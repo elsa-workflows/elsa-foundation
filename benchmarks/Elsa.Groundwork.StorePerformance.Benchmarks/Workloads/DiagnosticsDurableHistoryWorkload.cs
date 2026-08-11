@@ -1,0 +1,641 @@
+using System.Text;
+using System.Text.Json;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using Microsoft.Extensions.Logging;
+
+namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+
+/// <summary>
+/// Executes the catalog-owned durable diagnostics-history correctness baseline through the public
+/// <see cref="IStructuredLogStore"/> and <see cref="IOpenTelemetryStore"/> contracts only.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This runner is deliberately implementation-blind: it never names EF Core or Groundwork. The adapter
+/// supplies whichever pair of public stores the measured target selected, so the identical operation
+/// sequence and the identical asserted observations run against both stacks. That is what makes the
+/// SQLite EF-vs-Groundwork comparison a differential rather than two unrelated runs.
+/// </para>
+/// <para>
+/// Both stores queue <c>AppendAsync</c>/<c>WriteAsync</c> onto a bounded background drain, so every read
+/// in this sequence is preceded by <see cref="IDiagnosticsDurableHistoryWorkloadAdapter.FlushAsync"/>.
+/// Reading without flushing would measure drain scheduling instead of storage and would make the exact
+/// retained counts below non-deterministic.
+/// </para>
+/// </remarks>
+public sealed class DiagnosticsDurableHistoryWorkload
+{
+    private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
+    private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    public const string WorkloadId = "diagnostics-durable-history";
+    public const string ExpectedInputFingerprint = "448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667";
+    public const string ExpectedResultDigest = "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7";
+
+    public static string ScenarioId => Scenario.ScenarioId;
+    public static string Version => Scenario.Version;
+    public static string Seed => Scenario.Seed;
+
+    public static int ConcurrentWriters => Int("concurrentWriters");
+    public static int InstrumentCount => Int("instrumentCount");
+    public static int NormalizedRecordsPerOtlpBatch => Int("normalizedRecordsPerOtlpBatch");
+    public static int PayloadBytes => Int("payloadBytes");
+    public static int QueryLimit => Int("queryLimit");
+    public static int ResourceCount => Int("resourceCount");
+    public static int RetainedRecordsPerStream => Int("retainedRecordsPerStream");
+    public static int RetentionOverflowRecords => Int("retentionOverflowRecords");
+    public static int StructuredLogBatchSize => Int("structuredLogBatchSize");
+    public static int TenantCount => Int("tenantCount");
+    public static DateTimeOffset FixedNowUtc => DateTimeOffset.Parse((string)Scenario.Parameters["fixedNowUtc"], null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+
+    /// <summary>Total appended per stream: the retained capacity plus the deliberate retention overflow.</summary>
+    private static int AppendedPerStream => RetainedRecordsPerStream + RetentionOverflowRecords;
+
+    private const string SeedCrossScopeDiagnosticHistory = "seed-cross-scope-diagnostic-history";
+    private const string AppendStructuredLogBatches = "append-structured-log-batches";
+    private const string ReadStructuredLogRecent = "read-structured-log-recent";
+    private const string ResumeStructuredLogHistory = "resume-structured-log-history";
+    private const string ReopenAndReadStructuredLogHighWater = "reopen-and-read-structured-log-high-water";
+    private const string AppendOpenTelemetryBatches = "append-open-telemetry-batches";
+    private const string QueryOpenTelemetryResources = "query-open-telemetry-resources";
+    private const string QueryOpenTelemetryTraces = "query-open-telemetry-traces";
+    private const string ReadOpenTelemetryTraceDetail = "read-open-telemetry-trace-detail";
+    private const string QueryOpenTelemetryMetrics = "query-open-telemetry-metrics";
+    private const string QueryOpenTelemetryLogs = "query-open-telemetry-logs";
+    private const string InspectExactStreamCounts = "inspect-exact-stream-counts";
+    private const string TrimDiagnosticStreams = "trim-diagnostic-streams";
+    private const string ReopenAndVerifyDurableHistory = "reopen-and-verify-durable-history";
+    private const string VerifyCrossScopeIsolation = "verify-cross-scope-isolation";
+
+    /// <summary>
+    /// The measured phase ids, in frozen catalog order. The harness stamps these onto every sample, so a
+    /// divergence would silently retarget a budget row at a different operation.
+    /// </summary>
+    public static readonly string[] OperationIds =
+    [
+        SeedCrossScopeDiagnosticHistory,
+        AppendStructuredLogBatches,
+        ReadStructuredLogRecent,
+        ResumeStructuredLogHistory,
+        ReopenAndReadStructuredLogHighWater,
+        AppendOpenTelemetryBatches,
+        QueryOpenTelemetryResources,
+        QueryOpenTelemetryTraces,
+        ReadOpenTelemetryTraceDetail,
+        QueryOpenTelemetryMetrics,
+        QueryOpenTelemetryLogs,
+        InspectExactStreamCounts,
+        TrimDiagnosticStreams,
+        ReopenAndVerifyDurableHistory,
+        VerifyCrossScopeIsolation
+    ];
+
+    public async ValueTask<DiagnosticsDurableHistoryWorkloadResult> ExecuteAsync(
+        IDiagnosticsDurableHistoryWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        var scopes = await adapter.OpenScopedClientsAsync(cancellationToken);
+        RequireDistinctScopes(scopes);
+
+        var operations = new List<string>();
+
+        // 1. Seed the SECOND tenant scope. Every later assertion reads the primary scope only, so any
+        //    leakage of these records shows up as a non-zero crossScopeResultCount at the end rather than
+        //    as a silently inflated count in the middle.
+        await SeedSecondaryScopeAsync(scopes.Secondary, cancellationToken);
+        await adapter.FlushAsync(cancellationToken);
+        operations.Add(SeedCrossScopeDiagnosticHistory);
+
+        // 2. Append the retained capacity plus the deliberate overflow, across the frozen writer count.
+        //    The overflow is what makes the later explicit trim observable: without it, TrimAsync would be
+        //    a no-op and trimmedRecordsPerStream could not be distinguished from zero.
+        await AppendStructuredLogsAsync(scopes.Primary, cancellationToken);
+        await adapter.FlushAsync(cancellationToken);
+        var highWaterAfterAppend = await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync(cancellationToken);
+        if (highWaterAfterAppend != AppendedPerStream)
+            throw new InvalidOperationException(
+                $"The structured-log stream committed {highWaterAfterAppend} entries; the frozen contract requires {AppendedPerStream}.");
+        operations.Add(AppendStructuredLogBatches);
+
+        // 3. Bounded newest window, clamped by the caller's MaxCount.
+        var recent = await scopes.Primary.StructuredLogs.GetRecentAsync(
+            new StructuredLogFilter { MaxCount = QueryLimit },
+            cancellationToken);
+        var structuredLogRecentCount = recent.Count;
+        if (structuredLogRecentCount != QueryLimit)
+            throw new InvalidOperationException("The structured-log recent window did not honour the frozen query limit.");
+        operations.Add(ReadStructuredLogRecent);
+
+        // 4. Durable-tail resume from the oldest retained position. NextCursor must advance across every
+        //    scanned position, so a gap-free page of exactly the query limit is the contract.
+        var replay = await scopes.Primary.StructuredLogs.ReadAfterAsync(
+            afterCursor: null,
+            filter: StructuredLogFilter.None,
+            maxCount: QueryLimit,
+            cancellationToken);
+        var structuredLogReplayCount = replay.Entries.Count;
+        if (structuredLogReplayCount != QueryLimit || replay.NextCursor is null || !replay.HasMore)
+            throw new InvalidOperationException(
+                "The structured-log resume page did not return a bounded, continuable oldest-first window.");
+        operations.Add(ResumeStructuredLogHistory);
+
+        // 5. A genuinely distinct client must observe the same lifetime high-water. This is the durability
+        //    assertion, not a cache check, so it must not reuse the primary client.
+        var reopenedForHighWater = await adapter.ReopenClientAsync(cancellationToken);
+        RequireDistinctClient(reopenedForHighWater, scopes.Primary);
+        var reopenedHighWater = await reopenedForHighWater.StructuredLogs.GetHighWaterMarkAsync(cancellationToken);
+        if (reopenedHighWater != highWaterAfterAppend)
+            throw new InvalidOperationException("A reopened client did not observe the committed structured-log high-water.");
+        operations.Add(ReopenAndReadStructuredLogHighWater);
+
+        // 6. Fan the normalized OTLP batches into the four record streams. Each stream receives exactly the
+        //    retained capacity plus the overflow, so provider-side capacity retention has something to
+        //    evict and the inspected counts below are exact rather than approximate.
+        await AppendOpenTelemetryAsync(scopes.Primary, cancellationToken);
+        await adapter.FlushAsync(cancellationToken);
+        operations.Add(AppendOpenTelemetryBatches);
+
+        // 7-11. Every declared read shape, each clamped by the frozen query limit.
+        var resources = await scopes.Primary.OpenTelemetry.QueryResourcesAsync(
+            new OpenTelemetryResourceFilter { Take = QueryLimit },
+            cancellationToken);
+        if (resources.Items.Count != ResourceCount)
+            throw new InvalidOperationException(
+                $"The resource catalog exposed {resources.Items.Count} resources; the frozen contract requires {ResourceCount}.");
+        operations.Add(QueryOpenTelemetryResources);
+
+        var traces = await scopes.Primary.OpenTelemetry.QueryTracesAsync(
+            new OpenTelemetryTraceFilter { Take = QueryLimit },
+            cancellationToken);
+        if (traces.Items.Count == 0 || traces.Items.Count > QueryLimit)
+            throw new InvalidOperationException("The grouped trace window did not return a bounded non-empty page.");
+        operations.Add(QueryOpenTelemetryTraces);
+
+        var newestTraceId = traces.Items.OrderByDescending(item => item.StartTime).ThenBy(item => item.TraceId, StringComparer.Ordinal).First().TraceId;
+        var detail = await scopes.Primary.OpenTelemetry.GetTraceAsync(newestTraceId, cancellationToken);
+        if (detail is null || !StringComparer.OrdinalIgnoreCase.Equals(detail.Trace.TraceId, newestTraceId) || detail.Spans.Count == 0)
+            throw new InvalidOperationException("The trace detail did not expose the requested trace with its ordered spans.");
+        operations.Add(ReadOpenTelemetryTraceDetail);
+
+        var metrics = await scopes.Primary.OpenTelemetry.QueryMetricsAsync(
+            new OpenTelemetryMetricFilter { Take = QueryLimit },
+            cancellationToken);
+        if (metrics.Points.Count != QueryLimit || metrics.Instruments.Count == 0)
+            throw new InvalidOperationException("The metric window did not return the frozen bounded page with its referenced instruments.");
+        operations.Add(QueryOpenTelemetryMetrics);
+
+        var logs = await scopes.Primary.OpenTelemetry.QueryLogsAsync(
+            new OpenTelemetryLogFilter { Take = QueryLimit },
+            cancellationToken);
+        if (logs.Items.Count != QueryLimit)
+            throw new InvalidOperationException("The telemetry-log window did not honour the frozen query limit.");
+        operations.Add(QueryOpenTelemetryLogs);
+
+        // 12. Exact counts, not approximations. Provider capacity retention has already evicted the
+        //     overflow from each of the four streams, so each retains exactly its configured capacity.
+        var diagnostics = await scopes.Primary.OpenTelemetry.GetDiagnosticsAsync(cancellationToken);
+        var openTelemetryRetainedCounts = new[]
+        {
+            diagnostics.TraceCount,
+            diagnostics.SpanCount,
+            diagnostics.MetricPointCount,
+            diagnostics.LogRecordCount
+        };
+        if (openTelemetryRetainedCounts.Any(count => count != RetainedRecordsPerStream))
+            throw new InvalidOperationException(
+                $"The inspected stream counts [{string.Join(", ", openTelemetryRetainedCounts)}] do not each equal the frozen retained capacity {RetainedRecordsPerStream}.");
+        var diagnosticDropCount =
+            diagnostics.DroppedTraceCount +
+            diagnostics.DroppedSpanCount +
+            diagnostics.DroppedMetricPointCount +
+            diagnostics.DroppedLogRecordCount;
+        if (diagnosticDropCount != 0)
+            throw new InvalidOperationException(
+                $"The diagnostics capture path shed {diagnosticDropCount} records; the frozen contract admits no unexplained loss.");
+        if (diagnostics.ResourceCount != ResourceCount || diagnostics.MetricInstrumentCount != InstrumentCount)
+            throw new InvalidOperationException("The inspected catalog counts do not match the frozen resource/instrument contract.");
+        operations.Add(InspectExactStreamCounts);
+
+        // 13. Exact KeepNewest retention on the structured-log stream, and the lifetime high-water must
+        //     survive it. A trim that rewinds the high-water would let a restart reuse a committed
+        //     sequence, which is the failure this assertion exists to catch.
+        await scopes.Primary.StructuredLogs.TrimAsync(RetainedRecordsPerStream, cancellationToken);
+        var retainedAfterTrim = await CountRetainedAsync(scopes.Primary.StructuredLogs, cancellationToken);
+        var trimmedRecordsPerStream = AppendedPerStream - retainedAfterTrim;
+        if (retainedAfterTrim != RetainedRecordsPerStream || trimmedRecordsPerStream != RetentionOverflowRecords)
+            throw new InvalidOperationException(
+                $"Exact KeepNewest retention left {retainedAfterTrim} entries and trimmed {trimmedRecordsPerStream}; the frozen contract requires {RetainedRecordsPerStream} and {RetentionOverflowRecords}.");
+        var highWaterAfterTrim = await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync(cancellationToken);
+        if (highWaterAfterTrim != highWaterAfterAppend)
+            throw new InvalidOperationException("Retention rewound the lifetime structured-log high-water.");
+        operations.Add(TrimDiagnosticStreams);
+
+        // 14. Restart observation across a genuinely new client, after retention.
+        var reopened = await adapter.ReopenClientAsync(cancellationToken);
+        RequireDistinctClient(reopened, scopes.Primary);
+        RequireDistinctClient(reopened, reopenedForHighWater);
+        var restartHighWater = await reopened.StructuredLogs.GetHighWaterMarkAsync(cancellationToken);
+        var restartRetained = await CountRetainedAsync(reopened.StructuredLogs, cancellationToken);
+        var restartDiagnostics = await reopened.OpenTelemetry.GetDiagnosticsAsync(cancellationToken);
+        var restartStateMatched =
+            restartHighWater == highWaterAfterAppend &&
+            restartRetained == RetainedRecordsPerStream &&
+            restartDiagnostics.TraceCount == diagnostics.TraceCount &&
+            restartDiagnostics.SpanCount == diagnostics.SpanCount &&
+            restartDiagnostics.MetricPointCount == diagnostics.MetricPointCount &&
+            restartDiagnostics.LogRecordCount == diagnostics.LogRecordCount &&
+            restartDiagnostics.ResourceCount == diagnostics.ResourceCount &&
+            restartDiagnostics.MetricInstrumentCount == diagnostics.MetricInstrumentCount;
+        if (!restartStateMatched)
+            throw new InvalidOperationException("The reopened client did not observe the committed durable diagnostics history.");
+        operations.Add(ReopenAndVerifyDurableHistory);
+
+        // 15. Scope isolation. The secondary scope's seeded records carry a category and service name that
+        //     appear nowhere in the primary scope, so any match here is genuine leakage.
+        var crossScopeResultCount = await CountCrossScopeLeakageAsync(scopes.Primary, cancellationToken);
+        if (crossScopeResultCount != 0)
+            throw new InvalidOperationException(
+                $"{crossScopeResultCount} records from another storage scope were visible to the primary scope.");
+        operations.Add(VerifyCrossScopeIsolation);
+
+        if (!operations.SequenceEqual(scenario.OperationSequence, StringComparer.Ordinal))
+            throw new InvalidOperationException("The diagnostics workload operation order no longer matches the catalog contract.");
+
+        var actualObservations = new SortedDictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["crossScopeResultCount"] = crossScopeResultCount,
+            ["diagnosticDropCount"] = checked((int)diagnosticDropCount),
+            ["instrumentCount"] = diagnostics.MetricInstrumentCount,
+            ["openTelemetryRetainedCounts"] = openTelemetryRetainedCounts,
+            ["resourceCount"] = diagnostics.ResourceCount,
+            ["restartStateMatched"] = restartStateMatched,
+            ["structuredLogHighWater"] = checked((int)highWaterAfterTrim),
+            ["structuredLogRecentCount"] = structuredLogRecentCount,
+            ["structuredLogReplayCount"] = structuredLogReplayCount,
+            ["structuredLogRetainedCount"] = retainedAfterTrim,
+            ["trimmedRecordsPerStream"] = trimmedRecordsPerStream
+        };
+        if (!ObservationsMatch(actualObservations, scenario.CreateExpectedObservations()))
+            throw new InvalidOperationException("The diagnostics observable results no longer match the catalog contract.");
+
+        var resultDigest = ReproducibleWorkloadScenarioCatalog.Hash(ReproducibleWorkloadScenarioCatalog.Serialize(new
+        {
+            WorkloadId,
+            scenario.ScenarioId,
+            InputFingerprint = scenario.ComputeInputFingerprint(),
+            Operations = operations,
+            ObservableResults = actualObservations
+        }));
+        if (!StringComparer.Ordinal.Equals(resultDigest, ExpectedResultDigest))
+            throw new InvalidOperationException("The diagnostics observable result digest no longer matches its ratified value.");
+
+        return new DiagnosticsDurableHistoryWorkloadResult(
+            scenario.ComputeInputFingerprint(),
+            resultDigest,
+            operations,
+            actualObservations);
+    }
+
+    private static ReproducibleWorkloadScenario ValidateScenario()
+    {
+        if (Scenario.Version != "1.1.0" || Scenario.ScenarioId != "diagnostics-durable-history" ||
+            Scenario.Seed != "spec094-diagnostics-durable-history-v1.1" ||
+            Scenario.ComputeInputFingerprint() != ExpectedInputFingerprint ||
+            Scenario.ComputeResultDigest() != ExpectedResultDigest ||
+            !ReproducibleWorkloadScenarioCatalog.GoldenVectors.TryGetValue(WorkloadId, out var golden) ||
+            golden.InputFingerprint != ExpectedInputFingerprint || golden.ResultDigest != ExpectedResultDigest ||
+            ConcurrentWriters != 4 || InstrumentCount != 64 || NormalizedRecordsPerOtlpBatch != 64 ||
+            PayloadBytes != 512 || QueryLimit != 200 || ResourceCount != 128 ||
+            RetainedRecordsPerStream != 100_000 || RetentionOverflowRecords != 1_000 ||
+            StructuredLogBatchSize != 200 || TenantCount != 2 ||
+            !StringComparer.Ordinal.Equals((string)Scenario.Parameters["timedSetup"], "excluded"))
+            throw new InvalidOperationException("The diagnostics scenario no longer matches its frozen v1.1 catalog contract.");
+        if (AppendedPerStream % StructuredLogBatchSize != 0)
+            throw new InvalidOperationException("The frozen append total is not an exact multiple of the structured-log batch size.");
+        return Scenario;
+    }
+
+    /// <summary>
+    /// Writes a small, distinctly-labelled history into the secondary scope. Volume is irrelevant — what
+    /// matters is that these records exist and are findable by a predicate the primary scope will run.
+    /// </summary>
+    private static async Task SeedSecondaryScopeAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < StructuredLogBatchSize; index++)
+            await client.StructuredLogs.AppendAsync(StructuredLogEntryFor(index, CrossScopeCategory, CrossScopeSourceId), cancellationToken);
+
+        await client.OpenTelemetry.WriteAsync(
+            new OpenTelemetryBatch(
+                [ResourceFor(0, CrossScopeServiceName)],
+                [TraceFor(0, CrossScopeServiceName)],
+                [SpanFor(0, CrossScopeServiceName)],
+                [InstrumentFor(0, CrossScopeServiceName)],
+                [MetricPointFor(0, CrossScopeServiceName)],
+                [LogRecordFor(0, CrossScopeServiceName)]),
+            cancellationToken);
+    }
+
+    private static async Task AppendStructuredLogsAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    {
+        var batches = AppendedPerStream / StructuredLogBatchSize;
+        var writers = Enumerable.Range(0, ConcurrentWriters).Select(async writer =>
+        {
+            for (var batch = writer; batch < batches; batch += ConcurrentWriters)
+            {
+                for (var offset = 0; offset < StructuredLogBatchSize; offset++)
+                {
+                    var index = (batch * StructuredLogBatchSize) + offset;
+                    var committed = await client.StructuredLogs.AppendAsync(
+                        StructuredLogEntryFor(index, PrimaryCategory, PrimarySourceId),
+                        cancellationToken);
+                    if (committed.ReplayCursor is not { IsValid: true })
+                        throw new InvalidOperationException("A committed structured-log entry carried no valid replay cursor.");
+                }
+            }
+        }).ToArray();
+        await Task.WhenAll(writers);
+    }
+
+    private static async Task AppendOpenTelemetryAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    {
+        var remaining = AppendedPerStream;
+        var index = 0;
+        var resourcesWritten = 0;
+        var instrumentsWritten = 0;
+        while (remaining > 0)
+        {
+            var size = Math.Min(NormalizedRecordsPerOtlpBatch, remaining);
+
+            // The catalogs are mutable keyed upserts, not record streams: emit each resource and instrument
+            // exactly once so their inspected counts are the frozen catalog sizes rather than the record
+            // volume. Repeating them would still upsert, but it would make the intent unreadable.
+            var resources = Enumerable.Range(resourcesWritten, Math.Max(0, Math.Min(size, ResourceCount - resourcesWritten)))
+                .Select(ordinal => ResourceFor(ordinal, ServiceNameFor(ordinal)))
+                .ToArray();
+            var instruments = Enumerable.Range(instrumentsWritten, Math.Max(0, Math.Min(size, InstrumentCount - instrumentsWritten)))
+                .Select(ordinal => InstrumentFor(ordinal, ServiceNameFor(ordinal)))
+                .ToArray();
+            resourcesWritten += resources.Length;
+            instrumentsWritten += instruments.Length;
+
+            var traces = new List<TelemetryTrace>(size);
+            var spans = new List<TelemetrySpan>(size);
+            var points = new List<MetricPoint>(size);
+            var records = new List<OtlpLogRecord>(size);
+            for (var offset = 0; offset < size; offset++, index++)
+            {
+                var service = ServiceNameFor(index % ResourceCount);
+                traces.Add(TraceFor(index, service));
+                spans.Add(SpanFor(index, service));
+                points.Add(MetricPointFor(index, service));
+                records.Add(LogRecordFor(index, service));
+            }
+
+            await client.OpenTelemetry.WriteAsync(
+                new OpenTelemetryBatch(resources, traces, spans, instruments, points, records),
+                cancellationToken);
+            remaining -= size;
+        }
+
+        if (index != AppendedPerStream || resourcesWritten != ResourceCount || instrumentsWritten != InstrumentCount)
+            throw new InvalidOperationException("The OpenTelemetry fan-out did not emit the frozen record, resource and instrument totals.");
+    }
+
+    /// <summary>
+    /// Counts retained entries by draining the durable tail. <see cref="IStructuredLogStore"/> exposes no
+    /// count operation, and <c>GetRecentAsync</c> clamps to its own maximum, so the gap-free
+    /// <c>ReadAfterAsync</c> traversal is the only contract-legal exact count.
+    /// </summary>
+    private static async Task<int> CountRetainedAsync(IStructuredLogStore store, CancellationToken cancellationToken)
+    {
+        var count = 0;
+        StructuredLogReplayCursor? cursor = null;
+
+        // Bounded rather than while(true): a provider that returned HasMore without advancing its cursor
+        // would otherwise hang the correctness phase instead of failing it, and a hang inside a measured
+        // child process surfaces as an opaque timeout rather than as the contract violation it is.
+        var maximumPages = (AppendedPerStream / StructuredLogBatchSize) + 2;
+        for (var page = 0; page < maximumPages; page++)
+        {
+            var read = await store.ReadAfterAsync(cursor, StructuredLogFilter.None, StructuredLogBatchSize, cancellationToken);
+            count += read.Entries.Count;
+            cursor = read.NextCursor;
+            if (!read.HasMore || read.NextCursor is null)
+                return count;
+        }
+
+        throw new InvalidOperationException(
+            "The durable structured-log tail did not terminate within the bounded page budget; the provider is advertising more pages without advancing its cursor.");
+    }
+
+    private static async Task<int> CountCrossScopeLeakageAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    {
+        var leakedEntries = await client.StructuredLogs.GetRecentAsync(
+            new StructuredLogFilter { Category = CrossScopeCategory, MaxCount = QueryLimit },
+            cancellationToken);
+        var leakedResources = await client.OpenTelemetry.QueryResourcesAsync(
+            new OpenTelemetryResourceFilter { ServiceName = CrossScopeServiceName, Take = QueryLimit },
+            cancellationToken);
+        var leakedLogs = await client.OpenTelemetry.QueryLogsAsync(
+            new OpenTelemetryLogFilter { ServiceName = CrossScopeServiceName, Take = QueryLimit },
+            cancellationToken);
+        return leakedEntries.Count + leakedResources.Items.Count + leakedLogs.Items.Count;
+    }
+
+    private const string PrimaryCategory = "Elsa.Benchmarks.Diagnostics.Primary";
+    private const string PrimarySourceId = "spec094-primary";
+    private const string CrossScopeCategory = "Elsa.Benchmarks.Diagnostics.OtherScope";
+    private const string CrossScopeSourceId = "spec094-other-scope";
+    private const string CrossScopeServiceName = "spec094-other-scope-service";
+
+    private static string ServiceNameFor(int ordinal) => $"spec094-service-{ordinal % ResourceCount:D4}";
+
+    private static StructuredLogEntry StructuredLogEntryFor(int index, string category, string sourceId) => new()
+    {
+        Sequence = index + 1,
+        Timestamp = FixedNowUtc.AddMilliseconds(index),
+        Level = LogLevel.Information,
+        Category = category,
+        EventId = index % 128,
+        EventName = "spec094-diagnostics",
+        Message = PayloadFor(index),
+        MessageTemplate = "spec094 diagnostics {Index}",
+        Properties = [new LogProperty("index", index.ToString(System.Globalization.CultureInfo.InvariantCulture))],
+        SourceId = sourceId
+    };
+
+    /// <summary>
+    /// A message padded to the frozen payload byte length, so both stacks are measured moving the same
+    /// number of bytes rather than the same number of rows.
+    /// </summary>
+    private static string PayloadFor(int index)
+    {
+        var prefix = $"spec094-diagnostics-{index:D8}-";
+        var padding = PayloadBytes - Encoding.UTF8.GetByteCount(prefix);
+        if (padding < 0)
+            throw new InvalidOperationException("The frozen diagnostics payload budget cannot hold its own record prefix.");
+        var payload = prefix + new string('p', padding);
+        if (Encoding.UTF8.GetByteCount(payload) != PayloadBytes)
+            throw new InvalidOperationException("The diagnostics payload no longer has the frozen byte length.");
+        return payload;
+    }
+
+    private static TelemetryResource ResourceFor(int ordinal, string serviceName) => new(
+        $"resource-{ordinal:D4}",
+        serviceName,
+        $"instance-{ordinal:D4}",
+        "dotnet",
+        new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.ordinal"] = ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+        FixedNowUtc.AddMilliseconds(ordinal),
+        TelemetryResourceStatus.Active);
+
+    private static TelemetryTrace TraceFor(int index, string serviceName) => new(
+        TraceIdFor(index),
+        SpanIdFor(index),
+        $"spec094-trace-{index:D8}",
+        FixedNowUtc.AddMilliseconds(index),
+        FixedNowUtc.AddMilliseconds(index + 1),
+        TimeSpan.FromMilliseconds(1),
+        SpanStatus.Ok,
+        [$"resource-{index % ResourceCount:D4}"],
+        [$"workflow-{index % ResourceCount:D4}"],
+        1);
+
+    private static TelemetrySpan SpanFor(int index, string serviceName) => new(
+        $"span-row-{index:D8}",
+        TraceIdFor(index),
+        SpanIdFor(index),
+        null,
+        $"resource-{index % ResourceCount:D4}",
+        $"spec094-span-{index:D8}",
+        "Internal",
+        FixedNowUtc.AddMilliseconds(index),
+        FixedNowUtc.AddMilliseconds(index + 1),
+        SpanStatus.Ok,
+        null,
+        new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName },
+        [],
+        []);
+
+    private static MetricInstrument InstrumentFor(int ordinal, string serviceName) => new(
+        $"instrument-{ordinal:D4}",
+        $"resource-{ordinal % ResourceCount:D4}",
+        $"spec094.instrument.{ordinal:D4}",
+        "ms",
+        "spec094 frozen instrument",
+        MetricKind.Gauge,
+        new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName });
+
+    private static MetricPoint MetricPointFor(int index, string serviceName) => new(
+        $"point-{index:D8}",
+        $"instrument-{index % InstrumentCount:D4}",
+        $"spec094.instrument.{index % InstrumentCount:D4}",
+        $"resource-{index % ResourceCount:D4}",
+        FixedNowUtc.AddMilliseconds(index),
+        index % 1_000,
+        null,
+        null,
+        new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName },
+        TraceIdFor(index),
+        SpanIdFor(index));
+
+    private static OtlpLogRecord LogRecordFor(int index, string serviceName) => new(
+        $"otlp-log-{index:D8}",
+        $"resource-{index % ResourceCount:D4}",
+        FixedNowUtc.AddMilliseconds(index),
+        "Information",
+        9,
+        PayloadFor(index),
+        TraceIdFor(index),
+        SpanIdFor(index),
+        new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName });
+
+    private static string TraceIdFor(int index) => $"{index:x32}"[^32..];
+    private static string SpanIdFor(int index) => $"{index:x16}"[^16..];
+
+    private static void RequireDistinctScopes(DiagnosticsDurableHistoryScopes? scopes)
+    {
+        if (scopes is null || scopes.Primary is null || scopes.Secondary is null)
+            throw new InvalidOperationException("The diagnostics workload adapter must open both storage scopes.");
+        RequireDistinctClient(scopes.Secondary, scopes.Primary);
+    }
+
+    private static void RequireDistinctClient(DiagnosticsDurableHistoryClient candidate, DiagnosticsDurableHistoryClient other)
+    {
+        if (candidate is null ||
+            ReferenceEquals(candidate, other) ||
+            ReferenceEquals(candidate.StructuredLogs, other.StructuredLogs) ||
+            ReferenceEquals(candidate.OpenTelemetry, other.OpenTelemetry))
+            throw new InvalidOperationException("The diagnostics workload adapter must supply a genuinely distinct public-store client.");
+    }
+
+    private static int Int(string name) => (int)Scenario.Parameters[name];
+
+    private static bool ObservationsMatch(IReadOnlyDictionary<string, object> actual, IReadOnlyDictionary<string, object> expected) =>
+        actual.Count == expected.Count &&
+        actual.All(pair => expected.TryGetValue(pair.Key, out var value) &&
+                           JsonSerializer.Serialize(pair.Value, CanonicalJsonOptions) == JsonSerializer.Serialize(value, CanonicalJsonOptions));
+
+}
+
+/// <summary>
+/// Creates public diagnostics-store clients over one adapter-owned backing, in two distinct storage
+/// scopes, plus a genuinely reopened client for the restart assertions.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Capacity obligation.</b> The runner asserts that each of the four OpenTelemetry record streams
+/// retains exactly <c>retainedRecordsPerStream</c> after the deliberate overflow, and that the resource
+/// and instrument catalogs hold exactly their frozen sizes. Those are properties of the
+/// <c>OpenTelemetryDiagnosticsOptions</c> capacities the <i>adapter</i> configures, not of anything the
+/// runner can set. An implementation must therefore size trace, span, metric-point, log-record and
+/// resource capacities to the frozen parameters, or correctness fails closed at
+/// <c>inspect-exact-stream-counts</c> with a count mismatch rather than with a useful message.
+/// </para>
+/// <para>
+/// <b>Query-clamp obligation.</b> Both stores clamp a caller's requested page to their own configured
+/// maximum — <c>MaxRecentQuerySize</c> on the structured-log side, <c>MaxQuerySize</c> on the
+/// OpenTelemetry side. Both must be at least the frozen <c>queryLimit</c>, or the bounded reads return a
+/// short page and correctness fails at <c>read-structured-log-recent</c> for a configuration reason that
+/// looks like a storage defect.
+/// </para>
+/// <para>
+/// <b>Drop obligation.</b> The runner requires a zero total drop count. The capture queues must be sized
+/// so the frozen volume cannot shed; a shed batch is real evidence of loss, not a tuning artefact, so it
+/// must not be worked around by relaxing the assertion.
+/// </para>
+/// </remarks>
+public interface IDiagnosticsDurableHistoryWorkloadAdapter
+{
+    ValueTask<DiagnosticsDurableHistoryScopes> OpenScopedClientsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Completes the capture drain so everything appended is durable and queryable. Both stores enqueue
+    /// onto a bounded background drain, so a read before a flush measures scheduling rather than storage.
+    /// </summary>
+    ValueTask FlushAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Opens a new client over the same durable storage, modelling a process restart.</summary>
+    ValueTask<DiagnosticsDurableHistoryClient> ReopenClientAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>Two scope-bound clients over shared backing. Isolation between them is asserted, not assumed.</summary>
+public sealed record DiagnosticsDurableHistoryScopes(
+    DiagnosticsDurableHistoryClient Primary,
+    DiagnosticsDurableHistoryClient Secondary);
+
+/// <summary>The public diagnostics contracts required by the durable-history correctness baseline.</summary>
+public sealed record DiagnosticsDurableHistoryClient(
+    IStructuredLogStore StructuredLogs,
+    IOpenTelemetryStore OpenTelemetry);
+
+public sealed record DiagnosticsDurableHistoryWorkloadResult(
+    string InputFingerprint,
+    string ResultDigest,
+    IReadOnlyList<string> ObservableOperations,
+    IReadOnlyDictionary<string, object> ObservableResults);
