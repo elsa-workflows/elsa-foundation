@@ -26,4 +26,19 @@ public interface IRuntimeConsumedSchedulerWorkClaimAccessor
 
     /// <summary>Records that the store durably deleted the pending claim's work item inside a checkpoint commit.</summary>
     void MarkConsumedDurably(string workItemId);
+
+    /// <summary>
+    /// Opens a consume attempt for <paramref name="workItemId"/> around the store call that carries its deletion;
+    /// dispose the returned handle when the attempt settles either way. Between those two points the item may already
+    /// be gone from the queue while <see cref="MarkConsumedDurably"/> has not run yet, so
+    /// <see cref="IsConsumeInFlightOrDurable"/> reports the attempt as the explanation for a vanished claim (#1254).
+    /// </summary>
+    IDisposable BeginConsumeAttempt(string workItemId);
+
+    /// <summary>
+    /// Whether this dispatch's own consume of <paramref name="workItemId"/> is in flight or has landed durably. Read
+    /// by the drainer's claim-renewal loop, which runs on its own task while the dispatch commits, so implementations
+    /// must be safe to read concurrently with the dispatch thread's writes.
+    /// </summary>
+    bool IsConsumeInFlightOrDurable(string workItemId);
 }

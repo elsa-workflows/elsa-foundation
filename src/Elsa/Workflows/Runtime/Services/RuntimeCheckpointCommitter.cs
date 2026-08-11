@@ -10,7 +10,7 @@ public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
-    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
+    private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
     private readonly IWorkflowEngineTracer _tracer;
     private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
     private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
@@ -19,39 +19,23 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null)
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer = null)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, [])
-    {
-    }
-
+    /// <summary>
+    /// Creates the committer. C1 (#1227): the four telescoping constructors collapsed into this single primary
+    /// constructor: five required collaborators followed by optional collaborators that default to their no-op
+    /// implementations. The ownership context accessor is <b>required by construction</b> so the W5 fence
+    /// (<see cref="AttachExpectedFence"/>, which stamps the ambient lease onto the provider-facing envelope) can never
+    /// be silently disabled by picking a narrower constructor: without it a commit made inside a fenced drain would
+    /// carry no expected fence and a superseded writer would be admitted. The enricher and intent-handler contribution
+    /// sets are required for the same reason. They carry commit enrichment and post-commit retry policy, so an empty
+    /// set must be handed in deliberately rather than inferred from the constructor that happened to be selected.
+    /// </summary>
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer,
-        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, enrichers, [])
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
         IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
         IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IWorkflowEngineTracer? tracer = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
         IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
@@ -59,6 +43,7 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
+        ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
         ArgumentNullException.ThrowIfNull(enrichers);
         ArgumentNullException.ThrowIfNull(intentHandlerContributions);
 
@@ -141,25 +126,35 @@ public sealed class RuntimeCheckpointCommitter
             ? commit
             : commit with { StateChanges = stateChanges };
 
-        var storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
+        // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
+        // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
+        // item. Publishing the attempt lets the drainer's renewal loop recognize its own consume as the explanation
+        // instead. The attempt has to stay open until the durable mark lands, not just until the store call returns:
+        // the row is already gone the moment it returns, so closing the attempt any earlier reopens this same window
+        // around the validations below.
+        RuntimeCheckpointCommitStoreResult storeResult;
+        using (BeginConsumeAttempt(consumedWorkItems))
+        {
+            storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
-        if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
-            throw new InvalidOperationException(
-                $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
-                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
-                "post-commit outbox item it is handed.");
+            if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
+                throw new InvalidOperationException(
+                    $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
+                    $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                    $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
+                    "post-commit outbox item it is handed.");
 
-        if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
-            throw new InvalidOperationException(
-                $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
-                $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
-                "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
+            if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
+                throw new InvalidOperationException(
+                    $"Checkpoint commit store consumed {storeResult.ConsumedSchedulerWorkItemIds.Count} scheduler work item(s) " +
+                    $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
+                    $"{consumedWorkItems.Count}. The claimed work item's acknowledgement would be silently dropped; the store must " +
+                    "delete every consumed scheduler work item it is handed inside the same unit-of-work.");
 
-        // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
-        foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
-            _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+            // The store durably deleted the claimed item(s), so the drainer must not issue a second acknowledgement.
+            foreach (var workItemId in storeResult.ConsumedSchedulerWorkItemIds)
+                _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
+        }
 
         // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
         // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
@@ -194,6 +189,12 @@ public sealed class RuntimeCheckpointCommitter
         }
     }
 
+    // ResolveConsumedWorkItems yields at most the one pending claim, so a single attempt handle covers the commit.
+    private IDisposable? BeginConsumeAttempt(IReadOnlyCollection<ConsumedSchedulerWorkItem> consumedWorkItems) =>
+        _consumedWorkClaimAccessor is { } accessor && consumedWorkItems.FirstOrDefault() is { } consumed
+            ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
+            : null;
+
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
@@ -218,7 +219,7 @@ public sealed class RuntimeCheckpointCommitter
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {
-        if (_ownershipContextAccessor?.Current is not { } lease)
+        if (_ownershipContextAccessor.Current is not { } lease)
             return commit;
 
         if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))

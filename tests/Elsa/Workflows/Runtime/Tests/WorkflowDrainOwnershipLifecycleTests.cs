@@ -89,10 +89,9 @@ public sealed class WorkflowDrainOwnershipLifecycleTests
             drainer,
             EmptyPostCommitOutboxProcessor.Instance,
             [],
-            options: null,
             ownership,
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
-            TimeProvider.System);
+            timeProvider: TimeProvider.System);
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope()
     {

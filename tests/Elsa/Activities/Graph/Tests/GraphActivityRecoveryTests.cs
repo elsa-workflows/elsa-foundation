@@ -22,7 +22,7 @@ public sealed class GraphActivityRecoveryTests
         var stateStore = new InMemoryActivityExecutionStateStore();
         var incidentStore = new InMemoryIncidentStateStore();
         var commitStore = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: stateStore, incidentStateStore: incidentStore);
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var state = State("outer", null, "outer", ActivityExecutionStatus.Running);
         await stateStore.SaveAsync(state);
         var workItem = WorkItem(WorkflowExecutionCommandKind.InvokeActivity, "fault", executionScopeId: "outer");

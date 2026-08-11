@@ -140,6 +140,53 @@ public sealed class GroundworkDesignPostCommitRedriveTests
     }
 
     /// <summary>
+    /// A deliverer's *own* cancellation — an internal client timeout surfacing as
+    /// <see cref="TaskCanceledException"/> — is a delivery failure, not a reason to abandon the sweep. Treating
+    /// every cancellation as the sweep's own would let one slow target abort a page and strand the other
+    /// claims it holds until their leases expire.
+    /// </summary>
+    [Fact]
+    public async Task A_deliverers_own_timeout_defers_the_intent_instead_of_aborting_the_sweep()
+    {
+        await CommitAsync(Intent("timeout"));
+        var deliverer = new RecordingDeliverer
+        {
+            FailNextAttempts = 1,
+            Failure = () => new TaskCanceledException("The delivery target did not respond in time.")
+        };
+
+        var result = await new GroundworkDesignPostCommitRedrive(_outbox, [deliverer], new AdvanceableTimeProvider(Now))
+            .SweepAsync();
+
+        Assert.Equal(1, result.DeferredCount);
+        Assert.Contains("TaskCanceledException", Assert.Single(result.Intents).FailureMessage);
+        Assert.NotNull(await _outbox.FindAsync(Intent("timeout").IntentId));
+    }
+
+    /// <summary>The sweep's own cancellation is the one case that does propagate: the host is shutting down.</summary>
+    [Fact]
+    public async Task The_sweeps_own_cancellation_propagates()
+    {
+        await CommitAsync(Intent("cancelled"));
+        using var cancellation = new CancellationTokenSource();
+        var deliverer = new RecordingDeliverer
+        {
+            FailNextAttempts = 1,
+            Failure = () =>
+            {
+                cancellation.Cancel();
+                return new OperationCanceledException(cancellation.Token);
+            }
+        };
+        var redrive = new GroundworkDesignPostCommitRedrive(_outbox, [deliverer], new AdvanceableTimeProvider(Now));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => redrive.SweepAsync(cancellationToken: cancellation.Token));
+
+        // Still owed: the sweep abandoned it under lease rather than recording a failure that did not happen.
+        Assert.NotNull(await _outbox.FindAsync(Intent("cancelled").IntentId));
+    }
+
+    /// <summary>
     /// A host that has not composed the owning feature must not lose the obligation. The intent waits for the
     /// feature to arrive rather than being dropped as unroutable.
     /// </summary>
@@ -261,6 +308,10 @@ public sealed class GroundworkDesignPostCommitRedriveTests
 
         public int FailNextAttempts { get; set; }
 
+        /// <summary>What a failing attempt throws. Defaults to an ordinary provider-shaped failure.</summary>
+        public Func<Exception> Failure { get; set; } =
+            () => new InvalidOperationException("The delivery target is unavailable.");
+
         public IReadOnlyList<SaveDocumentRequest> Delivered => _delivered;
 
         public ValueTask DeliverAsync(
@@ -270,7 +321,7 @@ public sealed class GroundworkDesignPostCommitRedriveTests
             if (FailNextAttempts > 0)
             {
                 FailNextAttempts--;
-                throw new InvalidOperationException("The delivery target is unavailable.");
+                throw Failure();
             }
 
             _delivered.Add(intent.Document.ToSaveRequest());

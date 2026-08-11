@@ -48,6 +48,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -514,7 +515,7 @@ public sealed class ActivityDraftTestRunTests
     [Fact]
     public async Task Groundwork_sqlite_graph_run_suspends_restarts_in_runtime_only_host_then_reopens_status()
     {
-        var clock = new MutableTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
+        var clock = new FakeTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-restart-{Guid.NewGuid():N}.db");
         // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
         // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
@@ -1219,13 +1220,6 @@ public sealed class ActivityDraftTestRunTests
                 throw new InvalidOperationException("The transport dropped the first dispatch acknowledgement.");
             return result;
         }
-    }
-
-    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-        public override DateTimeOffset GetUtcNow() => _now;
-        public void Advance(TimeSpan duration) => _now += duration;
     }
 
     private sealed class AuthoringState

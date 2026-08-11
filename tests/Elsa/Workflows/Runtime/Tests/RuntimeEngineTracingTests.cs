@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -137,7 +138,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new InMemoryWorkflowExecutionStateStore(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             pauseGate: null,
             pipelineDispatcher: dispatcher,
             faultCapturePolicy: null,
@@ -156,13 +157,14 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        // Mirror production's committer activation: AddWorkflowRuntime registers the ownership services, so DI
-        // selects the widest constructor — the one that threads the tracer. Constructed explicitly here so the test
-        // doesn't depend on the full ownership wiring while still exercising the tracer-carrying constructor.
+        // Mirror production's committer activation, which threads the tracer through the single constructor.
+        // Constructed explicitly here so the test doesn't depend on the full ownership wiring.
         services.AddSingleton(sp => new RuntimeCheckpointCommitter(
             sp.GetRequiredService<IRuntimeCheckpointPersistencePolicy>(),
             sp.GetRequiredService<IRuntimeCheckpointCommitStore>(),
-            ownershipContextAccessor: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            [],
+            [],
             tracer: sp.GetRequiredService<IWorkflowEngineTracer>()));
 
         services.AddSingleton<RuntimeActivityLoadStateMiddleware>();

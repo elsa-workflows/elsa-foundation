@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -104,7 +105,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             workflowExecutionStateStore: workflowStore,
             incidentStateStore: incidentStore,
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         using var provider = services.BuildServiceProvider();
@@ -112,7 +113,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             executableStore,
             queue,
             new IncrementingRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             incidentStrategyCatalog: provider.GetRequiredService<IIncidentStrategyCatalog>(),
             checkpointCommitter: committer);
 
@@ -194,7 +195,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewStartWorkItem(executable.Identity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
@@ -241,7 +242,7 @@ public sealed class RuntimeStartCommandSchedulingTests
                 NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue, store),
                 new NoopWorkflowSchedulerWorkHandler()
             ],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             executable.Identity,
             "artifact-1",
@@ -280,7 +281,7 @@ public sealed class RuntimeStartCommandSchedulingTests
                 NewCheckpointHandler(activityStore, checkpointWriter, queue, executableStore),
                 new NoopWorkflowSchedulerWorkHandler()
             ],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var provenance = new WorkflowExecutableSourceProvenance(
             "reference-2", "WorkflowDefinitionVersion", "version-2", "2.0.0",
             "definition-1", "version-2", "2.0.0", "publication-2", "slot-production");
@@ -338,7 +339,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: NewStartPayloadWithSeed(executable.Identity)));
 
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
@@ -469,7 +470,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             new InMemoryWorkflowExecutableStore(),
             new InMemoryWorkflowSchedulerWorkQueue(),
             new IncrementingRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         Assert.True(handler.CanHandle(NewStartWorkItem(NewIdentity())));
         Assert.False(handler.CanHandle(NewStartWorkItem(NewIdentity(), WorkflowExecutionCommandKind.ScheduleActivity)));
@@ -506,7 +507,7 @@ public sealed class RuntimeStartCommandSchedulingTests
     private WorkflowStartSchedulerWorkHandler NewHandler(
         IWorkflowExecutableStore store,
         IWorkflowSchedulerWorkQueue queue) =>
-        new(store, queue, new IncrementingRuntimeExecutionIdGenerator(), new FixedTimeProvider(_now));
+        new(store, queue, new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now));
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
@@ -517,9 +518,9 @@ public sealed class RuntimeStartCommandSchedulingTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now),
+            timeProvider: new FakeTimeProvider(_now),
             workflowExecutableStore: executableStore);
 
     private static WorkflowExecutable NewExecutable(
@@ -573,11 +574,6 @@ public sealed class RuntimeStartCommandSchedulingTests
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, document.RootElement.Clone()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator

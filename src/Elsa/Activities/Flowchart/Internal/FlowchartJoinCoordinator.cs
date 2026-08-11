@@ -146,13 +146,11 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         if (!JoinPolicy.PropagatesDeadPaths)
             return state;
 
-        foreach (var connection in graph.GetOutboundConnections(sourceNodeId))
-        {
-            if (takenConnectionIds.Contains(graph.GetConnectionId(connection)))
-                continue;
+        var untaken = graph.GetOutboundConnections(sourceNodeId)
+            .Where(connection => !takenConnectionIds.Contains(graph.GetConnectionId(connection)));
 
+        foreach (var connection in untaken)
             state = EmitDeadArrival(context, state, graph, connection, executionScopeId, iterationKey, producingActivityExecutionId);
-        }
 
         return ReleaseReadyWaitingJoins(context, state, graph);
     }
@@ -199,7 +197,13 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
         if (LiveArrivals(state, group.TargetNodeId, group.ExecutionScopeId, group.IterationKey).Any())
             return FireJoinOrContinuation(context, state, graph, group.TargetNodeId, group.ExecutionScopeId, group.IterationKey, producingActivityExecutionId, connectionId);
 
-        return CarryDeadnessThrough(context, state, graph, group, producingActivityExecutionId);
+        // Concluding the target is dead takes every inbound having answered, which is a different question
+        // from "must it wait" and has to be asked directly. A Merge node is exempted from waiting because it
+        // must never block — not because nothing more is coming — so reading that exemption as an all-dead
+        // verdict would carry deadness past a live branch still in flight.
+        return MissingInboundSourceIds(state, graph, group).Length == 0
+            ? CarryDeadnessThrough(context, state, graph, group, producingActivityExecutionId)
+            : state;
     }
 
     /// <summary>

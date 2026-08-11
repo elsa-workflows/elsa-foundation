@@ -8,6 +8,35 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
+/// <summary>
+/// Claims scheduler work for one workflow execution and dispatches it, one item at a time. The loop has four exits:
+/// the queue runs dry, an item faults, an item pauses, or the per-drain work-item budget
+/// (<see cref="RuntimeSchedulerDrainRequest.MaxWorkItems"/>, unbounded by default) is exhausted. The terminal-status
+/// gate stops it as well, checked on entry and after each dispatched item.
+///
+/// <para>Only the first three are reported. This method names no stop reason of its own except
+/// <see cref="RuntimeSchedulerDrainStopReason.WorkflowTerminated"/>, so a budget-truncated drain is inferred as
+/// <see cref="RuntimeSchedulerDrainStopReason.Quiesced"/> and is indistinguishable downstream from a settled one,
+/// even though work is still queued.</para>
+///
+/// <para><b>This loop does not decide what a fault does to a workflow.</b> Every collaborator that decides an outcome
+/// sits behind an interface this class does not name, so reading it end to end will not tell you what happens when
+/// something throws. Two paths exist and they are not the same path:</para>
+/// <list type="bullet">
+/// <item><description>An <b>activity</b> fault never reaches <see cref="DispatchAsync"/>'s fault arm at all. The
+/// invoking work handler catches it and records a blocking incident, and the dispatch reports
+/// <see cref="RuntimeSchedulerWorkItemResultStatus.Completed"/>. Whether that incident terminates the workflow is
+/// decided later by the workflow's authored <c>IIncidentStrategy</c>, applied by
+/// <c>IncidentStrategyResolutionDrainObserver</c> at quiescence, with
+/// <c>BlockingIncidentWorkflowFaultObserver</c> as the backstop for drains that did not quiesce.</description></item>
+/// <item><description>A <b>handler</b> fault lands in <see cref="DispatchAsync"/>'s general catch, is poisoned by
+/// <see cref="HandleHandlerCrashAsync"/>, and is projected into a blocking incident by
+/// <c>PoisonedSchedulerWorkIncidentObserver</c>, which deliberately leaves the workflow non-terminal.</description></item>
+/// </list>
+///
+/// <para>Both paths, the defaults that decide them, and the source for each claim are mapped in
+/// <c>docs/runtime-fault-behavior.md</c>. Read that before concluding anything about fault behavior from this file.</para>
+/// </summary>
 public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
@@ -158,6 +187,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         return state is not null && state.Status.IsTerminal();
     }
 
+    /// <summary>
+    /// Dispatches one claimed work item and classifies its outcome. The fault arm below handles a <b>handler</b>
+    /// fault only. An activity that throws is caught inside the invoking handler and recorded as a blocking incident,
+    /// so it arrives here as a completed dispatch; see <c>docs/runtime-fault-behavior.md</c> for the two paths and
+    /// which collaborator decides each one.
+    /// </summary>
     private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(
         RuntimeSchedulerWorkItem workItem,
         RuntimeSchedulerWorkClaim? claim,
@@ -287,6 +322,10 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
     // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
     // entirely in the fault path — it does not change claim/pause/dispatch ordering.
+    //
+    // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
+    // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
+    // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
@@ -494,6 +533,21 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     _claimOptions.MaxDispatchDuration);
             }
 
+            // #1254: this dispatch's own checkpoint commit consumes the claim, so once that consume has landed there is
+            // nothing left to renew — the item is gone by design and the exclusivity the claim bought is permanent.
+            // Renewing anyway finds no document and reads as a lost claim, which would cancel and abort a dispatch whose
+            // work already committed.
+            if (_consumedWorkClaimAccessor?.WasConsumedDurably == true)
+                return;
+
+            // A consume that is still in flight only justifies skipping this one renewal, never ending the loop: the
+            // commit can still fail and leave the item queued, and a dispatch that then ran on without renewing would
+            // let the claim lapse and a successor re-drive work still in progress. Skipping costs at most one cadence
+            // of visibility (the timeout is three cadences), and renewing into the store call that is deleting this
+            // very document is the interleaving worth avoiding.
+            if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                continue;
+
             RuntimeSchedulerWorkClaimTransitionResult result;
             try
             {
@@ -509,12 +563,21 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             }
             catch (Exception exception)
             {
+                if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                    continue;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", status: null, exception);
             }
 
             if (result.Status != RuntimeSchedulerWorkClaimTransitionStatus.Succeeded || result.Claim is null)
             {
+                // Re-checked rather than keyed on the status: our own consume surfaces as AlreadyApplied or as Stale
+                // depending on where the renewal's load and save fell around the delete, and the in-memory queue reports
+                // a missing item as Stale in every case. A genuine successor still lands here and still wins. Looping
+                // rather than returning lets the next cadence settle it: the durable check above ends the loop once the
+                // consume lands, and a commit that failed instead gets renewed again.
+                if (IsOwnConsumeSettlingOrSettled(renewal.Current))
+                    continue;
                 await dispatchCancellation.CancelAsync();
                 throw NewClaimLost(renewal.Current, "renew", result.Status);
             }
@@ -522,6 +585,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             renewal.Current = result.Claim;
         }
     }
+
+    // Whether this dispatch's own consume explains a claim the queue no longer honors. A landed consume is fence-checked
+    // on owner+token (a successor reclaim advances the token and rolls the commit back as a consume conflict), so this
+    // never trusts the effects of a dispatch a successor stole.
+    private bool IsOwnConsumeSettlingOrSettled(RuntimeSchedulerWorkClaim claim) =>
+        _consumedWorkClaimAccessor?.IsConsumeInFlightOrDurable(claim.Item.WorkItemId) == true;
 
     private static RuntimeSchedulerWorkClaimLostException NewClaimLost(
         RuntimeSchedulerWorkClaim claim,

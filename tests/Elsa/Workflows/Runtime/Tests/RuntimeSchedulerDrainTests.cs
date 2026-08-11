@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -28,7 +29,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -100,6 +101,90 @@ public sealed class RuntimeSchedulerDrainTests
 
         Assert.Contains("was lost during 'renew'", exception.Message);
         Assert.True(handler.CancellationObserved);
+        Assert.Collection(
+            await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
+            item => Assert.Equal("work-1", item.WorkItemId));
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+    }
+
+    // #1254: the dispatch's own checkpoint commit consumes the claim, so a renewal that fires afterwards finds nothing
+    // and used to read as a lost claim — cancelling a dispatch whose work had already committed and aborting the drain
+    // with the queue row already gone, so nothing redelivered it. The precondition is constructed rather than raced: the
+    // handler consumes, then the renewal timer is fired while it is parked.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DrainAsync_ClaimRenewalAfterOwnConsume_LeavesTheCommittedDispatchAlone(bool settleBeforeParking)
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var accessor = new ConsumeCheckObservingClaimAccessor(new RuntimeConsumedSchedulerWorkClaimAccessor());
+        var handler = new ConsumingSchedulerWorkHandler(queue, accessor, settleBeforeParking);
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = TimeSpan.FromSeconds(9) };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions,
+            consumedWorkClaimAccessor: accessor);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Consumed.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+
+        // The renewal loop woke, recognized its own consume, and stopped renewing instead of calling a queue that would
+        // report the item gone. Waiting on the check itself keeps the assertion below from passing vacuously.
+        await accessor.OwnConsumeObserved.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, queue.RenewalAttempts);
+        handler.Release();
+
+        var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, result.DrainedCount);
+        Assert.False(result.StoppedOnFault);
+        Assert.All(result.Items, item => Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Completed, item.Status));
+        Assert.False(handler.CancellationObserved);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Empty(await poisonStore.ListAsync("wfexec-1"));
+    }
+
+    // The permissive branch above must not swallow a genuine loss: with a consume staged but never landed, a stale
+    // renewal is still a successor taking the item, and it still cancels the dispatch and refuses to ack or poison it.
+    [Fact]
+    public async Task DrainAsync_ClaimRenewalLossWithoutOwnConsume_StillCancelsTheDispatch()
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new RenewalObservingWorkQueue(innerQueue, loseFirstRenewal: true);
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var accessor = new ConsumeCheckObservingClaimAccessor(new RuntimeConsumedSchedulerWorkClaimAccessor());
+        var handler = new BlockingSchedulerWorkHandler();
+        var timeProvider = new ManualTimerTimeProvider(_now);
+        var claimOptions = new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = TimeSpan.FromSeconds(9) };
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            timeProvider,
+            poisonStore: poisonStore,
+            claimOptions: claimOptions,
+            consumedWorkClaimAccessor: accessor);
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var drainTask = drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask();
+        await handler.Started.WaitAsync(TimeSpan.FromSeconds(5));
+        await timeProvider.TimerCreated.WaitAsync(TimeSpan.FromSeconds(5));
+        timeProvider.AdvanceAndFire(TimeSpan.FromSeconds(3));
+
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(
+            () => drainTask.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Contains("was lost during 'renew'", exception.Message);
+        Assert.True(handler.CancellationObserved);
+        Assert.False(accessor.OwnConsumeObserved.IsCompleted);
         Assert.Collection(
             await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
             item => Assert.Equal("work-1", item.WorkItemId));
@@ -240,7 +325,7 @@ public sealed class RuntimeSchedulerDrainTests
         // concurrent writer interleaves so the dequeue returns work-2. The drainer must fail fast rather than gate
         // work-2's dequeue on work-1's decision.
         var queue = new PeekDequeueMismatchWorkQueue(peeked: NewWorkItem(1), dequeued: NewWorkItem(2));
-        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
@@ -255,7 +340,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -273,7 +358,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler(faultOnWorkItemId: "work-2");
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -323,8 +408,8 @@ public sealed class RuntimeSchedulerDrainTests
             crashingQueue,
             checkpointCommitter: null,
             inspectionAccumulator: null,
-            new FixedTimeProvider(_now));
-        var crashingDrainer = TestSchedulerDrainer.Create(crashingQueue, [crashingHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
+        var crashingDrainer = TestSchedulerDrainer.Create(crashingQueue, [crashingHandler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
 
         var scheduleItem = NewScheduleActivityWorkItem(1);
         await innerQueue.EnqueueAsync(scheduleItem);
@@ -352,8 +437,8 @@ public sealed class RuntimeSchedulerDrainTests
             innerQueue,
             checkpointCommitter: null,
             inspectionAccumulator: null,
-            new FixedTimeProvider(_now));
-        var honestDrainer = TestSchedulerDrainer.Create(innerQueue, [honestHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
+        var honestDrainer = TestSchedulerDrainer.Create(innerQueue, [honestHandler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
 
         var redriveResult = await honestDrainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
 
@@ -378,7 +463,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
         var pauseGate = new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeActivityExecutionStart));
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now), pauseGate);
         await queue.EnqueueAsync(NewStartActivityWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -410,7 +495,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             pauseGate: null,
             workflowStateStore);
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
@@ -446,7 +531,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             pauseGate: null,
             workflowStateStore);
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
@@ -472,8 +557,8 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var store = new InMemoryWorkflowHoldStateStore();
         var handler = new RecordingSchedulerWorkHandler();
-        var pauseGate = new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(store), new FixedTimeProvider(_now));
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        var pauseGate = new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(store), new FakeTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now), pauseGate);
         await store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
@@ -516,7 +601,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             pauseGate);
         await queue.EnqueueAsync(NewGeneratedEventWorkItem(1));
 
@@ -536,7 +621,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task WorkflowSchedulerPauseGate_MapsSchedulerWorkToPauseDecisionRequests()
     {
         var provider = new RecordingRuntimePauseDecisionProvider();
-        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FixedTimeProvider(_now));
+        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FakeTimeProvider(_now));
 
         await pauseGate.EvaluateAsync(NewStartActivityWorkItem(1));
         await pauseGate.EvaluateAsync(NewInvokeActivityWorkItem(2));
@@ -580,7 +665,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task WorkflowSchedulerPauseGate_ReadsCaseInsensitiveSchedulerPayloads()
     {
         var provider = new RecordingRuntimePauseDecisionProvider();
-        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FixedTimeProvider(_now));
+        var pauseGate = new WorkflowSchedulerPauseGate(provider, new FakeTimeProvider(_now));
         var jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -599,7 +684,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var customHandler = new RecordingSchedulerWorkHandler(canHandle: false);
-        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -615,7 +700,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DoesNotNoopInvokeActivityWorkWhenNoProviderMatches()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.InvokeActivity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -633,7 +718,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.GeneratedEvent));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -651,7 +736,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingBookmarkResumeSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.ResumeBookmark));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -669,8 +754,8 @@ public sealed class RuntimeSchedulerDrainTests
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var drainer = TestSchedulerDrainer.Create(
             queue,
-            [new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FixedTimeProvider(_now)), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            [new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FakeTimeProvider(_now)), new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
@@ -693,7 +778,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
@@ -766,7 +851,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointCommitStore()), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         using var document = JsonDocument.Parse("""{"checkpointName":" "}""");
         await queue.EnqueueAsync(NewWorkItem(
             1,
@@ -789,7 +874,7 @@ public sealed class RuntimeSchedulerDrainTests
         var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.Checkpoint,
@@ -810,7 +895,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         await activityStateStore.SaveAsync(NewParentActivityState());
-        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FixedTimeProvider(_now));
+        var handler = new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewWorkItem(
             1,
@@ -837,7 +922,7 @@ public sealed class RuntimeSchedulerDrainTests
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewWorkItem(
             1,
@@ -864,7 +949,7 @@ public sealed class RuntimeSchedulerDrainTests
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             queue,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewWorkItem(
             1,
@@ -904,8 +989,8 @@ public sealed class RuntimeSchedulerDrainTests
             activityStateStore,
             queue,
             executableStore,
-            new FixedTimeProvider(_now));
-        var drainer = TestSchedulerDrainer.Create(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
@@ -938,7 +1023,7 @@ public sealed class RuntimeSchedulerDrainTests
             new InMemoryActivityExecutionStateStore(),
             queue,
             executableStore,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewWorkItem(
             1,
@@ -966,7 +1051,7 @@ public sealed class RuntimeSchedulerDrainTests
         var handler = new WorkflowCompleteActivitySchedulerWorkHandler(
             new InMemoryActivityExecutionStateStore(),
             new InMemoryWorkflowSchedulerWorkQueue(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewWorkItem(
             1,
@@ -982,7 +1067,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var customHandler = new RecordingSchedulerWorkHandler(canHandle: false);
         var fallbackHandler = new RecordingFallbackSchedulerWorkHandler();
-        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, fallbackHandler], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, fallbackHandler], new FakeTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -1221,9 +1306,9 @@ public sealed class RuntimeSchedulerDrainTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now));
+            timeProvider: new FakeTimeProvider(_now));
 
     private static string CompletionReason(SchedulerCompletionKind completionKind) =>
         completionKind switch
@@ -1394,11 +1479,6 @@ public sealed class RuntimeSchedulerDrainTests
         }
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
     private sealed class BlockingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1446,6 +1526,91 @@ public sealed class RuntimeSchedulerDrainTests
         }
 
         public void Release() => _release.TrySetResult();
+    }
+
+    // Stands in for a handler whose checkpoint commit folds the claim's deletion into its unit-of-work: the queue row
+    // disappears inside the "store call" (the consume attempt window), and only once that call returns does the
+    // committer mark it consumed. settleBeforeParking picks which side of that window the handler parks on, so one
+    // theory covers both a renewal landing after the consume settled and one landing while it is still in flight.
+    private sealed class ConsumingSchedulerWorkHandler(
+        IWorkflowSchedulerWorkQueue queue,
+        IRuntimeConsumedSchedulerWorkClaimAccessor accessor,
+        bool settleBeforeParking) : IWorkflowSchedulerWorkHandler
+    {
+        private readonly TaskCompletionSource _consumed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Name => nameof(ConsumingSchedulerWorkHandler);
+
+        /// <summary>Completes once the work item is gone from the queue, whether or not the consume has settled.</summary>
+        public Task Consumed => _consumed.Task;
+
+        public bool CancellationObserved { get; private set; }
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            var attempt = accessor.BeginConsumeAttempt(workItem.WorkItemId);
+            await queue.DeleteAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
+            if (settleBeforeParking)
+                Settle(workItem.WorkItemId, attempt);
+
+            _consumed.TrySetResult();
+            try
+            {
+                await _release.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+            finally
+            {
+                if (!settleBeforeParking)
+                    Settle(workItem.WorkItemId, attempt);
+            }
+        }
+
+        public void Release() => _release.TrySetResult();
+
+        private void Settle(string workItemId, IDisposable attempt)
+        {
+            accessor.MarkConsumedDurably(workItemId);
+            attempt.Dispose();
+        }
+    }
+
+    // Decorates the real accessor so a test can wait for the exact moment the renewal loop recognizes its own consume,
+    // rather than inferring it from timing. Both signals are watched because the loop consults them in order: a landed
+    // consume ends the loop on WasConsumedDurably alone and never reaches the in-flight predicate. Until the handler is
+    // released the renewal loop is the only reader of either, so a completion here means the loop looked.
+    private sealed class ConsumeCheckObservingClaimAccessor(IRuntimeConsumedSchedulerWorkClaimAccessor inner)
+        : IRuntimeConsumedSchedulerWorkClaimAccessor
+    {
+        private readonly TaskCompletionSource _observed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task OwnConsumeObserved => _observed.Task;
+
+        public ConsumedSchedulerWorkItem? PendingConsume => inner.PendingConsume;
+
+        public bool WasConsumedDurably => Observe(inner.WasConsumedDurably);
+
+        public IDisposable Begin(ConsumedSchedulerWorkItem consume) => inner.Begin(consume);
+
+        public void MarkConsumedDurably(string workItemId) => inner.MarkConsumedDurably(workItemId);
+
+        public IDisposable BeginConsumeAttempt(string workItemId) => inner.BeginConsumeAttempt(workItemId);
+
+        public bool IsConsumeInFlightOrDurable(string workItemId) => Observe(inner.IsConsumeInFlightOrDurable(workItemId));
+
+        private bool Observe(bool recognized)
+        {
+            if (recognized)
+                _observed.TrySetResult();
+            return recognized;
+        }
     }
 
     private sealed class RenewalObservingWorkQueue(
@@ -1558,7 +1723,6 @@ public sealed class RuntimeSchedulerDrainTests
         public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
             new((IReadOnlyCollection<string>)[]);
     }
-
 
     private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator
     {

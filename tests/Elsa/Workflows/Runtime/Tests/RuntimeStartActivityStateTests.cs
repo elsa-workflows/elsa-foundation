@@ -230,7 +230,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
             _schedulerWorkQueue,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore)),
+                new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
@@ -244,7 +244,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
             _schedulerWorkQueue,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),

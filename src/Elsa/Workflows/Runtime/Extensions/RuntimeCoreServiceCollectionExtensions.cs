@@ -219,7 +219,22 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
-        services.TryAddScoped<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
+        // Explicit factory (not greedy ctor selection): the coalescing drain scope factory is only registered when the
+        // coalescing feature is enabled, so which collaborators the orchestrator received used to depend on which
+        // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
+        // live-drain accessor and the cadence resolver are wired in every configuration (C1, #1227).
+        services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
+            new WorkflowDrainOrchestrator(
+                serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
+                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
+                serviceProvider.GetServices<IWorkflowSchedulerDrainObserver>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),
+                serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
+                serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
+                serviceProvider.GetService<IRuntimeCheckpointCadenceResolver>(),
+                serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
@@ -285,17 +300,17 @@ public static class RuntimeCoreServiceCollectionExtensions
         // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).
         services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
         // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
-        // coalescing feature is enabled, so the committer's widest constructor is not always satisfiable by the
-        // container. The factory injects each optional collaborator with GetService so the live-drain accessor and
-        // fast-path options are wired in every configuration.
+        // coalescing feature is enabled, so the container cannot always satisfy every constructor parameter. The factory
+        // injects each optional collaborator with GetService so the live-drain accessor and fast-path options are wired
+        // in every configuration, and each required one with GetRequiredService so a missing fence accessor fails loudly.
         services.TryAddScoped(serviceProvider =>
             new RuntimeCheckpointCommitter(
                 serviceProvider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>(),
                 serviceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>(),
-                serviceProvider.GetService<IRuntimeExecutionOwnershipContextAccessor>(),
-                serviceProvider.GetService<IWorkflowEngineTracer>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
                 serviceProvider.GetServices<IRuntimeCheckpointCommitEnricher>(),
                 serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>(),
+                serviceProvider.GetService<IWorkflowEngineTracer>(),
                 serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),

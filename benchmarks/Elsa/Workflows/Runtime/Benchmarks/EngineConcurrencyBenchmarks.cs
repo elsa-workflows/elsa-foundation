@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -24,6 +25,14 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 /// <see cref="EngineExecutionBenchmarks"/> uses) for N ∈ {1, 8, 32, 128} and reports the scaling curve — total wall
 /// time, per-run p50/p95 latency, and aggregate durable checkpoint commits — so the next optimization unit can be
 /// picked from evidence rather than guessed.
+///
+/// The curve is swept over THREE LEAF SHAPES (issue #1225). It originally fixed the leaf at <c>NoOpStep</c>, a
+/// ReplaySafe leaf that exists only in this assembly and commits once per run; the marking pass behind ADR 0047 found
+/// no SHIPPED leaf activity is ReplaySafe, so that curve described the fusable floor, not production traffic. The
+/// External CLR leaf (an unmarked <c>WriteLine</c>) pays ~11 commits and ~56 dispatches per run against the fusable
+/// shapes' 1 and 5, so it is the shape an admission-control limiter must be sized against. Alongside it the <c>Set</c>
+/// intrinsic — where Elsa 4's pure value work actually happens, fusable only since the blanket intrinsic exclusion
+/// became per-kind — and the original ReplaySafe leaf, kept as the reference bound.
 ///
 /// Three backends isolate WHERE the cost is, by removing one layer at a time:
 ///   * <b>in-memory</b>: runtime default stores, no fsync — pure CPU + scheduling scaling (the concurrency ceiling).
@@ -44,8 +53,25 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 /// build, the activity-type registry scan (<see cref="WorkflowExecutionHarness.InitializeActivityTypes"/>) — is done
 /// BEFORE the timed window, so wall time measures dispatch + drain + store I/O, not engine construction.
 ///
+/// A level may also FAIL outright rather than merely slow down, and that outcome is part of the curve: the
+/// <c>WorkflowDrainOrchestrator</c> renews its ownership lease (<c>RuntimeExecutionOwnershipOptions.LeaseDuration</c>,
+/// 1 minute by default) on a duration/3 cadence, and that renewal is itself a store write behind the same connection
+/// gate the drains are queued on. Past a queue depth the renewal starves and the execution faults, which is congestion
+/// collapse becoming correctness-visible. Such a level is recorded as FAULTED and the sweep continues, so the rest of
+/// the curve is not lost with it.
+///
+/// The fault surfaces as a DIFFERENT exception type per backend, all of them lease loss under load:
+/// <c>RuntimeSchedulerWorkClaimLostException</c> (in-memory), <c>RuntimeStaleFencingTokenException</c> (isolated
+/// SQLite), <c>RuntimeExecutionOwnershipLostException</c> (shared SQLite). Which one surfaces is not fixed either: the
+/// threshold moves with ambient host load. That is why the catch below is deliberately broad and records the exception
+/// TYPE rather than filtering on one of them. See issue #1249, which is scoped to reproducing this on a quiet machine
+/// before anyone concludes what the mechanism is.
+///
 /// There are deliberately NO hard latency/throughput assertions (they would flake); each run only asserts its
-/// workflow completed. Commit counts are the deterministic durable evidence. Emits the curve via
+/// workflow completed. Commit AND scheduler-dispatch counts are the deterministic, load-proof evidence — a curve
+/// reporting only wall time cannot falsify its own claim, because it cannot separate "the engine did more work" from
+/// "the shared writer congested". Dispatches come from <see cref="RuntimeSchedulerDispatchDiagnostics"/> (spec 123
+/// FR-008), the same counter the single-run engine benchmark uses. Emits the curve via
 /// <see cref="ITestOutputHelper"/>.
 ///
 /// Lives under benchmarks/ (not tests/), so neither CI gate runs it. Run on demand with:
@@ -59,6 +85,21 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
     private static readonly int[] ConcurrencyLevels = [1, 8, 32, 128];
 
     private enum Backend { InMemory, IsolatedSqlite, SharedSqlite }
+
+    /// <summary>
+    /// The hot-loop leaf shapes the curve is measured over (issue #1225). The original spec-114 curve fixed the leaf
+    /// at <see cref="BenchmarkWorkflows.NoOpLeaf"/>, a ReplaySafe leaf that exists only in this assembly and commits
+    /// once per run — the fusable FLOOR, not a shape any user can compose. Sweeping the leaf makes the leaf class the
+    /// only variable, so the shape of the collapse can be read against per-run durable work rather than assumed.
+    /// </summary>
+    private readonly record struct LeafShape(string Name, Func<int, ExecutableNode> MakeLeaf);
+
+    private static readonly LeafShape[] LeafShapes =
+    [
+        new("External CLR leaf (WriteLine)", BenchmarkWorkflows.ExternalLeaf),
+        new("Set intrinsic", BenchmarkWorkflows.SetIntrinsicLeaf),
+        new("ReplaySafe CLR leaf (NoOpStep)", BenchmarkWorkflows.NoOpLeaf)
+    ];
 
     // A DISTINCT activity-execution-id pool per execution. This mirrors production, where activity-execution ids are
     // globally unique — the checkpoint-commit marker document is keyed on a CommitId built from the work-item id
@@ -78,25 +119,81 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         output.WriteLine($"machine uptime/load at start: {uptime}");
         output.WriteLine($"processor count: {Environment.ProcessorCount}");
 
-        // One warmup pass per backend (JIT + OS page-cache + SQLite file warmup), discarded. Warm at a mid N so the
-        // thread pool has already grown before the first measured level.
-        foreach (var backend in Enum.GetValues<Backend>())
-            await MeasureAsync(backend, concurrency: 8, warmup: true);
-
-        foreach (var backend in Enum.GetValues<Backend>())
+        // The External leaf is a real WriteLine, so N×HotLoopLength Console writes would serialize on Console's own
+        // global lock and be charged to the store writer. Park stdout for the whole sweep so the only shared writer in
+        // the measurement is the one under study; ITestOutputHelper does not go through Console.Out, so the curve is
+        // still emitted. Restored in the finally.
+        var stdout = Console.Out;
+        Console.SetOut(TextWriter.Null);
+        try
         {
-            output.WriteLine($"=== backend: {backend} · hot-loop×{HotLoopLength} · Coalesced+ReplaySafe ===");
-            output.WriteLine("N | totalWall(ms) | p50(ms) | p95(ms) | min(ms) | max(ms) | aggCommits | commits/run | throughput(runs/s)");
-            foreach (var concurrency in ConcurrencyLevels)
+            // One warmup pass per backend (JIT + OS page-cache + SQLite file warmup), discarded. Warm at a mid N so the
+            // thread pool has already grown before the first measured level. Warm on the External shape: it exercises
+            // strictly the most code (no fusion, per-leaf attempt-claim flush), so it subsumes the other two shapes' JIT.
+            foreach (var backend in Enum.GetValues<Backend>())
+                await MeasureAsync(backend, LeafShapes[0], concurrency: 8, warmup: true);
+
+            // Sweep order is backend → N → leaf shape, so the three shapes at a given (backend, N) are measured
+            // BACK-TO-BACK. The comparison this instrument exists to make is across leaf shapes at a fixed N, and the
+            // machine's ambient load drifts over a sweep this long; pairing the shapes tightly is what keeps that
+            // comparison readable when the absolute walls are not (the same pairing discipline the group-commit A/B uses).
+            foreach (var backend in Enum.GetValues<Backend>())
             {
-                var result = await MeasureAsync(backend, concurrency, warmup: false);
-                var throughput = result.TotalWallMs > 0 ? concurrency / (result.TotalWallMs / 1000.0) : double.NaN;
-                output.WriteLine(
-                    $"{concurrency,4} | {result.TotalWallMs,10:F1} | {result.P50,7:F1} | {result.P95,7:F1} | " +
-                    $"{result.Min,7:F1} | {result.Max,7:F1} | {FormatCommits(result.AggregateCommits),10} | " +
-                    $"{FormatCommitsPerRun(result.AggregateCommits, concurrency),11} | {throughput,8:F1}");
+                // Only the durable backends configure Coalesced persistence. Fusion is a burst-only locality
+                // optimization — ReplaySafeFusionDriver.ShouldFuse requires a live coalescing session — so the
+                // in-memory backend runs every hop discretely and is the UNFUSED baseline, not a Coalesced one. Label
+                // it as such: its 58 dispatches/run are exactly ADR 0047's pre-fusion figure, and calling that column
+                // "Coalesced" (as this instrument originally did for all three backends) invites reading a 58-vs-5
+                // difference as a leaf-shape effect when it is a policy effect.
+                var policy = backend == Backend.InMemory ? "runtime defaults (Immediate, unfused)" : "Coalesced";
+                output.WriteLine($"=== backend: {backend} · hot-loop×{HotLoopLength} · {policy} · leaf shapes measured back-to-back per N ===");
+                output.WriteLine("N | leaf shape | totalWall(ms) | p50(ms) | p95(ms) | min(ms) | max(ms) | aggCommits | commits/run | aggDispatches | dispatches/run | throughput(runs/s)");
+                foreach (var concurrency in ConcurrencyLevels)
+                foreach (var shape in LeafShapes)
+                {
+                    // A level can FAIL rather than merely slow down. On the shared writer the External shape queues so
+                    // deep behind the connection gate that the drain's own ownership heartbeat, itself a store write
+                    // behind that same gate, misses its renewal and the execution faults. That outcome IS the
+                    // measurement (it is the congestion collapse turning into a correctness-visible fault), so record
+                    // it and carry on to the remaining cells instead of aborting the sweep and losing them.
+                    //
+                    // The catch is deliberately BROAD and must stay that way. The observed fault is a different
+                    // exception type per backend -- RuntimeSchedulerWorkClaimLostException (in-memory),
+                    // RuntimeStaleFencingTokenException (isolated), RuntimeExecutionOwnershipLostException (shared) --
+                    // so narrowing it to any one of them aborts the sweep on the other two and loses every remaining
+                    // cell, which is the exact failure this arm was added to prevent. The threshold is not
+                    // deterministic (it moves with host load), so which type surfaces is not fixed either. The
+                    // diagnosability cost is paid by recording exception.GetType().Name below: an unexpected exception
+                    // is visible as itself rather than silently absorbed, so a harness bug stays distinguishable from
+                    // a lease fault.
+                    ConcurrencyResult result;
+                    try
+                    {
+                        result = await MeasureAsync(backend, shape, concurrency, warmup: false);
+                    }
+                    catch (Exception exception)
+                    {
+                        output.WriteLine($"{concurrency,4} | {shape.Name,-31} | FAULTED — {exception.GetType().Name}: {exception.Message}");
+                        continue;
+                    }
+
+                    var throughput = result.TotalWallMs > 0 ? concurrency / (result.TotalWallMs / 1000.0) : double.NaN;
+                    output.WriteLine(
+                        $"{concurrency,4} | {shape.Name,-31} | {result.TotalWallMs,10:F1} | {result.P50,7:F1} | {result.P95,7:F1} | " +
+                        $"{result.Min,7:F1} | {result.Max,7:F1} | {FormatCommits(result.AggregateCommits),10} | " +
+                        $"{FormatCommitsPerRun(result.AggregateCommits, concurrency),11} | {result.AggregateDispatches,13} | " +
+                        $"{result.AggregateDispatches / (double)concurrency,15:F1} | {throughput,8:F1}");
+                }
             }
         }
+        finally
+        {
+            Console.SetOut(stdout);
+        }
+
+        // Load at the END as well as the start: a sweep this long outlives any single load reading, and a reader
+        // comparing rows across backends needs to see whether the host drifted underneath them.
+        output.WriteLine($"machine uptime/load at end: {ReadUptime()}");
     }
 
     /// <summary>
@@ -292,7 +389,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         return result;
     }
 
-    private async Task<ConcurrencyResult> MeasureAsync(Backend backend, int concurrency, bool warmup)
+    private async Task<ConcurrencyResult> MeasureAsync(Backend backend, LeafShape shape, int concurrency, bool warmup)
     {
         var trackedStores = new List<(IDocumentStore Store, string Path)>();
         IDocumentStore? sharedStore = null;
@@ -307,57 +404,76 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         var harnesses = new List<WorkflowExecutionHarness>(concurrency);
         var executables = new List<WorkflowExecutable>(concurrency);
 
-        for (var index = 0; index < concurrency; index++)
+        try
         {
-            var identity = IdentityFor(index);
-            var executionId = $"wfexec-{index}";
-
-            var activityIds = NewActivityIdPool(index);
-            WorkflowExecutionHarness harness;
-            switch (backend)
+            for (var index = 0; index < concurrency; index++)
             {
-                case Backend.InMemory:
-                    harness = NewInMemoryHarness(identity, executionId, activityIds);
-                    break;
-                case Backend.IsolatedSqlite:
-                    var isolated = await NewSqliteStoreAsync();
-                    trackedStores.Add(isolated);
-                    harness = NewDurableHarness(isolated.Store, identity, executionId, activityIds);
-                    break;
-                case Backend.SharedSqlite:
-                    harness = NewDurableHarness(sharedStore!, identity, executionId, activityIds);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(backend), backend, null);
+                var identity = IdentityFor(index);
+                var executionId = $"wfexec-{index}";
+
+                var activityIds = NewActivityIdPool(index);
+                WorkflowExecutionHarness harness;
+                switch (backend)
+                {
+                    case Backend.InMemory:
+                        harness = NewInMemoryHarness(identity, executionId, activityIds);
+                        break;
+                    case Backend.IsolatedSqlite:
+                        var isolated = await NewSqliteStoreAsync();
+                        trackedStores.Add(isolated);
+                        harness = NewDurableHarness(isolated.Store, identity, executionId, activityIds);
+                        break;
+                    case Backend.SharedSqlite:
+                        harness = NewDurableHarness(sharedStore!, identity, executionId, activityIds);
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(backend), backend, null);
+                }
+
+                // Pay per-provider setup (registry scan) BEFORE the timed window so wall time is execution, not construction.
+                harness.InitializeActivityTypes();
+                harnesses.Add(harness);
+                executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, shape.MakeLeaf, identity));
             }
 
-            // Pay per-provider setup (registry scan) BEFORE the timed window so wall time is execution, not construction.
-            harness.InitializeActivityTypes();
-            harnesses.Add(harness);
-            executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.NoOpLeaf, identity));
+            var (totalWallMs, latencies) = await TimeConcurrentRunsAsync(harnesses, executables);
+            var aggregateDispatches = SumDispatches(harnesses);
+
+            // Aggregate durable checkpoint commits (deterministic evidence). Shared store: one query over all N runs;
+            // isolated: sum per-run stores; in-memory: none.
+            long? aggregateCommits = backend == Backend.InMemory ? null : 0;
+            if (backend == Backend.SharedSqlite)
+                aggregateCommits = await CountCheckpointCommitsAsync(sharedStore!);
+            else if (backend == Backend.IsolatedSqlite)
+                foreach (var (store, _) in trackedStores)
+                    aggregateCommits += await CountCheckpointCommitsAsync(store);
+
+            return new ConcurrencyResult(totalWallMs, Percentile(latencies, 50), Percentile(latencies, 95),
+                latencies.Length > 0 ? latencies[0] : double.NaN,
+                latencies.Length > 0 ? latencies[^1] : double.NaN,
+                aggregateCommits,
+                aggregateDispatches);
         }
-
-        var (totalWallMs, latencies) = await TimeConcurrentRunsAsync(harnesses, executables);
-
-        // Aggregate durable checkpoint commits (deterministic evidence). Shared store: one query over all N runs;
-        // isolated: sum per-run stores; in-memory: none.
-        long? aggregateCommits = backend == Backend.InMemory ? null : 0;
-        if (backend == Backend.SharedSqlite)
-            aggregateCommits = await CountCheckpointCommitsAsync(sharedStore!);
-        else if (backend == Backend.IsolatedSqlite)
-            foreach (var (store, _) in trackedStores)
-                aggregateCommits += await CountCheckpointCommitsAsync(store);
-
-        foreach (var harness in harnesses)
-            await harness.DisposeAsync();
-        foreach (var (store, path) in trackedStores)
-            await DisposeStoreAsync(store, path);
-
-        return new ConcurrencyResult(totalWallMs, Percentile(latencies, 50), Percentile(latencies, 95),
-            latencies.Length > 0 ? latencies[0] : double.NaN,
-            latencies.Length > 0 ? latencies[^1] : double.NaN,
-            aggregateCommits);
+        finally
+        {
+            // Cleanup must survive a level that FAILS rather than merely slows: on the shared writer the External shape
+            // can starve its own ownership heartbeat and throw (see ConcurrencyScalingCurve), and without this the
+            // failing level would leak N providers and a temp database on the way out.
+            foreach (var harness in harnesses)
+                await harness.DisposeAsync();
+            foreach (var (store, path) in trackedStores)
+                await DisposeStoreAsync(store, path);
+        }
     }
+
+    /// <summary>
+    /// Aggregate scheduler dispatches over the N harnesses of one level (spec 123 FR-008 / PR #1214's counter). Each
+    /// concurrent harness owns its own DI container, so each resolves its OWN singleton counter and the level total is
+    /// the sum. Unlike wall time this is deterministic and load-proof, so it is the part of the curve that can falsify
+    /// its own claim: it separates "the engine is doing more work" from "the shared writer is congested".
+    /// </summary>
+    private static long SumDispatches(IEnumerable<WorkflowExecutionHarness> harnesses) =>
+        harnesses.Sum(harness => harness.Services.GetService<RuntimeSchedulerDispatchDiagnostics>()?.Dispatches ?? 0);
 
     /// <summary>
     /// Times N concurrent runs (each harness runs its own executable under its own stopwatch) and returns the total
@@ -499,5 +615,6 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         double P95,
         double Min,
         double Max,
-        long? AggregateCommits);
+        long? AggregateCommits,
+        long AggregateDispatches);
 }

@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -138,7 +139,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             pauseGate: null,
             workflowExecutionStateStore: null,
             dispatcher);
@@ -164,6 +165,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
         services.AddSingleton<RuntimeWorkflowInvokeMiddleware>();
@@ -223,5 +225,4 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
             return next(context);
         }
     }
-
 }

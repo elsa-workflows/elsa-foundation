@@ -1867,6 +1867,7 @@ public sealed class WorkflowExecutableCompilerTests
         services.AddSingleton<IRuntimeCheckpointCommitStore>(checkpointStore);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
+        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityCompletionProjector>();
         services.AddSingleton<RuntimeOutputCaptureProjector>();

@@ -14,7 +14,7 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.103";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.111";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
@@ -97,10 +97,11 @@ public sealed class GroundworkTargetBaselineTests
         Assert.Equal(CurrentGroundworkVersion, PackageVersion(typeof(IDocumentStore).Assembly));
         Assert.Equal(CurrentGroundworkVersion, packageFamilyVersion);
         Assert.Equal(CurrentGroundworkVersion, schemaToolVersion);
-        // preview.103 plus the durable runtime-alteration and workflow-executable coordination schemas retains
+        // preview.111 plus the durable runtime-alteration and workflow-executable coordination schemas retains
         // unaccepted physical target and plan fingerprint drift from the accepted preview.81 values. Pin the
         // observed drift without accepting it as evidence; the exact-source publication work unit must ratify
-        // it before enabling evidence output.
+        // it before enabling evidence output. Both fingerprints are unchanged from preview.103: the SQL Server
+        // index-pin fix in that release changes query rendering only, not the physical target or plan.
         Assert.True(
             StringComparer.Ordinal.Equals(PendingTargetFingerprint, telemetrySnapshot.TargetFingerprint),
             $"Pending target fingerprint mismatch. Expected: {PendingTargetFingerprint}; Actual: {telemetrySnapshot.TargetFingerprint}");

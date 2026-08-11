@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -238,12 +239,10 @@ public sealed class RuntimeDrainStepSingleTransactionTests
         new(
             new ImmediatePolicy(),
             store,
-            ownershipContextAccessor: null,
-            tracer: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             enrichers: [],
             intentHandlerContributions: [],
-            consumedWorkClaimAccessor: accessor,
-            coalescingSessionAccessor: null);
+            consumedWorkClaimAccessor: accessor);
 
     private WorkflowSchedulerDrainer NewDrainer(
         IWorkflowSchedulerWorkQueue queue,
@@ -254,7 +253,7 @@ public sealed class RuntimeDrainStepSingleTransactionTests
             queue,
             handlers,
             new InMemoryWorkflowExecutionStateStore(),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             pauseGate: null,
             pipelineDispatcher: null,
             faultCapturePolicy: null,
@@ -277,11 +276,6 @@ public sealed class RuntimeDrainStepSingleTransactionTests
             sequence: index,
             payload: null,
             commandMetadata: null);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class ImmediatePolicy : IRuntimeCheckpointPersistencePolicy
     {

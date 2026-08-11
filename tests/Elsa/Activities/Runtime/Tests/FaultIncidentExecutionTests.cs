@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -68,6 +69,47 @@ public sealed class FaultIncidentExecutionTests
         Assert.Equal("The workflow faulted.", incident.Message);
     }
 
+    /// <summary>
+    /// Establishes <b>which</b> collaborator decides that an activity fault terminates the workflow: the authored
+    /// <c>IIncidentStrategy</c>, applied by <c>IncidentStrategyResolutionDrainObserver</c> at quiescence, not
+    /// <c>BlockingIncidentWorkflowFaultObserver</c>. The recorded outcome carries the strategy reference and the
+    /// <c>FaultWorkflow</c> action kind; the fault observer never writes a resolution outcome. See
+    /// <c>docs/runtime-fault-behavior.md</c>.
+    /// </summary>
+    [Fact]
+    public async Task FaultActivity_WorkflowFault_IsAuthoredByTheIncidentStrategy()
+    {
+        await using var provider = NewProvider(["actexec-fault"]);
+
+        await ExecuteAsync(provider, NewExecutable("Boom!"));
+
+        var incident = Assert.Single(await provider.GetRequiredService<IIncidentStateStore>().ListAsync("wfexec-1"));
+        var outcome = Assert.IsType<IncidentResolutionOutcome>(incident.ResolutionOutcome);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, outcome.ActionKind);
+        Assert.Equal(IncidentStrategyBuiltIns.FaultReference, outcome.Strategy);
+        Assert.Null(outcome.SystemSource);
+    }
+
+    /// <summary>
+    /// The counterpart to <see cref="FaultActivity_WorkflowFault_IsAuthoredByTheIncidentStrategy"/>: authoring
+    /// <c>ContinueWithIncidents</c> on the same fault leaves the workflow Running. A blocking incident is therefore
+    /// not by itself a workflow fault, which is the confusion <c>docs/runtime-fault-behavior.md</c> exists to fix.
+    /// </summary>
+    [Fact]
+    public async Task FaultActivity_WithContinueWithIncidentsStrategy_LeavesTheWorkflowRunning()
+    {
+        await using var provider = NewProvider(["actexec-fault"]);
+
+        await ExecuteAsync(provider, NewExecutable("Boom!", IncidentStrategyBuiltIns.ContinueWithIncidentsReference));
+
+        var incident = Assert.Single(await provider.GetRequiredService<IIncidentStateStore>().ListAsync("wfexec-1"));
+        Assert.Equal(IncidentStatus.Open, incident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.ContinueWithIncidents, incident.ResolutionOutcome!.ActionKind);
+
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        Assert.Equal(WorkflowExecutionStatus.Running, workflowState!.Status);
+    }
+
     private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
     {
         var services = new ServiceCollection();
@@ -91,7 +133,7 @@ public sealed class FaultIncidentExecutionTests
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
-    private WorkflowExecutable NewExecutable(string? message)
+    private WorkflowExecutable NewExecutable(string? message, IncidentStrategyReference? incidentStrategy = null)
     {
         var stringType = new ValueTypeDescriptor("String");
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
@@ -133,7 +175,7 @@ public sealed class FaultIncidentExecutionTests
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
             compatibilityMetadata: new Dictionary<string, string>(),
-            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            incidentStrategy: incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
     }
 
     private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
