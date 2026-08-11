@@ -233,7 +233,7 @@ public sealed class WorkflowStartLineageTests
             new FixedTimeProvider(Now));
         var checkpointHandler = new WorkflowCheckpointSchedulerWorkHandler(
             activityStore,
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(Now),
             workflowExecutionStateStore: workflowStore,

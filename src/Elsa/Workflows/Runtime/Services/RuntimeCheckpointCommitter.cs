@@ -10,7 +10,7 @@ public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
-    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
+    private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
     private readonly IWorkflowEngineTracer _tracer;
     private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
     private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
@@ -19,39 +19,23 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly RuntimeInProcessHopFastPathOptions _inProcessHopFastPathOptions;
 
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null)
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer = null)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, [])
-    {
-    }
-
+    /// <summary>
+    /// Creates the committer. C1 (#1227): the four telescoping constructors collapsed into this single primary
+    /// constructor: five required collaborators followed by optional collaborators that default to their no-op
+    /// implementations. The ownership context accessor is <b>required by construction</b> so the W5 fence
+    /// (<see cref="AttachExpectedFence"/>, which stamps the ambient lease onto the provider-facing envelope) can never
+    /// be silently disabled by picking a narrower constructor: without it a commit made inside a fenced drain would
+    /// carry no expected fence and a superseded writer would be admitted. The enricher and intent-handler contribution
+    /// sets are required for the same reason. They carry commit enrichment and post-commit retry policy, so an empty
+    /// set must be handed in deliberately rather than inferred from the constructor that happened to be selected.
+    /// </summary>
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer,
-        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers)
-        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, tracer, enrichers, [])
-    {
-    }
-
-    public RuntimeCheckpointCommitter(
-        IRuntimeCheckpointPersistencePolicy persistencePolicy,
-        IRuntimeCheckpointCommitStore checkpointCommitStore,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IWorkflowEngineTracer? tracer,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
         IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers,
         IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IWorkflowEngineTracer? tracer = null,
         IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null,
         IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
@@ -59,6 +43,7 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
+        ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
         ArgumentNullException.ThrowIfNull(enrichers);
         ArgumentNullException.ThrowIfNull(intentHandlerContributions);
 
@@ -218,7 +203,7 @@ public sealed class RuntimeCheckpointCommitter
 
     private RuntimeCheckpointCommit AttachExpectedFence(RuntimeCheckpointCommit commit)
     {
-        if (_ownershipContextAccessor?.Current is not { } lease)
+        if (_ownershipContextAccessor.Current is not { } lease)
             return commit;
 
         if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))

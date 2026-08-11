@@ -272,9 +272,9 @@ public sealed class WorkflowDispatchDurabilityContractTests
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             captureStore,
-            ownershipContextAccessor: null,
-            tracer: null,
-            enrichers: [enricher]);
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            enrichers: [enricher],
+            intentHandlerContributions: []);
 
         await committer.CommitAsync(NewTerminalCommit(pending.ChildWorkflowExecutionId, executionStatus));
 

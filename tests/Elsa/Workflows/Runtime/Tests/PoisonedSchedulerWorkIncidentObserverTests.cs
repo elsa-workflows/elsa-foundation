@@ -212,7 +212,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 incidentStateStore: commitIncidentStore ?? IncidentStore,
                 activityExecutionInspectionWriter: inspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore);
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
             var timeProvider = new FixedTimeProvider(now);
             Observer = new PoisonedSchedulerWorkIncidentObserver(PoisonStore, IncidentStore, committer, timeProvider);
             FaultObserver = new BlockingIncidentWorkflowFaultObserver(

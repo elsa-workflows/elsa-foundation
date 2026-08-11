@@ -350,4 +350,51 @@ public sealed class FlowchartConformanceCorpusTests
         Assert.Equal(["node-decide", "node-live", "node-after"], run.Order);
         Assert.Equal(WorkflowExecutionStatus.Completed, run.Status);
     }
+
+    /// <summary>
+    /// C9 — a <c>merge</c> node with one dead and one live inbound. Merge is the one node kind that bypasses
+    /// join accounting entirely: it never waits, by design. That exemption means "must not block", not
+    /// "nothing more is coming", and the two are easy to conflate — reading the first as the second lets a
+    /// dead arrival carry deadness past a live branch still in flight, which fires the join behind it early
+    /// and then again when the real token lands. So the row asserts the node behind the merge runs exactly
+    /// once, in its place in the order, under both semantics.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(JoinPolicies))]
+    public async Task C9_MergeNodeWithOneDeadAndOneLiveInbound_DoesNotCarryDeadnessPastTheLiveBranch(string joinPolicyKind)
+    {
+        var run = await RunAsync(joinPolicyKind, fixture => fixture.NewExecutable(
+            children:
+            [
+                fixture.NewProbeNode("node-fork"),
+                fixture.NewProbeNode("node-decide", ["Skip"]),
+                fixture.NewProbeNode("node-live"),
+                fixture.NewProbeNode("node-other"),
+                fixture.NewProbeNode("node-skipped"),
+                fixture.NewProbeNode("node-merge"),
+                fixture.NewProbeNode("node-after"),
+                fixture.NewProbeNode("node-join")
+            ],
+            connections:
+            [
+                fixture.NewConnection("node-fork", "node-decide"),
+                fixture.NewConnection("node-fork", "node-live"),
+                fixture.NewConnection("node-fork", "node-other"),
+                fixture.NewConnection("node-decide", "node-merge", "Take"),
+                fixture.NewConnection("node-decide", "node-skipped", "Skip"),
+                fixture.NewConnection("node-live", "node-merge"),
+                fixture.NewConnection("node-merge", "node-after"),
+                fixture.NewConnection("node-after", "node-join"),
+                fixture.NewConnection("node-other", "node-join")
+            ],
+            startNodeId: "node-fork",
+            nodeMetadata: new Dictionary<string, FlowchartNodeMetadata> { ["node-merge"] = new(FlowchartPolicyKinds.Merge) }));
+
+        Assert.Equal(
+        [
+            "node-fork", "node-decide", "node-live", "node-other", "node-skipped",
+            "node-merge", "node-after", "node-join"
+        ], run.Order);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.Status);
+    }
 }

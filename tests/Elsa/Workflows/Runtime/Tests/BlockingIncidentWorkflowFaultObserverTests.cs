@@ -194,7 +194,7 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 incidentStateStore: IncidentStore,
                 activityExecutionInspectionWriter: InspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore);
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
             Observer = new BlockingIncidentWorkflowFaultObserver(
                 IncidentStore,
                 WorkflowStore,

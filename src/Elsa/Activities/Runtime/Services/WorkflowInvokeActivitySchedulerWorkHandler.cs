@@ -674,6 +674,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             cancellationToken);
     }
 
+    // This is where an activity fault stops: it is recorded here, not re-thrown, so it never reaches the scheduler
+    // drainer's fault arm and never produces a poison record. Whether the resulting blocking incident terminates the
+    // workflow is decided later by the authored IIncidentStrategy at drain quiescence. See
+    // docs/runtime-fault-behavior.md for the full path and its contrast with a handler-level fault.
+    //
     // Records a blocking fault incident for the activity and commits it. Each fault arm in InvokeActivityAsync
     // (input materialization, construction/binding, execution) differs only in its reason and snapshot set;
     // centralizing the request shape + commit here keeps those arms to one call. When the faulted activity has a

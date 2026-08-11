@@ -15,6 +15,10 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 /// together. Co-located that is one transaction; split it becomes an ordered sequence, and these pin the
 /// two properties that make the ordering safe: each lane is addressed through its own target's store, and
 /// the mode is chosen from the actual bindings rather than assumed. Issue #1156, ADR 0066.
+/// <para>
+/// What each phase boundary leaves behind when a host dies mid-sequence is pinned by crash injection in
+/// <c>ActivityDefinitionPublicationTests</c>, which owns the store harness those phases commit through.
+/// </para>
 /// </summary>
 public sealed class SplitActivityPublicationOrderingTests
 {

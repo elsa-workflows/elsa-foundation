@@ -233,7 +233,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         // compiles to the fail-safe External profile and its pre-activation claim keeps the mandatory flush.
         var coalescedExternalLeaf = await MeasureAsync(
             () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
-            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")),
+            () => BuildHotLoopFlowchart(BenchmarkWorkflows.ExternalLeaf),
             AssertHotLoopCompleted);
         Report($"hot-loop×{HotLoopLength} (External leaf: WriteLine) · durable-sqlite · Coalesced (cap {HotLoopSegmentCap})", coalescedExternalLeaf);
 
@@ -248,7 +248,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         await DumpCommitBreakdownAsync(
             $"hot-loop×{HotLoopLength} External leaf · Coalesced (cap {HotLoopSegmentCap})",
             () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
-            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")));
+            () => BuildHotLoopFlowchart(BenchmarkWorkflows.ExternalLeaf));
         await DumpCommitBreakdownAsync(
             $"hot-loop×{HotLoopLength} ReplaySafe leaf · Coalesced (HOST-DEFAULT cap 50 — cap trips mid-burst, tail flushes Immediate)",
             () => NewDurableSqliteHarnessAsync(coalesce: true),
@@ -293,7 +293,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     {
         var external = await MeasureAsync(
             () => NewDurableSqliteHarnessAsync(coalesce: true, maxSegmentCheckpoints: HotLoopSegmentCap),
-            () => BuildHotLoopFlowchart(index => NewWriteLineNode(LoopNodeId(index), $"loop step {index}")),
+            () => BuildHotLoopFlowchart(BenchmarkWorkflows.ExternalLeaf),
             AssertHotLoopCompleted);
         Report($"hot-loop×{HotLoopLength} (External CLR leaf: WriteLine) · durable-sqlite · Coalesced", external);
 
@@ -672,8 +672,6 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     private static string LoopNodeId(int index) => BenchmarkWorkflows.LoopNodeId(index);
 
     private static ExecutableNode NewPureLoopNode(int index) => BenchmarkWorkflows.NoOpLeaf(index);
-
-    private static ExecutableNode NewWriteLineNode(string nodeId, string text) => BenchmarkWorkflows.NewWriteLineNode(nodeId, text);
 
     /// <summary>A run measurement: per-iteration wall times, per-iteration commit counts (durable only), and executable-read counts.</summary>
     private sealed record Measurement(

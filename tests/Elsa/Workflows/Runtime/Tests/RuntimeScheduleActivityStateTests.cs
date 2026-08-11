@@ -317,7 +317,7 @@ public sealed class RuntimeScheduleActivityStateTests
             _schedulerWorkQueue,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(_now));
 

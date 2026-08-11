@@ -71,6 +71,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(_now));
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
+        services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         if (bookmarkLifecycleObserver is not null)
             services.AddSingleton(bookmarkLifecycleObserver);

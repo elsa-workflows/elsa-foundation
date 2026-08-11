@@ -266,11 +266,9 @@ public sealed class RuntimeInProcessHopFastPathTests
         new(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             store,
-            ownershipContextAccessor: null,
-            tracer: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             enrichers: [],
             intentHandlerContributions: [],
-            consumedWorkClaimAccessor: null,
             coalescingSessionAccessor: coalescing,
             liveDrainDeliveryAccessor: liveDrain,
             inProcessHopFastPathOptions: new RuntimeInProcessHopFastPathOptions { Enabled = enabled });

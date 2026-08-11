@@ -208,7 +208,9 @@ public sealed class RuntimeExecutionOwnershipTests
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             commitStore,
-            accessor);
+            accessor,
+            [],
+            []);
 
         // Two racing writers: A acquires first, then B supersedes it.
         var staleWriter = await ownership.AcquireAsync(WorkflowExecutionId);
@@ -243,7 +245,9 @@ public sealed class RuntimeExecutionOwnershipTests
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             commitStore,
-            accessor);
+            accessor,
+            [],
+            []);
 
         // No active scope pushed: the fencing check is skipped entirely.
         var result = await committer.CommitAsync(NewCommit("commit-unscoped"));

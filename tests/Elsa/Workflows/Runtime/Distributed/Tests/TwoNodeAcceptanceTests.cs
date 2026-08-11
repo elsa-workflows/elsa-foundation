@@ -541,8 +541,7 @@ public abstract class TwoNodeAcceptanceTests
         new(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             store,
-            ownershipContextAccessor: null,
-            tracer: null,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             enrichers: [],
             intentHandlerContributions:
             [

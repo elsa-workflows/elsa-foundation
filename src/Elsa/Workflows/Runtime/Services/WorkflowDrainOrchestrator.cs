@@ -12,89 +12,39 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
     private readonly WorkflowDrainOrchestratorOptions _options;
-    private readonly IRuntimeExecutionOwnershipService? _ownershipService;
-    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
+    private readonly IRuntimeExecutionOwnershipService _ownershipService;
+    private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
 
+    /// <summary>
+    /// Creates the orchestrator. C1 (#1227): the six telescoping constructors collapsed into this single primary
+    /// constructor: five required collaborators followed by optional collaborators that default to their
+    /// no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
+    /// construction</b> so the RT-2 single-writer lease, which fences every checkpoint commit made during the drain
+    /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
+    /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
+    /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately.
+    /// </summary>
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options = null)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService: null, ownershipContextAccessor: null)
-    {
-    }
-
-    public WorkflowDrainOrchestrator(
-        IWorkflowSchedulerDrainer schedulerDrainer,
-        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options,
-        IRuntimeExecutionOwnershipService? ownershipService,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, TimeProvider.System)
-    {
-    }
-
-    public WorkflowDrainOrchestrator(
-        IWorkflowSchedulerDrainer schedulerDrainer,
-        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options,
-        IRuntimeExecutionOwnershipService? ownershipService,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        TimeProvider timeProvider)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor: null, timeProvider)
-    {
-    }
-
-    // Immediate-mode DI selects this overload (widest satisfiable when no coalescing scope factory is registered) so
-    // the live-drain delivery accessor (WU-2) is injected and the in-memory fast path can engage.
-    public WorkflowDrainOrchestrator(
-        IWorkflowSchedulerDrainer schedulerDrainer,
-        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options,
-        IRuntimeExecutionOwnershipService? ownershipService,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
-        TimeProvider timeProvider)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null, liveDrainDeliveryAccessor, timeProvider)
-    {
-    }
-
-    // Coalescing-compatible overload retained for direct callers that do not customize the time provider.
-    public WorkflowDrainOrchestrator(
-        IWorkflowSchedulerDrainer schedulerDrainer,
-        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options,
-        IRuntimeExecutionOwnershipService? ownershipService,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
-        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null)
-        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory, liveDrainDeliveryAccessor, TimeProvider.System)
-    {
-    }
-
-    public WorkflowDrainOrchestrator(
-        IWorkflowSchedulerDrainer schedulerDrainer,
-        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
-        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowDrainOrchestratorOptions? options,
-        IRuntimeExecutionOwnershipService? ownershipService,
-        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
-        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
-        TimeProvider timeProvider,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null)
+        IRuntimeExecutionOwnershipService ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        WorkflowDrainOrchestratorOptions? options = null,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
         ArgumentNullException.ThrowIfNull(schedulerDrainObservers);
+        ArgumentNullException.ThrowIfNull(ownershipService);
+        ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
 
         _schedulerDrainer = schedulerDrainer;
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
@@ -105,7 +55,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _cadenceResolver = cadenceResolver;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -123,10 +73,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
         // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
         // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
-        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery.
-        if (_ownershipService is null || _ownershipContextAccessor is null)
-            return await DrainCoreAsync(envelope, request, cancellationToken);
-
+        // while every in-process completion path stops renewal and releases it to avoid false-positive recovery. Both
+        // collaborators are required by construction (C1), so there is no unfenced fallback path.
         var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
         using (_ownershipContextAccessor.Push(lease))
         using (var renewalStop = new CancellationTokenSource())
@@ -199,7 +147,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             RuntimeExecutionOwnershipTransitionResult heartbeat;
             try
             {
-                heartbeat = await _ownershipService!.HeartbeatAsync(lease, stopToken);
+                heartbeat = await _ownershipService.HeartbeatAsync(lease, stopToken);
             }
             catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
             {

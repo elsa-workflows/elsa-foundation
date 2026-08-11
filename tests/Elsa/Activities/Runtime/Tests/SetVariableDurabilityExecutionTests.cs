@@ -374,7 +374,7 @@ public sealed class SetVariableDurabilityExecutionTests
             activityExecutionStateStore: activityStore,
             activityExecutionInspectionWriter: inspectionStore,
             rootWriteLeaseManager: PassThroughRootWriteLeaseManager.Instance);
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var executor = new WorkflowIntrinsicExecutor(
             workflowStore,
             activityStore,

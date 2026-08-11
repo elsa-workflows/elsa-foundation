@@ -1011,16 +1011,87 @@ public sealed class ActivityDefinitionPublicationTests
     }
 
     /// <summary>
-    /// The split path commits runtime, then design, then the receipt. The design commit is the point the
-    /// publication becomes done, so an interruption before the receipt must be finishable: retrying with the
-    /// same idempotency key has to write the receipt rather than reject the retry as a duplicate. Without
-    /// this, the receipt would be unobtainable forever and every retry would conflict. ADR 0066.
+    /// Crash injection at the first phase boundary, rather than seeding the state a crash would have left.
+    /// The runtime commit lands and the design commit never runs, so the only durable trace is the runtime
+    /// material: no publication, no version, no receipt, and a draft still active. Every one of those partial
+    /// documents has to be inert, which is what lets the ordering converge by redrive alone. ADR 0066.
     /// </summary>
+    [Fact]
+    public async Task A_crash_after_the_runtime_commit_leaves_nothing_but_inert_runtime_material()
+    {
+        var harness = await Harness.CreateSplitAsync(crashBeforeDesignCommit: true);
+
+        await Assert.ThrowsAsync<HostCrashException>(() => harness.Command.ExecuteAsync(harness.Commit));
+
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            harness.Commit.ExecutableTemplate.TemplateId));
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "source-ref-1"));
+        Assert.Null(await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, "version-1"));
+        Assert.Null(await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "version-1"));
+        Assert.Null(await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
+            ActivityDependencyProjectionState.CurrentId));
+        Assert.Null(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey)));
+        var draft = DeserializeDesign<ActivityDefinitionDraft>((await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "draft-1"))!);
+        var authoring = DeserializeDesign<ActivityDefinitionAuthoringState>((await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, "authoring-generated-id"))!);
+        Assert.Equal(ActivityDefinitionDraftStatus.Active, draft.Status);
+        Assert.Null(authoring.HeadVersionId);
+    }
+
     /// <summary>
-    /// The earlier window. The split path writes the runtime documents before the design commit, so an
-    /// interruption between the two leaves a source reference behind. It is create-only, so a naive retry
-    /// conflicts on it and the publication is never finishable. The retry must recognise its own earlier
-    /// write and carry on. ADR 0066.
+    /// The same crash, then a restarted host retrying it. Convergence is not enough on its own: the retry
+    /// must also not repeat phase one. The runtime documents are create-only, so re-committing them would
+    /// either conflict or rewrite them, and the dependency projection allocates a sequence per publication —
+    /// so an unchanged document version on both runtime documents and a projection still at its first
+    /// sequence are what "no duplicate effects" means here. ADR 0066.
+    /// </summary>
+    [Fact]
+    public async Task A_retry_after_a_crash_at_the_runtime_boundary_converges_without_duplicate_effects()
+    {
+        var crashed = await Harness.CreateSplitAsync(crashBeforeDesignCommit: true);
+        await Assert.ThrowsAsync<HostCrashException>(() => crashed.Command.ExecuteAsync(crashed.Commit));
+        var templateAfterCrash = await crashed.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            crashed.Commit.ExecutableTemplate.TemplateId);
+        var referenceAfterCrash = await crashed.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "source-ref-1");
+
+        var restarted = await crashed.RestartAsync();
+        var result = await restarted.Command.ExecuteAsync(restarted.Commit);
+
+        Assert.Equal("version-1", result.DefinitionVersionId);
+        Assert.NotNull(await restarted.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, "version-1"));
+        Assert.NotNull(await restarted.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(restarted.Commit.Receipt.IdempotencyKey)));
+        var templateAfterRetry = await restarted.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
+            restarted.Commit.ExecutableTemplate.TemplateId);
+        var referenceAfterRetry = await restarted.Documents.LoadAsync(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "source-ref-1");
+        Assert.Equal(templateAfterCrash!.Version, templateAfterRetry!.Version);
+        Assert.Equal(referenceAfterCrash!.Version, referenceAfterRetry!.Version);
+        var projection = DeserializeDesign<ActivityDependencyProjectionState>((await restarted.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
+            ActivityDependencyProjectionState.CurrentId))!);
+        Assert.Equal(1, projection.Sequence);
+    }
+
+    /// <summary>
+    /// The same window, reached by seeding rather than by crashing, which keeps a case the crash test cannot
+    /// produce: a source reference present without its template. Phase one commits the two atomically, so no
+    /// crash separates them, but the resume check keys on the reference alone and has to hold whether or not
+    /// the template is there. Either way the retry must recognise its own earlier write and carry on rather
+    /// than conflict on the create-only reference. ADR 0066.
     /// </summary>
     /// <remarks>
     /// The interruption is modelled by seeding the runtime phase and then publishing once, rather than by
@@ -1096,6 +1167,13 @@ public sealed class ActivityDefinitionPublicationTests
         string ArtifactId,
         WorkflowExecutableSourceReference Reference);
 
+    /// <summary>
+    /// The split path commits runtime, then design, then the receipt. The design commit is the point the
+    /// publication becomes done, so an interruption before the receipt must be finishable: retrying with the
+    /// same idempotency key has to write the receipt rather than reject the retry as a duplicate. Without
+    /// this, the receipt would be unobtainable forever and every retry would conflict. ADR 0066.
+    /// </summary>
+    [Fact]
     public async Task Split_publication_interrupted_before_its_receipt_is_finished_by_a_retry()
     {
         var harness = await Harness.CreateSplitAsync();
@@ -1118,6 +1196,112 @@ public sealed class ActivityDefinitionPublicationTests
         Assert.Equal(first.DefinitionVersionId, resumed.DefinitionVersionId);
         Assert.Equal(first.SourceReferenceId, resumed.SourceReferenceId);
         Assert.Equal(first.PublishedAt, resumed.PublishedAt);
+    }
+
+    /// <summary>
+    /// The intent that makes step 3 converge. It is staged inside the design commit, so it is durable at the
+    /// instant the publication becomes done — and retired only once the receipt is durable too, which is why a
+    /// publication that runs to completion leaves nothing behind.
+    /// </summary>
+    [Fact]
+    public async Task A_completed_split_publication_leaves_no_outstanding_intent()
+    {
+        var harness = await Harness.CreateSplitAsync();
+
+        await harness.Command.ExecuteAsync(harness.Commit);
+
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey)));
+        Assert.Null(await harness.Outbox.FindAsync(ReceiptIntentId(harness)));
+    }
+
+    /// <summary>
+    /// A co-located publication is one transaction, so it has no step 3 and defers nothing. Recording an
+    /// intent there would create an obligation that is already met by the time anything could read it.
+    /// </summary>
+    [Fact]
+    public async Task A_colocated_publication_records_no_intent()
+    {
+        var harness = await Harness.CreateAsync();
+
+        await harness.Command.ExecuteAsync(harness.Commit);
+
+        Assert.Null(await harness.Outbox.FindAsync(ReceiptIntentId(harness)));
+    }
+
+    /// <summary>
+    /// The window ADR 0064 recorded as the deliberate limit, now closed. The design commit lands, the receipt
+    /// write fails, and the caller never comes back — so nothing the caller does can fix it. The redrive
+    /// delivers the receipt on its own and retires the intent. Issue #1171.
+    /// </summary>
+    [Fact]
+    public async Task A_split_publication_abandoned_after_its_design_commit_is_finished_by_the_redrive()
+    {
+        var harness = await Harness.CreateSplitAsync(interruptBeforeReceipt: true);
+        var receiptId = ReceiptId(harness.Commit.Receipt.IdempotencyKey);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => harness.Command.ExecuteAsync(harness.Commit));
+
+        // The publication is done and observable; only the receipt is missing, and the intent is what says so.
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
+            harness.Commit.Design.Publication.Id));
+        Assert.Null(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+        Assert.NotNull(await harness.Outbox.FindAsync(ReceiptIntentId(harness)));
+
+        var swept = await harness.Redrive.SweepAsync();
+
+        Assert.Equal(1, swept.DeliveredCount);
+        Assert.NotNull(await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind, receiptId));
+        Assert.Null(await harness.Outbox.FindAsync(ReceiptIntentId(harness)));
+    }
+
+    /// <summary>
+    /// A crash between a successful receipt write and the intent's deletion leaves the intent behind. The
+    /// redrive must converge on that too: redelivery finds the identical receipt already stored, which is
+    /// success rather than a duplicate-key conflict.
+    /// </summary>
+    [Fact]
+    public async Task Redelivering_a_receipt_that_already_landed_still_retires_the_intent()
+    {
+        var harness = await Harness.CreateSplitAsync();
+        await harness.Command.ExecuteAsync(harness.Commit);
+        var receipt = await harness.Documents.LoadAsync(
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            ReceiptId(harness.Commit.Receipt.IdempotencyKey));
+        await harness.Documents.SaveAllAsync(
+            DocumentCommitScope.Of(GroundworkDesignAtomicWriteStorageManifest.DesignPostCommitIntentDocumentKind),
+            [GroundworkDesignPostCommitOutbox.CreateSaveRequest(
+                ActivityPublicationReceiptDelivery.CreateIntent(new(
+                    receipt!.DocumentKind, receipt.Id, receipt.SchemaVersion, receipt.ContentJson)),
+                harness.Commit.Design.Publication.PublishedAt)]);
+
+        var swept = await harness.Redrive.SweepAsync();
+
+        Assert.Equal(1, swept.DeliveredCount);
+        Assert.Null(await harness.Outbox.FindAsync(ReceiptIntentId(harness)));
+    }
+
+    private static string ReceiptIntentId(Harness harness) =>
+        ActivityPublicationReceiptDelivery.IntentId(ReceiptId(harness.Commit.Receipt.IdempotencyKey));
+
+    /// <summary>
+    /// Refuses exactly the receipt's own single-kind commit, which is how the crash window is reproduced
+    /// without touching the design commit that precedes it.
+    /// </summary>
+    private sealed class ReceiptWriteFailureStore(InMemoryDocumentStore inner) : DocumentStoreDecorator(inner)
+    {
+        // Everything else passes straight through: the design lane still has to read and write while the
+        // publishing target is the thing that is unreachable.
+        public override Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            scope.Kinds.Contains(
+                PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+                StringComparer.Ordinal)
+                ? throw new TimeoutException("The publishing target is unreachable.")
+                : Inner.BeginAsync(scope, cancellationToken);
     }
 
     /// <summary>A fully committed publication is still a duplicate, not a resume.</summary>
@@ -1887,11 +2071,24 @@ public sealed class ActivityDefinitionPublicationTests
     private sealed class Harness(
         InMemoryDocumentStore documents,
         GroundworkActivityPublicationCommand command,
-        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit)
+        ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit,
+        GroundworkLaneStores? laneStores = null)
     {
         public InMemoryDocumentStore Documents { get; } = documents;
         public GroundworkActivityPublicationCommand Command { get; } = command;
         public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> Commit { get; } = commit;
+
+        /// <summary>The design lane's outbox, over the working store.</summary>
+        public GroundworkDesignPostCommitOutbox Outbox { get; } = new(documents, documents);
+
+        /// <summary>
+        /// The sweep a host runs on its own schedule, wired to the real receipt deliverer. Only the split
+        /// harness supplies lane stores, because only a split publication defers anything.
+        /// </summary>
+        public GroundworkDesignPostCommitRedrive Redrive => new(
+            Outbox,
+            [new ActivityPublicationReceiptIntentDeliverer(
+                laneStores ?? throw new InvalidOperationException("Only a split harness composes a redrive."))]);
 
         public static async Task<Harness> CreateAsync(bool injectLateLayoutConflict = false)
         {
@@ -1920,7 +2117,7 @@ public sealed class ActivityDefinitionPublicationTests
                 documents);
             return new(
                 documents,
-                CreateCommand(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection, null),
+                CreateCommand(store, payloads, runtimeSerializer, publications, projection, managementProjection, null),
                 commit);
         }
 
@@ -1928,32 +2125,66 @@ public sealed class ActivityDefinitionPublicationTests
         /// Composes the publication command with design and publishing on one target and runtime on another,
         /// which is what selects the ordered (non-transactional) path.
         /// </summary>
-        public static async Task<Harness> CreateSplitAsync()
+        /// <param name="crashBeforeDesignCommit">
+        /// Kills the host at the first phase boundary: the runtime commit lands and the design commit never
+        /// runs. Injected rather than seeded, so the state left behind is one the code actually produces.
+        /// </param>
+        /// <param name="interruptBeforeReceipt">
+        /// Fails the receipt write and nothing else, which is the crash window ADR 0066 records: the design
+        /// commit is durable, the publication is observable, and the caller never comes back. Modelled by
+        /// refusing the receipt's own single-kind commit scope rather than by undoing a write, so the state
+        /// left behind is one a real crash produces.
+        /// </param>
+        public static Task<Harness> CreateSplitAsync(
+            bool crashBeforeDesignCommit = false,
+            bool interruptBeforeReceipt = false) =>
+            CreateSplitAsync(new(CombinedManifest()), seed: true, crashBeforeDesignCommit, interruptBeforeReceipt);
+
+        /// <summary>
+        /// Composes a fresh command over the documents already committed, as a restarted host would: the
+        /// process that crashed is gone, and whatever it left behind is all the retry has to work from.
+        /// </summary>
+        public Task<Harness> RestartAsync() =>
+            CreateSplitAsync(Documents, seed: false, crashBeforeDesignCommit: false, interruptBeforeReceipt: false);
+
+        private static async Task<Harness> CreateSplitAsync(
+            InMemoryDocumentStore documents,
+            bool seed,
+            bool crashBeforeDesignCommit,
+            bool interruptBeforeReceipt)
         {
-            var documents = new InMemoryDocumentStore(CombinedManifest());
-            await SeedAsync(documents);
+            if (seed)
+                await SeedAsync(documents);
             var payloads = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
             var runtimeSerializer = new GroundworkRuntimeDocumentSerializer();
-            IDocumentStore store = documents;
+            IDocumentStore store = crashBeforeDesignCommit ? new CrashBeforeDesignCommitStore(documents)
+                : interruptBeforeReceipt ? new ReceiptWriteFailureStore(documents)
+                : documents;
             var commit = CreateCommit();
             var publications = new PublisherPublicationStore([]);
             var projection = new GroundworkActivityDependencyProjection(store, publications);
             var managementProjection = new GroundworkActivityManagementProjectionWriter(
                 store, new ImmediateLockProvider(), documents);
 
+            var bindings = SplitBindings();
+            return new(
+                documents,
+                CreateCommand(store, payloads, runtimeSerializer, publications, projection, managementProjection, bindings),
+                commit,
+                // Always the working store: a redrive is what runs after the crash, not during it.
+                CreateLaneStores(documents, bindings, runtimeStore: null));
+        }
+
+        private static GroundworkManifestBindings SplitBindings()
+        {
             var bindings = new GroundworkManifestBindings();
             bindings.Bind(typeof(ActivitiesDesignGroundworkStorageManifestSource), "authoring");
             bindings.Bind(typeof(PublishingGroundworkStorageManifestSource), "authoring");
-
-            return new(
-                documents,
-                CreateCommand(store, documents, payloads, runtimeSerializer, publications, projection, managementProjection, bindings),
-                commit);
+            return bindings;
         }
 
         private static GroundworkActivityPublicationCommand CreateCommand(
             IDocumentStore store,
-            InMemoryDocumentStore documents,
             IPayloadSerializer payloads,
             IGroundworkRuntimeDocumentSerializer runtimeSerializer,
             PublisherPublicationStore publications,
@@ -1961,6 +2192,23 @@ public sealed class ActivityDefinitionPublicationTests
             GroundworkActivityManagementProjectionWriter managementProjection,
             GroundworkManifestBindings? bindings,
             IDocumentStore? runtimeStore = null)
+        {
+            var laneStores = CreateLaneStores(store, bindings, runtimeStore);
+            return new(
+                    payloads,
+                    runtimeSerializer,
+                    publications,
+                    projection,
+                    managementProjection,
+                    new PublishingGroundworkDocumentSerializer(),
+                    new GroundworkLaneTargets(bindings ?? new GroundworkManifestBindings()),
+                    laneStores);
+        }
+
+        private static GroundworkLaneStores CreateLaneStores(
+            IDocumentStore store,
+            GroundworkManifestBindings? bindings,
+            IDocumentStore? runtimeStore)
         {
             var laneTargets = new GroundworkLaneTargets(bindings ?? new GroundworkManifestBindings());
             var services = new ServiceCollection().AddSingleton(store);
@@ -1973,15 +2221,7 @@ public sealed class ActivityDefinitionPublicationTests
                 services.AddKeyedSingleton(typeof(IBoundedDocumentStore), "authoring", designBounded);
             if ((runtimeStore ?? store) is IBoundedDocumentStore runtimeBounded)
                 services.AddKeyedSingleton(typeof(IBoundedDocumentStore), GroundworkTargetNames.Default, runtimeBounded);
-            return new(
-                    payloads,
-                    runtimeSerializer,
-                    publications,
-                    projection,
-                    managementProjection,
-                    new PublishingGroundworkDocumentSerializer(),
-                    laneTargets,
-                    new GroundworkLaneStores(services.BuildServiceProvider(), laneTargets));
+            return new(services.BuildServiceProvider(), laneTargets);
         }
 
         private static async Task SeedAsync(IDocumentStore store)
@@ -2156,34 +2396,75 @@ public sealed class ActivityDefinitionPublicationTests
             var design = ActivitiesDesignStorageManifest.Create();
             var runtime = ElsaRuntimeStorageManifest.Create();
             var publishing = PublishingGroundworkStorageManifest.Create();
+            // The design lane's ledger and post-commit intent outbox ride in the same commit as the design
+            // documents, so a harness that omits them cannot represent a split publication faithfully.
+            var atomicWrite = GroundworkDesignAtomicWriteStorageManifest.Create();
             return new(
                 new("elsa-activity-publication-tests"),
                 new("elsa.tests"),
                 new("1.0.0"),
-                design.StorageUnits.Concat(runtime.StorageUnits).Concat(publishing.StorageUnits).ToArray(),
+                design.StorageUnits
+                    .Concat(runtime.StorageUnits)
+                    .Concat(publishing.StorageUnits)
+                    .Concat(atomicWrite.StorageUnits)
+                    .ToArray(),
                 new HashSet<string> { "optimistic-concurrency" },
                 []);
         }
     }
 
-    private sealed class BeginConflictStore(InMemoryDocumentStore inner, SaveDocumentRequest conflict) : IDocumentStore
+    /// <summary>
+    /// Forwards every store operation; subclasses intercept only the commit they need to disturb. Both
+    /// contracts are forwarded because <see cref="GroundworkLaneStores"/> resolves the bounded store by its
+    /// own contract: a decorator that implemented only <see cref="IDocumentStore"/> would make every lane
+    /// fail to resolve its query store, and the command would die before reaching the phase under test.
+    /// </summary>
+    private abstract class DocumentStoreDecorator(InMemoryDocumentStore inner) : IDocumentStore, IBoundedDocumentStore
+    {
+        protected InMemoryDocumentStore Inner { get; } = inner;
+        public DocumentStoreAccess Access => Inner.Access;
+        public TransactionBoundary TransactionBoundary => Inner.TransactionBoundary;
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) => Inner.SaveAsync(request, cancellationToken);
+        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) => Inner.LoadAsync(documentKind, id, cancellationToken);
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) => Inner.DeleteAsync(request, cancellationToken);
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) => Inner.QueryAsync(query, cancellationToken);
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.QueryAsync(query, cancellationToken);
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.FirstOrDefaultAsync(query, cancellationToken);
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.AnyAsync(query, cancellationToken);
+        public virtual Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) => Inner.BeginAsync(scope, cancellationToken);
+
+        Task<DocumentQueryResult> IBoundedDocumentStore.QueryAsync(DocumentQuery query, CancellationToken cancellationToken) => Inner.QueryAsync(query, cancellationToken);
+        Task<long> IBoundedDocumentStore.CountAsync(DocumentQuery query, CancellationToken cancellationToken) => Inner.CountAsync(query, cancellationToken);
+        Task<DocumentEnvelope?> IBoundedDocumentStore.FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken) => Inner.FirstOrDefaultAsync(query, cancellationToken);
+        Task<bool> IBoundedDocumentStore.AnyAsync(DocumentQuery query, CancellationToken cancellationToken) => Inner.AnyAsync(query, cancellationToken);
+    }
+
+    private sealed class BeginConflictStore(InMemoryDocumentStore inner, SaveDocumentRequest conflict) : DocumentStoreDecorator(inner)
     {
         private int _injected;
-        public DocumentStoreAccess Access => inner.Access;
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
-        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
-        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
 
-        public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
+        public override async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref _injected, 1) == 0)
-                Assert.Equal(DocumentStoreWriteStatus.Saved, (await inner.SaveAsync(conflict, cancellationToken)).Status);
-            return await inner.BeginAsync(scope, cancellationToken);
+                Assert.Equal(DocumentStoreWriteStatus.Saved, (await Inner.SaveAsync(conflict, cancellationToken)).Status);
+            return await Inner.BeginAsync(scope, cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Cuts the ordered split sequence at the runtime/design boundary. Only the design commit carries the
+    /// publication kind — the runtime commit's scope is the two runtime kinds and the receipt commit's is the
+    /// receipt kind — so refusing that one scope stops the host exactly after phase one has committed and
+    /// leaves the durable state a real crash there would leave.
+    /// </summary>
+    private sealed class CrashBeforeDesignCommitStore(InMemoryDocumentStore inner) : DocumentStoreDecorator(inner)
+    {
+        public override Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            scope.Kinds.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, StringComparer.Ordinal)
+                ? throw new HostCrashException()
+                : Inner.BeginAsync(scope, cancellationToken);
+    }
+
+    /// <summary>The host dies mid-sequence: the call never returns and nothing compensates.</summary>
+    private sealed class HostCrashException() : Exception("The host died before the design commit.");
 }

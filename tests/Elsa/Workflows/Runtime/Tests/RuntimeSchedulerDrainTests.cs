@@ -1222,7 +1222,7 @@ public sealed class RuntimeSchedulerDrainTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
             timeProvider: new FakeTimeProvider(_now));
 
