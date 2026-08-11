@@ -62,7 +62,7 @@ public sealed class GroundworkDiscardDraftCommand(
             outcome.Value is { WasDiscarded: true, WorkflowDefinitionId: { } workflowDefinitionId })
         {
             await deferredEventPublisher.Publish(
-                new OnDraftDiscarded(draftId, workflowDefinitionId),
+                new DraftDiscarded(draftId, workflowDefinitionId),
                 CancellationToken.None);
         }
     }

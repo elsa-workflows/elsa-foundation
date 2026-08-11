@@ -21,12 +21,12 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <para>
 /// <b>Idempotency.</b> A second Discard on the same DraftId is a no-op — the lock acquires,
 /// the load returns <c>null</c>, the command exits cleanly without re-publishing
-/// <c>OnDraftDiscarded</c>.
+/// <c>DraftDiscarded</c>.
 /// </para>
 /// <para>
 /// <b>Parent Definition id.</b> Read directly off
 /// <c>WorkflowDefinitionDraft.WorkflowDefinitionId</c> after loading; the impl supplies it to
-/// <c>OnDraftDiscarded</c>. The caller does not pass it — the FK on the Draft is the single
+/// <c>DraftDiscarded</c>. The caller does not pass it — the FK on the Draft is the single
 /// source of truth.
 /// </para>
 /// </remarks>

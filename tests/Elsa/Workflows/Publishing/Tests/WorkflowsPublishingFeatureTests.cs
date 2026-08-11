@@ -65,7 +65,7 @@ public sealed class WorkflowsPublishingFeatureTests
         // spec 147: the engine subscribes to the Design-side reconcile completion event so sources with
         // PublishOnReconcile become executable at startup. Independent subscriber — no contributor interface.
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IEventHandler<OnWorkflowVersionsReconciled>) &&
+            descriptor.ServiceType == typeof(IEventHandler<WorkflowVersionsReconciled>) &&
             descriptor.ImplementationType == typeof(PublishReconciledWorkflowVersions));
     }
 

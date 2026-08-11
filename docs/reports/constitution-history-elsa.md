@@ -121,7 +121,7 @@ Derives from: framework constitution v3.0.0 (was v2.0.0).
   pub/sub concepts collapsed into one `IEvent`; exception-shielding-by-default
   reversed; event handling moved to its own `Elsa.Events.Core` / `Elsa.Events`
   library family). Elsa §E3.x worked examples realigned: §E3.3
-  (`OnJsonPayloadConvertersInitializing` now `IEvent`, published Sequential),
+  (`JsonPayloadConvertersInitializing` now `IEvent`, published Sequential),
   §E3.7 (JS declaration/binding events as Sequential contribution), §E3.9
   (`IEventPublisher.Publish` in the sync-over-async note), §E3.10 (validators).
   Any plan/spec/Elsa-section citing `IDomainEvent` / `INotification` /
@@ -143,7 +143,7 @@ Derives from: framework constitution v3.0.0 (was v2.0.0).
   variable copy-back is the canonical post-processor). The Jint evaluator now
   publishes `OnScriptEvaluated` after evaluation. §E3.8 + §E3.10 rewritten
   (validators are `IDraftValidator` contributor impls, not per-feature
-  `IEventHandler<OnDraftValidating>`; the single `ExecuteValidations` handler
+  `IEventHandler<DraftValidating>`; the single `ExecuteValidations` handler
   aggregates). "Source" (returns) vs "Contributor" (receives context + acts) vs
   "PreProcessor/PostProcessor" (acts on a lifecycle context, bound to an
   OnXxxing/OnXxxed pair) naming pinned framework-side.
@@ -217,7 +217,7 @@ Unit C Phase-3 cascade (2026-05-28, draft pending 2026-06-01 ratification):
   sub-rule was withdrawn; §E3.3 now uses `IJsonConverterSource` + the single
   `RegisterJsonConverters` handler + a directly-accessible `ICollection`.]
   - §E3.3 REWRITTEN under the new framework §2.6.1 intent-revealing-methods
-    sub-rule. `OnJsonPayloadConvertersInitializing` is now a `sealed class`
+    sub-rule. `JsonPayloadConvertersInitializing` is now a `sealed class`
     with `AddConverter(JsonConverter)` + `public IReadOnlyList<JsonConverter>
     Converters`. Earlier "payload carries `List<JsonConverter>`" wording
     superseded. Cross-references framework §2.6.1's new sub-pattern.
@@ -298,7 +298,7 @@ Added Elsa sections (relative to v1.0.0):
     in §E3.2). Jint isolated to implementation feature; `.Core` is engine-free.
   - §E3.7 — NEW: "Design-time vs runtime contract split — JS function
     declarations vs functions." Worked example for framework §2.6.4. Uses the
-    existing `OnDeclarationsDocumentGenerating` (design-time) and
+    existing `DeclarationsDocumentGenerating` (design-time) and
     `OnEvaluatingScript` (runtime) domain events.
   - §E3.8 — NEW: "`Elsa.Http.JavaScript` — secondary-domain naming walkthrough."
   - §E3.9 — NEW: "Sync contributor pattern — `IEntityModelCreatingHandler`."
@@ -344,8 +344,8 @@ ratification):
   - Migrate `IPayloadSerializerConverterProvider` and friends to Registry +
     StartUp Task + Domain Event pattern (matches §E3.3's new prose).
   - Migrate EF Core entity save/load handlers to the unified-event pattern.
-    **DONE** (Unit 1 consistency fix, 2026-06-03): `OnEntitySaving` +
-    `OnEntityLoading` are now each consumed by a **single aggregating**
+    **DONE** (Unit 1 consistency fix, 2026-06-03): `EntitySaving` +
+    `EntityLoading` are now each consumed by a **single aggregating**
     `IEventHandler` (`ApplyEntitySavingHandlers` / `ApplyEntityLoadingHandlers`,
     registered once by `EFCorePersistenceShellFeatureBase`) that dispatches every
     registered typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>`

@@ -4,7 +4,7 @@
 **Layer**: `Elsa.Workflows.Design.Persistence.Core/Contracts/` (the provider-agnostic persistence command surface; sibling to the 4 retained lifecycle command contracts).
 **Resolves**: FR-021 naming (R7).
 
-> **Supersession note (2026-07-05):** the command contract stands as the canonical Draft-mutation surface, but its **per-diff event emission** and **`WorkflowDefinitionDraftValidation` sibling write** are retired — per-diff publication is dropped (no subscribers; `DraftStateDiffer` remains the tested contract but is unregistered from DI) and the validation entity is deleted (errors are derived state; spec 002 FR-021). The command still takes the lock, applies desired state, runs `OnDraftValidating`, persists State, and Background-publishes `OnDraftValidated`. Reinstatable when an event-sourcing consumer exists.
+> **Supersession note (2026-07-05):** the command contract stands as the canonical Draft-mutation surface, but its **per-diff event emission** and **`WorkflowDefinitionDraftValidation` sibling write** are retired — per-diff publication is dropped (no subscribers; `DraftStateDiffer` remains the tested contract but is unregistered from DI) and the validation entity is deleted (errors are derived state; spec 002 FR-021). The command still takes the lock, applies desired state, runs `DraftValidating`, persists State, and Background-publishes `DraftValidated`. Reinstatable when an event-sourcing consumer exists.
 
 This is the **only** new public contract Unit 2 introduces. It replaces the 20 deleted granular mutation command contracts as the canonical Draft-mutation surface. The internal `DraftStateDiffer` and the per-dimension apply/emit logic are **not** contracts (G2/G25 — no public indirection).
 
@@ -57,11 +57,11 @@ public sealed record UpdateDraftRequest(
 2. Load + hydrate stored Draft (State + layout) → `stored` snapshot.
 3. Assign desired wholesale: `draft.State = request.State`, `layout.Records = request.Layout`; mark Modified.
 4. Diff `stored` vs desired → ordered event list (existing 20 event types).
-5. **Sequential** publish `OnDraftValidating` (sync, awaited gate) against post-apply state.
+5. **Sequential** publish `DraftValidating` (sync, awaited gate) against post-apply state.
 6. Upsert validation sibling wholesale.
 7. SaveChanges (transactional).
 8. Release lock.
-9. **Background** publish the per-diff events, then `OnDraftValidated` (cause-before-effect).
+9. **Background** publish the per-diff events, then `DraftValidated` (cause-before-effect).
 
 **Guarantees**:
 - **Atomicity**: state + validation outcome commit in one transaction under the lock.
@@ -72,7 +72,7 @@ public sealed record UpdateDraftRequest(
 **Error modes**:
 - Unknown/empty `DraftId` → load fails → not-found surfaced; no diff, no events, no commit.
 - Lock acquisition failure → surfaced to caller; no partial write.
-- A `OnDraftValidating` handler that throws breaks the caller (Sequential gate semantics, by design).
+- A `DraftValidating` handler that throws breaks the caller (Sequential gate semantics, by design).
 
 ---
 

@@ -172,7 +172,7 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
-        // spec 145: the executable compiler + the OnExecutableCompilationCollecting handler moved to the
+        // spec 145: the executable compiler + the ExecutableCompilationCollecting handler moved to the
         // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
         // shell composition. This test invokes ConfigureServices directly (bypassing DependsOn), so it composes
         // the engine feature too — otherwise the compiler and the compilation fan-in handler are unregistered.
@@ -184,7 +184,7 @@ public sealed class DispatchWorkflowDesignTests
         Assert.Contains(
             scope.ServiceProvider.GetServices<IExecutableCompilationSource>(),
             source => source is DispatchPinSource);
-        Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<OnExecutableCompilationCollecting>>());
+        Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<ExecutableCompilationCollecting>>());
 
         var executable = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableCompiler>().CompileAsync(
             new WorkflowExecutableCompileRequest(
@@ -889,6 +889,6 @@ public sealed class DispatchWorkflowDesignTests
         private readonly CollectExecutableCompilation _handler = new([], sources);
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
-            _handler.Handle(Assert.IsType<OnExecutableCompilationCollecting>(@event), cancellationToken);
+            _handler.Handle(Assert.IsType<ExecutableCompilationCollecting>(@event), cancellationToken);
     }
 }

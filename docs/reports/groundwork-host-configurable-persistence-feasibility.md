@@ -80,7 +80,7 @@ Option 2 — chosen because the requirement is "one DB configured once at the ho
   non-relational provider needs no joins; `SemVer` knowledge stays out of the store (callers pass a
   precomputed sort key).
 - **EF Core implements the same contract.** A generic `EFCoreReadStore<TDbContext, TEntity>` translates
-  `Query<TEntity>` to LINQ (`EFCoreQueryTranslator`), preserving tenant filters + the `OnEntityLoading`
+  `Query<TEntity>` to LINQ (`EFCoreQueryTranslator`), preserving tenant filters + the `EntityLoading`
   hydration pipeline. Relational users are unaffected.
 - **The legacy surface is gone.** `IQueries<TEntity>`, `IFilter<TEntity>`, `EFCoreQueries<,>`, and
   `ConfigureQueries<>` have been deleted; all design consumers (lookups, reconcilers, publishing, the

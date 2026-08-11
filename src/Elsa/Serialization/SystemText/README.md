@@ -4,4 +4,4 @@ Provides JSON serialisation infrastructure: registers the `IJsonSerializerOption
 
 ## Cross-domain contributions
 
-- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `JsonPayloadConvertersInitializingStartupTask` runs at startup to initialise the JSON converter registry by publishing `OnJsonPayloadConvertersInitializing`. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `JsonPayloadConvertersInitializingStartupTask` runs at startup to initialise the JSON converter registry by publishing `JsonPayloadConvertersInitializing`. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)

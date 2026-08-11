@@ -14,7 +14,7 @@ using System.Text.Json;
 namespace Elsa.Activities.Design.Reconciliation.Handlers;
 
 /// <summary>
-/// Handles <see cref="OnActivityVersionsReconciling"/> by pulling every registered
+/// Handles <see cref="ActivityVersionsReconciling"/> by pulling every registered
 /// <see cref="IActivityReconciliationSource"/> from DI and contributing one
 /// <c>IActivityDefinitionVersion</c> per entry. The handler is source-agnostic and
 /// provider- and consumer-agnostic: it validates stable provider/consumer keys and schemas, serialises
@@ -26,9 +26,9 @@ public sealed class CollectActivityVersions(
     IActivityDefinitionVersionFactory versionFactory,
     IPayloadSerializer payloadSerializer,
     IEnumerable<IActivityReconciliationSource> sources)
-    : IEventHandler<OnActivityVersionsReconciling>
+    : IEventHandler<ActivityVersionsReconciling>
 {
-    public async Task Handle(OnActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(ActivityVersionsReconciling domainEvent, CancellationToken cancellationToken)
     {
         foreach (var source in sources)
         {

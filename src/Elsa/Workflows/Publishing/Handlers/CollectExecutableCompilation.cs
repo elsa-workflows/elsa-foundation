@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Publishing.Handlers;
 /// <summary>
 /// Single fan-in handler that collects and validates every registered executable-compilation source.
 /// </summary>
-public sealed class CollectExecutableCompilation : IEventHandler<OnExecutableCompilationCollecting>
+public sealed class CollectExecutableCompilation : IEventHandler<ExecutableCompilationCollecting>
 {
     private readonly SourceRegistration[] _sources;
 
@@ -59,7 +59,7 @@ public sealed class CollectExecutableCompilation : IEventHandler<OnExecutableCom
         _sources = registrations;
     }
 
-    public async Task Handle(OnExecutableCompilationCollecting domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(ExecutableCompilationCollecting domainEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
 

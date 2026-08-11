@@ -19,8 +19,8 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <c>projectName</c> identifies the project whose directory contains the per-domain catalog.
 /// <para>
 /// Two properties are verified:
-/// (a) every event in the assembly has a corresponding <c>### OnXxx</c> heading in the catalog;
-/// (b) every <c>### OnXxx</c> heading in the catalog maps to a real event in at least one of
+/// (a) every event in the assembly has a corresponding <c>### Xxx</c> heading in the catalog;
+/// (b) every <c>### Xxx</c> heading in the catalog maps to a real event in at least one of
 ///     the assemblies registered for that catalog (handles the multi-assembly case where two
 ///     Core assemblies publish into the same feature catalog).
 /// </para>
@@ -36,8 +36,10 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// folded into the per-domain <c>EXTENSION_POINTS.md</c> (with the events as an "Events"
 /// section) on 2026-06-03 (framework §2.22.1 amendment). Catalog locations moved from
 /// <c>*.Core</c> to composition-root feature projects on 2026-06-03 (framework §2.22.1
-/// amendment). Only <c>### On…</c> headings are matched, so contract/contributor headings
-/// in the other sections are ignored.
+/// amendment). Only undecorated PascalCase <c>### Xxx</c> headings are matched, so decorated
+/// contract/contributor headings in the other sections — e.g. <c>### `IDraftValidator` *(Core)*</c>
+/// — are ignored. The <c>On</c> prefix that used to do this filtering was dropped from event
+/// names on 2026-08-08 (framework §2.6.6 amendment, constitution v4.0.0).
 /// </remarks>
 public sealed class CatalogParityTests
 {
@@ -52,17 +54,17 @@ public sealed class CatalogParityTests
     public static IEnumerable<object[]> CoreAssembliesWithCatalogs()
     {
         // Workflows.Design mutation events → composition root at Elsa.Workflows.Design.Api
-        yield return [typeof(OnDraftCreated), "Elsa.Workflows.Design.Api"];
+        yield return [typeof(DraftCreated), "Elsa.Workflows.Design.Api"];
         // Validation events → composition root at Elsa.Workflows.Design.Validations
-        yield return [typeof(OnDraftValidating), "Elsa.Workflows.Design.Validations"];
+        yield return [typeof(DraftValidating), "Elsa.Workflows.Design.Validations"];
         // Serialization converter-initializing event
-        yield return [typeof(OnJsonPayloadConvertersInitializing), "Elsa.Serialization.SystemText"];
+        yield return [typeof(JsonPayloadConvertersInitializing), "Elsa.Serialization.SystemText"];
         // JavaScript rendering (declarations) event
-        yield return [typeof(OnDeclarationsDocumentGenerating), "Elsa.Expressions.JavaScript.Rendering"];
+        yield return [typeof(DeclarationsDocumentGenerating), "Elsa.Expressions.JavaScript.Rendering"];
         // Activity reconciliation event
-        yield return [typeof(OnActivityVersionsReconciling), "Elsa.Activities.Design.Reconciliation"];
+        yield return [typeof(ActivityVersionsReconciling), "Elsa.Activities.Design.Reconciliation"];
         // Workflow reconciliation event
-        yield return [typeof(OnWorkflowVersionsReconciling), "Elsa.Workflows.Design.Reconciliation"];
+        yield return [typeof(WorkflowVersionsReconciling), "Elsa.Workflows.Design.Reconciliation"];
     }
 
     [Theory]
@@ -115,15 +117,18 @@ public sealed class CatalogParityTests
 
     /// <summary>
     /// Extracts level-3 markdown headings from the catalog beside the selected project file.
-    /// Filters to headings that look like event class names per R4 — alphanumeric + starts
-    /// with <c>On</c> + no decoration. Prose like <c>### OnDraftValidating: domain gate</c>
-    /// would be ignored (the regex requires the heading to end at the class name).
+    /// Filters to headings that look like event class names per R4 — PascalCase alphanumeric +
+    /// no decoration. Prose like <c>### DraftValidating: domain gate</c> would be ignored (the
+    /// regex requires the heading to end at the class name), as would any decorated heading such
+    /// as <c>### `IDraftValidator` *(Core)*</c>. An undecorated single-word level-3 heading in a
+    /// catalog is therefore reserved for event names; <see cref="Every_catalog_heading_maps_to_a_real_event"/>
+    /// fails if one appears that no event backs.
     /// </summary>
     private static IReadOnlySet<string> ReadCatalogHeadings(string projectName)
     {
         var path = FindCatalogPath(projectName);
         var content = File.ReadAllText(path);
-        var matches = Regex.Matches(content, @"^### (On[A-Za-z0-9]+)\s*$", RegexOptions.Multiline);
+        var matches = Regex.Matches(content, @"^### ([A-Z][A-Za-z0-9]*)\s*$", RegexOptions.Multiline);
         return matches.Select(m => m.Groups[1].Value).ToHashSet();
     }
 

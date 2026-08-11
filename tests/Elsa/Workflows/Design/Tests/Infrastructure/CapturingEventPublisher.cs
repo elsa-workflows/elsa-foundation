@@ -34,20 +34,20 @@ public sealed class CapturingEventPublisher : IInlineEventPublisher, IDeferredEv
     /// <summary>
     /// Optional hook invoked on every <see cref="Publish"/> call before the event is enqueued.
     /// Tests use it to simulate validator contributions (e.g. add a <c>ValidationError</c> to
-    /// an <c>OnDraftValidating</c> instance) without spinning up the full event pipeline +
+    /// an <c>DraftValidating</c> instance) without spinning up the full event pipeline +
     /// handler-invoker middleware.
     /// </summary>
     public Action<IEvent>? OnPublish { get; set; }
 
     /// <summary>
     /// Convenience: install an <see cref="OnPublish"/> hook that contributes <paramref name="error"/>
-    /// onto every <c>OnDraftValidating</c> pass, simulating a validator that always emits it. Replaces
-    /// the copy-pasted "if OnDraftValidating add ValidationError" lambda at each call site.
+    /// onto every <c>DraftValidating</c> pass, simulating a validator that always emits it. Replaces
+    /// the copy-pasted "if DraftValidating add ValidationError" lambda at each call site.
     /// </summary>
     public void ContributeError(ValidationError error) =>
         OnPublish = e =>
         {
-            if (e is OnDraftValidating validating)
+            if (e is DraftValidating validating)
                 validating.Errors.Add(error);
         };
 

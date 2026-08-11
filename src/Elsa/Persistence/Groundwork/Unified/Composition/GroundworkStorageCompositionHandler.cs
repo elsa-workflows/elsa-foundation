@@ -7,7 +7,7 @@ namespace Elsa.Persistence.Groundwork.Unified.Composition;
 /// Single aggregating handler for the host-selected Groundwork manifest sources. Sources are invoked
 /// once in stable feature-identity order; the context is frozen only after every contribution succeeds.
 /// </summary>
-public sealed class GroundworkStorageCompositionHandler : IEventHandler<OnGroundworkStorageComposing>
+public sealed class GroundworkStorageCompositionHandler : IEventHandler<GroundworkStorageComposing>
 {
     private readonly IReadOnlyList<IGroundworkStorageManifestSource> sources;
 
@@ -24,7 +24,7 @@ public sealed class GroundworkStorageCompositionHandler : IEventHandler<OnGround
     }
 
     public async Task Handle(
-        OnGroundworkStorageComposing domainEvent,
+        GroundworkStorageComposing domainEvent,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);

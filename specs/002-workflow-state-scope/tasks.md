@@ -135,39 +135,39 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ## Phase 6: Cross-cutting substrate — Draft event surface (FR-018 + FR-018a + FR-025)
 
-**Purpose**: Declare the 19 domain events that the Draft event-sourcing architectural slot rests on (16 FR-018 mutation events + 2 FR-018a lifecycle events in `Workflows.Design.Core`; 1 FR-025 `OnDraftValidating` in `Workflows.Design.Validations.Core`).
+**Purpose**: Declare the 19 domain events that the Draft event-sourcing architectural slot rests on (16 FR-018 mutation events + 2 FR-018a lifecycle events in `Workflows.Design.Core`; 1 FR-025 `DraftValidating` in `Workflows.Design.Validations.Core`).
 
 **Note**: All events are `sealed class IDomainEvent` per framework §2.6.1's intent-revealing-methods sub-rule. The Mediator pipeline cascade (Phase-6 in the constitution SIR) is already landed (committed in clarify session 1); no rework here.
 
 ### Event types in Workflows.Design.Core (FR-018 + FR-018a — 18 events)
 
-- [X] T042 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftCreated.cs`. Sealed class with primary ctor; payload `DraftId`, `WorkflowDefinitionId`.
-- [X] T043 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityAddedToDraft.cs`. **Decision:** passes `ActivityNode` directly (sealed record, immutable by structure) rather than the spec's phantom `IActivityNodeView`; introducing a parallel IView interface adds surface area without strengthening the non-mutating guarantee. Derived projections `NodeId` + `ActivityVersionId` expose convenience accessors.
-- [X] T044 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityRemovedFromDraft.cs`.
-- [X] T045 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityPropertyChangedInDraft.cs`. **Subsequently DELETED per Joey iteration 2026-05-28 round 2** — the generic event was redundant once the 6 specialized per-activity input/output CRUD events landed. All per-activity mutations now route through specialized commands; if a future non-input/non-output property surfaces (e.g. an `IsStart` toggle command), it gets its own dedicated event rather than a generic catch-all.
-- [X] T046 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnActivityMovedInDraft.cs`.
-- [X] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionAddedToDraft.cs`. Passes `ActivityConnection` directly (same record-as-view rationale).
-- [X] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnConnectionRemovedFromDraft.cs`. **Decision:** passes the full `ActivityConnection` removed (no `Id` field exists on connections — source+target IS the identity); spec mentioned a `ConnectionId` field that doesn't exist on the model.
-- [X] T049 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableDeclaredInDraft.cs`. Passes `VariableDefinition` directly.
-- [X] T050 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableUpdatedInDraft.cs`.
-- [X] T051 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnVariableRemovedFromDraft.cs`.
-- [X] T052 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputAddedToDraft.cs`. Passes `InputDefinition` directly.
-- [X] T053 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputUpdatedInDraft.cs`.
-- [X] T054 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowInputRemovedFromDraft.cs`.
-- [X] T055 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputAddedToDraft.cs`. Passes `OutputDefinition` directly.
-- [X] T056 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputUpdatedInDraft.cs`.
-- [X] T057 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnWorkflowOutputRemovedFromDraft.cs`.
-- [X] T058 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftClonedFromVersion.cs` (FR-018a lifecycle).
-- [X] T059 [P] Create `src/Elsa.Workflows.Design.Core/Events/OnDraftDiscarded.cs` (FR-018a lifecycle).
+- [X] T042 [P] Create `src/Elsa.Workflows.Design.Core/Events/DraftCreated.cs`. Sealed class with primary ctor; payload `DraftId`, `WorkflowDefinitionId`.
+- [X] T043 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityAddedToDraft.cs`. **Decision:** passes `ActivityNode` directly (sealed record, immutable by structure) rather than the spec's phantom `IActivityNodeView`; introducing a parallel IView interface adds surface area without strengthening the non-mutating guarantee. Derived projections `NodeId` + `ActivityVersionId` expose convenience accessors.
+- [X] T044 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityRemovedFromDraft.cs`.
+- [X] T045 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityPropertyChangedInDraft.cs`. **Subsequently DELETED per Joey iteration 2026-05-28 round 2** — the generic event was redundant once the 6 specialized per-activity input/output CRUD events landed. All per-activity mutations now route through specialized commands; if a future non-input/non-output property surfaces (e.g. an `IsStart` toggle command), it gets its own dedicated event rather than a generic catch-all.
+- [X] T046 [P] Create `src/Elsa.Workflows.Design.Core/Events/ActivityMovedInDraft.cs`.
+- [X] T047 [P] Create `src/Elsa.Workflows.Design.Core/Events/ConnectionAddedToDraft.cs`. Passes `ActivityConnection` directly (same record-as-view rationale).
+- [X] T048 [P] Create `src/Elsa.Workflows.Design.Core/Events/ConnectionRemovedFromDraft.cs`. **Decision:** passes the full `ActivityConnection` removed (no `Id` field exists on connections — source+target IS the identity); spec mentioned a `ConnectionId` field that doesn't exist on the model.
+- [X] T049 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableDeclaredInDraft.cs`. Passes `VariableDefinition` directly.
+- [X] T050 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableUpdatedInDraft.cs`.
+- [X] T051 [P] Create `src/Elsa.Workflows.Design.Core/Events/VariableRemovedFromDraft.cs`.
+- [X] T052 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowInputAddedToDraft.cs`. Passes `InputDefinition` directly.
+- [X] T053 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowInputUpdatedInDraft.cs`.
+- [X] T054 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowInputRemovedFromDraft.cs`.
+- [X] T055 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowOutputAddedToDraft.cs`. Passes `OutputDefinition` directly.
+- [X] T056 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowOutputUpdatedInDraft.cs`.
+- [X] T057 [P] Create `src/Elsa.Workflows.Design.Core/Events/WorkflowOutputRemovedFromDraft.cs`.
+- [X] T058 [P] Create `src/Elsa.Workflows.Design.Core/Events/DraftClonedFromVersion.cs` (FR-018a lifecycle).
+- [X] T059 [P] Create `src/Elsa.Workflows.Design.Core/Events/DraftDiscarded.cs` (FR-018a lifecycle).
 
-**Pre-req added (not in original task list):** `Elsa.Workflows.Design.Core.csproj` gained `ProjectReference` to `Elsa.Mediator.Core` (required by all events for `IDomainEvent`); `Elsa.Workflows.Design.Validations.Core.csproj` gained the same for `OnDraftValidating`.
+**Pre-req added (not in original task list):** `Elsa.Workflows.Design.Core.csproj` gained `ProjectReference` to `Elsa.Mediator.Core` (required by all events for `IDomainEvent`); `Elsa.Workflows.Design.Validations.Core.csproj` gained the same for `DraftValidating`.
 
-**Joey iteration 2026-05-28 — per-activity input/output full CRUD + drop generic property event.** Six new specialized events landed for symmetry with workflow-level CRUD and variable CRUD: `OnActivityInputAddedToDraft`, `OnActivityInputUpdatedInDraft`, `OnActivityInputRemovedFromDraft`, `OnActivityOutputAddedToDraft`, `OnActivityOutputUpdatedInDraft`, `OnActivityOutputRemovedFromDraft`. Each carries `DraftId + NodeId + ArgumentState` (Add) or `+ ReferenceKey + Old/New` (Update) or `+ ReferenceKey` (Remove). The generic `OnActivityPropertyChangedInDraft` was then **deleted** — once specialized CRUD events covered inputs/outputs, the generic event was redundant; future non-input/non-output property mutations (e.g. `IsStart` toggle) get their own dedicated event when they surface, not a catch-all. Workflows.Design.Core now publishes **23 events** (21 mutation + 2 lifecycle). `EventNamingTests` asserts all 21 mutation event names + exact count 23. `DOMAIN_EVENTS.md` gained two new sections (Per-activity inputs CRUD + Per-activity outputs CRUD); removed the OnActivityPropertyChangedInDraft entry; catalog-parity test re-passes. **Spec regeneration flag:** FR-018's authoritative count in the spec narrative needs to become "21 mutation events / 23 events total" with the generic property event removed and the 6 input/output CRUD events added.
+**Joey iteration 2026-05-28 — per-activity input/output full CRUD + drop generic property event.** Six new specialized events landed for symmetry with workflow-level CRUD and variable CRUD: `ActivityInputAddedToDraft`, `ActivityInputUpdatedInDraft`, `ActivityInputRemovedFromDraft`, `ActivityOutputAddedToDraft`, `ActivityOutputUpdatedInDraft`, `ActivityOutputRemovedFromDraft`. Each carries `DraftId + NodeId + ArgumentState` (Add) or `+ ReferenceKey + Old/New` (Update) or `+ ReferenceKey` (Remove). The generic `ActivityPropertyChangedInDraft` was then **deleted** — once specialized CRUD events covered inputs/outputs, the generic event was redundant; future non-input/non-output property mutations (e.g. `IsStart` toggle) get their own dedicated event when they surface, not a catch-all. Workflows.Design.Core now publishes **23 events** (21 mutation + 2 lifecycle). `EventNamingTests` asserts all 21 mutation event names + exact count 23. `DOMAIN_EVENTS.md` gained two new sections (Per-activity inputs CRUD + Per-activity outputs CRUD); removed the ActivityPropertyChangedInDraft entry; catalog-parity test re-passes. **Spec regeneration flag:** FR-018's authoritative count in the spec narrative needs to become "21 mutation events / 23 events total" with the generic property event removed and the 6 input/output CRUD events added.
 
-### `OnDraftValidating` in Validations.Core (FR-025)
+### `DraftValidating` in Validations.Core (FR-025)
 
 - [X] T060 [P] Create `ValidationError` value record at `src/Elsa.Workflows.Design.Validations.Core/Models/ValidationError.cs`. Sealed record `(Path, Type, Message)`. Doc header carries R2 Path format conventions + R3 Type categories.
-- [X] T061 Create `src/Elsa.Workflows.Design.Validations.Core/Events/OnDraftValidating.cs`. Canonical §2.6.1 contribution shape — sealed class, primary ctor, private `_errors`, `AddValidationError(ValidationError)`, `public IReadOnlyList<ValidationError> Errors`.
+- [X] T061 Create `src/Elsa.Workflows.Design.Validations.Core/Events/DraftValidating.cs`. Canonical §2.6.1 contribution shape — sealed class, primary ctor, private `_errors`, `AddValidationError(ValidationError)`, `public IReadOnlyList<ValidationError> Errors`.
 
 ### Tests for the event surface
 
@@ -181,7 +181,7 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ## Phase 7: Cross-cutting substrate — Draft mutation commands + lock (FR-019 + FR-027)
 
-**Purpose**: 16 granular CQS mutation commands (per FR-019) + 1 lifecycle `ICreateDraftCommand` + lock-semantics infrastructure. Each command takes the per-Draft distributed lock, applies the snapshot mutation, publishes the granular FR-018 event, publishes `OnDraftValidating`, rebuilds the validation sibling, transactional flush, release lock.
+**Purpose**: 16 granular CQS mutation commands (per FR-019) + 1 lifecycle `ICreateDraftCommand` + lock-semantics infrastructure. Each command takes the per-Draft distributed lock, applies the snapshot mutation, publishes the granular FR-018 event, publishes `DraftValidating`, rebuilds the validation sibling, transactional flush, release lock.
 
 **Note**: The `WorkflowDefinitionDraftValidation` sibling is created in Phase 9; until then, command implementations stub the validation flush. Then Phase 9 wires it up.
 
@@ -189,7 +189,7 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 - [X] T065 [P] Create `IAddActivityToDraftCommand.cs`.
 - [X] T066 [P] Create `IRemoveActivityFromDraftCommand.cs`.
-- [X] T067 [P] **N/A — DELETED** per Joey iteration 2026-05-28 round 2 (`OnActivityPropertyChangedInDraft` event was removed; the generic property command is redundant once specialized CRUD covers inputs/outputs). Six new contracts replaced it:
+- [X] T067 [P] **N/A — DELETED** per Joey iteration 2026-05-28 round 2 (`ActivityPropertyChangedInDraft` event was removed; the generic property command is redundant once specialized CRUD covers inputs/outputs). Six new contracts replaced it:
   - `IAddActivityInputToDraftCommand.cs`
   - `IUpdateActivityInputInDraftCommand.cs`
   - `IRemoveActivityInputFromDraftCommand.cs`
@@ -212,7 +212,7 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 
 ### Shared lock-acquisition helper
 
-- [X] T081 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DraftMutationPipeline.cs` — **shipped as helper service (composition), NOT abstract base class.** Encapsulates the FR-027 pipeline (acquire lock via `IDistributedLockProvider`, load Draft, invoke loading handlers, run mutate-and-build-event hook, mark Entity Modified, publish granular event, publish `OnDraftValidating`, [validation sibling flush — Phase 9 stub], flush, release lock). Provides `ExecuteMutation` for mutations on existing drafts + `ExecuteCreation` for `ICreateDraftCommand`. Composition over inheritance — each command depends on the service rather than inheriting.
+- [X] T081 Create `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DraftMutationPipeline.cs` — **shipped as helper service (composition), NOT abstract base class.** Encapsulates the FR-027 pipeline (acquire lock via `IDistributedLockProvider`, load Draft, invoke loading handlers, run mutate-and-build-event hook, mark Entity Modified, publish granular event, publish `DraftValidating`, [validation sibling flush — Phase 9 stub], flush, release lock). Provides `ExecuteMutation` for mutations on existing drafts + `ExecuteCreation` for `ICreateDraftCommand`. Composition over inheritance — each command depends on the service rather than inheriting.
 
 ### Command implementations in Persistence.EFCore (FR-019a)
 
@@ -235,12 +235,12 @@ Modular-monolith .NET 10 layout. Source under `src/`, tests under `tests/`. Solu
 - [X] **NEW per Joey iteration round 1:** 6 per-activity input/output CRUD impls — `AddActivityInputToDraftCommand`, `UpdateActivityInputInDraftCommand`, `RemoveActivityInputFromDraftCommand`, `AddActivityOutputToDraftCommand`, `UpdateActivityOutputInDraftCommand`, `RemoveActivityOutputFromDraftCommand`. All share an internal `WithMutatedActivity(state, nodeId, mutate)` helper for the per-node mutation pattern.
 - [X] T098 Register all 22 command implementations + the `DraftMutationPipeline` service in `EFCoreWorkflowsPersistenceFeatureBase.OnAfterConfigured`.
 
-**Pre-reqs added (not in original task list):** `Workflows.Design.Persistence.EFCore.csproj` gained `ProjectReference` to `Elsa.Locking.Core`, `Elsa.Mediator.Core`, and `Elsa.Workflows.Design.Validations.Core` (for `IDistributedLockProvider`, `IDomainEventSender`, and `OnDraftValidating`).
+**Pre-reqs added (not in original task list):** `Workflows.Design.Persistence.EFCore.csproj` gained `ProjectReference` to `Elsa.Locking.Core`, `Elsa.Mediator.Core`, and `Elsa.Workflows.Design.Validations.Core` (for `IDistributedLockProvider`, `IDomainEventSender`, and `DraftValidating`).
 
 ### Tests for commands
 
 - [X] T099 `CommandRegistrationTests.cs` — parametrised over all 21 contracts (lifecycle origination + 20 mutations); verifies each resolves to its expected implementation from the DI container. SC-012.
-- [X] T100 + T101 — **Consolidated as `DraftMutationPipelineTests.cs`** (representative pipeline coverage, 6 tests): `AddActivityToDraft` mutates state + publishes granular event + ordering with `OnDraftValidating`; `DeclareVariableInDraft` publishes event; `AddWorkflowInputToDraft` publishes distinct workflow-level event (not per-activity); `AddActivityInputToDraft` publishes per-activity event (not workflow-level); `CreateDraft` creates Draft + Layout siblings + publishes `OnDraftCreated`; closed-mode contract holds (no subscribers registered, pipeline completes). The pipeline is uniform across commands; exhaustive per-command branch coverage is **deferred to Phase 12 polish** — flagged in Unit C follow-up.
+- [X] T100 + T101 — **Consolidated as `DraftMutationPipelineTests.cs`** (representative pipeline coverage, 6 tests): `AddActivityToDraft` mutates state + publishes granular event + ordering with `DraftValidating`; `DeclareVariableInDraft` publishes event; `AddWorkflowInputToDraft` publishes distinct workflow-level event (not per-activity); `AddActivityInputToDraft` publishes per-activity event (not workflow-level); `CreateDraft` creates Draft + Layout siblings + publishes `DraftCreated`; closed-mode contract holds (no subscribers registered, pipeline completes). The pipeline is uniform across commands; exhaustive per-command branch coverage is **deferred to Phase 12 polish** — flagged in Unit C follow-up.
 - [X] T102 `LockSemanticsTests.cs` — two tests: (a) two acquires on the same lock name serialise; (b) two acquires on different lock names proceed in parallel. SC-016 + FR-027 + FR-027a.
 
 **Test infrastructure added:** `tests/Elsa.Workflows.Design.Tests/Infrastructure/`:
@@ -282,13 +282,13 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Tests for the Validations sub-domain
 
-- [X] T111 `ValidationsFeatureRegistrationTests.cs` — 4 tests: all 5 validators register; all implement `IDomainEventHandler<OnDraftValidating>`; default `MaxRecursionDepth == 100`; feature property override binds to options. SC-021. (Uses a stub `IActivityDefinitionLookup` to satisfy `RequiredInputOutputValidator`'s constructor.)
+- [X] T111 `ValidationsFeatureRegistrationTests.cs` — 4 tests: all 5 validators register; all implement `IDomainEventHandler<DraftValidating>`; default `MaxRecursionDepth == 100`; feature property override binds to options. SC-021. (Uses a stub `IActivityDefinitionLookup` to satisfy `RequiredInputOutputValidator`'s constructor.)
 - [X] T112 [P] `OrphanActivityValidatorTests.cs` — 4 branches (orphan, only-inbound, only-outbound, IsStart-disconnected).
 - [X] T113 [P] `StartActivityValidatorTests.cs` — 3 branches (zero / one / two starts).
 - [X] T114 [P] `VariableUniquenessValidatorTests.cs` — 3 branches (distinct names; case-insensitive collision; 3-way collision still emits one error).
 - [X] T115 [P] `RequiredInputOutputValidatorTests.cs` — required-input branches (satisfied; missing; present-but-empty), optional activity-result capture, unknown version skipped, and recursion through activity-owned children. SC-022(d). **Issue #1058 clarification:** `OutputDefinition.IsRequired` describes a produced result and does not require an authored output capture. Workflow-level validation remains deferred per the FR-033 no-op decision.
 - [X] T116 [P] `VariableExpressionResolverValidatorTests.cs` — 7 branches (non-Variable expression; known ReferenceKey; unknown ReferenceKey; empty reference; ReferenceKey-vs-Name disambiguation; recursion into child; output-path variant).
-- [X] T117 `CrossFeatureValidatorSubscriptionTests.cs` — 2 tests: a stub `IDomainEventHandler<OnDraftValidating>` defined in the test assembly (simulating an Elsa.Http-style activity feature per FR-034) contributes errors via `CapturingDomainEventSender.OnSend` that persist to the validation sibling; baseline + cross-feature contributions coexist in the same dispatch pass. SC-023 (contribution-flow); end-to-end DI dispatcher correctness via the real `DomainEventPipeline` is deferred to the already-flagged `Elsa.Mediator.Tests` follow-on.
+- [X] T117 `CrossFeatureValidatorSubscriptionTests.cs` — 2 tests: a stub `IDomainEventHandler<DraftValidating>` defined in the test assembly (simulating an Elsa.Http-style activity feature per FR-034) contributes errors via `CapturingDomainEventSender.OnSend` that persist to the validation sibling; baseline + cross-feature contributions coexist in the same dispatch pass. SC-023 (contribution-flow); end-to-end DI dispatcher correctness via the real `DomainEventPipeline` is deferred to the already-flagged `Elsa.Mediator.Tests` follow-on.
 - Tests added: 4 + 4 + 3 + 3 + 6 + 7 + 2 = **29 tests** (199 total — 31 in Activities.Design.Tests preserved + 168 in Workflows.Design.Tests).
 
 **Phase 8 architectural notes (recorded for the follow-up):**
@@ -345,19 +345,19 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Implementations
 
-- [X] T129 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/CloneDraftFromVersionCommand.cs`. Loads source Version + invokes version loading handlers to hydrate State; loads source VersionLayout; deep-copies State (collection-expression spread `[.. xs]`) + layout records into a new Draft + DraftLayout; routes through `DraftMutationPipeline.ExecuteCreation` so the new Draft acquires its per-Draft lock, gets its validation sibling populated, and emits the standard lifecycle-event sequence (OnDraftClonedFromVersion + OnDraftValidated). FR-028.
-- [X] T130 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DiscardDraftCommand.cs`. Custom flow (NOT via DraftMutationPipeline — different shape: no validation rebuild, no granular event). Uses `LockKeys.DraftKey(draftId)` helper. Acquires lock; loads Draft (return-cleanly-null for idempotency); `Remove(draft)` → cascade deletes Layout + Validation per R5; SaveChangesAsync; release lock; publishes OnDraftDiscarded.
+- [X] T129 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/CloneDraftFromVersionCommand.cs`. Loads source Version + invokes version loading handlers to hydrate State; loads source VersionLayout; deep-copies State (collection-expression spread `[.. xs]`) + layout records into a new Draft + DraftLayout; routes through `DraftMutationPipeline.ExecuteCreation` so the new Draft acquires its per-Draft lock, gets its validation sibling populated, and emits the standard lifecycle-event sequence (DraftClonedFromVersion + DraftValidated). FR-028.
+- [X] T130 `src/Elsa.Workflows.Design.Persistence.EFCore/Commands/DiscardDraftCommand.cs`. Custom flow (NOT via DraftMutationPipeline — different shape: no validation rebuild, no granular event). Uses `LockKeys.DraftKey(draftId)` helper. Acquires lock; loads Draft (return-cleanly-null for idempotency); `Remove(draft)` → cascade deletes Layout + Validation per R5; SaveChangesAsync; release lock; publishes DraftDiscarded.
 - [X] T131 Registered in `EFCoreWorkflowsPersistenceFeatureBase.OnAfterConfigured` ("Lifecycle origination + cloning + discard" group, alongside `ICreateDraftCommand`). Mirrored in `WorkflowsDesignTestHost.RegisterCommands`.
 
 ### Tests
 
-- [X] T132 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/CloneDraftFromVersionTests.cs` — 4 tests: State deep-copy verified by re-hydrating from StateSource; Layout records carried 1:1 (incl. Width/Height); NodeIds match as sets; `OnDraftClonedFromVersion` published with NewDraftId + SourceVersionId + TargetDefinitionId. SC-017. **ClonedFromVersionId field check (FR-028(d))** deferred per the contract's note — Unit D's field allocation.
-- [X] T133 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/DiscardDraftTests.cs` — 4 tests: atomic delete of Draft + Layout + Validation via cascade; no Version touched; OnDraftDiscarded published with DraftId + WorkflowDefinitionId; second Discard on same id is a no-op (exactly one OnDraftDiscarded published across two calls). SC-018.
+- [X] T132 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/CloneDraftFromVersionTests.cs` — 4 tests: State deep-copy verified by re-hydrating from StateSource; Layout records carried 1:1 (incl. Width/Height); NodeIds match as sets; `DraftClonedFromVersion` published with NewDraftId + SourceVersionId + TargetDefinitionId. SC-017. **ClonedFromVersionId field check (FR-028(d))** deferred per the contract's note — Unit D's field allocation.
+- [X] T133 [P] `tests/Elsa.Workflows.Design.Tests/Unit/DraftMutationCommandTests/DiscardDraftTests.cs` — 4 tests: atomic delete of Draft + Layout + Validation via cascade; no Version touched; DraftDiscarded published with DraftId + WorkflowDefinitionId; second Discard on same id is a no-op (exactly one DraftDiscarded published across two calls). SC-018.
 
 **Phase 10 architectural notes:**
 
 - **Test SeedVersion gotcha.** `WorkflowDefinitionVersionSavingHandler` re-serializes from `entity.State` on every save; if you only pass `stateSource` via constructor and don't set `entity.State`, the handler overwrites StateSource to `string.Empty`. Test helpers now set `State` directly and let the handler serialize on save.
-- **`ClonedFromVersionId` not added.** Per FR-028(d) the back-pointer field is "provisional; Unit D's call". Unit C declines to pre-empt by leaving the field off the entity. The `OnDraftClonedFromVersion` event payload carries `SourceVersionId` so audit subscribers can reconstruct the lineage; Unit D may persist the back-pointer if cardinality requires it.
+- **`ClonedFromVersionId` not added.** Per FR-028(d) the back-pointer field is "provisional; Unit D's call". Unit C declines to pre-empt by leaving the field off the entity. The `DraftClonedFromVersion` event payload carries `SourceVersionId` so audit subscribers can reconstruct the lineage; Unit D may persist the back-pointer if cardinality requires it.
 - **Draft → Definition relationship flipped (2026-05-29).** The prior model had `WorkflowDefinition.DraftId` (parent → child pointer, 1:0..1). Joey's call: stage the future 1-Definition-to-many-Drafts cardinality now by moving the FK to `WorkflowDefinitionDraft.WorkflowDefinitionId` (child → parent, many:1, required, cascade). Removes the reverse-lookup the Discard command needed, simplifies the Clone command (target Definition derived from source Version), aligns the data model with where multi-Draft semantics will land. Touches: `WorkflowDefinitionDraft` + `WorkflowDefinition` entities + read contracts; `WorkflowDefinitionConfiguration` (drop relationship) + `WorkflowDefinitionDraftConfiguration` (add FK); `CreateDraftCommand` + `CloneDraftFromVersionCommand` (set FK); `DiscardDraftCommand` (drop parameter); `WorkflowsVersionProvisioner.Map` (drop `DraftId` line); `GetDefinitionRequestHandler` + `AddDefinitionCommandHandler` + `WorkflowDefinitionQueryExtensions` (query Draft via the new direction). Test infra gains `WorkflowsDesignTestHost.EnsureDefinition` since the FK is now required.
 - **`IDiscardDraftCommand.Execute(string draftId, CT)` — single id.** Reads `draft.WorkflowDefinitionId` after loading; no caller-supplied parent id. Symmetric with `ICloneDraftFromVersionCommand.Execute(string sourceVersionId, CT)` — the FK on the entity is the single source of truth for parent linkage.
 
@@ -372,7 +372,7 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 ### Catalog files
 
 - [X] T134 [P] Create `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` listing every event in Workflows.Design.Core (18 events). Heading format `### <EventClassName>` per R4; each entry carries semantic + payload + publication site + expected handlers + ordering + cross-references. Grouped by category (lifecycle / activities / connections / variables / workflow inputs / workflow outputs).
-- [X] T135 [P] Create `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` listing `OnDraftValidating` (1 event). Same format and content as T134.
+- [X] T135 [P] Create `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` listing `DraftValidating` (1 event). Same format and content as T134.
 
 ### Parity test (FR-031 + FR-031a + R4)
 
@@ -433,10 +433,10 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 - **US3 (Phase 5)**: depends on Foundational. Independent of US1 / US2.
 - **Substrate Phase 6 (events)**: depends on Foundational. Events declared in `.Core`; consumed by Phase 7 commands.
 - **Substrate Phase 7 (commands)**: depends on Phase 6 (event types must exist) + US2 (layout entities must exist for the MoveActivity / Add commands that update layout).
-- **Substrate Phase 8 (Validations)**: depends on Phase 6 (`OnDraftValidating` must exist) + Foundational (`IsRequired` must exist).
-- **Substrate Phase 9 (validation sibling)**: depends on Phase 8 (validators) + Phase 7 (commands publish `OnDraftValidating`).
+- **Substrate Phase 8 (Validations)**: depends on Phase 6 (`DraftValidating` must exist) + Foundational (`IsRequired` must exist).
+- **Substrate Phase 9 (validation sibling)**: depends on Phase 8 (validators) + Phase 7 (commands publish `DraftValidating`).
 - **Substrate Phase 10 (lifecycle commands)**: depends on Phase 7 (lock infrastructure) + US2 (layout entities exist for Clone) + Phase 9 (Discard cascades the validation sibling).
-- **Substrate Phase 11 (catalog)**: depends on Phase 6 (events exist) + Phase 8 (`OnDraftValidating` exists).
+- **Substrate Phase 11 (catalog)**: depends on Phase 6 (events exist) + Phase 8 (`DraftValidating` exists).
 - **Polish (Phase 12)**: depends on everything else.
 
 ### User Story Dependencies
@@ -464,7 +464,7 @@ The substrate phases (6-11) are non-user-story work that ships as part of Unit C
 - **US1**: T016 → T017 → T018 → T019 → T020 (sequential — each verifies prior step).
 - **US2**: T021-T024 are `[P]` (different files); T025 + T026 are `[P]`; T027 sequential; T028-T031 are `[P]` (different test files).
 - **US3**: T032-T038 are mostly sequential (each grep+update audit); T040-T041 are `[P]` (different test files).
-- **Phase 6**: T042-T060 are all `[P]`; T061 depends on T060 (ValidationError must exist before OnDraftValidating references it); T062-T064 are `[P]`.
+- **Phase 6**: T042-T060 are all `[P]`; T061 depends on T060 (ValidationError must exist before DraftValidating references it); T062-T064 are `[P]`.
 - **Phase 7**: T065-T080 `[P]`; T081 sequential; T082-T097 `[P]` after T081; T098 sequential; T099-T102 `[P]`.
 - **Phase 8**: T103 `[P]`; T104 → T105-T109 `[P]` → T110 `[P]`; T111 → T112-T116 `[P]` → T117 sequential.
 - **Phase 9**: T118 → T119 → T120 sequential; T121 sequential after T118-T120; T122-T126 mostly sequential.
@@ -478,11 +478,11 @@ The substrate phases (6-11) are non-user-story work that ships as part of Unit C
 
 ```bash
 # Launch all 18 Workflows.Design.Core event file creations in parallel:
-Task: "Create src/Elsa.Workflows.Design.Core/Events/OnDraftCreated.cs"
-Task: "Create src/Elsa.Workflows.Design.Core/Events/OnActivityAddedToDraft.cs"
-Task: "Create src/Elsa.Workflows.Design.Core/Events/OnActivityRemovedFromDraft.cs"
-# ... and so on through OnDraftDiscarded.cs
-# Plus ValidationError + OnDraftValidating in Validations.Core.
+Task: "Create src/Elsa.Workflows.Design.Core/Events/DraftCreated.cs"
+Task: "Create src/Elsa.Workflows.Design.Core/Events/ActivityAddedToDraft.cs"
+Task: "Create src/Elsa.Workflows.Design.Core/Events/ActivityRemovedFromDraft.cs"
+# ... and so on through DraftDiscarded.cs
+# Plus ValidationError + DraftValidating in Validations.Core.
 
 # After all event files compile, launch the surface tests in parallel:
 Task: "Tests EventNamingTests.cs"
@@ -537,7 +537,7 @@ Tasks inherit the Constitution Check gates (G1–G30) decided in [plan.md](./pla
 - **G15 (Elsa §E2.2 hard rule)** — every task touches `Elsa.Workflows.Design.*`; no Runtime references introduced.
 - **G18 (CQS at persistence boundary)** — all FR-019 commands mutate without returning queryable views; queries on the validation sibling go through `IWorkflowDefinitionDraftValidation` only.
 - **G20 (refactor work preserves test subjects)** — T039 explicitly invokes §2.21.1 during the NodeId rename + collapse.
-- **G21 (domain events are the contribution mechanism)** — every validator is `IDomainEventHandler<OnDraftValidating>`; no provider/contributor interfaces introduced.
+- **G21 (domain events are the contribution mechanism)** — every validator is `IDomainEventHandler<DraftValidating>`; no provider/contributor interfaces introduced.
 - **G27 (unit test discipline)** — every feature class gets a §2.23.1 registration test; every logic-bearing implementation gets §2.23.2 branch-covered tests. Exception: Mediator middleware tests deferred per plan.md Complexity Tracking entry.
 
 If any task encounters a constitutional ambiguity during execution — escalate to Joey rather than silently bypass the rule (working-loop §5 + meta-repo CLAUDE.md §8 point 6).

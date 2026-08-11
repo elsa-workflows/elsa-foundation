@@ -41,10 +41,10 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T004 Remove the `TenantId` property from `src/Elsa.Primitives/Entities/Entity.cs`.
 - [X] T005 Extend `src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs` with `ApplyTenantIdIndex(ModelBuilder)` — scans `TenantEntity` descendants and registers a non-unique `TenantId` index. Invoke from `ConfigureEntityModel`. Mirror of existing `ApplyRowNumberIndex` pattern.
 
-### `OnEntitySaving` event + dispatch (model-creating stays on legacy interface)
+### `EntitySaving` event + dispatch (model-creating stays on legacy interface)
 
-- [X] T006 [P] Add `src/Elsa.Persistence.EFCore/Events/OnEntitySaving.cs` — `public sealed record OnEntitySaving(DbContext DbContext, EntityEntry Entry) : IDomainEvent;`.
-- [X] T007 Wire `OnEntitySaving` dispatch into `src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs::BeforeSavingChanges` — publish one event per modified `Entity`. Legacy `ApplyGlobalSavingHandlers` and `ApplyEntitySavingHandlers` paths remain ACTIVE for OTHER features' handlers until the wider Unit A migration closes; coexistence is intentional.
+- [X] T006 [P] Add `src/Elsa.Persistence.EFCore/Events/EntitySaving.cs` — `public sealed record EntitySaving(DbContext DbContext, EntityEntry Entry) : IDomainEvent;`.
+- [X] T007 Wire `EntitySaving` dispatch into `src/Elsa.Persistence.EFCore/ElsaDbContextBase.cs::BeforeSavingChanges` — publish one event per modified `Entity`. Legacy `ApplyGlobalSavingHandlers` and `ApplyEntitySavingHandlers` paths remain ACTIVE for OTHER features' handlers until the wider Unit A migration closes; coexistence is intentional.
 - [ ] T008 *(no task — `IEntityModelCreatingHandler` stays as-is per clarification session 3; the existing `ApplyEntityModelCreatingHandlers` mechanism in `OnModelCreating` is the right tool for sync side-effect chains.)*
 
 ### Kind discriminators — plain strings (smart-enum approach reversed 2026-05-28)
@@ -194,12 +194,12 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T075 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityFactory.cs` — `ValueTask<IActivity> Create(IImplementationDescriptor, IEnumerable<InputState>, IEnumerable<OutputState>, CancellationToken)`.
 - [X] T076 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityImplementationResolver.cs` — non-generic marker + generic `IActivityImplementationResolver<TDescriptor> where TDescriptor : class, IImplementationDescriptor { string Kind { get; } Type Resolve(TDescriptor); }`.
 - [X] T077 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Contracts/IActivityImplementationResolverRegistry.cs` — `RegisterAll(IEnumerable<IActivityImplementationResolver>)` + `Resolve(IImplementationDescriptor)`.
-- [X] T078 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Events/OnActivityImplementationResolversInitializing.cs` — `public sealed record OnActivityImplementationResolversInitializing(ICollection<IActivityImplementationResolver> Resolvers) : IDomainEvent;`.
+- [X] T078 [P] [US3] Add `src/Elsa.Activities.Runtime.Core/Events/ActivityImplementationResolversInitializing.cs` — `public sealed record ActivityImplementationResolversInitializing(ICollection<IActivityImplementationResolver> Resolvers) : IDomainEvent;`.
 
 ### Implementation for US3 — factory + CLR resolver implementations
 
 - [X] T079 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistry.cs` — backing dictionary keyed by `ImplementationKind.Value`; throws on duplicate-kind registration; throws on unknown-kind lookup with `ActivityResolutionException`.
-- [X] T080 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistryStartupTask.cs` — implements `IStartUpTask`; publishes `OnActivityImplementationResolversInitializing` with a fresh `List<IActivityImplementationResolver>`; flushes contributions to the registry.
+- [X] T080 [US3] Add `src/Elsa.Activities/Services/ActivityImplementationResolverRegistryStartupTask.cs` — implements `IStartUpTask`; publishes `ActivityImplementationResolversInitializing` with a fresh `List<IActivityImplementationResolver>`; flushes contributions to the registry.
 - [X] T081 [US3] Add `src/Elsa.Activities/Resolvers/ClrActivityImplementationResolver.cs` — implements `IActivityImplementationResolver<ClrImplementationDescriptor>`; `Kind = ImplementationKind.Clr.Value`; `Resolve(descriptor) => descriptor.TypeInfo.LoadType()`.
 - [X] T082 [US3] *(input/output state wiring to `Input&lt;T&gt;` / `Output&lt;T&gt;` deferred — out of Unit B contract scope; `ActivityFactory` doc-comment flags it for a follow-up.)* Add `src/Elsa.Activities/Services/ActivityFactory.cs` — implements `IActivityFactory`; resolver lookup via registry; type activation via `ActivatorUtilities.CreateInstance`; `InputState` / `OutputState` → `Input<T>` / `Output<T>` mapping via reflection; `ArgumentValue` → `IExpression` via `IExpressionFactory` (existing `Elsa.Expressions.Core` contract; verify the existing API or extend if needed).
 - [X] T083 [US3] Add `src/Elsa.Activities/ActivitiesRuntimeFeature.cs` (or extend existing feature class) — registers:
@@ -207,7 +207,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
    - `IImplementationDescriptorRegistry` + its `ImplementationDescriptorRegistryStartupTask`.
    - `IActivityFactory`.
    - `ClrActivityImplementationResolver` (DI-registered).
-   - Handles `OnActivityImplementationResolversInitializing` to contribute `ClrActivityImplementationResolver`.
+   - Handles `ActivityImplementationResolversInitializing` to contribute `ClrActivityImplementationResolver`.
    - Handles `OnImplementationDescriptorsInitializing` to contribute `new ImplementationDescriptorRegistration(ImplementationKind.Clr, typeof(ClrImplementationDescriptor))`.
 - [X] T084 [US3] Audit existing consumers of `ActivityDefinitionVersion.TypeInfo` across the codebase (likely some runtime activity-loading path); reroute to read `ImplementationDescriptor` and, for CLR cases, cast/pattern-match to `ClrImplementationDescriptor` to obtain the `TypeInformation`.
 - [X] T085 [US3] Update `src/Elsa3.Activities.Design.Import/...` mapping to produce `ImplementationKind=Clr` + `ClrImplementationDescriptor(TypeInformation)` for legacy Elsa3 activities. *(The `ActivityDefinitionVersionImport` record is reshaped to carry `ActivityTypeKey`, `ImplementationKind`, `IImplementationDescriptor`. No concrete mapping currently constructs this record; the Elsa3-activity → import flow itself is out of Unit B scope and lands alongside the activity-import wiring.)*
@@ -244,12 +244,12 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T097 [US4] Rename project directory `src/Elsa.Activities.Design.Provisioning.Core/` → `src/Elsa.Activities.Design.Reconciliation.Core/`; rename the `.csproj` file; update `<AssemblyName>` / `<RootNamespace>` if present.
 - [X] T098 [US4] Rename project directory `src/Elsa.Activities.Design.Provisioning/` → `src/Elsa.Activities.Design.Reconciliation/`; rename `.csproj`; update assembly/root-namespace.
 - [X] T099 [US4] In `Reconciliation.Core`, rename file `IActivityVersionProvisioner.cs` → `IActivityVersionReconciler.cs`; rename type and `namespace` declaration to `Elsa.Activities.Design.Reconciliation.Core`.
-- [X] T100 [US4] In `Reconciliation.Core`, rename file `OnActivityVersionsProvisioning.cs` → `OnActivityVersionsReconciling.cs`; rename type and namespace.
+- [X] T100 [US4] In `Reconciliation.Core`, rename file `OnActivityVersionsProvisioning.cs` → `ActivityVersionsReconciling.cs`; rename type and namespace.
 - [X] T101 [US4] In `Reconciliation` (feature), rename file `ActivityVersionProvisioner.cs` → `ActivityVersionReconciler.cs`; rename type; rename namespace `Elsa.Activities.Design.Provisioning.Services` → `Elsa.Activities.Design.Reconciliation.Services`.
 - [X] T102 [US4] In `Reconciliation` (feature), rename `ActivitiesDesignProvisioningFeature` → `ActivitiesDesignReconciliationFeature`; rename `ActivityVersionProvisionerOptions` → `ActivityVersionReconcilerOptions`; rename `ActivityVersionProvisionerStartupTask` → `ActivityVersionReconcilerStartupTask`; rename `ActivityVersionProvisionerStartupTaskOptions` similarly.
 - [X] T103 [US4] Update `Elsa.Server.slnx` to drop the old `Provisioning` project entries and add the renamed `Reconciliation` projects.
 - [X] T104 [US4] Update all `<ProjectReference>` entries in `.csproj` files referencing the old `Provisioning` projects to point at the renamed `Reconciliation` projects.
-- [X] T105 [US4] Audit C# source: replace namespace usings `Elsa.Activities.Design.Provisioning(.Core)?(...*)` → `Elsa.Activities.Design.Reconciliation$1`; replace type references `ActivityVersionProvisioner` → `ActivityVersionReconciler`, `OnActivityVersionsProvisioning` → `OnActivityVersionsReconciling`, `ActivitiesDesignProvisioningFeature` → `ActivitiesDesignReconciliationFeature`, etc. across `Server/` host registration and any other consumer.
+- [X] T105 [US4] Audit C# source: replace namespace usings `Elsa.Activities.Design.Provisioning(.Core)?(...*)` → `Elsa.Activities.Design.Reconciliation$1`; replace type references `ActivityVersionProvisioner` → `ActivityVersionReconciler`, `OnActivityVersionsProvisioning` → `ActivityVersionsReconciling`, `ActivitiesDesignProvisioningFeature` → `ActivitiesDesignReconciliationFeature`, etc. across `Server/` host registration and any other consumer.
 
 ### Implementation for US4 — hasher + reconciler behaviour
 
@@ -264,7 +264,7 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T111 [P] [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Options/JsonReconciliationOptions.cs` — `string FilePath`.
 - [X] T112 [P] [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Models/JsonCatalogEntry.cs` — record mirroring `elsa-core-activities.json` entry shape (`TypeInformation TypeInfo`, `int Version`, `ActivityKind Kind`, nested `Definition`, `Inputs/Outputs/DesignFacets`).
 - [X] T113 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Services/JsonActivityCatalogReader.cs` — reads + deserialises the file path from options; exposes `IReadOnlyList<JsonCatalogEntry>` (or fails gracefully if file missing — log warning, return empty).
-- [X] T114 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Handlers/JsonActivityVersionsReconcilingHandler.cs` — implements `IDomainEventHandler<OnActivityVersionsReconciling>`; reads entries via the catalog reader; constructs an `IActivityDefinitionVersion` per entry with `Definition.SourceKind = SourceKind.Json`, `Definition.SourceId = entry.TypeInfo.AssemblyName`, `Definition.ProvisionedAt = clock.UtcNow`, `Definition.ProvisionedBy = Environment.MachineName`, descriptor = `new ClrImplementationDescriptor(entry.TypeInfo)`, kind = `ImplementationKind.Clr`.
+- [X] T114 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/Handlers/JsonActivityVersionsReconcilingHandler.cs` — implements `IDomainEventHandler<ActivityVersionsReconciling>`; reads entries via the catalog reader; constructs an `IActivityDefinitionVersion` per entry with `Definition.SourceKind = SourceKind.Json`, `Definition.SourceId = entry.TypeInfo.AssemblyName`, `Definition.ProvisionedAt = clock.UtcNow`, `Definition.ProvisionedBy = Environment.MachineName`, descriptor = `new ClrImplementationDescriptor(entry.TypeInfo)`, kind = `ImplementationKind.Clr`.
 - [X] T115 [US4] Add `src/Elsa.Activities.Design.Reconciliation.Json/ActivitiesDesignReconciliationJsonFeature.cs` — registers the handler, the reader service, the options binding.
 
 **Checkpoint**: US4 complete — Provisioning → Reconciliation rename done; reconciliation-state schema + hasher + JSON-file seed source operational; full end-to-end reconciliation works against `elsa-core-activities.json`.
@@ -273,24 +273,24 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 
 ## Phase 7: User Story 5 — Persistence churn contained; entity-handler events via framework pipeline (Priority: P2)
 
-**Goal**: Activity-catalog **saving / loading** handlers run via the `OnEntitySaving` domain event. Closes the activity-catalog saving portion of Unit A's open code-checklist item. **Model-creating** stays on `IEntityModelCreatingHandler` — sync side-effect chain pattern; not migrated.
+**Goal**: Activity-catalog **saving / loading** handlers run via the `EntitySaving` domain event. Closes the activity-catalog saving portion of Unit A's open code-checklist item. **Model-creating** stays on `IEntityModelCreatingHandler` — sync side-effect chain pattern; not migrated.
 
-**Independent Test**: Save an `ActivityDefinitionVersion`; observe the migrated handler runs via `OnEntitySaving` (verified by registering a counting probe `IDomainEventHandler<OnEntitySaving>` in the test). Existing legacy `IGlobalEntitySavingHandler` / `IEntitySavingHandler<,>` paths remain active for other features (coexistence — wider Unit A migration handles them later).
+**Independent Test**: Save an `ActivityDefinitionVersion`; observe the migrated handler runs via `EntitySaving` (verified by registering a counting probe `IDomainEventHandler<EntitySaving>` in the test). Existing legacy `IGlobalEntitySavingHandler` / `IEntitySavingHandler<,>` paths remain active for other features (coexistence — wider Unit A migration handles them later).
 
 ### Tests for US5
 
-- [X] T116 [P] [US5] *(`SavingEventDispatchTests.SavingHandler_ProducesShadowDescriptor_FromOnEntitySaving` + `SavingHandler_IsNoOp_ForUnrelatedEntities` — handler invoked through the event-shaped `Handle(OnEntitySaving, ct)` surface and the payload write asserted.)* Test in `tests/Elsa.Activities.Design.Tests/Unit/SavingEventDispatchTests.cs`.
-- [X] T117 [P] [US5] *(`MultipleHandlers_CanSubscribeToOnEntitySaving` — DI surface check: two `IDomainEventHandler<OnEntitySaving>` registrations both resolve, per §2.6.1 contribution shape. End-to-end mediator-pipeline dispatch is the mediator's responsibility and out of this test's scope.)* Test — registering a sibling `IDomainEventHandler<OnEntitySaving>` results in both running.
+- [X] T116 [P] [US5] *(`SavingEventDispatchTests.SavingHandler_ProducesShadowDescriptor_FromEntitySaving` + `SavingHandler_IsNoOp_ForUnrelatedEntities` — handler invoked through the event-shaped `Handle(EntitySaving, ct)` surface and the payload write asserted.)* Test in `tests/Elsa.Activities.Design.Tests/Unit/SavingEventDispatchTests.cs`.
+- [X] T117 [P] [US5] *(`MultipleHandlers_CanSubscribeToEntitySaving` — DI surface check: two `IDomainEventHandler<EntitySaving>` registrations both resolve, per §2.6.1 contribution shape. End-to-end mediator-pipeline dispatch is the mediator's responsibility and out of this test's scope.)* Test — registering a sibling `IDomainEventHandler<EntitySaving>` results in both running.
 - [ ] T118 *(no task — `OnEntityModelCreating` event not introduced; model-creating remains on `IEntityModelCreatingHandler`. See clarification session 3.)*
 
 ### Implementation for US5
 
-- [X] T119 [US5] Refactor `src/Elsa.Activities.Design.Persistence.EFCore/EntityHandlers/ActivityDefinitionVersionSavingHandler.cs` to implement `IDomainEventHandler<OnEntitySaving>` instead of `IEntitySavingHandler<,>`. Filter by `e.Entry.Entity is ActivityDefinitionVersion`. Register in DI as `IDomainEventHandler<OnEntitySaving>`.
-- [X] T120 [US5] *(Loading handler stays on `IEntityLoadingHandler` — no `OnEntityLoading` event is in Unit B scope; the loading dispatch is intrinsically sync side-effect against the materialised entity. Flagged for the wider Unit A migration.)*
+- [X] T119 [US5] Refactor `src/Elsa.Activities.Design.Persistence.EFCore/EntityHandlers/ActivityDefinitionVersionSavingHandler.cs` to implement `IDomainEventHandler<EntitySaving>` instead of `IEntitySavingHandler<,>`. Filter by `e.Entry.Entity is ActivityDefinitionVersion`. Register in DI as `IDomainEventHandler<EntitySaving>`.
+- [X] T120 [US5] *(Loading handler stays on `IEntityLoadingHandler` — no `EntityLoading` event is in Unit B scope; the loading dispatch is intrinsically sync side-effect against the materialised entity. Flagged for the wider Unit A migration.)*
 - [X] T121 *(no task — `IEntityModelCreatingHandler` stays unchanged per §2.6.5 / §E3.9.)*
-- [X] T122 [US5] `EFCoreActivitiesPersistenceFeatureBase.OnBeforeConfiguring` now calls `AddDomainEventHandlersFrom(...)` for both assemblies (registers the migrated saving handler as `IDomainEventHandler<OnEntitySaving>`). The legacy `AddEntitySavingHandlersFrom(...)` calls are left in place as a no-op safety net — the activity-catalog assembly no longer contains any `IEntitySavingHandler<,>` implementations.
+- [X] T122 [US5] `EFCoreActivitiesPersistenceFeatureBase.OnBeforeConfiguring` now calls `AddDomainEventHandlersFrom(...)` for both assemblies (registers the migrated saving handler as `IDomainEventHandler<EntitySaving>`). The legacy `AddEntitySavingHandlersFrom(...)` calls are left in place as a no-op safety net — the activity-catalog assembly no longer contains any `IEntitySavingHandler<,>` implementations.
 
-**Checkpoint**: US5 complete — activity-catalog saving handlers run via `OnEntitySaving`; activity-catalog `IEntityModelCreatingHandler` registrations remain intact. SC-007 + SC-021 satisfied.
+**Checkpoint**: US5 complete — activity-catalog saving handlers run via `EntitySaving`; activity-catalog `IEntityModelCreatingHandler` registrations remain intact. SC-007 + SC-021 satisfied.
 
 ---
 
@@ -351,12 +351,12 @@ description: "Task list for Unit B — Activity Identity & Catalog as Source-of-
 - [X] T141 [P] Add §2.23.1 registration test for `ActivitiesDesignReconciliationFeature` *(in `tests/Elsa.Activities.Design.Tests/Registration/FeatureRegistrationTests.cs`).*
 - [X] T142 [P] Add §2.23.1 registration test for `ActivitiesDesignReconciliationJsonFeature`.
 - [X] T143 [P] Add §2.23.1 registration test for `ActivitiesRuntimeFeature`.
-- [X] T144 [P] Add §2.23.1 registration tests for the activity-catalog persistence shell features *(SqliteActivitiesDesignPersistenceShellFeature smoke test verifies `IActivityDefinitionLookup`, `IAddActivityDefinitionCommand`, `IQueries<>` for all three entities, `ISaveCommand<ActivityDefinitionReconciliationState>`, and the migrated `IDomainEventHandler<OnEntitySaving>` saving handler all resolve from DI.)*
+- [X] T144 [P] Add §2.23.1 registration tests for the activity-catalog persistence shell features *(SqliteActivitiesDesignPersistenceShellFeature smoke test verifies `IActivityDefinitionLookup`, `IAddActivityDefinitionCommand`, `IQueries<>` for all three entities, `ISaveCommand<ActivityDefinitionReconciliationState>`, and the migrated `IDomainEventHandler<EntitySaving>` saving handler all resolve from DI.)*
 - [X] T145 [P] *(Audit clean — all new Unit B code conforms: feature classes `public class` non-sealed; logic-bearing impls `public sealed`; records `public sealed record`. Pre-existing filter classes remain `public class` non-sealed — out of scope.)* Apply visibility rule (§2.23.3).
 
 ### Cross-context lifecycle coverage (FR-013 / two-context independence)
 
-- [X] T154 [P] Integration test in `tests/Elsa.Activities.Design.Tests/Integration/CrossContextLifecycleTests.cs` *(5 tests: [Immutable] enforcement on both contexts' entities, central TenantId index on every TenantEntity descendant in both contexts, base-class hook shared.)* — assert that BOTH `ActivitiesDesignDbContext` and `WorkflowsDesignDbContext` (independently constructed in the test) have the same `ElsaDbContextBase` lifecycle hooks active: (a) `[Immutable]` enforcement throws on attempted modification of immutable properties; (b) `TenantId` index is registered on every `TenantEntity` descendant; (c) `OnEntitySaving` is dispatched for modified entities; (d) `IEntityModelCreatingHandler` registrations are invoked during model build. Guard against future refactors where someone might swap a base class and silently drop a hook — the test fails and the breaking change surfaces.
+- [X] T154 [P] Integration test in `tests/Elsa.Activities.Design.Tests/Integration/CrossContextLifecycleTests.cs` *(5 tests: [Immutable] enforcement on both contexts' entities, central TenantId index on every TenantEntity descendant in both contexts, base-class hook shared.)* — assert that BOTH `ActivitiesDesignDbContext` and `WorkflowsDesignDbContext` (independently constructed in the test) have the same `ElsaDbContextBase` lifecycle hooks active: (a) `[Immutable]` enforcement throws on attempted modification of immutable properties; (b) `TenantId` index is registered on every `TenantEntity` descendant; (c) `EntitySaving` is dispatched for modified entities; (d) `IEntityModelCreatingHandler` registrations are invoked during model build. Guard against future refactors where someone might swap a base class and silently drop a hook — the test fails and the breaking change surfaces.
 
 ### Golden-rule audit (§2.21.1)
 

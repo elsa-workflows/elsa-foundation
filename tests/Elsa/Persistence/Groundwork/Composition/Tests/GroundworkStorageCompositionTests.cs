@@ -315,7 +315,7 @@ public class GroundworkStorageCompositionTests
         var context = new GroundworkStorageCompositionContext();
 
         await new GroundworkStorageCompositionHandler(sources)
-            .Handle(new OnGroundworkStorageComposing(context), CancellationToken.None);
+            .Handle(new GroundworkStorageComposing(context), CancellationToken.None);
 
         Assert.Equal(["a-feature", "z-feature"], calls);
         Assert.Equal(["a-feature", "z-feature"], context.Declarations.Select(x => x.FeatureIdentity));
@@ -334,7 +334,7 @@ public class GroundworkStorageCompositionTests
 
         var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new GroundworkStorageCompositionHandler(sources)
-                .Handle(new OnGroundworkStorageComposing(context), CancellationToken.None));
+                .Handle(new GroundworkStorageComposing(context), CancellationToken.None));
 
         Assert.Same(expected, actual);
         Assert.False(context.IsFrozen);
@@ -349,7 +349,7 @@ public class GroundworkStorageCompositionTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new GroundworkStorageCompositionHandler([new RecordingSource("feature", calls)])
-                .Handle(new OnGroundworkStorageComposing(new GroundworkStorageCompositionContext()), cancellation.Token));
+                .Handle(new GroundworkStorageComposing(new GroundworkStorageCompositionContext()), cancellation.Token));
 
         Assert.Empty(calls);
     }

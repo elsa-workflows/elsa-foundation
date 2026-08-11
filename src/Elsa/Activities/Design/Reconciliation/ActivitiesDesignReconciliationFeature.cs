@@ -44,6 +44,6 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
 
         services.AddScoped<IStartupTask, ActivityVersionReconcilerStartupTask>();
 
-        services.AddEventHandler<OnActivityVersionsReconciling, CollectActivityVersions>();
+        services.AddEventHandler<ActivityVersionsReconciling, CollectActivityVersions>();
     }
 }

@@ -268,15 +268,15 @@ single-aggregating-handler shape"):
     migration off the "coexist" half-state onto the canonical contributor +
     single-aggregating-handler shape (mirror of `IDraftValidator` +
     `ExecuteValidations`). `Elsa.Persistence.EFCore` now ships two single
-    aggregators — `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>`
-    and `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (registered
+    aggregators — `ApplyEntitySavingHandlers : IEventHandler<EntitySaving>`
+    and `ApplyEntityLoadingHandlers : IEventHandler<EntityLoading>` (registered
     once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`) — that
     reflect the typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>`
     contributors over the runtime DbContext + entity types. The legacy
     direct-dispatch loops in `ElsaDbContextBase` / `EFCoreQueries` were removed;
     `ActivityDefinitionVersionSavingHandler` was re-homed onto the typed
     `IEntitySavingHandler<,>`; mutate-then-save commands (`UpdateDraft`) now
-    publish `OnEntityLoading` Sequential against their own tracked context rather
+    publish `EntityLoading` Sequential against their own tracked context rather
     than hand-rolling a handler loop. `Elsa.Persistence.EFCore` gains an
     `EXTENSION_POINTS.md`; the repo root gains the `EXTENSION_POINTS.md` index.
     The out-of-band
@@ -315,7 +315,7 @@ filename + scope refined 2026-05-29):
     because lifecycle events are not domain events). Worked examples: Unit C
     creates `src/Elsa/Workflows/Design/Core/EVENTS.md` (all lifecycle) and
     `src/Elsa/Workflows/Design/Validations/Core/EVENTS.md` (mixed —
-    `OnDraftValidating` domain, `OnDraftValidated` lifecycle).
+    `DraftValidating` domain, `DraftValidated` lifecycle).
 
 Unit C Phase-6 amendment (2026-05-28, draft pending 2026-06-01 ratification):
   - §2.6.1 EXTENDED — "Visibility" bullet REWRITTEN as
@@ -373,13 +373,13 @@ Unit C Phase-3 amendment (2026-05-28, draft pending 2026-06-01 ratification):
     `record`) to enforce encapsulation. Smell heuristic: too wide a variety
     of methods on one event indicates two distinct events that should be
     split.
-  - Code cascade (this branch): `OnActivityVersionsReconciling` (Unit B's
+  - Code cascade (this branch): `ActivityVersionsReconciling` (Unit B's
     reconciliation event) refactored from record-with-ICollection to
     sealed-class-with-`AddVersion(...)`; the reconciler and JSON handler
     updated accordingly. Same retroactive cascade reasoning as Phase-1's
     Model X rewrite: don't leave two patterns in the codebase.
   - Worked examples queued for §E3.3 rewrite (in Elsa constitution) and Unit
-    C's `OnDraftValidating` (with `AddValidationError(ValidationError)` method).
+    C's `DraftValidating` (with `AddValidationError(ValidationError)` method).
 
 Added sections (framework layer, relative to v1.0.0):
   - §2.2 — "Secondary-domain naming sub-rule" (new subsection within §2.2):

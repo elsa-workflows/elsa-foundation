@@ -128,14 +128,14 @@ public sealed class RequiredInputOutputValidatorDerivationTests
 
     /// <summary>
     /// Minimal <see cref="IInlineEventPublisher"/> that runs a single validator against
-    /// <see cref="OnDraftValidating"/> and aggregates its errors — exercising the gate's publish +
+    /// <see cref="DraftValidating"/> and aggregates its errors — exercising the gate's publish +
     /// read-back contract with the real validator so its throwing behaviour reaches the gate.
     /// </summary>
     private sealed class ValidatingPublisher(IDraftValidator validator) : IInlineEventPublisher
     {
         public async Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
-            if (@event is OnDraftValidating validating)
+            if (@event is DraftValidating validating)
                 foreach (var error in await validator.Validate(validating.Draft, cancellationToken))
                     validating.Errors.Add(error);
         }

@@ -115,7 +115,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
     /// <summary>
     /// Derives the current validation error set the same way production does: load the draft, then
-    /// run the gate through the hook publisher (which re-publishes <c>OnDraftValidating</c>). Replaces
+    /// run the gate through the hook publisher (which re-publishes <c>DraftValidating</c>). Replaces
     /// the retired store derive-port.
     /// </summary>
     private async Task<IReadOnlyList<ValidationError>> DeriveErrors(string draftId)
@@ -347,8 +347,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(draftLockCount, _locks.AcquireCounts[draftLockKey]);
         Assert.Collection(
             deferredEvents.Events,
-            @event => Assert.IsType<OnDraftCreated>(@event),
-            @event => Assert.IsType<OnDraftValidated>(@event));
+            @event => Assert.IsType<DraftCreated>(@event),
+            @event => Assert.IsType<DraftValidated>(@event));
         Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
         Assert.NotNull(await DraftStore().FindByIdAsync(cloneId));
     }
@@ -434,9 +434,9 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         _events.OnPublish = @event =>
         {
-            if (@event is OnDraftCreated or OnDraftValidated)
+            if (@event is DraftCreated or DraftValidated)
                 Assert.NotEmpty(_store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind));
-            if (@event is OnDraftDiscarded)
+            if (@event is DraftDiscarded)
                 Assert.Empty(_store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind));
         };
         var createKey = NextKey();
@@ -452,10 +452,10 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         Assert.Collection(
             _events.DeferredEvents,
-            @event => Assert.IsType<OnDraftCreated>(@event),
-            @event => Assert.IsType<OnDraftValidated>(@event),
-            @event => Assert.IsType<OnDraftValidated>(@event),
-            @event => Assert.IsType<OnDraftDiscarded>(@event));
+            @event => Assert.IsType<DraftCreated>(@event),
+            @event => Assert.IsType<DraftValidated>(@event),
+            @event => Assert.IsType<DraftValidated>(@event),
+            @event => Assert.IsType<DraftDiscarded>(@event));
     }
 
     [Fact]
@@ -477,8 +477,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(draftId, replay);
         Assert.Collection(
             deferredEvents.Events,
-            @event => Assert.IsType<OnDraftCreated>(@event),
-            @event => Assert.IsType<OnDraftValidated>(@event));
+            @event => Assert.IsType<DraftCreated>(@event),
+            @event => Assert.IsType<DraftValidated>(@event));
         Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
     }
 
@@ -507,7 +507,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         Assert.True(callerCancellation.IsCancellationRequested);
         Assert.True(store.ReconciliationUsedFreshToken);
-        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<OnDraftValidated>(@event));
+        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<DraftValidated>(@event));
         Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
     }
 
@@ -532,7 +532,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         Assert.True(callerCancellation.IsCancellationRequested);
         Assert.True(store.ReconciliationUsedFreshToken);
-        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<OnDraftDiscarded>(@event));
+        Assert.Collection(deferredEvents.Events, @event => Assert.IsType<DraftDiscarded>(@event));
         Assert.All(deferredEvents.CancellationTokens, token => Assert.False(token.IsCancellationRequested));
     }
 

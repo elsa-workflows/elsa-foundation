@@ -78,7 +78,7 @@ Mechanism:
 2. Parse the corresponding `DOMAIN_EVENTS.md` from the project root. Extract all level-3 markdown headings (`### `). Filter to those that look like type names (alphanumeric, no spaces, starts with `On`).
 3. Assert bidirectional set equality. Failures report missing entries (event without heading) or stale entries (heading without event).
 
-**Naming convention:** the markdown heading MUST match the event class name verbatim, prefixed with `### `. Example: `### OnActivityAddedToDraft`. No prose decoration in the heading (the prose lives in the heading's body).
+**Naming convention:** the markdown heading MUST match the event class name verbatim, prefixed with `### `. Example: `### ActivityAddedToDraft`. No prose decoration in the heading (the prose lives in the heading's body).
 
 **Test location:** `tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs`. The same test class parametrises over both Core assemblies (Workflows.Design.Core + Workflows.Design.Validations.Core), running the same parity assertion against each pair.
 

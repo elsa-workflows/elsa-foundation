@@ -22,7 +22,7 @@ public sealed class ApiCapabilityCatalog(
         }
 
         if (eventPublisher is not null)
-            await eventPublisher.Publish(new CollectingApiCapabilities(contributions), cancellationToken);
+            await eventPublisher.Publish(new ApiCapabilitiesCollecting(contributions), cancellationToken);
 
         var staticById = staticEntries
             .GroupBy(declaration => declaration.CapabilityId, StringComparer.Ordinal)

@@ -1,0 +1,14 @@
+using Elsa.Events.Core.Contracts;
+
+namespace Elsa.Workflows.Design.Core.Events;
+
+/// <summary>
+/// Mutation event for an input removed from a placed activity. Published by
+/// <c>IRemoveActivityInputFromDraftCommand</c>.
+/// </summary>
+public sealed class ActivityInputRemovedFromDraft(string draftId, string nodeId, string inputReferenceKey) : IEvent
+{
+    public string DraftId { get; } = draftId;
+    public string NodeId { get; } = nodeId;
+    public string InputReferenceKey { get; } = inputReferenceKey;
+}

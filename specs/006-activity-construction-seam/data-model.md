@@ -31,13 +31,13 @@ Entities and contracts, with their fields, relationships, invariants, and the be
 - `void Add(IActivityConstructor constructor)` (throws `DuplicateActivityConstructorException` naming the `DescriptorType` if already present); `IActivityConstructor Resolve(string descriptorType)` (throws `UnknownDescriptorTypeException` if absent — a domain failure).
 - Populated once at startup (see event below); sync-read thereafter.
 
-### `OnActivityConstructorsInitializing : IEvent` *(NEW)* — Registry + StartUp Task pattern (G21)
+### `ActivityConstructorsInitializing : IEvent` *(NEW)* — Registry + StartUp Task pattern (G21)
 - Exposes the registry (or its mutable collection). Published Sequential by a StartUp Task. Single handler `RegisterActivityConstructors` (in `Elsa.Activities.Runtime`) aggregates all `IActivityConstructor` contributors into the registry.
 
 ## 3. Runtime-side impl (`Elsa.Activities.Runtime`)
 - `ActivityFactory` (public sealed) — dispatch.
 - `ActivityConstructorRegistry` (public sealed) — dictionary keyed by `DescriptorType`; dup-guard throw.
-- `RegisterActivityConstructors` (public sealed) — single aggregating `IEventHandler<OnActivityConstructorsInitializing>`.
+- `RegisterActivityConstructors` (public sealed) — single aggregating `IEventHandler<ActivityConstructorsInitializing>`.
 - `ActivityConstructorsStartupTask` — publishes the event once.
 - `ActivitiesRuntimeFeature` (public, not sealed) — registers all of the above + the factory.
 

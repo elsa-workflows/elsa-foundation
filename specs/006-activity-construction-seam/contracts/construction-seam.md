@@ -9,7 +9,7 @@ All types here live in `Elsa.Activities.Runtime.Core` and reference **no** `Elsa
 | `IActivityConstructor` / `IActivityConstructor<TDescriptor>` | **contribution** | `Runtime.Core` | features contribute per-descriptor-type constructors |
 | `IActivityFactory` | **replacement** | `Runtime.Core` | single swappable construction entry point |
 | `IActivityConstructorRegistry` | **replacement** | `Runtime.Core` | single swappable sync-access registry |
-| `OnActivityConstructorsInitializing` | domain event | `Runtime.Core` | Registry + StartUp Task population (G21) |
+| `ActivityConstructorsInitializing` | domain event | `Runtime.Core` | Registry + StartUp Task population (G21) |
 | `IActivityArgumentBinder` | **neither** → NOT in Core | `Elsa.Activities.Primitives` | feature-internal helper (core-not-a-bucket rule) |
 
 ## `IActivityFactory` (replacement)
@@ -68,11 +68,11 @@ public interface IActivityConstructorRegistry
 ```
 - Invariant: **one constructor per `DescriptorType`** (FR-006), enforced at `Add` time (startup), loud not last-wins.
 
-## `OnActivityConstructorsInitializing` (domain event — Registry + StartUp Task, G21)
+## `ActivityConstructorsInitializing` (domain event — Registry + StartUp Task, G21)
 
-- `OnActivityConstructorsInitializing : IEvent` exposes the registry (or its mutable collection).
+- `ActivityConstructorsInitializing : IEvent` exposes the registry (or its mutable collection).
 - Published **Sequential** once by `ActivityConstructorsStartupTask`.
-- Single aggregating handler `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (in `Elsa.Activities.Runtime`) adds every registered `IActivityConstructor` to the registry.
+- Single aggregating handler `RegisterActivityConstructors : IEventHandler<ActivityConstructorsInitializing>` (in `Elsa.Activities.Runtime`) adds every registered `IActivityConstructor` to the registry.
 - Consumers sync-read via `IActivityConstructorRegistry` after startup.
 
 ## Domain failures (not system faults — G29)

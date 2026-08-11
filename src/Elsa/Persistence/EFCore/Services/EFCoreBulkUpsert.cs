@@ -33,7 +33,7 @@ public sealed class EFCoreBulkUpsert<TDbContext, TEntity>(IDbContextFactory<TDbC
             foreach (var batch in entities.Chunk(batchSize))
             {
                 // This command bypasses DbContext.SaveChanges (which is overridden in
-                // ElsaDbContextBase to publish OnEntitySaving), so we publish the event here
+                // ElsaDbContextBase to publish EntitySaving), so we publish the event here
                 // ourselves — the single ApplyEntitySavingHandlers aggregator then runs every
                 // registered IEntitySavingHandler<,> so source columns are populated before the
                 // raw upsert SQL is generated.
@@ -69,6 +69,6 @@ public sealed class EFCoreBulkUpsert<TDbContext, TEntity>(IDbContextFactory<TDbC
         // tracking the entity as Unchanged, which is inert here since this path never calls
         // SaveChanges (it executes raw upsert SQL instead).
         foreach (var entity in entities)
-            await eventPublisher.Publish(new OnEntitySaving(dbContext, dbContext.Entry(entity)), cancellationToken);
+            await eventPublisher.Publish(new EntitySaving(dbContext, dbContext.Entry(entity)), cancellationToken);
     }
 }

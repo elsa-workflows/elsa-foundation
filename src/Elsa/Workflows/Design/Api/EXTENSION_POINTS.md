@@ -12,7 +12,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 - **Implementable contributor interfaces** — *add-don't-replace* seams aggregated by a single handler (framework §2.6.1, §2.24.2).
 - **Events** — the FR-018/FR-018a mutation + lifecycle events this domain publishes.
 
-> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.Groundwork`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The Groundwork provider persists design documents through provider-neutral read/write ports (no EF `OnEntitySaving` / `OnEntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
+> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.Groundwork`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The Groundwork provider persists design documents through provider-neutral read/write ports (no EF `EntitySaving` / `EntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
 
 ---
 
@@ -119,7 +119,7 @@ Known implementations:
 
 Every event the Workflows.Design domain publishes is an `IEvent` (framework §2.6.1), grouped by **delivery strategy** (§2.6.6).
 
-**Sequential / contribution** — none in this domain's Core. The contribution event (`OnDraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+**Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 
 Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/Elsa.Workflows.Design.Tests` asserts bidirectional alignment between the `### On…` headings here and the assembly's published `IEvent` types (anchored on the `Elsa.Workflows.Design.Core` assembly).
 
@@ -127,13 +127,13 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 **Lifecycle — origination + disposal.**
 
-### OnDraftCreated
+### DraftCreated
 
 **Semantic.** A freshly-created `WorkflowDefinitionDraft` has been persisted — the single origination marker regardless of how the Draft was born. A cloned Draft emits this same event; `SourceVersionId` distinguishes the two origins.
 **Payload.** `DraftId : string`, `WorkflowDefinitionId : string`, `SourceVersionId : string?` — the `WorkflowDefinitionVersion` the Draft was cloned from, or `null` for a fresh Draft.
 **Publication site.** `ICreateDraftCommand` implementation, after the draft is committed + lock release. `ICloneDraftFromVersionCommand` reaches it by delegation.
 
-### OnDraftDiscarded
+### DraftDiscarded
 
 **Semantic.** A `WorkflowDefinitionDraft` was atomically deleted along with its layout sibling. Terminal entry on the Draft's event stream.
 **Payload.** `DraftId : string`, `WorkflowDefinitionId : string`.
@@ -143,17 +143,17 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 **Activities.**
 
-### OnActivityAddedToDraft
+### ActivityAddedToDraft
 
 **Payload.** `DraftId : string`, `Activity : ActivityNode` (with derived `NodeId`, `ActivityVersionId` projections).
 **Publication site.** `IUpdateDraftCommand` — emitted when a desired activity `NodeId` is absent from stored state.
 
-### OnActivityRemovedFromDraft
+### ActivityRemovedFromDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`.
 **Publication site.** `IUpdateDraftCommand` — emitted when a stored activity `NodeId` is absent from desired state.
 
-### OnActivityMovedInDraft
+### ActivityMovedInDraft
 
 **Semantic.** Layout-position / size change for a placed activity.
 **Payload.** `DraftId : string`, `NodeId : string`, `NewX : double`, `NewY : double`, `NewWidth : double?`, `NewHeight : double?`.
@@ -161,85 +161,85 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 **Per-activity inputs — full CRUD.**
 
-### OnActivityInputAddedToDraft
+### ActivityInputAddedToDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `Input : ArgumentState`.
 **Publication site.** `IUpdateDraftCommand` — desired (`NodeId`,`ReferenceKey`) input absent from stored.
 
-### OnActivityInputUpdatedInDraft
+### ActivityInputUpdatedInDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `InputReferenceKey : string`, `OldValue : ArgumentState`, `NewValue : ArgumentState`.
 **Publication site.** `IUpdateDraftCommand` — matched input payload changed.
 
-### OnActivityInputRemovedFromDraft
+### ActivityInputRemovedFromDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `InputReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored (`NodeId`,`ReferenceKey`) input absent from desired.
 
 **Per-activity outputs — full CRUD.**
 
-### OnActivityOutputAddedToDraft
+### ActivityOutputAddedToDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `Output : ArgumentState`.
 **Publication site.** `IUpdateDraftCommand` — desired (`NodeId`,`ReferenceKey`) output absent from stored.
 
-### OnActivityOutputUpdatedInDraft
+### ActivityOutputUpdatedInDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `OutputReferenceKey : string`, `OldValue : ArgumentState`, `NewValue : ArgumentState`.
 **Publication site.** `IUpdateDraftCommand` — matched output payload changed.
 
-### OnActivityOutputRemovedFromDraft
+### ActivityOutputRemovedFromDraft
 
 **Payload.** `DraftId : string`, `NodeId : string`, `OutputReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored (`NodeId`,`ReferenceKey`) output absent from desired.
 
 **Variables — full CRUD.**
 
-### OnVariableDeclaredInDraft
+### VariableDeclaredInDraft
 
 **Payload.** `DraftId : string`, `Variable : VariableDefinition`.
 **Publication site.** `IUpdateDraftCommand` — desired variable `ReferenceKey` absent from stored.
 
-### OnVariableUpdatedInDraft
+### VariableUpdatedInDraft
 
 **Payload.** `DraftId : string`, `VariableReferenceKey : string`, `OldValue : VariableDefinition`, `NewValue : VariableDefinition`.
 **Publication site.** `IUpdateDraftCommand` — matched variable payload changed.
 
-### OnVariableRemovedFromDraft
+### VariableRemovedFromDraft
 
 **Payload.** `DraftId : string`, `VariableReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored variable `ReferenceKey` absent from desired.
 
 **Workflow inputs — full CRUD.**
 
-### OnWorkflowInputAddedToDraft
+### WorkflowInputAddedToDraft
 
 **Payload.** `DraftId : string`, `Input : InputDefinition`.
 **Publication site.** `IUpdateDraftCommand` — desired workflow-input `ReferenceKey` absent from stored.
 
-### OnWorkflowInputUpdatedInDraft
+### WorkflowInputUpdatedInDraft
 
 **Payload.** `DraftId : string`, `InputReferenceKey : string`, `OldValue : InputDefinition`, `NewValue : InputDefinition`.
 **Publication site.** `IUpdateDraftCommand` — matched workflow-input payload changed.
 
-### OnWorkflowInputRemovedFromDraft
+### WorkflowInputRemovedFromDraft
 
 **Payload.** `DraftId : string`, `InputReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored workflow-input `ReferenceKey` absent from desired.
 
 **Workflow outputs — full CRUD.**
 
-### OnWorkflowOutputAddedToDraft
+### WorkflowOutputAddedToDraft
 
 **Payload.** `DraftId : string`, `Output : OutputDefinition`.
 **Publication site.** `IUpdateDraftCommand` — desired workflow-output `ReferenceKey` absent from stored.
 
-### OnWorkflowOutputUpdatedInDraft
+### WorkflowOutputUpdatedInDraft
 
 **Payload.** `DraftId : string`, `OutputReferenceKey : string`, `OldValue : OutputDefinition`, `NewValue : OutputDefinition`.
 **Publication site.** `IUpdateDraftCommand` — matched workflow-output payload changed.
 
-### OnWorkflowOutputRemovedFromDraft
+### WorkflowOutputRemovedFromDraft
 
 **Payload.** `DraftId : string`, `OutputReferenceKey : string`.
 **Publication site.** `IUpdateDraftCommand` — stored workflow-output `ReferenceKey` absent from desired.
@@ -248,7 +248,7 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 ## Cross-references
 
-- Validation events (`OnDraftValidating` Sequential gate + `OnDraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+- Validation events (`DraftValidating` Sequential gate + `DraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 - Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.

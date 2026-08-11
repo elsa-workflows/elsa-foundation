@@ -18,9 +18,9 @@ public sealed class IdentityMatchTests
     {
         var diff = Evaluate(State(variables: [Variable("v1", "MyVar")]), State(variables: [Variable("v1", "RenamedVar")]));
 
-        Assert.IsType<OnVariableUpdatedInDraft>(Assert.Single(diff));
-        Assert.Empty(diff.OfType<OnVariableDeclaredInDraft>());
-        Assert.Empty(diff.OfType<OnVariableRemovedFromDraft>());
+        Assert.IsType<VariableUpdatedInDraft>(Assert.Single(diff));
+        Assert.Empty(diff.OfType<VariableDeclaredInDraft>());
+        Assert.Empty(diff.OfType<VariableRemovedFromDraft>());
     }
 
     [Fact]
@@ -29,8 +29,8 @@ public sealed class IdentityMatchTests
         // The key itself changes (v1 → v2) — an identity change, not a rename of the payload.
         var diff = Evaluate(State(variables: [Variable("v1", "MyVar")]), State(variables: [Variable("v2", "MyVar")]));
 
-        Assert.Single(diff.OfType<OnVariableDeclaredInDraft>(), e => e.Variable.ReferenceKey == "v2");
-        Assert.Single(diff.OfType<OnVariableRemovedFromDraft>(), e => e.VariableReferenceKey == "v1");
-        Assert.Empty(diff.OfType<OnVariableUpdatedInDraft>());
+        Assert.Single(diff.OfType<VariableDeclaredInDraft>(), e => e.Variable.ReferenceKey == "v2");
+        Assert.Single(diff.OfType<VariableRemovedFromDraft>(), e => e.VariableReferenceKey == "v1");
+        Assert.Empty(diff.OfType<VariableUpdatedInDraft>());
     }
 }

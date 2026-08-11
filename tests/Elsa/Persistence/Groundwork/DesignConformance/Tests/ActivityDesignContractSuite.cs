@@ -135,7 +135,7 @@ public abstract class ActivityDesignContractSuite
         IDesignPersistenceContractFixture fixture,
         ActivityDefinitionVersion candidate)
     {
-        var reconciling = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<OnActivityVersionsReconciling>());
+        var reconciling = Assert.Single((await fixture.ReadObservedEventsAsync()).OfType<ActivityVersionsReconciling>());
         var observed = Assert.Single(reconciling.Versions);
         Assert.Equal(candidate.Id, observed.Id);
         Assert.Equal(candidate.DefinitionId, observed.DefinitionId);

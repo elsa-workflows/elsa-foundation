@@ -17,7 +17,7 @@ remain in the [feature specification](../../../../specs/092-domain-owned-apis/sp
 - **Failure:** cancellation propagates. Provider failures and incompatible duplicate declarations fail document
   assembly; the catalog never silently advertises a partial or arbitrarily selected contract.
 
-The `CollectingApiCapabilities` inline contribution event is available for framework modules that already use
+The `ApiCapabilitiesCollecting` inline contribution event is available for framework modules that already use
 the event contribution pattern. Handlers append the same declaration type and obey the same duplicate rules.
 
 ## Replaceable service

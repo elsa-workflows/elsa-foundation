@@ -199,8 +199,10 @@ Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orient
 
 ## Constitution boundary
 
-The constitutions are draft quality-gate documents. Warn users when constitution draft/provisional
-status matters to their task. If they want to focus on unratified material, route that through
+Both constitutions are ratified at the document level (v4.0.0, 2026-08-08), but individual sections
+that carry their own `Status:` line — framework §2.24, Elsa §E2.9 — remain draft/provisional and are
+explicitly excluded from that ratification. Warn users when a section's draft/provisional status
+matters to their task. If they want to focus on unratified material, route that through
 [Constitution Readiness](docs/program-goals/constitution-readiness.md) and use
 [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or
 [Work Unit Planner](docs/skills/catalog.md#work-unit-planner). Draft history belongs in

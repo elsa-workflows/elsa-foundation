@@ -51,8 +51,8 @@ internal static class UpdateDraftTestKit
     /// The per-diff mutation events captured at or after <paramref name="skip"/> events — only the
     /// diff emissions (the 20 <c>Elsa.Workflows.Design.Core.Events</c> mutation events) remain, in
     /// publication order. The validation-gate pair
-    /// (<c>OnDraftValidating</c>/<c>OnDraftValidated</c>, a separate namespace) and infrastructure
-    /// events such as <c>OnEntitySaving</c> are filtered out.
+    /// (<c>DraftValidating</c>/<c>DraftValidated</c>, a separate namespace) and infrastructure
+    /// events such as <c>EntitySaving</c> are filtered out.
     /// </summary>
     public static IReadOnlyList<IEvent> DiffEventsSince(WorkflowsDesignTestHost host, int skip) =>
         host.EventPublisher.CapturedEvents

@@ -2,7 +2,7 @@
 
 **Location.** `Elsa.Activities.Runtime.Core.Contracts.IActivityImplementationResolver`
 
-**Kind.** Contribution contract (per `ImplementationKind`). Registered via the `OnActivityImplementationResolversInitializing` domain event (Registry + StartUp Task sub-pattern per framework §2.6.1).
+**Kind.** Contribution contract (per `ImplementationKind`). Registered via the `ActivityImplementationResolversInitializing` domain event (Registry + StartUp Task sub-pattern per framework §2.6.1).
 
 **Constitutional citation.** Framework §2.6.1 (Domain events — the contribution mechanism); Elsa §E3.3 (canonical worked example of Registry + StartUp Task).
 
@@ -52,12 +52,12 @@ public interface IActivityImplementationResolverRegistry
 
 ## Contribution flow
 
-1. `Elsa.Activities.Runtime.Core` declares the registry interface + the `OnActivityImplementationResolversInitializing` event.
+1. `Elsa.Activities.Runtime.Core` declares the registry interface + the `ActivityImplementationResolversInitializing` event.
 2. The activities runtime feature registers an `ActivityImplementationResolverRegistryStartupTask`:
 
    ```csharp
    var resolvers = new List<IActivityImplementationResolver>();
-   await sender.Send(new OnActivityImplementationResolversInitializing(resolvers), ct);
+   await sender.Send(new ActivityImplementationResolversInitializing(resolvers), ct);
    registry.RegisterAll(resolvers);
    ```
 

@@ -14,7 +14,7 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 
 ## Events published
 
-- **`OnActivityVersionsReconciling`** (declared in `Elsa.Activities.Design.Reconciliation.Core`). Carries a mutable `ICollection<IActivityDefinitionVersion>`. Source modules handle the event and contribute the activities they observe. The reconciler then upserts the catalog and the reconciliation-state sibling.
+- **`ActivityVersionsReconciling`** (declared in `Elsa.Activities.Design.Reconciliation.Core`). Carries a mutable `ICollection<IActivityDefinitionVersion>`. Source modules handle the event and contribute the activities they observe. The reconciler then upserts the catalog and the reconciliation-state sibling.
 
 ## Startup tasks
 

@@ -18,7 +18,7 @@
 
 ## Decision 3: Add generic async node-metadata sources behind a named fan-in event
 
-**Decision**: Add `IExecutableNodeMetadataSource`, a Publishing.Core contract that receives a compiled `ExecutableNode` and compile context and returns metadata claims. `ExecutableNodeMetadataEnricher` publishes `OnExecutableNodeMetadataCollecting`; Publishing's single `CollectExecutableNodeMetadata` handler resolves every source, stamps ownership, and applies claims deterministically before hashing/assembly. Duplicate keys with unequal values fail deterministically. The feature implementation is `DispatchPinSource`.
+**Decision**: Add `IExecutableNodeMetadataSource`, a Publishing.Core contract that receives a compiled `ExecutableNode` and compile context and returns metadata claims. `ExecutableNodeMetadataEnricher` publishes `ExecutableNodeMetadataCollecting`; Publishing's single `CollectExecutableNodeMetadata` handler resolves every source, stamps ownership, and applies claims deterministically before hashing/assembly. Duplicate keys with unequal values fail deterministically. The feature implementation is `DispatchPinSource`.
 
 **Rationale**: Resolving a Published child is asynchronous and activity-specific. Sources keep that work in the contributing domain, while the named event and single Publishing-owned handler preserve one fan-in topology and one conflict policy. A keyed switch on `DispatchWorkflow` in the compiler would invert ownership.
 

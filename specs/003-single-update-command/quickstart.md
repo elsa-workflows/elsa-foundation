@@ -2,7 +2,7 @@
 
 **Feature**: `003-single-update-command` (Unit 2) · **Date**: 2026-06-03
 
-> **Supersession note (2026-07-05):** `IUpdateDraftCommand`'s **per-diff event publication** and the **semantic diff engine** on the mutation path are retired (no subscribers; event-sourcing slot unbuilt; engine unregistered from DI), and the **validation-sibling write** is gone (`WorkflowDefinitionDraftValidation` deleted — spec 002 FR-021; errors are derived state). The command still takes the lock, applies the desired state, runs the `OnDraftValidating` gate, persists State, and Background-publishes `OnDraftValidated`. Diff engine + FR-023 stable-id matching remain the tested contract. Reinstatable when an event-sourcing consumer exists.
+> **Supersession note (2026-07-05):** `IUpdateDraftCommand`'s **per-diff event publication** and the **semantic diff engine** on the mutation path are retired (no subscribers; event-sourcing slot unbuilt; engine unregistered from DI), and the **validation-sibling write** is gone (`WorkflowDefinitionDraftValidation` deleted — spec 002 FR-021; errors are derived state). The command still takes the lock, applies the desired state, runs the `DraftValidating` gate, persists State, and Background-publishes `DraftValidated`. Diff engine + FR-023 stable-id matching remain the tested contract. Reinstatable when an event-sourcing consumer exists.
 
 This is the developer-facing orientation for the `IUpdateDraftCommand` collapse. It shows what changes for callers, how to drive the command, and where the moving parts live.
 
@@ -29,8 +29,8 @@ There is no patch/partial mode. "Move one activity" and "rewrite the whole graph
 
 ## What stays the same
 
-- **Events**: `OnActivityAddedToDraft`, `OnVariableUpdatedInDraft`, `OnActivityMovedInDraft`, … — same names, same payloads, same `IEvent` substrate. Event-sourcing consumers (Unit H) see no change in the event stream's vocabulary.
-- **Validation pair**: `OnDraftValidating` (Sequential gate) → `OnDraftValidated` (Background outcome). Unchanged; runs once per `Execute` against the post-diff state.
+- **Events**: `ActivityAddedToDraft`, `VariableUpdatedInDraft`, `ActivityMovedInDraft`, … — same names, same payloads, same `IEvent` substrate. Event-sourcing consumers (Unit H) see no change in the event stream's vocabulary.
+- **Validation pair**: `DraftValidating` (Sequential gate) → `DraftValidated` (Background outcome). Unchanged; runs once per `Execute` against the post-diff state.
 - **Lock**: the per-Draft `workflow-draft:{DraftId}` distributed lock.
 - **Lifecycle commands**: `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand` — untouched (FR-003).
 
@@ -44,12 +44,12 @@ lock(workflow-draft:{DraftId})
   ├─ draft.State   = request.State        (wholesale assign)
   ├─ layout.Records = request.Layout       (wholesale assign)
   ├─ diff(stored, desired)                → ordered IEvent list
-  ├─ publish OnDraftValidating  [Sequential, awaited gate]
+  ├─ publish DraftValidating  [Sequential, awaited gate]
   ├─ upsert validation sibling (outcome)
   └─ SaveChanges  [transaction]
 release lock
 publish per-diff events        [Background]   ← cause
-publish OnDraftValidated       [Background]   ← effect (after cause)
+publish DraftValidated       [Background]   ← effect (after cause)
 ```
 
 Last-writer-wins: no version check. A desired state built on a stale read overwrites concurrent edits, and the diff emits the resulting events — by design (FR-022).
@@ -73,7 +73,7 @@ Last-writer-wins: no version check. A desired state built on a stale read overwr
 
 - **Parity test** (`tests/Elsa.Workflows.Design.Tests/Unit/CatalogParityTests.cs`) must stay green — event types are unchanged.
 - **Migrated command tests**: each former `*CommandTests` whose objective was "operation X yields event E and state S" is **moved** to drive `IUpdateDraftCommand` with a desired state expressing change X, asserting E + S (FR-013, SC-010). Coverage is preserved one-for-one — every diff dimension keeps a test so each event is validated to publish correctly. No tests are deleted.
-- **New diff-engine tests** (net-new behaviours no single granular command exercised — FR-013 a–g): no-op (desired == stored → zero mutation events, validation still runs); multi-dimension diff in one `Execute` → exact event set in deterministic order; last-writer-wins overwrite (SC-014); rename = single UPDATE vs id-change = REMOVE+ADD (SC-015); connection change = REMOVE+ADD (no update event); activity removal cascades to connection prune; cause-before-effect ordering (per-diff events precede `OnDraftValidated`).
+- **New diff-engine tests** (net-new behaviours no single granular command exercised — FR-013 a–g): no-op (desired == stored → zero mutation events, validation still runs); multi-dimension diff in one `Execute` → exact event set in deterministic order; last-writer-wins overwrite (SC-014); rename = single UPDATE vs id-change = REMOVE+ADD (SC-015); connection change = REMOVE+ADD (no update event); activity removal cascades to connection prune; cause-before-effect ordering (per-diff events precede `DraftValidated`).
 
 ---
 

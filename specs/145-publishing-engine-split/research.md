@@ -15,7 +15,7 @@ Blast-radius map against current `main` (branch `145-publishing-engine-split`). 
 
 ## Decision 2 — Which handlers move (workflow-publish only)
 
-- **Move to engine** (auth-free, workflow-side): `PublishWorkflowRequestHandler`, `StartWorkflowTestRunRequestHandler`, `PublicationSlotLifecycleRequestHandlers` (workflow publication slot Unpublish/Restore), `RunRuntimeRequirementPreflightRequestHandler`, and the `OnExecutableCompilationCollecting` / `OnExecutableNodeMetadataCollecting` event handlers.
+- **Move to engine** (auth-free, workflow-side): `PublishWorkflowRequestHandler`, `StartWorkflowTestRunRequestHandler`, `PublicationSlotLifecycleRequestHandlers` (workflow publication slot Unpublish/Restore), `RunRuntimeRequirementPreflightRequestHandler`, and the `ExecutableCompilationCollecting` / `ExecutableNodeMetadataCollecting` event handlers.
 - **Stay in Api** (activity-draft, authorization-coupled): `PublishActivityDraftRequestHandler`, `ActivityPublicationPreflightHandlers`, and the activity-draft endpoints — these consume `IActivityDefinitionPublisher` / `IActivityDraftTestRunService`, which inject `IActivityPublishingAuthorizationContext` (see Decision 3).
 - **`PublishWorkflowRequestHandler` is HTTP/auth-free** — ctor (`Handlers/PublishWorkflowRequestHandler.cs:18-38`) has no `IHttpContextAccessor` and no `IActivityPublishingAuthorizationContext`; tenant arrives as plain data (`request.TenantId`), resolved at the endpoint by `PublicationRequestTenant.Resolve(User)`.
 - **Assembly-scan boundary**: the engine feature calls `AddRequestHandlersFrom(engineAssembly)`; the Api feature keeps its own scan for the activity-draft handlers it retains. Guard: the §2.23.1 registration tests.

@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Design.Validations.Core.Models;
 
 /// <summary>
-/// Validation error contributed by a validator handling <c>OnDraftValidating</c>. Aggregated onto
+/// Validation error contributed by a validator handling <c>DraftValidating</c>. Aggregated onto
 /// that event's <c>Errors</c> collection and read back by the publishing command — derived state,
 /// not persisted. Grouping key is the (<see cref="Path"/>, <see cref="Type"/>) tuple — multiple
 /// errors may share the same scope (e.g. two missing required inputs on the same activity). Per

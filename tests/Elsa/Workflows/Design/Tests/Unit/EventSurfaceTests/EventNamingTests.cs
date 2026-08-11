@@ -9,45 +9,45 @@ namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 /// exist with verbatim names. Plus the discipline assertion that no event uses the bare
 /// <c>Input</c>/<c>Output</c> names — the <c>WorkflowInput</c>/<c>WorkflowOutput</c> prefix
 /// is mandatory because workflow-level inputs/outputs are distinct from per-activity
-/// inputs/outputs (which mutate via <c>OnActivityPropertyChangedInDraft</c>).
+/// inputs/outputs (which mutate via <c>ActivityPropertyChangedInDraft</c>).
 /// </summary>
 public sealed class EventNamingTests
 {
     private static readonly string[] ExpectedMutationEventNames =
     [
         // Lifecycle origination
-        nameof(OnDraftCreated),
+        nameof(DraftCreated),
         // Activities (graph)
-        nameof(OnActivityAddedToDraft),
-        nameof(OnActivityRemovedFromDraft),
-        nameof(OnActivityMovedInDraft),
+        nameof(ActivityAddedToDraft),
+        nameof(ActivityRemovedFromDraft),
+        nameof(ActivityMovedInDraft),
         // Per-activity inputs (full CRUD, symmetric with workflow-input CRUD)
-        nameof(OnActivityInputAddedToDraft),
-        nameof(OnActivityInputUpdatedInDraft),
-        nameof(OnActivityInputRemovedFromDraft),
+        nameof(ActivityInputAddedToDraft),
+        nameof(ActivityInputUpdatedInDraft),
+        nameof(ActivityInputRemovedFromDraft),
         // Per-activity outputs (full CRUD, symmetric with workflow-output CRUD)
-        nameof(OnActivityOutputAddedToDraft),
-        nameof(OnActivityOutputUpdatedInDraft),
-        nameof(OnActivityOutputRemovedFromDraft),
+        nameof(ActivityOutputAddedToDraft),
+        nameof(ActivityOutputUpdatedInDraft),
+        nameof(ActivityOutputRemovedFromDraft),
         // Variables (definition-bag, full CRUD)
-        nameof(OnVariableDeclaredInDraft),
-        nameof(OnVariableUpdatedInDraft),
-        nameof(OnVariableRemovedFromDraft),
+        nameof(VariableDeclaredInDraft),
+        nameof(VariableUpdatedInDraft),
+        nameof(VariableRemovedFromDraft),
         // Workflow inputs (definition-bag, full CRUD)
-        nameof(OnWorkflowInputAddedToDraft),
-        nameof(OnWorkflowInputUpdatedInDraft),
-        nameof(OnWorkflowInputRemovedFromDraft),
+        nameof(WorkflowInputAddedToDraft),
+        nameof(WorkflowInputUpdatedInDraft),
+        nameof(WorkflowInputRemovedFromDraft),
         // Workflow outputs (definition-bag, full CRUD)
-        nameof(OnWorkflowOutputAddedToDraft),
-        nameof(OnWorkflowOutputUpdatedInDraft),
-        nameof(OnWorkflowOutputRemovedFromDraft),
+        nameof(WorkflowOutputAddedToDraft),
+        nameof(WorkflowOutputUpdatedInDraft),
+        nameof(WorkflowOutputRemovedFromDraft),
     ];
 
     private static readonly string[] ExpectedLifecycleEventNames =
     [
-        // OnDraftClonedFromVersion was dropped: both creation routes share the provider's
-        // origination lifecycle path, so a cloned Draft emits the single OnDraftCreated event.
-        nameof(OnDraftDiscarded),
+        // DraftClonedFromVersion was dropped: both creation routes share the provider's
+        // origination lifecycle path, so a cloned Draft emits the single DraftCreated event.
+        nameof(DraftDiscarded),
     ];
 
     [Fact]
@@ -73,16 +73,16 @@ public sealed class EventNamingTests
     {
         var actual = GetWorkflowDesignCoreEventNames();
 
-        // Bare names that Sipke item 11's earlier draft used (OnInputChangedInDraft / OnOutputChangedInDraft)
+        // Bare names that Sipke item 11's earlier draft used (InputChangedInDraft / OutputChangedInDraft)
         // would conflate workflow-level with per-activity per FR-018 naming discipline.
-        Assert.DoesNotContain("OnInputAddedToDraft", actual);
-        Assert.DoesNotContain("OnInputChangedInDraft", actual);
-        Assert.DoesNotContain("OnInputUpdatedInDraft", actual);
-        Assert.DoesNotContain("OnInputRemovedFromDraft", actual);
-        Assert.DoesNotContain("OnOutputAddedToDraft", actual);
-        Assert.DoesNotContain("OnOutputChangedInDraft", actual);
-        Assert.DoesNotContain("OnOutputUpdatedInDraft", actual);
-        Assert.DoesNotContain("OnOutputRemovedFromDraft", actual);
+        Assert.DoesNotContain("InputAddedToDraft", actual);
+        Assert.DoesNotContain("InputChangedInDraft", actual);
+        Assert.DoesNotContain("InputUpdatedInDraft", actual);
+        Assert.DoesNotContain("InputRemovedFromDraft", actual);
+        Assert.DoesNotContain("OutputAddedToDraft", actual);
+        Assert.DoesNotContain("OutputChangedInDraft", actual);
+        Assert.DoesNotContain("OutputUpdatedInDraft", actual);
+        Assert.DoesNotContain("OutputRemovedFromDraft", actual);
     }
 
     [Fact]
@@ -90,11 +90,11 @@ public sealed class EventNamingTests
     {
         // 19 FR-018 core mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
         // 3 activity input CRUD + 3 activity output CRUD + 3 variable CRUD +
-        // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 FR-018a lifecycle (OnDraftDiscarded) = 20.
+        // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 FR-018a lifecycle (DraftDiscarded) = 20.
         // Graph connection events are Flowchart-module concerns, not Workflows.Design.Core events.
-        // OnDraftClonedFromVersion was dropped — both creation routes share the provider's
-        // origination lifecycle path, so a cloned Draft emits the single OnDraftCreated event.
-        // Generic OnActivityPropertyChangedInDraft was removed per Joey iteration 2026-05-28 —
+        // DraftClonedFromVersion was dropped — both creation routes share the provider's
+        // origination lifecycle path, so a cloned Draft emits the single DraftCreated event.
+        // Generic ActivityPropertyChangedInDraft was removed per Joey iteration 2026-05-28 —
         // all per-activity mutations now go through the specialized CRUD events (Add/Remove
         // the whole activity for placement; CRUD on Inputs/Outputs for binding state).
         var actual = GetWorkflowDesignCoreEventNames();
@@ -106,7 +106,7 @@ public sealed class EventNamingTests
     {
         // After Unit 1's event unification, the FR-018 / FR-018a events in this .Core all
         // implement the single IEvent marker. Scan for it so future additions are picked up.
-        return typeof(OnDraftCreated).Assembly
+        return typeof(DraftCreated).Assembly
             .GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
             .Where(t => typeof(IEvent).IsAssignableFrom(t))

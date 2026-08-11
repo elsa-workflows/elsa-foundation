@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.EFCore.Handlers;
 
 /// <summary>
-/// The single <see cref="OnEntitySaving"/> handler — the write-side mirror of the
+/// The single <see cref="EntitySaving"/> handler — the write-side mirror of the
 /// <c>ExecuteValidations</c> aggregator. Resolves every registered
 /// <see cref="IEntitySavingHandler{TDbContext,TEntity}"/> closed over the runtime DbContext +
 /// entity types and invokes each against the entity being saved. Replaces the former
@@ -14,9 +14,9 @@ namespace Elsa.Persistence.EFCore.Handlers;
 /// on <c>ElsaDbContextBase</c>; features now contribute by registering a typed
 /// <see cref="IEntitySavingHandler{TDbContext,TEntity}"/>.
 /// </summary>
-public sealed class ApplyEntitySavingHandlers(IServiceProvider serviceProvider) : IEventHandler<OnEntitySaving>
+public sealed class ApplyEntitySavingHandlers(IServiceProvider serviceProvider) : IEventHandler<EntitySaving>
 {
-    public async Task Handle(OnEntitySaving domainEvent, CancellationToken cancellationToken)
+    public async Task Handle(EntitySaving domainEvent, CancellationToken cancellationToken)
     {
         var dbContext = domainEvent.DbContext;
         var entity = domainEvent.Entry.Entity;
