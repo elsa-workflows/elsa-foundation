@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 
@@ -594,7 +596,9 @@ public sealed record WorkflowExecutionStartDispatchView(
     string? Reason,
     string? SourceReferenceId = null,
     string? PublicationId = null,
-    string? SlotId = null)
+    string? SlotId = null,
+    bool Shed = false,
+    int? RetryAfterSeconds = null)
 {
     public static WorkflowExecutionStartDispatchView From(WorkflowExecutionStartDispatchResult result) =>
         new(
@@ -609,5 +613,20 @@ public sealed record WorkflowExecutionStartDispatchView(
             result.CommandDispatch.Reason,
             result.PinnedSource?.SourceReferenceId,
             result.PinnedSource?.PublicationId,
-            result.PinnedSource?.SlotId);
+            result.PinnedSource?.SlotId,
+            // Deferred alone does not identify backpressure — the distributed leaf returns it for "forwarded to the
+            // owning node" — so the shed marker is lifted out of the dispatch metadata rather than inferred from the
+            // status. The endpoint needs it to choose 429 over 200 (RB1, #1235).
+            IsShed(result.CommandDispatch.Metadata),
+            ReadRetryAfterSeconds(result.CommandDispatch.Metadata));
+
+    private static bool IsShed(IReadOnlyDictionary<string, string> metadata) =>
+        metadata.TryGetValue(RuntimeMetadataKeys.DispatchShed, out var shed) &&
+        string.Equals(shed, "true", StringComparison.Ordinal);
+
+    private static int? ReadRetryAfterSeconds(IReadOnlyDictionary<string, string> metadata) =>
+        metadata.TryGetValue(RuntimeMetadataKeys.DispatchRetryAfterSeconds, out var seconds) &&
+        int.TryParse(seconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 }

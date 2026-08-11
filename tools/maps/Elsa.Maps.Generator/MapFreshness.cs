@@ -6,10 +6,11 @@ namespace Elsa.Maps.Generator;
 /// <remarks>
 /// <para>
 /// The check regenerates every map into a scratch directory and compares the bytes with what is
-/// committed. It deliberately does <b>not</b> gate on <c>input_fingerprint</c>: that changes on every
-/// source edit, so a fingerprint gate would oblige every code PR to regenerate and commit eleven map
-/// files, even though most source edits change no map at all. Comparing outputs asks the question that
-/// actually matters — are the committed maps still true? — and stays quiet otherwise.
+/// committed. It deliberately does <b>not</b> gate on any fingerprint over the inputs: that would change
+/// on every source edit, obliging every code PR to regenerate and commit twelve map files even though
+/// most source edits change no map at all. Comparing outputs asks the question that actually matters —
+/// are the committed maps still true? — and stays quiet otherwise. That is also why the manifest carries
+/// no input fingerprint any more.
 /// </para>
 /// <para>
 /// It exists because the committed maps went three projects stale and carried 25 corrupted rows with
@@ -36,10 +37,10 @@ public static class MapFreshness
             generated.AddRange(ArchitectureReferenceMapGenerator.Generate(repo, projects));
             generated.AddRange(FeatureDependencyMapGenerator.Generate(repo, projects));
 
-            // manifest.json carries input_fingerprint and git metadata that move with every commit, so it
-            // is regenerated but not compared — it is bookkeeping, not a description of the tree.
+            // manifest.json is compared like every other generated file. It used to be excluded, because it
+            // carried git metadata and an input fingerprint that moved on every commit; those fields are
+            // gone, so what is left is a description of the tree and is worth holding to the same bar.
             var stale = generated
-                .Where(path => !path.EndsWith("manifest.json", StringComparison.Ordinal))
                 .Where(path => !SameBytes(Path.Combine(repo.Root, path), Path.Combine(scratch, path)))
                 .Order(StringComparer.Ordinal)
                 .ToArray();

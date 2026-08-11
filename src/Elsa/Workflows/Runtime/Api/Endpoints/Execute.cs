@@ -1,6 +1,8 @@
+using System.Globalization;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
+using Microsoft.AspNetCore.Http;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -47,6 +49,19 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         {
             var result = await _requestSender.Send(req, ct);
             var dispatchStatus = Enum.Parse<WorkflowExecutionCommandDispatchStatus>(result.CommandDispatchStatus);
+
+            // Shed by live dispatch admission control (RB1, #1235): nothing durable was written and the run did not
+            // start, so 429 with Retry-After is the only honest answer. A start has no execution id to correlate
+            // against, which is why it gets a status code every HTTP client already retries on rather than a body the
+            // caller would have to poll. Checked before the mapping below because a shed dispatch reports Deferred,
+            // which would otherwise fall through to 200 and advertise work that was never taken.
+            if (result.Shed)
+            {
+                var seconds = Math.Max(1, result.RetryAfterSeconds ?? 1);
+                HttpContext.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+                await Send.ResponseAsync(result, StatusCodes.Status429TooManyRequests, ct);
+                return;
+            }
 
             // The drain is synchronous to quiescence (ADR 0031), so the run has already reached completion, fault, or a
             // durable suspension by the time we respond. 200 honestly reports "handled, here is the outcome" — a 202
