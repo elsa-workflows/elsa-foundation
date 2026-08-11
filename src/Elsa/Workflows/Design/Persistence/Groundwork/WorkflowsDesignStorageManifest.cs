@@ -114,7 +114,7 @@ public static class WorkflowsDesignStorageManifest
             LogicalIndex("definition-by-description", [DefinitionDescriptionField, DefinitionIdField]),
             LogicalIndex("definition-by-search", [DefinitionNameField, DefinitionIdField, DefinitionDescriptionField]),
             LogicalIndex(V2("definition-by-id-list"), [DefinitionIdField], unique: true),
-            LogicalIndex(V2("definition-by-name"), [DefinitionNameField, DefinitionIdField], missingValues: MissingValueBehavior.IncludedAsNull),
+            LogicalIndex(V2("definition-by-name"), [DefinitionNameField, DefinitionIdField], unique: true, missingValues: MissingValueBehavior.IncludedAsNull),
             LogicalIndex(V2("definition-by-description"), [DefinitionDescriptionField, DefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
@@ -307,20 +307,24 @@ public static class WorkflowsDesignStorageManifest
 
     /// <summary>
     /// An index for a search that spans several optional fields. It must keep rows that have no value
-    /// for its keyed columns, because the disjunction can match them on another field, and it therefore
-    /// cannot be unique: a unique index that keeps such rows means different things per provider and is
-    /// refused at route compilation.
+    /// for its keyed columns, because the disjunction can match them on another field.
     /// </summary>
+    /// <remarks>
+    /// It stays unique, which is what certifies a total order for offset paging. That is portable here
+    /// even though it keys nullable columns: the key contains an already-unique identity column, so no
+    /// two rows can share the whole key and the providers' disagreement about whether two missing
+    /// values collide is unobservable. The alternative, a non-unique index carrying the document
+    /// identity tie-break, does not fit SQL Server's 1700-byte index key budget once a text column is
+    /// in the key.
+    /// </remarks>
     private static PhysicalIndexDefinition SearchPhysicalIndex(string identity, params string[] columns) =>
         new(
             identity,
             [
                 new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
-                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1)),
-                // Uniqueness used to certify a total order for offset paging; a non-unique index has to
-                // carry the document-identity tie-break explicitly instead.
-                new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, columns.Length + 1)
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
             ],
+            isUnique: true,
             missingValueBehavior: MissingValueBehavior.IncludedAsNull);
 
     private static PhysicalIndexDefinition UniquePhysicalIndex(string identity, params string[] columns) =>

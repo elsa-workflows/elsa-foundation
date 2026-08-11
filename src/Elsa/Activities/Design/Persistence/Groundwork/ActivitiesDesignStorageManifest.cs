@@ -319,7 +319,7 @@ public static class ActivitiesDesignStorageManifest
             LogicalIndex(V2("activity-definition-by-id"), [ActivityDefinitionIdField], unique: true),
             LogicalIndex(V2("activity-definition-by-type-key"), [ActivityDefinitionTypeKeyField, ActivityDefinitionIdField], unique: true),
             LogicalIndex(V2("activity-definition-by-category"), [ActivityDefinitionCategoryField, ActivityDefinitionIdField], unique: true),
-            LogicalIndex(V2("activity-definition-by-display-name"), [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField], missingValues: MissingValueBehavior.IncludedAsNull),
+            LogicalIndex(V2("activity-definition-by-display-name"), [ActivityDefinitionDisplayNameField, ActivityDefinitionIdField], unique: true, missingValues: MissingValueBehavior.IncludedAsNull),
             LogicalIndex(V2("activity-definition-by-description"), [ActivityDefinitionDescriptionField, ActivityDefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
@@ -836,20 +836,24 @@ public static class ActivitiesDesignStorageManifest
 
     /// <summary>
     /// An index for a search that spans several optional fields. It must keep rows that have no value
-    /// for its keyed columns, because the disjunction can match them on another field, and it therefore
-    /// cannot be unique: a unique index that keeps such rows means different things per provider and is
-    /// refused at route compilation.
+    /// for its keyed columns, because the disjunction can match them on another field.
     /// </summary>
+    /// <remarks>
+    /// It stays unique, which is what certifies a total order for offset paging. That is portable here
+    /// even though it keys nullable columns: the key contains an already-unique identity column, so no
+    /// two rows can share the whole key and the providers' disagreement about whether two missing
+    /// values collide is unobservable. The alternative, a non-unique index carrying the document
+    /// identity tie-break, does not fit SQL Server's 1700-byte index key budget once a text column is
+    /// in the key.
+    /// </remarks>
     private static PhysicalIndexDefinition SearchPhysicalIndex(string identity, params string[] columns) =>
         new(
             identity,
             [
                 new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
-                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1)),
-                // Uniqueness used to certify a total order for offset paging; a non-unique index has to
-                // carry the document-identity tie-break explicitly instead.
-                new PhysicalIndexColumnDefinition(Envelope.IdComparisonKeyColumn, columns.Length + 1)
+                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
             ],
+            isUnique: true,
             missingValueBehavior: MissingValueBehavior.IncludedAsNull);
 
     private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";

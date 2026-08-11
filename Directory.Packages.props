@@ -23,13 +23,13 @@
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.79" />
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.DiagnosticRecords" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.112" />
-    <PackageVersion Include="Groundwork.SqlServer" Version="0.0.1-preview.112" />
+    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.DiagnosticRecords" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.113" />
+    <PackageVersion Include="Groundwork.SqlServer" Version="0.0.1-preview.113" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
