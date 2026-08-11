@@ -85,7 +85,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             _executableStore,
             _activityStateStore,
             _schedulerWorkQueue,
-            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore),
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
             new FixedTimeProvider(Now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),

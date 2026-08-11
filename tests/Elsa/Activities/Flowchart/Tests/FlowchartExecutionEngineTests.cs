@@ -99,7 +99,7 @@ public sealed class FlowchartExecutionEngineTests
         // same logical commit on a replacement worker recovers the same single outbox item; the original
         // worker's lease fence is deliberately not part of replay identity.
         var replayStore = new InMemoryRuntimeCheckpointCommitStore();
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), replayStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), replayStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var failoverCommit = atomicCommit with { ExpectedFence = null };
         var first = await committer.CommitAsync(failoverCommit);
         var replay = await committer.CommitAsync(failoverCommit);

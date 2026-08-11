@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: Compute every package's version from the repository instead of injecting one, publish only the packages that changed, and let each nuspec dependency range state what the package actually needs.
 
-Decision of record: [ADR 0063](../../docs/adr/0063-package-versioning-uses-two-lines-with-computed-patch.md).
+Decision of record: [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md).
 Depends on [spec 149](../149-canonical-dependency-map/spec.md) for project-graph facts and ownership resolution.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -216,7 +216,7 @@ versions and their floors did not move.
   to compare against and is its own work unit.
 - The generated release manifest recording which package versions constitute a release.
 - Promote-not-rebuild at release time, which is untestable until there is a release to promote.
-- Ratifying Line A membership beyond the eight packages in ADR 0063; the remainder is deferred to the
+- Ratifying Line A membership beyond the eight packages in ADR 0067; the remainder is deferred to the
   clean host specification (#1145).
 
 ## Open Questions

@@ -207,6 +207,53 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Null(await templates.FindAsync(template.TemplateId));
     }
 
+    /// <summary>
+    /// Resolves the claim ADR 0066 left on reasoning alone: whether the material a split reusable-activity
+    /// publication strands is reclaimable by this collector. The strand is what
+    /// <c>A_crash_after_the_runtime_commit_leaves_nothing_but_inert_runtime_material</c> pins — a template
+    /// and the create-only <see cref="WorkflowExecutableReferenceScope.Published"/> source reference committed
+    /// with it, and no design publication.
+    /// <para>
+    /// It is unreachable, because nothing resolves a template without its publication. It is not
+    /// <i>unreferenced</i>, which is the only sense this collector acts on: query 1 drops a reference solely
+    /// when it is retired or expired, and a publication's reference is neither. So the strand survives every
+    /// sweep until something retires that reference, and reclamation is not automatic.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Sweep_ReclaimsAnInterruptedPublicationsTemplateOnlyOnceItsSourceReferenceIsRetired()
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var template = new ExecutableActivityTemplate(
+            "template-stranded", "hash-template-stranded", Executable("unused").RootActivity,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "test/1",
+            new Dictionary<string, string>(), _now);
+        await templates.SaveAsync(template);
+        await _sourceReferenceStore.SaveAsync(
+            Reference("stranded-ref", template.TemplateId, WorkflowExecutableReferenceScope.Published));
+        var collector = new WorkflowExecutableReferenceGarbageCollector(
+            _executableStore,
+            _sourceReferenceStore,
+            templates,
+            _workflowExecutionStateStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            TimeProvider.System,
+            NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+        var strandedSweep = await collector.SweepAsync(_now);
+
+        Assert.False(strandedSweep.DidWork);
+        Assert.NotNull(await templates.FindAsync(template.TemplateId));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("stranded-ref"));
+
+        await _sourceReferenceStore.RetireAsync("stranded-ref", _now, "publication-interrupted");
+        var reclaimSweep = await collector.SweepAsync(_now);
+
+        Assert.Equal(1, reclaimSweep.DeletedReferenceCount);
+        Assert.Equal(1, reclaimSweep.DeletedActivityTemplateCount);
+        Assert.Null(await templates.FindAsync(template.TemplateId));
+    }
+
     [Fact]
     public async Task Sweep_ProtectsDirectAndTransitiveDependencyClosureUntilFinalRootIsRemoved()
     {

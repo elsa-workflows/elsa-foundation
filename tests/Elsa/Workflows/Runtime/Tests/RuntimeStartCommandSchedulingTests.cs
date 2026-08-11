@@ -104,7 +104,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             workflowExecutionStateStore: workflowStore,
             incidentStateStore: incidentStore,
             rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
+        var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         using var provider = services.BuildServiceProvider();
@@ -517,7 +517,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
-                checkpointWriter),
+                checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
             timeProvider: new FixedTimeProvider(_now),
             workflowExecutableStore: executableStore);

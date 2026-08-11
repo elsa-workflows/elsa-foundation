@@ -59,6 +59,14 @@ internal static class BenchmarkWorkflows
             metadata: new Dictionary<string, string>());
 
     /// <summary>
+    /// The External hot-loop leaf: an unmarked <see cref="WriteLine"/>, which resolves fail-safe to
+    /// <c>SideEffectProfile.External</c>. This is the shape almost every shipped leaf activity has — the marking pass
+    /// behind ADR 0047 found NO shipped leaf carries <c>[ActivitySideEffectProfile(ReplaySafe)]</c> — so it, not
+    /// <see cref="NoOpLeaf"/>, is what production traffic costs.
+    /// </summary>
+    public static ExecutableNode ExternalLeaf(int index) => NewWriteLineNode(LoopNodeId(index), $"loop step {index}");
+
+    /// <summary>
     /// A real <see cref="WriteLine"/> CLR leaf with a literal <c>text</c> input. The activity contract is left unset so
     /// the harness reflects it from the CLR type (its established path for non-probe CLR nodes).
     /// </summary>
@@ -170,16 +178,14 @@ internal static class BenchmarkWorkflows
                 JsonSerializer.SerializeToElement(
                     new FlowchartStructure(connections: connections, startNodeId: startNodeId))));
 
-        if (identity is { } id)
-            return WorkflowExecutionHarness.NewExecutable(root, id);
-
         // A Set intrinsic writes a declared workflow variable, so the intrinsic hot loop needs the declaration; the
-        // CLR-leaf shapes ignore it and stay byte-identical to before (an unused declaration changes no dispatch).
-        var declaresIntrinsicVariable = leaves.Any(leaf => leaf.IntrinsicKind is WorkflowIntrinsicKind.Set);
-        return declaresIntrinsicVariable
-            ? WorkflowExecutionHarness.NewExecutable(
-                root,
-                new RuntimeVariableDeclaration(IntrinsicVariableKey, IntrinsicVariableKey, IntrinsicValueType, ValueProtectionPolicy.InstanceInline))
-            : WorkflowExecutionHarness.NewExecutable(root);
+        // CLR-leaf shapes get none and stay byte-identical to before. The declaration is independent of whether the
+        // caller pinned an identity — the concurrency instrument does both at once (distinct identity per execution
+        // AND a Set-intrinsic leaf shape), and a Set intrinsic against an undeclared variable does not execute.
+        RuntimeVariableDeclaration[] variables = leaves.Any(leaf => leaf.IntrinsicKind is WorkflowIntrinsicKind.Set)
+            ? [new(IntrinsicVariableKey, IntrinsicVariableKey, IntrinsicValueType, ValueProtectionPolicy.InstanceInline)]
+            : [];
+
+        return WorkflowExecutionHarness.NewExecutable(root, identity ?? WorkflowExecutionHarness.Identity, variables);
     }
 }

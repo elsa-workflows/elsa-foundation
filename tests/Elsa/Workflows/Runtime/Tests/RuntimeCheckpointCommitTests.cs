@@ -1626,7 +1626,10 @@ public sealed class RuntimeCheckpointCommitTests
         RecordingCommitStore commitStore) =>
         new(
             new FixedPolicy(mode),
-            commitStore);
+            commitStore,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            [],
+            []);
 
     private static JsonElement Json(string json)
     {
