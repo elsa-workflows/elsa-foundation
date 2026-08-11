@@ -60,7 +60,7 @@ bash tools/maps/generate-feature-dependency-map.sh
 
 Generated maps are committed point-in-time snapshots. Use [manifest.json](manifest.json) before relying on them.
 
-- `input_fingerprint` is the authoritative freshness signal for the tracked map inputs.
+- `input_fingerprint` records the tracked inputs the snapshot was generated from. It is a provenance stamp, not the freshness gate: it moves on every source edit, so most changes to it mean nothing changed in any map. The authoritative signal is `Elsa.Maps.Generator -- check`, which regenerates every map and byte-compares it with what is committed. `manifest.json` itself is excluded from that comparison.
 - `git_head` is advisory because maps are often generated before the commit that records them.
 - `relevant_inputs_dirty` tells you whether `src/`, `tests/`, `specs/`, or `tools/maps/` had uncommitted changes when the maps were generated.
 - Map generation is opt-in: do not refresh automatically when inputs are dirty, changed, or freshness is uncertain. Report the stale snapshot and let the user explicitly invoke or authorize the narrowest relevant map layer.
