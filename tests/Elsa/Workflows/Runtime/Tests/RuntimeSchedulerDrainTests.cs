@@ -21,7 +21,21 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Throws<ArgumentNullException>(() => new WorkflowSchedulerDrainer(
             new InMemoryWorkflowSchedulerWorkQueue(),
             [new NoopWorkflowSchedulerWorkHandler()],
-            workflowExecutionStateStore: null!));
+            workflowExecutionStateStore: null!,
+            poisonStore: new InMemoryWorkflowSchedulerPoisonStore()));
+    }
+
+    [Fact]
+    public void Constructor_RequiresThePoisonStore_SoAnAckDeletedFaultCannotVanish()
+    {
+        // #1271: the fault branch ack-deletes the work item before poison handling runs, so a drainer without a poison
+        // store loses it outright — no record, no incident, and the retry policy never consulted. Requiring the store
+        // by construction is what makes that configuration impossible rather than merely unregistered by default.
+        Assert.Throws<ArgumentNullException>(() => new WorkflowSchedulerDrainer(
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            [new NoopWorkflowSchedulerWorkHandler()],
+            new InMemoryWorkflowExecutionStateStore(),
+            poisonStore: null!));
     }
 
     [Fact]

@@ -47,7 +47,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
-    private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
+    private readonly IWorkflowSchedulerPoisonStore _poisonStore;
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
     private readonly IWorkflowEngineTracer _tracer;
     private readonly RuntimeSchedulerWorkClaimOptions _claimOptions;
@@ -57,21 +57,32 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     /// <summary>
     /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
-    /// three required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
-    /// <paramref name="workflowExecutionStateStore"/>) followed by optional collaborators that default to their
-    /// no-op/system implementations. The workflow execution state store is <b>required by construction</b> so the W5
-    /// terminal-status guard (which stops sibling work once an execution reaches a terminal status) can never be
-    /// silently disabled by picking a narrower constructor.
+    /// four required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
+    /// <paramref name="workflowExecutionStateStore"/>, <paramref name="poisonStore"/>) followed by optional
+    /// collaborators that default to their no-op/system implementations. The workflow execution state store is
+    /// <b>required by construction</b> so the W5 terminal-status guard (which stops sibling work once an execution
+    /// reaches a terminal status) can never be silently disabled by picking a narrower constructor.
+    ///
+    /// <para>The poison store is <b>required by construction</b> for the same reason (#1271): a handler fault is
+    /// ack-deleted from the durable queue before poison handling runs, so a drainer built without a poison store loses
+    /// the item entirely — nothing recorded, no incident projected, and <see cref="IRuntimeDomainRetryPolicy"/> never
+    /// consulted, so even a <c>RetryNow</c> decision does not re-enqueue. Requiring the store makes that configuration
+    /// impossible to construct rather than merely improbable; the core composition root already registers an
+    /// <c>InMemoryWorkflowSchedulerPoisonStore</c> unconditionally, so it costs nothing at composition time.</para>
+    ///
+    /// <para><paramref name="retryPolicy"/> stays optional because its absence is indistinguishable from the registered
+    /// default answering <c>DoNotRetry</c>: both park the item as <c>Poisoned</c>, and the record is written either
+    /// way.</para>
     /// </summary>
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowSchedulerPoisonStore poisonStore,
         TimeProvider? timeProvider = null,
         IWorkflowSchedulerPauseGate? pauseGate = null,
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
-        IWorkflowSchedulerPoisonStore? poisonStore = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
         IWorkflowEngineTracer? tracer = null,
         RuntimeSchedulerWorkClaimOptions? claimOptions = null,
@@ -81,6 +92,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(poisonStore);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
@@ -326,6 +338,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // What the operator eventually sees is decided elsewhere: PoisonedSchedulerWorkIncidentObserver projects a parked
     // Poisoned record into a blocking incident after the drain, and deliberately leaves the workflow non-terminal.
     // docs/runtime-fault-behavior.md maps that hand-off and contrasts it with the activity-fault path.
+    //
+    // #1271: this method has no "no store, nothing to do" exit. There cannot be one — the caller has already ack-deleted
+    // the item, so returning early would drop it silently. The store is required by construction instead.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
@@ -333,9 +348,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         RuntimeFaultInfo? innerFaultInfo,
         CancellationToken cancellationToken)
     {
-        if (_poisonStore is null)
-            return;
-
         var now = _timeProvider.GetUtcNow();
         var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
         var priorFailureCount = existing?.FailureCount ?? 0;

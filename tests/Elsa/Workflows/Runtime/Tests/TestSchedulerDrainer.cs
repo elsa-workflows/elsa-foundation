@@ -11,6 +11,11 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// state store to a fresh empty <see cref="InMemoryWorkflowExecutionStateStore"/> when a test does not supply one —
 /// behaviour-identical to the pre-RT-8 no-store path (an empty store reports no terminal execution, so the
 /// terminal-status guard stays inert). Tests that exercise the required-store contract construct the drainer directly.
+///
+/// <para>The poison store is defaulted the same way (#1271), to a fresh <see cref="InMemoryWorkflowSchedulerPoisonStore"/>
+/// that mirrors what the core composition root registers. This default is deliberately <em>not</em> equivalent to the
+/// old null: a handler fault now always leaves a record, and a test that does not care about poison simply drops the
+/// throwaway store.</para>
 /// </summary>
 internal static class TestSchedulerDrainer
 {
@@ -30,11 +35,11 @@ internal static class TestSchedulerDrainer
             schedulerWorkQueue,
             handlers,
             workflowExecutionStateStore ?? new InMemoryWorkflowExecutionStateStore(),
+            poisonStore ?? new InMemoryWorkflowSchedulerPoisonStore(),
             timeProvider,
             pauseGate,
             pipelineDispatcher,
             faultCapturePolicy,
-            poisonStore,
             retryPolicy,
             claimOptions: claimOptions,
             consumedWorkClaimAccessor: consumedWorkClaimAccessor);
