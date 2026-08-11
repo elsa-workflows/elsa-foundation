@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <!-- CShells core: the integration test boots a real shell (AddCShells + IShellRegistry) to prove the
          IFeatureAssemblyProvider seam is reachable from shell scope and that the startup pass runs there. -->

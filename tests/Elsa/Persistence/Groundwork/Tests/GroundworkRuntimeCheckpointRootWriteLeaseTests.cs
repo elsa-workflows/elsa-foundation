@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -30,7 +31,7 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
         var rootWriteLeaseManager = new WorkflowExecutableRootWriteLeaseManager(
             executableStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
             GroundworkTestSerialization.Serializer,
@@ -66,7 +67,7 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
         var manager = new WorkflowExecutableRootWriteLeaseManager(
             executableStore,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await manager.ExecuteAsync(parent.Identity, "checkpoint:closure", async _ =>
         {
@@ -163,9 +164,4 @@ public sealed class GroundworkRuntimeCheckpointRootWriteLeaseTests
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static string Hash(string artifactId) => $"sha256:{artifactId}";
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

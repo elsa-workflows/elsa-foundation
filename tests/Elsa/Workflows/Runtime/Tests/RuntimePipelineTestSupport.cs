@@ -141,9 +141,4 @@ public abstract class RuntimePipelineTestSupport
             return ValueTask.CompletedTask;
         }
     }
-
-    protected sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

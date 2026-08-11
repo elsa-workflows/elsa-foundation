@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Options;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
@@ -20,7 +21,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var executor = new RecordingCommandExecutor();
         var provider = NewProvider(store, transport, clock, NodeA, executor);
 
@@ -37,7 +38,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         // Node A takes placement first.
         var executorA = new RecordingCommandExecutor();
@@ -65,7 +66,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         // provider is (or structurally could be) persisted.
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         // Node A owns placement; node B resolves a forwarding actor for the same execution.
         var providerA = NewProvider(store, transport, clock, NodeA, new RecordingCommandExecutor());
@@ -99,7 +100,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         var providerA = NewProvider(store, transport, clock, NodeA, new RecordingCommandExecutor());
         await providerA.GetAgentAsync(Activation());
@@ -123,7 +124,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         // redelivered command re-claims placement (still owned by this node) and re-activates a fresh mailbox safely.
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var terminalExecutor = new RecordingCommandExecutor(_ => WorkflowExecutionCommandProcessResult.Terminal);
         var providerA = NewProvider(store, transport, clock, NodeA, terminalExecutor);
 
@@ -149,7 +150,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         // passivates the terminal execution through the distributed provider (its PassivateAsync owner-checks + releases).
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         var providerA = NewProvider(store, transport, clock, NodeA, new RecordingCommandExecutor(_ => WorkflowExecutionCommandProcessResult.Terminal));
         var actorA = await providerA.GetAgentAsync(Activation());
@@ -171,7 +172,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     [Fact]
     public void In_memory_capabilities_do_not_claim_provider_admitted_lease_fencing()
     {
-        var provider = NewProvider(new InMemoryExecutionPlacementStore(), new InMemoryExecutionCommandTransport(), new MutableTimeProvider(_now), NodeA, new RecordingCommandExecutor());
+        var provider = NewProvider(new InMemoryExecutionPlacementStore(), new InMemoryExecutionCommandTransport(), new FakeTimeProvider(_now), NodeA, new RecordingCommandExecutor());
 
         Assert.True(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.DistributedPlacement));
         Assert.False(provider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
@@ -184,7 +185,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         var provider = NewProvider(
             new InMemoryExecutionPlacementStore(),
             new InMemoryExecutionCommandTransport(),
-            new MutableTimeProvider(_now),
+            new FakeTimeProvider(_now),
             NodeA,
             new RecordingCommandExecutor(),
             new LeaseFencingCapability());
@@ -195,7 +196,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     private DistributedWorkflowExecutionActorProvider NewProvider(
         InMemoryExecutionPlacementStore store,
         InMemoryExecutionCommandTransport transport,
-        MutableTimeProvider clock,
+        FakeTimeProvider clock,
         string nodeId,
         RecordingCommandExecutor executor,
         IWorkflowExecutionLeaseFencingCapability? leaseFencingCapability = null)

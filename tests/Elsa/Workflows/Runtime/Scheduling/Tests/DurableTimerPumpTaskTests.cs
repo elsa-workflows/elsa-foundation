@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Scheduling.Tests;
@@ -199,12 +200,12 @@ public sealed class DurableTimerPumpTaskTests
         Assert.Equal(TimeSpan.FromSeconds(10), pump.CurrentSweepInterval);
     }
 
-    private static (DurableTimerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
+    private static (DurableTimerPumpTask Pump, FakeTimeProvider Clock) CreatePump(
         IDurableTimerStore store,
         FakeDispatcher dispatcher,
         int maxTimersPerTick = 100)
     {
-        var clock = new MutableTimeProvider(Now);
+        var clock = new FakeTimeProvider(Now);
         var options = Microsoft.Extensions.Options.Options.Create(new DurableTimerPumpOptions
         {
             SweepInterval = TimeSpan.FromSeconds(10),
@@ -259,12 +260,5 @@ public sealed class DurableTimerPumpTaskTests
 
         public ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
-    }
-
-    private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-        public override DateTimeOffset GetUtcNow() => _now;
-        public void Advance(TimeSpan by) => _now = _now.Add(by);
     }
 }

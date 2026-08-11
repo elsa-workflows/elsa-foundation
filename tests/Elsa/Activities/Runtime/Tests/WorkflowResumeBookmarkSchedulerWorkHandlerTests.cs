@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -40,7 +41,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     private WorkflowResumeBookmarkSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
-        new(provider.GetRequiredService<IServiceScopeFactory>(), new FixedTimeProvider(_now));
+        new(provider.GetRequiredService<IServiceScopeFactory>(), new FakeTimeProvider(_now));
 
     private Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
@@ -68,7 +69,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(_now));
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         if (bookmarkLifecycleObserver is not null)
@@ -225,10 +226,5 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 
         public void Dispose() => Disposed = true;
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

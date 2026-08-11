@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
@@ -17,7 +18,7 @@ public sealed class ExecutionPlacementPumpTaskTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var executor = new RecordingCommandExecutor();
         var node = new NodeHarness(NodeA, store, transport, clock, executor, LeaseDuration);
 
@@ -38,7 +39,7 @@ public sealed class ExecutionPlacementPumpTaskTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         var nodeA = new NodeHarness(NodeA, store, transport, clock, new RecordingCommandExecutor(), LeaseDuration);
         var executorB = new RecordingCommandExecutor();
@@ -61,7 +62,7 @@ public sealed class ExecutionPlacementPumpTaskTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var node = new NodeHarness(NodeA, store, transport, clock, new RecordingCommandExecutor(), LeaseDuration);
 
         var initial = await node.PlacementService.TryClaimAsync(ExecutionId);
@@ -82,7 +83,7 @@ public sealed class ExecutionPlacementPumpTaskTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         var executorA = new RecordingCommandExecutor();
         var nodeA = new NodeHarness(NodeA, store, transport, clock, executorA, LeaseDuration);
@@ -117,7 +118,7 @@ public sealed class ExecutionPlacementPumpTaskTests
     {
         var store = new InMemoryExecutionPlacementStore();
         var transport = new InMemoryExecutionCommandTransport();
-        var clock = new MutableTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
 
         // Node A owns placement so node B's local dispatch would forward (Deferred) instead of draining.
         var nodeA = new NodeHarness(NodeA, store, transport, clock, new RecordingCommandExecutor(), LeaseDuration);

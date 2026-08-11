@@ -11,6 +11,7 @@ using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
@@ -25,7 +26,7 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
 {
     protected override ClusterState CreateClusterState()
     {
-        var clock = new MutableTimeProvider(TestNow);
+        var clock = new FakeTimeProvider(TestNow);
         var runtimeManifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var distributedManifest = DistributedGroundworkStorageManifest.Create();
         var combinedManifest = runtimeManifest with
@@ -72,5 +73,4 @@ public sealed class GroundworkTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
         public PersistenceAccessContext Current { get; } =
             PersistenceAccessContext.Scoped(new PersistenceScope(PersistenceScope.DefaultValue));
     }
-
 }
