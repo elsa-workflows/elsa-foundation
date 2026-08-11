@@ -17,7 +17,10 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// also why a host that never saturates never sheds.</para>
 ///
 /// <para><b>A lone command is never shed.</b> With nothing in flight there is no contention to protect against, and
-/// refusing would mean a host that can serve exactly one request at a time serves none.</para>
+/// refusing would mean a host that can serve exactly one request at a time serves none. A command dispatched from
+/// inside an already-admitted one — a child workflow started during its parent's drain — is never shed either: the
+/// parent still holds its charge, so refusing frees nothing and the retry can only bounce until the parent is done.
+/// The limiter's job is to refuse work at the door, not to interrupt work already inside.</para>
 /// </summary>
 public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
 {
@@ -70,7 +73,7 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         var load = _loadSignal.InFlightDispatches;
         var limit = Limit;
 
-        if (_options.Enabled && load > 0 && load >= limit)
+        if (_options.Enabled && load > 0 && load >= limit && !_loadSignal.HasAmbientCharge)
         {
             _diagnostics?.RecordShed();
             return RuntimeAdmissionDecision.Shed(

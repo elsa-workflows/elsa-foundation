@@ -21,6 +21,8 @@ public sealed class DispatchRuntimeAdmissionLoadSignal : IRuntimeAdmissionLoadSi
 
     public long InFlightDispatches => Interlocked.Read(ref _inFlightDispatches);
 
+    public bool HasAmbientCharge => Ambient.Value is not null;
+
     public IRuntimeAdmissionCharge OpenCharge()
     {
         // Seeded at one unit: an admitted command always performs at least one dispatch, so a command that has been

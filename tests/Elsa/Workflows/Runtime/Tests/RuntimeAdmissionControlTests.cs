@@ -200,6 +200,32 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
+    public void TryAdmit_NeverShedsACommandDispatchedFromInsideAnAdmittedOne()
+    {
+        // A child workflow started during its parent's drain is not new work arriving at the host. The parent still
+        // holds its charge, so refusing the child frees nothing and could only bounce until the parent finishes.
+        var controller = NewController(new RuntimeAdmissionOptions { InitialLimit = 10, MinLimit = 10, MaxLimit = 10 });
+        _signal.InFlightDispatches = 1000;
+        _signal.HasAmbientCharge = true;
+
+        using var decision = controller.TryAdmit();
+
+        Assert.True(decision.IsAdmitted);
+    }
+
+    [Fact]
+    public void DispatchLoadSignal_TracksTheAmbientCharge()
+    {
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+
+        Assert.False(signal.HasAmbientCharge);
+        using (signal.OpenCharge())
+            Assert.True(signal.HasAmbientCharge);
+
+        Assert.False(signal.HasAmbientCharge);
+    }
+
+    [Fact]
     public void DispatchLoadSignal_ChargesPerDispatchNotPerCommand()
     {
         // The unit that makes the limit mean the same work for an External-leaf run (~56 dispatches) and a fusable
@@ -367,6 +393,8 @@ public sealed class RuntimeAdmissionControlTests
     private sealed class StubAdmissionLoadSignal : IRuntimeAdmissionLoadSignal
     {
         public long InFlightDispatches { get; set; }
+
+        public bool HasAmbientCharge { get; set; }
 
         public IRuntimeAdmissionCharge OpenCharge() => new NoopCharge();
 

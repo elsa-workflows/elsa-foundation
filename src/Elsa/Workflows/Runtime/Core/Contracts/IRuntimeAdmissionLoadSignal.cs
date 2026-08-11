@@ -18,6 +18,14 @@ public interface IRuntimeAdmissionLoadSignal
     long InFlightDispatches { get; }
 
     /// <summary>
+    /// Whether the calling flow is already inside an admitted command. A child workflow started from inside a parent's
+    /// drain is not new work arriving at the host, it is the continuation of work the host already accepted, so
+    /// shedding it would free nothing (the parent still holds its charge) and could only bounce until the parent
+    /// finishes.
+    /// </summary>
+    bool HasAmbientCharge { get; }
+
+    /// <summary>
     /// Opens the charge for one admitted command and makes it the ambient charge for the calling flow. Disposing it
     /// releases the units it accumulated and restores the previous ambient charge.
     /// </summary>
