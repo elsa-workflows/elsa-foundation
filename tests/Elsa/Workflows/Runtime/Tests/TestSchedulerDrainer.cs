@@ -24,7 +24,8 @@ internal static class TestSchedulerDrainer
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IWorkflowSchedulerPoisonStore? poisonStore = null,
         IRuntimeDomainRetryPolicy? retryPolicy = null,
-        RuntimeSchedulerWorkClaimOptions? claimOptions = null) =>
+        RuntimeSchedulerWorkClaimOptions? claimOptions = null,
+        IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor = null) =>
         new(
             schedulerWorkQueue,
             handlers,
@@ -35,5 +36,6 @@ internal static class TestSchedulerDrainer
             faultCapturePolicy,
             poisonStore,
             retryPolicy,
-            claimOptions: claimOptions);
+            claimOptions: claimOptions,
+            consumedWorkClaimAccessor: consumedWorkClaimAccessor);
 }

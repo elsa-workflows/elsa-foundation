@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: Make one generated machine-readable dataset the source of truth for the repository's project graph, with the existing markdown maps becoming projections of it, so that publishing can resolve which project owns a file without depending on a documentation tool.
 
-Decision of record: [ADR 0063](../../docs/adr/0063-package-versioning-uses-two-lines-with-computed-patch.md), which records that the dependency map "resolves file ownership for the patch computation and generates the `SharedAssemblies` list and the host compatibility manifest".
+Decision of record: [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md), which records that the dependency map "resolves file ownership for the patch computation and generates the `SharedAssemblies` list and the host compatibility manifest".
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -103,7 +103,7 @@ check fails naming the dataset.
   projection of that dataset, and MUST NOT independently scan `.csproj` files.
 - **FR-003**: Each node MUST record the project name, repository-relative project path, kind
   (source or test), packable state, domain and sub-domain, and role.
-- **FR-004**: Each node MUST record which version line it belongs to, per ADR 0063. Line A membership
+- **FR-004**: Each node MUST record which version line it belongs to, per ADR 0067. Line A membership
   is the eight packages named there; every other packable project is Line B.
 - **FR-005**: Each edge MUST be typed `internal` or `external`, and MUST record the target package
   identity. Internal edges MUST record the target project path; external edges MUST record the
@@ -153,8 +153,8 @@ check fails naming the dataset.
 
 - Version computation and selective publishing. That is spec 150, which consumes this dataset.
 - Generating the `SharedAssemblies` list and the host compatibility manifest. Both are named in
-  ADR 0063 as future consumers and neither is built here.
-- Ratifying Line A membership beyond the eight packages in ADR 0063. The remaining candidates are
+  ADR 0067 as future consumers and neither is built here.
+- Ratifying Line A membership beyond the eight packages in ADR 0067. The remaining candidates are
   deferred to the clean host specification (#1145).
 - Merging `feature-dependency-map.md` into the dataset, per FR-010.
 
