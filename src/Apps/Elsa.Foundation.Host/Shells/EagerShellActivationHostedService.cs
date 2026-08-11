@@ -66,7 +66,9 @@ internal sealed class EagerShellActivationHostedService(
             {
                 throw;
             }
-            catch (Exception exception)
+            // Best-effort optimization: swallow ordinary activation failures so the shell simply falls back to
+            // lazy activation. Fatal CLR exceptions are excluded from the filter so they still propagate.
+            catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException or AppDomainUnloadedException or BadImageFormatException))
             {
                 logger.LogWarning(exception, "Eager activation of shell '{Shell}' failed; it will activate lazily on its first request.", name);
             }

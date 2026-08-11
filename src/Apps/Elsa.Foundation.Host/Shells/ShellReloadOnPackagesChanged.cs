@@ -55,7 +55,13 @@ internal sealed class ShellReloadOnPackagesChanged(
             var results = await registry.ReloadActiveAsync(null, ct);
             logger.LogInformation("Reloaded {Count} active shell(s) after a Nuplane reconcile.", results.Count);
         }
-        catch (Exception exception)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        // Best-effort resilience: log and continue on ordinary reload failures (the new assemblies apply on
+        // the next restart or explicit reload). Fatal CLR exceptions are excluded so they still propagate.
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException or AppDomainUnloadedException or BadImageFormatException))
         {
             logger.LogError(exception, "Failed to reload active shells after a Nuplane reconcile; the new assemblies apply on the next restart or an explicit reload.");
         }
