@@ -214,7 +214,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** the user explicitly requests a map refresh or authorizes one as part of an approved task.
 
-**Workflow:** check `docs/maps/manifest.json` if present. When the user authorizes a refresh, run the narrowest map generator that fits the task before using the map as evidence. Use the split scripts from [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps). Review generated findings reports before continuing; if they expose drift that makes the current work unsafe, stop and tell the user. Record findings in reports rather than hand-editing generated facts. When no explicit refresh was requested, report freshness concerns without running a generator.
+**Workflow:** check `docs/maps/manifest.json` if present. When the user authorizes a refresh, run the narrowest map generator that fits the task before using the map as evidence. Use the split scripts from [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps). Review generated findings reports before continuing; if they expose drift that makes the current work unsafe, stop and tell the user. Record findings in reports rather than hand-editing generated facts. When no explicit refresh was requested, report freshness concerns without running a generator. Stage the changed map files by explicit path and never stage `docs/maps/manifest.json`: the freshness check excludes it, and its per-commit `git_head` makes concurrent map PRs conflict. See [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps).
 
 **Output:** refreshed map snapshots and any report-worthy findings.
 
