@@ -1,7 +1,6 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork;
@@ -23,7 +22,7 @@ namespace Elsa.Persistence.Groundwork;
     DisplayName = "Workflows Runtime Groundwork Persistence",
     Description = "Persists workflow execution state, bookmarks, executables, checkpoints, the post-commit outbox and the durable scheduler through Groundwork. Binds to a named Groundwork target, so runtime state can live in its own database.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public class WorkflowsRuntimeGroundworkPersistenceFeature : IShellFeature
+public class WorkflowsRuntimeGroundworkPersistenceFeature : GroundworkPersistenceShellFeatureBase
 {
     [ManifestSetting(
         DisplayName = "Target",
@@ -31,24 +30,6 @@ public class WorkflowsRuntimeGroundworkPersistenceFeature : IShellFeature
         Category = "Persistence")]
     public string? Target { get; set; }
 
-    [ManifestSetting(
-        DisplayName = "Cache workflow executables",
-        Description = "Retain a bounded shell-local cache of immutable workflow executable artifacts loaded from durable storage, isolated by persistence scope.",
-        Category = "Performance")]
-    public bool CacheWorkflowExecutables { get; set; } = true;
-
-    [ManifestSetting(
-        DisplayName = "Workflow executable cache capacity",
-        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
-        Category = "Performance")]
-    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
-
-    public void ConfigureServices(IServiceCollection services) =>
-        services.AddGroundworkRuntimeStores(
-            new WorkflowExecutableCacheOptions
-            {
-                Enabled = CacheWorkflowExecutables,
-                Capacity = WorkflowExecutableCacheCapacity
-            },
-            Target);
+    public override void ConfigureServices(IServiceCollection services) =>
+        services.AddGroundworkRuntimeStores(CreateWorkflowExecutableCacheOptions(), Target);
 }
