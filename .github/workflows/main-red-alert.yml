@@ -1,0 +1,108 @@
+name: Main red alert
+
+# Called by a gate that has just failed against main, to make sure the failure reaches
+# someone. Blocking is not available after a push: the commit has already landed, so the
+# only lever left is notification.
+#
+# It exists because the built-in notifications were demonstrably not enough on 2026-08-12.
+# PR #1270 was force-merged with red checks, main could not activate the Workbench for about
+# nine hours, and the one workflow that did notice -- Integration (nightly) -- failed silently
+# at 05:02Z. A scheduled workflow's failure mail goes to whoever last touched its cron, which
+# is nobody's inbox in practice; a push workflow's goes to the pusher, which is better but was
+# the same person who had just merged through red checks. An issue is visible to everyone and
+# survives an unread inbox.
+#
+# Deduplicated by exact title, so a gate that stays red comments on the existing issue rather
+# than filing a new one per push. It does NOT auto-close: main going green again does not mean
+# the breakage was understood, and the repository's convention is that a human closes an issue.
+#
+# Every failure mode here resolves toward filing SOMETHING. This job runs only when a gate has
+# already gone red, which is exactly the run nobody is watching, so a step that fails closed
+# produces silence -- the precise outcome the workflow exists to prevent. A duplicate issue or
+# an unlabeled one is a strictly better result than none.
+#
+# Implemented with `gh` and the built-in GITHUB_TOKEN rather than a third-party action, because
+# the org Actions allow-list gates those and a blocked entry fails the run at startup with no
+# logs (see the POLICY DEPENDENCY note in docker.yml). Local reusable workflows are always
+# allowed regardless of that policy.
+
+on:
+  workflow_call:
+    inputs:
+      gate:
+        description: Name of the gate that failed, used in the issue title.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  file-issue:
+    name: File a main-is-red issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: File or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GATE: ${{ inputs.gate }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          title="main is red: $GATE"
+
+          # Attribute only what the event actually says. On a schedule github.actor is whoever
+          # last touched the workflow file, not anyone who caused the failure, so naming them
+          # would pin a breakage on someone who had nothing to do with it.
+          case "$EVENT_NAME" in
+            push) trigger="push by @$ACTOR" ;;
+            schedule) trigger="scheduled run" ;;
+            *) trigger="$EVENT_NAME" ;;
+          esac
+
+          # Exact-title match over the open issues rather than `--search`, whose index lags
+          # issue creation by up to a minute -- long enough for two merges in quick succession
+          # to file the same issue twice. If the lookup itself fails, file without dedup.
+          if ! issues=$(gh issue list --state open --limit 300 --json number,title); then
+            echo "::warning::Could not list open issues; filing without deduplication."
+            issues='[]'
+          fi
+          existing=$(jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty' <<<"$issues")
+
+          # No "main is broken" claim: this is called by a benchmark gate too, where a budget
+          # miss on a workload with documented runner-class variance is not a broken main.
+          body=$(cat <<EOF
+          The **$GATE** gate failed against \`main\`.
+
+          - Commit: \`$COMMIT_SHA\`
+          - Trigger: $trigger
+          - Run: $RUN_URL
+
+          This gate cannot block anything: on a push the commit has already landed, and a
+          scheduled run is after the fact by definition. Fix forward or revert.
+
+          Close this issue once the gate is green again and the cause is understood. A later
+          green run does not close it automatically, and a gate that stays red comments here
+          instead of filing a second issue.
+          EOF
+          )
+
+          if [ -n "$existing" ]; then
+            echo "Commenting on existing issue #$existing."
+            gh issue comment "$existing" --body "$body"
+          else
+            echo "Filing a new issue."
+            # The label is a convenience. If it is ever renamed or deleted, `gh issue create`
+            # rejects the whole call, so fall back to filing unlabeled rather than losing the
+            # alert entirely.
+            gh issue create --title "$title" --body "$body" --label needs-triage || {
+              echo "::warning::Labeled create failed; filing without the needs-triage label."
+              gh issue create --title "$title" --body "$body"
+            }
+          fi
