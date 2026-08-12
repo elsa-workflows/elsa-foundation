@@ -63,8 +63,7 @@ internal static class SchedulerWorkStoragePhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var pendingIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.SchedulerWorkPendingByWorkflowOrderIndex,
             [
@@ -73,8 +72,7 @@ internal static class SchedulerWorkStoragePhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.SchedulerWorkOrderKeyField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var envelope = new DocumentEnvelopeDefinition();
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,

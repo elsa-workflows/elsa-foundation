@@ -81,8 +81,7 @@ internal static class TestScopeStoragePhysicalizer
         identity,
         fields,
         IndexValueKind.Keyword,
-        false,
-        MissingValueBehavior.Excluded);
+        false);
 
     private static PhysicalIndexDefinition Physical(string identity, params string[] columns) => new(
         identity,

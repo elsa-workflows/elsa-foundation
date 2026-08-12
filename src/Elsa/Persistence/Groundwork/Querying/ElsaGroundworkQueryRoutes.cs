@@ -400,8 +400,7 @@ public static class ElsaGroundworkQueryRoutes
                 new IndexField(ElsaRuntimeStorageManifest.ActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var parent = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionStateByWorkflowParentAndActivityExecutionId,
             [
@@ -410,8 +409,7 @@ public static class ElsaGroundworkQueryRoutes
                 new IndexField(ElsaRuntimeStorageManifest.ActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         const string activityIdColumn = "activity_execution_id";
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != ElsaRuntimeStorageManifest.ActivityExecutionIdField)
@@ -487,8 +485,7 @@ public static class ElsaGroundworkQueryRoutes
                 new IndexField(identityPath)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
             definition.ProjectedColumns
@@ -557,8 +554,7 @@ public static class ElsaGroundworkQueryRoutes
                     ElsaRuntimeStorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         const string executionSequenceColumn = "inspection_execution_sequence";
         const string scheduledAtColumn = "inspection_scheduled_at";
         const string activityExecutionIdColumn = "inspection_activity_execution_id";
@@ -651,8 +647,7 @@ public static class ElsaGroundworkQueryRoutes
                     ElsaRuntimeStorageManifest.ActivityExecutionHierarchyActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var pageByWorkflow = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionHierarchyPageByWorkflowIndex,
             [
@@ -664,8 +659,7 @@ public static class ElsaGroundworkQueryRoutes
                     ElsaRuntimeStorageManifest.ActivityExecutionHierarchyActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var scoped = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionHierarchyByScopeAndOrderIndex,
             [
@@ -681,8 +675,7 @@ public static class ElsaGroundworkQueryRoutes
                     ElsaRuntimeStorageManifest.ActivityExecutionHierarchyActivityExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         const string sequenceColumn = "hierarchy_execution_sequence";
         const string activityIdColumn = "hierarchy_activity_execution_id";
         const string isScopeRootColumn = "hierarchy_is_scope_root";
@@ -929,8 +922,7 @@ public static class ElsaGroundworkQueryRoutes
                     new IndexField(identity.Path, identity.Kind)
                 ],
                 IndexValueKind.Keyword,
-                isUnique: false,
-                MissingValueBehavior.Excluded)).ToArray();
+                isUnique: false)).ToArray();
         var routeIdentities = routes
             .Select(route => route.IndexIdentity)
             .ToHashSet(StringComparer.Ordinal);

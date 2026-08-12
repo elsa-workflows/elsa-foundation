@@ -119,8 +119,7 @@ public static class GroundworkDesignAtomicWriteStorageManifest
                 new IndexField(DesignPostCommitIntentIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
 
         // Offset paging, not cursor: a claim mutates claimableAt, so the ordering key moves under a cursor.
         // The driver reads one bounded page per sweep and comes back, which is also what keeps a single
@@ -164,8 +163,7 @@ public static class GroundworkDesignAtomicWriteStorageManifest
                         new PhysicalIndexColumnDefinition(DesignPostCommitIntentClaimableAtField, 1),
                         new PhysicalIndexColumnDefinition(DesignPostCommitIntentRecordedAtField, 2),
                         new PhysicalIndexColumnDefinition(DesignPostCommitIntentIdField, 3)
-                    ],
-                    missingValueBehavior: MissingValueBehavior.Excluded)
+                    ])
             ],
             linkedProjectedColumns:
             [

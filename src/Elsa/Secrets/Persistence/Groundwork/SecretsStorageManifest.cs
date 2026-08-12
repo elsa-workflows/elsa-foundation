@@ -41,13 +41,14 @@ public static class SecretsStorageManifest
             [new IndexField(TenantIdField), new IndexField(NormalizedNameField)],
             IndexValueKind.Keyword,
             isUnique: true,
+            // The deliberate sparse index: uniqueness over a nullable tenant column is null-distinct,
+            // which is what Excluded means. IncludedAsNull is refused as non-portable (GW-ROUTE-007).
             MissingValueBehavior.Excluded);
         var collectionIndex = new LogicalIndexDeclaration(
             ByCollectionIndex,
             [new IndexField(CollectionField)],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var filteredListIndex = new LogicalIndexDeclaration(
             SecretFilteredListIndex,
             [
@@ -100,7 +101,8 @@ public static class SecretsStorageManifest
                         new PhysicalIndexColumnDefinition(TenantIdField, 1),
                         new PhysicalIndexColumnDefinition(NormalizedNameField, 2)
                     ],
-                    isUnique: true),
+                    isUnique: true,
+                    missingValueBehavior: nameIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     collectionIndex.Identity,
                     [

@@ -35,8 +35,7 @@ internal static class ExecutionLivenessStatePagingPhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var all = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ExecutionLivenessStateByCollectionWorkflowAndStateId,
             [
@@ -45,8 +44,7 @@ internal static class ExecutionLivenessStatePagingPhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var envelope = new DocumentEnvelopeDefinition();
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != ElsaRuntimeStorageManifest.ExecutionLivenessOperationalStateIdField)

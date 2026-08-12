@@ -235,7 +235,7 @@ internal static class ExecutionLivenessRecoveryStoragePhysicalizer
             ]);
 
     private static LogicalIndexDeclaration Logical(string identity, params IndexField[] fields) =>
-        new(identity, fields, IndexValueKind.Keyword, false, MissingValueBehavior.Excluded);
+        new(identity, fields, IndexValueKind.Keyword, false);
 
     private static IndexField Keyword(string path) => new(path, IndexValueKind.Keyword);
 

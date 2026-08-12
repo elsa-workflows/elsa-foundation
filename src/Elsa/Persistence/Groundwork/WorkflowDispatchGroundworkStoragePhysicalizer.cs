@@ -157,8 +157,7 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
         identity,
         fields.Select(field => new IndexField(field)).ToArray(),
         IndexValueKind.Keyword,
-        isUnique: false,
-        MissingValueBehavior.Excluded);
+        isUnique: false);
 
     private static PhysicalIndexDefinition CompositePhysicalIndex(
         string identity,
@@ -203,8 +202,7 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
             indexIdentity,
             fields,
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var physicalIndex = new PhysicalIndexDefinition(
             indexIdentity,
             [

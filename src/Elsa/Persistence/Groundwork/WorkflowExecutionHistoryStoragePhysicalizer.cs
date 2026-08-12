@@ -63,8 +63,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     IndexValueKind.Keyword)
             ],
             IndexValueKind.Number,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var alterationCaptureIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
             [
@@ -73,8 +72,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var pinnedArtifactIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex,
             [
@@ -84,8 +82,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var pinnedArtifactV2Index = new LogicalIndexDeclaration(
             $"{ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex}-v2",
             [
@@ -96,6 +93,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: true,
+            // The deliberate sparse index here: every keyed column is nullable, so unique plus
+            // IncludedAsNull is refused as non-portable (GW-ROUTE-007) — providers disagree on whether
+            // two rows without an artifact id collide. Excluded constrains only rows that have one.
             MissingValueBehavior.Excluded);
         var faultedAttentionIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
@@ -111,8 +111,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                     IndexValueKind.Keyword)
             ],
             IndexValueKind.Number,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var envelope = new DocumentEnvelopeDefinition();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             TableName,
@@ -213,7 +212,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
                     ],
-                    isUnique: true)
+                    isUnique: true,
+                    missingValueBehavior: pinnedArtifactV2Index.MissingValueBehavior)
             ]);
         var historyQuery = new BoundedQueryDeclaration(
             ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,

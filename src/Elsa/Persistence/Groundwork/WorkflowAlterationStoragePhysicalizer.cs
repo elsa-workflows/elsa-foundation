@@ -62,6 +62,9 @@ internal static class WorkflowAlterationStoragePhysicalizer
             [Field(ElsaRuntimeStorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField)],
             IndexValueKind.Keyword,
             isUnique: true,
+            // The deliberate sparse index in this unit: uniqueness over a nullable idempotency key is
+            // null-distinct, which is exactly what Excluded means. IncludedAsNull is refused here as
+            // non-portable (GW-ROUTE-007) because providers disagree on whether two absent keys collide.
             MissingValueBehavior.Excluded);
         var columns = Columns(definition, [
             Column(planId, ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdField, PortablePhysicalType.String, ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
@@ -205,7 +208,7 @@ internal static class WorkflowAlterationStoragePhysicalizer
         columns.Single(column => StringComparer.Ordinal.Equals(column.Path, path)).LogicalName;
     private static IndexField Field(string path, IndexValueKind kind = IndexValueKind.Keyword) => new(path, kind);
     private static LogicalIndexDeclaration Index(string id, IndexValueKind valueKind, params IndexField[] fields) =>
-        new(id, fields, valueKind, false, MissingValueBehavior.Excluded);
+        new(id, fields, valueKind, false);
     private static PhysicalIndexDefinition Physical(
         DocumentEnvelopeDefinition envelope,
         LogicalIndexDeclaration index,
@@ -216,7 +219,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                 .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1)),
                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, columns.Length + 1)
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
 
     private static PhysicalIndexDefinition PhysicalExact(
         DocumentEnvelopeDefinition envelope,
@@ -227,7 +231,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
             [
                 new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                 .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1))
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
     private static BoundedQueryDeclaration Query(string id, LogicalIndexDeclaration index, IReadOnlyList<BoundedQueryPredicateField> predicates, IReadOnlyList<BoundedQuerySortField> sort) => new(
         id,
         index.Identity,

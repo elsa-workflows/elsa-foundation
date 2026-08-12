@@ -144,8 +144,7 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
             $"by-{indexIdentity}-time-recorded-id",
             fields,
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         string[] projectedColumns =
         [
             .. filterFields.Select(filter => filter.ProjectedColumn),
@@ -159,8 +158,7 @@ internal static class PostCommitOutboxGroundworkStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
                 .. projectedColumns.Select((column, index) =>
                     new PhysicalIndexColumnDefinition(column, index + 1))
-            ],
-            missingValueBehavior: MissingValueBehavior.Excluded);
+            ]);
         var predicateFields = new List<BoundedQueryPredicateField>();
         predicateFields.AddRange(filterFields.Select(filter => Equal(filter.Path)));
         predicateFields.Add(new BoundedQueryPredicateField(

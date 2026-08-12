@@ -65,8 +65,7 @@ public static class DistributedGroundworkStorageManifest
                 new IndexField(WorkflowExecutionIdKeyField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var table = PhysicalTableDefinition.PhysicalEntityTable(
             PlacementsTable,
             [
@@ -142,8 +141,7 @@ public static class DistributedGroundworkStorageManifest
                 new IndexField(SequenceField, IndexValueKind.Number)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var pendingIndex = new LogicalIndexDeclaration(
             PendingCommandByExecutionSequenceIndex,
             [
@@ -152,8 +150,7 @@ public static class DistributedGroundworkStorageManifest
                 new IndexField(SequenceField, IndexValueKind.Number)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var table = PhysicalTableDefinition.PhysicalEntityTable(
             CommandTransportTable,
             [

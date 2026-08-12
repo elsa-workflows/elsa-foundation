@@ -33,8 +33,7 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.BookmarkIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         var stimulusType = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.BookmarkStateByStimulusTypeAndIdentity,
             [
@@ -43,8 +42,7 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
                 new IndexField(ElsaRuntimeStorageManifest.BookmarkIdField)
             ],
             IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.Excluded);
+            isUnique: false);
         const string bookmarkIdColumn = "bookmark_id";
         const string stimulusLookupColumn = "bookmark_stimulus_lookup_key";
         const string stimulusTypeLookupColumn = "bookmark_stimulus_type_lookup_key";
