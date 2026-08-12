@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 154
 - Test projects: 100
 - Domains: 27
-- Direct cross-domain references: 706
+- Direct cross-domain references: 707
 
 ## Domains
 
@@ -243,7 +243,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Elsa.Foundation | Identity.AspNetCoreIdentity.Groundwork.Tests | test | Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | Elsa.Foundation | Identity.Persistence.Groundwork.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing |
-| [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.AdapterHost.Tests | test | Elsa.Groundwork.StorePerformance.AdapterHost |
+| [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.AdapterHost.Tests | test | Elsa.Groundwork.StorePerformance.AdapterHost<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.Benchmarks.Tests | test | Elsa.Groundwork.StorePerformance.Benchmarks |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
@@ -554,6 +554,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.Persistence.Groundwork](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj) | Elsa.Foundation | [Elsa.Persistence.Groundwork.Composition](../../src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | Elsa.Foundation | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | Elsa.Foundation | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
+| [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | Elsa.Groundwork | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | Elsa.Caching |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

@@ -52,11 +52,11 @@ The provenance carrier — the only place source identity survives past the cont
 | `PublishRequested` | `bool` | Snapshot of the source's `RequestsPublication`. |
 | `Deleted` | `bool` | Envelope's deletion marker — deleted definitions are never published. |
 
-### `OnWorkflowVersionsReconciling` (extended, additive)
+### `WorkflowVersionsReconciling` (extended, additive)
 
 Gains `public ICollection<WorkflowVersionSourceClaim> Claims { get; } = [];` beside the existing `Versions` collection (fan-in payload shape per §2.6.1 — get-only collection auto-property). `WorkflowVersionsReconcilingHandler` adds one claim per contributed entry in the same loop that adds the version.
 
-### `OnWorkflowVersionsReconciled` (new, `sealed class : IEvent`)
+### `WorkflowVersionsReconciled` (new, `sealed class : IEvent`)
 
 | Aspect | Value |
 |---|---|
@@ -66,13 +66,13 @@ Gains `public ICollection<WorkflowVersionSourceClaim> Claims { get; } = [];` bes
 | Dispatcher failure policy | A subscriber throw would fail the pass ⇒ subscribers MUST NOT throw (documented in `EXTENSION_POINTS.md`). |
 | Known subscribers | `PublishReconciledWorkflowVersions` *(cross-domain — Elsa.Workflows.Publishing)*. |
 
-Catalogued under `### OnWorkflowVersionsReconciled` in `src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md` (CatalogParityTests-enforced).
+Catalogued under `### WorkflowVersionsReconciled` in `src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md` (CatalogParityTests-enforced).
 
 ## 4. Subscriber — `Elsa.Workflows.Publishing` (engine)
 
-### `PublishReconciledWorkflowVersions` (new, `public sealed class : IEventHandler<OnWorkflowVersionsReconciled>`)
+### `PublishReconciledWorkflowVersions` (new, `public sealed class : IEventHandler<WorkflowVersionsReconciled>`)
 
-Verb-named per the Publishing feature's own handler style (`CollectExecutableCompilation`). Registered in `WorkflowsPublishingFeature.ConfigureServices` via `services.AddEventHandler<OnWorkflowVersionsReconciled, PublishReconciledWorkflowVersions>()` (scoped). New project reference: `Elsa.Workflows.Design.Reconciliation.Core` (allowed direction; see research D1/finding 8).
+Verb-named per the Publishing feature's own handler style (`CollectExecutableCompilation`). Registered in `WorkflowsPublishingFeature.ConfigureServices` via `services.AddEventHandler<WorkflowVersionsReconciled, PublishReconciledWorkflowVersions>()` (scoped). New project reference: `Elsa.Workflows.Design.Reconciliation.Core` (allowed direction; see research D1/finding 8).
 
 **Dependencies** (all existing contracts): `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionStore` (Design read ports), `IPublicationSlotStore`, `IPublicationRecordStore` (Publishing authority stores), `IRequestSender` (mediator), `ILogger<>`.
 
@@ -91,10 +91,10 @@ shells.json Options ──▶ JsonWorkflowReconciliationFeature (validate: Sourc
                           │ registers source (RequestsPublication = PublishOnReconcile)
 shell activation ──▶ WorkflowsVersionReconcilerStartupTask [SingleNodeTask][Order(2)] + lock
                           │ WorkflowsVersionReconciler.Reconcile
-                          │   publish OnWorkflowVersionsReconciling (Sequential)
+                          │   publish WorkflowVersionsReconciling (Sequential)
                           │     WorkflowVersionsReconcilingHandler: per source → Versions + Claims
                           │   per version: materialize (Model X: exists-check, mismatch tripwire, duplicate policy)
-                          │   pass succeeded ⇒ publish OnWorkflowVersionsReconciled(Claims) (Sequential)
+                          │   pass succeeded ⇒ publish WorkflowVersionsReconciled(Claims) (Sequential)
                           │     PublishReconciledWorkflowVersions: latest claim per definition
                           │       slot pre-check ─▶ skip | PublishWorkflow(versionId) ─▶ PublicationRecord Active
                           ▼

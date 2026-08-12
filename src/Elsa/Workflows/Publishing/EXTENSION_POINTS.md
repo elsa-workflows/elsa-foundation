@@ -108,7 +108,7 @@ feature's `IActivityDraftTestRunStore`.
   from `GetContributionAsync(ExecutableCompilationContext, CancellationToken)` without mutating the compiled tree.
 - **Context:** The source sees the resolved compile source, compiled root, request, and explicit optional tenant
   scope. It may return deterministic node-metadata claims and exact child artifact/node dependency claims.
-- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named Sequential `OnExecutableCompilationCollecting`
+- **Composition:** `ExecutableNodeMetadataEnricher` publishes the named Sequential `ExecutableCompilationCollecting`
   inline event. This engine owns the single active `CollectExecutableCompilation` handler, which resolves sources
   in stable type-identity order, stamps source ownership, validates the complete claim set, and appends it to the
   event for read-back.
@@ -126,7 +126,7 @@ feature's `IActivityDraftTestRunStore`.
 
 - **Kind:** Source, retained for source/binary compatibility while contributors migrate to
   `IExecutableCompilationSource`. `ExecutableNodeMetadataEnricher` publishes the paired
-  `OnExecutableNodeMetadataCollecting` event, and this engine owns the single active `CollectExecutableNodeMetadata`
+  `ExecutableNodeMetadataCollecting` event, and this engine owns the single active `CollectExecutableNodeMetadata`
   handler. New contributors register the generalized compilation source instead.
 
 ## Activity-template provider contributors
@@ -144,7 +144,7 @@ The Activity Graph implementation and its feature registration are documented in
 - Runtime executable artifacts, source references, trigger extraction/indexing, projection observers, and
   recurring schedules: [Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md).
 - Design version and layout reads used by compilation: [Workflows Design extension points](../Design/Api/EXTENSION_POINTS.md).
-- Design reconciliation completion (`OnWorkflowVersionsReconciled`), subscribed by the engine's
+- Design reconciliation completion (`WorkflowVersionsReconciled`), subscribed by the engine's
   `PublishReconciledWorkflowVersions` for publish-on-reconcile (spec 147):
   [Workflows Design Reconciliation extension points](../Design/Reconciliation/EXTENSION_POINTS.md).
 

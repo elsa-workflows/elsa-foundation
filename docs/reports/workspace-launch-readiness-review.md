@@ -42,7 +42,7 @@ It is not ready for an unconstrained prompt such as "understand the whole repo a
 | Program-goal buckets now separate launch readiness, runtime execution, constitution readiness, code/test reality, feature composition, and workspace split readiness. | Strength | New users can pick a focused bucket instead of continuing broad foundation-workspace polishing. | [Program goals index](../program-goals/README.md). |
 | The Architecture Tour is short and correctly routes readers to deeper surfaces. | Strength | It can be the first orientation skill without becoming a second constitution. | [Architecture tour](../architecture-tour.md). |
 | Reports are good evidence surfaces, especially runtime handoff, test maturity, CShells evidence, unfinished work, and agent maturity. | Strength | First workers can start from evidence rather than chat memory. | Reports index plus the relevant bucket. |
-| Maps are not safe as fresh verification facts when the manifest says `relevant_inputs_dirty: true` or freshness is uncertain. | Launch caution | When a thread invokes a map, refresh the relevant map layer first and review generated findings before continuing. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
+| Maps are not safe as fresh verification facts when freshness is uncertain. (As written, this cited the manifest's `relevant_inputs_dirty: true`; #1278 removed that field, since it recorded the working tree at generation time and meant nothing once committed. `Elsa.Maps.Generator -- check` is the freshness signal.) | Launch caution | When a thread invokes a map, run the check and refresh the relevant map layer if it is red, reviewing generated findings before continuing. | [Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md) or the selected hard-work bucket. |
 | Constitutions remain draft/provisional in places. | Launch caution | Warn users when draft status matters. If they want to focus on unratified items, start a targeted ratification work unit with the available skills and guardrails. | [Constitution Readiness](../program-goals/constitution-readiness.md). |
 | The repo is ready for a hard next unit, not more broad operating-model grooming. | Drift risk | Launch prep should now route toward specific buckets such as Runtime Execution Seam or Code Reality And Test Maturity. | [Program goals index](../program-goals/README.md). |
 
@@ -55,7 +55,7 @@ Recommended path for a new architect:
 3. Open [Program goals index](../program-goals/README.md) and select the relevant bucket.
 4. Use [Skills catalog](../skills/catalog.md) to choose the workflow.
 5. Read the one primary report/spec linked by the selected bucket.
-6. Check [maps manifest](../maps/manifest.json) before relying on generated maps.
+6. Run `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` before relying on generated maps; see the [maps index](../maps/README.md#freshness).
 7. Stop at the requested artifact: report, work-unit plan, Speckit spec, or implementation.
 
 ## Launch Blockers

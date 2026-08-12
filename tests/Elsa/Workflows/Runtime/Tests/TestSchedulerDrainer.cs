@@ -11,6 +11,17 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// state store to a fresh empty <see cref="InMemoryWorkflowExecutionStateStore"/> when a test does not supply one —
 /// behaviour-identical to the pre-RT-8 no-store path (an empty store reports no terminal execution, so the
 /// terminal-status guard stays inert). Tests that exercise the required-store contract construct the drainer directly.
+///
+/// <para>The poison store is defaulted the same way (#1271), to a fresh <see cref="InMemoryWorkflowSchedulerPoisonStore"/>
+/// that mirrors what the core composition root registers. This default is deliberately <em>not</em> equivalent to the
+/// old null: a handler fault now always leaves a record, and a test that does not care about poison simply drops the
+/// throwaway store.</para>
+///
+/// <para>The pause gate is defaulted to a real <see cref="WorkflowSchedulerPauseGate"/> over an empty
+/// <see cref="InMemoryWorkflowHoldStateStore"/> (#1277 R1). Unlike the poison store, this default <em>is</em>
+/// behaviour-identical to the old null for every test that holds nothing: with no effective hold the gate answers
+/// <c>CanAdvance: true</c>, so work advances exactly as it did when the gate was absent. The difference is that the
+/// pause contract is now expressed by the hold store's contents rather than by whether a collaborator was passed.</para>
 /// </summary>
 internal static class TestSchedulerDrainer
 {
@@ -30,12 +41,16 @@ internal static class TestSchedulerDrainer
             schedulerWorkQueue,
             handlers,
             workflowExecutionStateStore ?? new InMemoryWorkflowExecutionStateStore(),
+            poisonStore ?? new InMemoryWorkflowSchedulerPoisonStore(),
+            pauseGate ?? NewInertPauseGate(timeProvider),
             timeProvider,
-            pauseGate,
             pipelineDispatcher,
             faultCapturePolicy,
-            poisonStore,
             retryPolicy,
             claimOptions: claimOptions,
             consumedWorkClaimAccessor: consumedWorkClaimAccessor);
+
+    // A real gate over an empty hold store: holds nothing, so it answers CanAdvance: true for every boundary.
+    public static IWorkflowSchedulerPauseGate NewInertPauseGate(TimeProvider? timeProvider = null) =>
+        new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), timeProvider);
 }

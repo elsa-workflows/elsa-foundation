@@ -12,12 +12,12 @@ namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 /// (per-diff mutation-event publication retired from the mutation command). Designer-layout records
 /// live on the <c>WorkflowDefinitionDraftLayout</c> sibling, NOT inside
 /// <c>WorkflowDefinitionState</c> — the engine takes them as a separate argument. A new or changed
-/// <c>DesignMetadataRecord</c> for a <c>NodeId</c> diffs to <c>OnActivityMovedInDraft</c>.
+/// <c>DesignMetadataRecord</c> for a <c>NodeId</c> diffs to <c>ActivityMovedInDraft</c>.
 /// </summary>
 public sealed class LayoutDiffTests
 {
     [Fact]
-    public void A_new_layout_record_emits_OnActivityMovedInDraft()
+    public void A_new_layout_record_emits_ActivityMovedInDraft()
     {
         var diff = Evaluate(
             State(activities: [Node("n1")]),
@@ -25,7 +25,7 @@ public sealed class LayoutDiffTests
             storedLayout: [],
             desiredLayout: [LayoutRecord("n1", 10, 20, 100, 50)]);
 
-        var moved = Assert.Single(diff.OfType<OnActivityMovedInDraft>());
+        var moved = Assert.Single(diff.OfType<ActivityMovedInDraft>());
         Assert.Equal("n1", moved.NodeId);
         Assert.Equal(10, moved.NewX);
         Assert.Equal(20, moved.NewY);
@@ -34,7 +34,7 @@ public sealed class LayoutDiffTests
     }
 
     [Fact]
-    public void A_changed_layout_record_emits_OnActivityMovedInDraft()
+    public void A_changed_layout_record_emits_ActivityMovedInDraft()
     {
         var diff = Evaluate(
             State(activities: [Node("n1")]),
@@ -42,7 +42,7 @@ public sealed class LayoutDiffTests
             storedLayout: [LayoutRecord("n1", 10, 20)],
             desiredLayout: [LayoutRecord("n1", 99, 88)]);
 
-        var moved = Assert.IsType<OnActivityMovedInDraft>(Assert.Single(diff.OfType<OnActivityMovedInDraft>()));
+        var moved = Assert.IsType<ActivityMovedInDraft>(Assert.Single(diff.OfType<ActivityMovedInDraft>()));
         Assert.Equal(99, moved.NewX);
         Assert.Equal(88, moved.NewY);
     }
@@ -56,7 +56,7 @@ public sealed class LayoutDiffTests
             storedLayout: [LayoutRecord("n1", 10, 20)],
             desiredLayout: [LayoutRecord("n1", 10, 20)]);
 
-        Assert.Empty(diff.OfType<OnActivityMovedInDraft>());
+        Assert.Empty(diff.OfType<ActivityMovedInDraft>());
     }
 
     [Fact]
@@ -72,11 +72,11 @@ public sealed class LayoutDiffTests
             storedLayout: [RecordWithBag("n1", 10, 20, """{"z":1,"a":2}""")],
             desiredLayout: [RecordWithBag("n1", 10, 20, """{"z":1,"a":2}""")]);
 
-        Assert.Empty(diff.OfType<OnActivityMovedInDraft>());
+        Assert.Empty(diff.OfType<ActivityMovedInDraft>());
     }
 
     [Fact]
-    public void A_changed_opaque_bag_still_emits_OnActivityMovedInDraft()
+    public void A_changed_opaque_bag_still_emits_ActivityMovedInDraft()
     {
         // The normalisation must not blind the diff to a genuine bag change on an otherwise-unmoved node.
         var diff = Evaluate(
@@ -85,7 +85,7 @@ public sealed class LayoutDiffTests
             storedLayout: [RecordWithBag("n1", 10, 20, """{"label":"Start"}""")],
             desiredLayout: [RecordWithBag("n1", 10, 20, """{"label":"Begin"}""")]);
 
-        Assert.Single(diff.OfType<OnActivityMovedInDraft>());
+        Assert.Single(diff.OfType<ActivityMovedInDraft>());
     }
 
     private static DesignMetadataRecord RecordWithBag(string nodeId, double x, double y, string bagJson) =>

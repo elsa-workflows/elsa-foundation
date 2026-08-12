@@ -138,11 +138,11 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryWorkflowSchedulerPoisonStore(),
+            TestSchedulerDrainer.NewInertPauseGate(),
             new FakeTimeProvider(Now),
-            pauseGate: null,
             pipelineDispatcher: dispatcher,
             faultCapturePolicy: null,
-            poisonStore: null,
             retryPolicy: null,
             tracer: tracer);
     }

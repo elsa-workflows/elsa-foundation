@@ -55,7 +55,7 @@ This bucket exists to turn the Elsa foundation workspace from "still being polis
 - The next hard architecture unit should live in its own bucket, not here.
 - If an onboarding gap is discovered while preparing a worker handoff, fix the onboarding surface only when it prevents the handoff from being reliable.
 - When a handoff invokes maps and the manifest is dirty or freshness is uncertain, refresh the relevant map first and review generated findings before continuing.
-- Warn users that constitutions are draft/provisional when that affects their task; route ratification-focused work through [Constitution Readiness](constitution-readiness.md).
+- The constitutions are ratified at the document level (v4.0.0, 2026-08-08); warn users about the section-level gates still marked draft/provisional (framework §2.24, Elsa §E2.9) when that affects their task, and route ratification-focused work through [Constitution Readiness](constitution-readiness.md).
 - Do not continue broad foundation-workspace polishing. If the workspace can route the user, redirect to the focused hard-work bucket.
 
 ## Drift / Review Notes

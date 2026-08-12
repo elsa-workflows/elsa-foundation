@@ -168,8 +168,7 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
    the redrive safety the claim protocol provides.) The ack is skipped when a checkpoint commit inside
    this dispatch already consumed the item durably.
 3. Calls `HandleHandlerCrashAsync`, which asks `IRuntimeDomainRetryPolicy` what to do and records a
-   `RuntimeSchedulerPoisonRecord` whichever answer comes back (subject to the poison-store caveat
-   below):
+   `RuntimeSchedulerPoisonRecord` whichever answer comes back:
 
 | Retry mode | Disposition | Requeue |
 | --- | --- | --- |
@@ -185,13 +184,15 @@ decision (not a null, not a no-op): a handler fault parks as `Poisoned` on the f
 default poison store is `InMemoryWorkflowSchedulerPoisonStore`, so poison records are process-local
 until a durable provider is composed.
 
-One composition edge case is worth knowing, because it inverts everything above. The drainer takes its
-poison store as an optional constructor parameter, and `HandleHandlerCrashAsync` returns immediately
-when none was supplied. Step 2 has already ack-deleted the work item by then, so with no poison store
-the item is gone with no trace: nothing recorded, no incident ever projected, and the retry policy
-never consulted, which means even a `RetryNow` decision does not re-enqueue. `AddWorkflowRuntime`
-registers the in-memory store with `TryAddSingleton`, so no host reaches this by default. It is
-reachable by constructing the drainer directly, which tests and custom compositions do.
+There is no composition in which step 3 is skipped. The poison store is a **required constructor
+parameter** on `WorkflowSchedulerDrainer` (#1271); passing null throws. This matters because step 2 has
+already ack-deleted the work item by the time poison handling runs, so a drainer that could be built
+without a store would drop the item with no trace: nothing recorded, no incident ever projected, and
+the retry policy never consulted, which means even a `RetryNow` decision would not re-enqueue. That
+configuration used to be reachable by constructing the drainer directly, which tests and custom
+compositions do; it is now a construction-time failure. The retry policy stays optional by contrast,
+because its absence is indistinguishable from the registered default answering `DoNotRetry`, which is
+why the table above puts "or no policy" on the same row.
 
 ### How it becomes visible
 
@@ -259,7 +260,7 @@ when it lands, cite it for the exhaustive list rather than duplicating one here.
 | --- | --- | --- |
 | `IIncidentStrategy` (per workflow, pinned at publish) | `Fault/1` (`FaultIncidentStrategy`) | an unhandled activity fault terminalizes the run |
 | `IRuntimeDomainRetryPolicy` | `NoopRuntimeDomainRetryPolicy` → `DoNotRetry` | no handler-fault retries; poison on first failure |
-| `IWorkflowSchedulerPoisonStore` | `InMemoryWorkflowSchedulerPoisonStore` | poison records are process-local until a durable provider is composed |
+| `IWorkflowSchedulerPoisonStore` | `InMemoryWorkflowSchedulerPoisonStore` | poison records are process-local until a durable provider is composed; the drainer requires one by construction, so there is no "no store" mode |
 | `IRuntimeFaultCapturePolicy` | `DefaultRuntimeFaultCapturePolicy` | what of the exception reaches durable state |
 | `IIncidentStateStore` | `InMemoryIncidentStateStore` | same caveat as the poison store |
 
@@ -282,6 +283,7 @@ Changing the catalog default only affects workflows published afterwards.
 | the fault observer skips terminal workflows, decided incidents, and activation failures; it faults non-terminal ancestors | `src/Elsa/Workflows/Runtime/Services/BlockingIncidentWorkflowFaultObserver.cs` |
 | handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / cancellation excluded | `src/Elsa/Workflows/Runtime/Services/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
 | ack-before-poison, and the retry-mode ladder | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
+| the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
 | the default retry policy returns an explicit `DoNotRetry` | `src/Elsa/Workflows/Runtime/Services/NoopRuntimeDomainRetryPolicy.cs` |
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/Elsa/Workflows/Runtime/Services/PoisonedSchedulerWorkIncidentObserver.cs` |
@@ -298,7 +300,11 @@ Behavioral guards worth reading alongside the code:
   `ObserverChain_PoisonedRecord_PreservesSystemWaitAndNonterminalWorkflow` establishes that Path B
   leaves the workflow non-terminal.
 - `tests/Elsa/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs`: the retry-mode ladder,
-  including that the default policy neither retries nor re-enqueues.
+  including that the default policy neither retries nor re-enqueues, and
+  `DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord`, which pins that an empty
+  queue after a fault is always paired with a poison record.
+- `tests/Elsa/Workflows/Runtime/Tests/RuntimeSchedulerDrainTests.cs`:
+  `Constructor_RequiresThePoisonStore_SoAnAckDeletedFaultCannotVanish`.
 - `tests/Elsa/Workflows/Runtime/Tests/BlockingIncidentWorkflowFaultObserverTests.cs`: every skip
   condition and the ancestor-faulting rule.
 - `tests/Elsa/Workflows/Runtime/Tests/IncidentResolutionBatchExecutorTests.cs`: batch atomicity and

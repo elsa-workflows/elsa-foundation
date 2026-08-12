@@ -4,7 +4,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 
 - **Overridable contracts** — interfaces with a default implementation you can *replace* (`services.Replace(...)` / register-your-own). Bring one implementation and the built-in one steps aside. This is the *override* axis: "I want my own data access / my own bulk-upsert SQL."
 - **Implementable contributor interfaces** — *add-don't-replace* seams. Register an additional implementation alongside any others; a single aggregating handler runs them all (framework §2.6.1, §2.24.2). This is the *extend* axis.
-- **Events** — the EF Core persistence-lifecycle seams this assembly publishes (`OnEntitySaving` / `OnEntityLoading`).
+- **Events** — the EF Core persistence-lifecycle seams this assembly publishes (`EntitySaving` / `EntityLoading`).
 
 This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's entry for this domain; the index links here for detail.
 
@@ -20,7 +20,7 @@ This is the repo-wide [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md) index's
 
 ### Named read ports + `EFCoreReadStore<TDbContext, TEntity>` *(closed-query read surface)*
 - **Read contract:** each aggregate exposes a small, intent-revealing read port (in its domain `*.Design.Persistence.Core/Stores`) with closed methods (`GetAsync`, `FindBy…Async`, `ListBy…Async`, `ExistsAsync`, …). There is **no** `IQueryable`/LINQ surface — callers cannot express an arbitrary expression tree, so any provider can satisfy a port.
-- **Shared plumbing:** `EFCoreReadStore<TDbContext, TEntity>` (this assembly) is the base an EF-backed port adapter derives from: it translates the closed, provider-neutral `Query<TEntity>` spec (`Elsa.Persistence.Core.Queries`) to LINQ via `EFCoreQueryTranslator`, applies `IgnoreQueryFilters()` for tenant-agnostic reads, and publishes `OnEntityLoading` for every materialised entity. Filters project onto the spec through their `ToQuery()` method. No `EFCore<Aggregate>Store` adapters ship in-repo (the design-domain ones were removed when design persistence moved to Groundwork, spec 093); the base remains for domain lanes that add an EF-backed queried read surface.
+- **Shared plumbing:** `EFCoreReadStore<TDbContext, TEntity>` (this assembly) is the base an EF-backed port adapter derives from: it translates the closed, provider-neutral `Query<TEntity>` spec (`Elsa.Persistence.Core.Queries`) to LINQ via `EFCoreQueryTranslator`, applies `IgnoreQueryFilters()` for tenant-agnostic reads, and publishes `EntityLoading` for every materialised entity. Filters project onto the spec through their `ToQuery()` method. No `EFCore<Aggregate>Store` adapters ship in-repo (the design-domain ones were removed when design persistence moved to Groundwork, spec 093); the base remains for domain lanes that add an EF-backed queried read surface.
 - **Replace:** register your own implementation of a specific read port (or a decorator) — subclassing `EFCoreReadStore` when the replacement is EF-backed. Mutate-then-save commands that need change tracking do **not** go through the read ports (they use a tracked `DbContextFactory` context directly), so overriding a read port does not affect the write path.
 
 ### `IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*
@@ -41,7 +41,7 @@ These are registered alongside any others and dispatched by a single aggregating
 - **Signature:** `ValueTask Handle(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken);`
 - **Receives** the context + typed entity and **acts** — serialises `[NotMapped]` projections into backing `*Source` / payload columns before the row is flushed. The typed generics do the entity-type filtering (no inline `is` check).
 - **Register:** `services.AddEntitySavingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntitySavingHandlersFrom(assembly)`.
-- **Consumed by:** the single `ApplyEntitySavingHandlers : IEventHandler<OnEntitySaving>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
+- **Consumed by:** the single `ApplyEntitySavingHandlers : IEventHandler<EntitySaving>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
 **Known implementations (shipped):** none currently in-repo. The design-domain handlers were removed when design persistence moved to Groundwork (spec 093), and the surviving diagnostics EF lanes map their columns directly without `[NotMapped]` projections. The seam remains for domain persistence features that need it.
 
@@ -50,13 +50,13 @@ These are registered alongside any others and dispatched by a single aggregating
 - **Signature:** `ValueTask Handle(TDbContext dbContext, TEntity entity, CancellationToken cancellationToken);`
 - **Receives** the context + just-materialised entity and **acts** — hydrates `[NotMapped]` projections from the backing columns.
 - **Register:** `services.AddEntityLoadingHandler<TDbContext, TEntity, THandler>()` or scan with `services.AddEntityLoadingHandlersFrom(assembly)`.
-- **Consumed by:** the single `ApplyEntityLoadingHandlers : IEventHandler<OnEntityLoading>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
+- **Consumed by:** the single `ApplyEntityLoadingHandlers : IEventHandler<EntityLoading>` (this assembly), registered once by `EFCorePersistenceShellFeatureBase` via `TryAddEnumerable`.
 
 **Known implementations (shipped):** none currently in-repo. The design-domain handlers were removed when design persistence moved to Groundwork (spec 093), and the surviving diagnostics EF lanes map their columns directly without `[NotMapped]` projections. The seam remains for domain persistence features that need it.
 
 ### Out-of-band hooks (NOT event-dispatched)
 
-These contributor interfaces run through their own dispatch mechanism, not through `OnEntitySaving` / `OnEntityLoading` — listed here for completeness:
+These contributor interfaces run through their own dispatch mechanism, not through `EntitySaving` / `EntityLoading` — listed here for completeness:
 
 - **`IGlobalEntitySavingHandler`** *(Feature contract — `Elsa.Persistence.EFCore`)* — `ValueTask Handle(DbContext dbContext, EntityEntry entity, CancellationToken cancellationToken);`. Runs for **every** modified entity (no per-type fan-in) directly from `ElsaDbContextBase.ApplyGlobalSavingHandlers`.
 - **`IEntityModelCreatingHandler`** *(Feature contract — `Elsa.Persistence.EFCore`)* — `void Handle(ElsaDbContextBase dbContext, ModelBuilder modelBuilder, IMutableEntityType entityType);`. Runs during `OnModelCreating` (before any request scope exists), dispatched by `ElsaDbContextBase.ApplyEntityModelCreatingHandlers`.
@@ -93,13 +93,13 @@ in-repo worked example of overriding `EntityHandlerAssemblies` or registering en
 
 ## Events
 
-Both events are `IEvent` (framework §2.6.1). They are the EF Core persistence-lifecycle seams: a row is about to be flushed (`OnEntitySaving`) or has just been materialised (`OnEntityLoading`). Both are **Sequential / contribution** events — the publisher needs the contributors to have run (columns serialised / projections hydrated) before it proceeds.
+Both events are `IEvent` (framework §2.6.1). They are the EF Core persistence-lifecycle seams: a row is about to be flushed (`EntitySaving`) or has just been materialised (`EntityLoading`). Both are **Sequential / contribution** events — the publisher needs the contributors to have run (columns serialised / projections hydrated) before it proceeds.
 
-Each event has **exactly one** subscriber: a single aggregating `IEventHandler` that closes the typed contributor interface over the runtime DbContext + entity types, resolves every registered implementation, and invokes it. This is the same contributor-interface + single-aggregating-handler shape as `IDraftValidator` + `ExecuteValidations` (framework §2.24.2). Features never subscribe their own `IEventHandler<OnEntitySaving>` / `IEventHandler<OnEntityLoading>`; they register a typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>` (see Implementable contributor interfaces above) and let the aggregator dispatch it.
+Each event has **exactly one** subscriber: a single aggregating `IEventHandler` that closes the typed contributor interface over the runtime DbContext + entity types, resolves every registered implementation, and invokes it. This is the same contributor-interface + single-aggregating-handler shape as `IDraftValidator` + `ExecuteValidations` (framework §2.24.2). Features never subscribe their own `IEventHandler<EntitySaving>` / `IEventHandler<EntityLoading>`; they register a typed `IEntitySavingHandler<,>` / `IEntityLoadingHandler<,>` (see Implementable contributor interfaces above) and let the aggregator dispatch it.
 
 Heading convention per research item R4: `### <EventClassName>`.
 
-### OnEntitySaving
+### EntitySaving
 
 **Semantic.** A modified `Entity` (Added or Modified) is about to be flushed. Contributors serialise rich, `[NotMapped]` projections into their backing `*Source` / payload columns and derive any computed columns BEFORE the row is written. The publisher awaits the dispatch so the columns are populated by the time the underlying write runs.
 
@@ -113,10 +113,10 @@ Heading convention per research item R4: `### <EventClassName>`.
 
 **Publication sites.**
 - `ElsaDbContextBase.DispatchEntitySavingEvents` — published for every modified `Entity` inside `BeforeSavingChanges`, i.e. on every `SaveChangesAsync`.
-- `EFCoreBulkUpsert.PublishEntitySavingEvents` — the bulk-upsert path bypasses `SaveChanges` (it executes raw upsert SQL), so it publishes `OnEntitySaving` itself before generating the SQL so source columns are populated.
+- `EFCoreBulkUpsert.PublishEntitySavingEvents` — the bulk-upsert path bypasses `SaveChanges` (it executes raw upsert SQL), so it publishes `EntitySaving` itself before generating the SQL so source columns are populated.
 
 **Expected handler.**
-- Exactly one `IEventHandler<OnEntitySaving>`: `ApplyEntitySavingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable` (dedupes by implementation type even with several EF Core persistence features enabled).
+- Exactly one `IEventHandler<EntitySaving>`: `ApplyEntitySavingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable` (dedupes by implementation type even with several EF Core persistence features enabled).
 
 **Contributing handlers (`IEntitySavingHandler<,>` impls).**
 - None currently in-repo (the design-domain handlers were removed when design persistence moved to Groundwork, spec 093). The seam remains: a domain persistence feature registers typed handlers and the aggregator dispatches them.
@@ -127,7 +127,7 @@ Heading convention per research item R4: `### <EventClassName>`.
 - The unrelated `IGlobalEntitySavingHandler` (runs for *every* entity, no per-type fan-in) and `IEntityModelCreatingHandler` (runs during `OnModelCreating`) are separate mechanisms — not dispatched through this event.
 - The Sequential path ships **no exception-shielding** (framework §2.6.6): a contributor that throws fails the save.
 
-### OnEntityLoading
+### EntityLoading
 
 **Semantic.** An `Entity` has just been materialised from the store and needs hydrating: contributors deserialise the `*Source` / payload columns back into the rich, `[NotMapped]` projections. The publisher awaits the dispatch so the entity is fully hydrated before it is read or returned.
 
@@ -141,10 +141,10 @@ Heading convention per research item R4: `### <EventClassName>`.
 
 **Publication sites.**
 - `EFCoreReadStore.QueryAsync` / `FirstOrDefaultAsync` (this assembly) — the **read path** behind every named read port. Published for every entity returned by a port read (per-item and per-list fan-out). These results are `AsNoTracking`; hydration is in-memory.
-- Mutate-then-save commands — the **mutate-then-save path**. A command that loads an entity through its own **tracked** `DbContextFactory` context (NOT a named read store, which returns a detached `AsNoTracking` entity it could not save) publishes `OnEntityLoading` Sequential itself, so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
+- Mutate-then-save commands — the **mutate-then-save path**. A command that loads an entity through its own **tracked** `DbContextFactory` context (NOT a named read store, which returns a detached `AsNoTracking` entity it could not save) publishes `EntityLoading` Sequential itself, so the aggregator hydrates the already-tracked instance via the same context that will `SaveChangesAsync`.
 
 **Expected handler.**
-- Exactly one `IEventHandler<OnEntityLoading>`: `ApplyEntityLoadingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable`.
+- Exactly one `IEventHandler<EntityLoading>`: `ApplyEntityLoadingHandlers` (this assembly). Registered once per process by `EFCorePersistenceShellFeatureBase.ConfigureServices` via `TryAddEnumerable`.
 
 **Contributing handlers (`IEntityLoadingHandler<,>` impls).**
 - None currently in-repo (the design-domain handlers were removed when design persistence moved to Groundwork, spec 093). The seam remains: a domain persistence feature registers typed handlers and the aggregator dispatches them.

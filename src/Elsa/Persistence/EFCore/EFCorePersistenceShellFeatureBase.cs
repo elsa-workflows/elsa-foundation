@@ -99,8 +99,8 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
         // idempotent (TryAddEnumerable under the hood), so each aggregator lands exactly once even
         // with multiple EF Core persistence features enabled, and is registered under both the
         // closed generic (the dispatch path) and the non-generic marker.
-        services.TryAddEventHandler<OnEntitySaving, ApplyEntitySavingHandlers>();
-        services.TryAddEventHandler<OnEntityLoading, ApplyEntityLoadingHandlers>();
+        services.TryAddEventHandler<EntitySaving, ApplyEntitySavingHandlers>();
+        services.TryAddEventHandler<EntityLoading, ApplyEntityLoadingHandlers>();
 
         // Resolve pooling and lifetime settings with fallback
         // Note: These are resolved at configuration time, not runtime, but they'll use defaults if not set

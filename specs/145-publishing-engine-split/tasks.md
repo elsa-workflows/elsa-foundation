@@ -93,7 +93,7 @@
 **Goal**: Documented, legible layering — API = endpoints only.
 **Independent Test**: Review Api `ConfigureServices` (base + HTTP override + endpoints + capabilities only); catalogs updated.
 
-- [X] T022 [US3] Author `src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md` + `README.md` for the engine feature (owns the `OnExecutableCompilationCollecting`/`OnExecutableNodeMetadataCollecting` events, `IExecutableCompilationSource`/`IExecutableNodeMetadataSource` contributor interfaces, and the template registries) per §2.22/§2.22.1.
+- [X] T022 [US3] Author `src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md` + `README.md` for the engine feature (owns the `ExecutableCompilationCollecting`/`ExecutableNodeMetadataCollecting` events, `IExecutableCompilationSource`/`IExecutableNodeMetadataSource` contributor interfaces, and the template registries) per §2.22/§2.22.1.
 - [X] T023 [US3] Update `src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md` to endpoints-only and add the engine's catalog row to the repo-root `EXTENSION_POINTS.md` index.
 - [X] T024 [US3] Confirm (code review against SC-003) the Api `ConfigureServices` body registers nothing beyond `base`, the HTTP override, endpoints, and capabilities.
 

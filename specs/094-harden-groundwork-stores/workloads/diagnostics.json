@@ -53,10 +53,10 @@
         "instruments-by-last-seen"
       ],
       "requiredProviderEvidence": {
-        "sqlite": "file-backed-distinct-connections-with-retained-ef-oracle",
-        "sqlserver": "real-sqlserver-container-with-absolute-operational-budget",
-        "postgresql": "real-postgresql-container-with-absolute-operational-budget",
-        "mongodb": "transaction-capable-replica-set-with-absolute-operational-budget"
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
       },
       "correctness": {
         "resultDigestSha256": "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7",

@@ -64,7 +64,7 @@ public sealed class ActivityVersionReconciler(
 
         // Handlers contribute by adding to the event's directly-accessible Versions collection;
         // the reconciler reads the accumulated set after dispatch.
-        var @event = new OnActivityVersionsReconciling();
+        var @event = new ActivityVersionsReconciling();
         await eventPublisher.Publish(@event, cancellationToken);
 
         var (definitionIndex, versionIndex) = await Prefetch(@event.Versions, cancellationToken);

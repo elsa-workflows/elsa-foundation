@@ -374,7 +374,7 @@ public sealed class WorkflowsVersionReconcilerTests
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
 
-        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
         var carried = Assert.Single(reconciled.Claims);
         Assert.Equal(claim, carried);
         // Ordering: the completion event is published after the contribution event, i.e. after the pass.
@@ -398,7 +398,7 @@ public sealed class WorkflowsVersionReconcilerTests
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
 
-        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
         Assert.Empty(reconciled.Claims);
     }
 
@@ -419,7 +419,7 @@ public sealed class WorkflowsVersionReconcilerTests
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
 
-        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
         Assert.Equal(claim, Assert.Single(reconciled.Claims));
     }
 
@@ -441,7 +441,7 @@ public sealed class WorkflowsVersionReconcilerTests
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
         await reconciler.Reconcile(CancellationToken.None);
 
-        var reconciled = Assert.Single(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        var reconciled = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
         Assert.Equal(freshClaim, Assert.Single(reconciled.Claims));
     }
 
@@ -460,7 +460,7 @@ public sealed class WorkflowsVersionReconcilerTests
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Throw);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
-        Assert.Empty(sender.Published.OfType<OnWorkflowVersionsReconciled>());
+        Assert.Empty(sender.Published.OfType<WorkflowVersionsReconciled>());
     }
 
     private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
@@ -566,7 +566,7 @@ public sealed class WorkflowsVersionReconcilerTests
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             Published.Add(@event);
-            if (@event is OnWorkflowVersionsReconciling rec)
+            if (@event is WorkflowVersionsReconciling rec)
             {
                 foreach (var v in ToContribute)
                     rec.Versions.Add(v);

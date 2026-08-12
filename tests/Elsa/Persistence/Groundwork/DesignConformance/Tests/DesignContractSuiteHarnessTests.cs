@@ -144,7 +144,7 @@ public class DesignContractSuiteHarnessTests
             public Task Reconcile(CancellationToken cancellationToken)
             {
                 Calls++;
-                var reconciling = new OnActivityVersionsReconciling();
+                var reconciling = new ActivityVersionsReconciling();
 
                 foreach (var candidate in fixture._candidates)
                 {

@@ -49,7 +49,7 @@ public sealed class MongoDbAtomicityContractSuite(MongoDbDesignProviderFixture c
         await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
 
     [Fact]
-    public async Task Public_create_draft_command_publishes_OnDraftCreated_only_after_the_draft_is_durable()
+    public async Task Public_create_draft_command_publishes_DraftCreated_only_after_the_draft_is_durable()
     {
         await using var fixture = await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry);
         await fixture.ValidateReadinessAsync();

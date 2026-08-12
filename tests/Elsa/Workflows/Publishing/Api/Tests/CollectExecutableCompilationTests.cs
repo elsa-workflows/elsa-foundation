@@ -270,7 +270,7 @@ public sealed class CollectExecutableCompilationTests
         Assert.Contains(typeof(FixedSource).FullName!, exception.Message, StringComparison.Ordinal);
     }
 
-    private static OnExecutableCompilationCollecting Event(string? tenantId = null, ExecutableNode? root = null) =>
+    private static ExecutableCompilationCollecting Event(string? tenantId = null, ExecutableNode? root = null) =>
         new(new ExecutableCompilationContext(
             new WorkflowExecutableCompileRequest(
                 VersionId: "version-1",

@@ -36,7 +36,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetService<IWorkflowVersionReconciler>());
 
         var handlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
-        Assert.Contains(handlers, h => h is IEventHandler<OnWorkflowVersionsReconciling>);
+        Assert.Contains(handlers, h => h is IEventHandler<WorkflowVersionsReconciling>);
     }
 
     [Fact]

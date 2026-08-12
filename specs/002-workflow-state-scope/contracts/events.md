@@ -1,6 +1,6 @@
 # Contracts — Domain Events
 
-> **Supersession note (2026-07-05):** the per-diff **mutation** events below remain *declared* as the tested contract but are **no longer published** — commands no longer compute or publish them and the diff engine is unregistered from DI, until an event-sourcing consumer (FR-017) exists. The "publishing command reads `event.Errors` … flushes to `WorkflowDefinitionDraftValidation`" step is superseded (entity deleted; errors derived, not persisted — spec.md FR-021). **Lifecycle** events (`OnDraftCreated`, `OnDraftDiscarded`, `OnDraftValidating`, `OnDraftValidated`) remain published. Reinstatable when a consumer exists.
+> **Supersession note (2026-07-05):** the per-diff **mutation** events below remain *declared* as the tested contract but are **no longer published** — commands no longer compute or publish them and the diff engine is unregistered from DI, until an event-sourcing consumer (FR-017) exists. The "publishing command reads `event.Errors` … flushes to `WorkflowDefinitionDraftValidation`" step is superseded (entity deleted; errors derived, not persisted — spec.md FR-021). **Lifecycle** events (`DraftCreated`, `DraftDiscarded`, `DraftValidating`, `DraftValidated`) remain published. Reinstatable when a consumer exists.
 
 19 events in total. All events are `sealed class` `IDomainEvent` per framework §2.6.1's intent-revealing-methods sub-rule. Events that gather handler contributions expose `Add*(...)` methods + `public IReadOnlyList<T>` read accessors (private backing list).
 
@@ -13,76 +13,76 @@ Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):
 
 ## FR-018 mutation events (16) — `Elsa.Workflows.Design.Core`
 
-### `OnDraftCreated`
+### `DraftCreated`
 **Lifecycle origination** event for a freshly-created Draft.
 **Payload:** `DraftId : string`, `WorkflowDefinitionId : string`.
 **Published by:** `ICreateDraftCommand` implementation, after the Draft is persisted but before the command returns.
 **Expected handlers:** event-sourcing subscriber (if enabled), audit features, telemetry.
 **Ordering:** fires once per Draft creation, after the lock is released by the create-command.
 
-### `OnActivityAddedToDraft`
+### `ActivityAddedToDraft`
 **Mutation** event for an activity placed on the canvas.
 **Payload:** `DraftId : string`, `NodeId : string`, `ActivityVersionId : string`, `Activity : IActivityNodeView` (read-only view of the placed node).
 **Published by:** `IAddActivityToDraftCommand`.
-**Expected handlers:** event-sourcing subscriber, baseline graph-integrity validators (via `OnDraftValidating` chain, not directly).
-**Ordering:** after snapshot mutation, before `OnDraftValidating`.
+**Expected handlers:** event-sourcing subscriber, baseline graph-integrity validators (via `DraftValidating` chain, not directly).
+**Ordering:** after snapshot mutation, before `DraftValidating`.
 
-### `OnActivityRemovedFromDraft`
+### `ActivityRemovedFromDraft`
 **Mutation** event for an activity removed from the canvas.
 **Payload:** `DraftId : string`, `NodeId : string`.
 **Published by:** `IRemoveActivityFromDraftCommand`.
 
-### `OnActivityPropertyChangedInDraft`
+### `ActivityPropertyChangedInDraft`
 **Mutation** event for a configured-property or argument-state mutation.
 **Payload:** `DraftId : string`, `NodeId : string`, `PropertyPath : string`, `OldValue : object?`, `NewValue : object?`.
 **Published by:** `IUpdateActivityPropertyInDraftCommand`.
 
-### `OnActivityMovedInDraft` (layout event)
+### `ActivityMovedInDraft` (layout event)
 **Mutation** event for a layout-position change. Folds into the same Draft event stream per FR-017 (single stream, single replay).
 **Payload:** `DraftId : string`, `NodeId : string`, `NewX : double`, `NewY : double`, `NewWidth : double?`, `NewHeight : double?`.
 **Published by:** `IMoveActivityInDraftCommand`.
 
-### `OnConnectionAddedToDraft`
+### `ConnectionAddedToDraft`
 **Payload:** `DraftId : string`, `Connection : IActivityPortConnectionView`.
 **Published by:** `IAddConnectionToDraftCommand`.
 
-### `OnConnectionRemovedFromDraft`
+### `ConnectionRemovedFromDraft`
 **Payload:** `DraftId : string`, `ConnectionId : string`.
 **Published by:** `IRemoveConnectionFromDraftCommand`.
 
-### `OnVariableDeclaredInDraft`
+### `VariableDeclaredInDraft`
 **Payload:** `DraftId : string`, `Variable : IVariableDefinitionView`.
 **Published by:** `IDeclareVariableInDraftCommand`.
 
-### `OnVariableUpdatedInDraft`
+### `VariableUpdatedInDraft`
 **Payload:** `DraftId : string`, `VariableReferenceKey : string`, `OldValue : IVariableDefinitionView`, `NewValue : IVariableDefinitionView`.
 **Published by:** `IUpdateVariableInDraftCommand`.
 
-### `OnVariableRemovedFromDraft`
+### `VariableRemovedFromDraft`
 **Payload:** `DraftId : string`, `VariableReferenceKey : string`.
 **Published by:** `IRemoveVariableFromDraftCommand`.
 
-### `OnWorkflowInputAddedToDraft`
+### `WorkflowInputAddedToDraft`
 **Payload:** `DraftId : string`, `Input : IInputDefinitionView`.
 **Published by:** `IAddWorkflowInputToDraftCommand`.
 
-### `OnWorkflowInputUpdatedInDraft`
+### `WorkflowInputUpdatedInDraft`
 **Payload:** `DraftId : string`, `InputReferenceKey : string`, `OldValue : IInputDefinitionView`, `NewValue : IInputDefinitionView`.
 **Published by:** `IUpdateWorkflowInputInDraftCommand`.
 
-### `OnWorkflowInputRemovedFromDraft`
+### `WorkflowInputRemovedFromDraft`
 **Payload:** `DraftId : string`, `InputReferenceKey : string`.
 **Published by:** `IRemoveWorkflowInputFromDraftCommand`.
 
-### `OnWorkflowOutputAddedToDraft`
+### `WorkflowOutputAddedToDraft`
 **Payload:** `DraftId : string`, `Output : IOutputDefinitionView`.
 **Published by:** `IAddWorkflowOutputToDraftCommand`.
 
-### `OnWorkflowOutputUpdatedInDraft`
+### `WorkflowOutputUpdatedInDraft`
 **Payload:** `DraftId : string`, `OutputReferenceKey : string`, `OldValue : IOutputDefinitionView`, `NewValue : IOutputDefinitionView`.
 **Published by:** `IUpdateWorkflowOutputInDraftCommand`.
 
-### `OnWorkflowOutputRemovedFromDraft`
+### `WorkflowOutputRemovedFromDraft`
 **Payload:** `DraftId : string`, `OutputReferenceKey : string`.
 **Published by:** `IRemoveWorkflowOutputFromDraftCommand`.
 
@@ -90,13 +90,13 @@ Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):
 
 ## FR-018a lifecycle events (2) — `Elsa.Workflows.Design.Core`
 
-### `OnDraftClonedFromVersion`
+### `DraftClonedFromVersion`
 **Lifecycle** event for a Draft cloned from a Version.
 **Payload:** `NewDraftId : string`, `SourceVersionId : string`, `TargetDefinitionId : string`.
 **Published by:** `ICloneDraftFromVersionCommand`.
 **Expected handlers:** event-sourcing (records the cloning origin), audit, copy-trail telemetry.
 
-### `OnDraftDiscarded`
+### `DraftDiscarded`
 **Lifecycle** event for a discarded Draft.
 **Payload:** `DraftId : string`, `WorkflowDefinitionId : string`.
 **Published by:** `IDiscardDraftCommand`.
@@ -106,7 +106,7 @@ Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):
 
 ## FR-025 validation event (1) — `Elsa.Workflows.Design.Validations.Core`
 
-### `OnDraftValidating`
+### `DraftValidating`
 **Coarse** event fired after every granular FR-018 event. Validators subscribe to this and contribute errors.
 
 **Payload:**
@@ -117,7 +117,7 @@ Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):
 
 **Class shape:**
 ```csharp
-public sealed class OnDraftValidating(IWorkflowDefinitionDraft draft) : IDomainEvent
+public sealed class DraftValidating(IWorkflowDefinitionDraft draft) : IDomainEvent
 {
     private readonly List<ValidationError> _errors = new();
     public IWorkflowDefinitionDraft Draft { get; } = draft;
@@ -145,6 +145,6 @@ public sealed class OnDraftValidating(IWorkflowDefinitionDraft draft) : IDomainE
 Each `.Core` ships a `DOMAIN_EVENTS.md` at its project root documenting every event with: class name (markdown heading `### <EventClassName>` per R4), one-line semantic, payload signature, publication site, expected handler audiences, ordering guarantees.
 
 - `src/Elsa.Workflows.Design.Core/DOMAIN_EVENTS.md` — 18 events (16 FR-018 + 2 FR-018a).
-- `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` — 1 event (FR-025 `OnDraftValidating`).
+- `src/Elsa.Workflows.Design.Validations.Core/DOMAIN_EVENTS.md` — 1 event (FR-025 `DraftValidating`).
 
 The catalog parity test (FR-031) asserts bidirectional alignment per R4.

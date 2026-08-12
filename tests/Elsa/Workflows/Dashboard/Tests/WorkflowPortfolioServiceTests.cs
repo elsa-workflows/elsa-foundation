@@ -95,7 +95,7 @@ public sealed class WorkflowPortfolioServiceTests
             try
             {
                 await Task.Delay(2, cancellationToken);
-                var validating = Assert.IsType<OnDraftValidating>(@event);
+                var validating = Assert.IsType<DraftValidating>(@event);
                 if (invalidIds.Contains(validating.Draft.Id))
                     validating.Errors.Add(new ValidationError("$workflow", "Test", "Invalid"));
                 Interlocked.Increment(ref _validated);

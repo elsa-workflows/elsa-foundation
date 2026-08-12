@@ -10,7 +10,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - **Kind:** Contributor (receives a contribution context and acts — push pattern).
 - **Signature:** `ValueTask Contribute(IJavaScriptDeclarationsContributionContext context, CancellationToken cancellationToken);`
 - **Register:** `services.AddScoped<IJavaScriptDeclarationContributor, MyContributor>()`.
-- **Aggregated by:** the single `BuildDeclarationsDocument : IEventHandler<OnDeclarationsDocumentGenerating>` (this feature), which injects `IEnumerable<IJavaScriptDeclarationContributor>` and invokes each to build the TypeScript declaration document surfaced in the design editor.
+- **Aggregated by:** the single `BuildDeclarationsDocument : IEventHandler<DeclarationsDocumentGenerating>` (this feature), which injects `IEnumerable<IJavaScriptDeclarationContributor>` and invokes each to build the TypeScript declaration document surfaced in the design editor.
 - **Purpose:** contribute TypeScript type declarations, function signatures, variable names, etc. to the editor's IntelliSense document.
 
 **Known implementations (shipped):**
@@ -24,7 +24,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 
 `CatalogParityTests` scans `Elsa.Expressions.JavaScript.Rendering.Core` for `IEvent` types and asserts bidirectional alignment with `### On…` headings here.
 
-### OnDeclarationsDocumentGenerating
+### DeclarationsDocumentGenerating
 `(IJavaScriptDeclarationsContributionContext Context)`
 
 **Semantic.** The TypeScript declaration document for the JavaScript editor is being built. Contributors add their type declarations to `Context`. Sequential: the document must be complete before it is returned to the editor.

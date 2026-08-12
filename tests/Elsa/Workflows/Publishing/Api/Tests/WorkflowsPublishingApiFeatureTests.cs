@@ -42,10 +42,10 @@ public sealed class WorkflowsPublishingApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityDraftTestRunService));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityPublishingAuthorizationContext));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(Elsa.Events.Core.Contracts.IEventHandler<OnExecutableCompilationCollecting>) &&
+            descriptor.ServiceType == typeof(Elsa.Events.Core.Contracts.IEventHandler<ExecutableCompilationCollecting>) &&
             descriptor.ImplementationType == typeof(CollectExecutableCompilation));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(Elsa.Events.Core.Contracts.IEventHandler<OnExecutableNodeMetadataCollecting>) &&
+            descriptor.ServiceType == typeof(Elsa.Events.Core.Contracts.IEventHandler<ExecutableNodeMetadataCollecting>) &&
             descriptor.ImplementationType == typeof(CollectExecutableNodeMetadata));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestRunStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationSlotStore));

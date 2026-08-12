@@ -20,7 +20,7 @@ Each mutation command:
 1. Acquires lock `workflow-draft:{DraftId}` via `IDistributedLockProvider` (FR-027).
 2. Loads the Draft + applies the mutation in memory.
 3. Publishes the corresponding FR-018 granular event via `IDomainEventSender.Send`.
-4. Publishes `OnDraftValidating` (FR-025).
+4. Publishes `DraftValidating` (FR-025).
 5. Rebuilds `WorkflowDefinitionDraftValidation.Errors` from `event.Errors`.
 6. Transactional flush.
 7. Releases lock.
@@ -31,85 +31,85 @@ Handler exceptions never propagate to the caller per FR-027c + framework §2.6.1
 
 #### `IAddActivityToDraftCommand`
 **Payload:** `DraftId : string`, `Activity : ActivityNodeRecord` (the activity to add — exact record shape pin in tasks-stage).
-**Publishes:** `OnActivityAddedToDraft`.
+**Publishes:** `ActivityAddedToDraft`.
 **Effect:** appends to `WorkflowDefinitionState.Activities`; assigns `NodeId` if not pre-set; updates `WorkflowDefinitionDraftLayout.Records` with a default `DesignMetadataRecord` for placement (or expects layout to be supplied separately — plan-stage detail in tasks).
 
 #### `IRemoveActivityFromDraftCommand`
 **Payload:** `DraftId : string`, `NodeId : string`.
-**Publishes:** `OnActivityRemovedFromDraft`.
+**Publishes:** `ActivityRemovedFromDraft`.
 **Effect:** removes the activity from `State.Activities` AND removes all `ActivityConnections` referencing the NodeId (no dangling connections); removes the corresponding `DesignMetadataRecord` from the Draft's layout.
 
 #### `IUpdateActivityPropertyInDraftCommand`
 **Payload:** `DraftId : string`, `NodeId : string`, `PropertyPath : string`, `NewValue : object?`.
-**Publishes:** `OnActivityPropertyChangedInDraft`.
+**Publishes:** `ActivityPropertyChangedInDraft`.
 **Effect:** mutates the named property on the targeted `ActivityNode`. Property path may target configured-properties, argument state, etc. (tasks-stage pins the exact path resolution mechanism).
 
 #### `IMoveActivityInDraftCommand`
 **Payload:** `DraftId : string`, `NodeId : string`, `NewX : double`, `NewY : double`, `NewWidth : double?`, `NewHeight : double?`.
-**Publishes:** `OnActivityMovedInDraft` (the layout event per FR-018).
+**Publishes:** `ActivityMovedInDraft` (the layout event per FR-018).
 **Effect:** updates the matching `DesignMetadataRecord` in `WorkflowDefinitionDraftLayout.Records`. Does NOT touch `WorkflowDefinitionState` — layout is the sibling, not nested in State.
 
 ### Connections (graph)
 
 #### `IAddConnectionToDraftCommand`
 **Payload:** `DraftId : string`, `Connection : ActivityPortConnectionRecord`.
-**Publishes:** `OnConnectionAddedToDraft`.
+**Publishes:** `ConnectionAddedToDraft`.
 **Effect:** appends to `WorkflowDefinitionState.ActivityConnections`.
 
 #### `IRemoveConnectionFromDraftCommand`
 **Payload:** `DraftId : string`, `ConnectionId : string` (or composite key — plan-stage decides).
-**Publishes:** `OnConnectionRemovedFromDraft`.
+**Publishes:** `ConnectionRemovedFromDraft`.
 **Effect:** removes from `State.ActivityConnections`.
 
 ### Variables
 
 #### `IDeclareVariableInDraftCommand`
 **Payload:** `DraftId : string`, `Variable : VariableDefinitionRecord`.
-**Publishes:** `OnVariableDeclaredInDraft`.
+**Publishes:** `VariableDeclaredInDraft`.
 **Effect:** appends to `State.Variables`.
 
 #### `IUpdateVariableInDraftCommand`
 **Payload:** `DraftId : string`, `VariableReferenceKey : string`, `NewValue : VariableDefinitionRecord` (or property-path style — plan-stage decides).
-**Publishes:** `OnVariableUpdatedInDraft`.
+**Publishes:** `VariableUpdatedInDraft`.
 **Effect:** mutates the matching variable in `State.Variables`.
 
 #### `IRemoveVariableFromDraftCommand`
 **Payload:** `DraftId : string`, `VariableReferenceKey : string`.
-**Publishes:** `OnVariableRemovedFromDraft`.
+**Publishes:** `VariableRemovedFromDraft`.
 **Effect:** removes from `State.Variables`.
 
 ### Workflow inputs (workflow-definition-level declarations)
 
 #### `IAddWorkflowInputToDraftCommand`
 **Payload:** `DraftId : string`, `Input : InputDefinition` (carries `IsRequired` per FR-036).
-**Publishes:** `OnWorkflowInputAddedToDraft`.
+**Publishes:** `WorkflowInputAddedToDraft`.
 **Effect:** appends to `State.Inputs`.
 
 #### `IUpdateWorkflowInputInDraftCommand`
 **Payload:** `DraftId : string`, `InputReferenceKey : string`, `NewValue : InputDefinition`.
-**Publishes:** `OnWorkflowInputUpdatedInDraft`.
+**Publishes:** `WorkflowInputUpdatedInDraft`.
 **Effect:** mutates the matching input in `State.Inputs`.
 
 #### `IRemoveWorkflowInputFromDraftCommand`
 **Payload:** `DraftId : string`, `InputReferenceKey : string`.
-**Publishes:** `OnWorkflowInputRemovedFromDraft`.
+**Publishes:** `WorkflowInputRemovedFromDraft`.
 **Effect:** removes from `State.Inputs`.
 
 ### Workflow outputs (workflow-definition-level declarations)
 
 #### `IAddWorkflowOutputToDraftCommand`
 **Payload:** `DraftId : string`, `Output : OutputDefinition` (carries `IsRequired` per FR-036).
-**Publishes:** `OnWorkflowOutputAddedToDraft`.
+**Publishes:** `WorkflowOutputAddedToDraft`.
 **Effect:** appends to `State.Outputs`.
 
 #### `IUpdateWorkflowOutputInDraftCommand`
 **Payload:** `DraftId : string`, `OutputReferenceKey : string`, `NewValue : OutputDefinition`.
-**Publishes:** `OnWorkflowOutputUpdatedInDraft`.
+**Publishes:** `WorkflowOutputUpdatedInDraft`.
 **Effect:** mutates the matching output in `State.Outputs`.
 
 #### `IRemoveWorkflowOutputFromDraftCommand`
 **Payload:** `DraftId : string`, `OutputReferenceKey : string`.
-**Publishes:** `OnWorkflowOutputRemovedFromDraft`.
+**Publishes:** `WorkflowOutputRemovedFromDraft`.
 **Effect:** removes from `State.Outputs`.
 
 ---
@@ -118,17 +118,17 @@ Handler exceptions never propagate to the caller per FR-027c + framework §2.6.1
 
 ### `ICreateDraftCommand` (FR-019 lifecycle origination)
 **Payload:** `WorkflowDefinitionId : string`, `InitialState : WorkflowDefinitionState?` (optional — defaults to an empty State).
-**Publishes:** `OnDraftCreated`.
+**Publishes:** `DraftCreated`.
 **Effect:** creates a new `WorkflowDefinitionDraft` with the supplied (or empty) State; creates a corresponding empty `WorkflowDefinitionDraftLayout`. The Draft is now ready for mutation commands. Lock acquired on the new DraftId after generation.
 
 ### `ICloneDraftFromVersionCommand` (FR-028)
 **Payload:** `SourceVersionId : string`, `TargetDefinitionId : string`.
-**Publishes:** `OnDraftClonedFromVersion`.
+**Publishes:** `DraftClonedFromVersion`.
 **Effect:** per data-model.md §4.3 lifecycle. Cardinality interaction with pre-existing Drafts of the same Definition — Unit D's call per FR-028.
 
 ### `IDiscardDraftCommand` (FR-029)
 **Payload:** `DraftId : string`.
-**Publishes:** `OnDraftDiscarded`.
+**Publishes:** `DraftDiscarded`.
 **Effect:** per data-model.md §4.4 lifecycle. Idempotent — second discard on same DraftId is a no-op. NEVER touches any `WorkflowDefinitionVersion`.
 
 ---

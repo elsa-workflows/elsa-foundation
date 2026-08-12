@@ -90,7 +90,7 @@ public sealed class GroundworkUpdateDraftCommand(
         if (outcome.ShouldPublishPostCommitOutcome)
         {
             await deferredEventPublisher.Publish(
-                new OnDraftValidated(outcome.Value.Draft, outcome.Value.Errors),
+                new DraftValidated(outcome.Value.Draft, outcome.Value.Errors),
                 CancellationToken.None);
         }
     }

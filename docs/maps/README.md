@@ -15,7 +15,7 @@ Maps are navigation and generated-fact surfaces. They should be cheap to refresh
 - [Domain map](domain-map.md) - project grouping, roles, and direct cross-domain references.
 - [Extension-point map](extension-point-map.md) - generated facts from root and per-domain `EXTENSION_POINTS.md` catalogs.
 - [Architecture reference map](architecture-reference-map.md) - direct design/runtime reference signals for review.
-- [Map manifest](manifest.json) - point-in-time freshness metadata and input fingerprint.
+- [Map manifest](manifest.json) - what the v1 layer covers: project, package, feature and spec counts, and the files it generates.
 
 ## Refresh Maps v1
 
@@ -58,12 +58,17 @@ bash tools/maps/generate-feature-dependency-map.sh
 
 ## Freshness
 
-Generated maps are committed point-in-time snapshots. Use [manifest.json](manifest.json) before relying on them.
+Generated maps are committed point-in-time snapshots. The authoritative freshness signal is the
+check, not a field in a file:
 
-- `input_fingerprint` records the tracked inputs the snapshot was generated from. It is a provenance stamp, not the freshness gate: it moves on every source edit, so most changes to it mean nothing changed in any map. The authoritative signal is `Elsa.Maps.Generator -- check`, which regenerates every map and byte-compares it with what is committed. `manifest.json` itself is excluded from that comparison.
-- `git_head` is advisory because maps are often generated before the commit that records them.
-- `relevant_inputs_dirty` tells you whether `src/`, `tests/`, `specs/`, or `tools/maps/` had uncommitted changes when the maps were generated.
-- Map generation is opt-in: do not refresh automatically when inputs are dirty, changed, or freshness is uncertain. Report the stale snapshot and let the user explicitly invoke or authorize the narrowest relevant map layer.
+```bash
+dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+```
+
+- The check regenerates every map into a scratch directory and byte-compares it with what is committed, [manifest.json](manifest.json) included. Green means every committed map still describes the tree. CI runs it on every pull request and on every push to `main` (`.github/workflows/maps.yml`), so main going stale is reported against main.
+- It deliberately does not gate on a fingerprint over the inputs. Such a fingerprint moves on every source edit, so it would oblige every code PR to regenerate and commit twelve map files even though most source edits change no map at all.
+- **The manifest describes the tree, not the commit.** Every field is a function of the tree, so `-- all` rewrites it to the same bytes unless a count or a generated file actually changed. Stage it along with the other changed map files. Until #1278 it also carried `git_head`, `input_fingerprint`, `input_file_count` and `relevant_inputs_dirty`, which moved on every commit and made two concurrent map PRs conflict on this file for no semantic reason (PR #1247 went `CONFLICTING` the moment #1248 merged for exactly that, while #1243 left the manifest alone and stayed mergeable). Those fields are gone. If you want to know which commit generated a snapshot, `git log docs/maps/` answers it.
+- Map generation is opt-in: do not refresh automatically when the check is red or freshness is uncertain. Report the stale snapshot and let the user explicitly invoke or authorize the narrowest relevant map layer.
 - After an explicitly authorized refresh, review generated findings reports such as `docs/reports/maps-v1-findings.md` or `docs/reports/maps-v2-findings.md` before continuing.
 - If the refreshed report exposes drift that makes the current work unsafe, stop and tell the user rather than continuing from stale assumptions.
 

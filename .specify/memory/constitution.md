@@ -18,13 +18,34 @@ Sync Impact Report (3.4.0 -> 3.5.0, 2026-08-07)
   specification (#1145).
 - Templates requiring review: plan-template.md, spec-template.md, tasks-template.md for any
   Constitution Check text that assumes uniform package versions.
+
+SYNC IMPACT REPORT — 3.5.0 -> 4.0.0 (2026-08-08)
+Amendment: tracks framework constitution 4.0.0 — event types are never named with an `On` prefix.
+  MAJOR because this document normatively PINS event names that are now redefined
+  (§2.9 specialization and §E5 lifecycle/validation events), not merely illustrated.
+Modified sections:
+  §2.9 specialization - EF Core save/load event mirrors renamed
+                        `OnEntitySaving`/`OnEntityLoading` -> `EntitySaving`/`EntityLoading`.
+  §E2.9.7 (draft-mutation surface) - `OnDraftCreated`/`OnDraftDiscarded` -> `DraftCreated`/`DraftDiscarded`;
+                        `OnDraftValidating`/`OnDraftValidated` -> `DraftValidating`/`DraftValidated`;
+                        the dropped `OnDraftClonedFromVersion` reference follows the same shape.
+  §E6 - ADDED an R4 cross-reference to the framework event-naming rule so the type-name gate
+        surfaces it. Note the rename also brings the longest Draft-mutation event names back
+        inside the R1 component budget (`OnActivityOutputRemovedFromDraft` was 6 components,
+        over the hard cap of 5; `ActivityOutputRemovedFromDraft` is 5).
+Added sections: none.
+Removed sections: none.
+Derives-from pointer: framework v3.2.0 -> v4.0.0.
+Templates requiring updates: none (see framework report).
+Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; Joey Barten and Frans van Ek
+  did not sign off, so this is open to revision if they dissent.
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 3.5.0 (draft)
-**Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
+**Version:** 4.0.0
+**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v3.2.0**.
+**Derives from:** framework constitution **v4.0.0**.
 
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
@@ -202,7 +223,7 @@ The current composition remains revisable as evidence accrues.
 
 ### §E2.5 `ElsaDbContextBase` — opt-in capability, not requirement
 
-**framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). The save hooks are invoked before `SaveChangesAsync` reaches EF Core; the load hooks fire on the read path through the named read stores (`EFCoreReadStore<TDbContext, TEntity>`) as entities are materialised. Both are useful for shadow properties, custom deserializers, and similar cross-cutting concerns. Each legacy hook now coexists with a `§2.6.1` domain event mirror — `OnEntitySaving` (Sequential, from `ElsaDbContextBase`) and `OnEntityLoading` (Sequential, from `EFCoreReadStore`) — that features may migrate onto; the legacy interfaces keep running until a feature migrates.
+**framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). The save hooks are invoked before `SaveChangesAsync` reaches EF Core; the load hooks fire on the read path through the named read stores (`EFCoreReadStore<TDbContext, TEntity>`) as entities are materialised. Both are useful for shadow properties, custom deserializers, and similar cross-cutting concerns. Each legacy hook now coexists with a `§2.6.1` domain event mirror — `EntitySaving` (Sequential, from `ElsaDbContextBase`) and `EntityLoading` (Sequential, from `EFCoreReadStore`) — that features may migrate onto; the legacy interfaces keep running until a feature migrates.
 
 **`ElsaDbContextBase` is shared EF-Core infrastructure, not a model/entity-design requirement.** The persistence invariants Elsa enforces (immutability of Version entities, audit timestamps, etc. — see framework §2.9's "Persistence invariants are defined independently of the persistence provider") are defined independently of EF Core. An EF-Core-backed application MAY enforce those invariants through `ElsaDbContextBase`; another persistence provider MAY enforce the same invariants through interceptors, mappings, store logic, or whatever its native mechanism is. Inheriting from `ElsaDbContextBase` is one integration path, not the only one.
 
@@ -368,10 +389,10 @@ The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a 
 
 - **One mutation command.** `IUpdateDraftCommand.Execute(UpdateDraftRequest)` accepts the **complete desired** `WorkflowDefinitionState` (+ its layout sibling, carried beside State per §E2.9.2 — never inside it). Full-state-always: there is no patch API. Inside the per-Draft distributed lock (`workflow-draft:{DraftId}`) it loads the stored state, wholesale-assigns the desired state (last-writer-wins — no version check), **diffs** stored vs desired per concept (Variables/Inputs/Outputs by `ReferenceKey`, Activities and layout by `NodeId`, activity I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple), runs the in-lock validation gate, persists atomically, then publishes **one event per detected difference**.
 - **The event surface is preserved, not collapsed.** The diff emits the same 20 per-concept mutation events the former granular commands published (catalogued in the Events section of `Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`); their *types* and catalog headings are unchanged — only the publication site moved onto `IUpdateDraftCommand`. This keeps the event-sourcing seam open for a later event-sourcing unit (Unit H): subscribers observe the per-diff stream regardless of whether the mutation arrived via 20 commands or one.
-- **Lifecycle commands remain distinct.** `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, and `IPromoteDraftToVersionCommand` are **not** mutations of an existing Draft's content and stay as separate commands with their own lifecycle events (`OnDraftCreated`, `OnDraftDiscarded`). `IUpdateDraftCommand` emits none of these.
-- **One origination event, not two.** A cloned Draft and a fresh Draft share the single origination event `OnDraftCreated`; there is **no** separate `OnDraftClonedFromVersion`. `ICloneDraftFromVersionCommand` delegates to `ICreateDraftCommand` (the single origination path), and clone-vs-fresh is distinguished solely by the immutable optional `WorkflowDefinitionDraft.SourceVersionId` — a plain provenance column (no navigation property) surfaced on `OnDraftCreated.SourceVersionId` (`null` for a fresh Draft).
-- **Reads route through the named read ports.** Commands that only read (no change tracking) — e.g. `ICloneDraftFromVersionCommand` loading the source Version + layout — use the named per-aggregate read ports (`IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionVersionLayoutStore`, …) rather than a hand-rolled `DbContextFactory` + loading-handler loop. The EF default impls run on the shared `EFCoreReadStore<TDbContext, TEntity>`, which runs the read-side hydration pipeline (legacy `IEntityLoadingHandler` + the `OnEntityLoading` Sequential event, the read-side mirror of `OnEntitySaving`) and disposes its own short-lived context. A command opens its own tracked context only when it queries, mutates, and saves the *same* entity.
-- **Validation pair unchanged.** The `OnDraftValidating` (Sequential, in-lock gate) / `OnDraftValidated` (Background, outcome) pair is published by the command exactly as before.
+- **Lifecycle commands remain distinct.** `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, and `IPromoteDraftToVersionCommand` are **not** mutations of an existing Draft's content and stay as separate commands with their own lifecycle events (`DraftCreated`, `DraftDiscarded`). `IUpdateDraftCommand` emits none of these.
+- **One origination event, not two.** A cloned Draft and a fresh Draft share the single origination event `DraftCreated`; there is **no** separate `DraftClonedFromVersion`. `ICloneDraftFromVersionCommand` delegates to `ICreateDraftCommand` (the single origination path), and clone-vs-fresh is distinguished solely by the immutable optional `WorkflowDefinitionDraft.SourceVersionId` — a plain provenance column (no navigation property) surfaced on `DraftCreated.SourceVersionId` (`null` for a fresh Draft).
+- **Reads route through the named read ports.** Commands that only read (no change tracking) — e.g. `ICloneDraftFromVersionCommand` loading the source Version + layout — use the named per-aggregate read ports (`IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionVersionLayoutStore`, …) rather than a hand-rolled `DbContextFactory` + loading-handler loop. The EF default impls run on the shared `EFCoreReadStore<TDbContext, TEntity>`, which runs the read-side hydration pipeline (legacy `IEntityLoadingHandler` + the `EntityLoading` Sequential event, the read-side mirror of `EntitySaving`) and disposes its own short-lived context. A command opens its own tracked context only when it queries, mutates, and saves the *same* entity.
+- **Validation pair unchanged.** The `DraftValidating` (Sequential, in-lock gate) / `DraftValidated` (Background, outcome) pair is published by the command exactly as before.
 
 This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. The generic CQS command-per-operation guidance elsewhere in this constitution (and the framework's `Elsa.Persistence` CQS row) is unaffected — this rule narrows only the **Draft-mutation** surface within the Design domain.
 
@@ -441,6 +462,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
   - `…Provider` = yields impls/descriptors; `…Factory` = constructs; `…Resolver` = maps key→value; `…Registry` = holds registrations.
   - `…Executor`/`…Runner` = *does* the work (terminal); `…Router`/`…Dispatcher` = *selects a target and forwards*; `…Orchestrator`/`…Coordinator` = *sequences a multi-step operation*.
   - Reserve `…Handler` for (a) mediator handlers and (b) sanctioned entity-lifecycle handlers. The scheduler `…WorkHandler` family is grandfathered.
+  - **Event types carry no `On` prefix** (framework §2.6.6). `On` belongs to the handling side; the event is named for the fact — `DraftValidating` / `DraftValidated`, not `OnDraftValidating` / `OnDraftValidated`. Word order is subject-first. Note this also keeps the longest Draft-mutation names inside R1: `OnActivityOutputRemovedFromDraft` was 6 components, over the hard cap.
 - **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Groundwork`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
 - **R6 — One concept, one head-noun.** If several types share a `…State` (or similar) head, the *head* must make the distinction obvious (`Hold`, `Liveness`, `Scheduler…`) rather than leaning on a vague adjective.
 - **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus provider prefixes `EFCore…`/`Groundwork…`/`Sqlite…`. Keep using them.
@@ -465,7 +487,7 @@ This constitution is amended together with the framework constitution where the 
 
 ### Sync rule with framework constitution
 
-This document declares the framework constitution version it derives from in the header (currently **v2.0.0**). When the framework constitution bumps:
+This document declares the framework constitution version it derives from in the header (currently **v4.0.0**). When the framework constitution bumps:
 
 - **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
 - **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.
@@ -487,4 +509,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.5.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-08-07 | **Derives from framework constitution:** v3.2.0
+**Version:** 4.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-08-08 | **Derives from framework constitution:** v4.0.0

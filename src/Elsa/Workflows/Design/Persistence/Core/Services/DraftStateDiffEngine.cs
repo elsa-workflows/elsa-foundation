@@ -44,14 +44,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         foreach (var variable in desired.Variables)
         {
             if (!storedByKey.TryGetValue(variable.ReferenceKey, out var old))
-                events.Add(new OnVariableDeclaredInDraft(draftId, variable));
+                events.Add(new VariableDeclaredInDraft(draftId, variable));
             else if (!Equals(old, variable))
-                events.Add(new OnVariableUpdatedInDraft(draftId, variable.ReferenceKey, old, variable));
+                events.Add(new VariableUpdatedInDraft(draftId, variable.ReferenceKey, old, variable));
         }
 
         foreach (var variable in stored.Variables)
             if (!desiredByKey.ContainsKey(variable.ReferenceKey))
-                events.Add(new OnVariableRemovedFromDraft(draftId, variable.ReferenceKey));
+                events.Add(new VariableRemovedFromDraft(draftId, variable.ReferenceKey));
     }
 
     private static void DiffWorkflowInputs(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
@@ -62,14 +62,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         foreach (var input in desired.Inputs)
         {
             if (!storedByKey.TryGetValue(input.ReferenceKey, out var old))
-                events.Add(new OnWorkflowInputAddedToDraft(draftId, input));
+                events.Add(new WorkflowInputAddedToDraft(draftId, input));
             else if (!Equals(old, input))
-                events.Add(new OnWorkflowInputUpdatedInDraft(draftId, input.ReferenceKey, old, input));
+                events.Add(new WorkflowInputUpdatedInDraft(draftId, input.ReferenceKey, old, input));
         }
 
         foreach (var input in stored.Inputs)
             if (!desiredByKey.ContainsKey(input.ReferenceKey))
-                events.Add(new OnWorkflowInputRemovedFromDraft(draftId, input.ReferenceKey));
+                events.Add(new WorkflowInputRemovedFromDraft(draftId, input.ReferenceKey));
     }
 
     private static void DiffWorkflowOutputs(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
@@ -80,14 +80,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         foreach (var output in desired.Outputs)
         {
             if (!storedByKey.TryGetValue(output.ReferenceKey, out var old))
-                events.Add(new OnWorkflowOutputAddedToDraft(draftId, output));
+                events.Add(new WorkflowOutputAddedToDraft(draftId, output));
             else if (!Equals(old, output))
-                events.Add(new OnWorkflowOutputUpdatedInDraft(draftId, output.ReferenceKey, old, output));
+                events.Add(new WorkflowOutputUpdatedInDraft(draftId, output.ReferenceKey, old, output));
         }
 
         foreach (var output in stored.Outputs)
             if (!desiredByKey.ContainsKey(output.ReferenceKey))
-                events.Add(new OnWorkflowOutputRemovedFromDraft(draftId, output.ReferenceKey));
+                events.Add(new WorkflowOutputRemovedFromDraft(draftId, output.ReferenceKey));
     }
 
     private void DiffActivities(string draftId, WorkflowDefinitionState stored, WorkflowDefinitionState desired, List<IEvent> events)
@@ -99,11 +99,11 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
 
         foreach (var activity in desiredActivities)
             if (!storedByNode.ContainsKey(activity.NodeId))
-                events.Add(new OnActivityAddedToDraft(draftId, activity));
+                events.Add(new ActivityAddedToDraft(draftId, activity));
 
         foreach (var activity in storedActivities)
             if (!desiredByNode.ContainsKey(activity.NodeId))
-                events.Add(new OnActivityRemovedFromDraft(draftId, activity.NodeId));
+                events.Add(new ActivityRemovedFromDraft(draftId, activity.NodeId));
 
         foreach (var desiredActivity in desiredActivities)
         {
@@ -123,14 +123,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         foreach (var input in desired.Inputs)
         {
             if (!storedByKey.TryGetValue(input.ReferenceKey, out var old))
-                events.Add(new OnActivityInputAddedToDraft(draftId, nodeId, input));
+                events.Add(new ActivityInputAddedToDraft(draftId, nodeId, input));
             else if (!ArgumentStatesEqual(old, input))
-                events.Add(new OnActivityInputUpdatedInDraft(draftId, nodeId, input.ReferenceKey, old, input));
+                events.Add(new ActivityInputUpdatedInDraft(draftId, nodeId, input.ReferenceKey, old, input));
         }
 
         foreach (var input in stored.Inputs)
             if (!desiredByKey.ContainsKey(input.ReferenceKey))
-                events.Add(new OnActivityInputRemovedFromDraft(draftId, nodeId, input.ReferenceKey));
+                events.Add(new ActivityInputRemovedFromDraft(draftId, nodeId, input.ReferenceKey));
     }
 
     private static void DiffActivityOutputs(string draftId, string nodeId, ActivityNode stored, ActivityNode desired, List<IEvent> events)
@@ -141,14 +141,14 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
         foreach (var output in desired.Outputs)
         {
             if (!storedByKey.TryGetValue(output.ReferenceKey, out var old))
-                events.Add(new OnActivityOutputAddedToDraft(draftId, nodeId, output));
+                events.Add(new ActivityOutputAddedToDraft(draftId, nodeId, output));
             else if (!ArgumentStatesEqual(old, output))
-                events.Add(new OnActivityOutputUpdatedInDraft(draftId, nodeId, output.ReferenceKey, old, output));
+                events.Add(new ActivityOutputUpdatedInDraft(draftId, nodeId, output.ReferenceKey, old, output));
         }
 
         foreach (var output in stored.Outputs)
             if (!desiredByKey.ContainsKey(output.ReferenceKey))
-                events.Add(new OnActivityOutputRemovedFromDraft(draftId, nodeId, output.ReferenceKey));
+                events.Add(new ActivityOutputRemovedFromDraft(draftId, nodeId, output.ReferenceKey));
     }
 
     private static void DiffLayout(string draftId, IReadOnlyCollection<DesignMetadataRecord> stored, IReadOnlyCollection<DesignMetadataRecord> desired, List<IEvent> events)
@@ -160,7 +160,7 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
             if (storedByNode.TryGetValue(record.NodeId, out var old) && LayoutRecordsEqual(old, record))
                 continue;
 
-            events.Add(new OnActivityMovedInDraft(draftId, record.NodeId, record.X, record.Y, record.Width, record.Height));
+            events.Add(new ActivityMovedInDraft(draftId, record.NodeId, record.X, record.Y, record.Width, record.Height));
         }
     }
 
@@ -169,7 +169,7 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
     /// round-trip. The stored side's opaque <see cref="DesignMetadataRecord.AdditionalProperties"/> bag is
     /// rehydrated as a <see cref="JsonElement"/> whose value equality is reference-based over its backing
     /// document, so record equality would report two byte-identical bags as different and emit a phantom
-    /// <see cref="OnActivityMovedInDraft"/>. Comparing the position/size fields by value and the bag by its
+    /// <see cref="ActivityMovedInDraft"/>. Comparing the position/size fields by value and the bag by its
     /// canonical JSON projection normalises both sides (mirrors <see cref="ArgumentStatesEqual"/>).
     /// </summary>
     private static bool LayoutRecordsEqual(DesignMetadataRecord stored, DesignMetadataRecord desired) =>

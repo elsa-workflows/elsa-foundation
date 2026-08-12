@@ -20,7 +20,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     public async Task Empty_sources_collection_contributes_nothing()
     {
         var handler = NewHandler();
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -32,7 +32,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     {
         var source = new StubSource("Test", "test-1", entries: []);
         var handler = NewHandler(source);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -49,7 +49,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         };
         var source = new StubSource("Json", "test-source", entries);
         var handler = NewHandler(source);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -67,7 +67,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     {
         var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")]);
         var handler = NewHandler(source);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -82,7 +82,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")]);
         var sourceB = new StubSource("Workflow", "b", [Entry("wf-b", "Workflow B", version: "1.0.0")]);
         var handler = NewHandler(sourceA, sourceB);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -99,7 +99,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")], requestsPublication: true);
         var sourceB = new StubSource("git", "b", [Entry("wf-b", "Workflow B", version: "2.0.0")]);
         var handler = NewHandler(sourceA, sourceB);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -120,7 +120,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     {
         var source = new StubSource("Json", "test", [Entry(null, "Anon", version: "1.0.0")], requestsPublication: true);
         var handler = NewHandler(source);
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 
@@ -135,7 +135,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     {
         var deleted = Entry("wf-del", "Deleted", version: "1.0.0") with { Deleted = true };
         var handler = NewHandler(new StubSource("Json", "test", [deleted], requestsPublication: true));
-        var evt = new OnWorkflowVersionsReconciling();
+        var evt = new WorkflowVersionsReconciling();
 
         await handler.Handle(evt, CancellationToken.None);
 

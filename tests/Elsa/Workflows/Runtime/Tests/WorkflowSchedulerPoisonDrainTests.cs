@@ -47,6 +47,34 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord()
+    {
+        // #1271: the weakest configuration the drainer can now be built in — no retry policy, no fault capture policy,
+        // nothing but the required collaborators. The item is ack-deleted either way, so the invariant this pins is
+        // that the record survives the ack: an empty queue must always be paired with a poison record, never with
+        // nothing. Before the poison store became required, this same configuration dropped the item without a trace.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new InMemoryWorkflowExecutionStateStore(),
+            poisonStore,
+            TestSchedulerDrainer.NewInertPauseGate(),
+            new FakeTimeProvider(_now));
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Equal("work-1", record.WorkItemId);
+        Assert.Empty(record.Metadata); // No policy was consulted, so no retry-mode metadata is stamped.
+    }
+
+    [Fact]
     public async Task DrainAsync_HandlerCrashWithWrappedException_RecordsInnerFaultOnPoisonRecord()
     {
         // #1031: handler crashes are routinely wrapped (e.g. GroundworkRuntimeCheckpointWriterException around the

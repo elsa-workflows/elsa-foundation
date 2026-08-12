@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// <remarks>
 /// Uses the actual <see cref="VariableUniquenessValidator"/> wired into the
 /// <c>CapturingEventPublisher.OnPublish</c> hook — this exercises the validator's real logic
-/// end-to-end against every <c>OnDraftValidating</c> pass, including the one the gate helper
+/// end-to-end against every <c>DraftValidating</c> pass, including the one the gate helper
 /// (<c>DeriveValidationErrorsAsync</c>) fires when it recomputes errors on demand.
 /// </remarks>
 public sealed class ValidationLifecycleTests
@@ -30,14 +30,14 @@ public sealed class ValidationLifecycleTests
         using var host = await WorkflowsDesignTestHost.CreateAsync();
 
         // Wire the real VariableUniquenessValidator into the capturing publisher's hook so every
-        // OnDraftValidating dispatch runs the production validator code against the snapshot.
+        // DraftValidating dispatch runs the production validator code against the snapshot.
         var validator = new VariableUniquenessValidator(
             BaselineValidatorTests.ValidatorTestHelpers.Options(),
             BaselineValidatorTests.ValidatorTestHelpers.Walker(),
             BaselineValidatorTests.ValidatorTestHelpers.StructureService());
         host.EventPublisher.OnPublish = evt =>
         {
-            if (evt is OnDraftValidating validating)
+            if (evt is DraftValidating validating)
                 foreach (var error in validator.Validate(validating.Draft, CancellationToken.None).GetAwaiter().GetResult())
                     validating.Errors.Add(error);
         };
@@ -62,7 +62,7 @@ public sealed class ValidationLifecycleTests
     private static async Task AssertDerivedErrors(WorkflowsDesignTestHost host, string draftId, string[] expectedTypes)
     {
         // Errors are derived on demand through the gate (DeriveValidationErrorsAsync), which
-        // publishes OnDraftValidating on the loaded draft and reads the accumulated errors back —
+        // publishes DraftValidating on the loaded draft and reads the accumulated errors back —
         // replacing the former store derive-port. Load the current draft first, then derive.
         using var scope = host.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();

@@ -11,7 +11,7 @@ internal sealed class JavaScriptDeclarationsDocumentFactory(IInlineEventPublishe
     public async ValueTask<JavaScriptDeclarationsDocument> Create(CancellationToken cancellationToken = default)
     {
         var context = new JavaScriptDeclarationsContext();
-        var domainEvent = new OnDeclarationsDocumentGenerating(context);
+        var domainEvent = new DeclarationsDocumentGenerating(context);
         await eventPublisher.Publish(domainEvent, cancellationToken);
 
         return new JavaScriptDeclarationsDocument

@@ -36,4 +36,4 @@
 ## Notes
 
 - The three open questions are flagged, not resolved — resolve them in `/speckit.clarify` before `/speckit.plan`.
-- Verified current-state counts (2026-06-02): 20 granular mutation commands, 20 mutation events, 3 lifecycle events (23 Design.Core events total), 4 lifecycle commands, `OnDraftValidating`/`OnDraftValidated` pair. The follow-up's "22/23" framing is approximate; the spec uses verified counts.
+- Verified current-state counts (2026-06-02): 20 granular mutation commands, 20 mutation events, 3 lifecycle events (23 Design.Core events total), 4 lifecycle commands, `DraftValidating`/`DraftValidated` pair. The follow-up's "22/23" framing is approximate; the spec uses verified counts.

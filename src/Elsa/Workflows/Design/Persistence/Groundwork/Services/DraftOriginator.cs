@@ -111,13 +111,13 @@ public sealed class DraftOriginator(
         {
             var committed = outcome.Value;
             await deferredEventPublisher.Publish(
-                new OnDraftCreated(
+                new DraftCreated(
                     committed.Draft.Id,
                     committed.Draft.WorkflowDefinitionId,
                     committed.Draft.SourceVersionId),
                 CancellationToken.None);
             await deferredEventPublisher.Publish(
-                new OnDraftValidated(committed.Draft, committed.Errors),
+                new DraftValidated(committed.Draft, committed.Errors),
                 CancellationToken.None);
         }
 

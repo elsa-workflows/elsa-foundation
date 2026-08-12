@@ -54,7 +54,7 @@ with zero transport.
 
 The engine registers one independent event subscriber for a Design-side event (spec 147, #1157):
 
-- `PublishReconciledWorkflowVersions : IEventHandler<OnWorkflowVersionsReconciled>` — publish-on-reconcile.
+- `PublishReconciledWorkflowVersions : IEventHandler<WorkflowVersionsReconciled>` — publish-on-reconcile.
   After a workflow-reconciliation pass completes, it publishes the latest reconciled version of each
   definition whose source opted in (`PublishOnReconcile` on the JSON source → `PublishRequested` on the
   claim) via the in-process `PublishWorkflow` request. Idempotent across restarts (publication-slot

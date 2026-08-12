@@ -4,8 +4,8 @@ Baseline universal validators for the workflow-design sub-domain. Implements the
 `IDraftValidator` contributor interface (from `Elsa.Workflows.Design.Validations.Core`)
 and **returns** `ValidationError` entries. The single `ExecuteValidations` handler
 (also registered here) aggregates every validator's returned errors onto the
-`OnDraftValidating` event's `Errors` collection; the publishing command reads them back and
-surfaces them on `OnDraftValidated` (create/update) or uses them as the promotion gate (FR-024).
+`DraftValidating` event's `Errors` collection; the publishing command reads them back and
+surfaces them on `DraftValidated` (create/update) or uses them as the promotion gate (FR-024).
 Errors are derived state — recomputed on every mutation and re-derived on demand — and are not
 persisted.
 
@@ -30,10 +30,10 @@ Per framework §2.22 — this README documents what the feature registers.
 
 All of the following implement `IDraftValidator` and are registered via DI
 (`services.AddScoped<IDraftValidator, X>()`). Each **returns** its `ValidationError` set from
-`Validate(...)`; the single `ExecuteValidations : IEventHandler<OnDraftValidating>` handler
+`Validate(...)`; the single `ExecuteValidations : IEventHandler<DraftValidating>` handler
 (registered here) resolves `IEnumerable<IDraftValidator>`, runs each, and adds every returned
 error to `event.Errors`. The publishing command reads `event.Errors` back after dispatch and
-surfaces them on `OnDraftValidated` / uses them as the promotion gate; the errors are not
+surfaces them on `DraftValidated` / uses them as the promotion gate; the errors are not
 persisted.
 
 | Validator | Scope | `(Path, Type)` emitted |
@@ -75,4 +75,4 @@ None (no startup / recurring / scheduled tasks).
   graph semantics, such as a future Flowchart module.
 
 See [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md)
-for the `IDraftValidator` contributor interface and the `OnDraftValidating` / `OnDraftValidated` event surface (Events section).
+for the `IDraftValidator` contributor interface and the `DraftValidating` / `DraftValidated` event surface (Events section).

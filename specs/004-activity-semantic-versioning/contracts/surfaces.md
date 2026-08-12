@@ -68,7 +68,7 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature   // public, 
 }
 ```
 
-The universal `ActivityVersionsReconcilingHandler` is unchanged: it injects `IEnumerable<IActivityReconciliationSource>`, calls each `Read(...)`, and contributes versions to `OnActivityVersionsReconciling`.
+The universal `ActivityVersionsReconcilingHandler` is unchanged: it injects `IEnumerable<IActivityReconciliationSource>`, calls each `Read(...)`, and contributes versions to `ActivityVersionsReconciling`.
 
 ## 4. CLR source feature — NEW `Elsa.Activities.Design.Reconciliation.Clr` (FR-010)
 

@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 /// <summary>
 /// Minimal hook-only <see cref="IEventPublisher"/>: runs an optional <see cref="OnPublish"/> hook on
 /// each published event and captures nothing else. Tests use the hook to simulate validator
-/// contributions onto <c>OnDraftValidating</c> (errors are derived state — the command and promotion
+/// contributions onto <c>DraftValidating</c> (errors are derived state — the command and promotion
 /// gates re-run the validation gate through the inline face to derive the current error set).
 /// Implementing both delivery faces lets one instance satisfy every command ctor (inline gate,
 /// deferred notifications, or both). Shared across the Groundwork design-persistence test suites.
@@ -25,13 +25,13 @@ public sealed class HookEventPublisher : IInlineEventPublisher, IDeferredEventPu
 
     /// <summary>
     /// Convenience: install an <see cref="OnPublish"/> hook that contributes <paramref name="error"/>
-    /// onto every <c>OnDraftValidating</c> pass, simulating a validator that always emits it. Replaces
-    /// the copy-pasted "if OnDraftValidating add ValidationError" lambda at every call site.
+    /// onto every <c>DraftValidating</c> pass, simulating a validator that always emits it. Replaces
+    /// the copy-pasted "if DraftValidating add ValidationError" lambda at every call site.
     /// </summary>
     public void ContributeError(ValidationError error) =>
         OnPublish = e =>
         {
-            if (e is OnDraftValidating validating)
+            if (e is DraftValidating validating)
                 validating.Errors.Add(error);
         };
 

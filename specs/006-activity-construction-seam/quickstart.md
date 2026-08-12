@@ -15,7 +15,7 @@ This unit makes "add a new activity implementation kind" a closed, three-type mo
 ## Add a new kind — the three-type move (inside your feature)
 
 1. **Descriptor type** — a lightweight model. If sharable, put it in a zero-dep building-block lib (like `ClrActivityDescriptor`, `WorkflowIdentity`); otherwise in your feature. `DescriptorType = its FullName`.
-2. **`IActivityConstructor<TYourDescriptor>`** — in your feature. Implement `Construct(descriptor, inputs, outputs)`; add the one-line bridge. Register it in your feature's `ConfigureServices` (it is auto-aggregated into the registry at startup via `OnActivityConstructorsInitializing`).
+2. **`IActivityConstructor<TYourDescriptor>`** — in your feature. Implement `Construct(descriptor, inputs, outputs)`; add the one-line bridge. Register it in your feature's `ConfigureServices` (it is auto-aggregated into the registry at startup via `ActivityConstructorsInitializing`).
 3. **`IActivityReconciliationSource`** — in your feature (design-side). Produce `ActivityVersionReconciliationModel`s with `DescriptorType = "<FullName>"` and the descriptor object.
 
 That's it. No universal component changes — verified by the no-branch structural test.

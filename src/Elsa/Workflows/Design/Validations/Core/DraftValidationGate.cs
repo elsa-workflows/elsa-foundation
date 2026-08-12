@@ -6,11 +6,11 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Workflows.Design.Validations.Core;
 
 /// <summary>
-/// The single validation gate. Deriving errors means publishing <see cref="OnDraftValidating"/>:
+/// The single validation gate. Deriving errors means publishing <see cref="DraftValidating"/>:
 /// the one <c>ExecuteValidations</c> handler resolves every <see cref="Contracts.IDraftValidator"/>,
 /// runs each against the post-mutation Draft, and aggregates their returned errors onto the event
 /// (§2.6.1 contribution). The publisher awaits the full chain; we read the accumulated
-/// <see cref="OnDraftValidating.Errors"/> back afterwards.
+/// <see cref="DraftValidating.Errors"/> back afterwards.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,7 +32,7 @@ public static class DraftValidationGate
 {
     /// <summary>
     /// Derives the validation error set for <paramref name="draft"/> by publishing
-    /// <see cref="OnDraftValidating"/> inline (every handler awaited) and reading the aggregated
+    /// <see cref="DraftValidating"/> inline (every handler awaited) and reading the aggregated
     /// errors back. This IS the validation gate — a throwing validator propagates (the caller's
     /// write should fail). Use <see cref="TryDeriveValidationErrorsAsync"/> instead on read paths
     /// that must stay resilient to a faulting validator.
@@ -42,7 +42,7 @@ public static class DraftValidationGate
         IWorkflowDefinitionDraft draft,
         CancellationToken cancellationToken)
     {
-        var validatingEvent = new OnDraftValidating(draft);
+        var validatingEvent = new DraftValidating(draft);
         await eventPublisher.Publish(validatingEvent, cancellationToken);
         return validatingEvent.Errors.ToArray();
     }
@@ -63,7 +63,7 @@ public static class DraftValidationGate
         IWorkflowDefinitionDraft draft,
         CancellationToken cancellationToken)
     {
-        var validatingEvent = new OnDraftValidating(draft);
+        var validatingEvent = new DraftValidating(draft);
         try
         {
             // Inline delivery awaits every handler — see DeriveValidationErrorsAsync.

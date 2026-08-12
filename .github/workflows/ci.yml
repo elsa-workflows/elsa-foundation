@@ -113,21 +113,6 @@ jobs:
       - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
-  # Generation stays manually initiated (AGENTS.md); this only compares the committed maps'
-  # input_fingerprint against the tree. It exists because the maps went three projects stale and
-  # carried 25 corrupted rows without anything objecting.
-  map-freshness:
-    name: Generated maps fresh
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.x
-
-      - name: Check generated maps against the tree
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- check
+  # The "Generated maps fresh" job moved to maps.yml (issue #1274). It needed a push-to-main
+  # trigger as well, and this workflow is the pull_request gate. The job name is unchanged, so
+  # the required status check of that name still reports.

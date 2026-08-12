@@ -6,8 +6,10 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -45,10 +47,13 @@ namespace Elsa.Workflows.Runtime.Benchmarks;
 /// contention. Reading the two deltas against N names the bottleneck.
 ///
 /// WHY N INDEPENDENT HARNESSES SHARING ONE STORE (not one host with N actors): the in-process actor provider
-/// (<c>InProcessWorkflowExecutionActorProvider</c>) has NO global drain/concurrency cap — it serializes commands only
-/// per workflow-execution id (a per-actor mailbox), and distinct ids drain fully in parallel. So N one-actor engines
-/// over one shared store are behaviorally equivalent, for drain concurrency, to one engine hosting N actors, while
-/// being far simpler to stand up. Each harness gets a DISTINCT execution id + executable identity so the shared store
+/// (<c>InProcessWorkflowExecutionActorProvider</c>) serializes commands only per workflow-execution id (a per-actor
+/// mailbox), and distinct ids drain fully in parallel. So N one-actor engines over one shared store are behaviorally
+/// equivalent, for drain concurrency, to one engine hosting N actors, while being far simpler to stand up. The one
+/// thing this arrangement does NOT reproduce is a host-wide limiter: admission control (RB1, #1235) is a singleton
+/// per container, so these curves each run with N private controllers that never see each other. Only
+/// <see cref="ConcurrencyScalingCurve_AdmissionControl"/> injects one shared controller across the harnesses, which
+/// is why it is the arm that measures the limiter. Each harness gets a DISTINCT execution id + executable identity so the shared store
 /// partitions them cleanly (state/scheduler/executable documents all key on those ids). Per-provider setup — the DI
 /// build, the activity-type registry scan (<see cref="WorkflowExecutionHarness.InitializeActivityTypes"/>) — is done
 /// BEFORE the timed window, so wall time measures dispatch + drain + store I/O, not engine construction.
@@ -320,6 +325,177 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             }
         }
     }
+
+    /// <summary>
+    /// The acceptance instrument for live dispatch admission control (RB1, #1235). The claim it exists to test is a
+    /// SHAPE claim, not an absolute one: with the limiter off, throughput on the shared writer <b>falls</b> past a
+    /// threshold (and eventually the level faults outright with a lease-loss exception, #1249); with it on, throughput
+    /// should <b>plateau</b> instead, because the work that would have queued behind the connection gate is refused
+    /// and retried by the client rather than parked. Read the OFF and ON columns against each other within a level;
+    /// the absolute walls carry the usual ambient-load caveat, which is why the host load is printed at both ends.
+    ///
+    /// <para>Measured on the External CLR leaf and the shared-SQLite backend on purpose: that is the pair the
+    /// collapse was observed on, and the shape whose ~56 dispatches per run is what makes a dispatch-unit limit
+    /// different from a run-count one.</para>
+    ///
+    /// <para>ONE controller and ONE load signal are shared across all N harnesses, exactly as the group-commit A/B
+    /// shares one coordinator. Each harness owns its own DI container, so a per-container limiter would see one
+    /// command at a time and bound nothing — production has one host-wide limiter, and this models that.</para>
+    ///
+    /// <para>The client half is modelled honestly: a shed start throws out of the harness (the dispatch is
+    /// <c>Deferred</c>, not <c>Accepted</c>), and the caller waits Retry-After and retries, which is what a 429
+    /// contract asks of it. Retry-After is shortened to 25 ms here so the retry sleep does not dominate a reading
+    /// taken over a few seconds; a real deployment would use the default.</para>
+    /// </summary>
+    [Fact]
+    public async Task ConcurrencyScalingCurve_AdmissionControl()
+    {
+        output.WriteLine($"machine uptime/load at start: {ReadUptime()}");
+        output.WriteLine($"processor count: {Environment.ProcessorCount}");
+
+        var stdout = Console.Out;
+        Console.SetOut(TextWriter.Null);
+        try
+        {
+            await MeasureAdmissionAsync(concurrency: 8, admissionEnabled: false);
+            await MeasureAdmissionAsync(concurrency: 8, admissionEnabled: true);
+
+            output.WriteLine($"=== shared-sqlite · External CLR leaf · hot-loop×{HotLoopLength} · Coalesced · admission A/B ===");
+            output.WriteLine("Read the throughput columns as a SHAPE: OFF should fall (or fault) past a threshold, ON should plateau.");
+            output.WriteLine("N | OFF wall(ms) | OFF thr | ON wall(ms) | ON thr | admitted | shed | retries | finalLimit");
+            foreach (var concurrency in ConcurrencyLevels)
+            {
+                var off = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: false);
+                var on = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: true);
+                output.WriteLine(
+                    $"{concurrency,4} | {Format(off?.TotalWallMs),11} | {Format(Throughput(off, concurrency)),7} | " +
+                    $"{Format(on?.TotalWallMs),10} | {Format(Throughput(on, concurrency)),6} | " +
+                    $"{on?.Admitted.ToString() ?? "-",8} | {on?.Shed.ToString() ?? "-",4} | {on?.Retries.ToString() ?? "-",7} | " +
+                    $"{Format(on?.FinalLimit),10}");
+            }
+        }
+        finally
+        {
+            Console.SetOut(stdout);
+        }
+
+        output.WriteLine($"machine uptime/load at end: {ReadUptime()}");
+
+        static double? Throughput(AdmissionResult? result, int concurrency) =>
+            result is { TotalWallMs: > 0 } value ? concurrency / (value.TotalWallMs / 1000.0) : null;
+
+        static string Format(double? value) => value is { } number ? number.ToString("F1") : "-";
+    }
+
+    /// <summary>
+    /// Runs one admission A/B cell, recording a FAULTED level rather than losing the rest of the sweep with it. The
+    /// OFF arm is expected to fault at high N — that is the congestion collapse this unit exists to replace — so
+    /// aborting on it would throw away exactly the comparison the table is for.
+    /// </summary>
+    private async Task<AdmissionResult?> MeasureAdmissionSafelyAsync(int concurrency, bool admissionEnabled)
+    {
+        try
+        {
+            return await MeasureAdmissionAsync(concurrency, admissionEnabled);
+        }
+        catch (Exception exception)
+        {
+            output.WriteLine($"{concurrency,4} | admission={admissionEnabled} FAULTED — {exception.GetType().Name}: {exception.Message}");
+            return null;
+        }
+    }
+
+    private async Task<AdmissionResult> MeasureAdmissionAsync(int concurrency, bool admissionEnabled)
+    {
+        var shared = await NewSqliteStoreAsync();
+        var retryAfter = TimeSpan.FromMilliseconds(25);
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+        var diagnostics = new RuntimeAdmissionDiagnostics();
+        var options = new RuntimeAdmissionOptions { Enabled = admissionEnabled, RetryAfter = retryAfter };
+        var controller = new RuntimeAdmissionController(signal, options, diagnostics, TimeProvider.System);
+
+        var harnesses = new List<WorkflowExecutionHarness>(concurrency);
+        var executables = new List<WorkflowExecutable>(concurrency);
+        for (var index = 0; index < concurrency; index++)
+        {
+            var identity = IdentityFor(index);
+            var harness = NewAdmissionHarness(shared.Store, identity, $"wfexec-{index}", NewActivityIdPool(index), signal, controller, diagnostics, options);
+            harness.InitializeActivityTypes();
+            harnesses.Add(harness);
+            executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.ExternalLeaf, identity));
+        }
+
+        var retries = 0;
+        var wall = Stopwatch.StartNew();
+        await Task.WhenAll(Enumerable.Range(0, concurrency).Select(index => Task.Run(async () =>
+        {
+            var attempts = await RunWithShedRetryAsync(harnesses[index], executables[index], retryAfter);
+            Interlocked.Add(ref retries, attempts);
+        })));
+        wall.Stop();
+
+        foreach (var harness in harnesses)
+            await harness.DisposeAsync();
+        await DisposeStoreAsync(shared.Store, shared.Path);
+
+        return new AdmissionResult(wall.Elapsed.TotalMilliseconds, diagnostics.Admitted, diagnostics.Shed, retries, controller.Limit);
+    }
+
+    // The client half of the 429 contract: a shed start surfaces as a non-Accepted dispatch, which the harness raises.
+    // Waiting Retry-After and retrying is what makes shedding a bound on concurrency rather than a dropped request,
+    // and it is why the ON arm's wall includes the retry sleeps.
+    private static async Task<int> RunWithShedRetryAsync(WorkflowExecutionHarness harness, WorkflowExecutable executable, TimeSpan retryAfter)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var run = await harness.RunAsync(executable);
+                run.AssertWorkflowCompleted();
+                return attempt;
+            }
+            catch (InvalidOperationException exception) when (exception.Message.Contains("at capacity", StringComparison.Ordinal) && attempt < 1000)
+            {
+                await Task.Delay(retryAfter);
+            }
+        }
+    }
+
+    private static WorkflowExecutionHarness NewAdmissionHarness(
+        IDocumentStore store,
+        WorkflowExecutableIdentity identity,
+        string executionId,
+        IEnumerable<string> activityIds,
+        DispatchRuntimeAdmissionLoadSignal signal,
+        RuntimeAdmissionController controller,
+        RuntimeAdmissionDiagnostics diagnostics,
+        RuntimeAdmissionOptions options) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(store);
+                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddGroundworkRuntimeStores();
+                services.AddCoalescingRuntimeCheckpointPersistence(configure => configure.MaxSegmentCheckpoints = HotLoopSegmentCap);
+                services.RemoveAll<RuntimeBurstCacheOptions>();
+                services.AddSingleton(new RuntimeBurstCacheOptions { Enabled = true });
+
+                // One limiter for the whole level. Each harness has its own container, so without this every harness
+                // would resolve a private controller that only ever sees its own single command.
+                services.AddSingleton(options);
+                services.AddSingleton(diagnostics);
+                services.AddSingleton<IRuntimeAdmissionLoadSignal>(signal);
+                services.AddSingleton<IRuntimeAdmissionController>(controller);
+            })
+            .Build(identity, executionId, activityIds);
+
+    private readonly record struct AdmissionResult(
+        double TotalWallMs,
+        long Admitted,
+        long Shed,
+        int Retries,
+        double FinalLimit);
 
     private async Task<GroupCommitResult> MeasureSharedSqliteAsync(int concurrency, bool groupCommit, bool warmup)
     {
