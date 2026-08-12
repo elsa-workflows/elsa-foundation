@@ -18,7 +18,16 @@
     <AssemblyName>Elsa.Groundwork.StorePerformance.AdapterHost</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The SQLite diagnostic-record and document factories the diagnostics leaf builds its stores on.
+         The runtime leaf reaches its provider through Elsa.Persistence.Groundwork.Testing, but the
+         diagnostics stores are constructed from a connection string and their own OpenTelemetry storage
+         manifest, so they need the provider package directly. -->
+    <PackageReference Include="Groundwork.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>

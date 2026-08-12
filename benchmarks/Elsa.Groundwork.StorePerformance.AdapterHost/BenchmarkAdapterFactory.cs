@@ -21,7 +21,8 @@ internal static class BenchmarkAdapterFactory
         {
             // Keyed by workload id alone, so one entry covers every provider and physical form; the leaf
             // itself validates the requested provider against the frozen topology contract.
-            [RuntimeCheckpointCommitWorkload.WorkloadId] = CheckpointCommitAdapter.CreateAsync
+            [RuntimeCheckpointCommitWorkload.WorkloadId] = CheckpointCommitAdapter.CreateAsync,
+            [DiagnosticsDurableHistoryWorkload.WorkloadId] = DiagnosticsDurableHistoryAdapter.CreateAsync
         };
 
     public static IReadOnlyCollection<string> RegisteredWorkloads => Leaves.Keys.Order(StringComparer.Ordinal).ToArray();
