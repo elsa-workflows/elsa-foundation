@@ -129,7 +129,7 @@ A read-only source verification (three independent sweeps) re-baselined this buc
 - Do not reintroduce `WorkflowExecutionContext`, `WorkflowDefinitionActivity`, `UsableAsActivity`, or a workflow-definition runtime consumer. Extend reusable execution through provider-neutral activity definitions and runtime-owned executable templates; keep `ExecuteWorkflow` separate.
 - Treat `WorkflowDefinitionState.Activities`/`ActivityConnections`, `ActivityNode.Composition`, `WorkflowExecutable.Edges`/`StartNodeIds`, and `ExecutableNode.Composition` as superseded provisional slice artifacts. The workflow boundary is a single root activity; child ownership and flowchart traversal are activity behavior.
 - Treat generic child-slot metadata as superseded for composite semantics. Flowchart connections/start, If branch meaning, loop bodies, and similar structure must be module-owned activity structure.
-- Before relying on generated maps for verification, check [maps manifest](../maps/manifest.json); regenerate the relevant map if freshness matters.
+- Before relying on generated maps for verification, run `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`; regenerate the relevant map if it is red and freshness matters.
 - Treat the Runtime JavaScript Design reference as known deferred architecture debt, not as the first runtime-execution fix.
 
 ## Drift / Review Notes

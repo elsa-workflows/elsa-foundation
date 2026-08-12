@@ -33,6 +33,12 @@ name: Maps
 # A failed run on main notifies the pusher through the normal GitHub Actions failure
 # notification and is visible in the Actions tab. The failure step below writes the
 # refresh instructions into the run summary so the fix does not need this file.
+#
+# This job deliberately does NOT call main-red-alert.yml, which the other push-triggered gates
+# use to file a "main is red" issue. That is not an oversight: a stale map is a request to open
+# a refresh PR, not a broken main, and the actionable output here is the refresh command in the
+# run summary rather than a title and a link. Wire it up if stale maps start surviving on main
+# the way they did before issue #1274 -- the escalation is one `uses:` block away.
 
 on:
   pull_request:
@@ -76,10 +82,9 @@ jobs:
           dotnet run --project tools/maps/Elsa.Maps.Generator -- all
           ```
 
-          Then stage only the changed map files. **Do not stage `docs/maps/manifest.json`.**
-          The freshness check excludes it from the comparison, so committing it fixes
-          nothing, and its `git_head` / `input_fingerprint` fields move on every commit,
-          so two PRs that both regenerate maps will conflict on it.
+          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
+          included. The manifest carries no per-commit provenance, so it changes only when
+          the tree did, and this check compares it like any other generated file.
 
           If this run is on `main`, main is already stale: open a PR with the refreshed
           maps. Review the generated findings reports before merging.

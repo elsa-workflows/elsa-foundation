@@ -19,7 +19,7 @@ $ARGUMENTS
 ## Outline
 
 1. Read `docs/skills/catalog.md#refresh-generated-maps` and `AGENTS.md#refresh-generated-maps`.
-2. Check `docs/maps/manifest.json` if present when the user explicitly requests a refresh.
+2. Establish freshness with `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` when the user explicitly requests a refresh. That is the authoritative signal; `docs/maps/manifest.json` summarizes coverage but does not report staleness.
 3. Choose the narrowest map generator that matches the changed inputs.
 4. Prefer PowerShell scripts on Windows and Bash scripts where appropriate.
 5. Run map generators only when the user explicitly requests a refresh (or explicitly authorizes it as part of an approved task).

@@ -184,7 +184,7 @@ public static class OpenTelemetryGroundworkStorageSchema
             [new IndexField("createdAt")],
             IndexValueKind.DateTime,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var route = new BoundedQueryDeclaration(
             CaptureOperationsByCreatedAtQuery,
             createdAt.Identity,
@@ -248,7 +248,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         [new IndexField(Path(path))],
         kind,
         false,
-        MissingValueBehavior.Excluded);
+        MissingValueBehavior.IncludedAsNull);
 
     private static LogicalIndexDeclaration RetentionLogical() => new(
         ByRetentionIndex,
@@ -258,7 +258,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         ],
         IndexValueKind.Keyword,
         false,
-        MissingValueBehavior.Excluded);
+        MissingValueBehavior.IncludedAsNull);
 
     private static LogicalIndexDeclaration ResourceServiceLogical() => new(
         ByResourceServiceIndex,
@@ -269,7 +269,7 @@ public static class OpenTelemetryGroundworkStorageSchema
         ],
         IndexValueKind.Keyword,
         false,
-        MissingValueBehavior.Excluded);
+        MissingValueBehavior.IncludedAsNull);
 
     private static BoundedQueryDeclaration Query(
         string name,

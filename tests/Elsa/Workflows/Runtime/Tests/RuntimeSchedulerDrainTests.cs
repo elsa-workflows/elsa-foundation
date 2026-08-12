@@ -22,7 +22,22 @@ public sealed class RuntimeSchedulerDrainTests
             new InMemoryWorkflowSchedulerWorkQueue(),
             [new NoopWorkflowSchedulerWorkHandler()],
             workflowExecutionStateStore: null!,
-            poisonStore: new InMemoryWorkflowSchedulerPoisonStore()));
+            poisonStore: new InMemoryWorkflowSchedulerPoisonStore(),
+            pauseGate: TestSchedulerDrainer.NewInertPauseGate()));
+    }
+
+    [Fact]
+    public void Constructor_RequiresThePauseGate_SoHeldWorkCannotBeDispatchedAnyway()
+    {
+        // #1277 R1: a null gate made the pause evaluation answer null, which fails the drain loop's
+        // { CanAdvance: false } pattern, so an effective hold was ignored and its work dispatched. "Nothing is held" is
+        // expressed by an empty hold store, not by an absent gate, so there is no reason to allow the null.
+        Assert.Throws<ArgumentNullException>(() => new WorkflowSchedulerDrainer(
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            [new NoopWorkflowSchedulerWorkHandler()],
+            new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryWorkflowSchedulerPoisonStore(),
+            pauseGate: null!));
     }
 
     [Fact]
@@ -35,7 +50,8 @@ public sealed class RuntimeSchedulerDrainTests
             new InMemoryWorkflowSchedulerWorkQueue(),
             [new NoopWorkflowSchedulerWorkHandler()],
             new InMemoryWorkflowExecutionStateStore(),
-            poisonStore: null!));
+            poisonStore: null!,
+            pauseGate: TestSchedulerDrainer.NewInertPauseGate()));
     }
 
     [Fact]
@@ -494,6 +510,36 @@ public sealed class RuntimeSchedulerDrainTests
         Assert.Equal(nameof(WorkflowSchedulerPauseGate), itemResult.HandlerName);
         Assert.Contains("pause-1", itemResult.Error);
         Assert.Contains(nameof(RuntimePauseBoundary.BeforeActivityExecutionStart), itemResult.Error);
+    }
+
+    [Fact]
+    public async Task DrainAsync_InTheMinimalConfiguration_StillHonorsABlockingPauseDecision()
+    {
+        // #1277 R1: the same pause contract as above, but built with nothing except the five required collaborators —
+        // no time provider, no dispatcher, no fault capture policy. This is the configuration that used to be reachable
+        // with a null gate, where a blocked item was claimed and dispatched anyway. The constructor test alone would not
+        // catch a regression that reintroduced a null-tolerant path somewhere else, so this pins the behaviour: a
+        // { CanAdvance: false } decision must leave the item queued, the handler untouched, and the result Paused.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new RecordingSchedulerWorkHandler();
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryWorkflowSchedulerPoisonStore(),
+            new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeActivityExecutionStart)));
+        await queue.EnqueueAsync(NewStartActivityWorkItem(1));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnPause);
+        Assert.Equal(0, result.DrainedCount);
+        Assert.Empty(handler.WorkItemIds); // Never dispatched.
+        Assert.Equal(RuntimeSchedulerWorkItemResultStatus.Paused, Assert.Single(result.Items).Status);
+        // Released, not acked: a paused item must survive for the drain that runs after the hold is lifted.
+        Assert.Collection(
+            await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")),
+            item => Assert.Equal("work-1", item.WorkItemId));
     }
 
     [Fact]

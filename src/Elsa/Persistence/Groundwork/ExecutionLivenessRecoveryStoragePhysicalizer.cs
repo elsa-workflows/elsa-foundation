@@ -235,7 +235,9 @@ internal static class ExecutionLivenessRecoveryStoragePhysicalizer
             ]);
 
     private static LogicalIndexDeclaration Logical(string identity, params IndexField[] fields) =>
-        new(identity, fields, IndexValueKind.Keyword, false, MissingValueBehavior.Excluded);
+        // Recovery sweeps must see every row, so these traversal indexes cannot omit the ones whose
+        // keyed columns have no value.
+        new(identity, fields, IndexValueKind.Keyword, false, MissingValueBehavior.IncludedAsNull);
 
     private static IndexField Keyword(string path) => new(path, IndexValueKind.Keyword);
 

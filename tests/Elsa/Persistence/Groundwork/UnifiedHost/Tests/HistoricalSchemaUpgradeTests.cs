@@ -152,6 +152,10 @@ public sealed class HistoricalSchemaUpgradeTests
             PhysicalSchemaOperationKind.AddProjectedColumn,
             PhysicalSchemaOperationKind.FinalizeProjectedColumn,
             PhysicalSchemaOperationKind.CreatePhysicalIndex,
+            // Widening a null-excluding index to keep every row is executed as a rebuild. An index is
+            // derived state, so dropping and recreating one destroys no stored data -- which is what
+            // this guard is here to catch. Groundwork sanctions the rebuild as the way to widen.
+            PhysicalSchemaOperationKind.RebuildPhysicalIndex,
             PhysicalSchemaOperationKind.BackfillCanonicalJson,
             PhysicalSchemaOperationKind.ApplyProviderDefinition,
             PhysicalSchemaOperationKind.ValidatePhysicalSchema,

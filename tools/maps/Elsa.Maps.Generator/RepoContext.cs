@@ -60,39 +60,6 @@ public sealed class RepoContext
     /// <summary>The absolute path for a repo-relative path.</summary>
     public string Absolute(string relativePath) => Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
-    /// <summary>The current <c>HEAD</c> commit, or null outside a git checkout.</summary>
-    public string? TryGetHead()
-    {
-        try
-        {
-            var head = RunGit(["-C", Root, "rev-parse", "HEAD"]).Trim();
-            return head.Length == 0 ? null : head;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Whether any map input path has uncommitted changes, or null when git is unavailable.
-    /// </summary>
-    public bool? TryGetInputsDirty()
-    {
-        try
-        {
-            var status = RunGit([
-                "-C", Root, "status", "--porcelain", "--",
-                "src", "tests", "specs", "tools/maps", "Directory.Packages.props"
-            ]);
-            return status.Trim().Length > 0;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
     private string RunGit(IReadOnlyList<string> arguments)
     {
         var startInfo = new ProcessStartInfo("git")
