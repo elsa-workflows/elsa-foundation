@@ -19,14 +19,24 @@ name: Integration (nightly)
 # for determinism.
 #
 # This is informational/nightly, NOT a required PR check -- it is intentionally not
-# wired into branch protection. A failed run is visible in the Actions tab and via the
-# usual scheduled-workflow failure notifications.
+# wired into branch protection. A failed run is visible in the Actions tab.
+#
+# It is NOT, however, visible through the usual scheduled-workflow failure notification, which
+# is what this file used to claim. GitHub sends that mail to whoever last committed a change to
+# the cron schedule, which in a long-lived workflow is nobody who is watching: on 2026-08-12
+# this run failed at 05:02Z against a main that could not activate the Workbench, and it went
+# unread while main showed green for another four hours. The alert job at the bottom (issue
+# #1298) files a deduplicated issue instead, which is the same escalation the push-triggered
+# gates now use.
 
 on:
   schedule:
     # 03:17 UTC daily. Odd minute to avoid the top-of-hour scheduler surge.
     - cron: '17 3 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   integration-tests:
@@ -142,3 +152,16 @@ jobs:
         run: |
           echo "::error::Readiness scaffolding only; replace this sentinel after T100 and activate it in T105."
           exit 1
+
+  # Scheduled runs only. A workflow_dispatch failure needs no issue: someone is already looking
+  # at the run they just started.
+  alert:
+    name: Alert on a red main
+    needs: integration-tests
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/main-red-alert.yml
+    with:
+      gate: Integration (nightly)

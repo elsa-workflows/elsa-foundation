@@ -1,6 +1,6 @@
 name: CI
 
-# PR-time gate for pull requests targeting main.
+# Build-and-test gate for pull requests targeting main, and for main itself.
 #
 # Neither existing workflow guards PRs:
 #   - docker.yml   runs on push to main only.
@@ -18,13 +18,45 @@ name: CI
 # excluded here so no containers start; a full integration/nightly gate is a separate
 # follow-up. See issue #544.
 #
-# NOTE FOR MAINTAINERS: making "Build & test" a REQUIRED status check on main is a
-# branch-protection repo setting and cannot be enforced from this workflow file alone.
+# "Build & test" IS a required status check on main. Branch protection matches the context
+# by JOB name, not by workflow file, so the job names below are load-bearing and must not be
+# renamed. Note that `enforce_admins` is off, so a required check is a speed bump for an
+# admin rather than a wall -- which is the hole the push trigger below covers.
+#
+# TRIGGERS
+#   - pull_request: the merge gate. Unchanged behavior.
+#   - push to main: reports post-merge breakage AGAINST MAIN. Until issue #1298 this ran on
+#     pull_request only, so nothing ever evaluated main itself. On 2026-08-12 PR #1270 was
+#     force-merged at 00:20Z with three checks red and this very job still pending; main was
+#     then left unable to activate the Workbench at all, with HistoricalSchemaUpgradeTests
+#     failing 8 of 8, and showed all-green for about nine hours because every workflow that
+#     did run on push (Maps, Packages, Docker Images, Code Quality) is blind to test results.
+#     That test project references no Testcontainers, so it sits inside the container-free
+#     filter below and this job would have gone red on the merge commit within ~13 minutes.
+#   - workflow_dispatch: re-run on demand after a fix, without pushing an empty commit.
+#
+# The push run is deliberately the SAME job, not a scoped-down variant. Scoping it would mean
+# a second job name (the required-check context is tied to this one) and a second thing to
+# keep in step with the PR gate, in exchange for saving one run per merge. This workflow takes
+# ~13 minutes end to end, measured over its recent successful runs; every push to main already
+# pays ~8-10 for Docker Images, which builds two multi-platform images, and ~3 for Packages.
+# Those run in parallel with this one, so the answer to "is main broken" arrives ~13 minutes
+# after a merge and the merge itself is not held up by any of it.
+#
+# Blocking is not available on push: the commit has already landed. A red run on main is a
+# request to fix forward or revert; the alert job at the bottom makes sure someone is told.
 
 on:
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
@@ -84,13 +116,45 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      GROUNDWORK_LEDGER_BASE_REF: ${{ github.event.pull_request.base.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # GROUNDWORK_LEDGER_BASE_REF used to be a job-level env set straight from
+      # github.event.pull_request.base.sha, which is empty on push and workflow_dispatch.
+      # GroundworkCoverageLedgerTransitionTests skips itself on an empty value but treats an
+      # unresolvable one as a hard finding ("checkout must fetch immutable baseline history"),
+      # so the push baseline has to be validated rather than assumed: it is better for the
+      # transition guard alone to opt out than for the whole architecture job -- EF ratchet,
+      # continuity and dependency gates included -- to go red on a baseline artifact.
+      #
+      # On push the baseline is github.event.before, the commit main pointed at before this
+      # push, which is exactly what the landed change transitioned FROM. main forbids force
+      # pushes and deletions, so that commit is always a reachable ancestor here and never the
+      # all-zero branch-creation sha; both are still screened out, because this job should not
+      # be the thing that discovers a branch-protection setting was relaxed.
+      - name: Resolve the coverage-ledger baseline commit
+        env:
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}"
+          case "$base" in
+            *[!0]*) ;;     # holds a non-zero character, so it is a real sha
+            *) base="" ;;  # empty (workflow_dispatch), or the all-zero sha
+          esac
+          if [ -n "$base" ] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "::notice::Coverage-ledger baseline $base is not reachable in this checkout; the transition guard will skip."
+            base=""
+          fi
+          if [ -z "$base" ]; then
+            echo "No coverage-ledger baseline; the transition guard skips, every other ratchet still runs."
+          else
+            echo "Coverage-ledger baseline: $base"
+          fi
+          echo "GROUNDWORK_LEDGER_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -113,6 +177,24 @@ jobs:
       - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
+  # A red main has to reach a human. GitHub's own failure notification for a push does go to
+  # whoever pushed, which is a better channel than the one the nightly uses -- but on
+  # 2026-08-12 the pusher was the person who had just merged through three red checks, so it
+  # is not a channel to rely on alone. This files or updates one deduplicated issue as well.
+  alert:
+    name: Alert on a red main
+    needs:
+      - build-and-test
+      - groundwork-fast
+    if: ${{ failure() && github.event_name == 'push' }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/main-red-alert.yml
+    with:
+      gate: CI
+
   # The "Generated maps fresh" job moved to maps.yml (issue #1274). It needed a push-to-main
-  # trigger as well, and this workflow is the pull_request gate. The job name is unchanged, so
-  # the required status check of that name still reports.
+  # trigger as well, and this workflow was the pull_request gate at the time; both triggers now
+  # live here too, but the job stays in maps.yml. Its name is unchanged, so the required status
+  # check of that name still reports.

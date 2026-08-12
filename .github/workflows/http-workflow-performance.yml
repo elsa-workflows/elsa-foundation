@@ -1,5 +1,31 @@
 name: HTTP workflow performance
 
+# This is the only gate in the repository that STARTS the host. Everything else compiles it or
+# unit-tests around it; the "Start server" step below deploys a fresh schema, launches
+# Elsa.Workbench and waits on /health/ready, which makes it the de facto activation smoke test.
+#
+# TRIGGERS
+#   - pull_request, path-filtered: unchanged. On a PR the filter is doing its job -- a docs or
+#     Studio change cannot move a Groundwork-SQLite benchmark.
+#   - push to main, NOT path-filtered: deliberate, and the one real judgment call in issue
+#     #1298. On 2026-08-12 main was left in a state where the Workbench could not activate at
+#     all (Groundwork's scale-bearing index check refused list-by-stimulus-type on bookmark
+#     state during shell activation) and nothing noticed for nine hours. That particular change
+#     did touch Directory.Packages.props and src/Elsa/Persistence/Groundwork/**, so a
+#     path-filtered push trigger would have caught it -- but only by luck of where it landed.
+#     Activation is a whole-composition property: a CShells feature registration, a Nuplane host
+#     change, an appsettings edit or a startup task can break it from outside all five paths,
+#     and the point of a post-merge trigger is to catch what the pull_request gate did not. A
+#     filter that reproduces the PR gate's blind spot post-merge would inherit the blind spot.
+#     Cost is one ~5-minute run per merge, measured over this job's recent successful runs --
+#     the 20-minute timeout below is a ceiling, not a duration. The p95 budget is set ~6% above
+#     the observed maximum of 55 runs (see the derivation above the measure step), so an
+#     unfiltered push trigger does not buy this at the price of a flaky red on main.
+#   - workflow_dispatch: unchanged.
+#
+# Blocking is not available on push: the commit has already landed. A red run on main is a
+# request to fix forward or revert, and the alert job below files an issue so it is not missed.
+
 on:
   pull_request:
     branches:
@@ -10,7 +36,13 @@ on:
       - src/Elsa/Persistence/Groundwork/**
       - src/Elsa/Workflows/Runtime/**
       - tools/performance/**
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   sqlite-defaults:
@@ -121,3 +153,14 @@ jobs:
           path: |
             artifacts/http-workflow-performance
             ${{ runner.temp }}/elsa-workbench.log
+
+  alert:
+    name: Alert on a red main
+    needs: sqlite-defaults
+    if: ${{ failure() && github.event_name == 'push' }}
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/main-red-alert.yml
+    with:
+      gate: HTTP workflow performance
