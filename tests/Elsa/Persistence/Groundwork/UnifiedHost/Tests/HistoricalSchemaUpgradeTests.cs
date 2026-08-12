@@ -143,27 +143,38 @@ public sealed class HistoricalSchemaUpgradeTests
             historicalIndexIdentities,
             identity => Assert.Contains(identity, currentIndexIdentities));
 
-        PhysicalSchemaOperationKind[] additiveOperationKinds =
-        [
-            PhysicalSchemaOperationKind.CreatePrimaryStorage,
-            PhysicalSchemaOperationKind.CreateLinkedStorage,
-            PhysicalSchemaOperationKind.CreateCollectionElementStorage,
-            PhysicalSchemaOperationKind.CreatePhysicalEntityStorage,
-            PhysicalSchemaOperationKind.AddProjectedColumn,
-            PhysicalSchemaOperationKind.FinalizeProjectedColumn,
-            PhysicalSchemaOperationKind.CreatePhysicalIndex,
-            // Widening a null-excluding index to keep every row is executed as a rebuild. An index is
-            // derived state, so dropping and recreating one destroys no stored data -- which is what
-            // this guard is here to catch. Groundwork sanctions the rebuild as the way to widen.
-            PhysicalSchemaOperationKind.RebuildPhysicalIndex,
-            PhysicalSchemaOperationKind.BackfillCanonicalJson,
-            PhysicalSchemaOperationKind.ApplyProviderDefinition,
-            PhysicalSchemaOperationKind.ValidatePhysicalSchema,
-            PhysicalSchemaOperationKind.RecordAppliedState
-        ];
-        Assert.All(
-            plan.Operations,
-            operation => Assert.Contains(operation.Kind, additiveOperationKinds));
+        // This used to filter the plan against a list of operation kinds an additive upgrade may
+        // contain. It cannot discriminate: every kind Groundwork can plan today is additive, so the
+        // list grew to name all twelve and its Assert.All silently became unable to fail. Nothing about
+        // the shape of that check was salvageable -- a kind filter only has teeth while some kind is
+        // excluded from it.
+        //
+        // Pin the vocabulary instead. The upgrade is additive *because* Groundwork has no destructive
+        // operation kind, so that premise is the thing worth guarding: if a kind is ever added, this
+        // fails and someone has to decide whether an additive upgrade may contain it, rather than the
+        // question going unasked the way it did when RebuildPhysicalIndex arrived.
+        Assert.Equal(
+            new[]
+            {
+                nameof(PhysicalSchemaOperationKind.AddProjectedColumn),
+                nameof(PhysicalSchemaOperationKind.ApplyProviderDefinition),
+                nameof(PhysicalSchemaOperationKind.BackfillCanonicalJson),
+                nameof(PhysicalSchemaOperationKind.CreateCollectionElementStorage),
+                nameof(PhysicalSchemaOperationKind.CreateLinkedStorage),
+                nameof(PhysicalSchemaOperationKind.CreatePhysicalEntityStorage),
+                nameof(PhysicalSchemaOperationKind.CreatePhysicalIndex),
+                nameof(PhysicalSchemaOperationKind.CreatePrimaryStorage),
+                nameof(PhysicalSchemaOperationKind.FinalizeProjectedColumn),
+                nameof(PhysicalSchemaOperationKind.RebuildPhysicalIndex),
+                nameof(PhysicalSchemaOperationKind.RecordAppliedState),
+                nameof(PhysicalSchemaOperationKind.ValidatePhysicalSchema)
+            },
+            Enum.GetNames<PhysicalSchemaOperationKind>().Order(StringComparer.Ordinal));
+
+        // Widening an applied index is executed as a rebuild, and the preview.95 reference state
+        // predates every widening, so the upgrade has to plan at least one. Asserting anything about
+        // rebuilds without this would be an assertion over a possibly-empty sequence.
+        Assert.NotEmpty(plan.Operations.OfType<RebuildPhysicalIndexOperation>());
 
         var versionedIndexes = plan.Operations
             .OfType<CreatePhysicalIndexOperation>()
