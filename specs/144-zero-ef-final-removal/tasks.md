@@ -55,8 +55,13 @@
 >
 > Rewriting these tasks needs the ADR 0042 amendment ratified first — see the amendment note there — so
 > they are flagged rather than edited, to avoid encoding an unratified scope in the task list.
+>
+> **Applied 2026-08-12.** The amendment is ratified (ADR 0042, decided 2026-08-04), so the flagged tasks
+> have now been rewritten to the ratified scope; the warning above is retained as provenance. spec.md
+> FR-008/FR-012/FR-013 and SC-001 still carry the superseded absolute-zero wording and await the
+> T072–T075 documentation pass.
 
-- [ ] T010 Verify #643 completes the 145-member OpenIddict ledger, production registration, four-provider black-box suite, exact-range reviews, and merge; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T010 Record #643's program-owner re-disposition under the ratified ADR 0042 amendment (OpenIddict keeps its vendor persistence; spec 106 is superseded and its adapter removed), verify no Groundwork OpenIddict adapter or spec-106 registration remains in-tree, and record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T011 Verify #646 supplies an accepted verdict for every required coverage-ledger row, including diagnostics, Identity/OpenIddict, physical forms, and ratified amendments; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`. Behavioural-parity input (the correctness precondition that must pass before any #646 timing verdict is valid) is recorded per seam in `specs/094-harden-groundwork-stores/divergence-ledger.md`; that artifact carries no `performanceVerdict` and advances no coverage-ledger row. The 21 runtime-family rows have no EF comparand at all and so cannot receive an EF-ratio verdict; a proposed three-tier basis for grading them (enforced user-visible envelope, per-workload absolute ceilings, and a generation-over-generation ratio ratchet reusing the existing gate machinery) is in `specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md` and requires an independent ratifier before T011 can consume it
 - [ ] T012 Verify #932 supplies SQL Server and MongoDB dashboard run-health/portfolio support or a separately ratified non-support amendment, including #932's required final issue and Project 33 disposition; record evidence in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T013 Record three independent upstream gates in `specs/144-zero-ef-final-removal/quickstart.md`: exact consumed-package provenance for merged #141/#143 APIs; accepted #50 performance evidence and final issue disposition; and Groundwork parent #25 completion (or a named, separately ratified #647/#629 amendment). Never infer #50/#25 completion from package contents or a partial checkpoint.
@@ -93,8 +98,8 @@
 - [ ] T026 [US1] Wire dashboard run-health/portfolio into `src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs`
 - [ ] T027 [US1] Update dashboard Groundwork feature registration/extension-point documentation in `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/README.md` and `src/Elsa/Workflows/Dashboard/Persistence/Groundwork/EXTENSION_POINTS.md`
 - [ ] T028 [US1] Update unified provider documentation to promise the complete dashboard-enabled matrix in `src/Elsa/Persistence/Groundwork/Unified/README.md` and `src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`
-- [ ] T029 [US1] After T010, T012, T017, and T019-T028 pass, admit the sole earlier serialized #647 host slice and replace remaining Identity/OpenIddict EF host feature selection with Groundwork in `src/Apps/Elsa.Server/shells.json`
-- [ ] T030 [US1] In the same serialized host slice after T029, replace remaining production Identity/OpenIddict EF host feature selection with Groundwork while preserving seeded-admin configuration in `src/Apps/Elsa.Server/shells.Production.json`
+- [ ] T029 [US1] After T010, T012, T017, and T019-T028 pass, admit the sole earlier serialized #647 host slice and replace remaining Identity EF host feature selection with Groundwork in `src/Apps/Elsa.Server/shells.json`; OpenIddict host selection keeps its vendor EF provider per the ratified ADR 0042 amendment
+- [ ] T030 [US1] In the same serialized host slice after T029, replace remaining production Identity EF host feature selection with Groundwork while preserving seeded-admin configuration and the vendor-EF OpenIddict selection in `src/Apps/Elsa.Server/shells.Production.json`
 - [ ] T031 [US1] In the same serialized host slice after T030, remove host-only EF project/package references made obsolete by the Groundwork composition from `src/Apps/Elsa.Server/Elsa.Server.csproj`
 - [ ] T032 [US1] Run the container-free SQLite registration/composition/startup slice and record exact results in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T033 [US1] [CONTAINER] Run the SQL Server, PostgreSQL, and MongoDB dashboard-enabled host matrix and retain provider/version/topology/result evidence under `docs/reports/evidence/144-zero-ef-final-removal/`
@@ -113,7 +118,7 @@
 ### Test Preservation for User Story 2
 
 - [ ] T035 [P] [US2] Convert/rehost provider-neutral ASP.NET Core Identity test objectives from `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/` into Groundwork-backed fixtures under `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/Groundwork/`
-- [ ] T036 [P] [US2] Convert/rehost OpenIddict authentication, endpoint, scheme, and lifecycle test objectives from `tests/Elsa/Foundation/Identity/Tests/OpenIddict/` and `tests/Elsa/Foundation/Identity/Tests/Api/` onto the production Groundwork stores
+- [ ] T036 [P] [US2] Rehost the Identity halves of the shared `tests/Elsa/Foundation/Identity/Tests/OpenIddict/` and `tests/Elsa/Foundation/Identity/Tests/Api/` fixtures onto Groundwork Identity stores while retaining OpenIddict's vendor EF persistence, and reclassify the OpenIddict-store ledger rows as retained under the ratified ADR 0042 amendment
 - [ ] T037 [P] [US2] Convert/rehost provider-neutral diagnostics test objectives from `tests/Elsa/Diagnostics/*/Persistence/Tests/` onto the Groundwork diagnostics suites
 - [ ] T038 [P] [US2] Classify or convert provider-neutral objectives from `tests/Elsa/Persistence/EFCore/Tests/` into the appropriate persistence contract/architecture suites
 - [ ] T039 [P] [US2] Remove token-free EF reachability from `tests/Elsa/Modularity/Tests/` and other shared-host consumers while preserving their composition objectives
@@ -124,8 +129,8 @@
 - [ ] T041 [US2] After T009 and T011 pass, delete `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/` and remove its project/test references
 - [ ] T042 [US2] After T009 and T011 pass, delete `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` and remove its project/test references
 - [ ] T043 [US2] Remove obsolete diagnostics EF fixtures/packages from `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/` and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/` only after T037/T040 dispositions
-- [ ] T044 [US2] After T010/T011 pass, remove `UseEntityFrameworkCore`, the OpenIddict `DbContext`, migrations, EF packages, and EF registration paths from `src/Elsa/Foundation/Identity/OpenIddict/`
-- [ ] T045 [US2] Remove OpenIddict/Identity `UseInMemoryDatabase` and EF fixture setup from `tests/Elsa/Foundation/Identity/Tests/` only after T035/T036 replacements pass
+- [ ] T044 [US2] After T010 passes, verify OpenIddict's retained vendor EF surface stays self-contained (its `DbContext` derives from plain `DbContext` and `src/Elsa/Foundation/Identity/OpenIddict/` references no Elsa EF project) and enroll its exact package set in the permanent guard allowlist
+- [ ] T045 [US2] Remove Identity (non-OpenIddict) `UseInMemoryDatabase` and EF fixture setup from `tests/Elsa/Foundation/Identity/Tests/` only after T035/T036 replacements pass; OpenIddict vendor EF fixtures are retained per the ratified ADR 0042 amendment
 - [ ] T046 [US2] After T011 passes, delete `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/` together with its frozen oracle baseline/test
 - [ ] T047 [US2] Remove the frozen Identity EF benchmark target and temporary EF comparison code from `benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/` only after its verdict import is durably complete
 - [ ] T048 [US2] Delete `src/Elsa/Persistence/EFCore/` after diagnostics, OpenIddict, Identity, and every other dependent edge is gone
@@ -146,7 +151,7 @@
 
 ## Phase 5: User Story 3 - Prevent EF From Returning (Priority: P2)
 
-**Goal**: Replace migration-era ratchets with a permanent fail-closed guard over every repository project.
+**Goal**: Replace migration-era ratchets with a permanent fail-closed allowlist guard over every repository project: zero first-party EF, with only the named OpenIddict vendor set permitted.
 
 > **Scope change — 2026-08-04, ADR 0042 amendment ratified.** This phase's guard **cannot be
 > absolute-zero**. OpenIddict keeps its own vendor persistence by decision, so
@@ -162,6 +167,9 @@
 > Getting this wrong has a specific failure mode worth naming: a guard that can never pass will
 > eventually be switched off, and switching it off forfeits the protection the whole programme depends
 > on. An allowlist that passes today and fails on any new edge is what keeps it useful.
+>
+> **Applied 2026-08-12.** The goal line and T064/T067/T071 have been rewritten to the fail-closed
+> allowlist scope; this note is retained as provenance.
 
 **Independent Test**: Synthetic fixtures detect every bypass class, and the real complete restored graph has every guarded category empty.
 
@@ -171,21 +179,22 @@
 - [x] T060 [US3] Add central/shared/imported/conditional/direct/static-transitive dependency bypass tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [x] T061 [US3] Add restored-transitive, missing-assets, stale-but-present assets/receipt, changed dependency-input, and project-set-mismatch fail-closed tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
   - Evidence: the receipt-focused run passed 6/6 and the complete `EfCoreSurfaceRatchetTests` class passed 43/43 at the recorded T061/T063/T068 checkpoint.
-- [ ] T062 [US3] Add migration/context/registration/JSON/YAML host-configuration detection and comment-false-positive tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+- [x] T062 [US3] Add migration/context/registration/JSON/YAML host-configuration detection and comment-false-positive tests in `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
+  - Evidence: four new fixtures cover block-comment/string-literal source shapes, YAML comment lines, XML/TOML comments, and nested JSON comment properties; the non-JSON host-configuration scan now strips format-appropriate comments before token counting, and the complete `EfCoreSurfaceRatchetTests` class passed 47/47 with the real-repo shrink-only baseline unchanged.
 
 ### Implementation for User Story 3
 
 - [x] T063 [US3] Ensure `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` discovers every repository project independently of `Elsa.Server.slnx`, validates the all-project restore receipt's exact project/input/assets bindings, and evaluates all contract categories
   - Evidence: fresh discovery found 246 projects; both real receipts bound that set, 251 inputs, and all assets; the C# scanner returned `isValid=True`, and `Categories()` now exposes all 14 contract categories.
-- [ ] T064 [US3] Rewrite `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` so the production assertion requires a valid current all-project restore receipt plus every EF category and `ProjectsMissingAssets` to be empty
+- [ ] T064 [US3] Rewrite `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs` so the production assertion requires a valid current all-project restore receipt, `ProjectsMissingAssets` empty, and every EF category empty outside the ratified OpenIddict vendor allowlist
 - [ ] T065 [US3] Remove baseline load/save/compare behavior and the `ELSA_UPDATE_EF_CORE_BASELINE` switch from `tests/Elsa/Architecture/EfCoreSurfaceScanner.cs` and `tests/Elsa/Architecture/EfCoreSurfaceRatchetTests.cs`
 - [ ] T066 [US3] Delete `tests/Elsa/Architecture/Baselines/ef-core-surface.json` after T046 has already retired the frozen Identity oracle baseline/test in the same reviewed oracle-removal change
-- [ ] T067 [US3] Rewrite `tests/Elsa/Architecture/Baselines/README.md` as permanent absolute-zero guard documentation without an update path
+- [ ] T067 [US3] Rewrite `tests/Elsa/Architecture/Baselines/README.md` as permanent fail-closed allowlist guard documentation (zero first-party EF; named OpenIddict vendor allowlist) without an update path
 - [x] T068 [US3] Add and run repository-owned Bash and PowerShell restore-driver entry points under `tools/architecture/` to independently discover and force-evaluate every repository project, write the exact project/input/assets restore receipt consumed by the guard, and prove its project set matches fresh scanner discovery
   - Evidence: Bash and PowerShell each completed 246/246 forced restores on clean exact heads; their project-set, input, and 246 assets identities match exactly, with receipt hashes and failure dispositions retained in `quickstart.md`.
 - [ ] T069 [US3] Run the complete EF architecture guard and all bypass fixtures against the frozen candidate; record results in `specs/144-zero-ef-final-removal/quickstart.md`
 - [ ] T070 [US3] Run `dotnet nuget why` for every unexpected dependency found during certification and record the removed chain in `specs/144-zero-ef-final-removal/ef-removal-inventory.md`
-- [ ] T071 [US3] Record the exact-head absolute-zero certification and category counts in `specs/144-zero-ef-final-removal/quickstart.md`
+- [ ] T071 [US3] Record the exact-head zero-first-party-EF certification — every category empty apart from the named OpenIddict vendor allowlist entries — and category counts in `specs/144-zero-ef-final-removal/quickstart.md`
 
 **Checkpoint**: The permanent guard has no baseline/allow-list/update path and cannot be bypassed by solution omission or missing dependency evidence.
 

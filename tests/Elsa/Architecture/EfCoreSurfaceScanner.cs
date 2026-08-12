@@ -1395,13 +1395,23 @@ internal sealed class EfCoreSurfaceScanner
             yield break;
         }
 
-        var text = File.ReadAllText(path);
+        var text = ExecutableConfigurationText(path);
         foreach (var token in new[] { "EFCore", "EntityFrameworkCore" })
         {
             var count = CountOccurrences(text, token, StringComparison.OrdinalIgnoreCase);
             if (count != 0)
                 yield return Pair(relative, $"{token} x {count}");
         }
+    }
+
+    private static string ExecutableConfigurationText(string path)
+    {
+        var text = File.ReadAllText(path);
+        if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            return Regex.Replace(text, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+
+        // YAML and TOML comments start at '#' when it opens a line or follows whitespace.
+        return Regex.Replace(text, @"(?m)(?:^|(?<=\s))#.*$", string.Empty);
     }
 
     private static void CollectJsonConfigurationEntries(JsonElement element, string path, ICollection<string> entries)
