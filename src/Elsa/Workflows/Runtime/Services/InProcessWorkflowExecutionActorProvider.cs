@@ -323,13 +323,21 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
 
                 var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
 
-                // Admission shed (RB1, #1235). Deliberately BEFORE the idempotency key is remembered: the command was
-                // refused, not processed, so a retry of the same key must be evaluated afresh rather than answered
-                // Duplicate. Deferred is the truthful status — for a start nothing durable was written and the caller
-                // is expected to retry (the HTTP edge renders it 429), for anything else the work item is queued and
-                // the resumption sweep will re-drive it.
+                // Admission shed (RB1, #1235). Deferred is the truthful status either way, but the two refusals differ
+                // in what they left behind, and so in what the idempotency key must mean afterwards.
+                //
+                // A shed START wrote nothing, so its key is NOT consumed: the caller is told to retry (the HTTP edge
+                // renders it 429), and a retry that answered Duplicate would strand a workflow that never ran.
+                //
+                // Every other kind had its work item durably queued before the refusal, so its key IS consumed. The
+                // work is waiting for the resumption sweep; an at-least-once redelivery of the same key — which the
+                // distributed placement pump performs by design on every Deferred result — would otherwise queue the
+                // same work a second time and run it twice once the first copy is consumed.
                 if (processResult.Shed)
                 {
+                    if (processResult.ShedWorkQueued)
+                        RememberProcessedIdempotencyKey(envelope.IdempotencyKey);
+
                     var shedMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
                     {
                         [RuntimeMetadataKeys.DispatchShed] = "true"

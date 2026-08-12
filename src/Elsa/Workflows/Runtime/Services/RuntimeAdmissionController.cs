@@ -70,10 +70,23 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
 
     public RuntimeAdmissionDecision TryAdmit()
     {
-        var load = _loadSignal.InFlightDispatches;
         var limit = Limit;
 
-        if (_options.Enabled && load > 0 && load >= limit && !_loadSignal.HasAmbientCharge)
+        // The two exemptions are decided before the limit is consulted at all, so neither can be turned into a
+        // refusal by a concurrent burst. The load is read before the charge is opened so ObservedLoad means the same
+        // thing on both paths — the pre-reservation load — and an exempt command's own seeded unit cannot tip its
+        // completion sample into the saturated band.
+        if (!_options.Enabled || _loadSignal.HasAmbientCharge)
+        {
+            var observedLoad = _loadSignal.InFlightDispatches;
+            return Admit(_loadSignal.OpenCharge(), observedLoad, limit);
+        }
+
+        // One atomic compare-and-reserve, not a read followed by a reserve. Two operations would let N callers
+        // arriving together all observe the same below-limit load and all pass, which is the burst the limiter exists
+        // to stop.
+        var charge = _loadSignal.TryOpenCharge(limit, out var load);
+        if (charge is null)
         {
             _diagnostics?.RecordShed();
             return RuntimeAdmissionDecision.Shed(
@@ -83,13 +96,13 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
                 limit);
         }
 
+        return Admit(charge, load, limit);
+    }
+
+    private RuntimeAdmissionDecision Admit(IRuntimeAdmissionCharge charge, long load, double limit)
+    {
         _diagnostics?.RecordAdmitted();
-        return RuntimeAdmissionDecision.Admitted(
-            _loadSignal.OpenCharge(),
-            OnCompleted,
-            load,
-            limit,
-            _timeProvider.GetTimestamp());
+        return RuntimeAdmissionDecision.Admitted(charge, OnCompleted, load, limit, _timeProvider.GetTimestamp());
     }
 
     private void OnCompleted(RuntimeAdmissionCompletion completion)
@@ -109,8 +122,10 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
             }
 
             // An unsaturated sample carries no capacity information. Admitting at a quarter of the limit and taking
-            // 200 ms says the work is slow, not that the host is full.
-            var saturated = completion.ObservedLoad * 2 >= completion.Limit;
+            // 200 ms says the work is slow, not that the host is full. Written as a division of the double limit
+            // rather than a doubling of the long load: halving a double is exact in binary floating point, so the two
+            // forms compare identically, and this one is not an integer multiplication feeding a double comparison.
+            var saturated = completion.ObservedLoad >= completion.Limit / 2;
             if (saturated)
             {
                 if (duration.Ticks <= _baselineTicks * _options.LatencyTolerance)

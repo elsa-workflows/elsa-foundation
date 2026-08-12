@@ -74,6 +74,24 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
+    public void TryAdmit_ReportsThePreReservationLoadOnTheExemptPath()
+    {
+        // Uses the REAL load signal because the pin is an evaluation-order fact the stub cannot see: with a parent's
+        // ambient charge holding one unit, the exempt path must report ObservedLoad = 1 (the load before its own
+        // charge opened), matching what the gated path's compare-and-reserve reports. Reading the load after opening
+        // — the one-liner shape `Admit(OpenCharge(), InFlightDispatches, ...)` evaluates left to right — reports 2
+        // and lets a nested command's own seeded unit tip its completion sample into the saturated band.
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+        using var parentCharge = signal.OpenCharge();
+        var controller = new RuntimeAdmissionController(signal);
+
+        using var decision = controller.TryAdmit();
+
+        Assert.True(decision.IsAdmitted);
+        Assert.Equal(1, decision.ObservedLoad);
+    }
+
+    [Fact]
     public void TryAdmit_AdmitsAtCapacityWhenSheddingIsDisabled()
     {
         // The kill switch stops the refusal, not the evaluation: the decision is still counted, so an operator who
@@ -214,6 +232,80 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
+    public void TryAdmit_AdmitsExactlyTheLimitUnderASimultaneousBurst()
+    {
+        // The invariant a check-then-reserve gate cannot hold. The load signal here is instrumented to FORCE the worst
+        // interleaving rather than hope for it: any caller that reads the load separately parks until every caller has
+        // read, so they would all observe the same below-limit value and all reserve. An atomic gate never takes that
+        // read path at all, which is what makes this assertion deterministic instead of a race the test might lose.
+        const int limit = 8;
+        const int callers = 64;
+        var signal = new ReadRendezvousLoadSignal(callers);
+        var controller = new RuntimeAdmissionController(
+            signal,
+            new RuntimeAdmissionOptions { StaticLimit = limit },
+            _diagnostics,
+            _clock);
+
+        var decisions = new RuntimeAdmissionDecision[callers];
+        var start = new ManualResetEventSlim();
+        // Dedicated threads, not the thread pool: the pool injects workers slowly, so a pool-scheduled burst would
+        // arrive staggered and the interleaving under test would never occur.
+        var threads = Enumerable.Range(0, callers)
+            .Select(index => new Thread(() =>
+            {
+                start.Wait();
+                decisions[index] = controller.TryAdmit();
+            }) { IsBackground = true })
+            .ToArray();
+
+        foreach (var thread in threads)
+            thread.Start();
+        start.Set();
+        foreach (var thread in threads)
+            Assert.True(thread.Join(TimeSpan.FromSeconds(30)));
+
+        Assert.Equal(limit, decisions.Count(decision => decision.IsAdmitted));
+        Assert.Equal(callers - limit, decisions.Count(decision => !decision.IsAdmitted));
+        Assert.Equal(limit, _diagnostics.Admitted);
+        Assert.Equal(callers - limit, _diagnostics.Shed);
+
+        foreach (var decision in decisions)
+            decision.Dispose();
+    }
+
+    [Fact]
+    public void TryAdmit_DecidesThroughTheAtomicReservationNotASeparateRead()
+    {
+        // The structural half of the same guarantee, and the one that fails outright on a check-then-reserve gate:
+        // reaching a limit decision by reading the load first is the bug, so the signal refuses to serve that read.
+        var controller = new RuntimeAdmissionController(
+            new ReservationOnlyLoadSignal(),
+            new RuntimeAdmissionOptions { StaticLimit = 4 },
+            _diagnostics,
+            _clock);
+
+        using var decision = controller.TryAdmit();
+
+        Assert.True(decision.IsAdmitted);
+    }
+
+    [Fact]
+    public void DispatchLoadSignal_RefusesAReservationAtTheLimit()
+    {
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+
+        var first = signal.TryOpenCharge(limit: 1, out var loadBefore);
+        var second = signal.TryOpenCharge(limit: 1, out var loadAfter);
+
+        Assert.NotNull(first);
+        Assert.Equal(0, loadBefore);
+        Assert.Null(second);
+        Assert.Equal(1, loadAfter);
+        first!.Dispose();
+    }
+
+    [Fact]
     public void DispatchLoadSignal_TracksTheAmbientCharge()
     {
         var signal = new DispatchRuntimeAdmissionLoadSignal();
@@ -269,6 +361,7 @@ public sealed class RuntimeAdmissionControlTests
         var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.Start));
 
         Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
         Assert.False(result.DrainPerformed);
         Assert.False(result.IsFaulted);
         Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
@@ -285,8 +378,76 @@ public sealed class RuntimeAdmissionControlTests
         var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark));
 
         Assert.True(result.Shed);
+        Assert.True(result.ShedWorkQueued);
         Assert.False(result.DrainPerformed);
         Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    // The single source of truth for which kinds bypass the admission gate, shared by both theories below so the
+    // gated list and the exempt list cannot drift apart.
+    private static readonly WorkflowExecutionCommandKind[] AdmissionExemptKinds =
+    [
+        WorkflowExecutionCommandKind.RunSchedulerWork,
+        WorkflowExecutionCommandKind.Cancel,
+        WorkflowExecutionCommandKind.PauseWorkflowExecution,
+        WorkflowExecutionCommandKind.UnpauseWorkflowExecution
+    ];
+
+    public static TheoryData<WorkflowExecutionCommandKind> ExemptCommandKinds()
+    {
+        var data = new TheoryData<WorkflowExecutionCommandKind>();
+        foreach (var kind in AdmissionExemptKinds)
+            data.Add(kind);
+        return data;
+    }
+
+    public static TheoryData<WorkflowExecutionCommandKind> GatedCommandKinds()
+    {
+        // Computed from the enum rather than listed, so a kind added later defaults into the gated assertion — the
+        // safe direction for a deny-list exemption — and widening IsSubjectToAdmission's exemption set by even one
+        // kind goes red here until this test names it deliberately.
+        var data = new TheoryData<WorkflowExecutionCommandKind>();
+        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>()
+                     .Except(AdmissionExemptKinds)
+                     // Routed to the alteration executor above the gate. NOT load-gated there: alterations have a
+                     // plan-registration admission, not a load bound. Tracked as a composition gap in #1320.
+                     .Where(kind => kind != WorkflowExecutionCommandKind.AlterWorkflow))
+            data.Add(kind);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(GatedCommandKinds))]
+    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = NewRouter(queue, AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(kind));
+
+        Assert.True(result.Shed);
+        Assert.False(result.DrainPerformed);
+        var expectQueued = kind != WorkflowExecutionCommandKind.Start;
+        Assert.Equal(expectQueued, result.ShedWorkQueued);
+        Assert.Equal(expectQueued ? 1 : 0, (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExemptCommandKinds))]
+    public async Task Router_NeverShedsRecoveryOrControlPlaneCommands(WorkflowExecutionCommandKind kind)
+    {
+        // RunSchedulerWork is the resumption sweep re-driving a backlog that is ALREADY queued, so shedding it would
+        // add one more trigger per sweep pass and grow the backlog the sweep exists to drain. Cancel/pause/unpause
+        // reduce load, so refusing them at capacity would remove the tool for ending the overload.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainOrchestrator = new RecordingDrainOrchestrator();
+        var router = NewRouter(queue, AlwaysShed, drainOrchestrator);
+
+        var result = await router.ProcessAsync(NewEnvelope(kind));
+
+        Assert.False(result.Shed);
+        Assert.True(result.DrainPerformed);
+        Assert.Equal(1, drainOrchestrator.DrainCount);
     }
 
     [Fact]
@@ -305,11 +466,11 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
-    public async Task Actor_RendersAShedCommandAsDeferredWithoutConsumingTheIdempotencyKey()
+    public async Task Actor_KeepsAShedStartRetryableOnTheSameIdempotencyKey()
     {
-        // The command was refused, not processed, so the same key retried later must be evaluated afresh instead of
-        // being answered Duplicate.
-        var executor = new ShedThenAcceptCommandExecutor();
+        // A shed start wrote nothing, so the key is not consumed: answering Duplicate on the retry would strand a
+        // workflow that never ran.
+        var executor = new ShedThenAcceptCommandExecutor(workQueued: false);
         using var provider = new InProcessWorkflowExecutionActorProvider(executor);
         var actor = await provider.GetAgentAsync(NewActivationRequest());
         var envelope = NewEnvelope(WorkflowExecutionCommandKind.Start);
@@ -324,6 +485,24 @@ public sealed class RuntimeAdmissionControlTests
         var retried = await actor.EnqueueAsync(envelope);
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, retried.Status);
+    }
+
+    [Fact]
+    public async Task Actor_ConsumesTheIdempotencyKeyWhenAShedCommandWasQueued()
+    {
+        // The work item is durably queued and waiting for the resumption sweep. An at-least-once redelivery of the
+        // same key — which the distributed placement pump performs by design on every Deferred result — would queue
+        // the same work twice.
+        var executor = new ShedThenAcceptCommandExecutor(workQueued: true);
+        using var provider = new InProcessWorkflowExecutionActorProvider(executor);
+        var actor = await provider.GetAgentAsync(NewActivationRequest());
+        var envelope = NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark);
+
+        var shed = await actor.EnqueueAsync(envelope);
+        var retried = await actor.EnqueueAsync(envelope);
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, shed.Status);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, retried.Status);
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
@@ -396,6 +575,12 @@ public sealed class RuntimeAdmissionControlTests
 
         public bool HasAmbientCharge { get; set; }
 
+        public IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad)
+        {
+            observedLoad = InFlightDispatches;
+            return observedLoad > 0 && observedLoad >= limit ? null : new NoopCharge();
+        }
+
         public IRuntimeAdmissionCharge OpenCharge() => new NoopCharge();
 
         public void RecordDispatch()
@@ -410,6 +595,51 @@ public sealed class RuntimeAdmissionControlTests
             {
             }
         }
+    }
+
+    // Pass-through over the real signal that makes every separate load READ rendezvous with the others, forcing the
+    // interleaving a check-then-reserve gate loses on. The atomic gate never reads, so nothing ever waits.
+    private sealed class ReadRendezvousLoadSignal(int callers) : IRuntimeAdmissionLoadSignal
+    {
+        private readonly DispatchRuntimeAdmissionLoadSignal _inner = new();
+        private readonly CountdownEvent _reads = new(callers);
+
+        public long InFlightDispatches
+        {
+            get
+            {
+                var value = _inner.InFlightDispatches;
+                _reads.Signal();
+                _reads.Wait(TimeSpan.FromSeconds(10));
+                return value;
+            }
+        }
+
+        public bool HasAmbientCharge => _inner.HasAmbientCharge;
+
+        public IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad) =>
+            _inner.TryOpenCharge(limit, out observedLoad);
+
+        public IRuntimeAdmissionCharge OpenCharge() => _inner.OpenCharge();
+
+        public void RecordDispatch() => _inner.RecordDispatch();
+    }
+
+    private sealed class ReservationOnlyLoadSignal : IRuntimeAdmissionLoadSignal
+    {
+        private readonly DispatchRuntimeAdmissionLoadSignal _inner = new();
+
+        public long InFlightDispatches =>
+            throw new InvalidOperationException("A gated admission decision must come from TryOpenCharge, not from a separate load read.");
+
+        public bool HasAmbientCharge => _inner.HasAmbientCharge;
+
+        public IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad) =>
+            _inner.TryOpenCharge(limit, out observedLoad);
+
+        public IRuntimeAdmissionCharge OpenCharge() => _inner.OpenCharge();
+
+        public void RecordDispatch() => _inner.RecordDispatch();
     }
 
     private sealed class RecordingDrainOrchestrator : IWorkflowDrainOrchestrator
@@ -430,7 +660,7 @@ public sealed class RuntimeAdmissionControlTests
         }
     }
 
-    private sealed class ShedThenAcceptCommandExecutor : IWorkflowExecutionCommandExecutor
+    private sealed class ShedThenAcceptCommandExecutor(bool workQueued) : IWorkflowExecutionCommandExecutor
     {
         private bool _shed;
 
@@ -449,7 +679,7 @@ public sealed class RuntimeAdmissionControlTests
 
             _shed = true;
             return ValueTask.FromResult(
-                WorkflowExecutionCommandProcessResult.FromShed("at capacity", TimeSpan.FromSeconds(3)));
+                WorkflowExecutionCommandProcessResult.FromShed("at capacity", TimeSpan.FromSeconds(3), workQueued));
         }
     }
 }
