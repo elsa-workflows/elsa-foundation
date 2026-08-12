@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Elsa.Persistence.Core;
-using Elsa.Tasks.Core;
 using Elsa.Tasks.Schedules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -11,17 +10,17 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <summary>
 /// Tenant-scope-aware recurring activation for durable alteration plans. The coordinator does no in-memory queueing:
 /// every tick re-discovers bounded active-plan pages, so capture and leases safely resume after a process restart.
+/// Failure backoff comes from <see cref="BackoffSweepPumpTask"/>; only a cancellation of the pump's own token
+/// escapes, so a dependency's unrelated timeout feeds the backoff instead of crashing the recurring-task host.
 /// </summary>
-public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
+public sealed class WorkflowAlterationOrchestrationPumpTask : BackoffSweepPumpTask
 {
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly WorkflowAlterationOrchestrationSweep? _directSweep;
     private readonly IOptions<WorkflowAlterationOrchestrationOptions> _options;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<WorkflowAlterationOrchestrationPumpTask> _logger;
     private readonly ConcurrentDictionary<string, string> _scopeCursors = new(StringComparer.Ordinal);
     private string? _directCursor;
-    private int _consecutiveFailures;
 
     [ActivatorUtilitiesConstructor]
     public WorkflowAlterationOrchestrationPumpTask(
@@ -56,72 +55,61 @@ public sealed class WorkflowAlterationOrchestrationPumpTask : IRecurringTask
         IOptions<WorkflowAlterationOrchestrationOptions> options,
         TimeProvider timeProvider,
         ILogger<WorkflowAlterationOrchestrationPumpTask> logger)
+        : base(logger)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public TimeSpan CurrentSweepInterval => ComputeInterval(_options.Value, Volatile.Read(ref _consecutiveFailures));
+    protected override TimeSpan SweepInterval => ValidatedOptions.SweepInterval;
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override TimeSpan MaxBackoffInterval => ValidatedOptions.MaxBackoffInterval;
+
+    protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
-        var options = _options.Value;
-        options.Validate();
+        var options = ValidatedOptions;
         var workerId = options.WorkerId ?? $"runtime-alteration:{Environment.MachineName}";
-        try
-        {
-            if (_scopeRunner is null)
-            {
-                var result = await _directSweep!.ExecuteAsync(options, workerId, _directCursor, cancellationToken);
-                _directCursor = result.NextCursor;
-            }
-            else
-            {
-                await _scopeRunner.RunAsync(async (scope, operationScope, operationCancellationToken) =>
-                {
-                    _scopeCursors.TryGetValue(scope.Value, out var cursor);
-                    var result = await operationScope.ServiceProvider
-                        .GetRequiredService<WorkflowAlterationOrchestrationSweep>()
-                        .ExecuteAsync(options, workerId, cursor, operationCancellationToken);
-                    if (result.NextCursor is null)
-                        _scopeCursors.TryRemove(scope.Value, out _);
-                    else
-                        _scopeCursors[scope.Value] = result.NextCursor;
-                }, cancellationToken);
-            }
 
-            Interlocked.Exchange(ref _consecutiveFailures, 0);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        if (_scopeRunner is null)
         {
-            throw;
+            var result = await _directSweep!.ExecuteAsync(options, workerId, _directCursor, cancellationToken);
+            _directCursor = result.NextCursor;
         }
-        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        else
         {
-            var failures = Interlocked.Increment(ref _consecutiveFailures);
-            _logger.LogError(exception,
-                "Workflow alteration orchestration sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
-                failures,
-                CurrentSweepInterval);
+            await _scopeRunner.RunAsync(async (scope, operationScope, operationCancellationToken) =>
+            {
+                _scopeCursors.TryGetValue(scope.Value, out var cursor);
+                var result = await operationScope.ServiceProvider
+                    .GetRequiredService<WorkflowAlterationOrchestrationSweep>()
+                    .ExecuteAsync(options, workerId, cursor, operationCancellationToken);
+                if (result.NextCursor is null)
+                    _scopeCursors.TryRemove(scope.Value, out _);
+                else
+                    _scopeCursors[scope.Value] = result.NextCursor;
+            }, cancellationToken);
         }
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+        Logger.LogError(exception,
+            "Workflow alteration orchestration sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
+            consecutiveFailures,
+            backoffInterval);
 
-    private static TimeSpan ComputeInterval(WorkflowAlterationOrchestrationOptions options, int failures)
+    protected override bool IsHandledSweepException(Exception exception) =>
+        exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
+
+    protected override bool ShouldRethrowCancellation(OperationCanceledException exception, CancellationToken cancellationToken) =>
+        cancellationToken.IsCancellationRequested;
+
+    private WorkflowAlterationOrchestrationOptions ValidatedOptions
     {
-        options.Validate();
-        if (failures <= 0)
-            return options.SweepInterval;
-
-        var baseTicks = options.SweepInterval.Ticks;
-        var maxTicks = options.MaxBackoffInterval.Ticks;
-        var multiplier = 1L << Math.Min(failures - 1, 30);
-        return multiplier > maxTicks / baseTicks
-            ? options.MaxBackoffInterval
-            : TimeSpan.FromTicks(Math.Min(maxTicks, baseTicks * multiplier));
+        get
+        {
+            var options = _options.Value;
+            options.Validate();
+            return options;
+        }
     }
 }

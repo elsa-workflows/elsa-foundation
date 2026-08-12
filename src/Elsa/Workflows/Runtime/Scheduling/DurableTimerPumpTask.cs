@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using Elsa.Persistence.Core;
-using Elsa.Tasks.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,15 +16,10 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// Recurring background pump that fires due <see cref="DurableTimer"/>s. Each tick runs one bounded sweep:
 /// it loads at most <see cref="DurableTimerPumpOptions.MaxTimersPerTick"/> due timers and dispatches each
 /// as a bookmark resume through the single-writer <see cref="IBookmarkResumeDispatcher"/> (the same mailbox
-/// path every other resume uses). The pump owns two independent backoff mechanisms so failures degrade
-/// gracefully, mirroring <c>RuntimeResumptionPumpTask</c>.
+/// path every other resume uses). Whole-sweep failure backoff comes from <see cref="BackoffSweepPumpTask"/>;
+/// on top of it the pump parks individually failing timers.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Whole-sweep backoff.</b> A sweep that throws is caught, logged, and never rethrown (so it cannot
-/// crash the host). Consecutive failures widen the schedule interval geometrically up to
-/// <see cref="DurableTimerPumpOptions.MaxBackoffInterval"/>; the first clean sweep resets it.
-/// </para>
 /// <para>
 /// <b>Per-timer backoff.</b> A timer whose dispatch faults or is rejected/deferred is parked for a
 /// geometrically growing window and skipped on subsequent sweeps until eligible again, so a single poisoned
@@ -40,7 +34,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// duplicate fire cannot double-resume.
 /// </para>
 /// </remarks>
-public sealed class DurableTimerPumpTask : IRecurringTask
+public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
 {
     private static readonly PersistenceScope DirectConstructionScope = new(PersistenceScope.DefaultValue);
 
@@ -49,10 +43,8 @@ public sealed class DurableTimerPumpTask : IRecurringTask
     private readonly IBookmarkResumeDispatcher? _dispatcher;
     private readonly IOptions<DurableTimerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<DurableTimerPumpTask> _logger;
     private readonly ConcurrentDictionary<TimerKey, TimerBackoff> _timerBackoff = new();
     private readonly string _claimOwnerId = $"durable-timer-pump:{Guid.NewGuid():N}";
-    private int _consecutiveSweepFailures;
 
     [ActivatorUtilitiesConstructor]
     public DurableTimerPumpTask(
@@ -86,68 +78,53 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         IOptions<DurableTimerPumpOptions> options,
         TimeProvider timeProvider,
         ILogger<DurableTimerPumpTask> logger)
+        : base(logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _options = options;
         _timeProvider = timeProvider;
-        _logger = logger;
         if (_options.Value.ClaimVisibilityTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(options), "Durable timer claim visibility timeout must be greater than zero.");
     }
 
-    /// <summary>
-    /// The interval that will precede the next sweep: <see cref="DurableTimerPumpOptions.SweepInterval"/>
-    /// while healthy, widened geometrically by the current consecutive-failure count up to
-    /// <see cref="DurableTimerPumpOptions.MaxBackoffInterval"/>.
-    /// </summary>
-    public TimeSpan CurrentSweepInterval => ComputeInterval();
+    protected override TimeSpan SweepInterval => _options.Value.SweepInterval;
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override TimeSpan MaxBackoffInterval => _options.Value.MaxBackoffInterval;
+
+    protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
         var options = _options.Value;
         var now = _timeProvider.GetUtcNow();
 
-        try
-        {
-            PruneBackoff(options, now);
+        PruneBackoff(options, now);
 
-            if (_scopeRunner is null)
-            {
-                await SweepAsync(DirectConstructionScope, _timerStore!, _dispatcher!, options, now, cancellationToken);
-            }
-            else
-            {
-                await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
-                {
-                    await SweepAsync(
-                        persistenceScope,
-                        operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
-                        operationScope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>(),
-                        options,
-                        now,
-                        operationCancellationToken);
-                }, cancellationToken);
-            }
-
-            _consecutiveSweepFailures = 0;
-        }
-        catch (OperationCanceledException)
+        if (_scopeRunner is null)
         {
-            throw;
+            await SweepAsync(DirectConstructionScope, _timerStore!, _dispatcher!, options, now, cancellationToken);
         }
-        catch (Exception exception)
+        else
         {
-            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
-            _logger.LogError(
-                exception,
-                "Durable timer sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
-                failures,
-                ComputeInterval());
+            await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
+            {
+                await SweepAsync(
+                    persistenceScope,
+                    operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
+                    operationScope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>(),
+                    options,
+                    now,
+                    operationCancellationToken);
+            }, cancellationToken);
         }
     }
+
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+        Logger.LogError(
+            exception,
+            "Durable timer sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
+            consecutiveFailures,
+            backoffInterval);
 
     private async Task SweepAsync(
         PersistenceScope persistenceScope,
@@ -183,9 +160,9 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 }
             }
 
-            if (claimedDispatches > 0 && _logger.IsEnabled(LogLevel.Debug))
+            if (claimedDispatches > 0 && Logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(
+                Logger.LogDebug(
                     "Durable timer sweep fired {Dispatched}/{DueCount} claimed timer(s)",
                     claimedDispatches,
                     claims.Count);
@@ -208,8 +185,8 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 dispatched++;
         }
 
-        if (dispatched > 0 && _logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Durable timer sweep fired {Dispatched}/{DueCount} due timer(s)", dispatched, due.Count);
+        if (dispatched > 0 && Logger.IsEnabled(LogLevel.Debug))
+            Logger.LogDebug("Durable timer sweep fired {Dispatched}/{DueCount} due timer(s)", dispatched, due.Count);
     }
 
     private async Task<bool> FireClaimedAsync(
@@ -240,7 +217,7 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         }
         catch (RuntimeDurableTimerClaimLostException exception)
         {
-            _logger.LogError(
+            Logger.LogError(
                 exception,
                 "Durable timer '{TimerId}' claim was lost; leaving successor-owned state untouched",
                 claim.Timer.TimerId);
@@ -255,7 +232,7 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 options,
                 now,
                 cancellationToken);
-            _logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; releasing with backoff", claim.Timer.TimerId);
+            Logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; releasing with backoff", claim.Timer.TimerId);
             return false;
         }
 
@@ -277,9 +254,9 @@ public sealed class DurableTimerPumpTask : IRecurringTask
 
             default:
                 await ReleaseAfterFailureAsync(persistenceScope, timerStore, renewal.Current, options, now, cancellationToken);
-                if (_logger.IsEnabled(LogLevel.Debug))
+                if (Logger.IsEnabled(LogLevel.Debug))
                 {
-                    _logger.LogDebug(
+                    Logger.LogDebug(
                         "Durable timer '{TimerId}' dispatch returned {Status}; releasing with backoff",
                         claim.Timer.TimerId,
                         result.Status);
@@ -287,12 +264,6 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 return false;
         }
     }
-
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
 
     // Returns true when the timer was handed to the dispatcher (a real fire), false when it was skipped,
     // kept for retry, or deleted without a dispatch. A per-timer failure never escapes the sweep.
@@ -317,7 +288,7 @@ public sealed class DurableTimerPumpTask : IRecurringTask
         catch (Exception exception)
         {
             BackOff(persistenceScope, timer, options, now);
-            _logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; backing off", timer.TimerId);
+            Logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; backing off", timer.TimerId);
             return false;
         }
 
@@ -344,8 +315,8 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 // Rejected / Deferred / Ambiguous / ResumeResolutionFailed: transient or fault — keep the
                 // timer and back off so a poisoned timer cannot occupy a dispatch slot every tick.
                 BackOff(persistenceScope, timer, options, now);
-                if (_logger.IsEnabled(LogLevel.Debug))
-                    _logger.LogDebug("Durable timer '{TimerId}' dispatch returned {Status}; backing off", timer.TimerId, result.Status);
+                if (Logger.IsEnabled(LogLevel.Debug))
+                    Logger.LogDebug("Durable timer '{TimerId}' dispatch returned {Status}; backing off", timer.TimerId, result.Status);
                 return false;
         }
     }
@@ -523,36 +494,6 @@ public sealed class DurableTimerPumpTask : IRecurringTask
             if (pair.Value.NextEligibleAt <= pruneBefore)
                 _timerBackoff.TryRemove(pair.Key, out _);
         }
-    }
-
-    private TimeSpan ComputeInterval()
-    {
-        var options = _options.Value;
-        var failures = Volatile.Read(ref _consecutiveSweepFailures);
-        return failures <= 0
-            ? options.SweepInterval
-            : ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
-    }
-
-    // Geometric backoff (base * 2^(failures-1)) clamped to maxInterval, guarded against overflow.
-    private static TimeSpan ComputeBackoff(TimeSpan baseInterval, TimeSpan maxInterval, int failures)
-    {
-        var baseTicks = baseInterval.Ticks;
-        var maxTicks = maxInterval.Ticks;
-
-        if (baseTicks <= 0)
-            return maxInterval;
-        if (baseTicks >= maxTicks)
-            return maxInterval;
-
-        var exponent = Math.Min(failures - 1, 30);
-        var multiplier = 1L << exponent;
-
-        if (multiplier > maxTicks / baseTicks)
-            return maxInterval;
-
-        var scaledTicks = baseTicks * multiplier;
-        return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
     }
 
     private readonly record struct TimerKey(PersistenceScope PersistenceScope, string WorkflowExecutionId, string TimerId);

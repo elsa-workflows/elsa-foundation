@@ -1,4 +1,3 @@
-using Elsa.Tasks.Core;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -12,18 +11,13 @@ namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
 /// <summary>
 /// Recurring background pump that drives <see cref="IWorkflowExecutableReferenceGarbageCollector"/> (ADR 0040). Each
-/// tick runs one sweep. A sweep that throws is caught, logged and never rethrown (so it cannot crash the host);
-/// consecutive failures widen the schedule interval geometrically up to
-/// <see cref="WorkflowExecutableReferenceGarbageCollectionOptions.MaxBackoffInterval"/>, and the first clean sweep
-/// resets it — mirroring the resumption and timer pumps.
+/// tick runs one sweep; failure backoff comes from <see cref="BackoffSweepPumpTask"/>.
 /// </summary>
-public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : IRecurringTask
+public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : BackoffSweepPumpTask
 {
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly IWorkflowExecutableReferenceGarbageCollector? _garbageCollector;
     private readonly IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> _options;
-    private readonly ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> _logger;
-    private int _consecutiveSweepFailures;
 
     [ActivatorUtilitiesConstructor]
     public WorkflowExecutableReferenceGarbageCollectionPumpTask(
@@ -51,96 +45,53 @@ public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : IRecu
     private WorkflowExecutableReferenceGarbageCollectionPumpTask(
         IOptions<WorkflowExecutableReferenceGarbageCollectionOptions> options,
         ILogger<WorkflowExecutableReferenceGarbageCollectionPumpTask> logger)
+        : base(logger)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _options = options;
-        _logger = logger;
     }
 
-    /// <summary>The interval that will precede the next sweep: the baseline while healthy, widened geometrically under sustained failure.</summary>
-    public TimeSpan CurrentSweepInterval => ComputeInterval();
+    protected override TimeSpan SweepInterval => _options.Value.SweepInterval;
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override TimeSpan MaxBackoffInterval => _options.Value.MaxBackoffInterval;
+
+    protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
-        try
+        WorkflowExecutableReferenceSweepResult result;
+        if (_scopeRunner is null)
         {
-            WorkflowExecutableReferenceSweepResult result;
-            if (_scopeRunner is null)
+            result = await _garbageCollector!.SweepAsync(cancellationToken);
+        }
+        else
+        {
+            var deletedReferences = 0;
+            var deletedArtifacts = 0;
+            await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
             {
-                result = await _garbageCollector!.SweepAsync(cancellationToken);
-            }
-            else
-            {
-                var deletedReferences = 0;
-                var deletedArtifacts = 0;
-                await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
-                {
-                    var scopeResult = await operationScope.ServiceProvider
-                        .GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>()
-                        .SweepAsync(operationCancellationToken);
-                    deletedReferences += scopeResult.DeletedReferenceCount;
-                    deletedArtifacts += scopeResult.DeletedArtifactCount;
-                }, cancellationToken);
-                result = new WorkflowExecutableReferenceSweepResult(deletedReferences, deletedArtifacts);
-            }
-            _consecutiveSweepFailures = 0;
+                var scopeResult = await operationScope.ServiceProvider
+                    .GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>()
+                    .SweepAsync(operationCancellationToken);
+                deletedReferences += scopeResult.DeletedReferenceCount;
+                deletedArtifacts += scopeResult.DeletedArtifactCount;
+            }, cancellationToken);
+            result = new WorkflowExecutableReferenceSweepResult(deletedReferences, deletedArtifacts);
+        }
 
-            if (result.DidWork && _logger.IsEnabled(LogLevel.Debug))
-                _logger.LogDebug(
-                    "Reference GC sweep removed {ReferenceCount} reference(s) and {ArtifactCount} artifact(s)",
-                    result.DeletedReferenceCount,
-                    result.DeletedArtifactCount);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
-        {
-            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
-            _logger.LogError(
-                exception,
-                "Reference GC sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
-                failures,
-                ComputeInterval());
-        }
+        if (result.DidWork && Logger.IsEnabled(LogLevel.Debug))
+            Logger.LogDebug(
+                "Reference GC sweep removed {ReferenceCount} reference(s) and {ArtifactCount} artifact(s)",
+                result.DeletedReferenceCount,
+                result.DeletedArtifactCount);
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+        Logger.LogError(
+            exception,
+            "Reference GC sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
+            consecutiveFailures,
+            backoffInterval);
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
-
-    private TimeSpan ComputeInterval()
-    {
-        var options = _options.Value;
-        var failures = Volatile.Read(ref _consecutiveSweepFailures);
-        return failures <= 0
-            ? options.SweepInterval
-            : ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
-    }
-
-    // Geometric backoff (base * 2^(failures-1)) clamped to maxInterval, guarded against overflow (mirrors the resumption pump).
-    private static TimeSpan ComputeBackoff(TimeSpan baseInterval, TimeSpan maxInterval, int failures)
-    {
-        var baseTicks = baseInterval.Ticks;
-        var maxTicks = maxInterval.Ticks;
-
-        if (baseTicks <= 0)
-            return maxInterval;
-        if (baseTicks >= maxTicks)
-            return maxInterval;
-
-        var exponent = Math.Min(failures - 1, 30);
-        var multiplier = 1L << exponent;
-
-        if (multiplier > maxTicks / baseTicks)
-            return maxInterval;
-
-        var scaledTicks = baseTicks * multiplier;
-        return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
-    }
+    protected override bool IsHandledSweepException(Exception exception) =>
+        exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
 }

@@ -1,4 +1,3 @@
-using Elsa.Tasks.Core;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -26,7 +25,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// options evaluated against <see cref="TimeProvider"/>; there are no wall-clock literals here. A sweep that throws is
 /// caught, logged, and never rethrown, and consecutive failures widen the schedule interval geometrically.
 /// </remarks>
-public sealed class ExecutionPlacementPumpTask : IRecurringTask
+public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask
 {
     private readonly IWorkflowExecutionActorProvider _actorProvider;
     private readonly IPersistenceScopeRunner? _scopeRunner;
@@ -36,8 +35,6 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
     private readonly IOptions<ExecutionPlacementOptions> _placementOptions;
     private readonly IOptions<ExecutionPlacementPumpOptions> _pumpOptions;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<ExecutionPlacementPumpTask> _logger;
-    private int _consecutiveSweepFailures;
 
     [ActivatorUtilitiesConstructor]
     public ExecutionPlacementPumpTask(
@@ -47,20 +44,19 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         IOptions<ExecutionPlacementPumpOptions> pumpOptions,
         TimeProvider timeProvider,
         ILogger<ExecutionPlacementPumpTask> logger)
+        : base(logger)
     {
         ArgumentNullException.ThrowIfNull(actorProvider);
         ArgumentNullException.ThrowIfNull(scopeRunner);
         ArgumentNullException.ThrowIfNull(placementOptions);
         ArgumentNullException.ThrowIfNull(pumpOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _actorProvider = actorProvider;
         _scopeRunner = scopeRunner;
         _placementOptions = placementOptions;
         _pumpOptions = pumpOptions;
         _timeProvider = timeProvider;
-        _logger = logger;
     }
 
     public ExecutionPlacementPumpTask(
@@ -72,6 +68,7 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         IOptions<ExecutionPlacementPumpOptions> pumpOptions,
         TimeProvider timeProvider,
         ILogger<ExecutionPlacementPumpTask> logger)
+        : base(logger)
     {
         ArgumentNullException.ThrowIfNull(actorProvider);
         ArgumentNullException.ThrowIfNull(placementService);
@@ -80,7 +77,6 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         ArgumentNullException.ThrowIfNull(placementOptions);
         ArgumentNullException.ThrowIfNull(pumpOptions);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _actorProvider = actorProvider;
         _placementService = placementService;
@@ -89,17 +85,17 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         _placementOptions = placementOptions;
         _pumpOptions = pumpOptions;
         _timeProvider = timeProvider;
-        _logger = logger;
     }
 
-    /// <summary>The interval preceding the next sweep, widened geometrically by the consecutive-failure count.</summary>
-    public TimeSpan CurrentSweepInterval => ComputeInterval();
+    protected override TimeSpan SweepInterval => _pumpOptions.Value.SweepInterval;
+
+    protected override TimeSpan MaxBackoffInterval => _pumpOptions.Value.MaxBackoffInterval;
 
     /// <summary>
     /// Runs a single bounded sweep: renew held placements, then claim and drain transport backlog for owned executions.
     /// Public so tests can drive the pump deterministically without the timer.
     /// </summary>
-    public async ValueTask<ExecutionPlacementSweepResult> SweepAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<ExecutionPlacementSweepResult> SweepOnceAsync(CancellationToken cancellationToken = default)
     {
         if (_scopeRunner is null)
             return await SweepAsync(_placementService!, _transport!, _directPartition!, cancellationToken);
@@ -190,29 +186,10 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         return new ExecutionPlacementSweepResult(renewed, claimed, dispatched, acked);
     }
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await SweepAsync(cancellationToken);
-            _consecutiveSweepFailures = 0;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
-            _logger.LogError(exception, "Placement sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}", failures, ComputeInterval());
-        }
-    }
+    protected override async Task SweepAsync(CancellationToken cancellationToken) => await SweepOnceAsync(cancellationToken);
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+        Logger.LogError(exception, "Placement sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}", consecutiveFailures, backoffInterval);
 
     private async ValueTask<WorkflowExecutionCommandDispatchResult> DispatchAsync(
         string executionId,
@@ -232,13 +209,6 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         return await actor.EnqueueAsync(envelope, cancellationToken);
     }
 
-    private TimeSpan ComputeInterval()
-    {
-        var options = _pumpOptions.Value;
-        var failures = Volatile.Read(ref _consecutiveSweepFailures);
-        return failures <= 0 ? options.SweepInterval : ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
-    }
-
     private static ExecutionPlacementSweepResult Add(
         ExecutionPlacementSweepResult left,
         ExecutionPlacementSweepResult right) => new(
@@ -247,26 +217,6 @@ public sealed class ExecutionPlacementPumpTask : IRecurringTask
         left.DispatchedCommandCount + right.DispatchedCommandCount,
         left.AckedCount + right.AckedCount);
 
-    // Geometric backoff (base * 2^(failures-1)) clamped to maxInterval, guarded against overflow.
-    private static TimeSpan ComputeBackoff(TimeSpan baseInterval, TimeSpan maxInterval, int failures)
-    {
-        var baseTicks = baseInterval.Ticks;
-        var maxTicks = maxInterval.Ticks;
-
-        if (baseTicks <= 0)
-            return maxInterval;
-        if (baseTicks >= maxTicks)
-            return maxInterval;
-
-        var exponent = Math.Min(failures - 1, 30);
-        var multiplier = 1L << exponent;
-
-        if (multiplier > maxTicks / baseTicks)
-            return maxInterval;
-
-        var scaledTicks = baseTicks * multiplier;
-        return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
-    }
 }
 
 /// <summary>Per-sweep counters for diagnostics and deterministic tests.</summary>

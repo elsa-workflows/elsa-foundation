@@ -89,8 +89,8 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             "test",
             WorkflowExecutionActorCapabilities.None);
         Assert.NotNull(await actorProvider.GetAgentAsync(activation));
-        await pump.SweepAsync();
-        await pump.SweepAsync();
+        await pump.SweepOnceAsync();
+        await pump.SweepOnceAsync();
     }
 
     [Fact]
@@ -106,8 +106,8 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>());
 
-        await pump.SweepAsync();
-        await pump.SweepAsync();
+        await pump.SweepOnceAsync();
+        await pump.SweepOnceAsync();
 
         Assert.Equal(2, lifecycle.CreatedIds.Count);
         Assert.Equal(2, lifecycle.CreatedIds.Distinct().Count());
@@ -184,7 +184,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>());
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pump.SweepAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pump.SweepOnceAsync().AsTask());
 
         Assert.Equal("A persisted command partition does not match the current persistence scope.", exception.Message);
         Assert.Equal(0, actors.ActivationCount);
@@ -210,7 +210,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             clock,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<ExecutionPlacementPumpTask>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pump.SweepAsync().AsTask());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pump.SweepOnceAsync().AsTask());
 
         Assert.Equal("A persisted command partition does not match the current persistence scope.", exception.Message);
         Assert.Equal(0, actors.ActivationCount);
@@ -232,7 +232,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             await tenantB.ServiceProvider.GetRequiredService<IExecutionPlacementService>().TryClaimAsync("same-execution");
 
         var pump = Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>());
-        var result = await pump.SweepAsync();
+        var result = await pump.SweepOnceAsync();
 
         Assert.Equal(2, result.RenewedCount);
     }

@@ -1,4 +1,3 @@
-using Elsa.Tasks.Core;
 using Elsa.Persistence.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -44,12 +43,12 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// backlog is never replayed.
 /// </para>
 /// <para>
-/// <b>Whole-sweep backoff.</b> A sweep that throws is caught, logged, and never rethrown; consecutive failures
-/// widen the schedule interval geometrically up to <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>,
-/// and the first clean sweep resets it — mirroring the durable-timer pump.
+/// <b>Whole-sweep backoff.</b> Comes from <see cref="BackoffSweepPumpTask"/>: a sweep that throws is caught,
+/// logged, and never rethrown; consecutive failures widen the schedule interval geometrically up to
+/// <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, and the first clean sweep resets it.
 /// </para>
 /// </remarks>
-public sealed class RecurringTriggerPumpTask : IRecurringTask
+public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
 {
     private const string PumpRequestedBy = "runtime.recurring-trigger";
 
@@ -60,8 +59,6 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
     private readonly IRecurringScheduleCalculator? _calculator;
     private readonly IOptions<RecurringTriggerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<RecurringTriggerPumpTask> _logger;
-    private int _consecutiveSweepFailures;
 
     [ActivatorUtilitiesConstructor]
     public RecurringTriggerPumpTask(
@@ -101,61 +98,50 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         IOptions<RecurringTriggerPumpOptions> options,
         TimeProvider timeProvider,
         ILogger<RecurringTriggerPumpTask> logger)
+        : base(logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _options = options;
         _timeProvider = timeProvider;
-        _logger = logger;
     }
 
-    /// <summary>The interval that will precede the next sweep, widened geometrically under sustained failure.</summary>
-    public TimeSpan CurrentSweepInterval => ComputeInterval();
+    protected override TimeSpan SweepInterval => _options.Value.SweepInterval;
 
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override TimeSpan MaxBackoffInterval => _options.Value.MaxBackoffInterval;
+
+    protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
         var options = _options.Value;
         var now = _timeProvider.GetUtcNow();
 
-        try
+        if (_scopeRunner is null)
         {
-            if (_scopeRunner is null)
-            {
-                await SweepAsync(_store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
-            }
-            else
-            {
-                await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
-                {
-                    await SweepAsync(
-                        operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
-                        operationScope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
-                        operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
-                        operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
-                        options,
-                        now,
-                        operationCancellationToken);
-                }, cancellationToken);
-            }
-
-            _consecutiveSweepFailures = 0;
+            await SweepAsync(_store!, _bindingStore!, _router!, _calculator!, options, now, cancellationToken);
         }
-        catch (OperationCanceledException)
+        else
         {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
-            _logger.LogError(
-                exception,
-                "Recurring-trigger sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
-                failures,
-                ComputeInterval());
+            await _scopeRunner.RunAsync(async (_, operationScope, operationCancellationToken) =>
+            {
+                await SweepAsync(
+                    operationScope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>(),
+                    operationScope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>(),
+                    operationScope.ServiceProvider.GetRequiredService<IStimulusRouter>(),
+                    operationScope.ServiceProvider.GetRequiredService<IRecurringScheduleCalculator>(),
+                    options,
+                    now,
+                    operationCancellationToken);
+            }, cancellationToken);
         }
     }
+
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+        Logger.LogError(
+            exception,
+            "Recurring-trigger sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
+            consecutiveFailures,
+            backoffInterval);
 
     private async Task SweepAsync(
         IRecurringTriggerScheduleStore store,
@@ -176,15 +162,9 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
                 fired++;
         }
 
-        if (fired > 0 && _logger.IsEnabled(LogLevel.Debug))
-            _logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} due schedule(s)", fired, due.Count);
+        if (fired > 0 && Logger.IsEnabled(LogLevel.Debug))
+            Logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} due schedule(s)", fired, due.Count);
     }
-
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public ITaskSchedule GetSchedule() => new AdaptiveIntervalSchedule(() => CurrentSweepInterval, _logger);
 
     // Returns true when the schedule's occurrence was claimed and a start dispatched. A per-schedule failure
     // never escapes the sweep.
@@ -205,7 +185,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         catch (Exception exception)
         {
             // A schedule whose expression no longer parses cannot advance; drop it so it does not jam the sweep.
-            _logger.LogError(exception, "Recurring schedule '{ScheduleId}' has an invalid expression; deleting it", schedule.ScheduleId);
+            Logger.LogError(exception, "Recurring schedule '{ScheduleId}' has an invalid expression; deleting it", schedule.ScheduleId);
             await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
             return false;
         }
@@ -232,7 +212,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
             {
                 // Index drift (e.g. mid-republish): the occurrence stays claimed by the at-most-once contract, and
                 // the next occurrence fires against the refreshed index.
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Recurring schedule '{ScheduleId}' fired but no trigger binding is owned by artifact '{ArtifactId}' node '{ExecutableNodeId}'; occurrence dropped",
                     schedule.ScheduleId,
                     schedule.ArtifactId,
@@ -259,7 +239,7 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
         {
             // The occurrence was already claimed (cursor advanced), so this fire is lost by the at-most-once
             // contract; the next occurrence will still fire. Log and move on rather than replay.
-            _logger.LogError(exception, "Recurring schedule '{ScheduleId}' start dispatch threw after claim; occurrence dropped", schedule.ScheduleId);
+            Logger.LogError(exception, "Recurring schedule '{ScheduleId}' start dispatch threw after claim; occurrence dropped", schedule.ScheduleId);
             return false;
         }
     }
@@ -280,35 +260,5 @@ public sealed class RecurringTriggerPumpTask : IRecurringTask
                 StringComparer.Ordinal.Equals(binding.PublicationId, schedule.PublicationId) &&
                 StringComparer.Ordinal.Equals(binding.SlotId, schedule.SlotId))
             .ToArray();
-    }
-
-    private TimeSpan ComputeInterval()
-    {
-        var options = _options.Value;
-        var failures = Volatile.Read(ref _consecutiveSweepFailures);
-        return failures <= 0
-            ? options.SweepInterval
-            : ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
-    }
-
-    // Geometric backoff (base * 2^(failures-1)) clamped to maxInterval, guarded against overflow.
-    private static TimeSpan ComputeBackoff(TimeSpan baseInterval, TimeSpan maxInterval, int failures)
-    {
-        var baseTicks = baseInterval.Ticks;
-        var maxTicks = maxInterval.Ticks;
-
-        if (baseTicks <= 0)
-            return maxInterval;
-        if (baseTicks >= maxTicks)
-            return maxInterval;
-
-        var exponent = Math.Min(failures - 1, 30);
-        var multiplier = 1L << exponent;
-
-        if (multiplier > maxTicks / baseTicks)
-            return maxInterval;
-
-        var scaledTicks = baseTicks * multiplier;
-        return scaledTicks >= maxTicks ? maxInterval : TimeSpan.FromTicks(scaledTicks);
     }
 }
