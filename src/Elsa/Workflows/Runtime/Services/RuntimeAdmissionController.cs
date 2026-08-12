@@ -73,9 +73,14 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         var limit = Limit;
 
         // The two exemptions are decided before the limit is consulted at all, so neither can be turned into a
-        // refusal by a concurrent burst.
+        // refusal by a concurrent burst. The load is read before the charge is opened so ObservedLoad means the same
+        // thing on both paths — the pre-reservation load — and an exempt command's own seeded unit cannot tip its
+        // completion sample into the saturated band.
         if (!_options.Enabled || _loadSignal.HasAmbientCharge)
-            return Admit(_loadSignal.OpenCharge(), _loadSignal.InFlightDispatches, limit);
+        {
+            var observedLoad = _loadSignal.InFlightDispatches;
+            return Admit(_loadSignal.OpenCharge(), observedLoad, limit);
+        }
 
         // One atomic compare-and-reserve, not a read followed by a reserve. Two operations would let N callers
         // arriving together all observe the same below-limit load and all pass, which is the burst the limiter exists

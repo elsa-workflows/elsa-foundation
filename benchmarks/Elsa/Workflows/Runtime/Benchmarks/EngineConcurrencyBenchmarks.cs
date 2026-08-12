@@ -369,6 +369,13 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         AdmissionResult? on;
         try
         {
+            // Discarded warm-up, one run per arm. Each theory case may be the first admission measurement in the
+            // process, and without this the OFF arm — which runs first — absorbs first-call JIT and SQLite provider
+            // initialization that the ON arm never pays, which confounds the A/B exactly at the low-N baseline the
+            // shape is read against.
+            await MeasureAdmissionSafelyAsync(concurrency: 1, admissionEnabled: false, stage: "warm-up");
+            await MeasureAdmissionSafelyAsync(concurrency: 1, admissionEnabled: true, stage: "warm-up");
+
             off = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: false);
             on = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: true);
         }
@@ -407,7 +414,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
     /// diagnosability cost is paid by recording <c>exception.GetType().Name</c> below, so an unexpected exception is
     /// visible as itself rather than silently absorbed and a harness bug stays distinguishable from a lease fault.</para>
     /// </summary>
-    private async Task<AdmissionResult?> MeasureAdmissionSafelyAsync(int concurrency, bool admissionEnabled)
+    private async Task<AdmissionResult?> MeasureAdmissionSafelyAsync(int concurrency, bool admissionEnabled, string stage = "measure")
     {
         try
         {
@@ -415,7 +422,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         }
         catch (Exception exception)
         {
-            output.WriteLine($"{concurrency,4} | admission={admissionEnabled} FAULTED — {exception.GetType().Name}: {exception.Message}");
+            output.WriteLine($"{concurrency,4} | admission={admissionEnabled} [{stage}] FAULTED — {exception.GetType().Name}: {exception.Message}");
             return null;
         }
     }

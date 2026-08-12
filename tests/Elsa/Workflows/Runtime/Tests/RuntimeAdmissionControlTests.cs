@@ -74,6 +74,24 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
+    public void TryAdmit_ReportsThePreReservationLoadOnTheExemptPath()
+    {
+        // Uses the REAL load signal because the pin is an evaluation-order fact the stub cannot see: with a parent's
+        // ambient charge holding one unit, the exempt path must report ObservedLoad = 1 (the load before its own
+        // charge opened), matching what the gated path's compare-and-reserve reports. Reading the load after opening
+        // — the one-liner shape `Admit(OpenCharge(), InFlightDispatches, ...)` evaluates left to right — reports 2
+        // and lets a nested command's own seeded unit tip its completion sample into the saturated band.
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+        using var parentCharge = signal.OpenCharge();
+        var controller = new RuntimeAdmissionController(signal);
+
+        using var decision = controller.TryAdmit();
+
+        Assert.True(decision.IsAdmitted);
+        Assert.Equal(1, decision.ObservedLoad);
+    }
+
+    [Fact]
     public void TryAdmit_AdmitsAtCapacityWhenSheddingIsDisabled()
     {
         // The kill switch stops the refusal, not the evaluation: the decision is still counted, so an operator who
@@ -365,11 +383,57 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
     }
 
+    // The single source of truth for which kinds bypass the admission gate, shared by both theories below so the
+    // gated list and the exempt list cannot drift apart.
+    private static readonly WorkflowExecutionCommandKind[] AdmissionExemptKinds =
+    [
+        WorkflowExecutionCommandKind.RunSchedulerWork,
+        WorkflowExecutionCommandKind.Cancel,
+        WorkflowExecutionCommandKind.PauseWorkflowExecution,
+        WorkflowExecutionCommandKind.UnpauseWorkflowExecution
+    ];
+
+    public static TheoryData<WorkflowExecutionCommandKind> ExemptCommandKinds()
+    {
+        var data = new TheoryData<WorkflowExecutionCommandKind>();
+        foreach (var kind in AdmissionExemptKinds)
+            data.Add(kind);
+        return data;
+    }
+
+    public static TheoryData<WorkflowExecutionCommandKind> GatedCommandKinds()
+    {
+        // Computed from the enum rather than listed, so a kind added later defaults into the gated assertion — the
+        // safe direction for a deny-list exemption — and widening IsSubjectToAdmission's exemption set by even one
+        // kind goes red here until this test names it deliberately.
+        var data = new TheoryData<WorkflowExecutionCommandKind>();
+        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>()
+                     .Except(AdmissionExemptKinds)
+                     // Routed to the alteration executor above the gate. NOT load-gated there: alterations have a
+                     // plan-registration admission, not a load bound. Tracked as a composition gap in #1320.
+                     .Where(kind => kind != WorkflowExecutionCommandKind.AlterWorkflow))
+            data.Add(kind);
+        return data;
+    }
+
     [Theory]
-    [InlineData(WorkflowExecutionCommandKind.RunSchedulerWork)]
-    [InlineData(WorkflowExecutionCommandKind.Cancel)]
-    [InlineData(WorkflowExecutionCommandKind.PauseWorkflowExecution)]
-    [InlineData(WorkflowExecutionCommandKind.UnpauseWorkflowExecution)]
+    [MemberData(nameof(GatedCommandKinds))]
+    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = NewRouter(queue, AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(kind));
+
+        Assert.True(result.Shed);
+        Assert.False(result.DrainPerformed);
+        var expectQueued = kind != WorkflowExecutionCommandKind.Start;
+        Assert.Equal(expectQueued, result.ShedWorkQueued);
+        Assert.Equal(expectQueued ? 1 : 0, (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExemptCommandKinds))]
     public async Task Router_NeverShedsRecoveryOrControlPlaneCommands(WorkflowExecutionCommandKind kind)
     {
         // RunSchedulerWork is the resumption sweep re-driving a backlog that is ALREADY queued, so shedding it would
