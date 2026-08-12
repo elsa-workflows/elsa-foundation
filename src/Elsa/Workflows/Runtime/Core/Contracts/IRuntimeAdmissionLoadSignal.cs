@@ -26,8 +26,22 @@ public interface IRuntimeAdmissionLoadSignal
     bool HasAmbientCharge { get; }
 
     /// <summary>
-    /// Opens the charge for one admitted command and makes it the ambient charge for the calling flow. Disposing it
-    /// releases the units it accumulated and restores the previous ambient charge.
+    /// Compares the in-flight load against <paramref name="limit"/> and opens a charge <b>only if</b> it is below,
+    /// as one atomic operation. Returns null when the reservation was refused; <paramref name="observedLoad"/>
+    /// always reports the load the decision was made on.
+    /// </summary>
+    /// <remarks>
+    /// Check and reserve must not be two operations. Read the load, then reserve, and N callers arriving together all
+    /// read the same below-limit value, all pass, and all reserve — so an arbitrarily large burst walks through a
+    /// limiter that exists precisely to stop bursts. The race is worst exactly when the limiter matters most, which
+    /// is why the compare-and-increment lives here, next to the counter it protects, rather than in the controller.
+    /// </remarks>
+    IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad);
+
+    /// <summary>
+    /// Opens a charge unconditionally, for the paths the controller has already decided are not subject to the limit
+    /// (shedding disabled, or a command dispatched from inside an admitted one). Disposing it releases the units it
+    /// accumulated and restores the previous ambient charge.
     /// </summary>
     IRuntimeAdmissionCharge OpenCharge();
 

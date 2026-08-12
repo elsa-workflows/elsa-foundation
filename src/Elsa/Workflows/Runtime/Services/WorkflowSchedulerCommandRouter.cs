@@ -86,15 +86,17 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         //
         // The two refusal shapes follow from what the caller can correlate against. A start has no execution id to
         // hand back, so it is refused outright and nothing durable is written; the HTTP edge renders that as 429 with
-        // Retry-After. Every other kind already names a live execution, so the work item IS queued and only the drain
-        // is skipped: the resumption sweep re-drives it, which is what makes Deferred a promise rather than a drop.
-        using var admission = _admissionController?.TryAdmit();
+        // Retry-After. Every other gated kind already names a live execution, so the work item IS queued and only the
+        // drain is skipped: the resumption sweep re-drives it, which is what makes Deferred a promise rather than a
+        // drop.
+        using var admission = IsSubjectToAdmission(envelope.Command.Kind) ? _admissionController?.TryAdmit() : null;
         if (admission is { IsAdmitted: false })
         {
-            if (envelope.Command.Kind != WorkflowExecutionCommandKind.Start)
+            var queued = envelope.Command.Kind != WorkflowExecutionCommandKind.Start;
+            if (queued)
                 await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
 
-            return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter);
+            return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter, queued);
         }
 
         workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
@@ -137,6 +139,29 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             }
         }
     }
+
+    /// <summary>
+    /// Whether a command kind is <b>live work arriving at the host</b>, and so subject to admission control.
+    /// Admission bounds the door; it must not be applied to the runtime recovering work it already accepted, nor to
+    /// the commands an operator uses to reduce load.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>RunSchedulerWork</c> is the resumption sweep's re-drive envelope, and the backlog it names is already
+    /// in the durable queue. Gating it would make every sweep pass at capacity enqueue one more trigger for work that
+    /// is already queued, so sustained load would grow the backlog the sweep exists to drain — the same accumulation
+    /// shape <c>RuntimeResumptionService</c> already documents for the terminal guard. The sweep carries its own
+    /// bound (<c>RuntimeResumptionOptions.MaxExecutionsPerSweep</c>), which is the mechanism this one was ported
+    /// from; it does not need a second one.</para>
+    /// <para>Cancel, pause, and unpause are control-plane commands whose effect is to <em>reduce</em> load. Refusing
+    /// an operator's cancel during overload would take away the tool for ending the overload, and they schedule
+    /// almost no work themselves. <c>AlterWorkflow</c> never reaches here — it returns above, through its own
+    /// admission gate.</para>
+    /// </remarks>
+    private static bool IsSubjectToAdmission(WorkflowExecutionCommandKind kind) => kind is not (
+        WorkflowExecutionCommandKind.RunSchedulerWork or
+        WorkflowExecutionCommandKind.Cancel or
+        WorkflowExecutionCommandKind.PauseWorkflowExecution or
+        WorkflowExecutionCommandKind.UnpauseWorkflowExecution);
 
     private async ValueTask<string?> ResolveExecutionScopeIdAsync(
         WorkflowExecutionCommandEnvelope envelope,

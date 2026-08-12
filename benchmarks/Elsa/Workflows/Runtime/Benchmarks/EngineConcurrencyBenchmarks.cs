@@ -346,39 +346,45 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
     /// <c>Deferred</c>, not <c>Accepted</c>), and the caller waits Retry-After and retries, which is what a 429
     /// contract asks of it. Retry-After is shortened to 25 ms here so the retry sleep does not dominate a reading
     /// taken over a few seconds; a real deployment would use the default.</para>
+    ///
+    /// <para>ONE LEVEL PER TEST CASE, not one sweep. <c>ITestOutputHelper</c> only surfaces a test's lines once that
+    /// test returns, so a single-fact sweep over every N reports nothing at all until the slowest level finishes —
+    /// and the OFF arm at high N is precisely the level that can take tens of minutes or fault. A theory case per
+    /// level means each row lands as it is measured and a level that has to be abandoned costs only itself. Both arms
+    /// of a level still run back-to-back inside one case, which is what keeps the A/B readable under load drift.</para>
     /// </summary>
-    [Fact]
-    public async Task ConcurrencyScalingCurve_AdmissionControl()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(8)]
+    [InlineData(32)]
+    [InlineData(128)]
+    public async Task ConcurrencyScalingCurve_AdmissionControl(int concurrency)
     {
         output.WriteLine($"machine uptime/load at start: {ReadUptime()}");
         output.WriteLine($"processor count: {Environment.ProcessorCount}");
 
         var stdout = Console.Out;
         Console.SetOut(TextWriter.Null);
+        AdmissionResult? off;
+        AdmissionResult? on;
         try
         {
-            await MeasureAdmissionAsync(concurrency: 8, admissionEnabled: false);
-            await MeasureAdmissionAsync(concurrency: 8, admissionEnabled: true);
-
-            output.WriteLine($"=== shared-sqlite · External CLR leaf · hot-loop×{HotLoopLength} · Coalesced · admission A/B ===");
-            output.WriteLine("Read the throughput columns as a SHAPE: OFF should fall (or fault) past a threshold, ON should plateau.");
-            output.WriteLine("N | OFF wall(ms) | OFF thr | ON wall(ms) | ON thr | admitted | shed | retries | finalLimit");
-            foreach (var concurrency in ConcurrencyLevels)
-            {
-                var off = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: false);
-                var on = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: true);
-                output.WriteLine(
-                    $"{concurrency,4} | {Format(off?.TotalWallMs),11} | {Format(Throughput(off, concurrency)),7} | " +
-                    $"{Format(on?.TotalWallMs),10} | {Format(Throughput(on, concurrency)),6} | " +
-                    $"{on?.Admitted.ToString() ?? "-",8} | {on?.Shed.ToString() ?? "-",4} | {on?.Retries.ToString() ?? "-",7} | " +
-                    $"{Format(on?.FinalLimit),10}");
-            }
+            off = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: false);
+            on = await MeasureAdmissionSafelyAsync(concurrency, admissionEnabled: true);
         }
         finally
         {
             Console.SetOut(stdout);
         }
 
+        output.WriteLine($"=== shared-sqlite · External CLR leaf · hot-loop×{HotLoopLength} · Coalesced · admission A/B ===");
+        output.WriteLine("Read the throughput columns as a SHAPE: OFF should fall (or fault) past a threshold, ON should plateau.");
+        output.WriteLine("N | OFF wall(ms) | OFF thr | ON wall(ms) | ON thr | admitted | shed | retries | finalLimit");
+        output.WriteLine(
+            $"{concurrency,4} | {Format(off?.TotalWallMs),11} | {Format(Throughput(off, concurrency)),7} | " +
+            $"{Format(on?.TotalWallMs),10} | {Format(Throughput(on, concurrency)),6} | " +
+            $"{on?.Admitted.ToString() ?? "-",8} | {on?.Shed.ToString() ?? "-",4} | {on?.Retries.ToString() ?? "-",7} | " +
+            $"{Format(on?.FinalLimit),10}");
         output.WriteLine($"machine uptime/load at end: {ReadUptime()}");
 
         static double? Throughput(AdmissionResult? result, int concurrency) =>
@@ -388,9 +394,18 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Runs one admission A/B cell, recording a FAULTED level rather than losing the rest of the sweep with it. The
+    /// Runs one admission A/B cell, recording a FAULTED arm rather than losing the level's comparison with it. The
     /// OFF arm is expected to fault at high N — that is the congestion collapse this unit exists to replace — so
-    /// aborting on it would throw away exactly the comparison the table is for.
+    /// aborting on it would throw away exactly the comparison the row is for.
+    ///
+    /// <para>The catch is deliberately BROAD and must stay that way. The observed fault is a different exception type
+    /// per backend — <c>RuntimeSchedulerWorkClaimLostException</c> (in-memory),
+    /// <c>RuntimeStaleFencingTokenException</c> (isolated SQLite), <c>RuntimeExecutionOwnershipLostException</c>
+    /// (shared SQLite) — and none of them is an <c>InvalidOperationException</c> or a <c>TimeoutException</c>, so
+    /// narrowing to the types that look plausible would catch none of the ones that actually occur and the OFF arm
+    /// would abort. Which type surfaces is not fixed either: the threshold moves with ambient host load. The
+    /// diagnosability cost is paid by recording <c>exception.GetType().Name</c> below, so an unexpected exception is
+    /// visible as itself rather than silently absorbed and a harness bug stays distinguishable from a lease fault.</para>
     /// </summary>
     private async Task<AdmissionResult?> MeasureAdmissionSafelyAsync(int concurrency, bool admissionEnabled)
     {
