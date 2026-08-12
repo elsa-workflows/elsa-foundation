@@ -210,6 +210,31 @@ Versions live in the Groundwork **envelope** `SchemaVersion` field (already pers
 
 Groundwork checkpoint commits keep the child Completed projection, policy-safe output snapshot, and deterministic parent-resume outbox item in the same admitted transaction. Effective-final child-start delivery checks deterministic child-execution visibility and then either acknowledges the already-admitted child or commits the failed-final dead letter, safe `DispatchFailed` projection, and optional wait-parent resume together. Fire-and-forget redrive uses one cross-unit transaction over the existing dispatch and outbox document kinds; no new persisted kind or index is introduced. Restart tests recreate runtime services around checkpoint, claim, exhaustion, redrive, acknowledgement, and bookmark-consumption boundaries to prove claim expiry and uncertain acknowledgement converge without leaking redacted values.
 
+## Writing a Groundwork persistence shell feature (`GroundworkPersistenceShellFeatureBase`)
+
+The nine Groundwork persistence shell features share their manifest-setting surface through three abstract
+bases in `Elsa.Persistence.Groundwork`, so the wording and defaults of the shared settings cannot drift
+between providers. A new provider or host feature derives from the narrowest fitting base:
+
+- **`GroundworkPersistenceShellFeatureBase`** — the root. Supplies the workflow-executable cache settings
+  (`CacheWorkflowExecutables`, `WorkflowExecutableCacheCapacity`), the protected
+  `CreateWorkflowExecutableCacheOptions()` factory that turns them into `WorkflowExecutableCacheOptions`,
+  and the protected `ValueOrDefault(configured, fallback)` helper for connection-string fallbacks.
+  `ConfigureServices` is abstract; the derived feature owns its registration order.
+- **`GroundworkRuntimePersistenceShellFeatureBase`** — for per-provider runtime-lane features
+  (SQLite / PostgreSQL / SQL Server / MongoDB). Adds the runtime-lane `AutoApplySchemaOnStartup`.
+- **`GroundworkUnifiedPersistenceShellFeatureBase`** — for per-provider unified features. Adds the
+  unified-lane `AutoApplySchemaOnStartup` (its description also covers diagnostic-record streams) and the
+  `ShellFeatureContext` constructor plumbing, exposed as the protected `Context` property.
+
+Provider-specific settings (connection string, MongoDB's `DatabaseName`, SQLite's access-bound store cache)
+stay on the concrete feature. The unified base lives here rather than in
+`Elsa.Persistence.Groundwork.Unified` because that project deliberately keeps a single project reference.
+
+> §E6 R1 naming exception (recorded): the two derived base names run over the four-component budget on
+> purpose, to stay parallel with the nine concrete `<Provider>Groundwork<Lane>PersistenceShellFeature`
+> names that predate the rule.
+
 ## Cross-references
 
 - Serialization rule and schema-evolution contract: [`../../../../docs/serialization.md`](../../../../docs/serialization.md)
