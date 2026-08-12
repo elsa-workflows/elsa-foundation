@@ -22,8 +22,10 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.Tests;
 /// Pass <c>fileDataSource</c> to bind a real on-disk database instead. The shared-cache in-memory
 /// default cannot outlive <see cref="Dispose"/>, so a differential that compares this store against a
 /// file-backed provider would compare a volatile store against a durable one and report agreement on
-/// every restart assertion. The #646 diagnostics workload requires
-/// <c>file-backed-distinct-connections-with-retained-ef-oracle</c> for exactly that reason.
+/// every restart assertion. The #646 diagnostics workload requires the
+/// <c>file-backed-distinct-connections</c> SQLite topology for exactly that reason; that the retained EF
+/// oracle is the SQLite comparand is recorded by the workload's <c>correctness.timingGate</c>, which is
+/// where the gate regime belongs rather than inside a topology identifier.
 /// </remarks>
 internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsDbContext>, IDisposable
 {

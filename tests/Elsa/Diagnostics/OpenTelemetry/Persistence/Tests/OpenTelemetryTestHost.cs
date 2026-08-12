@@ -37,8 +37,10 @@ internal sealed class OpenTelemetryTestHost : IDbContextFactory<OpenTelemetryDbC
     /// Pass <paramref name="fileDataSource"/> to bind a real on-disk database instead of the
     /// shared-cache in-memory default. The default cannot outlive <see cref="Dispose"/>, so the #646
     /// differential would otherwise compare a volatile EF store against a file-backed Groundwork one and
-    /// report agreement on every restart assertion. The diagnostics workload contract requires
-    /// <c>file-backed-distinct-connections-with-retained-ef-oracle</c> for exactly that reason.
+    /// report agreement on every restart assertion. The diagnostics workload contract requires the
+    /// <c>file-backed-distinct-connections</c> SQLite topology for exactly that reason; that the retained
+    /// EF oracle is the SQLite comparand is recorded by the workload's <c>correctness.timingGate</c>,
+    /// which is where the gate regime belongs rather than inside a topology identifier.
     /// </summary>
     public static OpenTelemetryTestHost Create(string? fileDataSource = null)
     {

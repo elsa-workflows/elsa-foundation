@@ -10,5 +10,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj" />
+    <!-- Explicit rather than transitive through the adapter host: the topology-agreement test's whole
+         purpose is to bind the workload catalog to this exact vocabulary, so the dependency it rests on
+         should not be something a reference change elsewhere can quietly remove. -->
+    <ProjectReference Include="../../../../Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 </Project>

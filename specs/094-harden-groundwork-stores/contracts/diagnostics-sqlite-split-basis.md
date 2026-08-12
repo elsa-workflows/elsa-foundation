@@ -37,18 +37,22 @@ providers that have **no oracle to lose**.
 
 ## The core insight
 
-The contract already distinguishes the two evidence regimes, per provider, in
-`requiredProviderEvidence`:
+> **Correction (2026-08-11).** This section originally cited the four `requiredProviderEvidence` values,
+> which then carried `-with-retained-ef-oracle` / `-with-absolute-operational-budget` suffixes. Those
+> suffixes were a **defect**, not a design: the field is consumed as a driver topology identifier, and no
+> driver could report those strings — see
+> [`diagnostics-provider-topology-basis.md`](diagnostics-provider-topology-basis.md). They have been
+> corrected to the catalog topologies. The insight below survives, but its evidence is a different field.
 
-| Provider | Declared evidence kind |
-|---|---|
-| `sqlite` | `file-backed-distinct-connections-with-retained-ef-oracle` |
-| `sqlserver` | `real-sqlserver-container-with-absolute-operational-budget` |
-| `postgresql` | `real-postgresql-container-with-absolute-operational-budget` |
-| `mongodb` | `transaction-capable-replica-set-with-absolute-operational-budget` |
+The contract already distinguishes the two evidence regimes, per provider — in the workload's
+`correctness.timingGate`:
 
-SQLite's evidence kind does not mention an absolute budget. The other three name it explicitly. **The
-contract already knows these are two different obligations; only the admission gate treats them as one.**
+> SQLite compares the retained same-provider EF oracle. SQL Server, PostgreSQL, and MongoDB require
+> independently reviewed numeric absolute budgets plus an executable absolute-budget gate; neither exists
+> yet.
+
+One provider has a comparand; three do not and need budgets instead. **The contract already knows these
+are two different obligations; only the admission gate treats them as one.**
 
 ## The proposal
 
@@ -143,7 +147,7 @@ The block is enforced at four layers, all reading one code-owned switch, and the
 |---:|---|---|---|
 | 1 | `specs/094-harden-groundwork-stores/workloads/diagnostics.json` | `requiredProviders` → `["sqlite"]`; `benchmarkAdmission` → `ready` / `benchmark.ready`. Keep seed, all four `requiredProviderEvidence` keys, both `coverageRows`, and (recommended) `version`. | — |
 | 2 | `Contracts/WorkloadCatalog.cs:91-92` | The all-four-in-contract-order requirement becomes per-workload. | `"must require SQLite, SQL Server, PostgreSQL, and MongoDB in contract order"` |
-| 3 | `Contracts/WorkloadCatalog.cs:290-295` | `ExpectedSourceDigests["diagnostics.json"]` → new `sha256sum`. | `"does not match the frozen Spec 094 #646 source contract"` |
+| 3 | `Contracts/WorkloadCatalog.cs:290-295` | `ExpectedSourceDigests["diagnostics.json"]` → new `sha256sum`. **Recompute at the time of the edit:** the provider-topology correction already moved this pin once, to `fb2c8de1…00286a`, so the value in this table's sibling documents is not the one to copy. | `"does not match the frozen Spec 094 #646 source contract"` |
 | 4 | `Workloads/ReproducibleWorkloadScenarioCatalog.cs:61-70` | Remove `DiagnosticsWorkloadId` from `TryGetBlockedReason`. This is the single source all four layers consult. | Workload stays blocked at catalog, matrix, comparison and gate |
 | 5 | `Harness/ArtifactsAndMatrix.cs:609`, `:622` | No edit expected — both delegate to #4. Verify, do not duplicate the switch. | Silent second source of truth |
 | 6 | `Harness/Gates.cs:90` | No edit expected — delegates to #4. Verify. | as above |
