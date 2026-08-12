@@ -16,7 +16,8 @@ public sealed record WorkflowExecutionCommandProcessResult(
     string? FaultReason,
     bool WorkflowTerminated = false,
     bool Shed = false,
-    TimeSpan? RetryAfter = null)
+    TimeSpan? RetryAfter = null,
+    bool ShedWorkQueued = false)
 {
     /// <summary>
     /// The command was enqueued but no drain was performed (the drain policy returned no request). There is no fault verdict.
@@ -65,7 +66,12 @@ public sealed record WorkflowExecutionCommandProcessResult(
     /// not a fault: nothing went wrong with the command, the host declined to take it now. It is also deliberately not
     /// success, so a caller pattern-matching on acceptance cannot read a refusal as work done.
     /// </summary>
-    public static WorkflowExecutionCommandProcessResult FromShed(string reason, TimeSpan? retryAfter) =>
+    /// <param name="workQueued">
+    /// Whether the refusal still left the work item durably queued. It separates the two refusals: a start writes
+    /// nothing and is genuinely retryable, while any other kind is parked for the resumption sweep and has therefore
+    /// consumed its idempotency key. Callers that dedup on that key need to tell them apart.
+    /// </param>
+    public static WorkflowExecutionCommandProcessResult FromShed(string reason, TimeSpan? retryAfter, bool workQueued) =>
         new(
             DrainPerformed: false,
             StopReason: null,
@@ -73,7 +79,8 @@ public sealed record WorkflowExecutionCommandProcessResult(
             OutboxDeliveryFailed: false,
             FaultReason: reason,
             Shed: true,
-            RetryAfter: retryAfter);
+            RetryAfter: retryAfter,
+            ShedWorkQueued: workQueued);
 
     /// <summary>
     /// A completed drain that ended by committing a terminal workflow status without faulting. Test/support factory for
