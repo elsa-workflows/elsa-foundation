@@ -231,7 +231,7 @@ public sealed class WorkflowDefinitionLifecycleContractTests
         AssertCommandFailureStatusAsync(
             "Definitions.DeletePermanently",
             new DeleteDefinitionPermanently("delete-unverifiable", "definition-unverifiable"),
-            new WorkflowDefinitionPermanentDeletionUnavailableException("definition-unverifiable"),
+            new PermanentDeletionUnavailableException("definition-unverifiable"),
             StatusCodes.Status501NotImplemented);
 
     [Fact]

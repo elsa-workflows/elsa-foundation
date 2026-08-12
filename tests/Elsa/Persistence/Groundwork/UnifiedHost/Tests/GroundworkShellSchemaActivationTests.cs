@@ -37,7 +37,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Identity_feature_selects_and_admits_the_identity_schema_through_real_shell_activation()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await ApplySchemaAsync<GroundworkAllFeaturesWithIdentityDeploymentSchema>(database.ConnectionString);
         await using var root = BuildRoot(database.ConnectionString, includeIdentity: true);
 
@@ -53,7 +53,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Bare_provider_shell_selects_and_admits_the_default_schema_without_identity()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await ApplySchemaAsync<GroundworkAllFeaturesDeploymentSchema>(database.ConnectionString);
         await using var root = BuildRoot(database.ConnectionString, includeIdentity: false);
 
@@ -69,7 +69,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Diagnostics_feature_auto_applies_fresh_streams_and_activates_both_Groundwork_stores_without_an_EF_store()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await using var root = BuildRoot(
             database.ConnectionString,
             includeIdentity: false,
@@ -101,7 +101,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Diagnostics_feature_with_auto_apply_disabled_fails_when_streams_are_missing()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await ApplySchemaAsync<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(database.ConnectionString);
         await using var root = BuildRoot(
             database.ConnectionString,
@@ -118,7 +118,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Diagnostics_feature_auto_apply_is_idempotent_across_shell_restarts()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
 
         await ActivateDiagnosticsAsync(database.ConnectionString);
         await ActivateDiagnosticsAsync(database.ConnectionString);
@@ -132,7 +132,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Diagnostics_feature_auto_apply_rejects_drift_before_creating_missing_streams()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         var deployment = new GroundworkAllFeaturesWithDiagnosticsDeploymentSchema().CreateDeploymentManifest();
         var expected = deployment.Streams[0];
         var drifted = expected with { SchemaVersion = expected.SchemaVersion + 1 };
@@ -159,7 +159,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Identity_shell_fails_readiness_when_only_the_default_schema_was_applied()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await ApplySchemaAsync<GroundworkAllFeaturesDeploymentSchema>(database.ConnectionString);
         await using var root = BuildRoot(database.ConnectionString, includeIdentity: true);
 
@@ -174,7 +174,7 @@ public sealed class GroundworkShellSchemaActivationTests
     [Fact]
     public async Task Skip_if_current_stamps_the_first_activation_and_skips_the_walk_on_the_second()
     {
-        await using var database = new TemporarySqliteDatabase();
+        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
 
         // First activation against a fresh database: auto-apply admits and records the applied-plan stamp.
         var firstLog = new CapturingLoggerProvider();

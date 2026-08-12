@@ -931,12 +931,56 @@ public class GroundworkWorkflowDefinitionCommandTests
             _accessContext,
             [guard]);
 
-        var exception = await Assert.ThrowsAsync<WorkflowDefinitionPermanentDeletionUnavailableException>(() =>
+        var exception = await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
             delete.Execute(NextKey(), "definition-unverifiable", CancellationToken.None));
 
         Assert.Equal("definition-unverifiable", exception.DefinitionId);
         Assert.Null(guard.SeenDefinitionId);
         Assert.NotNull(await definitions.FindByIdAsync("definition-unverifiable"));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_refuses_when_no_guard_collection_is_supplied_at_all()
+    {
+        // The guards parameter is optional; a composition that supplies nothing must land on the same refusal as one
+        // that supplies only non-publication vetoes, not on accidental permission.
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
+            delete.Execute(NextKey(), "definition-any", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_replays_a_committed_delete_on_a_host_that_cannot_perform_one()
+    {
+        // Idempotent replay must survive the composition gate: a client whose delete committed on a
+        // publishing-composed node can have its timeout retry land on a design-only node, and that retry must replay
+        // the committed operation marker to success rather than refuse an operation that already happened. This pins
+        // the refusal INSIDE the atomic writer's beforeAttempt, behind the marker replay lookup.
+        await MaterializeDefinition(new WorkflowDefinition { Id = "definition-replayed", Name = "Delete me", DeletedAt = _clock.UtcNow });
+        var operationKey = NextKey();
+        await PermanentDeleteCommand().Execute(operationKey, "definition-replayed", CancellationToken.None);
+        var designOnly = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        await designOnly.Execute(operationKey, "definition-replayed", CancellationToken.None);
+
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-replayed"));
     }
 
     [Fact]

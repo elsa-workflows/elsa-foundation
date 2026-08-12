@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 /// held by another node against the same design catalog, which is unrecoverable, so the operation is refused
 /// outright rather than attempted.
 /// </summary>
-public sealed class WorkflowDefinitionPermanentDeletionUnavailableException(string definitionId)
+public sealed class PermanentDeletionUnavailableException(string definitionId)
     : InvalidOperationException(
         $"Permanent deletion of workflow definition '{definitionId}' is unavailable on this host: it does not " +
         "compose the publishing vertical, so it cannot verify whether the definition is still published, and " +

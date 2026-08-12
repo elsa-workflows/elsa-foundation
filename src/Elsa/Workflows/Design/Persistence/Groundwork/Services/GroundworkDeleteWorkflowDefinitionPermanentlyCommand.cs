@@ -34,14 +34,7 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
-        // Refuse before touching the store: whether this host may permanently delete at all is a property of its
-        // composition, not of the definition. A design-only host composes no publication check, so it cannot tell
-        // whether another node still holds a live publication against the same design catalog, and the delete is
-        // unrecoverable. Keying on the publication guard rather than on the guard list being empty keeps the
-        // refusal meaning "no publication check" once other verticals contribute vetoes of their own.
         var guards = deletionGuards?.ToArray() ?? [];
-        if (!guards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().Any())
-            throw new WorkflowDefinitionPermanentDeletionUnavailableException(definitionId);
 
         List<DeleteDocumentRequest>? deletes = null;
         PermanentDeleteResult? resolvedResult = null;
@@ -67,6 +60,17 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             cancellationToken: cancellationToken,
             beforeAttempt: async token =>
             {
+                // Refuse before touching any definition row: whether this host may permanently delete at all is a
+                // property of its composition, not of the definition. A design-only host composes no publication
+                // check, so it cannot tell whether another node still holds a live publication against the same
+                // design catalog, and the delete is unrecoverable. Keying on the publication guard rather than on
+                // the guard list being empty keeps the refusal meaning "no publication check" once other verticals
+                // contribute vetoes of their own. The check sits INSIDE beforeAttempt — after the atomic writer's
+                // operation-marker replay lookup — so a retry of an already-committed delete that lands on a
+                // design-only node still replays to success instead of refusing an operation that already happened.
+                if (guards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().Any() is false)
+                    throw new PermanentDeletionUnavailableException(definitionId);
+
                 var definition = await definitionStore.FindByIdAsync(definitionId, token)
                                  ?? throw EntityNotFoundException.ForEntity(
                                      typeof(WorkflowDefinition),

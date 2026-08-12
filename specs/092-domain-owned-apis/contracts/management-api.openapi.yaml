@@ -156,6 +156,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '501':
+          description: >-
+            This host composes no publication check (design-only deployment shape), so it cannot verify that no
+            live publication still references the definition, and refuses permanent deletion. Soft deletion remains
+            available here; permanent deletion requires a host that composes the publishing vertical. Retrying
+            against this host will never succeed.
 
   /design/workflows/drafts/{draftId}:
     parameters:

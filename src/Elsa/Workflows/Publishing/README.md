@@ -52,6 +52,16 @@ with zero transport.
 
 ## Cross-domain contributions
 
+This feature satisfies one Design-owned contribution contract (#1283):
+
+- `PublishedWorkflowDeletionGuard : IWorkflowDefinitionPublicationDeletionGuard` (and the base
+  `IWorkflowDefinitionPermanentDeletionGuard`) — the publication check that vetoes permanently deleting a
+  definition a live publication still references. The marker sub-contract carries composition weight: the
+  design lane's permanent-delete command refuses outright (HTTP 501) on any host where no publication
+  check is composed, so composing this feature is what makes permanent deletion available at all.
+  Contract semantics: [design-persistence extension-point
+  catalog](../Design/Persistence/Groundwork/EXTENSION_POINTS.md#contributor-interfaces).
+
 The engine registers one independent event subscriber for a Design-side event (spec 147, #1157):
 
 - `PublishReconciledWorkflowVersions : IEventHandler<WorkflowVersionsReconciled>` — publish-on-reconcile.

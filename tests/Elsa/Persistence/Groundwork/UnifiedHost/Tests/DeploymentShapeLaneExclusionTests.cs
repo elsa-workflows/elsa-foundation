@@ -91,7 +91,7 @@ public sealed class DeploymentShapeLaneExclusionTests
         await using var host = await BuildDesignHostAsync(database);
         using var scope = host.CreateScope();
 
-        var exception = await Assert.ThrowsAsync<WorkflowDefinitionPermanentDeletionUnavailableException>(() =>
+        var exception = await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
             PermanentDelete(scope, "definition-1"));
 
         Assert.Equal("definition-1", exception.DefinitionId);
@@ -130,8 +130,8 @@ public sealed class DeploymentShapeLaneExclusionTests
         services.AddSqliteGroundworkDocumentStore(database.ConnectionString);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
-        // After the lane, as a host composes it: the publishing feature contributes with TryAdd and must not
-        // displace the design lane's own stores.
+        // After the lane, as a host composes it. (Only the composition-gate effect of the addition is asserted by
+        // these tests; store non-displacement is a TryAdd property this fixture does not exercise.)
         composeFurther?.Invoke(services);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
