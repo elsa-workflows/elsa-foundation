@@ -660,7 +660,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.True(pinnedLogical.IsUnique);
         Assert.Equal(MissingValueBehavior.Excluded, pinnedLogical.MissingValueBehavior);
         Assert.False(legacyPinnedLogical.IsUnique);
-        Assert.Equal(MissingValueBehavior.Excluded, legacyPinnedLogical.MissingValueBehavior);
+        Assert.Equal(MissingValueBehavior.IncludedAsNull, legacyPinnedLogical.MissingValueBehavior);
         var pinnedPhysical = Assert.Single(
             physical.Indexes,
             index => index.LogicalName == pinnedIndexIdentity);
@@ -683,7 +683,7 @@ public sealed class ElsaRuntimeStorageManifestTests
             index =>
                 index.LogicalName == ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex &&
                 !index.IsUnique &&
-                index.MissingValueBehavior == MissingValueBehavior.Excluded &&
+                index.MissingValueBehavior == MissingValueBehavior.IncludedAsNull &&
                 index.Columns.Count == 4 &&
                 index.Columns[^1].ColumnLogicalName == "history_workflow_execution_id");
     }
@@ -774,7 +774,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         var deliverableIndex = Assert.Single(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == deliverable.IndexIdentity);
-        Assert.Equal(MissingValueBehavior.Excluded, deliverableIndex.MissingValueBehavior);
+        Assert.Equal(MissingValueBehavior.IncludedAsNull, deliverableIndex.MissingValueBehavior);
         Assert.Equal(
             IndexValueKind.Number,
             unit.Indexes.Single(index =>
@@ -801,7 +801,7 @@ public sealed class ElsaRuntimeStorageManifestTests
             physical.Indexes,
             index => index.LogicalName == deliverable.IndexIdentity);
         Assert.Equal(
-            MissingValueBehavior.Excluded,
+            MissingValueBehavior.IncludedAsNull,
             deliverablePhysicalIndex.MissingValueBehavior);
         var deliverableAt = Assert.Single(
             deliverable.PredicateFields,
@@ -822,7 +822,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         var claimableIndex = Assert.Single(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == claimable.IndexIdentity);
-        Assert.Equal(MissingValueBehavior.Excluded, claimableIndex.MissingValueBehavior);
+        Assert.Equal(MissingValueBehavior.IncludedAsNull, claimableIndex.MissingValueBehavior);
         Assert.Contains(
             claimable.PredicateFields,
             field => field.Path == ElsaRuntimeStorageManifest.PostCommitOutboxClaimableAtField);
