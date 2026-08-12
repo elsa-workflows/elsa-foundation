@@ -7,8 +7,8 @@ Records direct test-project references and test source-file inventory; it does n
 ## Summary
 
 - Test projects: 100
-- Source projects directly referenced by at least one test project: 156
-- Source projects not directly referenced by test projects: 8
+- Source projects directly referenced by at least one test project: 157
+- Source projects not directly referenced by test projects: 7
 
 ## Test Projects
 
@@ -92,7 +92,7 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
 | [Elsa.Studio.Preferences.Persistence.Groundwork.Tests](../../tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj) | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Studio.Preferences.Persistence.Groundwork |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core |
-| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Workflows.Dashboard.MongoDb.Tests](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/Elsa.Workflows.Dashboard.MongoDb.Tests.csproj) | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Workflows.Dashboard.SqlServer.Tests](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj) | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
@@ -197,7 +197,7 @@ Records direct test-project references and test source-file inventory; it does n
 | Elsa.Serialization.Tests | [DeterministicSerializationTests.cs](../../tests/Elsa/Serialization/Tests/Unit/DeterministicSerializationTests.cs)<br>[JsonPayloadSerializerOptionsCacheTests.cs](../../tests/Elsa/Serialization/Tests/Unit/JsonPayloadSerializerOptionsCacheTests.cs)<br>[TypeJsonConverterTests.cs](../../tests/Elsa/Serialization/Tests/Unit/TypeJsonConverterTests.cs)<br>[WellKnownTypeRegistryTests.cs](../../tests/Elsa/Serialization/Tests/Unit/WellKnownTypeRegistryTests.cs) |
 | Elsa.Studio.Preferences.Persistence.Groundwork.Tests | [GroundworkStudioPreferenceStoreTests.cs](../../tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/GroundworkStudioPreferenceStoreTests.cs) |
 | Elsa.Studio.Preferences.Tests | [StudioPreferencePreconditionTests.cs](../../tests/Elsa/Studio/Preferences/Tests/StudioPreferencePreconditionTests.cs)<br>[StudioPreferenceScopeResolverTests.cs](../../tests/Elsa/Studio/Preferences/Tests/StudioPreferenceScopeResolverTests.cs)<br>[StudioPreferenceServiceTests.cs](../../tests/Elsa/Studio/Preferences/Tests/StudioPreferenceServiceTests.cs) |
-| Elsa.Tasks.Tests | [StartupTaskStaticTelemetryFailureProbe.cs](../../tests/Elsa/Tasks/Tests/StartupTaskStaticTelemetryFailureProbe.cs)<br>[StartupTaskTelemetryTests.cs](../../tests/Elsa/Tasks/Tests/StartupTaskTelemetryTests.cs) |
+| Elsa.Tasks.Tests | [BackoffSweepPumpTaskTests.cs](../../tests/Elsa/Tasks/Tests/BackoffSweepPumpTaskTests.cs)<br>[StartupTaskStaticTelemetryFailureProbe.cs](../../tests/Elsa/Tasks/Tests/StartupTaskStaticTelemetryFailureProbe.cs)<br>[StartupTaskTelemetryTests.cs](../../tests/Elsa/Tasks/Tests/StartupTaskTelemetryTests.cs) |
 | Elsa.Workflows.Dashboard.MongoDb.Tests | [GroundworkWorkflowRunHealthDataSourceMongoDbTests.cs](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/GroundworkWorkflowRunHealthDataSourceMongoDbTests.cs)<br>[MongoDbDashboardContainerFixture.cs](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/MongoDbDashboardContainerFixture.cs)<br>[WorkflowPortfolioProviderMongoDbTests.cs](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/WorkflowPortfolioProviderMongoDbTests.cs) |
 | Elsa.Workflows.Dashboard.SqlServer.Tests | [GroundworkWorkflowRunHealthDataSourceSqlServerTests.cs](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/GroundworkWorkflowRunHealthDataSourceSqlServerTests.cs)<br>[SqlServerDashboardContainerFixture.cs](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/SqlServerDashboardContainerFixture.cs)<br>[WorkflowPortfolioProviderSqlServerTests.cs](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/WorkflowPortfolioProviderSqlServerTests.cs) |
 | Elsa.Workflows.Dashboard.Tests | [GroundworkWorkflowRunHealthDataSourceTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs)<br>[MongoDbWorkflowDashboardLaneWiringTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/MongoDbWorkflowDashboardLaneWiringTests.cs)<br>[WorkflowDashboardEndpointSecurityTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/WorkflowDashboardEndpointSecurityTests.cs)<br>[WorkflowPortfolioProviderTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioProviderTests.cs)<br>[WorkflowPortfolioServiceTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioServiceTests.cs)<br>[WorkflowRunHealthServiceTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/WorkflowRunHealthServiceTests.cs)<br>[WorkflowsDashboardGroundworkLaneWiringTests.cs](../../tests/Elsa/Workflows/Dashboard/Tests/WorkflowsDashboardGroundworkLaneWiringTests.cs) |
@@ -230,5 +230,4 @@ Records direct test-project references and test source-file inventory; it does n
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | Elsa.Http |
 | [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | Elsa.Locking |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
-| [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Primitives](../../src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj) | Elsa.Workflows |

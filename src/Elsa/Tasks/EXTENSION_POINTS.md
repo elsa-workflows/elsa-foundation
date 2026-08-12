@@ -63,6 +63,26 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 **Known implementations:**
 - `Elsa.Events` — `BackgroundEventPublisher` *(cross-domain — background event dispatch worker)*
 
+## Writing a bounded-sweep pump (`BackoffSweepPumpTask`)
+
+A recurring background pump that runs one bounded sweep per tick derives from `BackoffSweepPumpTask`
+(project `Elsa.Tasks.Schedules`) instead of implementing `IRecurringTask` and re-carrying the failure
+skeleton. The base owns it once: `ExecuteAsync` runs the derived `SweepAsync`, resets the failure count
+on success, and on any handled exception increments it and reports through `OnSweepFailed` without
+rethrowing (so a failing sweep cannot crash the host); `CurrentSweepInterval` widens geometrically from
+`SweepInterval` toward `MaxBackoffInterval`, and `GetSchedule` feeds it to an `AdaptiveIntervalSchedule`.
+
+A derivation supplies the sweep, its failure log message, and optionally: which exceptions feed the
+backoff (`IsHandledSweepException`; everything by default — override to let fatal exceptions escape),
+and which cancellations escape (`ShouldRethrowCancellation`; every `OperationCanceledException` by
+default — override to narrow to the pump's own token so a dependency's unrelated timeout backs off
+instead). The protected `ComputeBackoff` is reusable for per-item parking maps.
+
+All six shipped pumps are cross-domain consumers: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
+`RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`,
+`ExecutionPlacementPumpTask`, and `WorkflowAlterationOrchestrationPumpTask` *(all cross-domain — the
+pumps live in `Elsa.Workflows.Runtime.*` projects, which already reference `Elsa.Tasks.Schedules`)*.
+
 ---
 
 ## Cross-references

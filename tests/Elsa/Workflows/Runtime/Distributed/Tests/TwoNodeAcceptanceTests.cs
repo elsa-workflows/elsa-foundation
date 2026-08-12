@@ -59,7 +59,7 @@ public abstract class TwoNodeAcceptanceTests
         Assert.Empty(cluster.ExecutorB.Committed);
 
         // The owning node's pump drains the forwarded commands in enqueue order, exactly once each.
-        var sweep = await cluster.NodeA.Pump.SweepAsync();
+        var sweep = await cluster.NodeA.Pump.SweepOnceAsync();
 
         Assert.Equal(2, sweep.DispatchedCommandCount);
         Assert.Equal(2, sweep.AckedCount);
@@ -90,7 +90,7 @@ public abstract class TwoNodeAcceptanceTests
         // Failover: node B's pump claims placement, re-leases the stranded command, drains it locally under a fresh,
         // strictly greater fencing token (token 2), and acks. This asserts inbox re-drive on failover, not merely that
         // a stale write would be rejected.
-        var sweep = await cluster.NodeB.Pump.SweepAsync();
+        var sweep = await cluster.NodeB.Pump.SweepOnceAsync();
 
         Assert.Equal(1, sweep.ClaimedCount);
         Assert.Equal(1, sweep.DispatchedCommandCount);
@@ -179,7 +179,7 @@ public abstract class TwoNodeAcceptanceTests
         cluster.Clock.Advance(LeaseDuration + TimeSpan.FromSeconds(1));
         var restartedOwner = cluster.RestartNodeB();
 
-        var sweep = await restartedOwner.Pump.SweepAsync();
+        var sweep = await restartedOwner.Pump.SweepOnceAsync();
 
         // Both transport items are acknowledged, but the durable execution and authenticated inspection contracts show
         // one logical child with the original tenant, authority, partition, run-kind, and nesting-depth provenance.

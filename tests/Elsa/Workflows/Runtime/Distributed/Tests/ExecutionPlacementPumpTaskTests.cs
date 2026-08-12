@@ -25,7 +25,7 @@ public sealed class ExecutionPlacementPumpTaskTests
         // A command lands in the transport inbox for an execution nobody owns yet.
         await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-1", _now), _now);
 
-        var result = await node.Pump.SweepAsync();
+        var result = await node.Pump.SweepOnceAsync();
 
         Assert.Equal(1, result.ClaimedCount);
         Assert.Equal(1, result.DispatchedCommandCount);
@@ -50,7 +50,7 @@ public sealed class ExecutionPlacementPumpTaskTests
         await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-1", _now), _now);
 
         // Node B's sweep must not steal a live-owned execution.
-        var result = await nodeB.Pump.SweepAsync();
+        var result = await nodeB.Pump.SweepOnceAsync();
 
         Assert.Equal(0, result.ClaimedCount);
         Assert.Empty(executorB.Processed);
@@ -69,7 +69,7 @@ public sealed class ExecutionPlacementPumpTaskTests
 
         // Advance within the lease window and sweep; the held lease should be renewed (expiry pushed out, token bumped).
         clock.Advance(TimeSpan.FromSeconds(10));
-        var result = await node.Pump.SweepAsync();
+        var result = await node.Pump.SweepOnceAsync();
 
         Assert.Equal(1, result.RenewedCount);
         var renewed = await node.PlacementService.FindOwnerAsync(ExecutionId);
@@ -99,7 +99,7 @@ public sealed class ExecutionPlacementPumpTaskTests
         // Time passes beyond both the placement lease and the transport visibility lease: A is gone.
         clock.Advance(LeaseDuration + TimeSpan.FromSeconds(1));
 
-        var result = await nodeB.Pump.SweepAsync();
+        var result = await nodeB.Pump.SweepOnceAsync();
 
         // Node B claims placement, re-leases the stranded command, dispatches it locally, and acks.
         Assert.Equal(1, result.ClaimedCount);
@@ -128,7 +128,7 @@ public sealed class ExecutionPlacementPumpTaskTests
         await transport.SendAsync(ExecutionId, NodeHarness.Envelope(ExecutionId, "env-1", _now), _now);
         var nodeB = new NodeHarness(NodeB, store, transport, clock, new RecordingCommandExecutor(), LeaseDuration);
 
-        var result = await nodeB.Pump.SweepAsync();
+        var result = await nodeB.Pump.SweepOnceAsync();
 
         Assert.Equal(0, result.AckedCount);
         Assert.Equal(1, await transport.CountPendingAsync(ExecutionId));

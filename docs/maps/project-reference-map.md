@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 154
 - Test projects: 100
-- Direct project references: 1242
+- Direct project references: 1243
 
 ## Projects
 
@@ -246,7 +246,7 @@ Records direct project references only.
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | - | default | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
 | [Elsa.Studio.Preferences.Persistence.Groundwork.Tests](../../tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Studio.Preferences.Persistence.Groundwork |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core |
-| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Workflows.Dashboard.MongoDb.Tests](../../tests/Elsa/Workflows/Dashboard/MongoDb/Tests/Elsa.Workflows.Dashboard.MongoDb.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
 | [Elsa.Workflows.Dashboard.SqlServer.Tests](../../tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.ProcessProbe<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
