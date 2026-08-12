@@ -87,7 +87,10 @@ internal static class DueWorkStoragePhysicalizer
                             DurableTimerClaimOrderKeyColumn,
                             1,
                             PhysicalSortDirection.Ascending)
-                    ]))
+                    ],
+                    // Matches the logical declaration, which keeps Excluded because its optimized
+                    // physicalization is gated on it.
+                    missingValueBehavior: MissingValueBehavior.Excluded))
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
