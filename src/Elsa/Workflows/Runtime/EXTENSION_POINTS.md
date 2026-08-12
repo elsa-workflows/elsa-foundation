@@ -542,6 +542,15 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** modules can handle specific scheduler command kinds without replacing the drainer. The drainer evaluates ordinary handlers before fallback handlers.
 - **Default implementations:** `WorkflowStartSchedulerWorkHandler` *(turns `Start` work into `ScheduleActivity` work for executable start nodes)*, `WorkflowScheduleActivitySchedulerWorkHandler` *(records `Scheduled` `ActivityExecutionState` and queues `StartActivity` work for one executable node)*, `WorkflowStartActivitySchedulerWorkHandler` *(transitions scheduled activity state to `Running` and queues `InvokeActivity` work)*, `WorkflowCompleteActivitySchedulerWorkHandler` *(drains deterministic activity completion work)*, `WorkflowCheckpointSchedulerWorkHandler` *(commits named checkpoint scheduler work through `RuntimeCheckpointCommitter`)*, `MissingActivityInvocationSchedulerWorkHandler` *(fallback that faults `InvokeActivity` when no provider is composed)*, `MissingBookmarkResumeSchedulerWorkHandler` *(fallback that faults `ResumeBookmark` when no bookmark resume provider is composed)*, `MissingGeneratedEventSchedulerWorkHandler` *(fallback that faults `GeneratedEvent` when no generated-event provider is composed)*, and `NoopWorkflowSchedulerWorkHandler` *(fallback that acknowledges drained work that has no required provider-specific handler)*.
 
+`RuntimeSchedulerWorkHandlerBase<TPayload>` (project `Elsa.Workflows.Runtime`, same namespace) is the
+optional dispatch scaffold for payload-typed handlers that also implement `IRuntimePipelineWorkHandler`:
+it deserializes the payload once (throwing validation errors before any scope is created) and runs the
+handler body against the pipeline's ambient services or a fresh scope. A derivation supplies `Name`,
+`CanHandle`, `DeserializePayload`, and `HandleWithServicesAsync`. Shipped derivations:
+`WorkflowInvokeActivitySchedulerWorkHandler`, `WorkflowParentActivityCompletionSchedulerWorkHandler`,
+`WorkflowNotifyParentActivitySchedulerWorkHandler` *(all cross-domain — `Elsa.Activities.Runtime`)*.
+A handler that must not gain pipeline dispatch (the resume handler) implements the interfaces directly.
+
 ### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).
 - **Signature:** inherits `IWorkflowSchedulerWorkHandler`.

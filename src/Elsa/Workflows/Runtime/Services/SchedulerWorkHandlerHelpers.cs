@@ -156,4 +156,23 @@ public static class SchedulerWorkHandlerHelpers
 
         return snapshot;
     }
+
+    /// <summary>
+    /// Reads the completion outcome names persisted on a completed activity execution state. Falls back
+    /// to <see cref="ActivityOutcomes.Done"/> when nothing was persisted — unless the state's sub-status
+    /// equals <paramref name="skippedSubStatus"/> (pass <c>null</c> to never treat a state as skipped),
+    /// in which case a skipped activity yields no outcomes.
+    /// </summary>
+    public static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState, string? skippedSubStatus)
+    {
+        if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
+        {
+            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
+                ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
+
+            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+        }
+
+        return skippedSubStatus is not null && completedState.SubStatus == skippedSubStatus ? [] : [ActivityOutcomes.Done];
+    }
 }
