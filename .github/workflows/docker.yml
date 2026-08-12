@@ -1,6 +1,8 @@
-name: Docker Image
+name: Docker Images
 
-# Builds and pushes the Elsa 4 workbench image to Docker Hub as elsaworkflows/elsa-workbench.
+# Builds and pushes two Elsa 4 host images to Docker Hub:
+#   - elsaworkflows/elsa-workbench       — development and demo host
+#   - elsaworkflows/elsa-foundation-host — minimal Nuplane + CShells server host
 # The workbench is a development and demo host, not the shipped product; the
 # elsaworkflows/elsa-server name is reserved for the clean host once it exists.
 # The Elsa major version (4) is encoded in the image tags:
@@ -73,6 +75,38 @@ jobs:
       labels: |
         org.opencontainers.image.title=Elsa Workbench
         org.opencontainers.image.description=Elsa 4 development and demo workbench host
+    secrets:
+      registry-auths: |
+        - registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+  build-and-push-foundation-host:
+    name: Build & push elsa-foundation-host
+    # Same pinned reusable builder as the workbench job above (see the pinning note there):
+    # the BuildKit/Buildx versions must match the `# syntax=` pin in
+    # src/Apps/Elsa.Foundation.Host/Dockerfile.
+    uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      output: image
+      push: true
+      context: .
+      file: src/Apps/Elsa.Foundation.Host/Dockerfile
+      platforms: linux/amd64,linux/arm64
+      cache: true
+      cache-mode: max
+      cache-scope: elsa-foundation-host
+      meta-images: elsaworkflows/elsa-foundation-host
+      meta-tags: |
+        type=sha
+        type=raw,value=latest
+        type=raw,value=4.0.0-preview.${{ github.run_number }}
+      labels: |
+        org.opencontainers.image.title=Elsa Foundation Host
+        org.opencontainers.image.description=Minimal Nuplane + CShells Elsa 4 server host
     secrets:
       registry-auths: |
         - registry: docker.io
