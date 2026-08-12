@@ -5,6 +5,8 @@ using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Elsa.Api.FastEndpoints.Sse;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
@@ -33,7 +35,7 @@ public sealed class OpenTelemetryFeatureTests
             Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOtlpRequestAuthenticator)).Lifetime);
         Assert.NotNull(provider.GetRequiredService<OpenTelemetryStreamItemSerializer>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseFormatter>());
-        Assert.NotNull(provider.GetRequiredService<OpenTelemetrySseStreamWriter>());
+        Assert.NotNull(provider.GetRequiredService<SseStreamWriter<OpenTelemetryStreamItem>>());
         Assert.NotNull(provider.GetRequiredService<OpenTelemetryTraceFilterBinder>());
         Assert.NotNull(provider.GetRequiredService<IOptions<OpenTelemetryDiagnosticsOptions>>().Value);
     }

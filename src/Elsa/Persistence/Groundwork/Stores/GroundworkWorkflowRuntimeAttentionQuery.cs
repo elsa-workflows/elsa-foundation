@@ -53,7 +53,7 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
 
                     activeExecutionIds.Add(incident.WorkflowExecutionId);
                     totalCount = checked(totalCount + 1);
-                    Consider(top, MapIncident(incident, execution, observedAt), request.MaximumItems);
+                    Consider(top, WorkflowRuntimeAttentionRecords.MapIncident(incident, execution, observedAt), request.MaximumItems);
                 }
 
                 continuation = page.NextContinuation;
@@ -70,7 +70,7 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
             foreach (var execution in page.Items.Where(x => !activeExecutionIds.Contains(x.WorkflowExecutionId)))
             {
                 totalCount = checked(totalCount + 1);
-                Consider(top, MapFault(execution, observedAt), request.MaximumItems);
+                Consider(top, WorkflowRuntimeAttentionRecords.MapFault(execution, observedAt), request.MaximumItems);
             }
 
             cursor = page.NextCursor;
@@ -85,66 +85,8 @@ public sealed class GroundworkWorkflowRuntimeAttentionQuery(
         int maximumItems)
     {
         top.Add(candidate);
-        top.Sort(CompareAttention);
+        top.Sort(WorkflowRuntimeAttentionRecords.UrgencyComparer);
         if (top.Count > maximumItems)
             top.RemoveAt(top.Count - 1);
     }
-
-    private static int CompareAttention(WorkflowRuntimeAttentionRecord left, WorkflowRuntimeAttentionRecord right)
-    {
-        var kind = AttentionKindOrder(left.Kind).CompareTo(AttentionKindOrder(right.Kind));
-        if (kind != 0)
-            return kind;
-
-        var observed = right.LastObservedAt.CompareTo(left.LastObservedAt);
-        if (observed != 0)
-            return observed;
-
-        var executionId = StringComparer.Ordinal.Compare(left.WorkflowExecutionId, right.WorkflowExecutionId);
-        return executionId != 0
-            ? executionId
-            : StringComparer.Ordinal.Compare(left.IncidentId ?? string.Empty, right.IncidentId ?? string.Empty);
-    }
-
-    private static int AttentionKindOrder(WorkflowRuntimeAttentionKind kind) => kind switch
-    {
-        WorkflowRuntimeAttentionKind.BlockingIncident => 0,
-        WorkflowRuntimeAttentionKind.FaultedExecution => 1,
-        _ => 2
-    };
-
-    private static WorkflowRuntimeAttentionRecord MapIncident(
-        IncidentState incident,
-        WorkflowExecutionState execution,
-        DateTimeOffset observedAt) => new(
-        execution.WorkflowExecutionId,
-        execution.PinnedExecutable.DefinitionId,
-        incident.IncidentId,
-        incident.Status == IncidentStatus.Blocking
-            ? WorkflowRuntimeAttentionKind.BlockingIncident
-            : WorkflowRuntimeAttentionKind.OpenIncident,
-        $"{incident.IncidentId}:{incident.CreatedAt.UtcTicks}:{incident.Status}:{incident.Severity}",
-        incident.CreatedAt,
-        Later(observedAt, incident.CreatedAt),
-        1,
-        null);
-
-    private static WorkflowRuntimeAttentionRecord MapFault(
-        WorkflowExecutionState execution,
-        DateTimeOffset observedAt)
-    {
-        var occurredAt = execution.CompletedAt ?? execution.UpdatedAt ?? execution.StartedAt ?? execution.CreatedAt;
-        return new(
-            execution.WorkflowExecutionId,
-            execution.PinnedExecutable.DefinitionId,
-            null,
-            WorkflowRuntimeAttentionKind.FaultedExecution,
-            $"{execution.WorkflowExecutionId}:{occurredAt.UtcTicks}:{execution.Status}",
-            occurredAt,
-            Later(observedAt, occurredAt),
-            1,
-            null);
-    }
-
-    private static DateTimeOffset Later(DateTimeOffset first, DateTimeOffset second) => first >= second ? first : second;
 }

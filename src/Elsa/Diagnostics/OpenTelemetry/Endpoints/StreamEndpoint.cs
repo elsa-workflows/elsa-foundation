@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Sse;
 using Elsa.Api.FastEndpoints.Extensions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -20,7 +21,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 internal sealed class StreamEndpoint(
     IOpenTelemetryLiveFeed feed,
     OpenTelemetryTraceFilterBinder binder,
-    OpenTelemetrySseStreamWriter streamWriter,
+    SseStreamWriter<OpenTelemetryStreamItem> streamWriter,
     IOptions<OpenTelemetryDiagnosticsOptions> options) : ElsaEndpointWithoutRequest
 {
     public override void Configure()

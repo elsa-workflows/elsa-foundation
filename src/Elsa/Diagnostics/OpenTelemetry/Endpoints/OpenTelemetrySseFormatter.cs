@@ -1,4 +1,5 @@
 using System.Text;
+using Elsa.Api.FastEndpoints.Sse;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
@@ -9,7 +10,7 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 /// Each item carries a typed <c>event:</c> name (<c>resource</c>, <c>trace</c>, <c>metric</c>, <c>log</c>,
 /// or <c>dropped</c>); items are not sequenced, so no <c>id:</c> / <c>Last-Event-ID</c> resume is offered.
 /// </summary>
-public sealed class OpenTelemetrySseFormatter
+public sealed class OpenTelemetrySseFormatter : ISseStreamFormatter<OpenTelemetryStreamItem>
 {
     private readonly OpenTelemetryStreamItemSerializer _serializer;
 
