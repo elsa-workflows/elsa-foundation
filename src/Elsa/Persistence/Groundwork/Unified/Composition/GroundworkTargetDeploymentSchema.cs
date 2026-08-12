@@ -61,6 +61,11 @@ public sealed class GroundworkTargetDeploymentSchema :
         plan = CreatePlan(
             options.GetValueOrDefault(DescriptorOption),
             options.GetValueOrDefault(TargetOption));
+
+        // Resolve now rather than at the first CreateManifest. The tool reports what Configure throws
+        // verbatim, and turns anything later into a generic "details were suppressed to protect secrets",
+        // so deferring would cost the operator the one message that says which check failed.
+        _ = plan.Value;
     }
 
     /// <summary>The target this source was narrowed to.</summary>
