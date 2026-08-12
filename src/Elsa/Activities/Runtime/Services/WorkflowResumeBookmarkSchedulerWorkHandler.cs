@@ -294,13 +294,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken));
             if (transition is IStatefulActivitySuspensionTransition suspension)
             {
-                ValidateStatefulSuspensionRegistrations(executable, executableNode, suspension);
+                StatefulSuspensionSupport.ValidateRegistrations(executable, executableNode, suspension);
                 replacementSuspendedState = StatefulActivitySuspensionProjector.Project(
                     executionState,
                     resumeAttempt,
                     suspension,
                     _timeProvider.GetUtcNow(),
-                    key => ResolveResumeTarget(executable, executableNode, key).ResumeTargetId);
+                    key => StatefulSuspensionSupport.ResolveResumeTarget(executable, executableNode, key).ResumeTargetId);
             }
             else if (transition is IActivityCompletionTransition)
             {
@@ -653,39 +653,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         return true;
     }
 
-    private static void ValidateStatefulSuspensionRegistrations(
-        WorkflowExecutable executable,
-        ExecutableNode executableNode,
-        IStatefulActivitySuspensionTransition suspension)
-    {
-        foreach (var registration in suspension.Registrations)
-            ResolveResumeTarget(executable, executableNode, registration.ResumeTargetKey);
-    }
-
-    private static WorkflowExecutableResumeTarget ResolveResumeTarget(
-        WorkflowExecutable executable,
-        ExecutableNode executableNode,
-        string resumeTargetKey)
-    {
-        var resumeTarget = SchedulerWorkHandlerHelpers.FindResumeTargetForNode(
-            executable,
-            executableNode.ExecutableNodeId,
-            resumeTargetKey);
-        if (resumeTarget is null)
-        {
-            throw new InvalidOperationException(
-                $"Stateful activity '{executableNode.ExecutableNodeId}' registered missing resume target '{resumeTargetKey}'.");
-        }
-
-        if (!StringComparer.Ordinal.Equals(resumeTarget.ExecutableNodeId, executableNode.ExecutableNodeId))
-        {
-            throw new InvalidOperationException(
-                $"Resume target '{resumeTargetKey}' belongs to executable node '{resumeTarget.ExecutableNodeId}', not '{executableNode.ExecutableNodeId}'.");
-        }
-
-        return resumeTarget;
-    }
-
     private IEnumerable<RuntimeSchedulerWorkItem> NewReplacementBookmarkWorkItems(
         RuntimeSchedulerWorkItem resumeWorkItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
@@ -780,7 +747,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             resumePayload.ActivityExecutionId,
             completedState.ParentActivityExecutionId,
             completedState.BranchId,
-            ReadCompletionOutcomeNames(completedState),
+            SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, skippedSubStatus: null),
             RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
 
         return new RuntimeSchedulerWorkItem(
@@ -912,19 +879,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 .OrderBy(attempt => attempt.Ordinal)
                 .ToArray()
         };
-    }
-
-    private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)
-    {
-        if (completedState.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serializedOutcomeNames))
-        {
-            var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
-                ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
-
-            return SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
-        }
-
-        return [ActivityOutcomes.Done];
     }
 
     // Records a blocking fault incident for the resumed activity and commits it. Each fault arm in
