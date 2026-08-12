@@ -47,7 +47,7 @@ public static class SecretsStorageManifest
             [new IndexField(CollectionField)],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var filteredListIndex = new LogicalIndexDeclaration(
             SecretFilteredListIndex,
             [

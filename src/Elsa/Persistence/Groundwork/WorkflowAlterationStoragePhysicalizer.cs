@@ -205,7 +205,9 @@ internal static class WorkflowAlterationStoragePhysicalizer
         columns.Single(column => StringComparer.Ordinal.Equals(column.Path, path)).LogicalName;
     private static IndexField Field(string path, IndexValueKind kind = IndexValueKind.Keyword) => new(path, kind);
     private static LogicalIndexDeclaration Index(string id, IndexValueKind valueKind, params IndexField[] fields) =>
-        new(id, fields, valueKind, false, MissingValueBehavior.Excluded);
+        // Alteration job/plan sweeps must see every row, so these traversal indexes cannot omit the
+        // ones whose keyed columns have no value.
+        new(id, fields, valueKind, false, MissingValueBehavior.IncludedAsNull);
     private static PhysicalIndexDefinition Physical(
         DocumentEnvelopeDefinition envelope,
         LogicalIndexDeclaration index,

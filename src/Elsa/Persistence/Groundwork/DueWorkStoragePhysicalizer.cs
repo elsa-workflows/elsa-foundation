@@ -281,7 +281,7 @@ internal static class DueWorkStoragePhysicalizer
             fields,
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var envelope = new DocumentEnvelopeDefinition();
         var physicalIndexColumns = new List<PhysicalIndexColumnDefinition>
         {

@@ -401,7 +401,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var parent = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionStateByWorkflowParentAndActivityExecutionId,
             [
@@ -411,7 +411,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         const string activityIdColumn = "activity_execution_id";
         var projected = definition.ProjectedColumns
             .Where(column => column.Path != ElsaRuntimeStorageManifest.ActivityExecutionIdField)
@@ -488,7 +488,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
             definition.ProjectedColumns
@@ -558,7 +558,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         const string executionSequenceColumn = "inspection_execution_sequence";
         const string scheduledAtColumn = "inspection_scheduled_at";
         const string activityExecutionIdColumn = "inspection_activity_execution_id";
@@ -652,7 +652,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var pageByWorkflow = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionHierarchyPageByWorkflowIndex,
             [
@@ -665,7 +665,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var scoped = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.ActivityExecutionHierarchyByScopeAndOrderIndex,
             [
@@ -682,7 +682,7 @@ public static class ElsaGroundworkQueryRoutes
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         const string sequenceColumn = "hierarchy_execution_sequence";
         const string activityIdColumn = "hierarchy_activity_execution_id";
         const string isScopeRootColumn = "hierarchy_is_scope_root";
@@ -930,7 +930,9 @@ public static class ElsaGroundworkQueryRoutes
                 ],
                 IndexValueKind.Keyword,
                 isUnique: false,
-                MissingValueBehavior.Excluded)).ToArray();
+                // B7 traversal routes page over every document in the unit, so the index cannot omit the
+                // ones whose keyed columns have no value -- the sweep would be silently short.
+                MissingValueBehavior.IncludedAsNull)).ToArray();
         var routeIdentities = routes
             .Select(route => route.IndexIdentity)
             .ToHashSet(StringComparer.Ordinal);
@@ -974,7 +976,9 @@ public static class ElsaGroundworkQueryRoutes
                                 identity.ProjectedColumn,
                                 route.Fields.Count + 1),
                             .. CursorTieBreakColumns(route, envelope)
-                        ])))
+                        ],
+                        // Must match the logical declaration above.
+                        missingValueBehavior: MissingValueBehavior.IncludedAsNull)))
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
