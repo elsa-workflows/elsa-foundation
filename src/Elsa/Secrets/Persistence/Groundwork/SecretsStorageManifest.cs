@@ -100,13 +100,15 @@ public static class SecretsStorageManifest
                         new PhysicalIndexColumnDefinition(TenantIdField, 1),
                         new PhysicalIndexColumnDefinition(NormalizedNameField, 2)
                     ],
-                    isUnique: true),
+                    isUnique: true,
+                    missingValueBehavior: nameIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     collectionIndex.Identity,
                     [
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(CollectionField, 1)
-                    ]),
+                    ],
+                    missingValueBehavior: collectionIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     filteredListIndex.Identity,
                     [

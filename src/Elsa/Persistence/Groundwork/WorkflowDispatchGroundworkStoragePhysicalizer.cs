@@ -121,11 +121,11 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
             definition.Indexes.Concat(
             [
                 CompositePhysicalIndex(
-                    parentAndStatus.Identity,
+                    parentAndStatus,
                     ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex,
                     ElsaRuntimeStorageManifest.ByStatusIndex),
                 CompositePhysicalIndex(
-                    childAndStatus.Identity,
+                    childAndStatus,
                     ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex,
                     ElsaRuntimeStorageManifest.ByStatusIndex),
                 .. sortedRoutes.Select(route => route.PhysicalIndex)
@@ -161,15 +161,16 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
         MissingValueBehavior.Excluded);
 
     private static PhysicalIndexDefinition CompositePhysicalIndex(
-        string identity,
+        LogicalIndexDeclaration index,
         string firstProjectedColumn,
         string secondProjectedColumn) => new(
-        identity,
+        index.Identity,
         [
             new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
             new PhysicalIndexColumnDefinition(firstProjectedColumn, 1),
             new PhysicalIndexColumnDefinition(secondProjectedColumn, 2)
-        ]);
+        ],
+        missingValueBehavior: index.MissingValueBehavior);
 
     private static BoundedQueryDeclaration CompositeQuery(
         string identity,
@@ -217,7 +218,8 @@ internal static class WorkflowDispatchGroundworkStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(
                     ElsaRuntimeStorageManifest.ByDispatchIdIndex,
                     filterProjectedColumns.Count + 2)
-            ]);
+            ],
+            missingValueBehavior: logicalIndex.MissingValueBehavior);
         var query = new BoundedQueryDeclaration(
             queryIdentity,
             logicalIndex.Identity,

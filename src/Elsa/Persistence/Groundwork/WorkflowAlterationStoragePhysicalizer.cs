@@ -216,7 +216,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                 .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1)),
                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, columns.Length + 1)
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
 
     private static PhysicalIndexDefinition PhysicalExact(
         DocumentEnvelopeDefinition envelope,
@@ -227,7 +228,8 @@ internal static class WorkflowAlterationStoragePhysicalizer
             [
                 new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                 .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1))
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
     private static BoundedQueryDeclaration Query(string id, LogicalIndexDeclaration index, IReadOnlyList<BoundedQueryPredicateField> predicates, IReadOnlyList<BoundedQuerySortField> sort) => new(
         id,
         index.Identity,

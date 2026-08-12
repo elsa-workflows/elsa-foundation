@@ -87,7 +87,12 @@ internal static class DueWorkStoragePhysicalizer
                             DurableTimerClaimOrderKeyColumn,
                             1,
                             PhysicalSortDirection.Ascending)
-                    ]))
+                    ],
+                    missingValueBehavior: storage.LogicalIndexes
+                        .Single(index => StringComparer.Ordinal.Equals(
+                            index.Identity,
+                            ElsaRuntimeStorageManifest.DurableTimerByClaimOrder))
+                        .MissingValueBehavior))
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
@@ -296,7 +301,8 @@ internal static class DueWorkStoragePhysicalizer
                 physicalIndexColumns.Count));
         }
 
-        var physicalIndex = new PhysicalIndexDefinition(logicalIndex.Identity, physicalIndexColumns);
+        var physicalIndex = new PhysicalIndexDefinition(logicalIndex.Identity, physicalIndexColumns,
+                                missingValueBehavior: logicalIndex.MissingValueBehavior);
         var table = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
             definition.ProjectedColumns

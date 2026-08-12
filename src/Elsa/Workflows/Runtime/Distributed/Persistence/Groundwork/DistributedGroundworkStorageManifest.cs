@@ -88,7 +88,8 @@ public static class DistributedGroundworkStorageManifest
                         new PhysicalIndexColumnDefinition(OwnerIdLookupKeyField, 1),
                         new PhysicalIndexColumnDefinition(ExpiresAtField, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdKeyField, 3)
-                    ])
+                    ],
+                    missingValueBehavior: logicalIndex.MissingValueBehavior)
             ]);
         var query = new BoundedQueryDeclaration(
             ListOwnedPlacementsQuery,
@@ -184,7 +185,8 @@ public static class DistributedGroundworkStorageManifest
                         new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdKeyField, 1),
                         new PhysicalIndexColumnDefinition(SequenceField, 2)
-                    ]),
+                    ],
+                    missingValueBehavior: logicalIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     pendingIndex.Identity,
                     [
@@ -195,7 +197,8 @@ public static class DistributedGroundworkStorageManifest
                             SequenceField,
                             3,
                             PhysicalSortDirection.Descending)
-                    ])
+                    ],
+                    missingValueBehavior: pendingIndex.MissingValueBehavior)
             ]);
         var lease = new BoundedQueryDeclaration(
             LeaseVisibleCommandsQuery,

@@ -14,19 +14,24 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.114";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.120";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
+    // 2026-08-12 (#1296): every physical index now states the missing-value behavior of the logical index
+    // it serves, and three indexes were widened to IncludedAsNull because Groundwork's scale-bearing guard
+    // proved their queries could return rows the index omitted. Behavior is otherwise unchanged -- the
+    // physical side already defaulted to Excluded before preview.117 -- but stating it moves the physical
+    // target. Only the PENDING fingerprint moves; AcceptedTargetFingerprint is the ratified floor at
+    // preview.81 and is deliberately left alone, so this records a head that has moved rather than
+    // re-ratifying anything.
+    //
     // 2026-08-11: the design-lane search indexes and the trigger-binding traversal indexes now declare
-    // IncludedAsNull, so no provider omits rows whose keyed columns have no value. That changes the
-    // physical target. Only the PENDING fingerprint moves;
-    // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
-    // this records a head that has moved rather than re-ratifying anything.
-    private const string PendingTargetFingerprint = "1a7ac7c4e49922fba3393a6e06765c5e7e677a14233dc895f0d95d3b7536d5a0";
-    // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
-    // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "f9e388a89173d129953efdb94735829e9c6f9037d36a80b70bab74715acbc7a5";
+    // IncludedAsNull, so no provider omits rows whose keyed columns have no value.
+    private const string PendingTargetFingerprint = "3a520ae4e673a1707c11d0b411cae785ae7a602d24506c70153a901dfb063c7a";
+    // Moves with PendingTargetFingerprint above and for the same reason. AcceptedPlanFingerprint is
+    // untouched.
+    private const string PendingPlanFingerprint = "c7f7e1d2da4ad4a7699e4577b6eb9981a13f7e3c76522c61addf3dbd150ad1c9";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

@@ -64,7 +64,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Number,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // The history page query can match executions whose sort ticks or execution id are absent,
+            // so an index omitting those rows would silently drop them from the page and its count.
+            MissingValueBehavior.IncludedAsNull);
         var alterationCaptureIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
             [
@@ -175,7 +177,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                             PhysicalSortDirection.Descending),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                    ]),
+                    ],
+                    missingValueBehavior: historyIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     alterationCaptureIndex.Identity,
                     [
@@ -184,7 +187,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(AuthorityPartitionColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                    ]),
+                    ],
+                    missingValueBehavior: alterationCaptureIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     faultedAttentionIndex.Identity,
                     [
@@ -196,7 +200,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                             PhysicalSortDirection.Descending),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                    ]),
+                    ],
+                    missingValueBehavior: faultedAttentionIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     pinnedArtifactIndex.Identity,
                     [
@@ -204,7 +209,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(CollectionColumn, 1),
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
-                    ]),
+                    ],
+                    missingValueBehavior: pinnedArtifactIndex.MissingValueBehavior),
                 new PhysicalIndexDefinition(
                     pinnedArtifactV2Index.Identity,
                     [
@@ -213,7 +219,10 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
                     ],
-                    isUnique: true)
+                    isUnique: true,
+                    // Deliberately sparse: this index covers pinned artifacts, and an execution with no
+                    // pinned artifact has no business in it. Widening would index every execution.
+                    missingValueBehavior: pinnedArtifactV2Index.MissingValueBehavior)
             ]);
         var historyQuery = new BoundedQueryDeclaration(
             ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,

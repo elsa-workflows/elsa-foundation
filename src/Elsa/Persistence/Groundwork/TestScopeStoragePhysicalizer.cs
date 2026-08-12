@@ -48,10 +48,10 @@ internal static class TestScopeStoragePhysicalizer
             projectedColumns,
             definition.Indexes.Concat(
             [
-                Physical(stateAndScope.Identity,
+                Physical(stateAndScope,
                     ElsaRuntimeStorageManifest.ByStatusIndex,
                     ElsaRuntimeStorageManifest.ByScopeIdIndex),
-                Physical(stateScopeAndExpiry.Identity,
+                Physical(stateScopeAndExpiry,
                     ElsaRuntimeStorageManifest.ByStatusIndex,
                     ElsaRuntimeStorageManifest.ByScopeIdIndex,
                     ElsaRuntimeStorageManifest.ByExpiresAtIndex)
@@ -84,12 +84,13 @@ internal static class TestScopeStoragePhysicalizer
         false,
         MissingValueBehavior.Excluded);
 
-    private static PhysicalIndexDefinition Physical(string identity, params string[] columns) => new(
-        identity,
+    private static PhysicalIndexDefinition Physical(LogicalIndexDeclaration index, params string[] columns) => new(
+        index.Identity,
         [
             new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
-            .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
-        ]);
+            .. columns.Select((column, position) => new PhysicalIndexColumnDefinition(column, position + 1))
+        ],
+        missingValueBehavior: index.MissingValueBehavior);
 
     private static BoundedQueryDeclaration StatePageRoute(LogicalIndexDeclaration index) => new(
         ElsaRuntimeStorageManifest.ListWorkflowTestScopesByStatePageQuery,

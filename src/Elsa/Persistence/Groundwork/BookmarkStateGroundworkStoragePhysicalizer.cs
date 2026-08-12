@@ -34,7 +34,9 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // A bookmark can be held without a workflow execution or bookmark id projected, and the
+            // stimulus lookups match those rows, so an index omitting them loses live bookmarks.
+            MissingValueBehavior.IncludedAsNull);
         var stimulusType = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.BookmarkStateByStimulusTypeAndIdentity,
             [
@@ -44,7 +46,7 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         const string bookmarkIdColumn = "bookmark_id";
         const string stimulusLookupColumn = "bookmark_stimulus_lookup_key";
         const string stimulusTypeLookupColumn = "bookmark_stimulus_type_lookup_key";
@@ -89,7 +91,8 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
                                 new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, 2),
                                 new PhysicalIndexColumnDefinition(bookmarkIdColumn, 3),
                                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                            ]),
+                            ],
+                            missingValueBehavior: stimulusAndType.MissingValueBehavior),
                         new PhysicalIndexDefinition(
                             stimulusType.Identity,
                             [
@@ -98,7 +101,8 @@ internal static class BookmarkStateGroundworkStoragePhysicalizer
                                 new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, 2),
                                 new PhysicalIndexColumnDefinition(bookmarkIdColumn, 3),
                                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                            ])
+                            ],
+                            missingValueBehavior: stimulusType.MissingValueBehavior)
                     ])
                 .ToArray(),
             definition.SchemaVersion,

@@ -742,7 +742,8 @@ public static class ElsaGroundworkQueryRoutes
                                 activityIdColumn,
                                 3,
                                 PhysicalSortDirection.Descending)
-                        ]),
+                        ],
+                        missingValueBehavior: latest.MissingValueBehavior),
                     new PhysicalIndexDefinition(
                         pageByWorkflow.Identity,
                         [
@@ -757,7 +758,8 @@ public static class ElsaGroundworkQueryRoutes
                                 3,
                                 PhysicalSortDirection.Descending),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                        ]),
+                        ],
+                        missingValueBehavior: pageByWorkflow.MissingValueBehavior),
                     new PhysicalIndexDefinition(
                         scoped.Identity,
                         [
@@ -768,7 +770,8 @@ public static class ElsaGroundworkQueryRoutes
                             new PhysicalIndexColumnDefinition(sequenceColumn, 4),
                             new PhysicalIndexColumnDefinition(activityIdColumn, 5),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 6)
-                        ])
+                        ],
+                        missingValueBehavior: scoped.MissingValueBehavior)
                 ])
                 .ToArray(),
             definition.SchemaVersion,
@@ -974,7 +977,12 @@ public static class ElsaGroundworkQueryRoutes
                                 identity.ProjectedColumn,
                                 route.Fields.Count + 1),
                             .. CursorTieBreakColumns(route, envelope)
-                        ])))
+                        ],
+                        missingValueBehavior: logicalIndexes
+                            .Single(logical => StringComparer.Ordinal.Equals(
+                                logical.Identity,
+                                route.IndexIdentity))
+                            .MissingValueBehavior)))
                 .ToArray(),
             definition.SchemaVersion,
             definition.Evolution,
@@ -1220,7 +1228,8 @@ public static class ElsaGroundworkQueryRoutes
             new PhysicalIndexColumnDefinition(
                 new DocumentEnvelopeDefinition().IdLookupKeyColumn,
                 projectedColumns.Count + 1)
-        ]);
+        ],
+        missingValueBehavior: index.MissingValueBehavior);
 
     private static ElsaGroundworkQueryPredicate Equal(string path) =>
         new(path, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });

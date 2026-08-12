@@ -232,7 +232,8 @@ internal static class ExecutionLivenessRecoveryStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, 0),
                 ..index.Fields.Select((field, position) =>
                     new PhysicalIndexColumnDefinition(projectedByPath[field.Path], position + 1))
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
 
     private static LogicalIndexDeclaration Logical(string identity, params IndexField[] fields) =>
         new(identity, fields, IndexValueKind.Keyword, false, MissingValueBehavior.Excluded);

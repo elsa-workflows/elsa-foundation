@@ -731,6 +731,11 @@ public static class ActivitiesDesignStorageManifest
                 ],
                 predicateFields: [Predicate(ManagementValidToField, PortableQueryOperation.LessThanOrEqual)])
         };
+        // Physical indexes take their missing-value behavior from the logical index they serve, so the
+        // pair cannot drift apart. Groundwork requires the two to agree and defaults each independently.
+        MissingValueBehavior Missing(string identity) =>
+            logicalIndexes.Single(index => StringComparer.Ordinal.Equals(index.Identity, identity))
+                .MissingValueBehavior;
         var physical = PhysicalTableDefinition.PhysicalEntityTable(
             documentKind,
             columns,
@@ -742,19 +747,22 @@ public static class ActivitiesDesignStorageManifest
                     [
                         new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition(ColumnName(logicalIdField), 1)
-                    ]),
+                    ],
+                    missingValueBehavior: Missing("management-by-id")),
                 new PhysicalIndexDefinition(
                     "management-by-sort",
                     [
                         new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition("sort_key", 1)
-                    ]),
+                    ],
+                    missingValueBehavior: Missing("management-by-sort")),
                 new PhysicalIndexDefinition(
                     "management-by-valid-to",
                     [
                         new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
                         new PhysicalIndexColumnDefinition("valid_to", 1)
-                    ]),
+                    ],
+                    missingValueBehavior: Missing("management-by-valid-to")),
                 new PhysicalIndexDefinition(
                     V2("management-by-sort"),
                     [
@@ -762,7 +770,8 @@ public static class ActivitiesDesignStorageManifest
                         new PhysicalIndexColumnDefinition("sort_key", 1),
                         new PhysicalIndexColumnDefinition("valid_from", 2)
                     ],
-                    isUnique: true),
+                    isUnique: true,
+                    missingValueBehavior: Missing(V2("management-by-sort"))),
                 new PhysicalIndexDefinition(
                     V2("management-by-valid-to"),
                     [
@@ -771,7 +780,8 @@ public static class ActivitiesDesignStorageManifest
                         new PhysicalIndexColumnDefinition("resource_id", 2),
                         new PhysicalIndexColumnDefinition("valid_from", 3)
                     ],
-                    isUnique: true)
+                    isUnique: true,
+                    missingValueBehavior: Missing(V2("management-by-valid-to")))
             ]);
         return unit with
         {

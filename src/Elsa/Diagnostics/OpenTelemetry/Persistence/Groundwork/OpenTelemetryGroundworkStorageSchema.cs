@@ -203,7 +203,8 @@ public static class OpenTelemetryGroundworkStorageSchema
                 [
                     new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
                     new PhysicalIndexColumnDefinition("createdAt", 1)
-                ])],
+                ],
+                 missingValueBehavior: createdAt.MissingValueBehavior)],
             linkedProjectedColumns:
             [new ProjectedColumnDefinition("createdAt", "createdAt", PortablePhysicalType.DateTime, IsNullable: false)],
             linkedProjectionLogicalName: "elsa_open_telemetry_capture_operation_indexes");
@@ -477,7 +478,8 @@ public static class OpenTelemetryGroundworkStorageSchema
 
         return new(
             index.Identity,
-            columns);
+            columns,
+            missingValueBehavior: index.MissingValueBehavior);
     }
 
     private static PhysicalIndexDefinition LegacyPhysicalIndex(LogicalIndexDeclaration index)
@@ -494,7 +496,8 @@ public static class OpenTelemetryGroundworkStorageSchema
                         index.Identity == ByResourceServiceIndex && position > 0
                             ? PhysicalSortDirection.Descending
                             : PhysicalSortDirection.Ascending))
-            ]);
+            ],
+            missingValueBehavior: index.MissingValueBehavior);
     }
 
     private static LogicalIndexDeclaration CloneLogicalIndex(

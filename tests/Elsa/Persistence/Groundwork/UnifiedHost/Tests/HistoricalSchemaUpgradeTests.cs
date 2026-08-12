@@ -15,6 +15,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
+using Groundwork.Core.Indexing;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Text;
@@ -155,11 +156,18 @@ public sealed class HistoricalSchemaUpgradeTests
             PhysicalSchemaOperationKind.BackfillCanonicalJson,
             PhysicalSchemaOperationKind.ApplyProviderDefinition,
             PhysicalSchemaOperationKind.ValidatePhysicalSchema,
-            PhysicalSchemaOperationKind.RecordAppliedState
+            PhysicalSchemaOperationKind.RecordAppliedState,
+            // Rebuilding an index to keep rows it used to omit is additive: the rebuilt index serves every
+            // predicate the old one could, and more (valence-works/groundwork#177). Narrowing one is not,
+            // which is why the direction is asserted below rather than taken on trust.
+            PhysicalSchemaOperationKind.RebuildPhysicalIndex
         ];
         Assert.All(
             plan.Operations,
             operation => Assert.Contains(operation.Kind, additiveOperationKinds));
+        Assert.All(
+            plan.Operations.OfType<RebuildPhysicalIndexOperation>(),
+            operation => Assert.Equal(MissingValueBehavior.IncludedAsNull, operation.Index.MissingValueBehavior));
 
         var versionedIndexes = plan.Operations
             .OfType<CreatePhysicalIndexOperation>()

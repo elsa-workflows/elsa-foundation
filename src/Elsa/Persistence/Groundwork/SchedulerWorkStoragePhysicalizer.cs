@@ -93,7 +93,8 @@ internal static class SchedulerWorkStoragePhysicalizer
                             new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 1),
                             new PhysicalIndexColumnDefinition(OrderKeyColumn, 2),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                        ]),
+                        ],
+                        missingValueBehavior: byWorkflowIndex.MissingValueBehavior),
                     new PhysicalIndexDefinition(
                         pendingIndex.Identity,
                         [
@@ -101,7 +102,8 @@ internal static class SchedulerWorkStoragePhysicalizer
                             new PhysicalIndexColumnDefinition(collectionColumn, 1),
                             new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                             new PhysicalIndexColumnDefinition(OrderKeyColumn, 3)
-                        ])
+                        ],
+                        missingValueBehavior: pendingIndex.MissingValueBehavior)
                 ])
                 .ToArray(),
             definition.SchemaVersion,

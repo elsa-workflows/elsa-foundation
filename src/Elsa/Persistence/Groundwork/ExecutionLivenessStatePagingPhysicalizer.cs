@@ -84,7 +84,8 @@ internal static class ExecutionLivenessStatePagingPhysicalizer
                             new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, 1),
                             new PhysicalIndexColumnDefinition(OperationalStateIdColumn, 2),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                        ]),
+                        ],
+                        missingValueBehavior: byWorkflow.MissingValueBehavior),
                     new PhysicalIndexDefinition(
                         all.Identity,
                         [
@@ -93,7 +94,8 @@ internal static class ExecutionLivenessStatePagingPhysicalizer
                             new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, 2),
                             new PhysicalIndexColumnDefinition(OperationalStateIdColumn, 3),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                        ])
+                        ],
+                        missingValueBehavior: all.MissingValueBehavior)
                 ])
                 .ToArray(),
             definition.SchemaVersion,
