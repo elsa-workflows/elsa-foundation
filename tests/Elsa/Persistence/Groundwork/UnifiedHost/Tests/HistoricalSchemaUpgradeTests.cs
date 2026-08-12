@@ -152,6 +152,12 @@ public sealed class HistoricalSchemaUpgradeTests
             PhysicalSchemaOperationKind.AddProjectedColumn,
             PhysicalSchemaOperationKind.FinalizeProjectedColumn,
             PhysicalSchemaOperationKind.CreatePhysicalIndex,
+            // Widening a null-excluding index so it keeps every row is additive: the widened index
+            // serves every predicate the applied one served. Row exclusion is a filtered, partial or
+            // partial-filter-expression index, though, so creation cannot reach it -- the object already
+            // exists under the wrong predicate. The planner substitutes this for the ordinary create in
+            // the same slot, and only where the applied index actually carries such a predicate.
+            PhysicalSchemaOperationKind.RebuildPhysicalIndex,
             PhysicalSchemaOperationKind.BackfillCanonicalJson,
             PhysicalSchemaOperationKind.ApplyProviderDefinition,
             PhysicalSchemaOperationKind.ValidatePhysicalSchema,
