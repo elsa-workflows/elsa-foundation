@@ -78,8 +78,27 @@ portfolio tile spans design and runtime and switches to per-target queries with 
 first of these is the subject of
 [ADR 0066](0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md).
 
-**`Groundwork.Tool` still applies one host-wide schema.** A split host over-provisions each database rather
-than applying per-target. That is a tooling gap, not a runtime one: admission still validates per target.
+**`Groundwork.Tool` applied one host-wide schema; closed by [#1172](https://github.com/elsa-workflows/elsa-foundation/issues/1172).**
+A split host over-provisioned each database rather than applying per-target. That was a tooling gap, not a
+runtime one: admission always validated per target, so the surplus tables were inert.
+
+The fix is the host exporting the plan it already computed, rather than the tool re-deriving it. A second
+implementation of the binding rule would drift from this one, and a tool that provisions a schema the runtime
+does not expect fails quietly at deploy time, which is the shape this ADR exists to remove.
+`GroundworkTargetDeploymentDescriptor` records, per target, its manifest identity and the manifest sources
+bound to it; `GroundworkTargetDeploymentSchema` is the source the tool activates to apply one target's share.
+
+The tool selects a manifest source by type name and activates it parameterlessly, which cannot express "one
+of these schemas, chosen per invocation". Rather than smuggle the choice through the environment, where it
+is invisible to `--help` and to whatever records what was deployed, the seam was widened upstream:
+`valence-works/groundwork#179` adds a repeatable `--manifest-option key=value` forwarded verbatim to a source
+implementing `IConfigurablePhysicalSchemaManifestSource`. Groundwork stays neutral, knowing nothing about
+lanes or targets; Elsa reads `descriptor` and `target`.
+
+Every disagreement is a refusal, never a fallback to the host-wide union. The tool refuses when the
+descriptor is absent, unreadable, of an unknown format version, silent about the requested target, carrying a
+manifest identity this build does not derive, or no longer accounting for exactly the lanes the host
+composes. That last check is what makes freshness enforceable rather than conventional.
 
 The former one-provider-per-host rule is retired. `SelectGroundworkProviderLeaf` is deleted and its
 conformance suite now asserts the per-target contract: a different store claiming an already-declared name is

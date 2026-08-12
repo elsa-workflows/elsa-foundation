@@ -1,7 +1,11 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.MongoDb;
+using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Targets;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
@@ -296,6 +300,133 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         Assert.Equal(source.TargetFingerprint, admission.TargetFingerprint);
         Assert.Single(admission.Diagnostics, x => x.Code == "ELSA-GW-SCHEMA-DRIFT");
         Assert.False(await TableExistsAsync(database, "host_orders"));
+    }
+
+    /// <summary>
+    /// Issue #1172, end to end through the real tool: a split host applies one target's lanes to one
+    /// database rather than the union of every lane to both.
+    /// </summary>
+    [Fact]
+    public async Task Applying_a_target_provisions_that_targets_lanes_and_leaves_the_others_out()
+    {
+        var descriptor = WriteSplitDescriptor();
+        var designDatabase = Path.Combine(directory, $"design-{Guid.NewGuid():N}.db");
+        var runtimeDatabase = Path.Combine(directory, $"runtime-{Guid.NewGuid():N}.db");
+
+        var design = await RunTargetToolAsync("apply", descriptor, DesignTarget, designDatabase, "--safe");
+        var runtime = await RunTargetToolAsync("apply", descriptor, "default", runtimeDatabase, "--safe");
+
+        Assert.Equal(Success, design.ExitCode);
+        Assert.Equal(Success, runtime.ExitCode);
+
+        var designTables = await TableNamesAsync(designDatabase);
+        var runtimeTables = await TableNamesAsync(runtimeDatabase);
+
+        // Disjoint is the assertion that bites. Each database carrying its own lane would also be true
+        // of the bug, because over-provisioning is additive.
+        Assert.NotEmpty(designTables);
+        Assert.NotEmpty(runtimeTables);
+        Assert.Empty(designTables.Intersect(runtimeTables, StringComparer.Ordinal));
+        Assert.Contains(designTables, table => table.Contains("workflow_definition", StringComparison.Ordinal));
+        Assert.DoesNotContain(designTables, table => table.Contains("bookmark", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Applying_a_target_the_descriptor_does_not_describe_refuses_before_touching_the_database()
+    {
+        var descriptor = WriteSplitDescriptor();
+        var database = Path.Combine(directory, $"unknown-{Guid.NewGuid():N}.db");
+
+        var result = await RunTargetToolAsync("apply", descriptor, "reporting", database, "--safe");
+
+        Assert.NotEqual(Success, result.ExitCode);
+        Assert.False(File.Exists(database) && (await TableNamesAsync(database)).Count > 0);
+    }
+
+    [Fact]
+    public async Task A_stale_descriptor_refuses_rather_than_applying_the_host_wide_union()
+    {
+        // A lane the host composes but the descriptor does not place is what a descriptor exported
+        // before a feature was added looks like.
+        var full = GroundworkTargetDeploymentDescriptorFactory.Create(
+            new GroundworkAllFeaturesDeploymentSchema(),
+            SplitBindings());
+        var stale = GroundworkTargetDeploymentDescriptor.Create(
+            full.DeploymentSchemaSource,
+            full.Targets
+                .Select(entry => entry.Name == DesignTarget
+                    ? GroundworkTargetDeploymentEntry.Create(
+                        entry.Name,
+                        entry.ManifestIdentity,
+                        entry.ManifestSources.Take(1).ToArray())
+                    : entry)
+                .ToArray());
+        var path = Path.Combine(directory, $"stale-{Guid.NewGuid():N}.json");
+        stale.WriteTo(path);
+
+        var result = await RunTargetToolAsync(
+            "validate",
+            path,
+            DesignTarget,
+            database: null,
+            "--offline");
+
+        Assert.NotEqual(Success, result.ExitCode);
+    }
+
+    private const string DesignTarget = "authoring";
+
+    private static GroundworkManifestBindings SplitBindings()
+    {
+        var bindings = new GroundworkManifestBindings();
+        bindings.Bind(typeof(WorkflowsDesignGroundworkStorageManifestSource), DesignTarget);
+        bindings.Bind(typeof(ActivitiesDesignGroundworkStorageManifestSource), DesignTarget);
+        bindings.Bind(typeof(GroundworkDesignAtomicWriteStorageManifestSource), DesignTarget);
+        return bindings;
+    }
+
+    private string WriteSplitDescriptor()
+    {
+        var path = Path.Combine(directory, $"descriptor-{Guid.NewGuid():N}.json");
+        GroundworkTargetDeploymentDescriptorFactory
+            .Create(new GroundworkAllFeaturesDeploymentSchema(), SplitBindings())
+            .WriteTo(path);
+        return path;
+    }
+
+    private static Task<ToolResult> RunTargetToolAsync(
+        string command,
+        string descriptorPath,
+        string target,
+        string? database,
+        params string[] extraArguments) => RunToolForProviderAsync(
+        command,
+        typeof(GroundworkTargetDeploymentSchema),
+        "sqlite",
+        database,
+        CancellationToken.None,
+        [
+            "--manifest-option", $"{GroundworkTargetDeploymentSchema.DescriptorOption}={descriptorPath}",
+            "--manifest-option", $"{GroundworkTargetDeploymentSchema.TargetOption}={target}",
+            .. extraArguments
+        ]);
+
+    private static async Task<IReadOnlyList<string>> TableNamesAsync(string database)
+    {
+        if (!File.Exists(database))
+            return [];
+
+        await using var connection = new SqliteConnection($"Data Source={database}");
+        await connection.OpenAsync(CancellationToken.None);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
+            "AND name NOT LIKE 'groundwork%';";
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(CancellationToken.None);
+        while (await reader.ReadAsync(CancellationToken.None))
+            names.Add(reader.GetString(0));
+        return names;
     }
 
     public void Dispose() => Directory.Delete(directory, recursive: true);

@@ -28,6 +28,15 @@ public abstract class GroundworkDeploymentSchemaManifestSource : IPhysicalSchema
     protected virtual GroundworkStorageNamingPolicyOptions CreateStorageNamingPolicy() =>
         GroundworkStorageNamingPolicyOptions.Identity;
 
+    /// <summary>
+    /// The composed manifest identity. A whole-host source keeps the bare identity, which is what a
+    /// single-database deployment has always applied under. A source narrowed to one target derives its
+    /// own, because Groundwork keys persisted schema state on (manifest identity, provider name) and two
+    /// targets pointed at one database would otherwise overwrite each other's state row.
+    /// </summary>
+    private protected virtual StorageManifestIdentity ManifestIdentity =>
+        GroundworkStorageCompositionDescriptor.Identity;
+
     public StorageManifest CreateManifest() => definition.Value.Manifest;
 
     public IPhysicalNamePolicy CreateNamePolicy() => definition.Value.NamePolicy;
@@ -56,7 +65,7 @@ public abstract class GroundworkDeploymentSchemaManifestSource : IPhysicalSchema
         }
 
         var manifest = StorageManifestComposition.Union(
-            GroundworkStorageCompositionDescriptor.Identity,
+            ManifestIdentity,
             GroundworkStorageCompositionDescriptor.Owner,
             GroundworkStorageCompositionDescriptor.Version,
             declarations.Select(declaration => declaration.Manifest).ToArray());
