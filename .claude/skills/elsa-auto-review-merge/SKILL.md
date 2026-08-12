@@ -7,7 +7,7 @@ metadata:
   author: "elsa-foundation"
   source: "docs/skills/catalog.md#auto-review-loop-then-merge"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 ## User Input
