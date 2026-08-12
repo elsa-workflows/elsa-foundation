@@ -18,15 +18,16 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    // 2026-08-11: the design-lane search indexes and the trigger-binding traversal indexes now declare
-    // IncludedAsNull, so no provider omits rows whose keyed columns have no value. That changes the
-    // physical target. Only the PENDING fingerprint moves;
+    // 2026-08-12: the runtime-lane lookup, traversal and sweep indexes stopped declaring Excluded and
+    // now take preview.118's IncludedAsNull default, so no provider omits rows whose keyed columns have
+    // no value. That changes the physical target, on top of the design-lane search indexes and the
+    // trigger-binding traversal indexes that moved it on 2026-08-11. Only the PENDING fingerprint moves;
     // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
     // this records a head that has moved rather than re-ratifying anything.
-    private const string PendingTargetFingerprint = "1a7ac7c4e49922fba3393a6e06765c5e7e677a14233dc895f0d95d3b7536d5a0";
-    // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
-    // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "f9e388a89173d129953efdb94735829e9c6f9037d36a80b70bab74715acbc7a5";
+    private const string PendingTargetFingerprint = "887d628c61f0f8b572acd3b59b76e5c8e1fe58138063cf4db1213a1298d007f2";
+    // Moves with PendingTargetFingerprint above, and for the same reason: the index definitions the plan
+    // provisions changed. AcceptedPlanFingerprint is untouched.
+    private const string PendingPlanFingerprint = "b0c959542297a63acbff3d6d58e1d56ea99d91fa833b38d8ce75d69bcdd39c9b";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
