@@ -313,20 +313,6 @@ public sealed class GroundworkShellSchemaActivationTests
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1"));
     }
 
-    private sealed class TemporarySqliteDatabase : IAsyncDisposable
-    {
-        private readonly string path = Path.Combine(
-            Path.GetTempPath(),
-            $"elsa-groundwork-shell-schema-{Guid.NewGuid():N}.db");
-
-        public string ConnectionString => $"Data Source={path}";
-
-        public ValueTask DisposeAsync()
-        {
-            File.Delete(path);
-            return ValueTask.CompletedTask;
-        }
-    }
 }
 
 [ShellFeature(

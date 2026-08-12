@@ -224,6 +224,16 @@ public sealed class WorkflowDefinitionLifecycleContractTests
             new WorkflowDefinitionNotSoftDeletedException("definition-active"),
             StatusCodes.Status409Conflict);
 
+    // 501 rather than 409 or 500: this host will never be able to perform the operation, so an operator should
+    // read it as "not here", not as "retry" or "something broke" (#1283).
+    [Fact]
+    public Task Permanent_delete_without_a_publication_check_maps_to_not_implemented() =>
+        AssertCommandFailureStatusAsync(
+            "Definitions.DeletePermanently",
+            new DeleteDefinitionPermanently("delete-unverifiable", "definition-unverifiable"),
+            new WorkflowDefinitionPermanentDeletionUnavailableException("definition-unverifiable"),
+            StatusCodes.Status501NotImplemented);
+
     [Fact]
     public Task Unexpected_permanent_delete_failure_remains_an_internal_server_error() =>
         AssertCommandFailureStatusAsync(

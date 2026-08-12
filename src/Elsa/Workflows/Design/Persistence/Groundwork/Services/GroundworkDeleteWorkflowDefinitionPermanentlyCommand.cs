@@ -34,6 +34,15 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
+        // Refuse before touching the store: whether this host may permanently delete at all is a property of its
+        // composition, not of the definition. A design-only host composes no publication check, so it cannot tell
+        // whether another node still holds a live publication against the same design catalog, and the delete is
+        // unrecoverable. Keying on the publication guard rather than on the guard list being empty keeps the
+        // refusal meaning "no publication check" once other verticals contribute vetoes of their own.
+        var guards = deletionGuards?.ToArray() ?? [];
+        if (!guards.OfType<IWorkflowDefinitionPublicationDeletionGuard>().Any())
+            throw new WorkflowDefinitionPermanentDeletionUnavailableException(definitionId);
+
         List<DeleteDocumentRequest>? deletes = null;
         PermanentDeleteResult? resolvedResult = null;
         var outcome = await GroundworkDesignAtomicCommand.ExecuteAsync(
@@ -66,7 +75,7 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                 if (definition.DeletedAt is null)
                     throw new WorkflowDefinitionNotSoftDeletedException(definitionId);
 
-                foreach (var guard in deletionGuards ?? [])
+                foreach (var guard in guards)
                     await guard.EnsureCanDeleteAsync(definitionId, token);
 
                 var resolvedDeletes = new List<DeleteDocumentRequest>();

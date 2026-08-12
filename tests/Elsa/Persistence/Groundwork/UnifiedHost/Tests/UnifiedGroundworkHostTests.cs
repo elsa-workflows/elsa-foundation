@@ -582,16 +582,4 @@ public class UnifiedGroundworkHostTests
         Assert.Equal("wal", mode, ignoreCase: true);
     }
 
-    private sealed class TemporarySqliteDatabase : IAsyncDisposable
-    {
-        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-unified-{Guid.NewGuid():N}.db");
-
-        public string ConnectionString => $"Data Source={_path}";
-
-        public ValueTask DisposeAsync()
-        {
-            File.Delete(_path);
-            return ValueTask.CompletedTask;
-        }
-    }
 }

@@ -75,6 +75,8 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         // Permanent definition deletion must not strand a live publication: the guard is contributed into the
         // design-persistence delete commands and vetoes while a slot is active or a Published reference is live.
+        // It is also the publication check permanent deletion requires, so a host that does not compose this
+        // feature refuses the operation outright instead of deleting unverified (#1283).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
         // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
