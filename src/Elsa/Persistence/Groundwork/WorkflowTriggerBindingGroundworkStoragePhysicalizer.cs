@@ -35,7 +35,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // Traversal indexes: the bounded sweeps behind these routes must see every binding, so the
+            // index cannot omit the ones whose keyed columns have no value.
+            MissingValueBehavior.IncludedAsNull);
         var stimulusTypeAndActive = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulusTypeAndActive,
             [
@@ -47,7 +49,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // Traversal indexes: the bounded sweeps behind these routes must see every binding, so the
+            // index cannot omit the ones whose keyed columns have no value.
+            MissingValueBehavior.IncludedAsNull);
         var publicationAndId = OrderedLookupIndex(
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingByPublicationAndId,
             ElsaRuntimeStorageManifest.PublicationIdField);
@@ -92,7 +96,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(
                             envelope.IdLookupKeyColumn,
                             4)
-                    ]),
+                    ],
+                    missingValueBehavior: MissingValueBehavior.IncludedAsNull),
                 new PhysicalIndexDefinition(
                     stimulusTypeAndActive.Identity,
                     [
@@ -101,7 +106,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActive, 2),
                         new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingById, 3),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 4)
-                    ]),
+                    ],
+                    missingValueBehavior: MissingValueBehavior.IncludedAsNull),
                 OrderedLookupPhysicalIndex(
                     publicationAndId,
                     ElsaRuntimeStorageManifest.ByPublicationIndex,
@@ -203,7 +209,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // Traversal indexes: the bounded sweeps behind these routes must see every binding, so the
+            // index cannot omit the ones whose keyed columns have no value.
+            MissingValueBehavior.IncludedAsNull);
 
     private static PhysicalIndexDefinition OrderedLookupPhysicalIndex(
         LogicalIndexDeclaration index,
@@ -216,7 +224,10 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                 new PhysicalIndexColumnDefinition(predicateColumn, 1),
                 new PhysicalIndexColumnDefinition(ElsaRuntimeStorageManifest.WorkflowTriggerBindingById, 2),
                 new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-            ]);
+            ],
+            // Must match the logical declaration above; the two disagreeing is itself a blocking
+            // diagnostic, and these routes sweep every binding.
+            missingValueBehavior: MissingValueBehavior.IncludedAsNull);
 
     private static BoundedQueryDeclaration OrderedLookupQuery(
         string identity,
