@@ -66,7 +66,7 @@ public static class DistributedGroundworkStorageManifest
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var table = PhysicalTableDefinition.PhysicalEntityTable(
             PlacementsTable,
             [
@@ -143,7 +143,7 @@ public static class DistributedGroundworkStorageManifest
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var pendingIndex = new LogicalIndexDeclaration(
             PendingCommandByExecutionSequenceIndex,
             [
@@ -153,7 +153,7 @@ public static class DistributedGroundworkStorageManifest
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var table = PhysicalTableDefinition.PhysicalEntityTable(
             CommandTransportTable,
             [

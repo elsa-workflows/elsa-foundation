@@ -649,19 +649,19 @@ public static class ActivitiesDesignStorageManifest
                 ],
                 IndexValueKind.Keyword,
                 false,
-                MissingValueBehavior.Excluded),
+                MissingValueBehavior.IncludedAsNull),
             new LogicalIndexDeclaration(
                 "management-by-sort",
                 [new IndexField(ManagementSortField, IndexValueKind.Keyword)],
                 IndexValueKind.Keyword,
                 false,
-                MissingValueBehavior.Excluded),
+                MissingValueBehavior.IncludedAsNull),
             new LogicalIndexDeclaration(
                 "management-by-valid-to",
                 [new IndexField(ManagementValidToField, IndexValueKind.Keyword)],
                 IndexValueKind.Keyword,
                 false,
-                MissingValueBehavior.Excluded),
+                MissingValueBehavior.IncludedAsNull),
             new LogicalIndexDeclaration(
                 V2("management-by-sort"),
                 [
@@ -670,7 +670,7 @@ public static class ActivitiesDesignStorageManifest
                 ],
                 IndexValueKind.Keyword,
                 true,
-                MissingValueBehavior.Excluded),
+                MissingValueBehavior.IncludedAsNull),
             new LogicalIndexDeclaration(
                 V2("management-by-valid-to"),
                 [
@@ -680,7 +680,7 @@ public static class ActivitiesDesignStorageManifest
                 ],
                 IndexValueKind.Keyword,
                 true,
-                MissingValueBehavior.Excluded)
+                MissingValueBehavior.IncludedAsNull)
         };
         var boundedQueries = new[]
         {
