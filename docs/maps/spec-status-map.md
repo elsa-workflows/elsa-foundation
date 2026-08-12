@@ -121,7 +121,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [092-workflow-executable-cache](../../specs/092-workflow-executable-cache/spec.md) | Bounded Workflow Executable Cache | Approved for implementation | - | 32 | 0 | retained |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 87 | 1 | superseded |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
-| [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
+| [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | In Progress — issue #1106 cursor-recertification amendment | - | 98 | 10 | retained |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
 | [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | retained, deferred, out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
