@@ -104,6 +104,43 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Output:** created local `.agent-prefs/*.md` files, or a short note that the user chose to decide per session. Never commit personal preference files.
 
+## Review And Merge Skills
+
+### Auto-Review Loop Then Merge
+
+**Use when:** a branch or pull request is ready for review and the user wants it reviewed to convergence and then merged if the gate allows it. Also use when a review round produced fixes and the changed diff must be reviewed again before merge.
+
+**Workflow:**
+
+1. **Scope the diff before reading any code.** If a pull request exists, its base branch is the review base: `gh pr view --json number,url,baseRefName,headRefName,isDraft`. Otherwise use the merge base with `main`. Review the diff between that base and the branch head, and nothing else. For a stacked pull request the base is the parent branch rather than `main`: review only the commits this PR adds on top of its base, and state which base was used, because a stacked branch also carries whatever its base held when it was cut and reviewing the whole stack reports the parent's code as this PR's.
+2. **Review with independent reviewers, one per lens.** Run them concurrently where the AI provider supports it, and do not let one reviewer see another's output — shared context turns independent lenses into one lens. At minimum: correctness; repo-standards conformance against [../../AGENTS.md](../../AGENTS.md), [../../.specify/memory/constitution-framework.md](../../.specify/memory/constitution-framework.md), and [../../.specify/memory/constitution.md](../../.specify/memory/constitution.md); and spec/issue conformance against the spec under `specs/` or the issue the branch names, where the branch names one. Add the lenses the change earns, such as persistence, concurrency, public API surface, or test quality.
+3. **Verify every finding adversarially before acting on it.** A finding is a claim until it is traced to a specific file and line and paired with a concrete failure scenario: which inputs or state produce which wrong behavior. Discard everything else, including plausible-sounding claims, because an unverified finding costs a fix round and can leave the code worse. Audit each claim against the code itself, not against the reviewer's report or the diff summary: re-reading your own reasoning confirms nothing that writing it did not already assume. Where a finding says a guard is missing or too weak, mutation-test the guard before trusting either the guard or the finding — break the thing the guard claims to catch and confirm it goes red. A guard that stays green under that mutation is itself the finding.
+4. **Apply the surviving findings, then re-establish evidence.** Rebuild, and re-run the affected suites as whole test projects rather than filtered subsets; compare what executed against what exists, because a green summary line reports only the tests that ran. If files or project references changed, refresh the generated maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` and stage every changed map by explicit path, `docs/maps/manifest.json` included, per [../../AGENTS.md](../../AGENTS.md#refresh-generated-maps). Use [Refresh Generated Maps](#refresh-generated-maps) for the narrower refreshes.
+5. **Loop on the new diff.** Re-derive the diff against the same base and repeat from step 2 against the new head, since fixes are unreviewed code. Stop when a round produces no surviving findings, or at a stated iteration cap; three rounds is a reasonable default. Reaching the cap is an unconverged result and must be reported as one, not as a pass.
+6. **Only then consider merging,** through [Merge Gate](#merge-gate). Convergence of the review loop is not itself a merge decision.
+
+**Output:** per round, the surviving findings with file, line, and failure scenario; the claims that were discarded and which verification step they failed; and the fixes applied. At the end, whether the loop converged or hit its cap, followed by the merge decision and its evidence.
+
+### Merge Gate
+
+**Use when:** a branch is about to be merged, whether or not it came through the review loop.
+
+**Workflow:** refusing to merge is the default. Merging is what a fully green gate unlocks, so treat every item below as required and stop and report when any of them does not hold. This is the gate described in [../../AGENTS.md](../../AGENTS.md#program-bookkeeping).
+
+- **Build** the solution.
+- **Affected suites** pass, run as whole test projects.
+- **Architecture guard** passes: `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`.
+- **Generated-maps check** passes: `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
+- **Diff review** is complete and its surviving findings are resolved.
+- **Bite-proof** wherever the change claims a behavioral difference: revert the fix, or mutate the code the new test covers, show the test going red, then restore and show it green. A test that passes both before and after the change proves nothing about the change.
+- **Evidence posted as a pull-request comment before the merge**, written so a human can check it without rerunning anything: the commands, their results, the executed test counts, and the bite-proof's red-then-green transition. That comment is the notification of record. No comment, no merge — this holds for your own pull request as much as for a peer session's.
+- **Required checks are green on the head commit.** No required check may be red. An empty or missing check list is not green: a pull request that cannot merge cleanly runs no workflows at all, so no reported checks means the gate never ran.
+- **Not a draft.** Mark the pull request ready and let the gate run against it; do not merge a draft.
+- **Stacked pull requests merge base-first.** A child cannot merge before its base, and merging out of order rewrites what the child's diff means.
+- **A red gate is a stop even when its cause is outside this branch.** A regression already present on the base, an infrastructure failure, or an unrelated flake blocks the merge exactly like a defect in the change does. Report what is red, where it came from, and what would clear it. Do not merge past it and do not restamp it as unrelated.
+
+**Output:** either the posted evidence comment followed by the merge, or a refusal that names the failing item, its cause, and what would clear it.
+
 ## Speckit And Work-Unit Skills
 
 ### Speckit Flow Guide
