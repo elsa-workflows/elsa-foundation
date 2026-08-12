@@ -13,11 +13,11 @@ namespace Elsa.Foundation.Host.ModuleManagement;
 /// <list type="bullet">
 ///   <item><c>POST /_module-management/reconcile</c> — trigger a Nuplane package reconcile from the feed.</item>
 ///   <item><c>POST /_module-management/reload</c> — refresh the runtime feature catalog + reload active shells.</item>
-///   <item><c>GET  /_module-management/assemblies</c> — OBSERVABILITY: every live assembly load context and its
-///   assemblies + versions (ground truth from the CLR), cross-referenced with Nuplane's active set, flagging
-///   collectible contexts that are still resident but are no longer the active version (unload leak candidates).</item>
-///   <item><c>POST /_module-management/collect</c> — CONTROL: force GC + finalizers (repeatable) to complete any
-///   outstanding collectible-context unloads, and report which unloaded vs. are still pinned.</item>
+///   <item><c>GET  /_module-management/assemblies</c> — OBSERVABILITY (read-only): the resident collectible
+///   package load contexts and their assemblies + versions (ground truth from the CLR), cross-referenced with
+///   Nuplane's active set, flagging contexts still resident but no longer the active version (unload leak
+///   candidates). The default/framework load context is counted only, never enumerated, so no host assembly
+///   inventory is disclosed.</item>
 /// </list>
 /// Mapped only when <see cref="ModuleManagementOptions.Enabled"/> is true at startup.
 /// </summary>
@@ -39,18 +39,23 @@ internal static class ModuleManagementEndpoints
             return Results.Ok(new { features = snapshot.FeatureDescriptors.Count, reloaded = results.Count });
         });
 
-        // ---- OBSERVABILITY --------------------------------------------------------------------------------
+        // ---- OBSERVABILITY (read-only) --------------------------------------------------------------------
         // Ground truth comes from the CLR itself (AssemblyLoadContext.All), NOT from Nuplane's assembly
         // catalog (which reads empty/"stale" outside a load), so it shows what is *actually* resident. The
         // authoritative "should be active" set is Nuplane's active-package catalog (GetPackagesAsync). Nuplane
         // names each collectible context "nuplane:<PackageId>", so a collectible context whose package id is
         // NOT in the active set is a leak candidate — an old version still pinned after it should have unloaded.
+        //
+        // Only collectible contexts (the Nuplane package contexts — the operator's own feature packages) are
+        // detailed. The default/framework context is counted, never enumerated, so this surface never discloses
+        // the host's full assembly inventory.
         group.MapGet("/assemblies", async (INuplaneAdminOperations admin, CancellationToken ct) =>
         {
             var snapshot = await admin.GetPackagesAsync(ct);
             var activeIds = new HashSet<string>(snapshot.Packages.Select(p => p.PackageId), StringComparer.OrdinalIgnoreCase);
 
-            var contexts = AssemblyLoadContext.All.Select(alc =>
+            var all = AssemblyLoadContext.All.ToArray();
+            var collectible = all.Where(alc => alc.IsCollectible).Select(alc =>
             {
                 var asms = SafeAssemblies(alc);
                 var pkgId = PackageIdOf(alc);
@@ -58,11 +63,9 @@ internal static class ModuleManagementEndpoints
                                || asms.Any(a => activeIds.Contains(a.GetName().Name ?? ""));
                 return new
                 {
-                    name = alc.Name ?? "(default)",
-                    isCollectible = alc.IsCollectible,
+                    name = alc.Name ?? "(unnamed)",
                     packageId = pkgId,
                     activeInNuplane = isActive,
-                    assemblyCount = asms.Length,
                     assemblies = asms
                         .Select(a => new { name = a.GetName().Name ?? "", version = a.GetName().Version?.ToString() ?? "" })
                         .OrderBy(a => a.name, StringComparer.OrdinalIgnoreCase)
@@ -70,16 +73,15 @@ internal static class ModuleManagementEndpoints
                 };
             }).ToArray();
 
-            var collectible = contexts.Where(c => c.isCollectible).ToArray();
             var lingering = collectible.Where(c => !c.activeInNuplane).ToArray();
 
             return Results.Ok(new
             {
                 summary = new
                 {
-                    loadContexts = contexts.Length,
+                    loadContexts = all.Length,                        // total contexts (framework context counted, not listed)
                     collectibleContexts = collectible.Length,
-                    lingeringCollectibleContexts = lingering.Length, // resident but NOT an active package = leak candidates
+                    lingeringCollectibleContexts = lingering.Length,  // resident but NOT an active package = leak candidates
                     activePackages = activeIds.Count
                 },
                 activePackages = snapshot.Packages
@@ -87,38 +89,6 @@ internal static class ModuleManagementEndpoints
                     .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray(),
                 lingering,                                            // the collectible contexts that should be gone
                 collectibleContexts = collectible
-            });
-        });
-
-        // ---- CONTROL --------------------------------------------------------------------------------------
-        // A collectible AssemblyLoadContext unloads only after (a) Nuplane called Unload() on it — it does, when
-        // a reconcile removes the package — AND (b) no managed references remain AND (c) a GC actually runs.
-        // This forces (c), repeatedly, on demand: if the references have since been released, the pending
-        // unloads complete now. If a context is STILL resident afterwards, something is still pinning it — see
-        // GET /assemblies -> lingering. (Pair with POST /reconcile to also re-drive Nuplane's own unload retry.)
-        group.MapPost("/collect", (int? passes) =>
-        {
-            var n = Math.Clamp(passes ?? 3, 1, 20);
-            string[] Collectible() => AssemblyLoadContext.All
-                .Where(a => a.IsCollectible).Select(a => a.Name ?? "(unnamed)")
-                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
-
-            var before = Collectible();
-            for (var i = 0; i < n; i++)
-            {
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
-            }
-            var after = Collectible();
-
-            return Results.Ok(new
-            {
-                passes = n,
-                collectibleBefore = before.Length,
-                collectibleAfter = after.Length,
-                unloaded = before.Except(after, StringComparer.OrdinalIgnoreCase).ToArray(),
-                stillResident = after
             });
         });
 
