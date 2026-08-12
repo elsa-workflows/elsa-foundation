@@ -114,7 +114,7 @@ public static class WorkflowsDesignStorageManifest
             LogicalIndex("definition-by-description", [DefinitionDescriptionField, DefinitionIdField]),
             LogicalIndex("definition-by-search", [DefinitionNameField, DefinitionIdField, DefinitionDescriptionField]),
             LogicalIndex(V2("definition-by-id-list"), [DefinitionIdField], unique: true),
-            LogicalIndex(V2("definition-by-name"), [DefinitionNameField, DefinitionIdField], unique: true, missingValues: MissingValueBehavior.IncludedAsNull),
+            LogicalIndex(V2("definition-by-name"), [DefinitionNameField, DefinitionIdField], unique: true),
             LogicalIndex(V2("definition-by-description"), [DefinitionDescriptionField, DefinitionIdField], unique: true)
         };
         var physicalIndexes = new[]
@@ -125,7 +125,7 @@ public static class WorkflowsDesignStorageManifest
             PhysicalIndex("definition-by-description", "description", "definition_id"),
             PhysicalIndex("definition-by-search", "name", "definition_id", "description"),
             UniquePhysicalIndex(V2("definition-by-id-list"), "definition_id"),
-            SearchPhysicalIndex(V2("definition-by-name"), "name", "definition_id"),
+            UniquePhysicalIndex(V2("definition-by-name"), "name", "definition_id"),
             UniquePhysicalIndex(V2("definition-by-description"), "description", "definition_id")
         };
         var queries = new[]
@@ -289,43 +289,14 @@ public static class WorkflowsDesignStorageManifest
         };
     }
 
-    private static LogicalIndexDeclaration LogicalIndex(
-        string identity,
-        string[] fields,
-        bool unique = false,
-        MissingValueBehavior missingValues = MissingValueBehavior.Excluded) =>
-        new(identity, fields.Select(field => new IndexField(field, ValueKind(field))).ToArray(), IndexValueKind.Keyword, unique, missingValues);
+    private static LogicalIndexDeclaration LogicalIndex(string identity, string[] fields, bool unique = false) =>
+        new(identity, fields.Select(field => new IndexField(field, ValueKind(field))).ToArray(), IndexValueKind.Keyword, unique, MissingValueBehavior.Excluded);
 
     private static PhysicalIndexDefinition PhysicalIndex(string identity, params string[] columns) =>
         PhysicalIndex(identity, false, columns);
 
     private static PhysicalIndexDefinition PhysicalIndex(string identity, bool unique, params string[] columns) =>
-        PhysicalIndex(identity, unique, MissingValueBehavior.Excluded, columns);
-
-    private static PhysicalIndexDefinition PhysicalIndex(string identity, bool unique, MissingValueBehavior missingValues, params string[] columns) =>
-        new(identity, [new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0), .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))], isUnique: unique, missingValueBehavior: missingValues);
-
-    /// <summary>
-    /// An index for a search that spans several optional fields. It must keep rows that have no value
-    /// for its keyed columns, because the disjunction can match them on another field.
-    /// </summary>
-    /// <remarks>
-    /// It stays unique, which is what certifies a total order for offset paging. That is portable here
-    /// even though it keys nullable columns: the key contains an already-unique identity column, so no
-    /// two rows can share the whole key and the providers' disagreement about whether two missing
-    /// values collide is unobservable. The alternative, a non-unique index carrying the document
-    /// identity tie-break, does not fit SQL Server's 1700-byte index key budget once a text column is
-    /// in the key.
-    /// </remarks>
-    private static PhysicalIndexDefinition SearchPhysicalIndex(string identity, params string[] columns) =>
-        new(
-            identity,
-            [
-                new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0),
-                .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))
-            ],
-            isUnique: true,
-            missingValueBehavior: MissingValueBehavior.IncludedAsNull);
+        new(identity, [new PhysicalIndexColumnDefinition(Envelope.StorageScopeColumn, 0), .. columns.Select((column, index) => new PhysicalIndexColumnDefinition(column, index + 1))], isUnique: unique, missingValueBehavior: MissingValueBehavior.Excluded);
 
     private static PhysicalIndexDefinition UniquePhysicalIndex(string identity, params string[] columns) =>
         PhysicalIndex(identity, true, columns);

@@ -14,19 +14,19 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.114";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.111";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
-    // 2026-08-11: the design-lane search indexes and the trigger-binding traversal indexes now declare
-    // IncludedAsNull, so no provider omits rows whose keyed columns have no value. That changes the
-    // physical target. Only the PENDING fingerprint moves;
-    // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
-    // this records a head that has moved rather than re-ratifying anything.
-    private const string PendingTargetFingerprint = "1a7ac7c4e49922fba3393a6e06765c5e7e677a14233dc895f0d95d3b7536d5a0";
+    // 2026-08-10 (#1171): the design lane gained the designPostCommitIntent outbox unit and then bounded its
+    // projected intentId column so SQL Server accepts the claim index, both of which change the physical
+    // target. Only the PENDING fingerprint moves; AcceptedTargetFingerprint is the ratified floor at
+    // preview.81 and is deliberately left alone, so this records a head that has moved rather than
+    // re-ratifying anything.
+    private const string PendingTargetFingerprint = "455a80dc1ecbf75499fdbe80629d758dfcc5de78ae121cca3d5ba6639054c47a";
     // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
     // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "f9e388a89173d129953efdb94735829e9c6f9037d36a80b70bab74715acbc7a5";
+    private const string PendingPlanFingerprint = "0464dd34c792c3fca9b8edc47979bd7950df3d196283ec60c0814c4dffc0c67d";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()
