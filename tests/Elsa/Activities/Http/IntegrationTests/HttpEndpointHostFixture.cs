@@ -30,6 +30,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Groundwork.Core.Queries;
@@ -78,11 +79,15 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private readonly IHost _host;
     private readonly string? _databaseDirectory;
 
-    private HttpEndpointHostFixture(IHost host, string? databaseDirectory = null)
+    private HttpEndpointHostFixture(IHost host, CapturedServerLog serverLog, string? databaseDirectory = null)
     {
         _host = host;
+        ServerLog = serverLog;
         _databaseDirectory = databaseDirectory;
     }
+
+    /// <summary>Warning-and-worse server-side log entries, so a failed request can say why (#1297).</summary>
+    public CapturedServerLog ServerLog { get; }
 
     public HttpClient Client => _host.GetTestClient();
 
@@ -126,6 +131,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string? databaseDirectory,
         string? groundworkSqliteConnectionString)
     {
+        var serverLog = new CapturedServerLog();
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
             {
@@ -133,6 +139,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 webHost.ConfigureServices(services =>
                 {
                     services.AddLogging();
+                    services.AddSingleton<ILoggerProvider>(serverLog);
                     services.AddMemoryCache();
                     services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
@@ -229,7 +236,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         RunStartupTasks(host.Services);
 
-        return new HttpEndpointHostFixture(host, databaseDirectory);
+        return new HttpEndpointHostFixture(host, serverLog, databaseDirectory);
     }
 
     /// <summary>
@@ -744,8 +751,16 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync()).Count;
 
     /// <summary>The single persisted workflow execution's state — asserts exactly one run exists.</summary>
-    public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
-        Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync());
+    public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync()
+    {
+        var executions = await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
+        // A run that never started fails here rather than where it broke, so carry the server's own
+        // account of it into the message (#1297).
+        Assert.True(
+            executions.Count == 1,
+            $"Expected exactly one persisted workflow execution but found {executions.Count}.{ServerLog.Report()}");
+        return executions.Single();
+    }
 
     /// <summary>
     /// Waits for an asynchronously converging run and its committed result projection after the request that started it has

@@ -21,8 +21,14 @@ name: CI
 # NOTE FOR MAINTAINERS: making "Build & test" a REQUIRED status check on main is a
 # branch-protection repo setting and cannot be enforced from this workflow file alone.
 
+# Also runs on push to main. A PR-only gate says nothing once a PR is merged red, and a merge that
+# bypasses the gate leaves main broken with no signal at all: #1270 landed with four checks failing and
+# main stayed red and unreported until #1296 went looking. See #1297 for what accumulated meanwhile.
 on:
   pull_request:
+    branches:
+      - main
+  push:
     branches:
       - main
 

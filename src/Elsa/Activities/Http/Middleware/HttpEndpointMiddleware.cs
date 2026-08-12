@@ -13,6 +13,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Http.Middleware;
 
@@ -389,6 +390,16 @@ public sealed class HttpEndpointMiddleware(
         var faultException = timedOut && exception is OperationCanceledException
             ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
             : exception;
+
+        // Log before mapping. A dispatch fault becomes a bare status code with no body, so without this the
+        // cause is discarded and an operator sees only a 500 (#1297).
+        (context.RequestServices?.GetService(typeof(ILoggerFactory)) as ILoggerFactory)?
+            .CreateLogger<HttpEndpointMiddleware>()
+            .LogError(
+                faultException,
+                "HTTP endpoint dispatch faulted for {Method} {Path}.",
+                context.Request.Method,
+                context.Request.Path.Value);
 
         if (context.RequestServices?.GetService(typeof(IHttpEndpointFaultHandler)) is IHttpEndpointFaultHandler faultHandler)
         {
