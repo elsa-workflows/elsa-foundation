@@ -1154,6 +1154,12 @@ public sealed class ArchitectureGuardTests
         if (project.Name == "Elsa.Workbench")
             return "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj";
 
+        // Deployable host app, like Elsa.Workbench: it lives under src/Apps/, not the src/Elsa/<domain>/
+        // tree, so its name (which collides with the Elsa.Foundation identity domain) does not dictate its
+        // path.
+        if (project.Name == "Elsa.Foundation.Host")
+            return "src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+
         if (project.Name == "Elsa.Architecture.Tests")
             return "tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj";
 
@@ -1178,6 +1184,11 @@ public sealed class ArchitectureGuardTests
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Workbench")
+            return "/src/Apps/";
+
+        // Deployable host app under src/Apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
+        // solution folder, alongside Elsa.Workbench.
+        if (project.Name == "Elsa.Foundation.Host")
             return "/src/Apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');

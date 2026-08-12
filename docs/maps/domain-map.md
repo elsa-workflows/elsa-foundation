@@ -6,7 +6,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 153
+- Source projects: 154
 - Test projects: 100
 - Domains: 27
 - Direct cross-domain references: 707
@@ -24,7 +24,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Diagnostics | 13 | 9 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 10 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
-| Elsa.Foundation | 9 | 3 | feature/implementation<br>test |
+| Elsa.Foundation | 10 | 3 | feature/implementation<br>test |
 | Elsa.Git | 1 | 0 | feature/implementation |
 | Elsa.Groundwork | 0 | 2 | test |
 | Elsa.Http | 3 | 1 | contract<br>feature/implementation<br>test |
@@ -47,6 +47,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 | Project | Kind | Domain | Sub-domain | Role | Direct references |
 |---|---|---|---|---|---|
+| [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Elsa.Foundation | Host | feature/implementation | - |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Elsa.Workbench | - | host | Elsa.Activities.Bpmn<br>Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Design<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Design<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Sequence<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows<br>Elsa.Api.Capabilities<br>Elsa.Attention.Api<br>Elsa.Attention.Core<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Diagnostics.ConsoleLogStreaming<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Http<br>Elsa.Http.JavaScript<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Modularity.Api<br>Elsa.Modularity.Attention<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Persistence.Groundwork.PostgreSql.Unified<br>Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Attention<br>Elsa.Secrets.Core<br>Elsa.Secrets.Persistence.Groundwork<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.Groundwork<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.Groundwork<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.JavaScript<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Json<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.ExecutionEvidence<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Attention<br>Elsa.Workflows.Runtime.Http<br>Elsa.Workflows.Runtime.JavaScript<br>Elsa.Workflows.Runtime.ReferenceGarbageCollection<br>Elsa.Workflows.Runtime.Resumption<br>Elsa.Workflows.Runtime.Scheduling<br>Elsa.Workflows.Runtime.Tracing |
 | [Elsa.Activities.Bpmn](../../src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | source | Elsa.Activities | Bpmn | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Bpmn.Interchange](../../src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | source | Elsa.Activities | Bpmn.Interchange | feature/implementation | Elsa.Activities.Bpmn<br>Elsa.Api.FastEndpoints<br>Elsa.Workflows.Design.Core |
