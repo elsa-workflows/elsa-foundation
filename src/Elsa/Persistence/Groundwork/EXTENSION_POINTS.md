@@ -32,6 +32,35 @@ publishing documents in one transaction and Groundwork has no cross-store transa
 three fails with the lane-to-target mapping named. The dashboard portfolio tile spans design and runtime and
 switches to per-target queries with in-memory correlation when they differ.
 
+### Applying a split host's schema
+
+`Groundwork.Tool` runs in its own process and activates a schema source parameterlessly, so it cannot see
+which lane a host bound where. Export the plan from the composed host and point the tool at it, one target at
+a time:
+
+```csharp
+provider.WriteGroundworkDeploymentDescriptor("groundwork-targets.json");
+```
+
+```bash
+dotnet tool run groundwork -- apply \
+  --manifest-type Elsa.Persistence.Groundwork.Unified.Composition.GroundworkTargetDeploymentSchema \
+  --manifest-assembly <path>/Elsa.Persistence.Groundwork.Unified.dll \
+  --manifest-option descriptor=groundwork-targets.json \
+  --manifest-option target=authoring \
+  --provider sqlite --connection-env ELSA_DESIGN_CONNECTION
+```
+
+The descriptor is read, never guessed at. The tool refuses when it is missing, unreadable, of an unknown
+format version, silent about the requested target, carrying a manifest identity this build does not derive,
+or no longer accounting for exactly the lanes the host composes. It never falls back to the host-wide union,
+because doing that silently is the over-provisioning this replaces. Re-export the descriptor whenever the
+host's feature composition changes; the last check is what turns a stale one into an error rather than a
+wrong schema.
+
+Unsplit hosts need none of this: with no target named, the descriptor has one `default` entry carrying the
+bare `elsa-documents` identity, and the shipped whole-host deployment sources keep working unchanged.
+
 The unified and runtime-only shell features remain as **presets** that declare one target and bind the
 relevant lanes to it. The provider choice is the host's; runtime and domain code reference only the neutral
 ports.
