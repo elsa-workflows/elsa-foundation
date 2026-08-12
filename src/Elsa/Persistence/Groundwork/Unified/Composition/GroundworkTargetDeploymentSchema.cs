@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Targets;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
 
 namespace Elsa.Persistence.Groundwork.Unified.Composition;
 
