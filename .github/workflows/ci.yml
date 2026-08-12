@@ -25,7 +25,7 @@ name: CI
 #
 # TRIGGERS
 #   - pull_request: the merge gate. Unchanged behavior.
-#   - push to main: reports post-merge breakage AGAINST MAIN. Until issue #1298 this ran on
+#   - push to main: reports post-merge breakage AGAINST MAIN. Until PR #1302 this ran on
 #     pull_request only, so nothing ever evaluated main itself. On 2026-08-12 PR #1270 was
 #     force-merged at 00:20Z with three checks red and this very job still pending; main was
 #     then left unable to activate the Workbench at all, with HistoricalSchemaUpgradeTests

@@ -25,9 +25,9 @@ name: Integration (nightly)
 # is what this file used to claim. GitHub sends that mail to whoever last committed a change to
 # the cron schedule, which in a long-lived workflow is nobody who is watching: on 2026-08-12
 # this run failed at 05:02Z against a main that could not activate the Workbench, and it went
-# unread while main showed green for another four hours. The alert job at the bottom (issue
-# #1298) files a deduplicated issue instead, which is the same escalation the push-triggered
-# gates now use.
+# unread while main showed green for another four hours. The alert job at the bottom (PR #1302)
+# files a deduplicated issue instead, which is the same escalation the push-triggered gates
+# now use.
 
 on:
   schedule:

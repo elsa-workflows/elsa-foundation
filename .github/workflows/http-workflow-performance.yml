@@ -7,8 +7,8 @@ name: HTTP workflow performance
 # TRIGGERS
 #   - pull_request, path-filtered: unchanged. On a PR the filter is doing its job -- a docs or
 #     Studio change cannot move a Groundwork-SQLite benchmark.
-#   - push to main, NOT path-filtered: deliberate, and the one real judgment call in issue
-#     #1298. On 2026-08-12 main was left in a state where the Workbench could not activate at
+#   - push to main, NOT path-filtered: deliberate, and the one real judgment call in
+#     PR #1302. On 2026-08-12 main was left in a state where the Workbench could not activate at
 #     all (Groundwork's scale-bearing index check refused list-by-stimulus-type on bookmark
 #     state during shell activation) and nothing noticed for nine hours. That particular change
 #     did touch Directory.Packages.props and src/Elsa/Persistence/Groundwork/**, so a
