@@ -17,9 +17,22 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
     IBoundedDocumentStore? boundedStore = null)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
+    : GroundworkPublicationProjectionStore<WorkflowTriggerBinding>(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
 {
-    private const string ProjectionKind = "triggerBindings";
+    protected override string ProjectionKind => "triggerBindings";
+    protected override string ProjectionNoun => "trigger-binding";
+
+    protected override string ItemId(WorkflowTriggerBinding item) => item.TriggerBindingId;
+
+    protected override WorkflowTriggerBinding WithActive(WorkflowTriggerBinding item, bool isActive) =>
+        item with { IsActive = isActive };
+
+    protected override object StoragePayload(WorkflowTriggerBinding item) => item;
+
+    protected override async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListAllByPublicationCoreAsync(
+        string publicationId,
+        CancellationToken cancellationToken) =>
+        await this.ListAllByPublicationAsync(publicationId, cancellationToken);
     private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
 
     private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
@@ -69,26 +82,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         ArgumentNullException.ThrowIfNull(bindings);
         ValidatePublicationBindings(publicationId, bindings);
 
-        var projectionStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
-        var existing = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
-        var prepared = bindings.Select(binding => binding with { IsActive = false }).ToArray();
-        if (projectionStateEnvelope is not null)
-        {
-            var projectionState = Serializer.Deserialize<GroundworkPublicationProjectionState>(projectionStateEnvelope);
-            if (!projectionState.IsActive && ProjectionsEqual(existing, prepared))
-                return;
-
-            throw new InvalidOperationException(
-                $"Trigger-binding publication projection '{publicationId}' is already prepared with different state.");
-        }
-
-        await CommitAtomicallyAsync(
-            existing.Select(binding => binding.TriggerBindingId),
-            prepared,
-            new GroundworkPublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
-            deleteProjectionStateId: null,
-            cancellationToken,
-            projectionStateExpectedVersion: 0);
+        await PreparePublicationCoreAsync(publicationId, bindings, cancellationToken);
     }
 
     public async ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
@@ -112,60 +106,13 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         if (replacedPublicationId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
 
-        var candidateStateEnvelope = await LoadProjectionStateEnvelopeAsync(publicationId, cancellationToken);
-        if (candidateStateEnvelope is null)
-            throw new InvalidOperationException($"Publication '{publicationId}' has no prepared trigger-binding projection.");
-
-        var candidateState = Serializer.Deserialize<GroundworkPublicationProjectionState>(candidateStateEnvelope);
-        var hasDistinctReplacement = replacedPublicationId is not null &&
-            !StringComparer.Ordinal.Equals(publicationId, replacedPublicationId);
-        var replacedStateEnvelope = !hasDistinctReplacement
-            ? null
-            : await LoadProjectionStateEnvelopeAsync(replacedPublicationId!, cancellationToken);
-        var replacedState = replacedStateEnvelope is null
-            ? null
-            : Serializer.Deserialize<GroundworkPublicationProjectionState>(replacedStateEnvelope);
-        if (GroundworkPublicationProjectionTransition.IsAlreadyActivated(
-                candidateState,
-                replacedState,
-                hasDistinctReplacement))
-        {
-            return;
-        }
-
-        GroundworkPublicationProjectionTransition.EnsureCanActivate(
-            candidateState,
-            replacedState,
-            hasDistinctReplacement);
-
-        var candidate = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
-        var replaced = !hasDistinctReplacement
-            ? []
-            : await this.ListAllByPublicationAsync(replacedPublicationId!, cancellationToken);
-        var updates = candidate.Select(binding => binding with { IsActive = true })
-            .Concat(replaced.Select(binding => binding with { IsActive = false }))
-            .ToArray();
-        await CommitAtomicallyAsync(
-            [],
-            updates,
-            candidateState with { IsActive = true },
-            deleteProjectionStateId: null,
-            cancellationToken,
-            secondaryProjectionState: replacedState is null ? null : replacedState with { IsActive = false },
-            projectionStateExpectedVersion: candidateStateEnvelope.Version,
-            secondaryProjectionStateExpectedVersion: replacedStateEnvelope?.Version);
+        await ActivatePublicationCoreAsync(publicationId, replacedPublicationId, cancellationToken);
     }
 
     public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        var existing = await this.ListAllByPublicationAsync(publicationId, cancellationToken);
-        await CommitAtomicallyAsync(
-            existing.Select(binding => binding.TriggerBindingId),
-            [],
-            projectionState: null,
-            ProjectionStateId(publicationId),
-            cancellationToken);
+        await DeleteByPublicationCoreAsync(publicationId, cancellationToken);
     }
 
     public async ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -296,93 +243,4 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         }
     }
 
-    private async ValueTask<DocumentEnvelope?> LoadProjectionStateEnvelopeAsync(
-        string publicationId,
-        CancellationToken cancellationToken) =>
-        await Store.LoadAsync(
-            ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
-            ProjectionStateId(publicationId),
-            cancellationToken);
-
-    private async ValueTask CommitAtomicallyAsync(
-        IEnumerable<string> deleteIds,
-        IEnumerable<WorkflowTriggerBinding> upserts,
-        GroundworkPublicationProjectionState? projectionState,
-        string? deleteProjectionStateId,
-        CancellationToken cancellationToken,
-        GroundworkPublicationProjectionState? secondaryProjectionState = null,
-        long? projectionStateExpectedVersion = null,
-        long? secondaryProjectionStateExpectedVersion = null)
-    {
-        await using var unitOfWork = await Store.BeginAsync(
-            DocumentCommitScope.Of(DocumentKind, ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind),
-            cancellationToken);
-        foreach (var id in deleteIds)
-            await unitOfWork.DeleteAsync(new DeleteDocumentRequest(DocumentKind, id), cancellationToken);
-        if (deleteProjectionStateId is not null)
-            await unitOfWork.DeleteAsync(
-                new DeleteDocumentRequest(ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind, deleteProjectionStateId),
-                cancellationToken);
-        foreach (var binding in upserts)
-        {
-            var (schemaVersion, content) = Serializer.Serialize(DocumentKind, binding);
-            await unitOfWork.SaveAsync(
-                new SaveDocumentRequest(DocumentKind, binding.TriggerBindingId, schemaVersion, content),
-                cancellationToken);
-        }
-        if (projectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, projectionState, projectionStateExpectedVersion, cancellationToken);
-        if (secondaryProjectionState is not null)
-            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, secondaryProjectionStateExpectedVersion, cancellationToken);
-
-        await unitOfWork.CommitAsync(cancellationToken);
-    }
-
-    private async ValueTask SaveProjectionStateAsync(
-        IDocumentUnitOfWork unitOfWork,
-        GroundworkPublicationProjectionState state,
-        long? expectedVersion,
-        CancellationToken cancellationToken)
-    {
-        var (schemaVersion, content) = Serializer.Serialize(
-            ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
-            state);
-        var result = await unitOfWork.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
-                ProjectionStateId(state.PublicationId),
-                schemaVersion,
-                content,
-                ExpectedVersion: expectedVersion),
-            cancellationToken);
-        if (result.Status != DocumentStoreWriteStatus.Saved)
-            throw new InvalidOperationException(
-                $"Trigger-binding publication projection '{state.PublicationId}' could not be saved because the stored projection version changed.");
-    }
-
-    private static string ProjectionStateId(string publicationId) =>
-        $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
-
-    private bool ProjectionsEqual(
-        IEnumerable<WorkflowTriggerBinding> existing,
-        IEnumerable<WorkflowTriggerBinding> prepared)
-    {
-        var existingById = existing.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
-        var preparedById = prepared.ToDictionary(binding => binding.TriggerBindingId, StringComparer.Ordinal);
-        if (existingById.Count != preparedById.Count)
-            return false;
-
-        foreach (var (id, expected) in preparedById)
-        {
-            if (!existingById.TryGetValue(id, out var actual))
-                return false;
-
-            var (_, actualJson) = Serializer.Serialize(DocumentKind, actual with { IsActive = false });
-            var (_, expectedJson) = Serializer.Serialize(DocumentKind, expected);
-            if (!StringComparer.Ordinal.Equals(actualJson, expectedJson))
-                return false;
-        }
-
-        return true;
-    }
 }

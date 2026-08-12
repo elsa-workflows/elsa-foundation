@@ -9,6 +9,7 @@ using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Elsa.Api.FastEndpoints.Sse;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
@@ -215,7 +216,7 @@ public sealed class StreamEndpointTests
     {
         var body = new CapturingResponseBody();
         var formatter = new StructuredLogSseFormatter(new StructuredLogEntrySerializer());
-        var streamWriter = new StructuredLogSseStreamWriter(formatter, TimeSpan.FromMilliseconds(50));
+        var streamWriter = new SseStreamWriter<StructuredLogStreamItem>(formatter, TimeSpan.FromMilliseconds(50));
         var binder = new StructuredLogFilterBinder();
 
         var endpointType = typeof(StructuredLogSseFormatter).Assembly

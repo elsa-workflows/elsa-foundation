@@ -555,6 +555,11 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Default implementation:** `InMemoryWorkflowExecutableStore` *(single-process default)*. Groundwork supplies `GroundworkWorkflowExecutableStore` as a keyed backend; SQLite reference features select a bounded `CachingWorkflowExecutableStore`, while PostgreSQL/distributed and legacy direct registrations preserve direct reads by default. The cache coalesces same-ID misses, retains only positive provider results, invalidates on save/unconditional delete and successful guarded delete, and never populates from `ListAsync`. Root-write lease and deletion-guard transitions pass through to the provider unchanged; custom providers can replace the keyed backend without a concrete dependency.
 - **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true` for SQLite and `false` for PostgreSQL/distributed features; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs. Cache state and mutation invalidation are process-local; PostgreSQL hosts must explicitly opt in with an accepted immutable-retention/invalidation policy.
 
+### `WorkflowExecutableStoreDecorator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Derivation base (pass-through decorator scaffold over `IWorkflowExecutableStore`).
+- **Signature:** every `IWorkflowExecutableStore` member as a `virtual` forward to the wrapped store, exposed through the protected `Inner` property.
+- **Usage:** derive and override only the operations the decorator intercepts; everything else forwards unchanged. `CachingWorkflowExecutableStore` (read caching + mutation invalidation) and `InvalidatingWorkflowExecutableStore` (mutation invalidation with direct reads) are the shipped derivations.
+
 ### `IExecutableActivityTemplateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns immutable, content-addressed executable templates for reusable activity versions).
 - **Signature:** find by template id or behavior hash, list, save, and delete unreferenced templates.

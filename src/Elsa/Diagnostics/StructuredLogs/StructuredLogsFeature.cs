@@ -1,5 +1,7 @@
 using CShells.Features;
 using Elsa.Api.FastEndpoints;
+using Elsa.Api.FastEndpoints.Sse;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Capture;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
@@ -71,7 +73,8 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
 
         services.AddSingleton<StructuredLogEntrySerializer>();
         services.AddSingleton<StructuredLogSseFormatter>();
-        services.AddSingleton<StructuredLogSseStreamWriter>();
+        services.AddSingleton(provider =>
+            new SseStreamWriter<StructuredLogStreamItem>(provider.GetRequiredService<StructuredLogSseFormatter>()));
         services.AddSingleton<StructuredLogFilterBinder>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, StructuredLogCaptureProvider>());

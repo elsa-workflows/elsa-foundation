@@ -210,6 +210,19 @@ Versions live in the Groundwork **envelope** `SchemaVersion` field (already pers
 
 Groundwork checkpoint commits keep the child Completed projection, policy-safe output snapshot, and deterministic parent-resume outbox item in the same admitted transaction. Effective-final child-start delivery checks deterministic child-execution visibility and then either acknowledges the already-admitted child or commits the failed-final dead letter, safe `DispatchFailed` projection, and optional wait-parent resume together. Fire-and-forget redrive uses one cross-unit transaction over the existing dispatch and outbox document kinds; no new persisted kind or index is introduced. Restart tests recreate runtime services around checkpoint, claim, exhaustion, redrive, acknowledgement, and bookmark-consumption boundaries to prove claim expiry and uncertain acknowledgement converge without leaking redacted values.
 
+## Writing a publication-projected store (`GroundworkPublicationProjectionStore<TItem>`)
+
+Stores whose documents are projected per publication and flipped active in one atomic transition derive
+from `GroundworkPublicationProjectionStore<TItem>` (itself a `GroundworkDocumentStore`). The base owns the
+lifecycle both shipped derivations previously duplicated: idempotent prepare (re-prepare with identical
+serialized state is a no-op; different state throws), candidate/replacement activation through
+`GroundworkPublicationProjectionTransition`, per-publication delete, and the atomic commit that keeps item
+documents and projection-state documents in one unit of work. A derivation supplies `ProjectionKind` (the
+projection-state id discriminator), `ProjectionNoun` (error-message family), `ItemId`, `WithActive`,
+`StoragePayload` (the item or its storage envelope), and `ListAllByPublicationCoreAsync`; its queries,
+validation, and non-publication operations stay its own. Shipped derivations:
+`GroundworkWorkflowTriggerBindingStore`, `GroundworkRecurringTriggerScheduleStore`.
+
 ## Writing a Groundwork persistence shell feature (`GroundworkPersistenceShellFeatureBase`)
 
 The nine Groundwork persistence shell features share their manifest-setting surface through three abstract

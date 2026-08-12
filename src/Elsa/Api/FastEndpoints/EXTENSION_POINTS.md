@@ -43,6 +43,13 @@ The Mediator-bridge base classes (`ElsaRequestHandlerEndpoint`, both `ElsaComman
 - **Consumed by:** `EndpointFilterFastEndpointConfigurator`, which sets `Config.Endpoints.Filter` to exclude any endpoint a filter reports.
 - **Known implementations:** none default; feature modules contribute exclusions *(cross-domain)*.
 
+### `ISseStreamFormatter<TItem>`
+
+- **Kind:** Strategy contract (one formatter per live-feed item type; frames items and heartbeats for Server-Sent Events).
+- **Signature:** `string Format(TItem item)`, `string Heartbeat()`.
+- **Consumed by:** `SseStreamWriter<TItem>` (this project), which owns the streaming loop: formatted item frames, idle heartbeats, and bounded cleanup of a pending `MoveNextAsync` on disconnect.
+- **Known implementations:** `OpenTelemetrySseFormatter` (typed `event:` frames, no resume id) and `StructuredLogSseFormatter` (`id:`-sequenced entry frames) *(cross-domain)*.
+
 ## Per-shell security feature
 
 ### `ApiSecurityFeature` / `ApiSecurityOptions`

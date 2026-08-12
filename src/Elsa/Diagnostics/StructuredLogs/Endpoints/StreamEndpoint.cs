@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Sse;
 using Elsa.Api.FastEndpoints.Extensions;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -18,7 +19,7 @@ internal sealed class StreamEndpoint(
     IStructuredLogLiveFeed feed,
     IStructuredLogStore store,
     StructuredLogFilterBinder binder,
-    StructuredLogSseStreamWriter streamWriter,
+    SseStreamWriter<StructuredLogStreamItem> streamWriter,
     IOptions<StructuredLogsOptions> options) : ElsaEndpointWithoutRequest
 {
     public override void Configure()

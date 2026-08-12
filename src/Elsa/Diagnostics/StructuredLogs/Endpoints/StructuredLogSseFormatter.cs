@@ -1,4 +1,5 @@
 using System.Text;
+using Elsa.Api.FastEndpoints.Sse;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 
 namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
@@ -7,7 +8,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
 /// Formats <see cref="StructuredLogStreamItem"/> values into Server-Sent Events frames. Pure string
 /// production so the SSE wire contract (id / event / data framing) can be branch-tested without an HTTP host.
 /// </summary>
-public sealed class StructuredLogSseFormatter
+public sealed class StructuredLogSseFormatter : ISseStreamFormatter<StructuredLogStreamItem>
 {
     private readonly StructuredLogEntrySerializer _serializer;
 

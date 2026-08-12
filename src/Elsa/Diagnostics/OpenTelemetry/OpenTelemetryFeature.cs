@@ -1,5 +1,7 @@
 using CShells.Features;
 using Elsa.Api.FastEndpoints;
+using Elsa.Api.FastEndpoints.Sse;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
@@ -69,7 +71,8 @@ public class OpenTelemetryFeature : FastEndpointsFeatureBase
 
         services.AddSingleton<OpenTelemetryStreamItemSerializer>();
         services.AddSingleton<OpenTelemetrySseFormatter>();
-        services.AddSingleton<OpenTelemetrySseStreamWriter>();
+        services.AddSingleton(provider =>
+            new SseStreamWriter<OpenTelemetryStreamItem>(provider.GetRequiredService<OpenTelemetrySseFormatter>()));
         services.AddSingleton<OpenTelemetryTraceFilterBinder>();
     }
 

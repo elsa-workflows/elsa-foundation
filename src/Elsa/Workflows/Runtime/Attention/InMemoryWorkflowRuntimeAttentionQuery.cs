@@ -40,61 +40,19 @@ public sealed class InMemoryWorkflowRuntimeAttentionQuery(
             .ToHashSet(StringComparer.Ordinal);
         var observedAt = _timeProvider.GetUtcNow();
 
-        var incidentRecords = activeIncidents.Select(incident => MapIncident(
+        var incidentRecords = activeIncidents.Select(incident => WorkflowRuntimeAttentionRecords.MapIncident(
             incident,
             tenantExecutions[incident.WorkflowExecutionId],
             observedAt));
         var faultRecords = tenantExecutions.Values
             .Where(execution => execution.Status == WorkflowExecutionStatus.Faulted)
             .Where(execution => !executionsWithIncidents.Contains(execution.WorkflowExecutionId))
-            .Select(execution => MapFault(execution, observedAt));
+            .Select(execution => WorkflowRuntimeAttentionRecords.MapFault(execution, observedAt));
         var all = incidentRecords
             .Concat(faultRecords)
-            .OrderBy(record => record.Kind switch
-            {
-                WorkflowRuntimeAttentionKind.BlockingIncident => 0,
-                WorkflowRuntimeAttentionKind.FaultedExecution => 1,
-                _ => 2
-            })
-            .ThenByDescending(record => record.LastObservedAt)
-            .ThenBy(record => record.WorkflowExecutionId, StringComparer.Ordinal)
+            .Order(WorkflowRuntimeAttentionRecords.UrgencyComparer)
             .ToArray();
 
         return new(all.Length, all.Take(request.MaximumItems).ToArray());
     }
-
-    private static WorkflowRuntimeAttentionRecord MapIncident(
-        IncidentState incident,
-        WorkflowExecutionState execution,
-        DateTimeOffset observedAt) => new(
-        execution.WorkflowExecutionId,
-        execution.PinnedExecutable.DefinitionId,
-        incident.IncidentId,
-        incident.Status == IncidentStatus.Blocking
-            ? WorkflowRuntimeAttentionKind.BlockingIncident
-            : WorkflowRuntimeAttentionKind.OpenIncident,
-        $"{incident.IncidentId}:{incident.CreatedAt.UtcTicks}:{incident.Status}:{incident.Severity}",
-        incident.CreatedAt,
-        Later(observedAt, incident.CreatedAt),
-        1,
-        null);
-
-    private static WorkflowRuntimeAttentionRecord MapFault(
-        WorkflowExecutionState execution,
-        DateTimeOffset observedAt)
-    {
-        var occurredAt = execution.CompletedAt ?? execution.UpdatedAt ?? execution.StartedAt ?? execution.CreatedAt;
-        return new(
-            execution.WorkflowExecutionId,
-            execution.PinnedExecutable.DefinitionId,
-            null,
-            WorkflowRuntimeAttentionKind.FaultedExecution,
-            $"{execution.WorkflowExecutionId}:{occurredAt.UtcTicks}:{execution.Status}",
-            occurredAt,
-            Later(observedAt, occurredAt),
-            1,
-            null);
-    }
-
-    private static DateTimeOffset Later(DateTimeOffset first, DateTimeOffset second) => first >= second ? first : second;
 }

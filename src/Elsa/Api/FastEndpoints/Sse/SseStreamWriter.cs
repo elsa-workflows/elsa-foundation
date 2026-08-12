@@ -1,41 +1,47 @@
-using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Microsoft.AspNetCore.Http;
 
-namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
+namespace Elsa.Api.FastEndpoints.Sse;
 
 /// <summary>
-/// Writes structured-log live feed items to an HTTP response as Server-Sent Events.
+/// Formats one live-feed item into its Server-Sent Events frame. The heartbeat frame keeps the
+/// connection alive while the stream is idle.
 /// </summary>
-public sealed class StructuredLogSseStreamWriter
+public interface ISseStreamFormatter<in TItem>
+{
+    string Format(TItem item);
+
+    string Heartbeat();
+}
+
+/// <summary>
+/// Writes a live feed to an HTTP response as Server-Sent Events: items as formatted frames, heartbeats
+/// while the stream is idle, and bounded cleanup of a pending <c>MoveNextAsync</c> on disconnect.
+/// </summary>
+public sealed class SseStreamWriter<TItem>
 {
     private static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DefaultPendingMoveNextCleanupTimeout = TimeSpan.FromSeconds(5);
-    private readonly StructuredLogSseFormatter _formatter;
+    private readonly ISseStreamFormatter<TItem> _formatter;
     private readonly TimeSpan _heartbeatInterval;
     private readonly TimeSpan _pendingMoveNextCleanupTimeout;
 
-    public StructuredLogSseStreamWriter(StructuredLogSseFormatter formatter) : this(formatter, DefaultHeartbeatInterval)
-    {
-    }
-
-    public StructuredLogSseStreamWriter(StructuredLogSseFormatter formatter, TimeSpan heartbeatInterval) : this(formatter, heartbeatInterval, DefaultPendingMoveNextCleanupTimeout)
-    {
-    }
-
-    public StructuredLogSseStreamWriter(StructuredLogSseFormatter formatter, TimeSpan heartbeatInterval, TimeSpan pendingMoveNextCleanupTimeout)
+    public SseStreamWriter(
+        ISseStreamFormatter<TItem> formatter,
+        TimeSpan? heartbeatInterval = null,
+        TimeSpan? pendingMoveNextCleanupTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(formatter);
-        if (heartbeatInterval <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(heartbeatInterval), heartbeatInterval, "Heartbeat interval must be positive.");
-        if (pendingMoveNextCleanupTimeout <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(pendingMoveNextCleanupTimeout), pendingMoveNextCleanupTimeout, "Pending MoveNext cleanup timeout must be positive.");
+        if (heartbeatInterval is { } heartbeat && heartbeat <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(heartbeatInterval), heartbeat, "Heartbeat interval must be positive.");
+        if (pendingMoveNextCleanupTimeout is { } cleanup && cleanup <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(pendingMoveNextCleanupTimeout), cleanup, "Pending MoveNext cleanup timeout must be positive.");
 
         _formatter = formatter;
-        _heartbeatInterval = heartbeatInterval;
-        _pendingMoveNextCleanupTimeout = pendingMoveNextCleanupTimeout;
+        _heartbeatInterval = heartbeatInterval ?? DefaultHeartbeatInterval;
+        _pendingMoveNextCleanupTimeout = pendingMoveNextCleanupTimeout ?? DefaultPendingMoveNextCleanupTimeout;
     }
 
-    public async Task StreamAsync(HttpResponse response, IAsyncEnumerable<StructuredLogStreamItem> stream, CancellationToken cancellationToken)
+    public async Task StreamAsync(HttpResponse response, IAsyncEnumerable<TItem> stream, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(stream);
@@ -77,7 +83,7 @@ public sealed class StructuredLogSseStreamWriter
     }
 
     private static async Task DisposeAfterPendingMoveNextAsync(
-        IAsyncEnumerator<StructuredLogStreamItem> enumerator,
+        IAsyncEnumerator<TItem> enumerator,
         Task<bool>? moveNext,
         CancellationTokenSource streamCts,
         TimeSpan pendingMoveNextCleanupTimeout)

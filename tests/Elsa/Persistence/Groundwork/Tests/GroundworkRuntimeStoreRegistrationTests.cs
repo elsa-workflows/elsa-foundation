@@ -60,7 +60,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         Assert.Same(replacement, provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
             GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
         Assert.Contains(
-            selected.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            AllInstanceFields(selected.GetType()),
             field => ReferenceEquals(field.GetValue(selected), replacement));
     }
 
@@ -78,7 +78,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         Assert.Equal(CacheTypeName, selected.GetType().FullName);
         Assert.IsType<GroundworkWorkflowExecutableStore>(durableProvider);
         Assert.Contains(
-            selected.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            AllInstanceFields(selected.GetType()),
             field => ReferenceEquals(field.GetValue(selected), durableProvider));
     }
 
@@ -409,4 +409,14 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new RuntimeStorePage<WorkflowExecutable>(request, [], null));
     }
+
+    // GetFields never returns a base class's private fields, and decorators may hold the wrapped store
+    // in a base-declared backing field, so walk the hierarchy.
+    private static IEnumerable<FieldInfo> AllInstanceFields(Type? type)
+    {
+        for (; type is not null; type = type.BaseType)
+        foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+            yield return field;
+    }
+
 }
