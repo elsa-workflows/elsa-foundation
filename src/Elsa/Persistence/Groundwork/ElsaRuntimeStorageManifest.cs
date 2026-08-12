@@ -971,7 +971,7 @@ public static class ElsaRuntimeStorageManifest
                         IndexValueKind.Keyword,
                         false,
                         true,
-                        MissingValueBehavior.Excluded,
+                        MissingValueBehavior.IncludedAsNull,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
                         IndexPhysicalizationPolicy.Optimized)
                 ],

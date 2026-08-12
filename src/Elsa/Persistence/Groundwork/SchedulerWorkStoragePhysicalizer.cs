@@ -64,7 +64,9 @@ internal static class SchedulerWorkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // Scheduler sweeps must see every work item, so the index cannot omit the ones whose keyed
+            // columns have no value.
+            MissingValueBehavior.IncludedAsNull);
         var pendingIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.SchedulerWorkPendingByWorkflowOrderIndex,
             [
@@ -74,7 +76,9 @@ internal static class SchedulerWorkStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // Scheduler sweeps must see every work item, so the index cannot omit the ones whose keyed
+            // columns have no value.
+            MissingValueBehavior.IncludedAsNull);
         var envelope = new DocumentEnvelopeDefinition();
         var physical = PhysicalTableDefinition.SharedDocuments(
             definition.SharedStorage!,
@@ -93,7 +97,9 @@ internal static class SchedulerWorkStoragePhysicalizer
                             new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 1),
                             new PhysicalIndexColumnDefinition(OrderKeyColumn, 2),
                             new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                        ]),
+                        ],
+                        // Must match the logical declaration above.
+                        missingValueBehavior: MissingValueBehavior.IncludedAsNull),
                     new PhysicalIndexDefinition(
                         pendingIndex.Identity,
                         [
@@ -101,7 +107,9 @@ internal static class SchedulerWorkStoragePhysicalizer
                             new PhysicalIndexColumnDefinition(collectionColumn, 1),
                             new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                             new PhysicalIndexColumnDefinition(OrderKeyColumn, 3)
-                        ])
+                        ],
+                        // Must match the logical declaration above.
+                        missingValueBehavior: MissingValueBehavior.IncludedAsNull)
                 ])
                 .ToArray(),
             definition.SchemaVersion,

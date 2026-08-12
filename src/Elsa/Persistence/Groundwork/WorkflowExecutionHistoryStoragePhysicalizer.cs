@@ -64,7 +64,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Number,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            // page-history sweeps the whole history, so the index cannot omit rows whose sort ticks or
+            // execution id have no value.
+            MissingValueBehavior.IncludedAsNull);
         var alterationCaptureIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionAlterationCaptureOrderIndex,
             [
@@ -74,7 +76,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var pinnedArtifactIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionPinnedArtifactOrderIndex,
             [
@@ -96,6 +98,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Keyword,
             isUnique: true,
+            // Stays Excluded: a unique index keying nullable columns cannot keep missing values,
+            // because whether two valueless rows collide differs by provider (GW-ROUTE-007). Stated
+            // on the physical definition below too, so the two cannot drift.
             MissingValueBehavior.Excluded);
         var faultedAttentionIndex = new LogicalIndexDeclaration(
             ElsaRuntimeStorageManifest.WorkflowExecutionFaultedAttentionOrderIndex,
@@ -112,7 +117,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             ],
             IndexValueKind.Number,
             isUnique: false,
-            MissingValueBehavior.Excluded);
+            MissingValueBehavior.IncludedAsNull);
         var envelope = new DocumentEnvelopeDefinition();
         var definition = PhysicalTableDefinition.PhysicalEntityTable(
             TableName,
@@ -175,7 +180,9 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                             PhysicalSortDirection.Descending),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 2),
                         new PhysicalIndexColumnDefinition(envelope.IdLookupKeyColumn, 3)
-                    ]),
+                    ],
+                    // Must match the logical declaration above.
+                    missingValueBehavior: MissingValueBehavior.IncludedAsNull),
                 new PhysicalIndexDefinition(
                     alterationCaptureIndex.Identity,
                     [
@@ -204,7 +211,11 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(CollectionColumn, 1),
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
-                    ]),
+                    ],
+                    // Superseded by the -v2 index and not scale-bearing, so it keeps the narrow
+                    // behavior its logical declaration states. Stated explicitly because the
+                    // package default is IncludedAsNull and the two must not drift.
+                    missingValueBehavior: MissingValueBehavior.Excluded),
                 new PhysicalIndexDefinition(
                     pinnedArtifactV2Index.Identity,
                     [
@@ -213,7 +224,8 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
                         new PhysicalIndexColumnDefinition(ArtifactIdColumn, 2),
                         new PhysicalIndexColumnDefinition(WorkflowExecutionIdColumn, 3)
                     ],
-                    isUnique: true)
+                    isUnique: true,
+                    missingValueBehavior: MissingValueBehavior.Excluded)
             ]);
         var historyQuery = new BoundedQueryDeclaration(
             ElsaRuntimeStorageManifest.PageWorkflowExecutionsQuery,
