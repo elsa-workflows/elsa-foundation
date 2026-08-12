@@ -644,6 +644,85 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_ignores_ef_source_shapes_in_block_comments_and_string_literals()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/Feature/BlockCommented.cs", """
+            /* public sealed class FakeDbContext : DbContext */
+            /* [Migration("202607120001_Fake")]
+               public partial class Fake : Migration */
+            public sealed class Unrelated;
+            """);
+        fixture.Write("src/App/LiteralOnly.cs", """
+            public static class Doc
+            {
+                public const string Example = "services.AddDbContext<StoreContext>(); options.UseSqlite(path);";
+            }
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.DoesNotContain("src/Feature/BlockCommented.cs", snapshot.DbContextFiles);
+        Assert.DoesNotContain("src/Feature/BlockCommented.cs", snapshot.MigrationFiles);
+        Assert.DoesNotContain(snapshot.RegistrationFiles, entry => entry.StartsWith("src/App/LiteralOnly.cs -> ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_counts_yaml_host_configuration_values_but_not_comment_lines()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/App/appsettings.override.yaml", """
+            # persistence: EntityFrameworkCore was retired here
+            persistence: groundwork  # the EFCore selection is gone
+            """);
+        fixture.Write("src/App/appsettings.real.yml", "persistence: EFCore");
+
+        var entries = new EfCoreSurfaceScanner(fixture.Path).Scan().HostConfigurationFiles;
+
+        Assert.DoesNotContain(entries, entry => entry.StartsWith("src/App/appsettings.override.yaml -> ", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.StartsWith("src/App/appsettings.real.yml -> ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_ignores_xml_and_toml_host_configuration_comments()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/App/retired.xml", "<settings><!-- EntityFrameworkCore retired --><provider>groundwork</provider></settings>");
+        fixture.Write("src/App/retired.toml", """
+            # provider = "EFCore"
+            provider = "groundwork"
+            """);
+        fixture.Write("src/App/active.xml", "<settings><provider>EFCore</provider></settings>");
+
+        var entries = new EfCoreSurfaceScanner(fixture.Path).Scan().HostConfigurationFiles;
+
+        Assert.DoesNotContain(entries, entry => entry.StartsWith("src/App/retired.xml -> ", StringComparison.Ordinal));
+        Assert.DoesNotContain(entries, entry => entry.StartsWith("src/App/retired.toml -> ", StringComparison.Ordinal));
+        Assert.Contains(entries, entry => entry.StartsWith("src/App/active.xml -> ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_counts_json_string_values_but_not_nested_comment_properties()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/App/providers.json", """
+            {
+              "Persistence": {
+                "$comment": "EFCore was removed from this lane",
+                "_comment": "EntityFrameworkCore alias retired",
+                "Provider": "Groundwork"
+              },
+              "Legacy": { "Alias": "FeatureEFCoreSqlite" }
+            }
+            """);
+
+        var entries = new EfCoreSurfaceScanner(fixture.Path).Scan().HostConfigurationFiles;
+
+        Assert.Contains("src/App/providers.json -> json:$.Legacy.Alias -> EFCore", entries);
+        Assert.DoesNotContain(entries, entry => entry.Contains("comment", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Scanner_inventories_resolved_transitive_packages_and_missing_restore_assets()
     {
         using var fixture = new TemporaryRepository();

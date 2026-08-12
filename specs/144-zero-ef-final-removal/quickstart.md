@@ -610,3 +610,31 @@ Consequently a full run of every workload that *has* an executable class would r
 `secret-create-read-list` (1) have no workload class at all, and `iam-normalized-lookup-update` (8 rows) is
 blocked by the deliberately empty `RatifiedIamProductionMappings`. What *is* reachable from one measurement
 set is the Tier B absolute ceiling, since it needs no comparison.
+
+### 2026-08-12 program hold + refactor-proof slice (T062; ADR 0042 task reconciliation)
+
+**Program-owner hold decision (Sipke, 2026-08-12), recorded on
+[#647](https://github.com/elsa-workflows/elsa-foundation/issues/647):** spec 144 execution beyond this
+slice is on hold until the current Groundwork refactoring lands (portable-model retirement per Groundwork
+ADR 0006 merged; announced pre-1.0 breaking release retiring the legacy document lane, Groundwork #185;
+`PortableQueryOperation` rename #181; open performance lane #196–#204). Grounds: every deletion gate
+(T009–T013) is independently blocked, and any #642/#646 evidence generated against the pre-refactor
+package family would be invalidated by T087's fingerprint binding. Re-entry condition: the refactoring
+lands upstream and Elsa consumes the post-refactor preview family; then the Phase-2 currency notes must be
+re-verified before resuming. The T011 runtime-absolute-budget-basis ratification is deliberately deferred
+with the hold because the refactor's performance changes may move the sensible absolute ceilings. #643's
+re-disposition under the ratified ADR 0042 amendment is flagged to the program owner on #647.
+
+This slice also applied the two ratified-scope task rewrites that tasks.md had flagged pending
+ratification: the T010/T029/T030/T036/T044/T045 OpenIddict clauses and the Phase-5 goal/T064/T067/T071
+allowlist wording now match the decided 2026-08-04 ADR 0042 amendment, with both original flag notes
+retained as provenance. spec.md FR-008/FR-012/FR-013/SC-001 still carry superseded absolute-zero wording
+and await the T072–T075 documentation pass.
+
+Evidence note T062: `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore
+--filter "FullyQualifiedName~EfCoreSurfaceRatchetTests" -m:1 --disable-build-servers` — Passed 47,
+Failed 0, Skipped 0 (43 prior + 4 new fixtures: block-comment/string-literal source shapes, YAML comment
+lines vs values, XML/TOML comments, nested JSON comment properties vs string values). The scanner's
+non-JSON host-configuration scan gained format-appropriate comment stripping; the real-repo shrink-only
+baseline test passed unchanged in the same run, and the three baseline host-configuration entries are all
+JSON, so no baseline entry was affected. No database-server container or performance run was started.
