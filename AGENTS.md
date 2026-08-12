@@ -81,15 +81,15 @@ When work belongs to a program, the GitHub issue is the public, legible record o
 
 ## Post-merge gates
 
-A green PR is not the end of the gate. `CI` and `HTTP workflow performance` run on every push to `main` as well as on pull requests, because a required check on `main` is bypassable (`enforce_admins` is off) and because a change that passes on a branch can still break main in combination. `Maps` already ran on both.
+A green PR is not the end of the gate. `CI` and `HTTP workflow performance` run on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` already ran on both.
 
-When one of those gates fails against `main`, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
+When either of those gates fails against `main`, and when `Integration (nightly)` fails on its schedule, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
 
 - Treat one as a live report that main is failing that gate right now, not as stale noise.
 - Fix forward or revert; nothing can be blocked after the fact, since the commit has landed.
 - Close it by hand once the gate is green and the cause is understood. A later green run leaves it open on purpose.
 
-A red gate on `main` outranks whatever you were about to start. Check for one before beginning work that assumes a healthy main.
+Check for one before starting work that assumes a healthy main; it explains a local failure you would otherwise spend the session chasing.
 
 ## Refresh generated maps
 
