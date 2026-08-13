@@ -30,6 +30,15 @@ table before adding the Groundwork implementations, preserving the one-active-pr
 
 `IDraftStateDiffEngine` is intentionally absent: per-diff mutation-event publication is retired until an event-sourcing consumer exists, so the engine is no longer registered by this provider (it remains in Core as the tested contract).
 
+## Contributor interfaces
+
+### `IWorkflowDefinitionPermanentDeletionGuard` / `IWorkflowDefinitionPublicationDeletionGuard` *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Kind:** Open-ended contribution (veto list) plus a marker sub-contract that names the publication check as its own capability (#1283).
+- **Signature:** `EnsureCanDeleteAsync(definitionId, cancellationToken)` — throw to veto the permanent deletion. `IWorkflowDefinitionPublicationDeletionGuard` adds no members; it marks an implementation as *the publication check*.
+- **Usage:** `GroundworkDeleteWorkflowDefinitionPermanentlyCommand` resolves the base contract as `IEnumerable<T>` and runs every guard before staging deletes. **Absence of the marker is a hard refusal**, decided inside the atomic writer's `beforeAttempt` — after the operation-marker replay lookup (so a retry of an already-committed delete still replays to success on any node) but before any definition row is read. This inverts the usual contribution semantics on purpose: an empty guard set must not read as permission, and contributing an unrelated veto must not make permanent deletion available. A design-only host composes no publication check and answers `DELETE …/permanent` with 501; soft deletion is unaffected.
+- **Known implementations:** `PublishedWorkflowDeletionGuard` (`Elsa.Workflows.Publishing`, cross-domain, tagged in that feature's README) — implements both contracts; registered via `TryAddEnumerable` by `WorkflowsPublishingFeature`.
+- **Safety:** a host that supplies its own publication check must implement the marker interface, not only the base veto contract; implementing only the base leaves permanent deletion refused with a message that names the publishing vertical.
+
 ## Feature specialization seams
 
 | Contract | Default implementation |

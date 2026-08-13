@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
@@ -112,6 +113,22 @@ public class GroundworkWorkflowDefinitionCommandTests
     private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(_store, Payloads, _accessContext);
 
     private GroundworkWorkflowDefinitionVersionLayoutStore VersionLayoutStore() => new(_store);
+
+    // Permanent deletion is only available to a host that composes a publication check (#1283), so the
+    // arrange stands one in and tests vary the additional vetoes layered on top of it.
+    private GroundworkDeleteWorkflowDefinitionPermanentlyCommand PermanentDeleteCommand(
+        IWorkflowDefinitionStore? definitions = null,
+        params IWorkflowDefinitionPermanentDeletionGuard[] guards) =>
+        new(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            definitions ?? new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext,
+            [new PermittingPublicationDeletionGuard(), .. guards]);
 
     /// <summary>
     /// Derives the current validation error set the same way production does: load the draft, then
@@ -844,15 +861,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var versionId = await promote.Execute(NextKey(), draft!.Id, CancellationToken.None);
         _clock.Advance();
         var secondDraftId = await createDraft.Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
-            AtomicWrite(),
-            Payloads,
-            new GroundworkWorkflowDefinitionStore(_store),
-            DraftStore(),
-            versionStore,
-            VersionLayoutStore(),
-            _accessContext);
+        var delete = PermanentDeleteCommand();
 
         await delete.Execute(NextKey(), "definition-1", CancellationToken.None);
 
@@ -869,15 +878,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var definitions = new GroundworkWorkflowDefinitionStore(_store);
         await MaterializeDefinition(new WorkflowDefinition { Id = "definition-active", Name = "Keep me" });
-        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
-            AtomicWrite(),
-            Payloads,
-            definitions,
-            DraftStore(),
-            VersionStore(),
-            VersionLayoutStore(),
-            _accessContext);
+        var delete = PermanentDeleteCommand(definitions);
 
         var exception = await Assert.ThrowsAsync<WorkflowDefinitionNotSoftDeletedException>(() =>
             delete.Execute(NextKey(), "definition-active", CancellationToken.None));
@@ -889,15 +890,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_rejects_an_unknown_definition_as_not_found()
     {
-        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
-            AtomicWrite(),
-            Payloads,
-            new GroundworkWorkflowDefinitionStore(_store),
-            DraftStore(),
-            VersionStore(),
-            VersionLayoutStore(),
-            _accessContext);
+        var delete = PermanentDeleteCommand();
 
         var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             delete.Execute(NextKey(), "definition-missing", CancellationToken.None));
@@ -911,6 +904,22 @@ public class GroundworkWorkflowDefinitionCommandTests
         var definitions = new GroundworkWorkflowDefinitionStore(_store);
         await MaterializeDefinition(new WorkflowDefinition { Id = "definition-published", Name = "Still live", DeletedAt = _clock.UtcNow });
         var guard = new VetoingDeletionGuard();
+        var delete = PermanentDeleteCommand(definitions, guard);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            delete.Execute(NextKey(), "definition-published", CancellationToken.None));
+
+        Assert.Equal("definition-published", guard.SeenDefinitionId);
+        Assert.NotNull(await definitions.FindByIdAsync("definition-published"));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_refuses_when_no_publication_check_is_composed()
+    {
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        await MaterializeDefinition(new WorkflowDefinition { Id = "definition-unverifiable", Name = "Still live", DeletedAt = _clock.UtcNow });
+        // An unrelated veto is not a publication check, so it does not make the delete verifiable (#1283).
+        var guard = new VetoingDeletionGuard();
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             _store,
             AtomicWrite(),
@@ -922,11 +931,56 @@ public class GroundworkWorkflowDefinitionCommandTests
             _accessContext,
             [guard]);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            delete.Execute(NextKey(), "definition-published", CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
+            delete.Execute(NextKey(), "definition-unverifiable", CancellationToken.None));
 
-        Assert.Equal("definition-published", guard.SeenDefinitionId);
-        Assert.NotNull(await definitions.FindByIdAsync("definition-published"));
+        Assert.Equal("definition-unverifiable", exception.DefinitionId);
+        Assert.Null(guard.SeenDefinitionId);
+        Assert.NotNull(await definitions.FindByIdAsync("definition-unverifiable"));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_refuses_when_no_guard_collection_is_supplied_at_all()
+    {
+        // The guards parameter is optional; a composition that supplies nothing must land on the same refusal as one
+        // that supplies only non-publication vetoes, not on accidental permission.
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        await Assert.ThrowsAsync<PermanentDeletionUnavailableException>(() =>
+            delete.Execute(NextKey(), "definition-any", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_replays_a_committed_delete_on_a_host_that_cannot_perform_one()
+    {
+        // Idempotent replay must survive the composition gate: a client whose delete committed on a
+        // publishing-composed node can have its timeout retry land on a design-only node, and that retry must replay
+        // the committed operation marker to success rather than refuse an operation that already happened. This pins
+        // the refusal INSIDE the atomic writer's beforeAttempt, behind the marker replay lookup.
+        await MaterializeDefinition(new WorkflowDefinition { Id = "definition-replayed", Name = "Delete me", DeletedAt = _clock.UtcNow });
+        var operationKey = NextKey();
+        await PermanentDeleteCommand().Execute(operationKey, "definition-replayed", CancellationToken.None);
+        var designOnly = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            AtomicWrite(),
+            Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore(),
+            _accessContext);
+
+        await designOnly.Execute(operationKey, "definition-replayed", CancellationToken.None);
+
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-replayed"));
     }
 
     [Fact]
@@ -1022,6 +1076,14 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         Assert.NotEqual(default, entity.CreatedAt);
         Assert.Equal(entity.CreatedAt, entity.LastModifiedAt);
+    }
+
+    // Stands in for the publishing vertical's guard: this host can see publication state and this definition
+    // is not published, so the delete may proceed.
+    private sealed class PermittingPublicationDeletionGuard : IWorkflowDefinitionPublicationDeletionGuard
+    {
+        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class VetoingDeletionGuard : IWorkflowDefinitionPermanentDeletionGuard

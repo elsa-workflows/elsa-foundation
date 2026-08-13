@@ -309,6 +309,7 @@ internal sealed class MongoDbDesignPersistenceContractFixture : IDesignPersisten
                 sp.GetRequiredService<IEventPublisher>(),
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddDesignPersistencePublicationDeletionGuard();
         services.AddGroundworkMongoDbUnifiedPersistence(_connectionString, _databaseName, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);

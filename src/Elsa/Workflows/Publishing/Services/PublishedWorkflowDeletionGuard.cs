@@ -11,11 +11,14 @@ namespace Elsa.Workflows.Publishing.Services;
 /// Hard-deleting the design rows in that state strands the runtime executable and its Published reference
 /// against a definition that no longer exists, so the definition must be unpublished first. Both checks run
 /// because the slot authority and the source reference can desync — either one alone keeps the runtime live.
+/// It implements <see cref="IWorkflowDefinitionPublicationDeletionGuard"/> rather than the base veto contract
+/// because its presence is what makes permanent deletion possible at all: a host without it cannot answer the
+/// question and refuses.
 /// </summary>
 public sealed class PublishedWorkflowDeletionGuard(
     IPublicationSlotStore slotStore,
     IWorkflowExecutableSourceReferenceReader sourceReferenceReader,
-    TimeProvider timeProvider) : IWorkflowDefinitionPermanentDeletionGuard
+    TimeProvider timeProvider) : IWorkflowDefinitionPublicationDeletionGuard
 {
     public async Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default)
     {

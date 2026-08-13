@@ -299,6 +299,7 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
                 sp.GetRequiredService<IEventPublisher>(),
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddDesignPersistencePublicationDeletionGuard();
         services.AddGroundworkSqlServerUnifiedPersistence(_connectionString, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);

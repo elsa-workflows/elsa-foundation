@@ -305,6 +305,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
                 sp.GetRequiredService<IEventPublisher>(),
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddDesignPersistencePublicationDeletionGuard();
         services.AddGroundworkSqliteUnifiedPersistence(ConnectionString, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);

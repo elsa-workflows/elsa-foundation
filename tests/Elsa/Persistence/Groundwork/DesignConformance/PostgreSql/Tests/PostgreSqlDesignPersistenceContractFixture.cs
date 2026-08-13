@@ -299,6 +299,7 @@ internal sealed class PostgreSqlDesignPersistenceContractFixture : IDesignPersis
                 sp.GetRequiredService<IEventPublisher>(),
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddDesignPersistencePublicationDeletionGuard();
         services.AddGroundworkPostgreSqlUnifiedPersistence(_connectionString, autoApplyOnStartup: false);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);

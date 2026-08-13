@@ -5,6 +5,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// before any row is removed. Other verticals contribute implementations for state the design store cannot see;
 /// e.g. publishing refuses deletion while the definition still holds an active publication slot or a live
 /// Published executable reference, because hard-deleting the design rows would strand that runtime state.
+/// Contributing a veto here does not by itself make permanent deletion available: that needs the publication
+/// check, <see cref="IWorkflowDefinitionPublicationDeletionGuard"/>.
 /// </summary>
 public interface IWorkflowDefinitionPermanentDeletionGuard
 {

@@ -26,6 +26,13 @@ internal abstract class NoContentDesignCommandEndpoint<TCommand>(
         {
             ThrowError(exception.Message, 409);
         }
+        // 501 rather than 409: nothing about the definition is in conflict and no retry against this host will
+        // ever succeed. The operation is simply not implemented by this composition, and the message says which
+        // host can perform it and which delete remains available here.
+        catch (PermanentDeletionUnavailableException exception)
+        {
+            ThrowError(exception.Message, 501);
+        }
         catch (ArgumentException exception)
         {
             ThrowError(exception, 400);
