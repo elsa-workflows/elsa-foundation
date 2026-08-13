@@ -42,10 +42,20 @@ jobs:
   integration-tests:
     name: Integration tests (Testcontainers)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Raised from 45 once the tool-restore fix below let the suites actually run: the ~176 tests that
+    # used to fail in milliseconds on a missing CLI now do real container work, and the job hit the
+    # 45-minute cap mid-run (GitHub reports that as `cancelled`, not `failure`). 90 is headroom over
+    # the observed shape, not a measured total -- the first full green run should be used to tighten it.
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history, as ci.yml has. AspNetCoreIdentityProviderEvidenceTests resolves checked-in
+          # provenance by commit SHA (`<sha>^{tree}`), which a depth-1 clone cannot see: it fails with
+          # `git exited with code 128: ambiguous argument ... unknown revision`. This job was the only
+          # one taking the shallow default.
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
