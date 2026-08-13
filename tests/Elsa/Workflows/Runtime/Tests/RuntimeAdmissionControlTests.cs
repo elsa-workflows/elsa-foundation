@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -22,6 +23,7 @@ public sealed class RuntimeAdmissionControlTests
     private readonly FakeTimeProvider _clock = new(Now);
     private readonly StubAdmissionLoadSignal _signal = new();
     private readonly RuntimeAdmissionDiagnostics _diagnostics = new();
+    private readonly RecordingAlterationCommandExecutor _alterationExecutor = new();
 
     [Fact]
     public void TryAdmit_AdmitsWhileLoadIsBelowTheLimit()
@@ -407,14 +409,21 @@ public sealed class RuntimeAdmissionControlTests
         // safe direction for a deny-list exemption — and widening IsSubjectToAdmission's exemption set by even one
         // kind goes red here until this test names it deliberately.
         var data = new TheoryData<WorkflowExecutionCommandKind>();
-        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>()
-                     .Except(AdmissionExemptKinds)
-                     // Routed to the alteration executor above the gate. NOT load-gated there: alterations have a
-                     // plan-registration admission, not a load bound. Tracked as a composition gap in #1320.
-                     .Where(kind => kind != WorkflowExecutionCommandKind.AlterWorkflow))
+        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>().Except(AdmissionExemptKinds))
             data.Add(kind);
         return data;
     }
+
+    // The gated kinds that are refused OUTRIGHT rather than parked for a later drain, and why each one is on the list.
+    // Start writes nothing durable, so a caller told "not taken, retry" cannot end up having the work done twice.
+    // AlterWorkflow must not park either, for a different reason: NoopWorkflowSchedulerWorkHandler.CanHandle matches
+    // every kind except InvokeActivity/GeneratedEvent/ResumeBookmark and its HandleAsync does nothing, so a parked
+    // alteration item would be silently swallowed on the next drain even where the resumption sweep IS composed. Both
+    // have a re-driver that needs no parked item: the caller retries a start, and the alteration pump re-claims the
+    // job once its lease lapses.
+    private static bool ExpectsQueueingOnShed(WorkflowExecutionCommandKind kind) => kind is not (
+        WorkflowExecutionCommandKind.Start or
+        WorkflowExecutionCommandKind.AlterWorkflow);
 
     [Theory]
     [MemberData(nameof(GatedCommandKinds))]
@@ -427,7 +436,7 @@ public sealed class RuntimeAdmissionControlTests
 
         Assert.True(result.Shed);
         Assert.False(result.DrainPerformed);
-        var expectQueued = kind != WorkflowExecutionCommandKind.Start;
+        var expectQueued = ExpectsQueueingOnShed(kind);
         Assert.Equal(expectQueued, result.ShedWorkQueued);
         Assert.Equal(expectQueued ? 1 : 0, (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count);
     }
@@ -448,6 +457,49 @@ public sealed class RuntimeAdmissionControlTests
         Assert.False(result.Shed);
         Assert.True(result.DrainPerformed);
         Assert.Equal(1, drainOrchestrator.DrainCount);
+    }
+
+    [Fact]
+    public async Task Router_ChargesAnAdmittedAlterationForTheDurationOfTheExecutor()
+    {
+        // The defect #1325 actually fixes, and the half that gating alone does NOT deliver. RecordDispatch is
+        // Ambient.Value?.Add(), so a flow with no charge open weighs zero: a gate that admits and then releases before
+        // handing off to the alteration executor would leave every unit of alteration work invisible to the limiter,
+        // and live traffic would keep being admitted onto a host that is genuinely busy. Uses the REAL load signal —
+        // the stub cannot see this — and the executor awaits before it records, so this also pins that the AsyncLocal
+        // charge survives a real async continuation inside the callee.
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+        var executor = new RecordingAlterationCommandExecutor(signal, dispatches: 3);
+        var router = NewRouter(
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new RuntimeAdmissionController(signal, new RuntimeAdmissionOptions { InitialLimit = 100 }, _diagnostics, _clock),
+            alterationExecutor: executor);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.AlterWorkflow));
+
+        Assert.False(result.Shed);
+        Assert.Equal(1, executor.ExecuteCount);
+        // One seeded unit for the admitted command, plus one per dispatch it performed while inside the charge.
+        Assert.Equal(4, executor.LoadWhileExecuting);
+        Assert.Equal(1, _diagnostics.Admitted);
+        // Released on the way out, so an alteration weighs nothing once it is done.
+        Assert.Equal(0, signal.InFlightDispatches);
+    }
+
+    [Fact]
+    public async Task Router_RefusesAnAlterationAtCapacityWithoutQueueingOrRunningIt()
+    {
+        // A refused alteration must leave no trace: no parked work item for the Noop handler to swallow, and no
+        // execution, so the job stays claimable for the alteration pump to re-drive once its lease lapses.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = NewRouter(queue, AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.AlterWorkflow));
+
+        Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
+        Assert.Equal(0, _alterationExecutor.ExecuteCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
     }
 
     [Fact]
@@ -535,15 +587,19 @@ public sealed class RuntimeAdmissionControlTests
         decision.Dispose();
     }
 
+    // The alteration executor is composed by default, the way a real runtime host composes it, so an AlterWorkflow
+    // case reaches the routing under test instead of the "not composed" throw.
     private WorkflowSchedulerCommandRouter NewRouter(
         IWorkflowSchedulerWorkQueue queue,
         IRuntimeAdmissionController admissionController,
-        IWorkflowDrainOrchestrator? drainOrchestrator = null) =>
+        IWorkflowDrainOrchestrator? drainOrchestrator = null,
+        IWorkflowAlterationActorCommandExecutor? alterationExecutor = null) =>
         new(
             queue,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             drainOrchestrator ?? new RecordingDrainOrchestrator(),
             _clock,
+            alterationActorCommandExecutor: alterationExecutor ?? _alterationExecutor,
             admissionController: admissionController);
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowExecutionCommandKind kind) =>
@@ -640,6 +696,29 @@ public sealed class RuntimeAdmissionControlTests
         public IRuntimeAdmissionCharge OpenCharge() => _inner.OpenCharge();
 
         public void RecordDispatch() => _inner.RecordDispatch();
+    }
+
+    // Stands in for the alteration actor executor. When given the real load signal it records its dispatches AFTER an
+    // await, so what it reports back is the in-flight reading an alteration's own work produces on a genuinely resumed
+    // continuation rather than on the router's synchronous stack.
+    private sealed class RecordingAlterationCommandExecutor(
+        IRuntimeAdmissionLoadSignal? loadSignal = null,
+        int dispatches = 0) : IWorkflowAlterationActorCommandExecutor
+    {
+        public int ExecuteCount { get; private set; }
+
+        public long LoadWhileExecuting { get; private set; }
+
+        public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            ExecuteCount++;
+            await Task.Yield();
+
+            for (var dispatch = 0; dispatch < dispatches; dispatch++)
+                loadSignal?.RecordDispatch();
+
+            LoadWhileExecuting = loadSignal?.InFlightDispatches ?? 0;
+        }
     }
 
     private sealed class RecordingDrainOrchestrator : IWorkflowDrainOrchestrator

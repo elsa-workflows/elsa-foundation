@@ -56,6 +56,29 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(options);
 
+        // Admission control (RB1, #1235; extended to AlterWorkflow by #1325). The gate sits at the very top of the
+        // method, ahead of BOTH the alteration hand-off and the enqueue, for two reasons.
+        //
+        // It is the last point at which a refusal can still be honest: shedding after the work item is durably queued
+        // would leave the recovery sweep to run it later, so a caller told "not taken, retry" would get its work done
+        // twice.
+        //
+        // And the charge an admitted decision opens has to COVER the work the chosen branch then performs.
+        // <c>RecordDispatch()</c> is <c>Ambient.Value?.Add()</c>, so a flow running with no charge open weighs
+        // nothing; a gate placed after a branch would leave that branch's dispatches invisible to the limiter, which
+        // is exactly what made alteration load uncounted before #1325. The charge is an <c>AsyncLocal</c>, so it flows
+        // down into everything this method awaits and is released only when this <c>using</c> goes out of scope —
+        // after the alteration executor has returned, not before it is called.
+        using var admission = IsSubjectToAdmission(envelope.Command.Kind) ? _admissionController?.TryAdmit() : null;
+        if (admission is { IsAdmitted: false })
+        {
+            var queued = QueuesOnShed(envelope.Command.Kind);
+            if (queued)
+                await _schedulerWorkQueue.EnqueueAsync(await CreateWorkItemAsync(envelope, cancellationToken), cancellationToken);
+
+            return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter, queued);
+        }
+
         if (envelope.Command.Kind == WorkflowExecutionCommandKind.AlterWorkflow)
         {
             if (_alterationActorCommandExecutor is null)
@@ -64,42 +87,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
             return WorkflowExecutionCommandProcessResult.NoDrain;
         }
 
-        var executionScopeId = await ResolveExecutionScopeIdAsync(envelope, cancellationToken);
-        var workItem = new RuntimeSchedulerWorkItem(
-            workItemId: envelope.EnvelopeId,
-            workflowExecutionId: envelope.WorkflowExecutionId,
-            commandId: envelope.Command.CommandId,
-            commandKind: envelope.Command.Kind,
-            envelopeId: envelope.EnvelopeId,
-            idempotencyKey: envelope.IdempotencyKey,
-            enqueuedAt: envelope.EnqueuedAt,
-            recordedAt: _timeProvider.GetUtcNow(),
-            sequence: envelope.Sequence,
-            payload: envelope.Command.Payload,
-            commandMetadata: envelope.Command.Metadata,
-            envelopeMetadata: envelope.Metadata,
-            executionScopeId: executionScopeId);
-
-        // Admission control (RB1, #1235). The gate sits here, ahead of the enqueue, because that is the last point at
-        // which a refusal can still be honest. Shedding after the work item is durably queued would leave the recovery
-        // sweep to run it later, so a caller told "not taken, retry" would get its work done twice.
-        //
-        // The two refusal shapes follow from what the caller can correlate against. A start has no execution id to
-        // hand back, so it is refused outright and nothing durable is written; the HTTP edge renders that as 429 with
-        // Retry-After. Every other gated kind already names a live execution, so the work item IS queued and only the
-        // drain is skipped: the resumption sweep re-drives it, which is what makes Deferred a promise rather than a
-        // drop.
-        using var admission = IsSubjectToAdmission(envelope.Command.Kind) ? _admissionController?.TryAdmit() : null;
-        if (admission is { IsAdmitted: false })
-        {
-            var queued = envelope.Command.Kind != WorkflowExecutionCommandKind.Start;
-            if (queued)
-                await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
-
-            return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter, queued);
-        }
-
-        workItem = await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+        var workItem = await _schedulerWorkQueue.EnqueueAsync(await CreateWorkItemAsync(envelope, cancellationToken), cancellationToken);
 
         var drainRequest = _schedulerDrainPolicy.CreateDrainRequest(envelope, workItem);
         if (drainRequest is null)
@@ -154,14 +142,60 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// from; it does not need a second one.</para>
     /// <para>Cancel, pause, and unpause are control-plane commands whose effect is to <em>reduce</em> load. Refusing
     /// an operator's cancel during overload would take away the tool for ending the overload, and they schedule
-    /// almost no work themselves. <c>AlterWorkflow</c> never reaches here — it returns above, through its own
-    /// admission gate.</para>
+    /// almost no work themselves.</para>
+    /// <para>This deny-list is the whole exemption set: every kind not named here reaches the gate, including
+    /// <c>AlterWorkflow</c> (#1325). Its plan store admits by idempotency key, which is registration and not a load
+    /// bound, so before it was gated an alteration held no charge and every unit of work it ran weighed zero against
+    /// the limiter while live traffic was being shed.</para>
     /// </remarks>
     private static bool IsSubjectToAdmission(WorkflowExecutionCommandKind kind) => kind is not (
         WorkflowExecutionCommandKind.RunSchedulerWork or
         WorkflowExecutionCommandKind.Cancel or
         WorkflowExecutionCommandKind.PauseWorkflowExecution or
         WorkflowExecutionCommandKind.UnpauseWorkflowExecution);
+
+    /// <summary>
+    /// Whether a shed command parks its work item for a later drain, or is refused outright with nothing written.
+    /// </summary>
+    /// <remarks>
+    /// <para>The shape follows from what would re-drive the parked item. A gated kind naming a live execution is
+    /// deferred rather than dropped: the item stays queued and the resumption sweep re-drives it, which is what makes
+    /// <c>Deferred</c> a promise rather than a lie.</para>
+    /// <para><c>Start</c> has no execution id to hand back, so it is refused outright and nothing durable is written;
+    /// the HTTP edge renders that as 429 with Retry-After. Queueing it would let the sweep run it later, so a caller
+    /// told "not taken, retry" would get the work done twice.</para>
+    /// <para><c>AlterWorkflow</c> must not queue either, for a different reason: no drain handler would ever run it.
+    /// <c>NoopWorkflowSchedulerWorkHandler.CanHandle</c> matches every kind except <c>InvokeActivity</c>,
+    /// <c>GeneratedEvent</c>, and <c>ResumeBookmark</c>, and its <c>HandleAsync</c> returns without doing anything, so
+    /// a parked alteration item would be silently swallowed on the next drain even on a host with the resumption sweep
+    /// composed. The outright refusal is safe because the alteration path carries its own re-driver, registered
+    /// unconditionally in <c>AddWorkflowRuntime</c>: a refused dispatch writes nothing, leaves the job claimable, and
+    /// <c>IWorkflowAlterationStore.ClaimNextAsync</c> re-claims running jobs once their lease lapses.</para>
+    /// </remarks>
+    private static bool QueuesOnShed(WorkflowExecutionCommandKind kind) => kind is not (
+        WorkflowExecutionCommandKind.Start or
+        WorkflowExecutionCommandKind.AlterWorkflow);
+
+    private async ValueTask<RuntimeSchedulerWorkItem> CreateWorkItemAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        var executionScopeId = await ResolveExecutionScopeIdAsync(envelope, cancellationToken);
+        return new RuntimeSchedulerWorkItem(
+            workItemId: envelope.EnvelopeId,
+            workflowExecutionId: envelope.WorkflowExecutionId,
+            commandId: envelope.Command.CommandId,
+            commandKind: envelope.Command.Kind,
+            envelopeId: envelope.EnvelopeId,
+            idempotencyKey: envelope.IdempotencyKey,
+            enqueuedAt: envelope.EnqueuedAt,
+            recordedAt: _timeProvider.GetUtcNow(),
+            sequence: envelope.Sequence,
+            payload: envelope.Command.Payload,
+            commandMetadata: envelope.Command.Metadata,
+            envelopeMetadata: envelope.Metadata,
+            executionScopeId: executionScopeId);
+    }
 
     private async ValueTask<string?> ResolveExecutionScopeIdAsync(
         WorkflowExecutionCommandEnvelope envelope,
