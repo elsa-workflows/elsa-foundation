@@ -434,16 +434,8 @@ public sealed class RuntimeAdmissionControlTests
         return data;
     }
 
-    // The gated kinds that are refused OUTRIGHT rather than parked for a later drain, and why each one is on the list.
-    // Start writes nothing durable, so a caller told "not taken, retry" cannot end up having the work done twice.
-    // AlterWorkflow must not park either, for a different reason: NoopWorkflowSchedulerWorkHandler.CanHandle matches
-    // every kind except InvokeActivity/GeneratedEvent/ResumeBookmark and its HandleAsync does nothing, so a parked
-    // alteration item would be silently swallowed on the next drain even where the resumption sweep IS composed. That
-    // handler-less property is NOT unique to it — ContinueVolatileWait and DeliverSignal share it and would be
-    // dropped the same way, latent only because nothing in Elsa constructs them, so whoever wires one up owns adding
-    // it here. AlterWorkflow is on the list because it is the reachable one AND because the outright refusal is safe
-    // for it: both listed kinds have a re-driver that needs no parked item, the caller retrying a start and the
-    // alteration pump re-claiming the job once its lease lapses (a full JobLeaseDuration, one minute by default).
+    // Deliberately duplicated from WorkflowSchedulerCommandRouter.QueuesOnShed, so a change to the refusal shape has
+    // to be made twice; the reasoning for each entry lives on that method's doc.
     private static bool ExpectsQueueingOnShed(WorkflowExecutionCommandKind kind) => kind is not (
         WorkflowExecutionCommandKind.Start or
         WorkflowExecutionCommandKind.AlterWorkflow);
@@ -485,18 +477,21 @@ public sealed class RuntimeAdmissionControlTests
     [Fact]
     public async Task Router_ChargesAnAdmittedAlterationForTheDurationOfTheExecutor()
     {
-        // The charge has to stay OPEN across the hand-off rather than be acquired and discarded above it, because
-        // RecordDispatch is Ambient.Value?.Add() and TryAdmit's nested-command exemption keys off the same ambient
-        // value: a released charge would make a command dispatched from inside an alteration look like new work
-        // arriving at the door and let it be shed behind its own caller. Uses the REAL load signal, which the stub
-        // cannot model, and the executor reads the load AFTER an await, so this also pins that the AsyncLocal charge
-        // survives a genuine async continuation inside the callee and is released on the way out.
-        //
-        // ONE unit is the whole weight, and the assertion says so deliberately rather than manufacturing a bigger
-        // number. The product has exactly one RecordDispatch call site — WorkflowSchedulerDrainer, reached only
-        // through WorkflowDrainOrchestrator, which only the router's non-alteration branch drives — so an admitted
-        // alteration weighs the seed unit and nothing more, flat, whatever its plan size. The work it commits is
-        // drained later under the admission-exempt RunSchedulerWork and stays uncounted.
+        // Three separate pins, one per assertion, all against the REAL load signal:
+        //   AmbientChargeWhileExecuting — the charge is still the flow's AMBIENT value after an await inside the
+        //     callee, which is what TryAdmit's nested-command exemption and RecordDispatch (Ambient.Value?.Add()) both
+        //     key off. Reading the signal's global counter cannot show this; only the ambient slot can. Swapping
+        //     DispatchRuntimeAdmissionLoadSignal's AsyncLocal<Charge?> for a ThreadLocal<Charge?> — the mutation that
+        //     drops ExecutionContext flow while leaving every counter intact — goes red on THIS assertion and nowhere
+        //     else in the class. (A plain static field is not that mutation: it makes the charge process-global, so
+        //     this assertion still passes and the failures land on the burst and ambient-tracking cases instead.)
+        //   LoadWhileExecuting — the charge is still OPEN (not acquired and discarded above the hand-off), and its
+        //     weight is ONE. One unit is the whole weight and the assertion says so rather than manufacturing a bigger
+        //     number: the product has exactly one RecordDispatch call site, WorkflowSchedulerDrainer, reached only
+        //     through WorkflowDrainOrchestrator, which only the router's non-alteration branch drives. The work an
+        //     alteration commits is charged to whoever drains that execution next — uncounted under the exempt
+        //     RunSchedulerWork, charged to a subsequently admitted live command otherwise — never to the alteration.
+        //   InFlightDispatches — the charge is released on the way out.
         var signal = new DispatchRuntimeAdmissionLoadSignal();
         var executor = new RecordingAlterationCommandExecutor(signal);
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -512,6 +507,7 @@ public sealed class RuntimeAdmissionControlTests
         Assert.False(result.Shed);
         Assert.Equal(1, _diagnostics.Admitted);
         Assert.Equal(1, executor.ExecuteCount);
+        Assert.True(executor.AmbientChargeWhileExecuting);
         Assert.Equal(1, executor.LoadWhileExecuting);
         Assert.Equal(0, signal.InFlightDispatches);
 
@@ -761,9 +757,9 @@ public sealed class RuntimeAdmissionControlTests
         public void RecordDispatch() => _inner.RecordDispatch();
     }
 
-    // Stands in for the alteration actor executor. It reads the load AFTER an await and never records a dispatch of
-    // its own — matching the real executor, which reaches no RecordDispatch call site — so what it reports back is
-    // the reading a genuinely resumed continuation inside the callee sees, not one manufactured by the fixture.
+    // Stands in for the alteration actor executor. It records no dispatch of its own — matching the real executor,
+    // which reaches no RecordDispatch call site — and takes both of its readings AFTER an await, so they are what a
+    // genuinely resumed continuation inside the callee sees rather than something the fixture manufactured.
     private sealed class RecordingAlterationCommandExecutor(IRuntimeAdmissionLoadSignal? loadSignal = null)
         : IWorkflowAlterationActorCommandExecutor
     {
@@ -771,12 +767,15 @@ public sealed class RuntimeAdmissionControlTests
 
         public long LoadWhileExecuting { get; private set; }
 
+        public bool AmbientChargeWhileExecuting { get; private set; }
+
         public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
             ExecuteCount++;
             await Task.Yield();
 
             LoadWhileExecuting = loadSignal?.InFlightDispatches ?? 0;
+            AmbientChargeWhileExecuting = loadSignal?.HasAmbientCharge ?? false;
         }
     }
 

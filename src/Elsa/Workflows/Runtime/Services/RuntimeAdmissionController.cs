@@ -116,19 +116,14 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         if (duration <= TimeSpan.Zero)
             return;
 
-        // A command that dispatched nothing carries no capacity information, so it may move neither the limit nor the
-        // baseline. ChargedUnits is the seed unit plus one per RecordDispatch, so ChargedUnits == 1 means the command
-        // never reached the drainer at all: its duration measures whatever else it did — store reads, an early
-        // duplicate-return, a throw — and not contention on the writer the limit exists to protect. Feeding such a
-        // sample in is worse than feeding in an unsaturated one, because the baseline update takes a faster sample
-        // outright: one sub-millisecond exit collapses the baseline, the next genuine drain then exceeds
-        // LatencyTolerance against the collapsed value, and the limit multiplies down toward MinLimit while a pump
-        // re-pins it every sweep. AlterWorkflow (#1325) is the live instance — gated, and structurally incapable of
-        // dispatching — but the rule is general and protects any future zero-dispatch kind the same way.
-        //
-        // Deliberately ABOVE the first-sample calibration below: an uninformative sample must not become the baseline
-        // every later sample is judged against, which is the worst version of the same defect rather than an exception
-        // to it.
+        // ChargedUnits is the seed unit plus one per RecordDispatch, so <= 1 is exactly "recorded no dispatch" — and a
+        // completion that recorded none is not a drain-shaped sample: its duration measures whatever else the command
+        // did, not contention on the writer this limit bounds. Deliberately ABOVE the first-sample calibration below,
+        // because the baseline update takes a faster sample outright: fed in as an ordinary sample one sub-millisecond
+        // exit collapses the baseline every later sample is judged against, and fed in as the FIRST one it becomes
+        // that baseline with no decay path back. AlterWorkflow (#1325) is the shipped instance — it reaches no
+        // RecordDispatch() call site in any shipped composition; a dispatching alteration would need a custom
+        // preflight handler or a replaced executor, and would then report ChargedUnits > 1 and be sampled normally.
         if (completion.ChargedUnits <= 1)
             return;
 

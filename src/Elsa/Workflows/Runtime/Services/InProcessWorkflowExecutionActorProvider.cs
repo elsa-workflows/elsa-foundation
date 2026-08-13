@@ -330,8 +330,9 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
                 // renders it 429), and a retry that answered Duplicate would strand a workflow that never ran. A shed
                 // ALTERATION is refused the same start-shaped way (#1325) and for the same reason must keep its key,
                 // which is load-bearing rather than incidental: the alteration pump re-claims the job once its lease
-                // lapses and redelivers the SAME deterministic key, so a consumed key would answer Duplicate forever
-                // and strand the job with no other stimulus able to rescue it.
+                // lapses and redelivers the SAME deterministic key, so a consumed key would answer Duplicate until
+                // this agent is passivated or the key ages out of the bounded per-agent window, with no other stimulus
+                // able to rescue the job in the meantime.
                 //
                 // A kind whose work item WAS durably queued before the refusal has its key consumed. That work is
                 // waiting for the resumption sweep; an at-least-once redelivery of the same key — which the

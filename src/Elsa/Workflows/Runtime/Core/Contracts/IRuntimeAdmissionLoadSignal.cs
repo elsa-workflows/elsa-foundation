@@ -55,6 +55,12 @@ public interface IRuntimeAdmissionLoadSignal
 /// <summary>The in-flight charge held by one admitted command for as long as it occupies the host.</summary>
 public interface IRuntimeAdmissionCharge : IDisposable
 {
-    /// <summary>Dispatch units this charge currently holds.</summary>
+    /// <summary>
+    /// Dispatch units this charge currently holds: <b>one seed unit on admission, plus one per
+    /// <see cref="IRuntimeAdmissionLoadSignal.RecordDispatch"/></b>. The seed is part of the contract rather than a
+    /// detail of the default implementation — <c>RuntimeAdmissionController</c> reads a completion reporting exactly
+    /// one as "this command dispatched nothing" and excludes it from the adaptive sample, so a charge that seeded at
+    /// zero would switch adaptation off host-wide (#1325).
+    /// </summary>
     long Units { get; }
 }
