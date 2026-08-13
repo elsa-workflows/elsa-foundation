@@ -60,7 +60,8 @@ public interface IRuntimeAdmissionCharge : IDisposable
     /// <see cref="IRuntimeAdmissionLoadSignal.RecordDispatch"/></b>. The seed is part of the contract rather than a
     /// detail of the default implementation — <c>RuntimeAdmissionController</c> reads a completion reporting exactly
     /// one as "this command dispatched nothing" and excludes it from the adaptive sample, so a charge that seeded at
-    /// zero would switch adaptation off host-wide (#1325).
+    /// zero would silently drop every single-dispatch completion from that sample, biasing it toward heavier
+    /// commands (#1325).
     /// </summary>
     long Units { get; }
 }

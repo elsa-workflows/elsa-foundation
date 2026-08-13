@@ -121,9 +121,12 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         // did, not contention on the writer this limit bounds. Deliberately ABOVE the first-sample calibration below,
         // because the baseline update takes a faster sample outright: fed in as an ordinary sample one sub-millisecond
         // exit collapses the baseline every later sample is judged against, and fed in as the FIRST one it becomes
-        // that baseline with no decay path back. AlterWorkflow (#1325) is the shipped instance — it reaches no
-        // RecordDispatch() call site in any shipped composition; a dispatching alteration would need a custom
-        // preflight handler or a replaced executor, and would then report ChargedUnits > 1 and be sampled normally.
+        // that baseline with no decay path back. AlterWorkflow (#1325) is what made this reachable by construction —
+        // it reaches no RecordDispatch() call site in any shipped composition; a dispatching alteration would need a
+        // custom preflight handler or a replaced executor, and would then report ChargedUnits > 1 and be sampled
+        // normally. It is not the only source, though, so this guard is not dead code if AlterWorkflow is ever
+        // ungated: a drain that finds the workflow already terminal, one stopped by the pause gate, and one whose
+        // AcquireNextAsync loses the item to a concurrent sweep all reach the drainer and record no dispatch too.
         if (completion.ChargedUnits <= 1)
             return;
 

@@ -483,8 +483,10 @@ public sealed class RuntimeAdmissionControlTests
         //     key off. Reading the signal's global counter cannot show this; only the ambient slot can. Swapping
         //     DispatchRuntimeAdmissionLoadSignal's AsyncLocal<Charge?> for a ThreadLocal<Charge?> — the mutation that
         //     drops ExecutionContext flow while leaving every counter intact — goes red on THIS assertion and nowhere
-        //     else in the class. (A plain static field is not that mutation: it makes the charge process-global, so
-        //     this assertion still passes and the failures land on the burst and ambient-tracking cases instead.)
+        //     else in the class, whenever the Task.Yield continuation resumes on another thread. That is the usual
+        //     case rather than a guarantee, since the same worker may pick the continuation back up. (A plain static
+        //     field is not that mutation: it makes the charge process-global, so this assertion still passes and the
+        //     failures land on the burst and ambient-tracking cases instead.)
         //   LoadWhileExecuting — the charge is still OPEN (not acquired and discarded above the hand-off), and its
         //     weight is ONE. One unit is the whole weight and the assertion says so rather than manufacturing a bigger
         //     number: the product has exactly one RecordDispatch call site, WorkflowSchedulerDrainer, reached only

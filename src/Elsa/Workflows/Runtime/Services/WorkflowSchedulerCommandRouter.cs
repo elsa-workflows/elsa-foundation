@@ -174,11 +174,12 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// told "not taken, retry" would get the work done twice, and a queued <c>AlterWorkflow</c> would be matched only
     /// by <c>NoopWorkflowSchedulerWorkHandler</c> and silently swallowed. Both have a re-driver that needs no parked
     /// item: the caller's retry, and the alteration pump re-claiming the job once its lease lapses.</para>
-    /// <para>That swallow is systemic rather than an <c>AlterWorkflow</c> curiosity — <c>ContinueVolatileWait</c>,
-    /// <c>DeliverSignal</c>, and <c>NotifyParentActivity</c> (handler-less in the core composition; its handler comes
-    /// from <c>ActivitiesRuntimeFeature</c>) have no handler and no faulting fallback either, so whoever makes one of
-    /// them reachable as a router envelope owns adding it here. <c>AlterWorkflow</c> is named because it is the
-    /// reachable one today. The <c>Noop</c> matching rule, the pump's registration and its <c>IRecurringTask</c>
+    /// <para>That swallow is systemic rather than an <c>AlterWorkflow</c> curiosity: <c>ContinueVolatileWait</c> and
+    /// <c>DeliverSignal</c> have no handler anywhere and no faulting fallback either, and <c>NotifyParentActivity</c>
+    /// shares that only on a host composing no <c>ActivitiesRuntimeFeature</c>, which registers its handler. So
+    /// whoever makes one of them reachable as a router envelope owns deciding whether it belongs here — for the first
+    /// two the answer is yes on any host, for the third only where that feature is absent. <c>AlterWorkflow</c> is
+    /// named because it is the reachable one today. The <c>Noop</c> matching rule, the pump's registration and its <c>IRecurringTask</c>
     /// caveat, and the lease arithmetic live in the admission entry of <c>EXTENSION_POINTS.md</c>.</para>
     /// </remarks>
     private static bool QueuesOnShed(WorkflowExecutionCommandKind kind) => kind is not (
