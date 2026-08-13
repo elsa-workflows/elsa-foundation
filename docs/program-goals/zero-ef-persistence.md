@@ -56,17 +56,17 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 
 ## Current Roadmap Notes
 
-- **Current focus (2026-08-12): ON HOLD pending the upstream Groundwork refactoring.** Program-owner
-  decision recorded on [#647](https://github.com/elsa-workflows/elsa-foundation/issues/647): spec 144
-  execution is paused until the Groundwork refactoring lands (portable-model retirement per Groundwork
-  ADR 0006, the announced pre-1.0 breaking release retiring the legacy document lane in Groundwork #185,
-  and the open performance lane #196–#204), because evidence generated against the pre-refactor package
-  family would be invalidated by fingerprint binding and every deletion gate (spec 144 T009–T013) is
-  independently blocked. Re-entry: refactoring lands upstream, Elsa consumes the post-refactor preview
-  family, then re-verify the spec 144 Phase-2 currency notes. Note the ratified 2026-08-04 ADR 0042
+- **Current focus (2026-08-13): RE-ENTERED after the Groundwork structural refactoring.** The 2026-08-12
+  hold is lifted by program-owner direction recorded on
+  [#647](https://github.com/elsa-workflows/elsa-foundation/issues/647): the refactoring landed upstream
+  (provider consolidation, core decomposition, conformance rework; head `53431c862`) and Elsa consumes
+  the post-refactor family `0.0.1-preview.131`. Recorded caveat: Groundwork #185 (legacy-lane retirement
+  breaking release), #181, and perf items #196/#200/#204 remain open, so evidence generated now may be
+  invalidated if those land later. Next step per the re-entry condition: re-verify the spec 144 Phase-2
+  (T009–T013) currency notes. #643 is closed as not planned under the ratified 2026-08-04 ADR 0042
   amendment (OpenIddict keeps vendor persistence; completion criterion narrowed to zero *first-party*
   EF with a named vendor allowlist) — the "OpenIddict Groundwork stores" and "no transitive EF" wording
-  elsewhere in this file predates it and is reconciled by spec 144 T073.
+  elsewhere in this file predates the amendment and is reconciled by spec 144 T073.
 - Use this task as a lightweight control room; assign one bounded decision-map ticket or implementation issue to each fresh worker.
 - Groundwork vocabulary/API #28, pooled-session #27/#34, physical-table #31, tenancy #32, schema-diff #44, query-planner #45, provider-parity #47/#48, migration-CLI #49, and bounded-bulk #51 slices are closed upstream. Groundwork #63 is the deliberately retained post-delivery public-API review, and #50 remains the physical-form performance lane.
 - The Identity/OpenIddict inventory is resolved. Its upstream prerequisites are compound/typed/multi-value indexes, range and bounded bulk operations, storage-boundary tenancy, and four-provider UoW/OCC conformance; the OpenIddict generic-query boundary remains an explicit implementation capability decision rather than permission for client evaluation.

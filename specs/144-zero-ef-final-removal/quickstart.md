@@ -638,3 +638,73 @@ lines vs values, XML/TOML comments, nested JSON comment properties vs string val
 non-JSON host-configuration scan gained format-appropriate comment stripping; the real-repo shrink-only
 baseline test passed unchanged in the same run, and the three baseline host-configuration entries are all
 JSON, so no baseline entry was affected. No database-server container or performance run was started.
+
+### 2026-08-13 program re-entry + preview.131 consumption checkpoint
+
+**Re-entry (program-owner direction, recorded on #647).** The Groundwork structural refactoring landed
+upstream: provider consolidation (PR #210), core decomposition of physical-storage resolution and route
+compilation (PR #211), and the conformance rework (PR #206), at head `53431c862`. The post-refactor
+package family `0.0.1-preview.131` was published from that exact head (Publish run 131; its CI run 42
+succeeded). Caveat recorded and accepted by the owner: Groundwork #185 (legacy-lane retirement breaking
+release), #181 (rename), and perf items #196/#200/#204 remain open, so evidence generated now may still
+be invalidated if those land later.
+
+**Serialized alignment slice (this checkpoint).** Seven `Directory.Packages.props` pins, the
+`groundwork.tool` manifest entry, `GroundworkCoverageLedgerTests.CurrentPackageGroundworkVersion`, and
+`GroundworkTargetBaselineTests.CurrentGroundworkVersion` move `0.0.1-preview.120` → `0.0.1-preview.131`.
+The coverage ledger's `groundworkVersion` stays `0.0.1-preview.103` — the last mechanically imported
+evidence generation — and no row status, performance verdict, EF ratchet bucket, or issue/Project state
+advances through this alignment. #643 was separately closed as not planned (ADR 0042 amendment) on
+2026-08-12; the T010 gate is now that closure record.
+
+Container-free evidence: `dotnet restore Elsa.Server.slnx --force-evaluate` succeeded on the new family;
+`dotnet build Elsa.Server.slnx --no-restore` — 0 errors (the refactor did not break Elsa's compile
+surface); `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` — Passed 363, Failed 0,
+Skipped 0 (both bumped version guards, the coverage-ledger suite, and the shrink-only EF ratchet all
+green, so the resolved EF package surface did not move).
+
+Design-conformance SQLite (the suite that owns the physical-target/provisioning-plan fingerprints):
+`dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj --no-build --no-restore --disable-build-servers`
+— **Passed 63, Failed 0, Skipped 0**, duration 13m18s. `--list-tests` discovered 63, so the green run
+covers the whole project rather than a silent subset. **Both pending fingerprints are unchanged**:
+`PendingTargetFingerprint` `b0edf8ce…` and `PendingPlanFingerprint` `ac21d289…` still match under
+preview.131, so the refactor's core decomposition of physical-storage resolution and route compilation
+did **not** move Elsa's computed physical target or provisioning plan. The ratified preview.81
+`AcceptedTargetFingerprint`/`AcceptedPlanFingerprint` floor was not touched, and nothing was
+re-ratified by this alignment.
+
+Honest failure disclosure and disposition: the first execution of that project reported **Failed 3,
+Passed 60** with a duration of 1h19m, while the maps generator and the architecture suite were running
+concurrently on the same machine. Re-running `GroundworkTargetBaselineTests` in isolation passed 1/1
+(6m53s), and the full-project rerun on an otherwise-idle machine passed 63/63 in 13m18s — a 6× speedup
+over the contended run. The failures are therefore dispositioned as contention artifacts, not a
+preview.131 regression; the accepted evidence is the quiet-machine run. No fingerprint constant was
+changed in response to the failing run.
+
+No database-server container, provider suite, or performance run was started in this checkpoint.
+
+#### Phase-2 currency re-verification (2026-08-13, required by the re-entry condition)
+
+Re-verified at the post-refactor head. **No gate opened; no task is checked by this note.**
+
+| Task / gate | State before hold (2026-08-12) | State now | Change |
+|---|---|---|---|
+| T009 / #642 diagnostics | Blocked | **Blocked** | None in substance. Spec 139 T050–T055 and T057 remain unchecked; T050/T051 import a #646 verdict that still does not exist, and T053–T055 are the mechanical EF deletions behind it. |
+| T010 / #643 OpenIddict | Blocked | **Satisfied by re-disposition** | #643 closed as *not planned* on 2026-08-12 under the ratified ADR 0042 amendment. The gate is now that closure record; its quickstart evidence row is this table. |
+| T011 / #646 performance | Blocked | **Blocked** | `performanceVerdict` count in `coverage-ledger.json` is still **zero**. One genuine advance: `BenchmarkAdapterFactory` now registers an adapter leaf for `RuntimeCheckpointCommitWorkload`, so the harness is no longer leafless — but that is 1 workload, and the structural obstacles recorded on 2026-08-06 are unchanged. |
+| T012 / #932 dashboard | Blocked | **Blocked** | Still Open. SQL Server dialect and MongoDB aggregation exist in source; host acceptance evidence and the final issue/Project disposition do not. |
+| T013 / Groundwork upstream | Blocked | **Partially advanced, still blocked** | Groundwork **#141 is now CLOSED** and **#50 is now CLOSED/COMPLETED** (2026-07-31) — both were open at the hold. Parent **#25 remains OPEN**. |
+
+**T013 caveat, stated rather than inferred.** #50's closure is recorded as `COMPLETED`, but its own final
+comment says the merge "does not execute the controlled matrix, activate a baseline, select forms, or
+produce Elsa verdicts," and that its T036–T038 remain open. T013's text forbids inferring #50 completion
+from a partial checkpoint, so the closed state alone does **not** establish the "accepted #50 performance
+evidence and final issue disposition" the gate requires. Treat T013 as advanced-but-open pending either an
+accepted immutable baseline or a named, separately ratified amendment.
+
+**Net effect of re-entry on the critical path: none.** Consuming preview.131 unblocks no deletion task.
+The binding constraint is unchanged and remains T011: every deletion gate depends on #646 verdicts, none
+exist, and the 21 runtime-family rows still have no EF comparand — so the three-tier grading basis in
+`specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md` still needs an independent
+ratifier before T011 can consume it. That ratification is a program-owner decision and is **not**
+self-ratifiable by this work unit.
