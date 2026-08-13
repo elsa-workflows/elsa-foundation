@@ -638,3 +638,47 @@ lines vs values, XML/TOML comments, nested JSON comment properties vs string val
 non-JSON host-configuration scan gained format-appropriate comment stripping; the real-repo shrink-only
 baseline test passed unchanged in the same run, and the three baseline host-configuration entries are all
 JSON, so no baseline entry was affected. No database-server container or performance run was started.
+
+### 2026-08-13 program re-entry + preview.131 consumption checkpoint
+
+**Re-entry (program-owner direction, recorded on #647).** The Groundwork structural refactoring landed
+upstream: provider consolidation (PR #210), core decomposition of physical-storage resolution and route
+compilation (PR #211), and the conformance rework (PR #206), at head `53431c862`. The post-refactor
+package family `0.0.1-preview.131` was published from that exact head (Publish run 131; its CI run 42
+succeeded). Caveat recorded and accepted by the owner: Groundwork #185 (legacy-lane retirement breaking
+release), #181 (rename), and perf items #196/#200/#204 remain open, so evidence generated now may still
+be invalidated if those land later.
+
+**Serialized alignment slice (this checkpoint).** Seven `Directory.Packages.props` pins, the
+`groundwork.tool` manifest entry, `GroundworkCoverageLedgerTests.CurrentPackageGroundworkVersion`, and
+`GroundworkTargetBaselineTests.CurrentGroundworkVersion` move `0.0.1-preview.120` → `0.0.1-preview.131`.
+The coverage ledger's `groundworkVersion` stays `0.0.1-preview.103` — the last mechanically imported
+evidence generation — and no row status, performance verdict, EF ratchet bucket, or issue/Project state
+advances through this alignment. #643 was separately closed as not planned (ADR 0042 amendment) on
+2026-08-12; the T010 gate is now that closure record.
+
+Container-free evidence: `dotnet restore Elsa.Server.slnx --force-evaluate` succeeded on the new family;
+`dotnet build Elsa.Server.slnx --no-restore` — 0 errors (the refactor did not break Elsa's compile
+surface); `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` — Passed 363, Failed 0,
+Skipped 0 (both bumped version guards, the coverage-ledger suite, and the shrink-only EF ratchet all
+green, so the resolved EF package surface did not move).
+
+Design-conformance SQLite (the suite that owns the physical-target/provisioning-plan fingerprints):
+`dotnet test tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj --no-build --no-restore --disable-build-servers`
+— **Passed 63, Failed 0, Skipped 0**, duration 13m18s. `--list-tests` discovered 63, so the green run
+covers the whole project rather than a silent subset. **Both pending fingerprints are unchanged**:
+`PendingTargetFingerprint` `b0edf8ce…` and `PendingPlanFingerprint` `ac21d289…` still match under
+preview.131, so the refactor's core decomposition of physical-storage resolution and route compilation
+did **not** move Elsa's computed physical target or provisioning plan. The ratified preview.81
+`AcceptedTargetFingerprint`/`AcceptedPlanFingerprint` floor was not touched, and nothing was
+re-ratified by this alignment.
+
+Honest failure disclosure and disposition: the first execution of that project reported **Failed 3,
+Passed 60** with a duration of 1h19m, while the maps generator and the architecture suite were running
+concurrently on the same machine. Re-running `GroundworkTargetBaselineTests` in isolation passed 1/1
+(6m53s), and the full-project rerun on an otherwise-idle machine passed 63/63 in 13m18s — a 6× speedup
+over the contended run. The failures are therefore dispositioned as contention artifacts, not a
+preview.131 regression; the accepted evidence is the quiet-machine run. No fingerprint constant was
+changed in response to the failing run.
+
+No database-server container, provider suite, or performance run was started in this checkpoint.

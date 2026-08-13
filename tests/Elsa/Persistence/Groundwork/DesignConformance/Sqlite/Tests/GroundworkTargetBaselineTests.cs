@@ -14,10 +14,15 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 public sealed class GroundworkTargetBaselineTests
 {
     private const string EvidenceDirectoryVariable = "ELSA_DESIGN_GROUNDWORK_BASELINE_EVIDENCE_DIR";
-    private const string CurrentGroundworkVersion = "0.0.1-preview.120";
+    private const string CurrentGroundworkVersion = "0.0.1-preview.131";
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
+    // 2026-08-13: Groundwork moves to 0.0.1-preview.131, the first post-refactor family (provider
+    // consolidation, core decomposition of physical-storage resolution and route compilation, declared
+    // index key lengths/precision per ADR 0008). Zero-EF program re-entry per the #647 record; the
+    // accepted preview.81 floor is untouched, and the pending fingerprints move below only if the
+    // refactor changed the computed physical target or provisioning plan.
     // 2026-08-12: every index backing a scale-bearing sweep now declares IncludedAsNull, so no provider
     // omits rows whose keyed columns have no value, and Groundwork moves to 0.0.1-preview.120. Deliberately
     // sparse indexes are unchanged and now state Excluded on both their logical and physical declarations.

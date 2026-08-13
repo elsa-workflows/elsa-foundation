@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "groundwork.tool": {
-      "version": "0.0.1-preview.120",
+      "version": "0.0.1-preview.131",
       "commands": [
         "groundwork"
       ]
