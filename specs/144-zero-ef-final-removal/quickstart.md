@@ -682,3 +682,29 @@ preview.131 regression; the accepted evidence is the quiet-machine run. No finge
 changed in response to the failing run.
 
 No database-server container, provider suite, or performance run was started in this checkpoint.
+
+#### Phase-2 currency re-verification (2026-08-13, required by the re-entry condition)
+
+Re-verified at the post-refactor head. **No gate opened; no task is checked by this note.**
+
+| Task / gate | State before hold (2026-08-12) | State now | Change |
+|---|---|---|---|
+| T009 / #642 diagnostics | Blocked | **Blocked** | None in substance. Spec 139 T050–T055 and T057 remain unchecked; T050/T051 import a #646 verdict that still does not exist, and T053–T055 are the mechanical EF deletions behind it. |
+| T010 / #643 OpenIddict | Blocked | **Satisfied by re-disposition** | #643 closed as *not planned* on 2026-08-12 under the ratified ADR 0042 amendment. The gate is now that closure record; its quickstart evidence row is this table. |
+| T011 / #646 performance | Blocked | **Blocked** | `performanceVerdict` count in `coverage-ledger.json` is still **zero**. One genuine advance: `BenchmarkAdapterFactory` now registers an adapter leaf for `RuntimeCheckpointCommitWorkload`, so the harness is no longer leafless — but that is 1 workload, and the structural obstacles recorded on 2026-08-06 are unchanged. |
+| T012 / #932 dashboard | Blocked | **Blocked** | Still Open. SQL Server dialect and MongoDB aggregation exist in source; host acceptance evidence and the final issue/Project disposition do not. |
+| T013 / Groundwork upstream | Blocked | **Partially advanced, still blocked** | Groundwork **#141 is now CLOSED** and **#50 is now CLOSED/COMPLETED** (2026-07-31) — both were open at the hold. Parent **#25 remains OPEN**. |
+
+**T013 caveat, stated rather than inferred.** #50's closure is recorded as `COMPLETED`, but its own final
+comment says the merge "does not execute the controlled matrix, activate a baseline, select forms, or
+produce Elsa verdicts," and that its T036–T038 remain open. T013's text forbids inferring #50 completion
+from a partial checkpoint, so the closed state alone does **not** establish the "accepted #50 performance
+evidence and final issue disposition" the gate requires. Treat T013 as advanced-but-open pending either an
+accepted immutable baseline or a named, separately ratified amendment.
+
+**Net effect of re-entry on the critical path: none.** Consuming preview.131 unblocks no deletion task.
+The binding constraint is unchanged and remains T011: every deletion gate depends on #646 verdicts, none
+exist, and the 21 runtime-family rows still have no EF comparand — so the three-tier grading basis in
+`specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md` still needs an independent
+ratifier before T011 can consume it. That ratification is a program-owner decision and is **not**
+self-ratifiable by this work unit.
