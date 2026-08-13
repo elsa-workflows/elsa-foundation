@@ -65,10 +65,15 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         //
         // And the charge an admitted decision opens has to COVER the work the chosen branch then performs.
         // <c>RecordDispatch()</c> is <c>Ambient.Value?.Add()</c>, so a flow running with no charge open weighs
-        // nothing; a gate placed after a branch would leave that branch's dispatches invisible to the limiter, which
-        // is exactly what made alteration load uncounted before #1325. The charge is an <c>AsyncLocal</c>, so it flows
-        // down into everything this method awaits and is released only when this <c>using</c> goes out of scope —
-        // after the alteration executor has returned, not before it is called.
+        // nothing, and a gate placed after a branch would leave that branch's dispatches invisible to the limiter.
+        // For the alteration branch specifically that coverage is currently latent rather than load-bearing: the
+        // executor reaches no <c>RecordDispatch()</c> call site — the only one in the product is in
+        // <c>WorkflowSchedulerDrainer</c>, which only the drain branch below drives — so an admitted alteration
+        // weighs exactly the seed unit for its duration, flat, whatever its plan size. What the coverage does buy
+        // today is that a command dispatched from INSIDE an alteration sees an ambient charge and takes
+        // <c>TryAdmit</c>'s nested-command exemption instead of being shed behind its own caller. The charge is an
+        // <c>AsyncLocal</c>, so it flows down into everything this method awaits and is released only when this
+        // <c>using</c> goes out of scope — after the alteration executor has returned, not before it is called.
         using var admission = IsSubjectToAdmission(envelope.Command.Kind) ? _admissionController?.TryAdmit() : null;
         if (admission is { IsAdmitted: false })
         {
@@ -145,8 +150,12 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// almost no work themselves.</para>
     /// <para>This deny-list is the whole exemption set: every kind not named here reaches the gate, including
     /// <c>AlterWorkflow</c> (#1325). Its plan store admits by idempotency key, which is registration and not a load
-    /// bound, so before it was gated an alteration held no charge and every unit of work it ran weighed zero against
-    /// the limiter while live traffic was being shed.</para>
+    /// bound, so before it was gated an alteration held no charge at all and weighed zero while live traffic was being
+    /// shed. Gating it makes it <em>sheddable</em> and worth exactly one unit — the seed every admitted command pays —
+    /// for as long as its actor call runs. It is not worth more than that: the alteration executor performs no
+    /// scheduler dispatches of its own, so it accrues none of the per-dispatch units a <c>Start</c> does, and the
+    /// scheduler work it commits is drained later under the exempt <c>RunSchedulerWork</c> and stays uncounted. One
+    /// counted, refusable unit is the whole gain, and it is a smaller gain than "alteration load is now metered".</para>
     /// </remarks>
     private static bool IsSubjectToAdmission(WorkflowExecutionCommandKind kind) => kind is not (
         WorkflowExecutionCommandKind.RunSchedulerWork or
@@ -159,8 +168,13 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// </summary>
     /// <remarks>
     /// <para>The shape follows from what would re-drive the parked item. A gated kind naming a live execution is
-    /// deferred rather than dropped: the item stays queued and the resumption sweep re-drives it, which is what makes
-    /// <c>Deferred</c> a promise rather than a lie.</para>
+    /// deferred rather than dropped: the item stays queued for the resumption sweep to re-drive, which is what is
+    /// meant to make <c>Deferred</c> a promise rather than a drop. <b>That sweep is not unconditional.</b> It exists
+    /// only where <c>WorkflowsRuntimeResumptionFeature</c> is composed; <c>AddWorkflowRuntime</c> does not register
+    /// it, while admission itself is registered for every host and on by default. On a composition without a
+    /// re-driver the parked item has no owner and the promise is not kept — the open gap tracked by #1320, whose
+    /// chosen resolution (degrade to the start-shaped refusal when no re-driver is composed) is not implemented
+    /// here.</para>
     /// <para><c>Start</c> has no execution id to hand back, so it is refused outright and nothing durable is written;
     /// the HTTP edge renders that as 429 with Retry-After. Queueing it would let the sweep run it later, so a caller
     /// told "not taken, retry" would get the work done twice.</para>
@@ -168,9 +182,18 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// <c>NoopWorkflowSchedulerWorkHandler.CanHandle</c> matches every kind except <c>InvokeActivity</c>,
     /// <c>GeneratedEvent</c>, and <c>ResumeBookmark</c>, and its <c>HandleAsync</c> returns without doing anything, so
     /// a parked alteration item would be silently swallowed on the next drain even on a host with the resumption sweep
-    /// composed. The outright refusal is safe because the alteration path carries its own re-driver, registered
-    /// unconditionally in <c>AddWorkflowRuntime</c>: a refused dispatch writes nothing, leaves the job claimable, and
-    /// <c>IWorkflowAlterationStore.ClaimNextAsync</c> re-claims running jobs once their lease lapses.</para>
+    /// composed. That property is not unique to it: <c>ContinueVolatileWait</c> and <c>DeliverSignal</c> have no
+    /// handler either and would be swallowed the same way — latent only because nothing in <c>Elsa</c> constructs
+    /// them, so whoever wires one up owns adding it here. <c>AlterWorkflow</c> is named on this list rather than the
+    /// whole handler-less set because it is the one that is actually reachable, and because it is the one with a
+    /// re-driver that makes the outright refusal safe: <c>WorkflowAlterationOrchestrationPumpTask</c> is registered by
+    /// <c>AddWorkflowRuntime</c> itself rather than by any opt-in feature, so no composition choice can drop it —
+    /// though as an <c>IRecurringTask</c> it still only runs where the Tasks domain's <c>TaskManager</c> schedules it,
+    /// and that same pump is the only producer of <c>AlterWorkflow</c> envelopes, so a host that does not run it
+    /// cannot reach this refusal in the first place. A refused dispatch writes nothing and leaves the job claimable,
+    /// and <c>IWorkflowAlterationStore.ClaimNextAsync</c> re-claims running jobs once their lease lapses — a full
+    /// <c>WorkflowAlterationOrchestrationOptions.JobLeaseDuration</c>, one minute by default, against a
+    /// <c>RetryAfter</c> measured in seconds, so a large campaign under sustained load re-drives on minutes.</para>
     /// </remarks>
     private static bool QueuesOnShed(WorkflowExecutionCommandKind kind) => kind is not (
         WorkflowExecutionCommandKind.Start or

@@ -16,6 +16,11 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// and start shedding for no reason. So the limit only moves on a sample admitted at half the limit or more, which is
 /// also why a host that never saturates never sheds.</para>
 ///
+/// <para><b>Nor does a sample that dispatched nothing.</b> A gated command that never reached a scheduler dispatch —
+/// <c>AlterWorkflow</c> (#1325) is the shipped case — spent its time on something other than the writer this limit
+/// bounds, so its duration says nothing about capacity and its fast exits would otherwise collapse the latency
+/// baseline every later sample is judged against.</para>
+///
 /// <para><b>A lone command is never shed.</b> With nothing in flight there is no contention to protect against, and
 /// refusing would mean a host that can serve exactly one request at a time serves none. A command dispatched from
 /// inside an already-admitted one — a child workflow started during its parent's drain — is never shed either: the
@@ -109,6 +114,22 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     {
         var duration = _timeProvider.GetElapsedTime(completion.StartTimestamp);
         if (duration <= TimeSpan.Zero)
+            return;
+
+        // A command that dispatched nothing carries no capacity information, so it may move neither the limit nor the
+        // baseline. ChargedUnits is the seed unit plus one per RecordDispatch, so ChargedUnits == 1 means the command
+        // never reached the drainer at all: its duration measures whatever else it did — store reads, an early
+        // duplicate-return, a throw — and not contention on the writer the limit exists to protect. Feeding such a
+        // sample in is worse than feeding in an unsaturated one, because the baseline update takes a faster sample
+        // outright: one sub-millisecond exit collapses the baseline, the next genuine drain then exceeds
+        // LatencyTolerance against the collapsed value, and the limit multiplies down toward MinLimit while a pump
+        // re-pins it every sweep. AlterWorkflow (#1325) is the live instance — gated, and structurally incapable of
+        // dispatching — but the rule is general and protects any future zero-dispatch kind the same way.
+        //
+        // Deliberately ABOVE the first-sample calibration below: an uninformative sample must not become the baseline
+        // every later sample is judged against, which is the worst version of the same defect rather than an exception
+        // to it.
+        if (completion.ChargedUnits <= 1)
             return;
 
         lock (_limitLock)
