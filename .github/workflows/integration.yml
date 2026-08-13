@@ -80,6 +80,16 @@ jobs:
       - name: Restore
         run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore repository-local .NET tools
+        # Without this the `groundwork` tool from .config/dotnet-tools.json is never installed, and
+        # every test that shells out to it fails with 'Run "dotnet tool restore" to make the
+        # "groundwork" command available.' -- which reads as a product regression rather than a
+        # missing setup step. That is what kept this gate red every night from 2026-08-06 to
+        # 2026-08-13 (#1323): the diagnostics schema-deployment, Groundwork schema-CLI, and identity
+        # provider-evidence suites all drive that CLI. ci.yml and http-workflow-performance.yml have
+        # always had this step; this job was the one that did not.
+        run: dotnet tool restore
+
       - name: Build (full solution, including test projects)
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
