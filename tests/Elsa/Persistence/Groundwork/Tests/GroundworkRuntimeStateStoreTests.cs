@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
@@ -543,15 +544,16 @@ public sealed class GroundworkRuntimeStateStoreTests
         Assert.Equal(new[] { "inc-1", "inc-2" }, blocking.Select(x => x.IncidentId).OrderBy(x => x));
     }
 
-    [Theory]
-    [InlineData("sqlite")]
-    [InlineData("memory")]
-    public async Task IncidentState_LongFaultIdentity_RoundTrips_And_Remains_InsertOnly(string provider)
+    // The composed document identity exceeds Groundwork's 450-code-unit identity bound, so the store must
+    // hash it down while the document keeps the complete logical identity for round-tripping.
+    private static string LongFaultIncidentId => $"incident:work:{new string('x', 450)}:activity-1:Faulted";
+
+    [Fact]
+    public async Task IncidentState_LongFaultIdentity_RoundTrips_And_Remains_InsertOnly()
     {
-        await using var fixture = CreateStore(provider);
+        await using var fixture = CreateStore("memory");
         IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
-        var workItemId = $"work:{new string('x', 450)}";
-        var incidentId = $"incident:{workItemId}:activity-1:Faulted";
+        var incidentId = LongFaultIncidentId;
         Assert.True(incidentId.Length > 450, $"Expected the regression identity to exceed 450 code units, but observed {incidentId.Length}.");
 
         Assert.True(await store.TryAddAsync(Incident("wf-1", incidentId, IncidentStatus.Open)));
@@ -562,6 +564,22 @@ public sealed class GroundworkRuntimeStateStoreTests
 
         Assert.Equal(IncidentStatus.Blocking, (await store.FindAsync("wf-1", incidentId))!.Status);
         Assert.Equal(incidentId, Assert.Single(await store.ListAsync("wf-1")).IncidentId);
+    }
+
+    // The counterpart on a real provider: hashing the document identity does not exempt the incidentId FIELD
+    // from the 128-character `by-incident-id` projection the runtime manifest declares. Production keeps
+    // incident identities inside that bound on purpose (ActivityFaultIncidentRecorder, RuntimeChainId); this
+    // pins the failure that would otherwise be discovered in a live host.
+    [Fact]
+    public async Task IncidentState_LongFaultIdentity_IsRefusedByTheDeclaredIncidentIdProjection()
+    {
+        await using var fixture = CreateStore("sqlite");
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        var exception = await Assert.ThrowsAsync<PhysicalProjectionValueValidationException>(() =>
+            store.TryAddAsync(Incident("wf-1", LongFaultIncidentId, IncidentStatus.Open)).AsTask());
+
+        Assert.Contains(ElsaRuntimeStorageManifest.IncidentAttentionIncidentIdIndex, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

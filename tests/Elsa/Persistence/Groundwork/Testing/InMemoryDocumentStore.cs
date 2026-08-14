@@ -25,7 +25,7 @@ namespace Elsa.Persistence.Groundwork.Testing;
 /// compatibility tests, and provides a working cross-document unit of work mirroring the relational
 /// provider's <see cref="TransactionBoundary.CrossUnitAtomic"/> boundary.
 /// </remarks>
-public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStore
+public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStore, IDocumentEnumerationSource
 {
     private readonly StorageManifest manifest;
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
@@ -115,6 +115,10 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         }
     }
 
+    // --- Legacy IDocumentStore query members. These are abstract on the interface until Groundwork's
+    // portable-surface removal lands, so the double must still declare them; nothing inside this project
+    // calls them. They resolve their index from the declared physical storage like everything else. ---
+#pragma warning disable GW0004
     public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default)
     {
         var fieldPath = ResolveIndexFieldPath(query.DocumentKind, query.IndexName);
@@ -133,12 +137,8 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private string ResolveIndexFieldPath(string documentKind, string indexName)
     {
         var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
-
-        // Units that have migrated off the legacy declaration surface declare their indexes only on
-        // their physical storage; the legacy list still answers for the ones that have not.
-        var path = unit.Indexes.SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path
-                   ?? unit.PhysicalStorage?.LogicalIndexes
-                       .SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path;
+        var path = unit.PhysicalStorage?.LogicalIndexes
+            .SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path;
         return path ?? throw new UndeclaredDocumentIndexException(documentKind, indexName);
     }
 
@@ -160,9 +160,8 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         };
     }
 
-    // --- Closed-query (PortableDocumentQuery) surface. Only the clause-free "all documents of a kind" form
-    // (with optional offset paging) is implemented — the shape the trigger-binding store's type-scoped scan
-    // uses. A query carrying comparison clauses is still out of this double's remit. ---
+    // Only the clause-free "all documents of a kind" form (with optional offset paging) is implemented.
+    // A query carrying comparison clauses was never in this double's remit.
     public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default)
     {
         if (query.Clauses.Count > 0)
@@ -185,6 +184,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
 
     public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
+#pragma warning restore GW0004
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         => ExecuteQueryAsync(query, BoundedQueryResultOperation.Documents, cancellationToken);
@@ -250,14 +250,13 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             candidate => candidate.Identity.Value == query.DocumentKind)
             ?? throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' is not declared by the in-memory manifest.");
-        var declarations = unit.PhysicalStorage?.BoundedQueries
-            .Where(candidate => candidate.Identity == query.QueryIdentity)
-            .ToArray() ?? [];
-        var legacyDeclarations = unit.Queries
+        var storage = unit.PhysicalStorage
+            ?? throw new InvalidOperationException(
+                $"Document kind '{query.DocumentKind}' does not declare physical storage.");
+        var declarations = storage.BoundedQueries
             .Where(candidate => candidate.Identity == query.QueryIdentity)
             .ToArray();
-        if ((unit.PhysicalStorage is not null && declarations.Length != 1) ||
-            (unit.PhysicalStorage is null && legacyDeclarations.Length != 1))
+        if (declarations.Length != 1)
         {
             throw new InvalidOperationException(
                 $"Document kind '{query.DocumentKind}' must declare bounded query '{query.QueryIdentity}' exactly once.");
@@ -270,14 +269,7 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
                 $"through the '{expectedOperation}' execution method.");
         }
 
-        // Once a unit is physicalized, its bounded routes are authoritative. Retained legacy
-        // declarations cannot hide a missing physical route.
-        if (unit.PhysicalStorage is not null)
-            return ValidatePhysicalQuery(unit, declarations[0], query, expectedOperation);
-
-#pragma warning disable GW0003
-        return ValidateLegacyQuery(unit, legacyDeclarations[0], query);
-#pragma warning restore GW0003
+        return ValidatePhysicalQuery(unit, declarations[0], query, expectedOperation);
     }
 
     private static QueryBinding ValidatePhysicalQuery(
@@ -325,37 +317,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
             StringComparer.Ordinal);
         foreach (var residual in declaration.ResidualPredicateFields)
             fieldKinds[residual.Path] = residual.ValueKind;
-        AddReferencedProjectedFieldKinds(unit, query, fieldKinds);
-        return new QueryBinding(fieldKinds);
-    }
-
-#pragma warning disable GW0003
-    private static QueryBinding ValidateLegacyQuery(
-        StorageUnit unit,
-        PortableQueryDeclaration declaration,
-        DocumentQuery query)
-#pragma warning restore GW0003
-    {
-#pragma warning disable GW0002
-        var index = unit.Indexes.Single(candidate => candidate.Identity == declaration.IndexIdentity);
-#pragma warning restore GW0002
-        var predicates = index.Fields.ToDictionary(
-            field => field.Path,
-            _ => declaration.Operations,
-            StringComparer.Ordinal);
-        ValidateClauses(query, declaration.SupportsDisjunction, predicates);
-        ValidateLegacyOrder(query, declaration, index.Fields);
-        ValidatePaging(query, declaration.PagingSupport);
-        if (query.LatestPerKeyPath is not null)
-        {
-            throw new InvalidOperationException(
-                $"Latest-per-key selection is not bound to query '{query.QueryIdentity}'.");
-        }
-
-        var fieldKinds = index.Fields.ToDictionary(
-            field => field.Path,
-            field => field.ValueKind,
-            StringComparer.Ordinal);
         AddReferencedProjectedFieldKinds(unit, query, fieldKinds);
         return new QueryBinding(fieldKinds);
     }
@@ -417,32 +378,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         {
             throw new InvalidOperationException(
                 $"Compound ordering exceeds query declaration '{query.QueryIdentity}'.");
-        }
-    }
-
-#pragma warning disable GW0003, GW0002
-    private static void ValidateLegacyOrder(
-        DocumentQuery query,
-        PortableQueryDeclaration declaration,
-        IReadOnlyList<IndexField> indexFields)
-#pragma warning restore GW0003, GW0002
-    {
-        if (query.Order.Count == 0)
-            return;
-        var direction = query.Order[0].Direction;
-        var supported = query.Order.Count == 1 &&
-                        query.Order[0].Path == indexFields[0].Path &&
-                        declaration.SortSupport switch
-                        {
-                            QuerySortSupport.Ascending => direction == PhysicalSortDirection.Ascending,
-                            QuerySortSupport.Descending => direction == PhysicalSortDirection.Descending,
-                            QuerySortSupport.Both => true,
-                            _ => false
-                        };
-        if (!supported)
-        {
-            throw new InvalidOperationException(
-                $"Ordering is not bound to legacy query '{query.QueryIdentity}'.");
         }
     }
 
