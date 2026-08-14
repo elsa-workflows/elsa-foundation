@@ -64,17 +64,19 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void ActivityExecutionState_Declares_ByParent_Index_And_Query()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind)
+            .PhysicalStorage!;
 
         // The additive parent-scoped index (#514/#413 item 3) must be declared over the persisted nested field, alongside
         // the pre-existing by-workflow-execution index (this is additive, not a replacement).
-        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
+        Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
 
-        var byParent = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex);
+        var byParent = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex);
         Assert.Equal(ElsaRuntimeStorageManifest.ParentActivityExecutionIdField, Assert.Single(byParent.Fields).Path);
         Assert.Equal("state.parentActivityExecutionId", byParent.Fields[0].Path);
 
-        Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex);
+        Assert.Contains(storage.BoundedQueries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex);
     }
 
     [Theory]
@@ -190,23 +192,27 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void ExecutableActivityTemplate_Declares_FlatEnvelope_TemplateHash_Index()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind)
+            .PhysicalStorage!;
 
-        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
-        var byHash = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByTemplateHashIndex);
+        Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
+        var byHash = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByTemplateHashIndex);
         Assert.Equal("templateHash", Assert.Single(byHash.Fields).Path);
         Assert.True(byHash.IsUnique);
-        Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByTemplateHashIndex);
+        Assert.Contains(storage.BoundedQueries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByTemplateHashIndex);
     }
 
     [Fact]
     public void ExecutableActivityTemplateHashClaim_Declares_Atomic_Claim_Unit()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ExecutableActivityTemplateHashClaimDocumentKind)
+            .PhysicalStorage!;
 
-        Assert.Empty(unit.Indexes);
-        Assert.Empty(unit.Queries);
+        Assert.Empty(storage.LogicalIndexes);
+        Assert.Empty(storage.BoundedQueries);
     }
 
     [Fact]
@@ -300,38 +306,40 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void WorkflowExecutableSourceReference_Declares_Bounded_Scope_Gc_And_Artifact_Routes()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind)
+            .PhysicalStorage!;
 
-        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
-        Assert.Contains(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
+        Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
+        Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
 
-        var byScope = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
+        var byScope = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
         Assert.Equal(ElsaRuntimeStorageManifest.ScopeField, Assert.Single(byScope.Fields).Path);
 
-        var byExpiresAt = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt);
+        var byExpiresAt = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt);
         Assert.Equal(IndexValueKind.DateTime, byExpiresAt.ValueKind);
         Assert.Equal(ElsaRuntimeStorageManifest.ExpiresAtField, Assert.Single(byExpiresAt.Fields).Path);
-        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byExpiresAt.SupportedOperations);
 
-        var byRetired = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
+        var byRetired = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
         Assert.Equal(ElsaRuntimeStorageManifest.IsRetiredField, Assert.Single(byRetired.Fields).Path);
 
         Assert.Contains(
-            unit.Queries,
+            storage.BoundedQueries,
             q => q.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByArtifactQuery &&
                  q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
         Assert.Contains(
-            unit.Queries,
+            storage.BoundedQueries,
             q => q.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery &&
                  q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
 
-        var expired = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery);
+        // The range access pattern is authoritative on the bounded query, not on the index.
+        var expired = Assert.Single(storage.BoundedQueries, q => q.Identity == ElsaRuntimeStorageManifest.ListExpiredWorkflowExecutableSourceReferencesQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByExpiresAt, expired.IndexIdentity);
         Assert.Contains(PortableQueryOperation.LessThanOrEqual, expired.Operations);
         Assert.Equal(QuerySortSupport.Ascending, expired.SortSupport);
 
         Assert.Contains(
-            unit.Queries,
+            storage.BoundedQueries,
             q => q.Identity == ElsaRuntimeStorageManifest.ListRetiredWorkflowExecutableSourceReferencesQuery &&
                  q.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByRetired);
     }
@@ -340,16 +348,18 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void ActivityExecutionHierarchy_Declares_FlatEnvelope_Scope_And_Workflow_Indexes()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.ActivityExecutionHierarchyDocumentKind)
+            .PhysicalStorage!;
 
-        var byWorkflow = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
+        var byWorkflow = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
         Assert.Equal("workflowExecutionId", Assert.Single(byWorkflow.Fields).Path);
 
-        var byScope = Assert.Single(unit.Indexes, i => i.Identity == ElsaRuntimeStorageManifest.ByExecutionScopeIndex);
+        var byScope = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByExecutionScopeIndex);
         Assert.Equal("executionScopeId", Assert.Single(byScope.Fields).Path);
 
-        Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
-        Assert.Contains(unit.Queries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByExecutionScopeIndex);
+        Assert.Contains(storage.BoundedQueries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex);
+        Assert.Contains(storage.BoundedQueries, q => q.IndexIdentity == ElsaRuntimeStorageManifest.ByExecutionScopeIndex);
     }
 
     [Fact]
@@ -470,16 +480,18 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void RecurringTriggerSchedule_Declares_Due_Date_Route()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind)
+            .PhysicalStorage!;
 
         var byNextOccurrence = Assert.Single(
-            unit.Indexes,
+            storage.LogicalIndexes,
             i => i.Identity == ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence);
         Assert.Equal(IndexValueKind.DateTime, byNextOccurrence.ValueKind);
         Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleNextOccurrenceField, Assert.Single(byNextOccurrence.Fields).Path);
-        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byNextOccurrence.SupportedOperations);
 
-        var query = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
+        // The range access pattern is authoritative on the bounded query, not on the index.
+        var query = Assert.Single(storage.BoundedQueries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueRecurringTriggerSchedulesQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleByNextOccurrence, query.IndexIdentity);
         Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
         Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
@@ -489,24 +501,26 @@ public sealed class ElsaRuntimeStorageManifestTests
     public void DurableTimer_Declares_Due_Date_Route()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind);
+        var storage = manifest.StorageUnits
+            .Single(u => u.Identity.Value == ElsaRuntimeStorageManifest.DurableTimerDocumentKind)
+            .PhysicalStorage!;
 
         var byWorkflowExecution = Assert.Single(
-            unit.Indexes,
+            storage.LogicalIndexes,
             i => i.Identity == ElsaRuntimeStorageManifest.DurableTimerByWorkflowExecution);
         Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutionIdField, Assert.Single(byWorkflowExecution.Fields).Path);
 
         var byDueTime = Assert.Single(
-            unit.Indexes,
+            storage.LogicalIndexes,
             i => i.Identity == ElsaRuntimeStorageManifest.DurableTimerByDueTime);
         Assert.Equal(IndexValueKind.DateTime, byDueTime.ValueKind);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerDueTimeField, Assert.Single(byDueTime.Fields).Path);
-        Assert.Contains(PortableQueryOperation.LessThanOrEqual, byDueTime.SupportedOperations);
 
-        var byWorkflowQuery = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery);
+        var byWorkflowQuery = Assert.Single(storage.BoundedQueries, q => q.Identity == ElsaRuntimeStorageManifest.ListDurableTimersByWorkflowExecutionQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByWorkflowExecution, byWorkflowQuery.IndexIdentity);
 
-        var query = Assert.Single(unit.Queries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
+        // The range access pattern is authoritative on the bounded query, not on the index.
+        var query = Assert.Single(storage.BoundedQueries, q => q.Identity == ElsaRuntimeStorageManifest.ListDueDurableTimersQuery);
         Assert.Equal(ElsaRuntimeStorageManifest.DurableTimerByDueTime, query.IndexIdentity);
         Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
         Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
@@ -695,10 +709,23 @@ public sealed class ElsaRuntimeStorageManifestTests
 
         foreach (var unit in manifest.StorageUnits)
         {
-            foreach (var query in unit.Queries)
+            var storage = unit.PhysicalStorage!;
+            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+            foreach (var query in storage.BoundedQueries)
             {
-                var index = Assert.Single(unit.Indexes, candidate => candidate.Identity == query.IndexIdentity);
-                Assert.Equal(IndexPhysicalizationPolicy.Optimized, index.Physicalization);
+                var index = Assert.Single(storage.LogicalIndexes, candidate => candidate.Identity == query.IndexIdentity);
+
+                // Equality routes must resolve against a projected column rather than a scan of the
+                // canonical JSON: the shared-documents recipe projects exactly the single-field,
+                // Excluded indexes an equality route can key on. Range- and prefix-only routes
+                // (scheduler work order, durable-timer claim order) deliberately have no projection.
+                if (!query.Operations.Contains(PortableQueryOperation.Equal))
+                    continue;
+
+                Assert.Single(index.Fields);
+                Assert.Equal(MissingValueBehavior.Excluded, index.MissingValueBehavior);
+                Assert.Contains(table.Indexes, physical => physical.LogicalName == index.Identity);
+                Assert.Contains(table.ProjectedColumns, column => column.LogicalName == index.Identity);
             }
         }
     }
@@ -711,6 +738,10 @@ public sealed class ElsaRuntimeStorageManifestTests
             candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind);
         var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage!.Policy).Definition;
 
+        // The single-field base surface the composite routes layer over, taken before physicalization.
+        var baseStorage = ElsaRuntimeStorageManifest.Create().StorageUnits
+            .Single(candidate => candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowDispatchDocumentKind)
+            .PhysicalStorage!;
         Assert.Equal(
             [
                 ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex,
@@ -721,7 +752,7 @@ public sealed class ElsaRuntimeStorageManifestTests
                 ElsaRuntimeStorageManifest.ByStatusIndex,
                 ElsaRuntimeStorageManifest.ByTestScopeIndex
             ],
-            unit.Indexes.Select(index => index.Identity).Order(StringComparer.Ordinal));
+            baseStorage.LogicalIndexes.Select(index => index.Identity).Order(StringComparer.Ordinal));
         Assert.Contains(
             unit.PhysicalStorage.LogicalIndexes,
             index => index.Identity == ElsaRuntimeStorageManifest.ByParentWorkflowExecutionAndStatusIndex && index.Fields.Count == 2);
@@ -777,7 +808,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Equal(MissingValueBehavior.Excluded, deliverableIndex.MissingValueBehavior);
         Assert.Equal(
             IndexValueKind.Number,
-            unit.Indexes.Single(index =>
+            unit.PhysicalStorage.LogicalIndexes.Single(index =>
                 index.Identity == ElsaRuntimeStorageManifest.ByOutboxStatusIndex).ValueKind);
         var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
             unit.PhysicalStorage.Policy).Definition;
@@ -1430,8 +1461,9 @@ public sealed class ElsaRuntimeStorageManifestTests
     private static StorageManifest CreatePreAttentionRuntimeManifest()
     {
         var current = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var legacyIncident = LegacyGroundworkStorageManifestPhysicalizer
-            .Physicalize(ElsaRuntimeStorageManifest.Create())
+
+        // The unit as the manifest declares it, before the attention/liveness route post-processors run.
+        var legacyIncident = ElsaRuntimeStorageManifest.Create()
             .StorageUnits
             .Single(unit => unit.Identity.Value == ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
 
@@ -1477,7 +1509,7 @@ public sealed class ElsaRuntimeStorageManifestTests
         (
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
             ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
-            LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength)
+            SharedDocumentsStorage.StringProjectionLength)
     ];
 
     private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreateSqliteSchemaSourceAsync(StorageManifest manifest)

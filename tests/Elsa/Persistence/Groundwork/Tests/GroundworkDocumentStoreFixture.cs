@@ -186,16 +186,10 @@ internal sealed class GroundworkDocumentStoreFixture(
                     boundedQuery.PredicateFields.Select(field => field.Path).ToArray(),
                     cancellationToken);
 
-            var (indexIdentity, value) = Resolve(query);
-            var all = await store.QueryAsync(
-                new DocumentStoreQuery(query.DocumentKind, indexIdentity, value),
-                cancellationToken);
-            IEnumerable<DocumentEnvelope> window = all;
-            if (query.Skip is { } skip)
-                window = window.Skip(skip);
-            if (query.Take is { } take)
-                window = window.Take(take);
-            return new DocumentQueryResult(window.ToArray(), all.Count);
+            // Single-field equality routes are served the same way as the composite ones: the units
+            // declare their indexes on the physical surface, which the legacy closed-query translator
+            // cannot resolve.
+            return await QueryCompositeEqualityAsync(query, [ResolveIndexFieldPath(query)], cancellationToken);
         }
 
         private static bool IsOrderedRangeRoute(string identity) =>
@@ -564,26 +558,31 @@ internal sealed class GroundworkDocumentStoreFixture(
         public async Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             await FirstOrDefaultAsync(query, cancellationToken) is not null;
 
-        private (string IndexIdentity, string Value) Resolve(DocumentQuery query)
+        private string ResolveIndexFieldPath(DocumentQuery query)
         {
             var unit = manifest.StorageUnits.Single(candidate => candidate.Identity.Value == query.DocumentKind);
             var indexIdentity = TryGetBoundedQuery(query)?.IndexIdentity
                                 ?? unit.Queries.Single(candidate => candidate.Identity == query.QueryIdentity).IndexIdentity;
-            var index = unit.Indexes.Single(candidate => candidate.Identity == indexIdentity);
+            // Units that have migrated off the legacy declaration surface declare their indexes only
+            // on their physical storage; the legacy list still answers for the ones that have not.
+            var indexFields = unit.Indexes
+                                  .SingleOrDefault(candidate => candidate.Identity == indexIdentity)?.Fields
+                              ?? unit.PhysicalStorage!.LogicalIndexes
+                                  .Single(candidate => candidate.Identity == indexIdentity).Fields;
             var clause = query.Clauses.Count == 1
                 ? query.Clauses[0]
                 : throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have one clause.");
             var comparison = clause.Comparisons.Count == 1
                 ? clause.Comparisons[0]
                 : throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have one comparison.");
-            var indexField = index.Fields.Count == 1
-                ? index.Fields[0]
+            var indexField = indexFields.Count == 1
+                ? indexFields[0]
                 : throw new InvalidOperationException($"Groundwork test index '{indexIdentity}' must have one field.");
             if (comparison.Operator != QueryComparisonOperator.Equal || comparison.Path != indexField.Path || comparison.Values.Count != 1)
                 throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' has an unexpected shape.");
-            var value = comparison.Values[0]
-                        ?? throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have a non-null comparison value.");
-            return (indexIdentity, value);
+            if (comparison.Values[0] is null)
+                throw new InvalidOperationException($"Groundwork test query '{query.QueryIdentity}' must have a non-null comparison value.");
+            return indexField.Path;
         }
 
         private BoundedQueryDeclaration? TryGetBoundedQuery(DocumentQuery query)

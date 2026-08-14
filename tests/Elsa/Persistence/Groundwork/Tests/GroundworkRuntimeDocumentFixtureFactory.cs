@@ -837,7 +837,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             Task.FromResult<IReadOnlyList<DocumentEnvelope>>([]);
 
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("The capturing store only records saves.");
+            // Same probe as above, reached through the bounded-query adapter: an empty capture boundary.
+            Task.FromResult(new DocumentQueryResult([], 0));
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The capturing store only records saves.");
