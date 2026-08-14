@@ -7,7 +7,6 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 
@@ -40,7 +39,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
     /// </summary>
     private const int SplitPublishedIdLimit = 100_000;
 
-    private static readonly DocumentEnvelopeDefinition Envelope = new();
+    private readonly GroundworkDashboardSql _sql = new(dialect);
 
     private readonly JsonSerializerOptions _jsonOptions = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
@@ -64,7 +63,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
                    (SELECT COUNT(*) FROM current_drafts WHERE row_number = 1);
             """;
         AddParameter(command, "tenantId", tenantId);
-        AddParameter(command, "asOf", ProviderInstant(asOf));
+        AddParameter(command, "asOf", _sql.ProviderInstant(asOf));
         AddReferenceKind(command);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
@@ -117,7 +116,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
                   AND {DefinitionJson("deletedAt")} IS NULL
             ), current_drafts AS (
                 SELECT w.{WorkflowsDesignStorageManifest.DraftDefinitionIdColumn} AS definition_id,
-                       w.{Envelope.CanonicalJsonColumn} AS document,
+                       w.{GroundworkDashboardSql.Envelope.CanonicalJsonColumn} AS document,
                        ROW_NUMBER() OVER (
                            PARTITION BY w.{WorkflowsDesignStorageManifest.DraftDefinitionIdColumn}
                            ORDER BY w.{WorkflowsDesignStorageManifest.DraftLastModifiedAtColumn} DESC,
@@ -195,7 +194,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
               AND {ReferenceJson("deletedAt")} IS NULL
               AND ({ReferenceJson("expiresAt")} IS NULL OR {Instant(ReferenceJson("expiresAt"))} > {Instant("@asOf")});
             """;
-        AddParameter(command, "asOf", ProviderInstant(asOf));
+        AddParameter(command, "asOf", _sql.ProviderInstant(asOf));
         AddReferenceKind(command);
 
         var published = 0;
@@ -218,62 +217,30 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         return published;
     }
 
-    // The design entity tables are named after their document kind, which is camelCase — PostgreSQL folds
-    // unquoted identifiers, so they are addressed quoted (SQL Server via brackets, which need no session
-    // setting).
-    private string DefinitionsTable => QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+    private string DefinitionsTable => _sql.QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
 
-    private string DraftsTable => QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
-
-    private string QuoteIdentifier(string identifier) => dialect == GroundworkRunHealthDialect.SqlServer
-        ? $"[{identifier}]"
-        : $"\"{identifier}\"";
+    private string DraftsTable => _sql.QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
 
     /// <summary>Extracts a path under a definition document's <c>entity</c> member.</summary>
-    private string DefinitionJson(string property) => JsonExtract("d", Envelope.CanonicalJsonColumn, ["entity", property]);
+    private string DefinitionJson(string property) =>
+        _sql.JsonExtract("d", GroundworkDashboardSql.Envelope.CanonicalJsonColumn, ["entity", property]);
 
     /// <summary>Extracts a path under a draft document's <c>entity</c> member.</summary>
-    private string DraftJson(string property) => JsonExtract("w", Envelope.CanonicalJsonColumn, ["entity", property]);
+    private string DraftJson(string property) =>
+        _sql.JsonExtract("w", GroundworkDashboardSql.Envelope.CanonicalJsonColumn, ["entity", property]);
 
     /// <summary>Extracts a path under a source-reference document's <c>reference</c> member.</summary>
     private string ReferenceJson(string property) =>
-        JsonExtract("r", SharedDocumentsStorage.CanonicalJsonColumnName, ["reference", property]);
+        _sql.JsonExtract("r", SharedDocumentsStorage.CanonicalJsonColumnName, ["reference", property]);
 
-    private string ReferenceJsonInt(string property) => dialect switch
-    {
-        GroundworkRunHealthDialect.Sqlite => $"CAST({ReferenceJson(property)} AS INTEGER)",
-        GroundworkRunHealthDialect.SqlServer => $"TRY_CAST({ReferenceJson(property)} AS int)",
-        _ => $"({ReferenceJson(property)})::integer"
-    };
+    private string ReferenceJsonInt(string property) => _sql.CastInt(ReferenceJson(property));
 
-    private string JsonExtract(string alias, string column, string[] path) => dialect switch
-    {
-        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.{column}, '$.{string.Join('.', path)}')",
-        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.{column}, '$.{string.Join('.', path)}')",
-        _ => $"{alias}.{column}::jsonb #>> '{{{string.Join(',', path)}}}'"
-    };
+    private string Instant(string expression) => _sql.Instant(expression);
 
-    private string Instant(string expression) => dialect switch
-    {
-        GroundworkRunHealthDialect.Sqlite => $"julianday({expression})",
-        GroundworkRunHealthDialect.SqlServer => $"CAST({expression} AS datetimeoffset)",
-        _ => $"({expression})::timestamptz"
-    };
+    private string StatementPrefix => _sql.StatementPrefix;
 
-    private object ProviderInstant(DateTimeOffset value) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? value.ToUniversalTime().ToString("O")
-        : value;
-
-    // T-SQL requires the statement preceding a CTE to be terminated with a semicolon.
-    private string StatementPrefix => dialect == GroundworkRunHealthDialect.SqlServer ? ";" : string.Empty;
-
-    private static void AddParameter(DbCommand command, string name, object value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
-    }
+    private static void AddParameter(DbCommand command, string name, object value) =>
+        GroundworkDashboardSql.AddParameter(command, name, value);
 
     private static void AddReferenceKind(DbCommand command) =>
         AddParameter(command, "referenceKind", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind);

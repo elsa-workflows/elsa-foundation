@@ -3,7 +3,6 @@ using System.Data.Common;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 
@@ -35,7 +34,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     private const string RunKindColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindColumn;
     private const string ExecutionIdColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdColumn;
 
-    private static readonly DocumentEnvelopeDefinition Envelope = new();
+    private readonly GroundworkDashboardSql _sql = new(dialect);
 
     public bool IsAvailable => true;
 
@@ -76,8 +75,8 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         AddCommonParameters(command, request.Query);
         foreach (var bucket in request.Buckets)
         {
-            AddParameter(command, $"b{bucket.Index}From", ProviderInstant(bucket.From));
-            AddParameter(command, $"b{bucket.Index}To", ProviderInstant(bucket.To));
+            AddParameter(command, $"b{bucket.Index}From", _sql.ProviderInstant(bucket.From));
+            AddParameter(command, $"b{bucket.Index}To", _sql.ProviderInstant(bucket.To));
         }
 
         var result = new Dictionary<int, BucketCounts>();
@@ -115,7 +114,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            SELECT {SelectTop(5)}{ExecutionJson("pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
+            SELECT {_sql.SelectTop(5)}{ExecutionJson("pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
             FROM {ExecutionsTable} e
             WHERE e.{TenantIdColumn} = @tenantId
               AND e.{RunKindColumn} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
@@ -124,7 +123,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
               AND {Instant(ExecutionJson("startedAt"))} < {Instant("@to")}
             GROUP BY {ExecutionJson("pinnedExecutable", "definitionId")}
             ORDER BY failed_count DESC, definition_id
-            {LimitClause(5)};
+            {_sql.LimitClause(5)};
             """;
         AddCommonParameters(command, query);
         var result = new List<WorkflowFailureDefinitionSnapshot>();
@@ -151,7 +150,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         var testFilter = request.Query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}";
         return $"""
             {StatementPrefix}WITH executions AS (
-                SELECT e.{Envelope.StorageScopeColumn} AS storage_scope,
+                SELECT e.{GroundworkDashboardSql.Envelope.StorageScopeColumn} AS storage_scope,
                        e.{ExecutionIdColumn} AS execution_id,
                        e.{StatusColumn} AS status,
                        {Instant(ExecutionJson("startedAt"))} AS started_at
@@ -197,52 +196,25 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
 
     /// <summary>Extracts a path under the execution document's <c>state</c> envelope member.</summary>
     private string ExecutionJson(string property, string? nested = null) =>
-        JsonExtract("e", Envelope.CanonicalJsonColumn, nested is null ? ["state", property] : ["state", property, nested]);
+        _sql.JsonExtract("e", GroundworkDashboardSql.Envelope.CanonicalJsonColumn, nested is null ? ["state", property] : ["state", property, nested]);
 
     /// <summary>Extracts a top-level path from an incident document in the shared documents table.</summary>
     private string IncidentJson(string property) =>
-        JsonExtract("i", SharedDocumentsStorage.CanonicalJsonColumnName, [property]);
+        _sql.JsonExtract("i", SharedDocumentsStorage.CanonicalJsonColumnName, [property]);
 
-    private string JsonExtract(string alias, string column, string[] path) => dialect switch
-    {
-        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.{column}, '$.{string.Join('.', path)}')",
-        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.{column}, '$.{string.Join('.', path)}')",
-        _ => $"{alias}.{column}::jsonb #>> '{{{string.Join(',', path)}}}'"
-    };
+    private string Instant(string expression) => _sql.Instant(expression);
 
-    private string Instant(string expression) => dialect switch
-    {
-        GroundworkRunHealthDialect.Sqlite => $"julianday({expression})",
-        GroundworkRunHealthDialect.SqlServer => $"CAST({expression} AS datetimeoffset)",
-        _ => $"({expression})::timestamptz"
-    };
-
-    private object ProviderInstant(DateTimeOffset value) => dialect == GroundworkRunHealthDialect.Sqlite
-        ? value.ToUniversalTime().ToString("O")
-        : value;
-
-    // SQL Server has no LIMIT clause; row-limiting instead lives right after SELECT as TOP (n).
-    private string SelectTop(int count) => dialect == GroundworkRunHealthDialect.SqlServer ? $"TOP ({count}) " : string.Empty;
-
-    private string LimitClause(int count) => dialect == GroundworkRunHealthDialect.SqlServer ? string.Empty : $"LIMIT {count}";
-
-    // T-SQL requires the statement preceding a CTE to be terminated with a semicolon.
-    private string StatementPrefix => dialect == GroundworkRunHealthDialect.SqlServer ? ";" : string.Empty;
+    private string StatementPrefix => _sql.StatementPrefix;
 
     private void AddCommonParameters(DbCommand command, WorkflowRunHealthQuery query)
     {
         AddParameter(command, "tenantId", query.TenantId);
-        AddParameter(command, "from", ProviderInstant(query.From));
-        AddParameter(command, "to", ProviderInstant(query.To));
+        AddParameter(command, "from", _sql.ProviderInstant(query.From));
+        AddParameter(command, "to", _sql.ProviderInstant(query.To));
     }
 
-    private static void AddParameter(DbCommand command, string name, object value)
-    {
-        var parameter = command.CreateParameter();
-        parameter.ParameterName = name;
-        parameter.Value = value;
-        command.Parameters.Add(parameter);
-    }
+    private static void AddParameter(DbCommand command, string name, object value) =>
+        GroundworkDashboardSql.AddParameter(command, name, value);
 
     private sealed record BucketCounts(
         int Started,
