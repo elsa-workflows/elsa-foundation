@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "elsa3ReusableImportCollection",
-      "definitionFingerprint": "f36cac1867d17603eab7bf076b073d7ac2d426ef431c5dfd2c985f4ea6d15c40",
-      "fingerprint": "50e40cb5300ff1b6bd98a605813698b86e36f95705bb7f7377f6e846c851a9af",
+      "definitionDigest": "f36cac1867d17603eab7bf076b073d7ac2d426ef431c5dfd2c985f4ea6d15c40",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],
@@ -24,8 +23,7 @@
     },
     {
       "identity": "elsa3ReusableImportDefinitionBinding",
-      "definitionFingerprint": "b432d20d76843777fda3cc4222805fef23e09e9ace18680bdd99e3baeb0b2aa0",
-      "fingerprint": "d7f931c71612e35a7aafc4134f7c02edc46b4e664b75ec65b61957f9ca290a67",
+      "definitionDigest": "b432d20d76843777fda3cc4222805fef23e09e9ace18680bdd99e3baeb0b2aa0",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],
@@ -35,8 +33,7 @@
     },
     {
       "identity": "elsa3ReusableImportReceipt",
-      "definitionFingerprint": "96e5499b2ced9c9c1c5d814a7b2c24061512bf1eb867a46f42a1627938190cd3",
-      "fingerprint": "7ab271839aeefdc1bedcad540d01267f078011588dadeed63ba8df40bfcbc897",
+      "definitionDigest": "96e5499b2ced9c9c1c5d814a7b2c24061512bf1eb867a46f42a1627938190cd3",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],

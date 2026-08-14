@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "studioPreference",
-      "definitionFingerprint": "858fc151408107bab061a860914e7b861b2e9bda702e799e0e8e5d49373b2217",
-      "fingerprint": "bde7aeed4a71cb80249f6307045a0b923f3a254e03f84a8366c616f7bb4cc77a",
+      "definitionDigest": "858fc151408107bab061a860914e7b861b2e9bda702e799e0e8e5d49373b2217",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],

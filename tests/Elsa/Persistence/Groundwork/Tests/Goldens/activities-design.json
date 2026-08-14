@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "activityAvailabilitySettings",
-      "definitionFingerprint": "dd39651c8c626ae461d7c6bdc916d58a135b54beb6dd3b8757397fd44fd715ec",
-      "fingerprint": "12bd80ff6376cf35e1c4c6c1cb71400cfda5476ef27ef966b13213c0fbf055dc",
+      "definitionDigest": "dd39651c8c626ae461d7c6bdc916d58a135b54beb6dd3b8757397fd44fd715ec",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -24,8 +23,7 @@
     },
     {
       "identity": "activityDefinition",
-      "definitionFingerprint": "70e4ec84b03eb430ee3defe50518b32abdcbd607cf5b8d4777b2ef01b38a1df2",
-      "fingerprint": "641f158506fa06719d112d07a51b1a0d18852c6891ae9cb5f681f2699c3e636c",
+      "definitionDigest": "70e4ec84b03eb430ee3defe50518b32abdcbd607cf5b8d4777b2ef01b38a1df2",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -704,8 +702,7 @@
     },
     {
       "identity": "activityDefinitionAuthoringState",
-      "definitionFingerprint": "b8d3ea5bbec4ad572387eae49e83d91994a5dd3be3b8bbff2c7e1b0aeb30f592",
-      "fingerprint": "ea5d78457006f367bb8e83a57875e9810b372ad7084d1fe43a317302a2b03a13",
+      "definitionDigest": "b8d3ea5bbec4ad572387eae49e83d91994a5dd3be3b8bbff2c7e1b0aeb30f592",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -857,8 +854,7 @@
     },
     {
       "identity": "activityDefinitionDraft",
-      "definitionFingerprint": "c939f5735a4410fbd6f58217bf20f402b723bafdaf4d1df3739ba41db10c63a4",
-      "fingerprint": "938fa617710ca607c5668891b7b7fd8565aee7cdb1658b7f1b3f781aa39fd34c",
+      "definitionDigest": "c939f5735a4410fbd6f58217bf20f402b723bafdaf4d1df3739ba41db10c63a4",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -939,8 +935,7 @@
     },
     {
       "identity": "activityDefinitionDraftLayout",
-      "definitionFingerprint": "651abb56d0ac1ceed7897e2cc8ee7a79e1700c8e3ce0ae0202063a4d46eea742",
-      "fingerprint": "0e193968859f556d8e7996b1fe5f807f705d41958d5531fe1317a93e31d5ec95",
+      "definitionDigest": "651abb56d0ac1ceed7897e2cc8ee7a79e1700c8e3ce0ae0202063a4d46eea742",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1021,8 +1016,7 @@
     },
     {
       "identity": "activityDefinitionManagementProjection",
-      "definitionFingerprint": "4f75b6caae72c54cd0412585310e408e477a10ce612e698f24cb8e1d458e82c4",
-      "fingerprint": "650bd7cbd171bc0ab4573848a3996bafe6e699e86cccc1cdc25a56144aa073a7",
+      "definitionDigest": "4f75b6caae72c54cd0412585310e408e477a10ce612e698f24cb8e1d458e82c4",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1315,8 +1309,7 @@
     },
     {
       "identity": "activityDefinitionVersion",
-      "definitionFingerprint": "e0df31dfeffdaa08925a20bbbe11b0cfc9072b2c094fcd523d4e765f4c366b7a",
-      "fingerprint": "23fc5fd724d0f11635b5433ce207bac96842f81372b4d7aa5e9b1037aaaa5247",
+      "definitionDigest": "e0df31dfeffdaa08925a20bbbe11b0cfc9072b2c094fcd523d4e765f4c366b7a",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1498,8 +1491,7 @@
     },
     {
       "identity": "activityDefinitionVersionLayout",
-      "definitionFingerprint": "7de6928d3368c6a16c36238ee64bee8020d41645741884cfa194cd3f98509ab9",
-      "fingerprint": "641b4d29b9d7b41738795b3583aa32458c1ad0b9c6ca6f6ac264ab11097d20a3",
+      "definitionDigest": "7de6928d3368c6a16c36238ee64bee8020d41645741884cfa194cd3f98509ab9",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1580,8 +1572,7 @@
     },
     {
       "identity": "activityDefinitionVersionPublication",
-      "definitionFingerprint": "31dedd59c0eea3f9d3c81d64fccc1ce56ad23fa232be4e77855354dd7d40e1bb",
-      "fingerprint": "53ddcf23fd8199eec60614a5eb1e5b6176629e82e68e1773199c9f4bb0b2baa8",
+      "definitionDigest": "31dedd59c0eea3f9d3c81d64fccc1ce56ad23fa232be4e77855354dd7d40e1bb",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1731,8 +1722,7 @@
     },
     {
       "identity": "activityDependencyEdge",
-      "definitionFingerprint": "47fcc189f11be9abd07197114a9fe19c7e4b94e87a50600675b66e8eddb0b933",
-      "fingerprint": "96f2540ae673d1ad193677b42880c855b90fb59dcab24cbf599f608919ffdb0e",
+      "definitionDigest": "47fcc189f11be9abd07197114a9fe19c7e4b94e87a50600675b66e8eddb0b933",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -1882,8 +1872,7 @@
     },
     {
       "identity": "activityDependencyProjection",
-      "definitionFingerprint": "dedfad468ee1f9be8d2f2ac12087603497ec33898876f2a54ae63370a636b1d3",
-      "fingerprint": "9b7de4ef2657f431b309266f2d8173cc45aa44e13f37b64536a1be306e9f9425",
+      "definitionDigest": "dedfad468ee1f9be8d2f2ac12087603497ec33898876f2a54ae63370a636b1d3",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -1893,8 +1882,7 @@
     },
     {
       "identity": "activityDraftManagementProjection",
-      "definitionFingerprint": "d9929713dfdb72c91b9cd1be55de0bf77518c1e36d8564c574df914a865f3fca",
-      "fingerprint": "be76614d610dc011998d993192a5f1e6c46d544599c3f0f2c50a2a57553334b4",
+      "definitionDigest": "d9929713dfdb72c91b9cd1be55de0bf77518c1e36d8564c574df914a865f3fca",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -2187,8 +2175,7 @@
     },
     {
       "identity": "activityDraftValidation",
-      "definitionFingerprint": "3984e1d8cc6fe9157985c6ea8733ed70c41c3cae7aea5c23f3f57d2b32851f4b",
-      "fingerprint": "7f73ce08f56cd1a2cbd83f7dfa32a965829d17a88818e3eb8806b625d30ac768",
+      "definitionDigest": "3984e1d8cc6fe9157985c6ea8733ed70c41c3cae7aea5c23f3f57d2b32851f4b",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -2269,8 +2256,7 @@
     },
     {
       "identity": "activityForkCandidate",
-      "definitionFingerprint": "e1903bf2ccec931f8a11fe5ed638c9bbb183ec63f8c0111a264f50636b74f46c",
-      "fingerprint": "81cfa403762d0d63bf48bd4cfbf33a0f795bfed275aed206395d610d19fca515",
+      "definitionDigest": "e1903bf2ccec931f8a11fe5ed638c9bbb183ec63f8c0111a264f50636b74f46c",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -2347,8 +2333,7 @@
     },
     {
       "identity": "activityForkReceipt",
-      "definitionFingerprint": "eadafbb87b0177fc062a156a399832ff9a0a1e59040486d98fe41b41da086f19",
-      "fingerprint": "421875a89bf0cf4f73f84b58477b8e6b1b0f2d77e19cf3f45bc5ade38c22dd5f",
+      "definitionDigest": "eadafbb87b0177fc062a156a399832ff9a0a1e59040486d98fe41b41da086f19",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -2358,8 +2343,7 @@
     },
     {
       "identity": "activityManagementProjectionSnapshot",
-      "definitionFingerprint": "f2c58f4d2f9bec3c060945af62b820fbe50b9ed448792121c5a70b4711864332",
-      "fingerprint": "24865ea481490c12a16d0075c1e4111ada5af20e6b2e8ebff6670c845cf66b6c",
+      "definitionDigest": "f2c58f4d2f9bec3c060945af62b820fbe50b9ed448792121c5a70b4711864332",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -2369,8 +2353,7 @@
     },
     {
       "identity": "activityManagementProjectionWatermark",
-      "definitionFingerprint": "81df96b8a2cc235866e7b8b06631910e3de002d8df617dd3cce420ab2e35fa1e",
-      "fingerprint": "3631750c162340cd254e6548674f13b189afcc737444dc285c68dc32c3dc6960",
+      "definitionDigest": "81df96b8a2cc235866e7b8b06631910e3de002d8df617dd3cce420ab2e35fa1e",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -2380,8 +2363,7 @@
     },
     {
       "identity": "activityUpgradeApplyReceipt",
-      "definitionFingerprint": "6b3807ce36088c4603154f659061eded70b798fb4ae0124bbaa153a9b51cb130",
-      "fingerprint": "c7c2c8dd691d2534b58f41e0802f8d1718233709ef5f500f6d99868c32949139",
+      "definitionDigest": "6b3807ce36088c4603154f659061eded70b798fb4ae0124bbaa153a9b51cb130",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -2391,8 +2373,7 @@
     },
     {
       "identity": "activityUpgradePlan",
-      "definitionFingerprint": "7f2a6f1f5e0f6708450bb03c543882315bcd988df83d2ad26c983a4bd712167b",
-      "fingerprint": "a378436b80842cb72b0d31eaf1963799fae3513751a4f3b49ec3f863c5f8bb15",
+      "definitionDigest": "7f2a6f1f5e0f6708450bb03c543882315bcd988df83d2ad26c983a4bd712167b",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -2402,8 +2383,7 @@
     },
     {
       "identity": "activityVersionManagementProjection",
-      "definitionFingerprint": "880ba443471a32d516274730084dd1258fad84e800224c03b04e85fd9ef6a192",
-      "fingerprint": "b107eb55e41d6e660451a0d258498dfd057ce9acdad5d4d529171dd6c8c5c3ad",
+      "definitionDigest": "880ba443471a32d516274730084dd1258fad84e800224c03b04e85fd9ef6a192",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [

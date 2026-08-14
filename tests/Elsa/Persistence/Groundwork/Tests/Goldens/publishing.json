@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "publishingActivityDraftTestRun",
-      "definitionFingerprint": "fe408d9c26f937daf751f2dd10701d24b2b04e2497aa7716420169af3be0b8c5",
-      "fingerprint": "f7bf69d54f9d18fa0cab466c4b4ad13736e57934316cbae4d4a1f21b5527c14d",
+      "definitionDigest": "fe408d9c26f937daf751f2dd10701d24b2b04e2497aa7716420169af3be0b8c5",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -58,8 +57,7 @@
     },
     {
       "identity": "publishingActivityPublicationReceipt",
-      "definitionFingerprint": "af164c63a3b431ad75a77d056f6435939726d85b509fa2cfa30317485862e757",
-      "fingerprint": "1138dbc459167ad8b4becf5588ae920e33143594a1096d90c53a6d7a92b77a93",
+      "definitionDigest": "af164c63a3b431ad75a77d056f6435939726d85b509fa2cfa30317485862e757",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],
@@ -69,8 +67,7 @@
     },
     {
       "identity": "publishingProjectionIntent",
-      "definitionFingerprint": "98483bf20d7f203b0576e7b30fefbd1491d73f82c67e103de69c4047222ff6c4",
-      "fingerprint": "c4bdf19f098b5fcdabe3c90033bc9b4f71da48dac9625b1b767d590f0f226b7e",
+      "definitionDigest": "98483bf20d7f203b0576e7b30fefbd1491d73f82c67e103de69c4047222ff6c4",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -114,8 +111,7 @@
     },
     {
       "identity": "publishingPublicationPolicy",
-      "definitionFingerprint": "43983ada08ad2ecdb0fdd6a0d9eac8cc362d2b1938b0f42d464c4cf21f77b557",
-      "fingerprint": "cd73dc704e77516b4314b846e0846bb593d20be0da7b1ba95a50c13240adc33d",
+      "definitionDigest": "43983ada08ad2ecdb0fdd6a0d9eac8cc362d2b1938b0f42d464c4cf21f77b557",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [],
@@ -125,8 +121,7 @@
     },
     {
       "identity": "publishingPublicationRecord",
-      "definitionFingerprint": "79d4c5398e40ad54bd75129ba4184011630c6b1603d88e744161c1a059ad2236",
-      "fingerprint": "3d4d6c67c3ff5cd69fd2692ad671027522f4e0790d881b7d9013b099b7de8853",
+      "definitionDigest": "79d4c5398e40ad54bd75129ba4184011630c6b1603d88e744161c1a059ad2236",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -170,8 +165,7 @@
     },
     {
       "identity": "publishingPublicationSlot",
-      "definitionFingerprint": "f8ee68fd15599f0a652faaa14818da5abdceb26ed47d92afd14810d440ee3255",
-      "fingerprint": "d2b297f59f8d2b197b010cc029bca1aa068900eb7429beaa33caf8b46afd7a7e",
+      "definitionDigest": "f8ee68fd15599f0a652faaa14818da5abdceb26ed47d92afd14810d440ee3255",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -247,8 +241,7 @@
     },
     {
       "identity": "publishingSnapshotReview",
-      "definitionFingerprint": "e9fa83c6238de7da4dfeecad09334dec823cf1aaf16bb7d144012c1b63d558b3",
-      "fingerprint": "4575464e7587849eccff10aed6737508891d2c2305f58010eb5649f243c47f95",
+      "definitionDigest": "e9fa83c6238de7da4dfeecad09334dec823cf1aaf16bb7d144012c1b63d558b3",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [

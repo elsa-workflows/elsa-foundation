@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
@@ -51,13 +53,37 @@ public static class GroundworkManifestGoldenVerifier
             "If the change is intentional, regenerate with ELSA_UPDATE_GOLDENS=1 and review the diff.");
     }
 
+    // Identity-policy comparison-algorithm stamps embed a hash of the runtime's Unicode casefold
+    // table, which varies with the host's ICU version (macOS vs Linux). The digest below normalizes
+    // those stamps out so goldens are platform-stable; everything else in Groundwork's canonical
+    // definition serialization is pinned verbatim.
+    private static readonly Regex PlatformDependentAlgorithmHash = new(
+        "(?<=-v[0-9]+-)[0-9a-f]{64}", RegexOptions.Compiled);
+
     public static string Render(StorageManifest manifest)
     {
-        var target = PhysicalSchemaTargetCompiler.Compile(
+        // Compile validates the manifest and certifies executable routes exactly as production does.
+        PhysicalSchemaTargetCompiler.Compile(
             manifest,
             FingerprintProvider,
             SqliteGroundworkCapabilities.PhysicalNames);
-        var routes = target.Routes.ToDictionary(route => route.StorageUnit.Value, StringComparer.Ordinal);
+
+        var resolution = PhysicalStorageResolver.Resolve(
+            manifest, PhysicalNamePolicy.Identity, SqliteGroundworkCapabilities.PhysicalNames);
+        var serializedDefinitions = resolution.Definitions.ToDictionary(
+            definition => definition.Resolved.StorageUnit.Value,
+            definition => PlatformDependentAlgorithmHash.Replace(
+                PhysicalStorageDefinitionSerializer.Serialize(definition), "platform-dependent"),
+            StringComparer.Ordinal);
+
+        // Set ELSA_DUMP_DEFINITIONS=<dir> to write each unit's serialized definition for diffing
+        // when a digest changes and the declared sections of the golden do not explain it.
+        if (Environment.GetEnvironmentVariable("ELSA_DUMP_DEFINITIONS") is { Length: > 0 } dumpDirectory)
+        {
+            Directory.CreateDirectory(dumpDirectory);
+            foreach (var (unitIdentity, serialized) in serializedDefinitions)
+                File.WriteAllText(Path.Combine(dumpDirectory, $"{manifest.Identity.Value}.{unitIdentity}.json"), serialized);
+        }
 
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
@@ -84,7 +110,7 @@ public static class GroundworkManifestGoldenVerifier
             writer.WritePropertyName("storageUnits");
             writer.WriteStartArray();
             foreach (var unit in manifest.StorageUnits.OrderBy(x => x.Identity.Value, StringComparer.Ordinal))
-                WriteUnit(writer, unit, routes[unit.Identity.Value]);
+                WriteUnit(writer, unit, serializedDefinitions[unit.Identity.Value]);
             writer.WriteEndArray();
 
             writer.WriteEndObject();
@@ -93,15 +119,16 @@ public static class GroundworkManifestGoldenVerifier
         return Encoding.UTF8.GetString(stream.ToArray()) + Environment.NewLine;
     }
 
-    private static void WriteUnit(Utf8JsonWriter writer, StorageUnit unit, ExecutableStorageRoute route)
+    private static void WriteUnit(Utf8JsonWriter writer, StorageUnit unit, string serializedDefinition)
     {
         var storage = unit.PhysicalStorage
             ?? throw new InvalidOperationException($"Storage unit '{unit.Identity.Value}' has no physical storage to pin.");
 
         writer.WriteStartObject();
         writer.WriteString("identity", unit.Identity.Value);
-        writer.WriteString("definitionFingerprint", route.DefinitionFingerprint);
-        writer.WriteString("fingerprint", route.Fingerprint);
+        writer.WriteString(
+            "definitionDigest",
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedDefinition))).ToLowerInvariant());
         writer.WriteString("provisioningMode", storage.ProvisioningMode.ToString());
         writer.WriteString("policy", storage.Policy switch
         {

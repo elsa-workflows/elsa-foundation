@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "identityApplication",
-      "definitionFingerprint": "4c4c80838cbd648539d9125c3d397141a65d8cbfa4e0f135a5b296b074cafc2f",
-      "fingerprint": "9a9f2cc5ebaf91de34ae7a914786a50fa0a21d96746186d7afc295ef832af3d4",
+      "definitionDigest": "4c4c80838cbd648539d9125c3d397141a65d8cbfa4e0f135a5b296b074cafc2f",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -24,8 +23,7 @@
     },
     {
       "identity": "identityClaimMapping",
-      "definitionFingerprint": "390247d37b1fbc95d102d91ea07d3405c5a0518fad27bfc38effdfb0d931747f",
-      "fingerprint": "175d298e3e2f204e06720123d3f820fa700ea8772e9e3e2a3fa84e788572dde6",
+      "definitionDigest": "390247d37b1fbc95d102d91ea07d3405c5a0518fad27bfc38effdfb0d931747f",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -87,8 +85,7 @@
     },
     {
       "identity": "identityCredential",
-      "definitionFingerprint": "56c83f0076327caa5042e205fb1e7ac54ac8fd5afbeab82fe512b9a528184913",
-      "fingerprint": "98919fb3e25aae864935bf4537cde2453f78a3051925895f9221b6412e8667cb",
+      "definitionDigest": "56c83f0076327caa5042e205fb1e7ac54ac8fd5afbeab82fe512b9a528184913",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -98,8 +95,7 @@
     },
     {
       "identity": "identityEmailReservation",
-      "definitionFingerprint": "d382224f8d35d77c50ff6378394c044f44ff83c82e03e471c03a162ac5438b56",
-      "fingerprint": "638ff34c6b12ab00ac368391b1274fcb85863cbb75d29d2c27f7087863ad0d7c",
+      "definitionDigest": "d382224f8d35d77c50ff6378394c044f44ff83c82e03e471c03a162ac5438b56",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -109,8 +105,7 @@
     },
     {
       "identity": "identityExternalLogin",
-      "definitionFingerprint": "b3e248ee10505a33eb95606ca22afaad571a2940013d2b94e1def90f7176c850",
-      "fingerprint": "07fcb4f595205275c7a639b20888354a2f57785a8e571897e22ffccdd23d13a1",
+      "definitionDigest": "b3e248ee10505a33eb95606ca22afaad571a2940013d2b94e1def90f7176c850",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -172,8 +167,7 @@
     },
     {
       "identity": "identityGlobalProviderConfiguration",
-      "definitionFingerprint": "10654a9126164be6be693b70f1539e60c051c40b3f7fea1ab8bc77565ac20454",
-      "fingerprint": "0b2c31342b55e40a77d950db7c2765316ac37308a2bdfa39bf1c51824bb15019",
+      "definitionDigest": "10654a9126164be6be693b70f1539e60c051c40b3f7fea1ab8bc77565ac20454",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -183,8 +177,7 @@
     },
     {
       "identity": "identityMutationReceipt",
-      "definitionFingerprint": "e3bca334c36364753f0607b3b68e9b3b6af62c095c6f066d4b680c994b9f46e1",
-      "fingerprint": "ede6784100ba82a98aefd9811e89448083b27c9cf7cbbc194cdee6ebd8baa7cc",
+      "definitionDigest": "e3bca334c36364753f0607b3b68e9b3b6af62c095c6f066d4b680c994b9f46e1",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -251,8 +244,7 @@
     },
     {
       "identity": "identityProviderConfiguration",
-      "definitionFingerprint": "67ed541584b7c41d558c0ed33f25cb8415af8305430c0c80fd5c959d8159a6fe",
-      "fingerprint": "0f7c3d3aa945f7883111010eed6879c06ff93f6879fc7835425f9a5ad0359786",
+      "definitionDigest": "67ed541584b7c41d558c0ed33f25cb8415af8305430c0c80fd5c959d8159a6fe",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -262,8 +254,7 @@
     },
     {
       "identity": "identityRole",
-      "definitionFingerprint": "5a84e5ff4a957e5c230cd8c7d28315b3da9678a07298a1bb7747eccd8f6a8848",
-      "fingerprint": "0f39a36619aaec8cd3b7bd4a17601a401c92e8815603f8b5a9ac437c9148e9ea",
+      "definitionDigest": "5a84e5ff4a957e5c230cd8c7d28315b3da9678a07298a1bb7747eccd8f6a8848",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -375,8 +366,7 @@
     },
     {
       "identity": "identityRoleClaim",
-      "definitionFingerprint": "fe50d676294c2383bb224d203dd22dfa8f04f38f6c519a357c441a1eaeb67813",
-      "fingerprint": "f58d9e059492b42da086add7a406d082b2f586f742168a702282514e3f1e32a9",
+      "definitionDigest": "fe50d676294c2383bb224d203dd22dfa8f04f38f6c519a357c441a1eaeb67813",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -438,8 +428,7 @@
     },
     {
       "identity": "identityRoleNameReservation",
-      "definitionFingerprint": "ac4bab4d4259975270ec933012f49637d83be4faaabf3ea661f6be6fe92e38d4",
-      "fingerprint": "c730bcf834c6dc7ad2e8c20d2541c8b25036b745de677160cfc71519d66f6443",
+      "definitionDigest": "ac4bab4d4259975270ec933012f49637d83be4faaabf3ea661f6be6fe92e38d4",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -449,8 +438,7 @@
     },
     {
       "identity": "identityTenantMembership",
-      "definitionFingerprint": "462c862d65a7744b28bb7a2236c2729b107f20c57c816124ade61f7495645536",
-      "fingerprint": "d0282001d8275a90ed02eae21992ec1bea7fa4b24473ac2608f9fa970daa54c2",
+      "definitionDigest": "462c862d65a7744b28bb7a2236c2729b107f20c57c816124ade61f7495645536",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -460,8 +448,7 @@
     },
     {
       "identity": "identityUser",
-      "definitionFingerprint": "eba812a27ee140ceb4daebad05ea5773b0019f4ad471b30a74033bba9d49185f",
-      "fingerprint": "a53cab446b57bb7be7b1bb106741cb6cfefcc4b992f6485baf8de19611e3d9a7",
+      "definitionDigest": "eba812a27ee140ceb4daebad05ea5773b0019f4ad471b30a74033bba9d49185f",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -573,8 +560,7 @@
     },
     {
       "identity": "identityUserClaim",
-      "definitionFingerprint": "d9080b9bd5946a64d44a01811a1e6a32c733160fd286f7306ddde979e845b639",
-      "fingerprint": "da01f6243b18310dfedf135d4f8ba9fa9e046f04ca269e2293d4ab2df26e5182",
+      "definitionDigest": "d9080b9bd5946a64d44a01811a1e6a32c733160fd286f7306ddde979e845b639",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -686,8 +672,7 @@
     },
     {
       "identity": "identityUserNameReservation",
-      "definitionFingerprint": "8419795b081556e6bc70951215e448af2a3db5b1807c2b342b32158b42d843e4",
-      "fingerprint": "793e8df900ca5d5874895b6ee773299e0edefb8d8419a067242bde7f4679ac38",
+      "definitionDigest": "8419795b081556e6bc70951215e448af2a3db5b1807c2b342b32158b42d843e4",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -697,8 +682,7 @@
     },
     {
       "identity": "identityUserRole",
-      "definitionFingerprint": "b617ef0852fa46510ae4b6b6442019e8b6f571a4f0cacdaaa70b91cd43ea50ad",
-      "fingerprint": "74033a417a469e0ed0edd967f145b1838c70264b00a99025a0f87ecc072fb54e",
+      "definitionDigest": "b617ef0852fa46510ae4b6b6442019e8b6f571a4f0cacdaaa70b91cd43ea50ad",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -810,8 +794,7 @@
     },
     {
       "identity": "identityUserToken",
-      "definitionFingerprint": "fc851928adbe42e3598e8fe3ca4dfb0a79ce0e14145ce2b4c95098e382c4b461",
-      "fingerprint": "e23569f965252b596136229eab23a26ab8773aae328ef354bfac5aa2926ac682",
+      "definitionDigest": "fc851928adbe42e3598e8fe3ca4dfb0a79ce0e14145ce2b4c95098e382c4b461",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],

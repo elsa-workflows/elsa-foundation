@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "workflowDefinition",
-      "definitionFingerprint": "d99a3eb531802f380e38ecdbe3711269d338a7231cbeff9e963a5f5e69c97f4f",
-      "fingerprint": "3eaf61bec5a65d753f22b656e9cdc4e188bf4c35953408a4194bb70d17303427",
+      "definitionDigest": "d99a3eb531802f380e38ecdbe3711269d338a7231cbeff9e963a5f5e69c97f4f",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -409,8 +408,7 @@
     },
     {
       "identity": "workflowDefinitionDraft",
-      "definitionFingerprint": "293044e792661377c7dbcec7b1d64aed200c0450def9434fcf1e0e1a37051a53",
-      "fingerprint": "758ffd8abb7ded6eb706620958183f37d6995fab7cded3201279d3b40b9f26ef",
+      "definitionDigest": "293044e792661377c7dbcec7b1d64aed200c0450def9434fcf1e0e1a37051a53",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -598,8 +596,7 @@
     },
     {
       "identity": "workflowDefinitionVersion",
-      "definitionFingerprint": "bff7cef39a5eb879087d1db154b7696999effcad4efb12c95e4f3ca0a4e1be93",
-      "fingerprint": "df90b8b39661af345db08519a3cb71263700f03ff11e0f313cf140b4a4791f8e",
+      "definitionDigest": "bff7cef39a5eb879087d1db154b7696999effcad4efb12c95e4f3ca0a4e1be93",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -836,8 +833,7 @@
     },
     {
       "identity": "workflowDefinitionVersionLayout",
-      "definitionFingerprint": "1a6d0b4637c78a87a8b451c11230b1bae6dca366437bdce086912c8e3f3d7758",
-      "fingerprint": "ddf26782a7e4c3d5510809e6c1e2d77644d8d5ae34dabf33d6b163eb356060bc",
+      "definitionDigest": "1a6d0b4637c78a87a8b451c11230b1bae6dca366437bdce086912c8e3f3d7758",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [

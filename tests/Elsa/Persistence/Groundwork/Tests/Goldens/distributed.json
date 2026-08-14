@@ -13,8 +13,7 @@
   "storageUnits": [
     {
       "identity": "executionCommandStreamHead",
-      "definitionFingerprint": "a637f260d75df93c915ecc39b736726d0d17a5f49f7f84bda3f4281ed4664706",
-      "fingerprint": "654ac3fbf9eb9804ea407bdb71fab0c8cd10b42d318ca52f4a59fdf773ea4c30",
+      "definitionDigest": "a637f260d75df93c915ecc39b736726d0d17a5f49f7f84bda3f4281ed4664706",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [],
@@ -24,8 +23,7 @@
     },
     {
       "identity": "executionCommandTransport",
-      "definitionFingerprint": "6ff1e45d44dd951022f67317470c7c2bb97bf21bebcc9a57a52509938d84995b",
-      "fingerprint": "ec0521b34a9e8179c7b09134d3727c2e7300d67d736fae8fb1c1c62d2f5a2ccc",
+      "definitionDigest": "6ff1e45d44dd951022f67317470c7c2bb97bf21bebcc9a57a52509938d84995b",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -187,8 +185,7 @@
     },
     {
       "identity": "executionPlacement",
-      "definitionFingerprint": "afbae10e84afc7bae483937f85fbe30d596fcfe4e42f288b473c4a47c4103cff",
-      "fingerprint": "e0ac52a078d19d7ba0121b0d1314765193a9446aa28f3366d39d08fdb2168742",
+      "definitionDigest": "afbae10e84afc7bae483937f85fbe30d596fcfe4e42f288b473c4a47c4103cff",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [

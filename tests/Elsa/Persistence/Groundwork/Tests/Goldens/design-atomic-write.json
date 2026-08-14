@@ -6,8 +6,7 @@
   "storageUnits": [
     {
       "identity": "designOperation",
-      "definitionFingerprint": "687a545c038943d74c5fbaf1c89126f66441c8e5f76c2abc9643d74671f0c24f",
-      "fingerprint": "035d13ba92c5e0c14b919fe8d2995d8557ed4b3bb1204d5ee3716c0052c67fd6",
+      "definitionDigest": "687a545c038943d74c5fbaf1c89126f66441c8e5f76c2abc9643d74671f0c24f",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [],
@@ -17,8 +16,7 @@
     },
     {
       "identity": "designPostCommitIntent",
-      "definitionFingerprint": "251c5b4f2b562b58b0fedcf86fda4091483fa3ec74a5f1e1cc447340d774979d",
-      "fingerprint": "4e2280e4ab0a27b074747f4729adc1f49992e1838b59b8703872c1afadeddc54",
+      "definitionDigest": "251c5b4f2b562b58b0fedcf86fda4091483fa3ec74a5f1e1cc447340d774979d",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [

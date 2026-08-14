@@ -6,8 +6,7 @@
   "storageUnits": [
     {
       "identity": "openTelemetryCaptureOperation",
-      "definitionFingerprint": "53b3c5557697f26ff485d8fa8d83d36504c2d882041d8dc1dc01242ec21e98eb",
-      "fingerprint": "31af69da7a5ef30b82352287f0719f57996e231f98ddcb3a2ec5b5fef79c9771",
+      "definitionDigest": "53b3c5557697f26ff485d8fa8d83d36504c2d882041d8dc1dc01242ec21e98eb",
       "provisioningMode": "Declared",
       "policy": "Explicit(DedicatedDocumentTable)",
       "logicalIndexes": [
@@ -57,8 +56,7 @@
     },
     {
       "identity": "openTelemetryMetricInstrument",
-      "definitionFingerprint": "2e81dcaed13b9b024d8c00a31652d6ecf6d7ee2254a9c5a6a2ff374f3a841c7a",
-      "fingerprint": "d900025ac24a332af640f895751bf74d0153785d5acd0f685c8737163fa8276d",
+      "definitionDigest": "4f69d5b9f90c3476b83213914e030fb901f21a5f664ac8fd2cd448afb95c9233",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
@@ -281,8 +279,7 @@
     },
     {
       "identity": "openTelemetryResource",
-      "definitionFingerprint": "d444bb169894cdf88439dea3ebfb7df106e7d2912c94bec4862d31ea7447663a",
-      "fingerprint": "3d5af605bb31112ec8b50dc41b58fee0eee6683c590f29ca67cac2588b1f436f",
+      "definitionDigest": "349dc46190e6e5c35283d97ed59e2e59c00edbc37fc940bb3beba95c64cf765f",
       "provisioningMode": "Declared",
       "policy": "Explicit(PhysicalEntityTable)",
       "logicalIndexes": [
