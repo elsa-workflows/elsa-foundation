@@ -33,9 +33,10 @@
 
 - **Named contracts/services in FRs are intentional, not leakage.** This spec transcribes GitHub
   issue #1304 (rev 4), which was code-reviewed by @sfmskywalker and revised four times; the named
-  types (`IRuntimeRequirementChecker`, `IWorkflowTriggerBindingStore`, the prohibition on
-  `IPublicationSlotStore`/`IPublicationRecordStore`, …) are **reviewed architectural decisions the
-  spec is required to carry faithfully** — they define the design/runtime boundary the feature
+  types (`IRuntimeRequirementChecker`, `IWorkflowTriggerBindingStore`, the relocation of
+  `IPublicationSlotStore` to the runtime layer, the prohibition on the publishing-only
+  `IPublicationRecordStore`/Publishing-assembly machinery entering the runtime, …) are **reviewed
+  architectural decisions the spec is required to carry faithfully** — they define the design/runtime boundary the feature
   exists to preserve. Softening them into technology-neutral prose would lose the review's verdicts
   (notably the FR-B-006 redesign). SC-B-001/SC-B-005 are assembly-dependency assertions because the
   measurable outcome *is* composition-level separation.

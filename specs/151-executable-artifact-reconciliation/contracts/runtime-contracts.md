@@ -21,7 +21,7 @@ public interface IRuntimeRequirementChecker
 
 ## `IPublicationSlotStore` — relocated to `Elsa.Workflows.Runtime.Core` (FR-B-006 / A2)
 
-Contract, `PublicationSlot`, and `PublicationSlotTransitionResult` move **unrenamed** from `Elsa.Workflows.Publishing.Core.Contracts/Models`. Semantics unchanged (definition-keyed authority, `Revision` CAS, returns `ReplacedPublicationId`). Replacement contract: exactly one active implementation per engine — publishing Groundwork (existing table) on publish-capable engines; reconciliation-owned runtime-family Groundwork on runtime-only engines; in-memory default otherwise. Double-durable-registration must fail loudly at startup.
+Contract, `PublicationSlot`, and `PublicationSlotTransitionResult` move **unrenamed** from `Elsa.Workflows.Publishing.Core.Contracts/Models`. Semantics unchanged (definition-keyed authority, `Revision` CAS, returns `ReplacedPublicationId`). Replacement contract with **one durable implementation, one physical home**: a slot document kind in the runtime Groundwork store family, registered with the other runtime stores; the publishing-family slot store is **deleted** (no consumers yet → nothing to migrate); in-memory default otherwise. Groundwork historical-schema baselines update as a named task.
 
 **Publication-id namespace (new convention, opaque strings):** publish = `publication-{shortId}`; import = `import:{sourceId}:{shortId}`. Cross-authority guard: an actor MUST NOT supersede an `ActivePublicationId` carrying the other namespace — reject with a diagnostic naming the conflicting authority.
 
@@ -36,7 +36,7 @@ public interface IWorkflowArtifactReconciliationSource
 }
 ```
 
-v1 implementation: JSON folder/file source configured by `JsonWorkflowArtifactReconciliationOptions` (FilePath | ordered Files | FolderPath; `SourceId` required; optional `TenantId`). Missing folder → error; empty → no-op. All infrastructure failures wrapped as `InvalidWorkflowArtifactClosureException` (§2.23.5).
+v1 implementation: JSON folder/file source configured by `JsonWorkflowArtifactReconciliationOptions` (FilePath | ordered Files | FolderPath; `SourceId` required; optional `TenantId`). Exception taxonomy (§2.23.5), preserving the scope distinction: **file-level** infrastructure failures (unreadable, malformed JSON, unknown format version) wrap as `InvalidWorkflowArtifactClosureException` (carries the file path); **pass-aborting** conditions (e.g. configured folder missing) use the `WorkflowArtifactReconciliationException` family; empty folder → no-op; **per-artifact** rejections are diagnostics on the pass result, never exceptions (batch isolation).
 
 ## `IWorkflowArtifactReconciler` — `Elsa.Workflows.Runtime.Reconciliation` (new)
 
@@ -81,7 +81,7 @@ public sealed record WorkflowArtifactExportDelivery(
     string? Location);                // Receipt: where the target delivered it
 ```
 
-Strategy (§2.24.2 #9); fan-in via `TryAddEnumerable`; future targets contribute, never replace. The export endpoint is the invocation surface for all targets.
+Strategy (§2.24.2 #9); fan-in via `TryAddEnumerable`; future targets contribute, never replace. The v1 GET endpoint binds to the `download` target only (safe-method semantics); receipt-producing targets (blob/folder) ship with their own POST command surface carrying an idempotency contract.
 
 ## Feature surface
 
@@ -89,5 +89,4 @@ Strategy (§2.24.2 #9); fan-in via `TryAddEnumerable`; future targets contribute
 |---|---|---|---|
 | `WorkflowsArtifactReconciliationFeature` (abstract, no attribute) | — | Runtime.Reconciliation | — |
 | `JsonWorkflowArtifactReconciliationFeature` | `JsonWorkflowArtifactReconciliation` | Runtime.Reconciliation | `Tasks` (+ calls `AddWorkflowRuntime()` itself, idempotent per ADR 0029) |
-| Reconciliation Groundwork persistence unit | (mirrors existing `*GroundworkPersistence` id family) | new persistence unit | reconciliation feature + Groundwork lane |
 | `WorkflowsPublishingFeature` / `WorkflowsPublishingApiFeature` (modified) | existing | Publishing / Publishing.Api | unchanged |

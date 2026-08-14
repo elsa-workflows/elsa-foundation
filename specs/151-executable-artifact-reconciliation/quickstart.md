@@ -29,7 +29,7 @@ Compose a runtime-only engine — no design, no publishing, no compiler — with
     "WorkflowsRuntimeTriggers": {},     // stimulus routing for trigger-started workflows
     "JsonWorkflowArtifactReconciliation": {
       "FolderPath": "/mnt/artifacts",   // or FilePath / ordered Files
-      "SourceId": "prod-artifact-drop"
+      "SourceId": "prod-artifact-drop",
       // "TenantId": "tenant-a"         // optional; default null
     }
     // + a Groundwork runtime persistence feature for durability (in-memory otherwise)

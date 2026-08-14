@@ -14,7 +14,7 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 
 **Primary Dependencies**: CShells (`IShellFeature`/`[ShellFeature]`), Elsa.Tasks (`IStartupTask`, `[SingleNodeTask]`, `[TaskDependency]`), Elsa.Locking.Core, Elsa.Serialization.Core (`IPayloadSerializer`, `IWellKnownTypeRegistry`), Elsa.Api.FastEndpoints + Elsa.Api.Capabilities, Groundwork persistence (manifest sources + physicalizers)
 
-**Storage**: contract-first — in-memory defaults via `AddWorkflowRuntime()`; durable via Groundwork (existing publishing slot table retargeted, no migration; one new runtime-family slot document kind provisioned by a reconciliation-owned manifest source). **Zero EF Core** (program-goal ratchet enforced).
+**Storage**: contract-first — in-memory defaults via `AddWorkflowRuntime()`; durable via Groundwork with **one physical activation ledger**: a new slot document kind in the runtime store family, while the publishing-family slot store is deleted (no consumers yet → nothing to migrate; historical-schema baselines updated as a named task). **Zero EF Core** (program-goal ratchet enforced).
 
 **Testing**: xunit 2.9.3 only (FluentAssertions constitutionally absent); §2.23.1 registration tests + §2.23.2 branch-covered unit tests; architecture-guard and composition assertions for SC-B-001/005
 
@@ -24,7 +24,7 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 
 **Performance Goals**: reconcile pass is startup-path work — must complete before readiness; no serving-path changes (dispatch/stimulus routing untouched)
 
-**Constraints**: assembly-enforced design-freedom (SC-B-005: no Design/Publishing assembly enters the runtime closure); no data migration; behavior-preserving relocations (§2.21.1 golden rule — existing publishing tests pass unchanged)
+**Constraints**: assembly-enforced design-freedom (SC-B-005: no Design/Publishing assembly enters the runtime closure); behavior-preserving relocations (§2.21.1 golden rule — existing publishing tests pass with wiring-only changes); slot storage moves families deliberately (no consumers → no migration; schema baselines updated, never silently churned)
 
 **Scale/Scope**: ~12 new contracts/services, 2 relocations, 1 endpoint + capability rel, ~6 EXTENSION_POINTS/maps/docs touchpoints; folder-scale artifact sets (tens–hundreds of closures per reconcile)
 
@@ -85,9 +85,10 @@ src/Elsa/Workflows/Publishing/
 ├── Api/                                   # MODIFIED: preflight → thin wrapper (+consumer diagnostics),
 │                                          #   +export endpoint, +DownloadWorkflowArtifactExportTarget,
 │                                          #   +capability rel workflow-executable-export, +permission, +route
-└── Persistence/Groundwork/                # MODIFIED: slot store retargets to relocated contract (same table)
-src/Elsa/Persistence/Groundwork/           # MODIFIED (or reconciliation-owned unit): runtime-family slot store +
-                                           #   reconciliation IGroundworkStorageManifestSource (new document kind)
+└── Persistence/Groundwork/                # MODIFIED: slot store + manifest entry DELETED (ledger moves to runtime family)
+src/Elsa/Persistence/Groundwork/           # MODIFIED: runtime-family Groundwork slot store; slot document kind in
+                                           #   ElsaRuntimeStorageManifest + GroundworkRuntimeStoreRegistration;
+                                           #   historical-schema/target baselines updated
 src/Elsa/Activities/
 ├── Runtime/Core/                          # MODIFIED: UnknownActivityTypeException re-parented to
 │                                          #   ActivityResolutionException + new failure kind (research D2)
@@ -113,4 +114,4 @@ docs/maps/* (regenerated), EXTENSION_POINTS.md files per research D9
 
 ## Next step
 
-`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker extraction + wrapper + classification fix; (2) slot-contract relocation + Groundwork retarget + guard; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.
+`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker extraction + wrapper + classification fix; (2) slot-contract relocation + single runtime-family ledger (publishing slot store deleted, baselines updated) + cross-authority guard; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.

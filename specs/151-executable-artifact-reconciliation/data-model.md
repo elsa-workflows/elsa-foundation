@@ -14,15 +14,16 @@ The single self-describing JSON closure envelope (clarified Q2). Not a persisted
 | `SourceReferences` | `IReadOnlyList<WorkflowExecutableSourceReference>` | The exporting engine's **Published-scope** references for the closure members. **Provenance/expectations only** — the importer never persists these rows (D4). |
 | `TriggerBindings` | `IReadOnlyList<WorkflowTriggerBinding>` | The exporting engine's active bindings for the closure members. **Expectations only** — activation recomputes bindings via `WorkflowTriggerIndexer`; a node/stimulus-set mismatch vs the recomputed surface is a broken-source diagnostic. |
 
-**Validation rules**: `RootArtifactId` present in `Artifacts`; every `Dependencies` edge of every member resolves inside `Artifacts` ∪ already-imported store content; declared `ArtifactHash` on edges matches the referenced member's identity hash; no cycles; references restricted to `Scope == Published` (export-side enforcement, FR-B-011).
+**Validation rules**: `RootArtifactId` present in `Artifacts`; every `Dependencies` edge of every member resolves **inside `Artifacts` alone** — wire-format validity is environment-independent, so an envelope that is only complete because the target store happens to contain a child is a broken export and fails everywhere identically (the store is consulted only afterward, for idempotent skip-persistence of already-present members); declared `ArtifactHash` on edges matches the referenced member's identity hash; no cycles; references restricted to `Scope == Published` (export-side enforcement, FR-B-011).
 
 ## Relocated: activation authority — `Elsa.Workflows.Publishing.Core` → `Elsa.Workflows.Runtime.Core`
 
 Moved **unrenamed** (clarified Q3/A2): `IPublicationSlotStore`, `PublicationSlot(SlotId, WorkflowDefinitionId, SlotName, ActivePublicationId, Revision, UpdatedAt)`, `PublicationSlotTransitionResult(Succeeded, Slot, ReplacedPublicationId, Failure)`.
 
-- One ledger per engine (replacement contract §2.6.2). Implementations: publishing Groundwork store (existing table, retargeted — **no data migration**); in-memory default (`AddWorkflowRuntime()`, `TryAdd`); runtime-family Groundwork store (new document kind, provisioned by a **reconciliation-owned** `IGroundworkStorageManifestSource` — engines without the feature create no storage).
+- One ledger per engine, **physically as well as contractually**: a single durable implementation backed by a new slot document kind in the **runtime Groundwork store family** (registered with the other runtime stores); the publishing-family Groundwork slot store is deleted (no consumers yet → nothing to migrate; removes the dual-ledger composition-transition hole). In-memory default via `AddWorkflowRuntime()` (`TryAdd`) is the non-Groundwork fallback.
 - **Id namespace convention** (new, on the opaque `PublicationId` string): publish mints `publication-{shortId}` (existing); the importer mints `import:{sourceId}:{shortId}`. The namespace is the authority attribution for the cross-authority guard.
 - **State transitions**: `TryActivateAsync(definitionId, slotName, candidatePublicationId, expectedRevision)` — CAS on `Revision`; returns `ReplacedPublicationId`. Guard precondition (both actors): if the slot's `ActivePublicationId` carries the *other* actor's namespace → reject candidate (diagnostic naming the conflicting authority), no transition.
+- **Supersession ordering** (FR-B-007): "newer" = SemVer sort key over `ArtifactVersion` (`SemVer.ToSortKey`, ordinal compare — the design-side comparator), evaluated against the active publication's minted source reference. Candidate ≤ active → skip; unparseable → reject at import.
 
 ## New: `RuntimeRequirementCheckResult` — `Elsa.Workflows.Runtime.Core`
 
@@ -61,4 +62,4 @@ minted WorkflowExecutableSourceReference ──PublicationId/SlotId──> Publi
 WorkflowTriggerBinding ──PublicationId──> publication projection state (IsActive flip)
 ```
 
-Nothing on any existing entity changes shape. The only new persisted record kind is the runtime-family slot document (reconciliation-owned manifest); everything else reuses existing stores.
+Nothing on any existing entity changes shape. The only new persisted record kind is the runtime-family slot document (registered in the runtime Groundwork store family, replacing the deleted publishing-family slot store); everything else reuses existing stores.

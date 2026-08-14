@@ -31,7 +31,7 @@ The portable export/import unit — one JSON document per closure (clarified Q2)
 ## Invariants (validated at import; violation = per-file or per-artifact rejection)
 
 1. `rootArtifactId` ∈ `artifacts[].identity.artifactId`.
-2. Every `dependencies[]` edge of every member resolves within `artifacts` ∪ the store snapshot, with declared `childArtifactHash` equal to the resolved member's `identity.artifactHash` (`MissingArtifact` / `HashMismatch` / `ConflictingIdentity` / `Cycle` → reject the dependent, batch continues).
+2. Every `dependencies[]` edge of every member resolves **within `artifacts` alone**, with declared `childArtifactHash` equal to the resolved member's `identity.artifactHash` (`MissingArtifact` / `HashMismatch` / `ConflictingIdentity` / `Cycle` → reject the dependent, batch continues). This invariant is environment-independent: the closure is self-contained by contract (FR-B-010), so a file must never validate on one runtime and fail on another because of what happens to be in the store. Deduplication against already-imported store content happens **after** envelope validation, at persistence time only.
 3. Every `sourceReferences[].scope == "Published"`; version ids never `draft:`-prefixed.
 4. Artifact ids are content-addressed and stable — the importer MUST NOT mint or rewrite identities.
 5. Tenant is absent from artifacts by design; `tenantId` on carried references is ignored (the importer stamps its source-configured tenant option).
