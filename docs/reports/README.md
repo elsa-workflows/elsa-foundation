@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Endpoint framework and authorization spike 2026-08](endpoint-framework-authorization-spike-2026-08.md) - issue #1329 evidence and recommendation: keep Minimal APIs for root shell management, coexist with current Elsa feature adapters, unify authorization on Foundation policies, atomically publish validated CShells endpoint manifests, and treat FastEndpoints endpoint assemblies as non-collectible until the observed 0/3 unload result is resolved.
 - [Elsa 4 architecture review 2026-07](elsa-4-architecture-review-2026-07.md) - consolidated full-codebase review with verified findings and improvement roadmap (W1-W21). Detail sub-reports and per-work-unit implementation briefs: [elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md).
 - [Simplification review 2026-07](simplification-review-2026-07.md) - YAGNI/DRY/modernization pass over the tree after the W1-W21 roadmap landed; public-API surface, build-config duplication, missing style enforcement, and the accretion pressure behind the project/LoC/type growth. Static analysis only, not compile-verified.
 - [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](elsa-4-activity-gaps.md).
