@@ -327,8 +327,12 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         Assert.NotEmpty(designTables);
         Assert.NotEmpty(runtimeTables);
         Assert.Empty(designTables.Intersect(runtimeTables, StringComparer.Ordinal));
-        Assert.Contains(designTables, table => table.Contains("workflow_definition", StringComparison.Ordinal));
-        Assert.DoesNotContain(designTables, table => table.Contains("bookmark", StringComparison.Ordinal));
+        Assert.Contains(designTables, table => table.Contains(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, StringComparison.Ordinal));
+        Assert.Contains(runtimeTables, table => table.Contains(
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, StringComparison.Ordinal));
+        Assert.DoesNotContain(designTables, table => table.Contains(
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, StringComparison.Ordinal));
     }
 
     [Fact]
