@@ -910,7 +910,7 @@ public class GroundworkStorageCompositionTests
         string? physicalName = null,
         string schemaVersion = "1.0.0")
     {
-        var unit = new StorageUnit(
+        var unit = StorageUnit.Create(
             new StorageUnitIdentity(unitIdentity),
             unitIdentity,
             StorageIntent.PortableDocument(),
@@ -919,15 +919,10 @@ public class GroundworkStorageCompositionTests
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(
-                    physicalName ?? $"{unitIdentity}_documents")))
-        };
+                    physicalName ?? $"{unitIdentity}_documents"))));
         return new StorageManifest(
             new StorageManifestIdentity(featureIdentity),
             new StorageManifestOwner($"{featureIdentity}.owner"),

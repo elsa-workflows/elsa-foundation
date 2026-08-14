@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -52,7 +53,7 @@ public sealed class GroundworkBurstCacheGuardrailTests
 
         Assert.NotEmpty(offSnapshot);
         Assert.Equal(offSnapshot, onSnapshot);
-        Assert.Equal(await CommitIdsAsync(offStore), await CommitIdsAsync(onStore));
+        Assert.Equal(CommitIds(offStore), CommitIds(onStore));
 
         Assert.True(offReads > onReads, $"Expected cache-on reads ({onReads}) < cache-off reads ({offReads}).");
         Assert.True(onReads <= 3, $"Expected cache-on executable reads ≤ 3 per run, was {onReads}.");
@@ -80,7 +81,7 @@ public sealed class GroundworkBurstCacheGuardrailTests
         }
 
         Assert.Equal(await SnapshotActivityStateAsync(controlStore), await SnapshotActivityStateAsync(evictedStore));
-        Assert.Equal(await CommitIdsAsync(controlStore), await CommitIdsAsync(evictedStore));
+        Assert.Equal(CommitIds(controlStore), CommitIds(evictedStore));
 
         // A perpetually-lost cache re-reads on every hop, so its read count matches a run with no cache at all.
         Assert.True(evictedReads > 3, $"A continuously-evicted cache should re-read durably on every hop, was {evictedReads}.");
@@ -160,13 +161,13 @@ public sealed class GroundworkBurstCacheGuardrailTests
             .ToList();
     }
 
-    private static async Task<IReadOnlyList<string>> CommitIdsAsync(IDocumentStore store)
-    {
-#pragma warning disable GW0004
-        var result = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
-        return result.Documents.Select(document => document.Id).OrderBy(id => id, StringComparer.Ordinal).ToList();
-    }
+    // The double's own enumeration seam, not a store query surface: this compares the complete commit ledger
+    // written by two runs, which is what the retired kind-wide portable scan expressed.
+    private static IReadOnlyList<string> CommitIds(IDocumentEnumerationSource store) =>
+        store.Snapshot(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind)
+            .Select(document => document.Id)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToList();
 
     // A fresh provider over an existing store for read-back only (no burst wiring needed).
     private static ServiceProvider BuildReaderProvider(IDocumentStore store)

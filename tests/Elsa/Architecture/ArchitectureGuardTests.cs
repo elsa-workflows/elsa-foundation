@@ -331,28 +331,168 @@ public sealed class ArchitectureGuardTests
         Assert.Equal(3, Regex.Matches(scopedAdapterSource, @"\bPortableDocumentQuery\b").Count);
         Assert.Equal(7, Regex.Matches(scopedAdapterSource, @"WithDocumentsAsync\(store => store\.").Count);
 
-        var forbiddenTypes = new[] { "DocumentStoreQuery", "PortableDocumentQuery" };
+        // The two query types are banned only under src/Elsa/**/Groundwork/**, where the two carve-out
+        // adapters above live. The retired-surface names below are banned across the whole of src/Elsa:
+        // nothing outside Groundwork's own adapters has any business naming them at all.
+        var groundworkOnlyPatterns = new[]
+        {
+            (Name: "DocumentStoreQuery", Pattern: @"\bDocumentStoreQuery\b"),
+            (Name: "PortableDocumentQuery", Pattern: @"\bPortableDocumentQuery\b")
+        };
+        var productionWidePatterns = new[]
+        {
+            (Name: "LegacyPhysicalStorageBridge", Pattern: @"\bLegacyPhysicalStorageBridge\b"),
+            (Name: "PhysicalizationPolicy.", Pattern: @"\bPhysicalizationPolicy\s*\."),
+            (Name: "IndexPhysicalizationPolicy", Pattern: @"\bIndexPhysicalizationPolicy\b"),
+            (Name: "DocumentStoreFactory.CreateAsync(", Pattern: @"\bDocumentStoreFactory\s*\.\s*CreateAsync\s*\(")
+        };
+
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
             .Select(file => new
             {
                 File = file,
                 RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
             })
-            .Where(candidate => candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal))
             .Where(candidate =>
                 !StringComparer.Ordinal.Equals(candidate.RelativePath, unitOfWorkAdapterPath) &&
                 !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
             .SelectMany(candidate =>
             {
                 var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
-                return forbiddenTypes
-                    .Where(type => Regex.IsMatch(source, $@"\b{type}\b"))
-                    .Select(type => $"{candidate.RelativePath}: {type}");
+                var applicable = candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal)
+                    ? groundworkOnlyPatterns.Concat(productionWidePatterns)
+                    : productionWidePatterns;
+                return applicable
+                    .Where(forbidden => Regex.IsMatch(source, forbidden.Pattern))
+                    .Select(forbidden => $"{candidate.RelativePath}: {forbidden.Name}");
             })
             .ToArray();
 
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
     }
+
+    /// <summary>
+    /// The retired portable query types stay *declarable* everywhere until the package bump deletes the
+    /// abstract members, so test doubles keep their stub blocks. Nothing may still <em>construct</em> one,
+    /// though: a constructed query is a live call against a surface that no migrated storage unit can answer
+    /// (its <c>Indexes</c> are empty), which fails at run time rather than at compile time.
+    /// </summary>
+    [Fact]
+    public void Groundwork_test_and_benchmark_code_constructs_no_retired_portable_queries()
+    {
+        // The scoped-adapter contract test drives the adapter's compatibility surface on purpose — it is the
+        // test that proves each retired member still routes through an ordinary scoped session. It goes away
+        // with the members themselves at the bump.
+        const string scopedAdapterContractTest =
+            "tests/Elsa/Persistence/Groundwork/Tests/GroundworkScopedDocumentStoreTests.cs";
+
+        // Any qualification of the type name counts — the migration found call sites written both bare and
+        // fully qualified (global::Groundwork.Documents.Store.PortableDocumentQuery).
+        var constructionPatterns = new[]
+        {
+            (Name: "new DocumentStoreQuery(", Pattern: @"\bnew\s+(?:[\w.]+\.|global::[\w.]+\.)?DocumentStoreQuery\s*\("),
+            (Name: "new PortableDocumentQuery(", Pattern: @"\bnew\s+(?:[\w.]+\.|global::[\w.]+\.)?PortableDocumentQuery\s*\(")
+        };
+
+        var violations = GroundworkGuardSourceFiles("tests", "benchmarks")
+            .Where(candidate => !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterContractTest))
+            .SelectMany(candidate =>
+            {
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
+                return constructionPatterns
+                    .Where(forbidden => Regex.IsMatch(source, forbidden.Pattern))
+                    .Select(forbidden => $"{candidate.RelativePath}: {forbidden.Name}");
+            })
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "Retired portable queries must not be constructed. Read through the unit's declared bounded route " +
+            "(GroundworkPhysicalTestStores) or the in-memory double's IDocumentEnumerationSource seam instead:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// Every provider store — production, test, probe or benchmark — opens on Groundwork's physical surface.
+    /// The portable <c>CreateAsync</c> entry points vanish at the package bump, and a store opened through one
+    /// carries no compiled routes, so a bounded read against it fails at run time.
+    /// </summary>
+    [Fact]
+    public void Groundwork_stores_open_only_through_the_physical_factory_entry_points()
+    {
+        // Known debt, deliberately visible: the Groundwork dashboard data sources still read workflow
+        // definitions, drafts and executions from the shared groundwork_documents table, which a physically
+        // opened store no longer routes them into. Their fixtures can only reproduce the layout the SQL reads
+        // by opening portably. Fixing the data sources retires both carve-outs — the package bump forces it.
+        var dashboardDataSourceFixtures = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioProviderTests.cs",
+            "tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs"
+        };
+
+        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+            .Where(candidate => !dashboardDataSourceFixtures.Contains(candidate.RelativePath))
+            .Select(candidate => new
+            {
+                candidate.RelativePath,
+                Source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File))
+            })
+            .SelectMany(candidate => Regex
+                .Matches(candidate.Source, @"\b(Sqlite|SqlServer|PostgreSql|MongoDb)DocumentStoreFactory\s*\.\s*CreateAsync\s*\(")
+                .Select(match => $"{candidate.RelativePath}: {match.Value.Trim()}"))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "Provider stores must be opened with OpenPhysicalAsync — through GroundworkPhysicalTestStores in " +
+            "tests and benchmarks:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// A bare <c>#pragma warning disable GW…</c> is indistinguishable from an unmigrated call site. Requiring a
+    /// justification on the pragma line (or immediately above it) keeps every surviving suppression readable as
+    /// the deliberate stub-block declaration it is, and makes the bump's "delete every GW pragma" sweep safe.
+    /// </summary>
+    [Fact]
+    public void Every_groundwork_warning_suppression_carries_a_justification()
+    {
+        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+            .SelectMany(candidate =>
+            {
+                var lines = File.ReadAllLines(candidate.File);
+                return lines
+                    .Select((line, index) => (Line: line, Index: index))
+                    .Where(entry => entry.Line.TrimStart().StartsWith("#pragma warning disable GW", StringComparison.Ordinal))
+                    .Where(entry =>
+                        !HasComment(entry.Line) &&
+                        !(entry.Index > 0 && HasComment(lines[entry.Index - 1])))
+                    .Select(entry => $"{candidate.RelativePath}({entry.Index + 1}): {entry.Line.Trim()}");
+            })
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "Each GW suppression needs a justification comment on its own line or the line above it:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
+
+        static bool HasComment(string line)
+        {
+            var comment = line.IndexOf("//", StringComparison.Ordinal);
+            return comment >= 0 && line[(comment + 2)..].Trim().Length > 0;
+        }
+    }
+
+    /// <summary>Every first-party C# file under the given repository roots, excluding build output.</summary>
+    private static IEnumerable<(string File, string RelativePath)> GroundworkGuardSourceFiles(params string[] roots) =>
+        roots
+            .Select(root => Path.Combine(RepoRoot, root))
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Select(file => (File: file, RelativePath: Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')))
+            .Where(candidate =>
+                !candidate.RelativePath.Contains("/obj/", StringComparison.Ordinal) &&
+                !candidate.RelativePath.Contains("/bin/", StringComparison.Ordinal));
 
     [Fact]
     public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()

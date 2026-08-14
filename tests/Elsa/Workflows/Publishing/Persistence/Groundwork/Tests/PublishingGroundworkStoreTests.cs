@@ -97,7 +97,7 @@ public sealed class PublishingGroundworkStoreTests
     {
         await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var stores = Stores.Create(fixture.Store, serializer);
+        var stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
 
         var initial = await stores.Slots.TryActivateAsync("definition-1", "default", "publication-current", 0, Now);
         Assert.True(initial.Succeeded);
@@ -133,7 +133,7 @@ public sealed class PublishingGroundworkStoreTests
         Assert.True(claimed.Succeeded);
 
         await fixture.RestartAsync();
-        stores = Stores.Create(fixture.Store, serializer);
+        stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
 
         var slot = await stores.Slots.FindAsync("definition-1", "default");
         Assert.Equal(2, slot!.Revision);
@@ -153,13 +153,13 @@ public sealed class PublishingGroundworkStoreTests
     {
         await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var firstReplica = ReviewStore(fixture.Store, serializer);
+        var firstReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
         var review = Review("token-1", Now.AddMinutes(15));
 
         Assert.True(await firstReplica.TryAddAsync(review));
         await fixture.RestartAsync();
-        firstReplica = ReviewStore(fixture.Store, serializer);
-        var secondReplica = ReviewStore(fixture.Store, serializer);
+        firstReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
+        var secondReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
         Assert.Equal(review, await secondReplica.FindAsync(review.PreflightToken));
 
         var consumers = await Task.WhenAll(
@@ -178,12 +178,13 @@ public sealed class PublishingGroundworkStoreTests
 
     private static GroundworkPublicationSnapshotReviewStore ReviewStore(
         IDocumentStore store,
+        IBoundedDocumentStore queries,
         PublishingGroundworkDocumentSerializer serializer) =>
         new(
             store,
             serializer,
             GroundworkTestAccess.AccessContext("tenant-a"),
-            new PublishingTestBoundedDocumentStore(store));
+            queries);
 
     private static PublicationSnapshotReview Review(string token, DateTimeOffset expiresAt) => new(
         token, "sha256:candidate", "definition-1", PublicationAction.Replace, "default",
@@ -239,9 +240,11 @@ public sealed class PublishingGroundworkStoreTests
         GroundworkPublicationPolicyStore Policies,
         GroundworkPublicationProjectionIntentStore Intents)
     {
-        public static Stores Create(IDocumentStore store, PublishingGroundworkDocumentSerializer serializer)
+        public static Stores Create(
+            IDocumentStore store,
+            IBoundedDocumentStore queries,
+            PublishingGroundworkDocumentSerializer serializer)
         {
-            var queries = new PublishingTestBoundedDocumentStore(store);
             return new Stores(
                 new GroundworkPublicationSlotStore(store, serializer, queries),
                 new GroundworkPublicationRecordStore(store, serializer, queries),
@@ -253,35 +256,55 @@ public sealed class PublishingGroundworkStoreTests
     private sealed class PublishingStoreFixture(
         string provider,
         string? sqlitePath,
-        IDocumentStore store) : IAsyncDisposable
+        IDocumentStore store,
+        IBoundedDocumentStore queries) : IAsyncDisposable
     {
         private static readonly ProviderIdentity SqliteProvider = new("publishing-groundwork-sqlite-tests", "1.0.0");
         public IDocumentStore Store { get; private set; } = store;
 
+        /// <summary>
+        /// The bounded surface paired with <see cref="Store"/>: the in-memory double's evaluator for the memory
+        /// lane, and the provider's own route-bound query runtime for the SQLite lane.
+        /// </summary>
+        public IBoundedDocumentStore Queries { get; private set; } = queries;
+
         public static async Task<PublishingStoreFixture> CreateAsync(string provider)
         {
             if (provider == "memory")
-                return new PublishingStoreFixture(provider, null, new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
+            {
+                var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+                return new PublishingStoreFixture(
+                    provider,
+                    null,
+                    documents,
+                    new PublishingTestBoundedDocumentStore(documents));
+            }
+
             var path = Path.Combine(Path.GetTempPath(), $"elsa-publishing-{Guid.NewGuid():N}.db");
-            // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
-            // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
-            var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path};Pooling=False",
-                PublishingGroundworkStorageManifest.Create(),
-                SqliteProvider,
-                DocumentStoreAccess.Scoped(new StorageScope("default")));
-            return new PublishingStoreFixture(provider, path, handle);
+            var fixture = new PublishingStoreFixture(provider, path, null!, null!);
+            await fixture.OpenSqliteAsync();
+            return fixture;
         }
 
         public async Task RestartAsync()
         {
             if (provider == "memory")
                 return;
-            Store = await SqliteDocumentStoreFactory.CreateAsync(
+            await OpenSqliteAsync();
+        }
+
+        private async Task OpenSqliteAsync()
+        {
+            var manifest = PublishingGroundworkStorageManifest.Create();
+            // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
+            // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
+            var opened = await GroundworkPhysicalTestStores.OpenSqliteAsync(
                 $"Data Source={sqlitePath};Pooling=False",
-                PublishingGroundworkStorageManifest.Create(),
+                manifest,
                 SqliteProvider,
                 DocumentStoreAccess.Scoped(new StorageScope("default")));
+            Store = opened.Store;
+            Queries = opened.Queries;
         }
 
         public ValueTask DisposeAsync()

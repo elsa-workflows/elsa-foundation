@@ -256,10 +256,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
                     isRequired: true)
             ]);
 
-#pragma warning disable GW0001
-#pragma warning disable GW0002
-#pragma warning disable GW0003
-        var unit = new StorageUnit(
+        var unit = StorageUnit.Create(
             new StorageUnitIdentity(DocumentKind),
             "Bounded query document",
             StorageIntent.PortableDocument(),
@@ -268,31 +265,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
             TenancyPolicy.Global,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [
-                new IndexDeclaration(
-                    "legacy-bounded-query-index",
-                    [new IndexField(NamePath)],
-                    IndexValueKind.String,
-                    false,
-                    true,
-                    MissingValueBehavior.Excluded,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
-            ],
-            [
-                new PortableQueryDeclaration(
-                    QueryIdentity,
-                    "legacy-bounded-query-index",
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-                    QuerySortSupport.None,
-                    QueryPagingSupport.Offset)
-            ],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0003
-#pragma warning restore GW0002
-#pragma warning restore GW0001
-        unit = unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(
                     PhysicalTableDefinition.PhysicalEntityTable(
@@ -303,8 +276,7 @@ public sealed class InMemoryDocumentStoreBoundedQueryTests
                             new ProjectedColumnDefinition("group", GroupPath, PortablePhysicalType.String, Length: 100)
                         ])),
                 [logicalIndex],
-                includePhysicalRoute ? [declaration] : [])
-        };
+                includePhysicalRoute ? [declaration] : []));
 
         return new StorageManifest(
             new StorageManifestIdentity("in-memory-bounded-query-tests"),

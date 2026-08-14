@@ -429,7 +429,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         assert(run);
 
-        var commits = lease.Store is null ? (long?)null : await CountCheckpointCommitsAsync(lease.Store);
+        var commits = lease.Queries is null ? (long?)null : await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(lease.Queries);
         return (commits, lease.ExecutableReads, dispatchDiagnostics?.Dispatches ?? 0);
     }
 
@@ -450,12 +450,9 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         var run = await lease.Harness.RunAsync(executableFactory());
         run.AssertWorkflowCompleted();
 
-#pragma warning disable GW0004
-        var result = await lease.Store!.QueryAsync(
-            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
+        var documents = await GroundworkBenchmarkStore.ListCheckpointCommitsAsync(lease.Queries!);
 
-        var kinds = result.Documents
+        var kinds = documents
             .Select(document =>
             {
                 using var content = JsonDocument.Parse(document.ContentJson);
@@ -470,7 +467,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             .ThenBy(group => group.Key, StringComparer.Ordinal)
             .ToArray();
 
-        output.WriteLine($"=== flushed-commit breakdown (1 diagnostic run): {label} — total={result.TotalCount} ===");
+        output.WriteLine($"=== flushed-commit breakdown (1 diagnostic run): {label} — total={documents.Count} ===");
         foreach (var group in kinds)
             output.WriteLine($"  {group.Count(),3} × {group.Key}");
     }
@@ -500,17 +497,6 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         var segments = commitId.Split(':');
         return segments.Length >= 2 ? $"…{segments[^2]}:{segments[^1]}" : commitId;
-    }
-
-    private static async Task<long> CountCheckpointCommitsAsync(IDocumentStore store)
-    {
-        // Provider-agnostic count of durable checkpoint-commit documents (the fsync unit under measurement),
-        // equivalent to `SELECT COUNT(*) FROM groundwork_documents WHERE document_kind='checkpointCommit'`.
-#pragma warning disable GW0004
-        var result = await store.QueryAsync(
-            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
-        return result.TotalCount;
     }
 
     private static void AssertTwoNodeCompleted(WorkflowExecutionRun run)
@@ -593,18 +579,14 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                 CountExecutableReads(services, readCounter);
             })
             .Build(ActivityExecutionIds);
-        return new HarnessLease(harness, store: null, databasePath: null, readCounter);
+        return new HarnessLease(harness, store: null, queries: null, databasePath: null, readCounter);
     }
 
     private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null, bool fastPathEnabled = true, bool burstCache = true)
     {
         var readCounter = new ExecutableReadCounter();
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
-        var store = await SqliteDocumentStoreFactory.CreateAsync(
-            $"Data Source={databasePath}",
-            ElsaRuntimeStorageManifest.CreatePhysicalized(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            GroundworkTestAccess.DefaultScoped);
+        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
@@ -613,8 +595,8 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                 // Swap the runtime's in-memory store defaults for the durable Groundwork bridges, backed by the
                 // raw SQLite document store above plus the shared bounded-query adapter. This is the exact wiring
                 // the ActivityDraftTestRun suite uses to drive real end-to-end execution over SQLite.
-                services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton<IDocumentStore>(opened.Store);
+                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
                 services.AddGroundworkRuntimeStores();
 
                 // Opt into burst-coalescing checkpoint persistence AFTER the durable stores are registered — the
@@ -638,7 +620,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             })
             .Build(ActivityExecutionIds);
 
-        return new HarnessLease(harness, store, databasePath, readCounter);
+        return new HarnessLease(harness, opened.Store, opened.Queries, databasePath, readCounter);
     }
 
     // Wraps the last IWorkflowExecutableStore registration with a shared FindAsync counter (the durable reads the burst
@@ -707,13 +689,21 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     }
 
     /// <summary>Owns one harness run plus (for the durable variant) its SQLite store and temp database file.</summary>
-    private sealed class HarnessLease(WorkflowExecutionHarness harness, IDocumentStore? store, string? databasePath, ExecutableReadCounter readCounter)
+    private sealed class HarnessLease(
+        WorkflowExecutionHarness harness,
+        IDocumentStore? store,
+        IBoundedDocumentStore? queries,
+        string? databasePath,
+        ExecutableReadCounter readCounter)
         : IAsyncDisposable
     {
         public WorkflowExecutionHarness Harness { get; } = harness;
 
-        /// <summary>The durable document store (for commit counting), or <c>null</c> for the in-memory harness.</summary>
+        /// <summary>The durable document store, or <c>null</c> for the in-memory harness.</summary>
         public IDocumentStore? Store { get; } = store;
+
+        /// <summary>Its route-bound query runtime (for commit counting), or <c>null</c> for the in-memory harness.</summary>
+        public IBoundedDocumentStore? Queries { get; } = queries;
 
         /// <summary>Durable executable-store FindAsync calls during the run (the reads the burst cache saves).</summary>
         public long ExecutableReads => readCounter.Count;

@@ -171,18 +171,15 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
     {
         var counters = new Counters();
         var databasePath = Path.Combine(Path.GetTempPath(), $"scratch-{Guid.NewGuid():N}.db");
-        IDocumentStore store = await SqliteDocumentStoreFactory.CreateAsync(
-            $"Data Source={databasePath}",
-            ElsaRuntimeStorageManifest.CreatePhysicalized(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            GroundworkTestAccess.DefaultScoped);
+        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
+        IDocumentStore store = opened.Store;
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
                 services.AddGroundworkRuntimeStores();
 
                 var descriptor = services.Last(d => d.ServiceType == typeof(IWorkflowExecutableStore));
@@ -226,16 +223,14 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         var fusedSpansPerRun = dispatchDiagnostics?.FusedSpans ?? 0;
         var inlineCascadePerRun = dispatchDiagnostics?.InlineCascadeDispatches ?? 0;
 
-#pragma warning disable GW0004
-        var docs = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
+        var commitCount = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(opened.Queries);
 
         output.WriteLine($"=== {label} ===");
-        output.WriteLine($"durable checkpoint-commit documents/run = {docs.TotalCount}");
+        output.WriteLine($"durable checkpoint-commit documents/run = {commitCount}");
         output.WriteLine($"dispatches/run = {dispatchesPerRun}   fused-spans/run = {fusedSpansPerRun}   inline-cascade/run = {inlineCascadePerRun}");
         output.WriteLine($"root-write-lease + executable-store ops/run: {counters}");
         output.WriteLine($"=> per durable checkpoint flush there is 1 acquire(read+write) + 1 release(read+write) + closure find(s); " +
-                         $"lease writes/run ≈ {counters.Acquire + counters.Release + counters.Renew} fsync-scale, vs {docs.TotalCount} checkpoint-marker fsyncs.");
+                         $"lease writes/run ≈ {counters.Acquire + counters.Release + counters.Renew} fsync-scale, vs {commitCount} checkpoint-marker fsyncs.");
 
         await harness.DisposeAsync();
         if (store is IAsyncDisposable ad) await ad.DisposeAsync();
@@ -245,7 +240,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
 
         var queueOps = counters.QEnqueue + counters.QDequeue + counters.QDelete + counters.QConsume +
                        counters.QClaim + counters.QComplete + counters.QRelease;
-        return new RunCounts(docs.TotalCount, queueOps, counters.Find, dispatchesPerRun, fusedSpansPerRun, inlineCascadePerRun, stopwatch.ElapsedMilliseconds);
+        return new RunCounts(commitCount, queueOps, counters.Find, dispatchesPerRun, fusedSpansPerRun, inlineCascadePerRun, stopwatch.ElapsedMilliseconds);
     }
 
     // In-memory substrate variant (no Groundwork/Sqlite): coalesced, none / D1 / D1+D2. Commits counted from the
