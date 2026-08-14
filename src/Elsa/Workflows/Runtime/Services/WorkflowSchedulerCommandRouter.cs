@@ -45,10 +45,11 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _admissionController = admissionController;
         // Read once per router, which is once per dispatched command (the router is scoped). This is a host-wide
         // constant, so the obvious place for it is a singleton — but a singleton injecting this enumerable would be a
-        // captive dependency: Groundwork contributes four of these as Scoped, and containers built with
-        // ValidateScopes refuse that outright. The per-command cost is enumerating a handful of marker objects and no
-        // I/O: only .Component is read here, and the one contribution with a dependency at all
-        // (GroundworkCheckpointDurabilityEvidence) takes the singleton GroundworkStoreSessionSource.
+        // captive dependency: Groundwork contributes five of these as Scoped (four runtime-store boundaries plus the
+        // distributed one), and containers built with ValidateScopes refuse that outright. The per-command cost is
+        // enumerating a handful of marker objects and no I/O: only .Component is read here, and the one contribution
+        // with a dependency at all (GroundworkCheckpointDurabilityEvidence) takes the singleton
+        // GroundworkStoreSessionSource.
         _hasResumptionRedriver = durabilityEvidence?.Any(evidence =>
             string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) ?? false;
     }
@@ -194,14 +195,11 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// absent one reads as "no re-driver", so a router composed by hand refuses in the conservative direction: it
     /// writes nothing and tells the caller to retry, rather than parking work nobody has been shown to own.</para>
     /// <para>What that evidence establishes is that the sweep is <b>registered</b>, not that it runs — the same caveat
-    /// the alteration pump carries above: <c>RuntimeResumptionPumpTask</c> is an <c>IRecurringTask</c>, so it runs only
-    /// where the Tasks domain schedules it. A host that calls <c>WorkflowsRuntimeResumptionFeature.ConfigureServices</c>
-    /// directly and composes no Tasks host therefore contributes the evidence, parks, and never sweeps, reproducing
-    /// #1320 in a composition this rule reads as safe; a shell-composed host does not, because that feature declares
-    /// <c>DependsOn = { "Tasks" }</c>. The hosts the refusal itself reaches are the hand-composed and in-memory ones,
-    /// which compose <c>AddWorkflowRuntime</c> (or <c>WorkflowsRuntimeApi</c>) and no resumption feature — not
-    /// Groundwork-backed shells, since all nine Groundwork persistence shell features declare
-    /// <c>DependsOn = { "WorkflowsRuntimeResumption" }</c>.</para>
+    /// the alteration pump carries above, <c>RuntimeResumptionPumpTask</c> being likewise an <c>IRecurringTask</c>. So
+    /// a host that composes the feature but no Tasks host contributes the evidence, parks, and never sweeps, which is
+    /// #1320 again in a composition this rule reads as safe. Which hosts reach the refusal, and why a shell-composed
+    /// one does not, live with the rest of this rule's reachability arithmetic in the admission entry of
+    /// <c>EXTENSION_POINTS.md</c> rather than being restated here.</para>
     /// <para>That swallow is systemic rather than an <c>AlterWorkflow</c> curiosity: <c>ContinueVolatileWait</c> and
     /// <c>DeliverSignal</c> have no handler anywhere and no faulting fallback either, and <c>NotifyParentActivity</c>
     /// shares that only on a host composing no <c>ActivitiesRuntimeFeature</c>, which registers its handler. So
