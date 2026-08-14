@@ -408,11 +408,13 @@ public sealed class RuntimeAdmissionControlTests
     public async Task Router_ShedsAResumeWithoutQueueingWhenNoResumptionRedriverIsComposed()
     {
         // #1320, resolution 1. Parking is a promise that someone re-drives the item, and only
-        // WorkflowsRuntimeResumptionFeature makes that true — AddWorkflowRuntime composes the gate but not the sweep,
-        // so "durable stores, no sweep" is what a host composing the runtime and a Groundwork provider actually is.
-        // On such a host the parked item would have no owner at all, so the refusal degrades to the start shape:
-        // nothing durable written, nothing drained, and the caller's retry left as the only re-driver. Refusing loudly
-        // is the deliberate direction over a Deferred that reads like a delivery and silently is not one.
+        // WorkflowsRuntimeResumptionFeature makes that true — AddWorkflowRuntime composes the gate but not the sweep.
+        // The reachable host is therefore a hand-composed or in-memory one, which is catalog-legal and is the shape
+        // most fixtures use; NOT a Groundwork-backed one, since all nine Groundwork persistence shell features declare
+        // DependsOn "WorkflowsRuntimeResumption" and so auto-enable the sweep. On a host without it the parked item
+        // would have no owner at all, so the refusal degrades to the start shape: nothing durable written, nothing
+        // drained, and the caller's retry left as the only re-driver. Refusing loudly is the deliberate direction over
+        // a Deferred that reads like a delivery and silently is not one.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var drainOrchestrator = new RecordingDrainOrchestrator();
         var router = NewRouter(queue, AlwaysShed, drainOrchestrator, hasRedriver: false);
@@ -747,23 +749,15 @@ public sealed class RuntimeAdmissionControlTests
     // named" would promise a delivery nobody owns and fail here rather than pass.
     private static IEnumerable<IWorkflowDispatchDurabilityEvidence> DurabilityEvidence(bool hasRedriver)
     {
-        string[] components = hasRedriver
-            ?
-            [
-                WorkflowDispatchDurabilityComponents.Checkpoint,
-                WorkflowDispatchDurabilityComponents.DispatchStore,
-                WorkflowDispatchDurabilityComponents.Outbox,
-                WorkflowDispatchDurabilityComponents.Scheduler,
-                WorkflowDispatchDurabilityComponents.Resumption
-            ]
-            :
-            [
-                WorkflowDispatchDurabilityComponents.Checkpoint,
-                WorkflowDispatchDurabilityComponents.DispatchStore,
-                WorkflowDispatchDurabilityComponents.Outbox,
-                WorkflowDispatchDurabilityComponents.Scheduler
-            ];
-        return components
+        string[] durableProviderComponents =
+        [
+            WorkflowDispatchDurabilityComponents.Checkpoint,
+            WorkflowDispatchDurabilityComponents.DispatchStore,
+            WorkflowDispatchDurabilityComponents.Outbox,
+            WorkflowDispatchDurabilityComponents.Scheduler
+        ];
+        return durableProviderComponents
+            .Concat(hasRedriver ? [WorkflowDispatchDurabilityComponents.Resumption] : [])
             .Select(component => new WorkflowDispatchDurabilityEvidence(component, WorkflowDispatchDurabilityLevel.Durable))
             .ToArray();
     }

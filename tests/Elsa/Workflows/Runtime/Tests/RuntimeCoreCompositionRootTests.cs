@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -289,14 +290,54 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.Equal(WorkflowExecutionStatus.Cancelled, workflowState!.Status);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AddWorkflowRuntime_ParksAShedResumeOnlyWhenAResumptionRedriverIsComposed(bool composeResumption)
+    {
+        // #1320 through the container, not through a hand-built router. Every other test of this rule constructs
+        // WorkflowSchedulerCommandRouter directly, so nothing pinned that the DI-composed one is handed the evidence
+        // enumerable at all: rewriting its registration as an explicit factory omitting durabilityEvidence — the
+        // prevailing style around it in RuntimeCoreServiceCollectionExtensions — would turn parking off on every
+        // durable host while the suite stayed green. Driven both ways from one composition so the assertion is the
+        // difference the evidence makes, not a property the container has either way.
+        var services = new ServiceCollection();
+        // Wins the TryAddSingleton in the composition root. StaticLimit clamps the controller's whole range to one
+        // dispatch unit; on its own that still admits, because a lone command is never shed, so the held charge below
+        // is the other half of forcing the refusal.
+        services.AddSingleton(new RuntimeAdmissionOptions { StaticLimit = 1 });
+        services.AddWorkflowRuntime();
+        services.AddLogging();
+        if (composeResumption)
+            new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        // Opened on a separate async flow on purpose: a charge is ambient (AsyncLocal) and a command dispatched under
+        // an ambient charge takes the nested-command exemption, so opening it inline would admit the very command
+        // this test needs shed. The in-flight count it leaves behind is a plain field and outlives that flow.
+        using var heldCharge = await Task.Run(provider.GetRequiredService<IRuntimeAdmissionLoadSignal>().OpenCharge);
+        using var scope = provider.CreateScope();
+        var router = scope.ServiceProvider.GetRequiredService<WorkflowSchedulerCommandRouter>();
+
+        var result = await router.ProcessAsync(NewEnvelope(1, kind: WorkflowExecutionCommandKind.ResumeBookmark));
+
+        Assert.True(result.Shed);
+        Assert.False(result.DrainPerformed);
+        Assert.Equal(composeResumption, result.ShedWorkQueued);
+        var queued = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAsync(new RuntimeSchedulerWorkQuery("wfexec-scopes"));
+        Assert.Equal(composeResumption ? 1 : 0, queued.Items.Count);
+    }
+
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
-        WorkflowExecutionPartition? partition = null)
+        WorkflowExecutionPartition? partition = null,
+        WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.RunSchedulerWork)
     {
         var command = new WorkflowExecutionCommand(
             $"command-{index}",
             "wfexec-scopes",
-            WorkflowExecutionCommandKind.RunSchedulerWork,
+            kind,
             Now,
             null,
             new Dictionary<string, string>());
