@@ -14,6 +14,14 @@ namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 public sealed class AspNetCoreIdentityProviderEvidenceTests
 {
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.60";
+    // The Groundwork family the live-runtime smoke below runs against, not an evidence-provenance
+    // value: it moves with the package pins in Directory.Packages.props in the same unit of work that
+    // moves them, exactly like CurrentGroundworkVersion in GroundworkTargetBaselineTests and
+    // CurrentPackageGroundworkVersion in GroundworkCoverageLedgerTests. The checked-in artifacts stay
+    // frozen at AcceptedEvidenceGroundworkVersion and are never reinterpreted through this constant.
+    // It sat at preview.103 through four package-pin bumps (preview.111, preview.114, preview.120,
+    // and preview.131) because this project runs only in the nightly, which could not restore the
+    // Groundwork tool (#1323) and so never reported it.
     private const string CurrentGroundworkVersion = "0.0.1-preview.131";
     private static readonly Lazy<JsonSchema> EvidenceSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(EvidenceSchemaPath(RepositoryRoot()))));
