@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
@@ -42,7 +43,7 @@ public static class DistributedGroundworkStorageManifest
     public const string ListPendingExecutionIdsQuery = "list-visible-command-executions";
     public const string CountPendingCommandsQuery = "count-pending-commands-by-execution";
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa-workflows-runtime-distributed"),
         new StorageManifestOwner("elsa.workflows.runtime.distributed"),
         new StorageManifestVersion(SchemaVersion),
@@ -52,7 +53,12 @@ public static class DistributedGroundworkStorageManifest
             CommandTransportUnit()
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Physical storage is declared per unit above; the manifest still declares the shared Groundwork
+        // document envelope itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     private static StorageUnit PlacementUnit()
     {
@@ -306,16 +312,13 @@ public static class DistributedGroundworkStorageManifest
             []);
     }
 
-    // Groundwork's required positional StorageUnit constructor still carries the legacy physicalization argument;
-    // PhysicalStorage below is authoritative.
-#pragma warning disable GW0001
     private static StorageUnit Unit(
         string documentKind,
         string label,
         PhysicalTableDefinition table,
         IReadOnlyList<LogicalIndexDeclaration> indexes,
         IReadOnlyList<BoundedQueryDeclaration> queries) =>
-        new(
+        StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             label,
             StorageIntent.PortableDocument(),
@@ -324,17 +327,11 @@ public static class DistributedGroundworkStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(table),
                 indexes,
-                queries)
-        };
-#pragma warning restore GW0001
+                queries));
 
     private static ProjectedColumnDefinition OrdinalKeyProjection(string path) =>
         StringProjection(

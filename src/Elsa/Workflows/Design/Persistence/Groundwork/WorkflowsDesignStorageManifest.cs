@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -91,7 +92,7 @@ public static class WorkflowsDesignStorageManifest
         new(DraftIdField, PhysicalSortDirection.Descending)
     ];
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa-workflows-design"),
         new StorageManifestOwner("elsa.workflows.design"),
         new StorageManifestVersion(SchemaVersion),
@@ -102,7 +103,12 @@ public static class WorkflowsDesignStorageManifest
             LayoutUnit()
         ],
         new HashSet<string> { "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Physical storage is declared per unit above; the manifest still declares the shared Groundwork
+        // document envelope itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     private static StorageUnit DefinitionUnit()
     {
@@ -262,10 +268,8 @@ public static class WorkflowsDesignStorageManifest
         ProjectedColumnDefinition[] columns,
         LogicalIndexDeclaration[] logicalIndexes,
         PhysicalIndexDefinition[] physicalIndexes,
-        BoundedQueryDeclaration[] boundedQueries)
-    {
-#pragma warning disable GW0001 // Required bridge-release constructor value; the legacy declarations above are intentionally empty.
-        var unit = new StorageUnit(
+        BoundedQueryDeclaration[] boundedQueries) =>
+        StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             label,
             StorageIntent.PortableDocument(),
@@ -274,20 +278,11 @@ public static class WorkflowsDesignStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, Envelope, physicalIndexes)),
                 logicalIndexes,
-                boundedQueries)
-        };
-    }
+                boundedQueries));
 
     private static LogicalIndexDeclaration LogicalIndex(
         string identity,

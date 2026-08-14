@@ -15,8 +15,7 @@ public sealed class DistributedGroundworkStorageManifestSource : IGroundworkStor
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            DistributedGroundworkStorageManifest.Create());
+        var manifest = DistributedGroundworkStorageManifest.Create();
 
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,

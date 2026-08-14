@@ -1,6 +1,8 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -32,7 +34,7 @@ public static class PublishingGroundworkStorageManifest
     public const string ExpiresAtField = "expiresAt";
     public const string ReceiptExpiresAtField = "receiptExpiresAt";
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa-workflows-publishing"),
         new StorageManifestOwner("elsa.workflows.publishing"),
         new StorageManifestVersion(SchemaVersion),
@@ -64,14 +66,35 @@ public static class PublishingGroundworkStorageManifest
                     QuerySortSupport.Ascending)])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Every unit stores its documents in the shared Groundwork document table, so the manifest declares
+        // that table itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
-    private static StorageUnit Unit(string kind, string label, IndexDeclaration[] indexes, PortableQueryDeclaration[] queries) => new(
-        new StorageUnitIdentity(kind), label, StorageIntent.PortableDocument(), LifecyclePolicy.Mutable,
-        IdentityPolicy.StringId(), TenancyPolicy.Scoped, ConcurrencyPolicy.Optimistic(), SerializationPolicy.Json(),
-        indexes, queries, PhysicalizationPolicy.Portable);
+    private static StorageUnit Unit(
+        string kind,
+        string label,
+        IReadOnlyList<SharedDocumentsIndex> indexes,
+        IReadOnlyList<BoundedQueryDeclaration> queries)
+    {
+        // The unit and its shared-documents recipe must agree on tenancy: the recipe prefixes every
+        // physical index with the storage-scope column exactly when the unit is tenant-scoped.
+        var tenancy = TenancyPolicy.Scoped;
+        return StorageUnit.Create(
+            new StorageUnitIdentity(kind),
+            label,
+            StorageIntent.PortableDocument(),
+            LifecyclePolicy.Mutable,
+            IdentityPolicy.StringId(),
+            tenancy,
+            ConcurrencyPolicy.Optimistic(),
+            SerializationPolicy.Json(),
+            SharedDocumentsStorage.Create(kind, tenancy, indexes, queries));
+    }
 
-    private static PortableQueryDeclaration Query(
+    private static BoundedQueryDeclaration Query(
         string name,
         string index,
         IReadOnlySet<PortableQueryOperation>? operations = null,
@@ -82,14 +105,21 @@ public static class PublishingGroundworkStorageManifest
         sortSupport,
         QueryPagingSupport.Offset);
 
-    private static IndexDeclaration Keyword(string identity, string field) => new(
-        identity, [new IndexField(field)], IndexValueKind.Keyword, false, true,
-        MissingValueBehavior.Excluded, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex Keyword(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.Keyword,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static IndexDeclaration DateTime(string identity, string field) => new(
-        identity, [new IndexField(field)], IndexValueKind.DateTime, false, true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex DateTime(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.DateTime,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 }

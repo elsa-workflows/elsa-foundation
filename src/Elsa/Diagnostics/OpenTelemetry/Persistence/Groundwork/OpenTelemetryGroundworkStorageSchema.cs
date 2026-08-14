@@ -167,14 +167,12 @@ public static class OpenTelemetryGroundworkStorageSchema
         return Unit(
             documentKind,
             label,
-            IdentityPolicy.StringId(stringCasePolicy: StringIdentityCasePolicy.UnicodeOrdinalIgnoreCase)) with
-        {
-            PhysicalStorage = new(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 versionedLogicalIndexes,
-                versionedQueries)
-        };
+                versionedQueries),
+            IdentityPolicy.StringId(stringCasePolicy: StringIdentityCasePolicy.UnicodeOrdinalIgnoreCase));
     }
 
     private static StorageUnit LedgerUnit()
@@ -207,23 +205,22 @@ public static class OpenTelemetryGroundworkStorageSchema
             linkedProjectedColumns:
             [new ProjectedColumnDefinition("createdAt", "createdAt", PortablePhysicalType.DateTime, IsNullable: false)],
             linkedProjectionLogicalName: "elsa_open_telemetry_capture_operation_indexes");
-        return Unit(OperationLedgerKind, "OpenTelemetry capture operation ledger") with
-        {
-            PhysicalStorage = new(
+        return Unit(
+            OperationLedgerKind,
+            "OpenTelemetry capture operation ledger",
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 [createdAt],
-                [route])
-        };
+                [route]));
     }
 
     private static StorageUnit Unit(
         string documentKind,
         string label,
-        IdentityPolicy? identityPolicy = null)
-    {
-#pragma warning disable GW0001 // PhysicalStorage on the returned unit is the authoritative declaration.
-        return new(
+        StorageUnitPhysicalStorage physicalStorage,
+        IdentityPolicy? identityPolicy = null) =>
+        StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             label,
             StorageIntent.PortableDocument(),
@@ -232,11 +229,7 @@ public static class OpenTelemetryGroundworkStorageSchema
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-    }
+            physicalStorage);
 
     private static ProjectedColumnDefinition Column(
         string path,

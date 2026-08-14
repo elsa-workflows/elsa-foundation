@@ -1,7 +1,6 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
@@ -22,19 +21,18 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </summary>
 public class GroundworkManifestPhysicalStorageGoldenTests
 {
-    // Each factory mirrors the corresponding production manifest source's composition path,
-    // including the legacy physicalization wrapper where that source still applies it.
+    // Each factory mirrors the corresponding production manifest source's composition path.
     private static readonly IReadOnlyDictionary<string, Func<StorageManifest>> Manifests =
         new Dictionary<string, Func<StorageManifest>>(StringComparer.Ordinal)
         {
             ["runtime"] = ElsaRuntimeStorageManifest.CreatePhysicalized,
             ["design-atomic-write"] = GroundworkDesignAtomicWriteStorageManifest.Create,
-            ["publishing"] = () => LegacyGroundworkStorageManifestPhysicalizer.Physicalize(PublishingGroundworkStorageManifest.Create()),
+            ["publishing"] = PublishingGroundworkStorageManifest.Create,
             ["studio-preferences"] = StudioPreferencesStorageManifest.Create,
-            ["activities-design"] = () => LegacyGroundworkStorageManifestPhysicalizer.Physicalize(ActivitiesDesignStorageManifest.Create()),
-            ["workflows-design"] = () => LegacyGroundworkStorageManifestPhysicalizer.Physicalize(WorkflowsDesignStorageManifest.Create()),
-            ["distributed"] = () => LegacyGroundworkStorageManifestPhysicalizer.Physicalize(DistributedGroundworkStorageManifest.Create()),
-            ["identity"] = () => LegacyGroundworkStorageManifestPhysicalizer.Physicalize(IdentityStorageManifest.Create()),
+            ["activities-design"] = ActivitiesDesignStorageManifest.Create,
+            ["workflows-design"] = WorkflowsDesignStorageManifest.Create,
+            ["distributed"] = DistributedGroundworkStorageManifest.Create,
+            ["identity"] = IdentityStorageManifest.Create,
             ["secrets"] = SecretsStorageManifest.Create,
             ["opentelemetry"] = OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest
         };
