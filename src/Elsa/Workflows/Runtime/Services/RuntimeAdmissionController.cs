@@ -16,6 +16,11 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// and start shedding for no reason. So the limit only moves on a sample admitted at half the limit or more, which is
 /// also why a host that never saturates never sheds.</para>
 ///
+/// <para><b>Nor does a sample that dispatched nothing.</b> A gated command that never reached a scheduler dispatch —
+/// <c>AlterWorkflow</c> (#1325) is the shipped case — spent its time on something other than the writer this limit
+/// bounds, so its duration says nothing about capacity and its fast exits would otherwise collapse the latency
+/// baseline every later sample is judged against.</para>
+///
 /// <para><b>A lone command is never shed.</b> With nothing in flight there is no contention to protect against, and
 /// refusing would mean a host that can serve exactly one request at a time serves none. A command dispatched from
 /// inside an already-admitted one — a child workflow started during its parent's drain — is never shed either: the
@@ -109,6 +114,20 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     {
         var duration = _timeProvider.GetElapsedTime(completion.StartTimestamp);
         if (duration <= TimeSpan.Zero)
+            return;
+
+        // ChargedUnits is the seed unit plus one per RecordDispatch, so <= 1 is exactly "recorded no dispatch" — and a
+        // completion that recorded none is not a drain-shaped sample: its duration measures whatever else the command
+        // did, not contention on the writer this limit bounds. Deliberately ABOVE the first-sample calibration below,
+        // because the baseline update takes a faster sample outright: fed in as an ordinary sample one sub-millisecond
+        // exit collapses the baseline every later sample is judged against, and fed in as the FIRST one it becomes
+        // that baseline with no decay path back. AlterWorkflow (#1325) is what made this reachable by construction —
+        // it reaches no RecordDispatch() call site in any shipped composition; a dispatching alteration would need a
+        // custom preflight handler or a replaced executor, and would then report ChargedUnits > 1 and be sampled
+        // normally. It is not the only source, though, so this guard is not dead code if AlterWorkflow is ever
+        // ungated: a drain that finds the workflow already terminal, one stopped by the pause gate, and one whose
+        // AcquireNextAsync loses the item to a concurrent sweep all reach the drainer and record no dispatch too.
+        if (completion.ChargedUnits <= 1)
             return;
 
         lock (_limitLock)
