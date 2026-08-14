@@ -62,6 +62,11 @@ public sealed class GroundworkDocumentStoreFixtureContinuationTests
         Assert.NotNull(second.NextContinuation);
     }
 
+    // This route declares latest-per-key selection with QueryPagingSupport.None — the shape the
+    // production queue issues — so it has no pages to resume across. The retired legacy adapter
+    // modelled a paged continuation the declaration never offered, which is why this asserts the
+    // unpaged snapshot instead. Multi-page keyset behavior is still covered above, on the scheduler
+    // work-item route that does declare paging.
     [Fact]
     public async Task PendingSchedulerExecutionsPage_IsAnUnpagedLatestPerExecutionSnapshot()
     {

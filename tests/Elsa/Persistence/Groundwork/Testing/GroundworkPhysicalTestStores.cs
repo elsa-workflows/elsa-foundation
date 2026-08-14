@@ -46,19 +46,15 @@ public static class GroundworkPhysicalTestStores
             SqliteQueries(store, manifest, provider));
     }
 
+    /// <summary>Compiles the target for callers that hold only a provider identity.</summary>
     public static GroundworkBoundedDocumentStoreRouter SqliteQueries(
         SqlitePhysicalDocumentStore store,
         StorageManifest manifest,
-        ProviderIdentity provider)
-    {
-        var target = PhysicalSchemaTargetCompiler.Compile(
+        ProviderIdentity provider) =>
+        SqliteQueries(
+            store,
             manifest,
-            provider,
-            SqliteGroundworkCapabilities.PhysicalNames);
-        return Route(
-            target.Routes,
-            route => SqlitePhysicalQueryRuntime.Create(store, manifest, route, target.Provider));
-    }
+            PhysicalSchemaTargetCompiler.Compile(manifest, provider, SqliteGroundworkCapabilities.PhysicalNames));
 
     public static GroundworkBoundedDocumentStoreRouter SqliteQueries(
         SqlitePhysicalDocumentStore store,

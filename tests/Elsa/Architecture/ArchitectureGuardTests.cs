@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -344,7 +345,9 @@ public sealed class ArchitectureGuardTests
             (Name: "LegacyPhysicalStorageBridge", Pattern: @"\bLegacyPhysicalStorageBridge\b"),
             (Name: "PhysicalizationPolicy.", Pattern: @"\bPhysicalizationPolicy\s*\."),
             (Name: "IndexPhysicalizationPolicy", Pattern: @"\bIndexPhysicalizationPolicy\b"),
-            (Name: "DocumentStoreFactory.CreateAsync(", Pattern: @"\bDocumentStoreFactory\s*\.\s*CreateAsync\s*\(")
+            // The provider prefix is part of the identifier, so the word boundary has to sit before it:
+            // "\bDocumentStoreFactory" can never match "SqliteDocumentStoreFactory".
+            (Name: "DocumentStoreFactory.CreateAsync(", Pattern: @"\b\w*DocumentStoreFactory\s*\.\s*CreateAsync\s*\(")
         };
 
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
@@ -481,6 +484,68 @@ public sealed class ArchitectureGuardTests
             var comment = line.IndexOf("//", StringComparison.Ordinal);
             return comment >= 0 && line[(comment + 2)..].Trim().Length > 0;
         }
+    }
+
+    /// <summary>
+    /// A justification comment is not enough on its own: a suppression that swallows unrelated code
+    /// hides the next legacy usage someone adds inside it. Every member declared within a GW region
+    /// must therefore name one of the retired types the region exists to suppress.
+    /// </summary>
+    [Fact]
+    public void Every_groundwork_warning_suppression_covers_only_the_declarations_it_suppresses()
+    {
+        string[] suppressedTypes = ["DocumentStoreQuery", "PortableDocumentQuery", "IndexDeclaration", "PortableQueryDeclaration", "PhysicalizationPolicy", "IndexPhysicalizationPolicy", "DocumentStoreFactory"];
+        var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
+            .SelectMany(candidate => StrayMembers(File.ReadAllLines(candidate.File))
+                .Select(stray => $"{candidate.RelativePath}({stray.Line}): {stray.Declaration}"))
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            "A GW suppression must wrap only the declarations that need it; move these out of the suppressed region:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
+
+        IEnumerable<(int Line, string Declaration)> StrayMembers(string[] lines)
+        {
+            var suppressed = false;
+            for (var index = 0; index < lines.Length; index++)
+            {
+                var trimmed = lines[index].TrimStart();
+                if (trimmed.StartsWith("#pragma warning disable GW", StringComparison.Ordinal))
+                    suppressed = true;
+                else if (trimmed.StartsWith("#pragma warning restore GW", StringComparison.Ordinal))
+                    suppressed = false;
+                else if (suppressed && IsMemberDeclaration(trimmed) &&
+                         !suppressedTypes.Any(type => Signature(lines, index).Contains(type, StringComparison.Ordinal)))
+                    yield return (index + 1, trimmed);
+            }
+        }
+
+        // The full signature, which routinely wraps its parameters across lines: read on until the
+        // parameter list closes, so a legacy type named on a continuation line still counts.
+        static string Signature(string[] lines, int start)
+        {
+            var text = new StringBuilder();
+            var depth = 0;
+            for (var index = start; index < lines.Length; index++)
+            {
+                text.Append(lines[index]);
+                depth += lines[index].Count(character => character == '(') - lines[index].Count(character => character == ')');
+                if (depth <= 0 && index > start || (depth == 0 && lines[index].Contains(')', StringComparison.Ordinal)))
+                    break;
+            }
+
+            return text.ToString();
+        }
+
+        // A member signature, as opposed to a body line: an accessibility keyword followed by a
+        // parameter list, which is the shape every stub declaration takes.
+        static bool IsMemberDeclaration(string trimmed) =>
+            (trimmed.StartsWith("public ", StringComparison.Ordinal) ||
+             trimmed.StartsWith("private ", StringComparison.Ordinal) ||
+             trimmed.StartsWith("internal ", StringComparison.Ordinal) ||
+             trimmed.StartsWith("protected ", StringComparison.Ordinal)) &&
+            trimmed.Contains('(', StringComparison.Ordinal);
     }
 
     /// <summary>Every first-party C# file under the given repository roots, excluding build output.</summary>

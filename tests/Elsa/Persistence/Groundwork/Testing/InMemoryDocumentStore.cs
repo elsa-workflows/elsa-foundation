@@ -134,32 +134,6 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
         return Task.FromResult<IReadOnlyList<DocumentEnvelope>>(matches.ToArray());
     }
 
-    private string ResolveIndexFieldPath(string documentKind, string indexName)
-    {
-        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
-        var path = unit.PhysicalStorage?.LogicalIndexes
-            .SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path;
-        return path ?? throw new UndeclaredDocumentIndexException(documentKind, indexName);
-    }
-
-    private static string? ReadField(string contentJson, string path)
-    {
-        using var doc = JsonDocument.Parse(contentJson);
-        var element = doc.RootElement;
-        foreach (var segment in path.Split('.'))
-        {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(segment, out element))
-                return null;
-        }
-
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.String => element.GetString(),
-            _ => element.ToString()
-        };
-    }
-
     // Only the clause-free "all documents of a kind" form (with optional offset paging) is implemented.
     // A query carrying comparison clauses was never in this double's remit.
     public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default)
@@ -185,6 +159,32 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
 #pragma warning restore GW0004
+
+    private string ResolveIndexFieldPath(string documentKind, string indexName)
+    {
+        var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
+        var path = unit.PhysicalStorage?.LogicalIndexes
+            .SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path;
+        return path ?? throw new UndeclaredDocumentIndexException(documentKind, indexName);
+    }
+
+    private static string? ReadField(string contentJson, string path)
+    {
+        using var doc = JsonDocument.Parse(contentJson);
+        var element = doc.RootElement;
+        foreach (var segment in path.Split('.'))
+        {
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(segment, out element))
+                return null;
+        }
+
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => element.GetString(),
+            _ => element.ToString()
+        };
+    }
 
     public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
         => ExecuteQueryAsync(query, BoundedQueryResultOperation.Documents, cancellationToken);
