@@ -19,22 +19,22 @@ public sealed class GroundworkAlterationManifestTests
 
         var plan = Assert.Single(
             manifest.StorageUnits,
-            unit => unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind);
+            unit => unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationPlanDocumentKind).PhysicalStorage!;
         var job = Assert.Single(
             manifest.StorageUnits,
-            unit => unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind);
+            unit => unit.Identity.Value == ElsaRuntimeStorageManifest.WorkflowAlterationJobDocumentKind).PhysicalStorage!;
 
-        Assert.Contains(plan.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanByCollection);
-        Assert.Contains(plan.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndIdempotency);
-        Assert.Contains(plan.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyUniqueness && index.IsUnique);
-        Assert.Contains(plan.Queries, query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowAlterationPlansQuery);
-        Assert.Contains(plan.Queries, query => query.Identity == ElsaRuntimeStorageManifest.FindWorkflowAlterationPlanByTenantAndIdempotencyQuery);
+        Assert.Contains(plan.LogicalIndexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanByCollection);
+        Assert.Contains(plan.LogicalIndexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanByTenantAndIdempotency);
+        Assert.Contains(plan.LogicalIndexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationPlanIdempotencyUniqueness && index.IsUnique);
+        Assert.Contains(plan.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowAlterationPlansQuery);
+        Assert.Contains(plan.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.FindWorkflowAlterationPlanByTenantAndIdempotencyQuery);
 
-        Assert.Contains(job.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlan);
-        Assert.Contains(job.Indexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationJobByClaimability);
-        Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery);
-        Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery);
-        Assert.Contains(job.Queries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery);
+        Assert.Contains(job.LogicalIndexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationJobByPlan);
+        Assert.Contains(job.LogicalIndexes, index => index.Identity == ElsaRuntimeStorageManifest.WorkflowAlterationJobByClaimability);
+        Assert.Contains(job.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowAlterationJobsByPlanQuery);
+        Assert.Contains(job.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsQuery);
+        Assert.Contains(job.BoundedQueries, query => query.Identity == ElsaRuntimeStorageManifest.ListClaimableWorkflowAlterationJobsByPlanQuery);
     }
 
     [Fact]

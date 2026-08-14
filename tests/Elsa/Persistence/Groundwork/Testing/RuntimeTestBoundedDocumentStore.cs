@@ -16,34 +16,34 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         if (IsOrderedRangeQuery(query))
             return await QueryOrderedRangeAsync(query, cancellationToken);
 
-        var (index, path) = query.QueryIdentity switch
+        var path = query.QueryIdentity switch
         {
             ElsaRuntimeStorageManifest.ListAllQuery =>
-                (ElsaRuntimeStorageManifest.ByCollectionIndex, ElsaRuntimeStorageManifest.CollectionField),
+                ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery =>
-                (ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListByArtifactQuery =>
-                (ElsaRuntimeStorageManifest.ByArtifactIndex, ElsaRuntimeStorageManifest.ArtifactIdField),
+                ElsaRuntimeStorageManifest.ArtifactIdField,
             ElsaRuntimeStorageManifest.ListByParentActivityExecutionQuery =>
-                (ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex, ElsaRuntimeStorageManifest.ParentActivityExecutionIdField),
+                ElsaRuntimeStorageManifest.ParentActivityExecutionIdField,
             ElsaRuntimeStorageManifest.ListBookmarksByStimulusQuery =>
-                (ElsaRuntimeStorageManifest.ByStimulusIndex, ElsaRuntimeStorageManifest.StimulusHashField),
+                ElsaRuntimeStorageManifest.StimulusHashField,
             ElsaRuntimeStorageManifest.ListBookmarksByStimulusTypeQuery =>
-                (ElsaRuntimeStorageManifest.ByStimulusTypeIndex, ElsaRuntimeStorageManifest.StimulusTypeField),
+                ElsaRuntimeStorageManifest.StimulusTypeField,
             ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery =>
-                (ElsaRuntimeStorageManifest.ByTemplateHashIndex, ElsaRuntimeStorageManifest.TemplateHashField),
+                ElsaRuntimeStorageManifest.TemplateHashField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery =>
-                (ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildQuery =>
-                (ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByStatusQuery =>
-                (ElsaRuntimeStorageManifest.ByStatusIndex, ElsaRuntimeStorageManifest.StatusField),
+                ElsaRuntimeStorageManifest.StatusField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery =>
-                (ElsaRuntimeStorageManifest.ByTestScopeIndex, ElsaRuntimeStorageManifest.TestScopeIdField),
+                ElsaRuntimeStorageManifest.TestScopeIdField,
             "list-by-execution-scope" =>
-                (ElsaRuntimeStorageManifest.ByExecutionScopeIndex, ElsaRuntimeStorageManifest.ExecutionScopeIdField),
+                ElsaRuntimeStorageManifest.ExecutionScopeIdField,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery =>
-                (ElsaRuntimeStorageManifest.ByPublicationIndex, ElsaRuntimeStorageManifest.PublicationIdField),
+                ElsaRuntimeStorageManifest.PublicationIdField,
             _ => throw new InvalidOperationException($"Undeclared Runtime test query '{query.QueryIdentity}'.")
         };
         var clause = query.Clauses.Count == 1
@@ -55,15 +55,19 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         if (comparison.Path != path || comparison.Operator != QueryComparisonOperator.Equal || comparison.Values.Count != 1)
             throw new InvalidOperationException($"Runtime test query '{query.QueryIdentity}' has an unexpected shape.");
 
+        // Filtered here rather than through an index-named closed query: migrated units declare their
+        // indexes on their physical storage, which the legacy closed-query surface cannot resolve.
 #pragma warning disable GW0004
-        var matches = await documents.QueryAsync(
-            new DocumentStoreQuery(query.DocumentKind, index, comparison.Values[0]!),
-            cancellationToken);
+        var all = await documents.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
 #pragma warning restore GW0004
+        var matches = all.Documents
+            .Where(document => Matches(document, comparison))
+            .OrderBy(document => document.Id, StringComparer.Ordinal)
+            .ToArray();
         IEnumerable<DocumentEnvelope> page = matches.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             page = page.Take(take);
-        return new DocumentQueryResult(page.ToArray(), matches.Count);
+        return new DocumentQueryResult(page.ToArray(), matches.Length);
     }
 
     private async Task<DocumentQueryResult> QueryOrderedRangeAsync(
