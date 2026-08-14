@@ -10,15 +10,12 @@ namespace Elsa.Persistence.Groundwork.Composition;
 /// </summary>
 public static class LegacyGroundworkStorageManifestPhysicalizer
 {
-    public const string SharedDocumentsLogicalName = "groundwork_documents";
-    public const string CanonicalJsonColumnName = "content_json";
-    public const int LegacyStringProjectionLength = 450;
+    public const string SharedDocumentsLogicalName = SharedDocumentsStorage.LogicalName;
+    public const string CanonicalJsonColumnName = SharedDocumentsStorage.CanonicalJsonColumnName;
+    public const int LegacyStringProjectionLength = SharedDocumentsStorage.StringProjectionLength;
 
-    private static readonly SharedStorageBinding SharedDocumentsBinding = new(SharedDocumentsLogicalName);
-    private static readonly SharedDocumentStorageDefinition SharedDocumentsDefinition = new(
-        SharedDocumentsBinding,
-        SharedDocumentsLogicalName,
-        new DocumentEnvelopeDefinition(CanonicalJsonColumn: CanonicalJsonColumnName));
+    private static readonly SharedStorageBinding SharedDocumentsBinding = SharedDocumentsStorage.Binding;
+    private static readonly SharedDocumentStorageDefinition SharedDocumentsDefinition = SharedDocumentsStorage.Definition;
 
     /// <summary>Physicalizes every legacy unit without changing the authoritative manifest identity.</summary>
     public static StorageManifest Physicalize(StorageManifest manifest)

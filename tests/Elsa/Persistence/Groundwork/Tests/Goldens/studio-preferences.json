@@ -1,0 +1,25 @@
+{
+  "manifest": "elsa-studio-preferences",
+  "owner": "elsa.studio.preferences",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [
+    {
+      "binding": "groundwork_documents",
+      "featureDefaultLogicalName": "groundwork_documents",
+      "canonicalJsonColumn": "content_json",
+      "schemaVersion": 1
+    }
+  ],
+  "storageUnits": [
+    {
+      "identity": "studioPreference",
+      "definitionDigest": "858fc151408107bab061a860914e7b861b2e9bda702e799e0e8e5d49373b2217",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

@@ -190,7 +190,7 @@ internal static class WorkflowAlterationStoragePhysicalizer
         return (storage, definition);
     }
     private static ProjectedColumnDefinition Column(string name, string path, PortablePhysicalType type, int? length = null) =>
-        new(name, path, type, type == PortablePhysicalType.String ? length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength : null);
+        new(name, path, type, type == PortablePhysicalType.String ? length ?? SharedDocumentsStorage.StringProjectionLength : null);
     private static ProjectedColumnDefinition[] Columns(PhysicalTableDefinition definition, ProjectedColumnDefinition[] additions)
     {
         var additionsByPath = additions.ToDictionary(addition => addition.Path, StringComparer.Ordinal);

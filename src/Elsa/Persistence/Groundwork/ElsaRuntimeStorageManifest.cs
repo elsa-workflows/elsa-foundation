@@ -30,7 +30,7 @@ public static class ElsaRuntimeStorageManifest
     public const int WorkflowDispatchIdProjectionLength = 76;
     public const int PostCommitOutboxItemIdProjectionLength =
         RuntimePostCommitOutboxIdentity.MaximumProjectionLength;
-    public const int StimulusHashProjectionLength = LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength;
+    public const int StimulusHashProjectionLength = SharedDocumentsStorage.StringProjectionLength;
     public const int StimulusTypeProjectionLength = 256;
     public const int WorkflowTriggerBindingStimulusTypeProjectionLength = 240;
 

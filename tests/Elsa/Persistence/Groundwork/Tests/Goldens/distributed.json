@@ -1,0 +1,274 @@
+{
+  "manifest": "elsa-workflows-runtime-distributed",
+  "owner": "elsa.workflows.runtime.distributed",
+  "version": "1.1.0",
+  "sharedDocumentStorages": [
+    {
+      "binding": "groundwork_documents",
+      "featureDefaultLogicalName": "groundwork_documents",
+      "canonicalJsonColumn": "content_json",
+      "schemaVersion": 1
+    }
+  ],
+  "storageUnits": [
+    {
+      "identity": "executionCommandStreamHead",
+      "definitionDigest": "a637f260d75df93c915ecc39b736726d0d17a5f49f7f84bda3f4281ed4664706",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "executionCommandTransport",
+      "definitionDigest": "6ff1e45d44dd951022f67317470c7c2bb97bf21bebcc9a57a52509938d84995b",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "command-by-execution-sequence",
+          "fields": [
+            {
+              "path": "workflowExecutionIdKey"
+            },
+            {
+              "path": "sequence",
+              "valueKind": "Number"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "pending-command-by-execution-sequence",
+          "fields": [
+            {
+              "path": "collection"
+            },
+            {
+              "path": "workflowExecutionIdKey"
+            },
+            {
+              "path": "sequence",
+              "valueKind": "Number"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "count-pending-commands-by-execution",
+          "indexIdentity": "command-by-execution-sequence",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionIdKey",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Count"
+          ]
+        },
+        {
+          "identity": "lease-visible-commands-by-execution",
+          "indexIdentity": "command-by-execution-sequence",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "sequence",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionIdKey",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "visibleAt",
+              "valueKind": "DateTime",
+              "operations": [
+                "LessThanOrEqual"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-visible-command-executions",
+          "indexIdentity": "pending-command-by-execution-sequence",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Both",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionIdKey",
+              "direction": "Ascending"
+            },
+            {
+              "path": "sequence",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "visibleAt",
+              "valueKind": "DateTime",
+              "operations": [
+                "LessThanOrEqual"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ],
+          "latestPerKeyPath": "workflowExecutionIdKey"
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "executionPlacement",
+      "definitionDigest": "afbae10e84afc7bae483937f85fbe30d596fcfe4e42f288b473c4a47c4103cff",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "placement-by-owner-expiry",
+          "fields": [
+            {
+              "path": "ownerIdLookupKey"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "workflowExecutionIdKey"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-owned-live-placements",
+          "indexIdentity": "placement-by-owner-expiry",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "ownerIdLookupKey",
+              "direction": "Ascending"
+            },
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "workflowExecutionIdKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "ownerIdLookupKey",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "ownerIdComparisonKey",
+              "valueKind": "String",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

@@ -10,12 +10,12 @@ public static class StudioPreferencesStorageManifest
     public const string DocumentKind = "studioPreference";
 
     public static StorageManifest Create() =>
-        LegacyGroundworkStorageManifestPhysicalizer.Physicalize(new(
+        new StorageManifest(
             new StorageManifestIdentity("elsa-studio-preferences"),
             new StorageManifestOwner("elsa.studio.preferences"),
             new StorageManifestVersion(SchemaVersion),
             [
-                new StorageUnit(
+                StorageUnit.Create(
                     new StorageUnitIdentity(DocumentKind),
                     "Studio Preference",
                     StorageIntent.PortableDocument(),
@@ -27,10 +27,11 @@ public static class StudioPreferencesStorageManifest
                     TenancyPolicy.Global,
                     ConcurrencyPolicy.Optimistic(),
                     SerializationPolicy.Json(),
-                    [],
-                    [],
-                    PhysicalizationPolicy.Portable)
+                    SharedDocumentsStorage.Create(DocumentKind, TenancyPolicy.Global, [], []))
             ],
             new HashSet<string> { "schema-history", "optimistic-concurrency" },
-            []));
+            [])
+        {
+            SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+        };
 }
