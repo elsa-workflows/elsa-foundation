@@ -67,8 +67,7 @@ public sealed class DesignEvolutionProbeGroundworkStorageManifestSource : IGroun
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            DesignEvolutionProbeManifest.Create(FeatureIdentity, DesignEvolutionProbeManifest.ProbeKind, DesignEvolutionProbeManifest.ProbeKind));
+        var manifest = DesignEvolutionProbeManifest.Create(FeatureIdentity, DesignEvolutionProbeManifest.ProbeKind, DesignEvolutionProbeManifest.ProbeKind);
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity, manifest, [], [], [], []));
     }
@@ -86,8 +85,7 @@ public sealed class DesignEvolutionCollisionGroundworkStorageManifestSource : IG
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            DesignEvolutionProbeManifest.Create(FeatureIdentity, "designEvolutionCollisionProbe", "workflowDefinition"));
+        var manifest = DesignEvolutionProbeManifest.Create(FeatureIdentity, "designEvolutionCollisionProbe", "workflowDefinition");
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity, manifest, [], [], [], []));
     }
@@ -147,7 +145,12 @@ internal static class DesignEvolutionProbeManifest
             new StorageManifestVersion(SchemaVersion),
             [Unit(documentKind, tableLogicalName, columns, logicalIndexes, physicalIndexes, queries)],
             new HashSet<string> { "optimistic-concurrency" },
-            []);
+            [])
+        {
+            // Matches what the production families declare, so the probe never introduces a shared
+            // document storage difference into the evolution comparison.
+            SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+        };
     }
 
     private static StorageUnit Unit(

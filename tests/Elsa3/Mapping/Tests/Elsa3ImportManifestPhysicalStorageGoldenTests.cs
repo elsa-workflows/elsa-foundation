@@ -1,4 +1,3 @@
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa3.Activities.Design.Import.Persistence.Groundwork;
 using Xunit;
@@ -15,6 +14,6 @@ public class Elsa3ImportManifestPhysicalStorageGoldenTests
     [Fact]
     public void Manifest_physical_surface_matches_committed_golden() =>
         GroundworkManifestGoldenVerifier.Verify(
-            LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Elsa3ImportStorageManifest.Create()),
+            Elsa3ImportStorageManifest.Create(),
             "tests", "Elsa3", "Mapping", "Tests", "Goldens", "elsa3-import.json");
 }

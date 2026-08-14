@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
@@ -154,7 +155,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementVersionsQuery = "management-versions-identity-asc";
     public const string ManagementExpiredQuery = "management-expired";
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa-activities-design"),
         new StorageManifestOwner("elsa.activities.design"),
         new StorageManifestVersion(SchemaVersion),
@@ -304,7 +305,12 @@ public static class ActivitiesDesignStorageManifest
                 [])
         ],
         new HashSet<string> { "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Physical storage is declared per unit above; the manifest still declares the shared Groundwork
+        // document envelope itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     private static StorageUnit ActivityDefinitionUnit()
     {
@@ -589,7 +595,6 @@ public static class ActivitiesDesignStorageManifest
         string pageQuery,
         string logicalIdField)
     {
-        var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
         var columns = new[]
         {
             Column("resource_id", ManagementResourceIdField, false, IdentityColumnLength),
@@ -773,14 +778,15 @@ public static class ActivitiesDesignStorageManifest
                     ],
                     isUnique: true)
             ]);
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+        return BaseUnit(
+            documentKind,
+            label,
+            LifecyclePolicy.Mutable,
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(physical),
                 logicalIndexes,
-                boundedQueries)
-        };
+                boundedQueries));
     }
 
     private static StorageUnit ExplicitPhysicalUnit(
@@ -789,19 +795,17 @@ public static class ActivitiesDesignStorageManifest
         ProjectedColumnDefinition[] columns,
         LogicalIndexDeclaration[] logicalIndexes,
         PhysicalIndexDefinition[] physicalIndexes,
-        BoundedQueryDeclaration[] boundedQueries)
-    {
-        var unit = BaseUnit(documentKind, label, LifecyclePolicy.Mutable);
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+        BoundedQueryDeclaration[] boundedQueries) =>
+        BaseUnit(
+            documentKind,
+            label,
+            LifecyclePolicy.Mutable,
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(
                     PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, Envelope, physicalIndexes)),
                 logicalIndexes,
-                boundedQueries)
-        };
-    }
+                boundedQueries));
 
     private static LogicalIndexDeclaration LogicalIndex(
         string identity,
@@ -1158,21 +1162,23 @@ public static class ActivitiesDesignStorageManifest
             })
             .ToArray();
 
-        var unit = BaseUnit(documentKind, label, lifecycle);
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+        return BaseUnit(
+            documentKind,
+            label,
+            lifecycle,
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(documentKind, columns, Envelope, physicalIndexes)),
                 logicalIndexes,
-                boundedQueries)
-        };
+                boundedQueries));
     }
 
-    private static StorageUnit BaseUnit(string documentKind, string label, LifecyclePolicy lifecycle)
-    {
-#pragma warning disable GW0001 // Bridge-release constructor requirement; the legacy declaration collections are intentionally empty.
-        return new StorageUnit(
+    private static StorageUnit BaseUnit(
+        string documentKind,
+        string label,
+        LifecyclePolicy lifecycle,
+        StorageUnitPhysicalStorage physicalStorage) =>
+        StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             label,
             StorageIntent.PortableDocument(),
@@ -1181,11 +1187,7 @@ public static class ActivitiesDesignStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-    }
+            physicalStorage);
 
     private static string ColumnName(string path) => path switch
     {
