@@ -42,9 +42,9 @@ Drop `my-workflow-closure.json` into `/mnt/artifacts` and start the shell. At ac
 1. parses each closure file (malformed/unknown formatVersion → loud rejection, no partial import);
 2. validates the dependency closure against the envelope alone (missing child / hash mismatch / cycle → parent rejected) and recomputes each artifact's content hash (corrupted payload → rejected before persistence);
 3. runs the requirements preflight — consumer capabilities, storage drivers, **and** CLR activity-type presence — rejecting unsatisfiable artifacts **at import** with a diagnostic naming what's missing (never an `UnknownActivityTypeException` at first activation);
-4. activates survivors: mints an `import:{sourceId}:…` publication, recomputes trigger bindings, flips the definition's slot (latest-wins, exactly one active version per definition).
+4. activates survivors: mints an `import:{sourceId}:…` publication, recomputes trigger bindings **and recurring schedules**, notifies the trigger-index observers (routes refresh), and flips the definition's slot (latest-wins, exactly one active version per definition).
 
-Verify: start the workflow by artifact id via the runtime API, or fire its HTTP/timer stimulus — routing works because bindings were registered from the artifact. A mixed batch activates the satisfiable artifacts and rejects the rest individually.
+All gates run for a complete closure unit (root + dependencies) before anything is written — a failed unit writes nothing. Verify: start the workflow by artifact id via the runtime API, or fire its HTTP/timer stimulus — routing and timers work because the full projection set was activated from the artifact. A mixed batch activates the satisfiable closure units and rejects the rest individually.
 
 ## 3. Roll out v2 (US4)
 

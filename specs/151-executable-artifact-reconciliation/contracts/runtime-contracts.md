@@ -47,9 +47,11 @@ v1 implementation: JSON folder/file source configured by `JsonWorkflowArtifactRe
 ```csharp
 public interface IWorkflowArtifactReconciler
 {
-    /// One pass over all registered sources: parse → closure validation → requirements
-    /// gate → idempotency/supersession → activate. Per-artifact isolation: rejections are
-    /// diagnostics on the result, never batch failures.
+    /// One pass over all registered sources: parse → closure validation (envelope-only) →
+    /// hash recompute → requirements gate → idempotency/supersession → activate (full
+    /// projection set: bindings + recurring schedules + observer notification). Isolation
+    /// unit = the closure file: all gates before any write; a failing member rejects the
+    /// whole unit; rejections are diagnostics on the result, never batch failures.
     Task<WorkflowArtifactReconciliationResult> ReconcileAsync(CancellationToken ct = default);
 }
 ```
@@ -92,5 +94,5 @@ Strategy (§2.24.2 #9); fan-in via `TryAddEnumerable`; future targets contribute
 | Feature class | Id (`[ShellFeature]` name) | Project | DependsOn |
 |---|---|---|---|
 | `WorkflowsArtifactReconciliationFeature` (abstract, no attribute) | — | Runtime.Reconciliation | — |
-| `JsonWorkflowArtifactReconciliationFeature` | `JsonWorkflowArtifactReconciliation` | Runtime.Reconciliation | `Tasks` (+ calls `AddWorkflowRuntime()` itself, idempotent per ADR 0029) |
+| `JsonWorkflowArtifactReconciliationFeature` | `JsonWorkflowArtifactReconciliation` | Runtime.Reconciliation | `Tasks`, `WorkflowsRuntimeTriggers` (the trigger indexer/binding/schedule spine is registered by the triggers feature, not `AddWorkflowRuntime()`) — plus calls `AddWorkflowRuntime()` itself, idempotent per ADR 0029 |
 | `WorkflowsPublishingFeature` / `WorkflowsPublishingApiFeature` (modified) | existing | Publishing / Publishing.Api | unchanged |
