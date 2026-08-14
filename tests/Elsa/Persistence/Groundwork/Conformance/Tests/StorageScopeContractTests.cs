@@ -1,9 +1,11 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
@@ -88,7 +90,7 @@ public sealed class StorageScopeContractTests
             Assert.Equal("tenant-b", await LoadValueAsync(tenantB.DocumentStore, ScopedDocumentKind, "shared-id"));
             Assert.Null(await tenantB.DocumentStore.LoadAsync(ScopedDocumentKind, "only-in-a"));
             Assert.Null(await tenantB.DocumentStore.LoadAsync(ScopedDocumentKind, "missing"));
-            Assert.Equal<string>(["shared-id"], await QueryIdsAsync(tenantB.DocumentStore, ScopedDocumentKind));
+            Assert.Equal<string>(["shared-id"], await QueryIdsAsync(tenantB, ScopedDocumentKind));
 
             var wrongScopeUpdate = await tenantB.DocumentStore.SaveAsync(
                 Request(ScopedDocumentKind, "only-in-a", "must-not-write", expectedVersion: 1));
@@ -114,7 +116,7 @@ public sealed class StorageScopeContractTests
             var deleted = await tenantB.DocumentStore.DeleteAsync(
                 new DeleteDocumentRequest(ScopedDocumentKind, "shared-id", ExpectedVersion: 2));
             Assert.Equal(DocumentStoreWriteStatus.Deleted, deleted.Status);
-            Assert.Empty(await QueryIdsAsync(tenantB.DocumentStore, ScopedDocumentKind));
+            Assert.Empty(await QueryIdsAsync(tenantB, ScopedDocumentKind));
         }
 
         accessor.Current = PersistenceAccessContext.Global;
@@ -123,7 +125,7 @@ public sealed class StorageScopeContractTests
             Assert.Equal("global", await LoadValueAsync(global.DocumentStore, GlobalDocumentKind, "shared-id"));
             Assert.Equal<string>(
                 ["global-only", "shared-id"],
-                await QueryIdsAsync(global.DocumentStore, GlobalDocumentKind));
+                await QueryIdsAsync(global, GlobalDocumentKind));
 
             var updated = await global.DocumentStore.SaveAsync(
                 Request(GlobalDocumentKind, "shared-id", "global-updated", expectedVersion: 1));
@@ -131,7 +133,7 @@ public sealed class StorageScopeContractTests
             var deleted = await global.DocumentStore.DeleteAsync(
                 new DeleteDocumentRequest(GlobalDocumentKind, "global-only", ExpectedVersion: 1));
             Assert.Equal(DocumentStoreWriteStatus.Deleted, deleted.Status);
-            Assert.Equal<string>(["shared-id"], await QueryIdsAsync(global.DocumentStore, GlobalDocumentKind));
+            Assert.Equal<string>(["shared-id"], await QueryIdsAsync(global, GlobalDocumentKind));
         }
 
         accessor.Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"));
@@ -140,7 +142,7 @@ public sealed class StorageScopeContractTests
         Assert.Equal("tenant-a-only", await LoadValueAsync(reopenedTenantA.DocumentStore, ScopedDocumentKind, "only-in-a"));
         Assert.Equal<string>(
             ["only-in-a", "shared-id"],
-            await QueryIdsAsync(reopenedTenantA.DocumentStore, ScopedDocumentKind));
+            await QueryIdsAsync(reopenedTenantA, ScopedDocumentKind));
     }
 
     private static async Task AssertOrdinaryAccessBoundariesAsync(
@@ -327,11 +329,15 @@ public sealed class StorageScopeContractTests
         return json.RootElement.GetProperty("value").GetString();
     }
 
-    private static async Task<string[]> QueryIdsAsync(IDocumentStore store, string documentKind)
+    // Reads the kind through its declared list-all route, the same route the privileged across-scope
+    // read below uses; the ten-document bound is the one the retired kind-wide scan carried.
+    private static async Task<string[]> QueryIdsAsync(GroundworkStoreSession session, string documentKind)
     {
-#pragma warning disable GW0004
-        var result = await store.QueryAsync(new PortableDocumentQuery(documentKind, take: 10));
-#pragma warning restore GW0004
+        var result = await session.BoundedDocumentStore.QueryAsync(new DocumentQuery(
+            documentKind,
+            ListAllQuery,
+            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(CollectionField, documentKind))],
+            take: 10));
         return result.Documents.Select(document => document.Id).Order(StringComparer.Ordinal).ToArray();
     }
 
@@ -364,7 +370,9 @@ public sealed class StorageScopeContractTests
             Leases.Add(lease);
             return new GroundworkStoreSessionResources(
                 client.DocumentStore,
-                new ProviderTestBoundedDocumentStore(client.DocumentStore),
+                client.BoundedDocumentStore
+                    ?? throw new InvalidOperationException(
+                        "The provider driver did not expose a route-bound query runtime for the scope-contract manifest."),
                 lease);
         }
 
@@ -376,7 +384,8 @@ public sealed class StorageScopeContractTests
 
         private static StorageManifest Manifest { get; } = CreateManifest();
 
-#pragma warning disable GW0001, GW0002, GW0003
+        // Mirrors how the production manifests declare a shared-documents unit: one projected keyword index
+        // over the collection field, and the list-all bounded route bound to it.
         private static StorageManifest CreateManifest() => new(
             new StorageManifestIdentity("elsa-storage-scope-contract"),
             new StorageManifestOwner("elsa.tests"),
@@ -386,9 +395,12 @@ public sealed class StorageScopeContractTests
                 CreateUnit(GlobalDocumentKind, TenancyPolicy.Global)
             ],
             new HashSet<string>(),
-            []);
+            [])
+        {
+            SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+        };
 
-        private static StorageUnit CreateUnit(string identity, TenancyPolicy tenancy) => new(
+        private static StorageUnit CreateUnit(string identity, TenancyPolicy tenancy) => StorageUnit.Create(
             new StorageUnitIdentity(identity),
             identity,
             StorageIntent.PortableDocument(),
@@ -397,71 +409,27 @@ public sealed class StorageScopeContractTests
             tenancy,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [Keyword(ByCollectionIndex, CollectionField)],
-            [Query(ListAllQuery, ByCollectionIndex)],
-            PhysicalizationPolicy.Portable);
+            SharedDocumentsStorage.Create(
+                identity,
+                tenancy,
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query(ListAllQuery, ByCollectionIndex)]));
 
-        private static PortableQueryDeclaration Query(string identity, string indexIdentity) => new(
+        private static BoundedQueryDeclaration Query(string identity, string indexIdentity) => new(
             identity,
             indexIdentity,
             new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
             QuerySortSupport.None,
             QueryPagingSupport.Offset);
 
-        private static IndexDeclaration Keyword(string identity, string field) => new(
-            identity,
-            [new IndexField(field)],
-            IndexValueKind.Keyword,
-            false,
-            true,
-            MissingValueBehavior.Excluded,
-            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-            IndexPhysicalizationPolicy.Optimized);
-#pragma warning restore GW0001, GW0002, GW0003
-    }
-
-    /// <summary>
-    /// Adapts the standalone provider-driver surface to the route-bound query contract. Production
-    /// hosts obtain an admitted provider query runtime from their provider initializer instead.
-    /// </summary>
-    private sealed class ProviderTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
-    {
-        public async Task<DocumentQueryResult> QueryAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default)
-        {
-            Assert.Equal(ListAllQuery, query.QueryIdentity);
-            var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-            Assert.Equal(CollectionField, comparison.Path);
-            Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
-
-#pragma warning disable GW0004
-            var result = await documents.QueryAsync(
-                new DocumentStoreQuery(
-                    query.DocumentKind,
-                    ByCollectionIndex,
-                    Assert.Single(comparison.Values)!,
-                    query.Skip,
-                    query.Take),
-                cancellationToken);
-#pragma warning restore GW0004
-            return new DocumentQueryResult(result, result.Count);
-        }
-
-        public async Task<long> CountAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            (await QueryAsync(query, cancellationToken)).TotalCount;
-
-        public async Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            (await QueryAsync(query.Page(query.Skip, 1), cancellationToken)).Documents.FirstOrDefault();
-
-        public async Task<bool> AnyAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            await FirstOrDefaultAsync(query, cancellationToken) is not null;
+        private static SharedDocumentsIndex Keyword(string identity, string field) => new(
+            new LogicalIndexDeclaration(
+                identity,
+                [new IndexField(field)],
+                IndexValueKind.Keyword,
+                false,
+                MissingValueBehavior.Excluded),
+            Projected: true);
     }
 
     private sealed class TrackingClientLease(GroundworkProviderClient client) : IAsyncDisposable

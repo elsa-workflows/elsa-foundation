@@ -506,6 +506,7 @@ public sealed class RuntimeTransitionContractTests
             return envelope;
         }
 
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) =>
@@ -525,6 +526,7 @@ public sealed class RuntimeTransitionContractTests
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) =>
             inner.AnyAsync(query, cancellationToken);
+        #pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,

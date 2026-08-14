@@ -480,6 +480,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw exception;
 
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
 
@@ -491,6 +492,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw exception;
+        #pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             throw exception;
@@ -525,6 +527,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             innerStore.DeleteAsync(request, cancellationToken);
 
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             innerStore.QueryAsync(query, cancellationToken);
 
@@ -536,6 +539,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             innerStore.AnyAsync(query, cancellationToken);
+        #pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             throw exception;
@@ -555,6 +559,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             innerStore.DeleteAsync(request, cancellationToken);
 
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             innerStore.QueryAsync(query, cancellationToken);
 
@@ -566,6 +571,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             innerStore.AnyAsync(query, cancellationToken);
+        #pragma warning restore GW0004
 
         public async Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             new CommitMarkerFailingUnitOfWork(await innerStore.BeginAsync(scope, cancellationToken));

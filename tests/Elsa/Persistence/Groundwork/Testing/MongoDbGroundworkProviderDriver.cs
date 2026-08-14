@@ -46,6 +46,10 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     private static readonly string PackageVersion =
         GroundworkProviderDriverSupport.PackageVersion(typeof(MongoDbDocumentStoreFactory).Assembly);
 
+    /// <summary>The driver owns its database outright, so safe pending schema work is applied on open.</summary>
+    private static MongoDbPhysicalDocumentStoreOptions AutoApplySchema =>
+        new() { AutoApplyOnStartup = true };
+
     public override GroundworkProviderDescriptor Descriptor { get; } = new(
         "mongodb",
         "groundwork-mongodb",
@@ -101,15 +105,16 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
                 $"MongoDB standalone topology probe failed to start ({exception.GetType().Name}); provider output was suppressed.");
         }
 
-        MongoDbDocumentStoreHandle? handle = null;
+        MongoDbPhysicalDocumentStoreOpenHandle? handle = null;
         try
         {
-            handle = await MongoDbDocumentStoreFactory.CreateAsync(
+            handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
                 standalone.GetConnectionString(),
                 $"elsa_groundwork_standalone_{Guid.NewGuid():N}",
-                ElsaRuntimeStorageManifest.Create(),
+                ElsaRuntimeStorageManifest.CreatePhysicalized(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
                 GroundworkTestAccess.DefaultScoped,
+                options: AutoApplySchema,
                 cancellationToken: cancellationToken);
             try
             {
@@ -237,7 +242,7 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         CancellationToken cancellationToken) =>
         OpenClientCoreAsync(
             clientId,
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             GroundworkTestAccess.DefaultScoped,
             cancellationToken: cancellationToken);
 
@@ -249,16 +254,18 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
     {
         // The string factory constructs a new MongoClient for every handle. Two open driver clients are
         // therefore backed by separate driver clusters as well as separate Groundwork store adapters.
-        var handle = await MongoDbDocumentStoreFactory.CreateAsync(
+        var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
             RequiredConnectionString(),
             _databaseName,
             manifest,
             new ProviderIdentity("groundwork-mongodb", PackageVersion),
             access,
+            options: AutoApplySchema,
             cancellationToken: cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton(handle.Store)
             .AddSingleton<IDocumentStore>(handle.Store)
+            .AddSingleton<IBoundedDocumentStore>(handle.Store)
             .BuildServiceProvider();
 
         return new GroundworkProviderClient(
@@ -593,23 +600,25 @@ public sealed class MongoDbGroundworkProviderDriver : GroundworkProviderDriver, 
         if (!IsExpectedPrimary(firstHello) || !IsExpectedPrimary(secondHello))
             throw UnsupportedTopology();
 
-        MongoDbDocumentStoreHandle? firstHandle = null;
-        MongoDbDocumentStoreHandle? secondHandle = null;
+        MongoDbPhysicalDocumentStoreOpenHandle? firstHandle = null;
+        MongoDbPhysicalDocumentStoreOpenHandle? secondHandle = null;
         try
         {
-            firstHandle = await MongoDbDocumentStoreFactory.CreateAsync(
+            firstHandle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
                 connectionString,
                 _databaseName,
-                ElsaRuntimeStorageManifest.Create(),
+                ElsaRuntimeStorageManifest.CreatePhysicalized(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
                 GroundworkTestAccess.DefaultScoped,
+                options: AutoApplySchema,
                 cancellationToken: cancellationToken);
-            secondHandle = await MongoDbDocumentStoreFactory.CreateAsync(
+            secondHandle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
                 connectionString,
                 _databaseName,
-                ElsaRuntimeStorageManifest.Create(),
+                ElsaRuntimeStorageManifest.CreatePhysicalized(),
                 new ProviderIdentity("groundwork-mongodb", PackageVersion),
                 GroundworkTestAccess.DefaultScoped,
+                options: AutoApplySchema,
                 cancellationToken: cancellationToken);
             if (ReferenceEquals(firstHandle.Store, secondHandle.Store))
                 throw UnsupportedTopology();

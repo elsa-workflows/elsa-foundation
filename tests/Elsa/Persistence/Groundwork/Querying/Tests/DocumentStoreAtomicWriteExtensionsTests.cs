@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
@@ -57,7 +58,7 @@ public class GroundworkDocumentStoreAtomicWriteExtensionsTests
         new StorageManifestOwner("elsa.persistence.groundwork.querying.tests"),
         new StorageManifestVersion(SchemaVersion),
         [
-            new StorageUnit(
+            StorageUnit.Create(
                 new StorageUnitIdentity(Kind),
                 "Thing",
                 StorageIntent.PortableDocument(),
@@ -66,10 +67,11 @@ public class GroundworkDocumentStoreAtomicWriteExtensionsTests
                 TenancyPolicy.Global,
                 ConcurrencyPolicy.Optimistic(),
                 SerializationPolicy.Json(),
-                [],
-                [],
-                PhysicalizationPolicy.Portable)
+                SharedDocumentsStorage.Create(Kind, TenancyPolicy.Global, [], []))
         ],
         new HashSet<string>(),
-        []);
+        [])
+    {
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 }

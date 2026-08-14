@@ -213,12 +213,22 @@ public sealed partial class GroundworkRuntimeCheckpointWriterTests
         await Task.WhenAll(tasks);
     }
 
+    // Counted through the ledger's declared list-all route rather than an unbounded scan; the page bound is
+    // far above the marker count any of these commits produce.
+    private const int MarkerPageBound = 1024;
+
     private static async Task<int> CountCheckpointMarkersAsync(IDocumentStore store)
     {
-#pragma warning disable GW0004
-        var result = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
-        return (int)result.TotalCount;
+        var result = await ((IBoundedDocumentStore)store).QueryAsync(new DocumentQuery(
+            ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
+            ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
+            [
+                DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ElsaRuntimeStorageManifest.CollectionField,
+                    ElsaRuntimeStorageManifest.CheckpointCommitCollection))
+            ],
+            take: MarkerPageBound));
+        return result.Documents.Count;
     }
 
     private static void DeleteSqliteFiles(string dbPath)

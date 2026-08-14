@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
@@ -8,7 +9,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
 /// Keeps the legacy in-memory/standalone SQLite fixtures focused on Publishing behavior while production
 /// hosts execute the same <see cref="DocumentQuery"/> requests through certified physical runtimes.
 /// </summary>
-internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+internal sealed class PublishingTestBoundedDocumentStore(IDocumentEnumerationSource documents) : IBoundedDocumentStore
 {
     private static readonly IReadOnlyDictionary<string, (string Index, string Path)> Queries =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
@@ -25,7 +26,7 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore document
                 (PublishingGroundworkStorageManifest.ByExpiresAtIndex, PublishingGroundworkStorageManifest.ExpiresAtField)
         };
 
-    public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
     {
         var declaration = Resolve(query);
         var isExpiry = query.QueryIdentity == PublishingGroundworkStorageManifest.DeleteExpiredQuery;
@@ -42,15 +43,14 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore document
                 $"Publishing test query '{query.QueryIdentity}' must order by '{declaration.Path}' ascending.");
         }
 
-        // The declared surface no longer carries the portable per-index read path these fixtures used to
-        // translate into, so evaluate the declared predicate over the document kind here — the same
-        // predicate the physical runtimes push down to their projected columns in production.
-#pragma warning disable GW0004
-        var all = await documents.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
-#pragma warning restore GW0004
+        // The declared surface carries no kind-wide read path, and standing in for one is exactly this
+        // double's job — so it enumerates the double's own contents through the test-only enumeration seam
+        // and evaluates the declared predicate here, the same predicate the physical runtimes push down to
+        // their projected columns in production.
+        var all = documents.Snapshot(query.DocumentKind);
         var matches = isExpiry
-            ? MatchExpired(all.Documents, declaration.Path, comparison.Values[0]!)
-            : all.Documents
+            ? MatchExpired(all, declaration.Path, comparison.Values[0]!)
+            : all
                 .Where(document => string.Equals(
                     ReadPath(document, declaration.Path),
                     comparison.Values[0],
@@ -61,11 +61,11 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore document
         var window = matches.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             window = window.Take(take);
-        return new DocumentQueryResult(window.ToArray(), matches.Length);
+        return Task.FromResult(new DocumentQueryResult(window.ToArray(), matches.Length));
     }
 
     private static DocumentEnvelope[] MatchExpired(
-        IReadOnlyList<DocumentEnvelope> documents,
+        IReadOnlyCollection<DocumentEnvelope> documents,
         string path,
         string cutoffValue)
     {

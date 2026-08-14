@@ -529,14 +529,15 @@ public sealed class ActivityDraftTestRunTests
 
         try
         {
-            var generation1Documents = await OpenSqliteAsync(connectionString);
+            var (generation1Documents, generation1Queries) = await OpenSqliteAsync(connectionString);
             try
             {
                 await using var generation1 = BuildProvider(
                     generation1Documents,
                     clock,
                     authoring,
-                    externalPayloadStore: externalPayloads);
+                    externalPayloadStore: externalPayloads,
+                    queries: generation1Queries);
                 first = await StartAsync(generation1, authoring.Draft.Revision, "same-request");
                 var duplicate = await StartAsync(generation1, authoring.Draft.Revision, "same-request");
                 second = await StartAsync(generation1, authoring.Draft.Revision, "new-rerun");
@@ -609,13 +610,14 @@ public sealed class ActivityDraftTestRunTests
                 await DisposeStoreAsync(generation1Documents);
             }
 
-            var generation2Documents = await OpenSqliteAsync(connectionString);
+            var (generation2Documents, generation2Queries) = await OpenSqliteAsync(connectionString);
             try
             {
                 await using var generation2 = BuildRuntimeOnlyProvider(
                     generation2Documents,
                     clock,
-                    externalPayloads);
+                    externalPayloads,
+                    generation2Queries);
                 await ResumeAsync(generation2, first.WorkflowExecutionId);
                 await ResumeAsync(generation2, second.WorkflowExecutionId);
                 var resumedFirstStatus = await StatusAsync(generation2, first.WorkflowExecutionId);
@@ -666,14 +668,15 @@ public sealed class ActivityDraftTestRunTests
                 await DisposeStoreAsync(generation2Documents);
             }
 
-            var generation3Documents = await OpenSqliteAsync(connectionString);
+            var (generation3Documents, generation3Queries) = await OpenSqliteAsync(connectionString);
             try
             {
                 await using var generation3 = BuildProvider(
                     generation3Documents,
                     clock,
                     authoring,
-                    externalPayloadStore: externalPayloads);
+                    externalPayloadStore: externalPayloads,
+                    queries: generation3Queries);
                 var completed = await generation3.GetRequiredService<IActivityDraftTestRunService>().GetAsync(first.TestRunId);
                 Assert.Equal(WorkflowExecutionStatus.Completed.ToString(), completed.Status);
                 Assert.Equal(outerActivityExecutionId, completed.OuterActivityExecutionId);
@@ -765,7 +768,8 @@ public sealed class ActivityDraftTestRunTests
         bool makeFirstDispatchAmbiguous = false,
         string? persistenceScope = null,
         IActivityDraftTestRunCancellationPolicy? cancellationPolicy = null,
-        IExternalPayloadStore? externalPayloadStore = null)
+        IExternalPayloadStore? externalPayloadStore = null,
+        IBoundedDocumentStore? queries = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -793,7 +797,7 @@ public sealed class ActivityDraftTestRunTests
         new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddSingleton(documents);
-        services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
+        services.AddSingleton(queries ?? new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkPublishingStores();
         if (persistenceScope is not null)
@@ -841,7 +845,8 @@ public sealed class ActivityDraftTestRunTests
     private static ServiceProvider BuildRuntimeOnlyProvider(
         IDocumentStore documents,
         TimeProvider clock,
-        IExternalPayloadStore? externalPayloadStore = null)
+        IExternalPayloadStore? externalPayloadStore = null,
+        IBoundedDocumentStore? queries = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -854,14 +859,17 @@ public sealed class ActivityDraftTestRunTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
         services.AddSingleton(documents);
-        services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(documents));
+        services.AddSingleton(queries ?? new RuntimeTestBoundedDocumentStore(documents));
         services.AddGroundworkRuntimeStores();
 
         return services.BuildServiceProvider();
     }
 
-    private static async Task<IDocumentStore> OpenSqliteAsync(string connectionString) =>
-        await SqliteDocumentStoreFactory.CreateAsync(
+    // The real provider serves the bounded routes here, so the run is driven through the same compiled
+    // query plans a host would admit rather than a test evaluator.
+    private static async Task<GroundworkPhysicalTestStore<SqlitePhysicalDocumentStore>> OpenSqliteAsync(
+        string connectionString) =>
+        await GroundworkPhysicalTestStores.OpenSqliteAsync(
             connectionString,
             CombinedStorageManifest(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
@@ -871,13 +879,19 @@ public sealed class ActivityDraftTestRunTests
     {
         var runtime = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var publishing = PublishingGroundworkStorageManifest.Create();
-        return new(
+        return new StorageManifest(
             new("elsa-activity-test-run-tests"),
             new("elsa.tests"),
             new("1.0.0"),
             runtime.StorageUnits.Concat(publishing.StorageUnits).ToArray(),
             new HashSet<string> { "optimistic-concurrency" },
-            []);
+            [])
+        {
+            SharedDocumentStorages = runtime.SharedDocumentStorages
+                .Concat(publishing.SharedDocumentStorages)
+                .DistinctBy(storage => storage.Binding.Value)
+                .ToArray()
+        };
     }
 
     private static async ValueTask DisposeStoreAsync(IDocumentStore store)

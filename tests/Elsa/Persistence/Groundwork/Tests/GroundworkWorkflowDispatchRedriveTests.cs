@@ -385,7 +385,7 @@ public sealed class GroundworkWorkflowDispatchRedriveTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members delegated by the decorator.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
 

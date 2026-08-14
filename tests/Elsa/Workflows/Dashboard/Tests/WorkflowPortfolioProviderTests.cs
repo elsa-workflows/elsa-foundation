@@ -31,10 +31,18 @@ public sealed class WorkflowPortfolioProviderTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-portfolio-{Guid.NewGuid():N}.db");
         try
         {
+            // The Groundwork dashboard SQL still reads workflow definitions, drafts and executions out of the shared
+            // groundwork_documents table. Since wave 3 every manifest declares its physical storage, and a physically
+            // opened store routes those kinds into dedicated tables (workflowDefinition, workflowDefinitionDraft,
+            // workflow_execution_states) instead — so this fixture can only reproduce what the data source reads by
+            // opening on the retired portable surface. The data source is what has to change; until it does, this open
+            // stays portable and the package bump will surface it here.
+            #pragma warning disable GW0005
             var store = await SqliteDocumentStoreFactory.CreateAsync(
                 $"Data Source={path}", new GroundworkAllFeaturesDeploymentSchema().CreateManifest(),
                 new ProviderIdentity("groundwork-sqlite", "1.0.0"),
                 DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
+            #pragma warning restore GW0005
             foreach (var definition in Enumerable.Range(0, 105).Select(index => Definition(index)))
                 await SaveDefinitionAsync(store, definition);
             foreach (var draft in Enumerable.Range(0, 30).Select(index => Draft(index)))

@@ -687,11 +687,11 @@ public sealed class GroundworkStoreSessionFactoryTests
             DeleteDocumentRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-#pragma warning disable GW0004
         public Task<DocumentQueryResult> QueryAsync(
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -703,7 +703,7 @@ public sealed class GroundworkStoreSessionFactoryTests
         public Task<bool> AnyAsync(
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
-#pragma warning restore GW0004
+        #pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,

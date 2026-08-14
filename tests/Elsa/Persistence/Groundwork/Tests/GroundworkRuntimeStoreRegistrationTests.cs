@@ -313,7 +313,6 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
     }
 
-#pragma warning disable GW0004 // This test decorator intentionally implements the complete compatibility surface.
     private sealed class CountingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
         private int _loadCount;
@@ -335,6 +334,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; each delegates to the inner store.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
 
@@ -346,13 +346,13 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
 
         public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
     }
-#pragma warning restore GW0004
 
     private sealed class ReplacementWorkflowExecutableStore : IWorkflowExecutableStore
     {

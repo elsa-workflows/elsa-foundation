@@ -161,8 +161,7 @@ internal static class DesignEvolutionProbeManifest
         PhysicalIndexDefinition[] physicalIndexes,
         BoundedQueryDeclaration[] boundedQueries)
     {
-#pragma warning disable GW0001 // Required bridge-release constructor value; the legacy declarations above are intentionally empty.
-        var unit = new StorageUnit(
+        return StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             "Design evolution probe",
             StorageIntent.PortableDocument(),
@@ -171,19 +170,11 @@ internal static class DesignEvolutionProbeManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(tableLogicalName, columns, indexes: physicalIndexes)),
                 logicalIndexes,
-                boundedQueries)
-        };
+                boundedQueries));
     }
 
     private static LogicalIndexDeclaration LogicalIndex(string identity, string[] fields, bool unique = false) =>

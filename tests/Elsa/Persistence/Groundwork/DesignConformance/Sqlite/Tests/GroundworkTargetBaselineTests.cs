@@ -99,7 +99,7 @@ public sealed class GroundworkTargetBaselineTests
         Assert.True(drift.Length == 0, JsonSerializer.Serialize(drift, JsonOptions));
 
         var telemetrySnapshot = telemetry.Snapshot();
-        var packageFamilyVersion = PackageVersion(typeof(SqliteDocumentStore).Assembly);
+        var packageFamilyVersion = PackageVersion(typeof(SqlitePhysicalDocumentStore).Assembly);
         var schemaToolVersion = GroundworkSchemaCli.ToolPackageVersion();
         Assert.Equal(CurrentGroundworkVersion, PackageVersion(typeof(StorageManifest).Assembly));
         Assert.Equal(CurrentGroundworkVersion, PackageVersion(typeof(IDocumentStore).Assembly));

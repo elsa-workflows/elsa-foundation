@@ -84,7 +84,7 @@ public sealed class GroundworkScopedDocumentStoreTests
         await store.SaveAsync(new SaveDocumentRequest("kind", "id", "1.0.0", "{}"));
         await store.LoadAsync("kind", "id");
         await store.DeleteAsync(new DeleteDocumentRequest("kind", "id"));
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Drives the adapter's compatibility surface on purpose: this test proves each retired member still takes an ordinary scoped session.
         await store.QueryAsync(new DocumentStoreQuery("kind", "by-value", "value"));
         await store.QueryAsync(new PortableDocumentQuery("kind"));
         await store.FirstOrDefaultAsync(new PortableDocumentQuery("kind"));
@@ -431,7 +431,7 @@ public sealed class GroundworkScopedDocumentStoreTests
             return Task.FromResult(DocumentStoreWriteResult.NotFound);
         }
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the recording test double.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default)

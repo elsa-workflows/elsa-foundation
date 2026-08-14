@@ -227,13 +227,15 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
 
         await using var client = await driver.OpenClientAsync();
         var store = client.DocumentStore;
+        var queries = client.BoundedDocumentStore
+            ?? throw new InvalidOperationException("The PostgreSQL driver did not expose a bounded query runtime.");
 
         try
         {
             // Warmup pass (discarded), then the measured curve. Commits accumulate on the one shared DB, so each level
             // reports the DELTA in checkpoint-commit documents (== that level's runs; deterministically 1/run).
-            await RunPostgresLevelAsync(store, concurrency: 8, warmup: true);
-            var commitsSoFar = await CountCheckpointCommitsAsync(store);
+            await RunPostgresLevelAsync(store, queries, concurrency: 8, warmup: true);
+            var commitsSoFar = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(queries);
 
             output.WriteLine($"=== backend: SharedPostgres · hot-loop×{HotLoopLength} · Coalesced+ReplaySafe ===");
             output.WriteLine("N | totalWall(ms) | p50(ms) | p95(ms) | min(ms) | max(ms) | aggCommits | commits/run | throughput(runs/s)");
@@ -245,8 +247,8 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                 // the benchmark: record the level that could not complete and stop.
                 try
                 {
-                    var (totalWallMs, latencies) = await RunPostgresLevelAsync(store, concurrency, warmup: false);
-                    var after = await CountCheckpointCommitsAsync(store);
+                    var (totalWallMs, latencies) = await RunPostgresLevelAsync(store, queries, concurrency, warmup: false);
+                    var after = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(queries);
                     var levelCommits = after - commitsSoFar;
                     commitsSoFar = after;
                     var throughput = totalWallMs > 0 ? concurrency / (totalWallMs / 1000.0) : double.NaN;
@@ -441,7 +443,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         for (var index = 0; index < concurrency; index++)
         {
             var identity = IdentityFor(index);
-            var harness = NewAdmissionHarness(shared.Store, identity, $"wfexec-{index}", NewActivityIdPool(index), signal, controller, diagnostics, options);
+            var harness = NewAdmissionHarness(shared.Store, shared.Queries, identity, $"wfexec-{index}", NewActivityIdPool(index), signal, controller, diagnostics, options);
             harness.InitializeActivityTypes();
             harnesses.Add(harness);
             executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.ExternalLeaf, identity));
@@ -485,6 +487,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
 
     private static WorkflowExecutionHarness NewAdmissionHarness(
         IDocumentStore store,
+        IBoundedDocumentStore queries,
         WorkflowExecutableIdentity identity,
         string executionId,
         IEnumerable<string> activityIds,
@@ -497,7 +500,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             .ConfigureServices(services =>
             {
                 services.AddSingleton(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton(queries);
                 services.AddGroundworkRuntimeStores();
                 services.AddCoalescingRuntimeCheckpointPersistence(configure => configure.MaxSegmentCheckpoints = HotLoopSegmentCap);
                 services.RemoveAll<RuntimeBurstCacheOptions>();
@@ -529,14 +532,14 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         for (var index = 0; index < concurrency; index++)
         {
             var identity = IdentityFor(index);
-            var harness = NewDurableHarness(shared.Store, identity, $"wfexec-{index}", NewActivityIdPool(index), coordinator);
+            var harness = NewDurableHarness(shared.Store, shared.Queries, identity, $"wfexec-{index}", NewActivityIdPool(index), coordinator);
             harness.InitializeActivityTypes();
             harnesses.Add(harness);
             executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.NoOpLeaf, identity));
         }
 
         var (totalWallMs, latencies) = await TimeConcurrentRunsAsync(harnesses, executables);
-        var aggregateCommits = await CountCheckpointCommitsAsync(shared.Store);
+        var aggregateCommits = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(shared.Queries);
 
         foreach (var harness in harnesses)
             await harness.DisposeAsync();
@@ -563,7 +566,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         long SoloFlushes,
         long DegradedBatches);
 
-    private async Task<(double TotalWallMs, double[] SortedLatencies)> RunPostgresLevelAsync(IDocumentStore store, int concurrency, bool warmup)
+    private async Task<(double TotalWallMs, double[] SortedLatencies)> RunPostgresLevelAsync(IDocumentStore store, IBoundedDocumentStore queries, int concurrency, bool warmup)
     {
         var harnesses = new List<WorkflowExecutionHarness>(concurrency);
         var executables = new List<WorkflowExecutable>(concurrency);
@@ -575,7 +578,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             var identity = new WorkflowExecutableIdentity($"artifact-{tag}", $"definition-{tag}", "version-1", "1.0.0", "sha256:test");
             var executionId = $"wfexec-{tag}";
             var activityIds = Enumerable.Range(0, 64).Select(slot => $"actexec-{tag}-{slot}").ToArray();
-            var harness = NewDurableHarness(store, identity, executionId, activityIds);
+            var harness = NewDurableHarness(store, queries, identity, executionId, activityIds);
             harness.InitializeActivityTypes();
             harnesses.Add(harness);
             executables.Add(BenchmarkWorkflows.HotLoop(HotLoopLength, BenchmarkWorkflows.NoOpLeaf, identity));
@@ -589,13 +592,15 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
 
     private async Task<ConcurrencyResult> MeasureAsync(Backend backend, LeafShape shape, int concurrency, bool warmup)
     {
-        var trackedStores = new List<(IDocumentStore Store, string Path)>();
+        var trackedStores = new List<(IDocumentStore Store, IBoundedDocumentStore Queries, string Path)>();
         IDocumentStore? sharedStore = null;
+        IBoundedDocumentStore? sharedQueries = null;
 
         if (backend == Backend.SharedSqlite)
         {
             var shared = await NewSqliteStoreAsync();
             sharedStore = shared.Store;
+            sharedQueries = shared.Queries;
             trackedStores.Add(shared);
         }
 
@@ -619,10 +624,10 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                     case Backend.IsolatedSqlite:
                         var isolated = await NewSqliteStoreAsync();
                         trackedStores.Add(isolated);
-                        harness = NewDurableHarness(isolated.Store, identity, executionId, activityIds);
+                        harness = NewDurableHarness(isolated.Store, isolated.Queries, identity, executionId, activityIds);
                         break;
                     case Backend.SharedSqlite:
-                        harness = NewDurableHarness(sharedStore!, identity, executionId, activityIds);
+                        harness = NewDurableHarness(sharedStore!, sharedQueries!, identity, executionId, activityIds);
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(backend), backend, null);
@@ -641,10 +646,10 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             // isolated: sum per-run stores; in-memory: none.
             long? aggregateCommits = backend == Backend.InMemory ? null : 0;
             if (backend == Backend.SharedSqlite)
-                aggregateCommits = await CountCheckpointCommitsAsync(sharedStore!);
+                aggregateCommits = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(sharedQueries!);
             else if (backend == Backend.IsolatedSqlite)
-                foreach (var (store, _) in trackedStores)
-                    aggregateCommits += await CountCheckpointCommitsAsync(store);
+                foreach (var (_, queries, _) in trackedStores)
+                    aggregateCommits += await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(queries);
 
             return new ConcurrencyResult(totalWallMs, Percentile(latencies, 50), Percentile(latencies, 95),
                 latencies.Length > 0 ? latencies[0] : double.NaN,
@@ -659,7 +664,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             // failing level would leak N providers and a temp database on the way out.
             foreach (var harness in harnesses)
                 await harness.DisposeAsync();
-            foreach (var (store, path) in trackedStores)
+            foreach (var (store, _, path) in trackedStores)
                 await DisposeStoreAsync(store, path);
         }
     }
@@ -703,11 +708,12 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .Build(identity, executionId, activityIds);
 
-    private static WorkflowExecutionHarness NewDurableHarness(IDocumentStore store, WorkflowExecutableIdentity identity, string executionId, IEnumerable<string> activityIds) =>
-        NewDurableHarness(store, identity, executionId, activityIds, groupCommit: null);
+    private static WorkflowExecutionHarness NewDurableHarness(IDocumentStore store, IBoundedDocumentStore queries, WorkflowExecutableIdentity identity, string executionId, IEnumerable<string> activityIds) =>
+        NewDurableHarness(store, queries, identity, executionId, activityIds, groupCommit: null);
 
     private static WorkflowExecutionHarness NewDurableHarness(
         IDocumentStore store,
+        IBoundedDocumentStore queries,
         WorkflowExecutableIdentity identity,
         string executionId,
         IEnumerable<string> activityIds,
@@ -720,7 +726,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                 // store, Coalesced checkpoint persistence (cap above the burst so it never trips), burst-scoped
                 // executable cache on.
                 services.AddSingleton(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton(queries);
                 services.AddGroundworkRuntimeStores();
                 services.AddCoalescingRuntimeCheckpointPersistence(options => options.MaxSegmentCheckpoints = HotLoopSegmentCap);
                 services.RemoveAll<RuntimeBurstCacheOptions>();
@@ -735,24 +741,11 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
             })
             .Build(identity, executionId, activityIds);
 
-    private static async Task<(IDocumentStore Store, string Path)> NewSqliteStoreAsync()
+    private static async Task<(IDocumentStore Store, IBoundedDocumentStore Queries, string Path)> NewSqliteStoreAsync()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-conc-bench-{Guid.NewGuid():N}.db");
-        var store = await SqliteDocumentStoreFactory.CreateAsync(
-            $"Data Source={databasePath}",
-            ElsaRuntimeStorageManifest.CreatePhysicalized(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            GroundworkTestAccess.DefaultScoped);
-        return (store, databasePath);
-    }
-
-    private static async Task<long> CountCheckpointCommitsAsync(IDocumentStore store)
-    {
-#pragma warning disable GW0004
-        var result = await store.QueryAsync(
-            new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
-        return result.TotalCount;
+        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
+        return (opened.Store, opened.Queries, databasePath);
     }
 
     private static async Task DisposeStoreAsync(IDocumentStore store, string databasePath)

@@ -52,11 +52,8 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
     {
         var metrics = new StageMetrics();
         var databasePath = Path.Combine(Path.GetTempPath(), $"buffered-stage-{Guid.NewGuid():N}.db");
-        IDocumentStore store = await SqliteDocumentStoreFactory.CreateAsync(
-            $"Data Source={databasePath}",
-            ElsaRuntimeStorageManifest.CreatePhysicalized(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            GroundworkTestAccess.DefaultScoped);
+        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
+        IDocumentStore store = opened.Store;
 
         using var tracer = new StageTracer(metrics);
 
@@ -65,7 +62,7 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
                 services.AddGroundworkRuntimeStores();
 
                 // The committer opens the checkpoint-commit span through IWorkflowEngineTracer; our tracer records the
@@ -90,12 +87,10 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
         var run = await harness.RunAsync(BuildHotLoop());
         run.AssertWorkflowCompleted();
 
-#pragma warning disable GW0004
-        var docs = await store.QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
-#pragma warning restore GW0004
+        var commitCount = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(opened.Queries);
 
         output.WriteLine($"=== {label} — stage breakdown (1 run, hot-loop×{HotLoopLength}) ===");
-        output.WriteLine($"durable checkpoint-commit documents/run = {docs.TotalCount}");
+        output.WriteLine($"durable checkpoint-commit documents/run = {commitCount}");
         output.WriteLine("");
         output.WriteLine($"committer.CommitAsync invocations: total={metrics.CommitterCount} (reliable count)");
         output.WriteLine($"  span durations captured (best-effort listener): spans={metrics.SpanCount}  " +
