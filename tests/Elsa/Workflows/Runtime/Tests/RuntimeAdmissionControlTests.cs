@@ -391,9 +391,8 @@ public sealed class RuntimeAdmissionControlTests
     public async Task Router_ShedsAResumeButParksTheWorkItem()
     {
         // A command naming a live execution is deferred, not dropped, so the work item stays queued for the
-        // resumption sweep to re-drive. What is pinned here is the parking, not the delivery: the sweep is composed
-        // only by WorkflowsRuntimeResumptionFeature and AddWorkflowRuntime does not register it, so on a host without
-        // one the parked item has no owner — the still-open gap tracked by #1320.
+        // resumption sweep to re-drive. The parking is conditional on that sweep existing, which is what the router
+        // reads off the resumption durability evidence composed here (#1320); the no-re-driver half is the next case.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var router = NewRouter(queue, AlwaysShed);
 
@@ -403,6 +402,49 @@ public sealed class RuntimeAdmissionControlTests
         Assert.True(result.ShedWorkQueued);
         Assert.False(result.DrainPerformed);
         Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Router_ShedsAResumeWithoutQueueingWhenNoResumptionRedriverIsComposed()
+    {
+        // #1320, resolution 1. Parking is a promise that someone re-drives the item, and only
+        // WorkflowsRuntimeResumptionFeature makes that true — AddWorkflowRuntime composes the gate but not the sweep,
+        // so "durable stores, no sweep" is what a host composing the runtime and a Groundwork provider actually is.
+        // On such a host the parked item would have no owner at all, so the refusal degrades to the start shape:
+        // nothing durable written, nothing drained, and the caller's retry left as the only re-driver. Refusing loudly
+        // is the deliberate direction over a Deferred that reads like a delivery and silently is not one.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainOrchestrator = new RecordingDrainOrchestrator();
+        var router = NewRouter(queue, AlwaysShed, drainOrchestrator, hasRedriver: false);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark));
+
+        Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
+        Assert.False(result.DrainPerformed);
+        Assert.Equal(0, drainOrchestrator.DrainCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Router_ShedsWithoutQueueingWhenNoDurabilityEvidenceIsInjectedAtAll()
+    {
+        // The absent-enumerable default, which the container never produces — IEnumerable<T> always resolves, empty at
+        // worst — but a hand-composed router does. It has to read as "no re-driver", so that forgetting to wire the
+        // evidence costs a promise nobody could have kept rather than silently parking work with no owner.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = new WorkflowSchedulerCommandRouter(
+            queue,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            new RecordingDrainOrchestrator(),
+            _clock,
+            admissionController: AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark));
+
+        Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
     }
 
     // The single source of truth for which kinds bypass the admission gate, shared by both theories below so the
@@ -423,35 +465,42 @@ public sealed class RuntimeAdmissionControlTests
         return data;
     }
 
-    public static TheoryData<WorkflowExecutionCommandKind> GatedCommandKinds()
+    public static TheoryData<WorkflowExecutionCommandKind, bool> GatedCommandKinds()
     {
         // Computed from the enum rather than listed, so a kind added later defaults into the gated assertion — the
         // safe direction for a deny-list exemption — and widening IsSubjectToAdmission's exemption set by even one
-        // kind goes red here until this test names it deliberately.
-        var data = new TheoryData<WorkflowExecutionCommandKind>();
+        // kind goes red here until this test names it deliberately. Crossed with both compositions, because the
+        // refusal shape now depends on a second thing (#1320): before PR #1291 only two gated kinds were asserted at
+        // all and a widened exemption passed the whole suite, so a dimension left unenumerated is exactly how this
+        // predicate has already been wrong once. Every kind under both answers closes that hole on the new dimension.
+        var data = new TheoryData<WorkflowExecutionCommandKind, bool>();
         foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>().Except(AdmissionExemptKinds))
-            data.Add(kind);
+        foreach (var hasRedriver in new[] { true, false })
+            data.Add(kind, hasRedriver);
         return data;
     }
 
     // Deliberately duplicated from WorkflowSchedulerCommandRouter.QueuesOnShed, so a change to the refusal shape has
-    // to be made twice; the reasoning for each entry lives on that method's doc.
-    private static bool ExpectsQueueingOnShed(WorkflowExecutionCommandKind kind) => kind is not (
-        WorkflowExecutionCommandKind.Start or
-        WorkflowExecutionCommandKind.AlterWorkflow);
+    // to be made twice; the reasoning for each half lives on that method's doc. Both halves are needed to park: a kind
+    // whose parked item a re-driver would run, and a re-driver composed to run it.
+    private static bool ExpectsQueueingOnShed(WorkflowExecutionCommandKind kind, bool hasRedriver) =>
+        kind is not (
+            WorkflowExecutionCommandKind.Start or
+            WorkflowExecutionCommandKind.AlterWorkflow) &&
+        hasRedriver;
 
     [Theory]
     [MemberData(nameof(GatedCommandKinds))]
-    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind)
+    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind, bool hasRedriver)
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var router = NewRouter(queue, AlwaysShed);
+        var router = NewRouter(queue, AlwaysShed, hasRedriver: hasRedriver);
 
         var result = await router.ProcessAsync(NewEnvelope(kind));
 
         Assert.True(result.Shed);
         Assert.False(result.DrainPerformed);
-        var expectQueued = ExpectsQueueingOnShed(kind);
+        var expectQueued = ExpectsQueueingOnShed(kind, hasRedriver);
         Assert.Equal(expectQueued, result.ShedWorkQueued);
         Assert.Equal(expectQueued ? 1 : 0, (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count);
     }
@@ -593,6 +642,36 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, retried.Status);
     }
 
+    [Theory]
+    [InlineData(true, WorkflowExecutionCommandDispatchStatus.Duplicate)]
+    [InlineData(false, WorkflowExecutionCommandDispatchStatus.Accepted)]
+    public async Task Actor_ConsumesTheKeyOfAShedResumeOnlyWhenItWasActuallyQueued(
+        bool hasRedriver,
+        WorkflowExecutionCommandDispatchStatus expectedRetryStatus)
+    {
+        // The two halves of #1320 composed, which is where the defect lived: each half was correct on its own. The
+        // router decides the refusal shape and the agent reads the key rule off ShedWorkQueued, so with a re-driver a
+        // redelivery of the same deterministic key must answer Duplicate (the work is queued; running it twice is the
+        // hazard), and without one it must answer Accepted (nothing was written; Duplicate would strand the command
+        // with no queue anywhere holding it — a refusal that looks exactly like a delivery). Both directions are
+        // asserted because the silent failure is the one that reports success.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = NewRouter(queue, AlwaysShed, hasRedriver: hasRedriver);
+        using var provider = new InProcessWorkflowExecutionActorProvider(router);
+        var actor = await provider.GetAgentAsync(NewActivationRequest());
+        var envelope = NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark);
+
+        var shed = await actor.EnqueueAsync(envelope);
+        var queuedByTheShed = (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count;
+        _signal.InFlightDispatches = 0; // the overload passes, so only the key rule can decide the retry
+        var retried = await actor.EnqueueAsync(envelope);
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, shed.Status);
+        Assert.Equal("true", shed.Metadata[RuntimeMetadataKeys.DispatchShed]);
+        Assert.Equal(expectedRetryStatus, retried.Status);
+        Assert.Equal(hasRedriver ? 1 : 0, queuedByTheShed);
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     private RuntimeAdmissionController NewController(RuntimeAdmissionOptions options) =>
@@ -644,19 +723,50 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     // The alteration executor is composed by default, the way a real runtime host composes it, so an AlterWorkflow
-    // case reaches the routing under test instead of the "not composed" throw.
+    // case reaches the routing under test instead of the "not composed" throw. The resumption re-driver is composed by
+    // default too — as the real WorkflowsRuntimeResumptionFeature composes it, by contributing durability evidence for
+    // the resumption component — so a case that says nothing about #1320 keeps the parking behavior it was written for.
     private WorkflowSchedulerCommandRouter NewRouter(
         IWorkflowSchedulerWorkQueue queue,
         IRuntimeAdmissionController admissionController,
         IWorkflowDrainOrchestrator? drainOrchestrator = null,
-        IWorkflowAlterationActorCommandExecutor? alterationExecutor = null) =>
+        IWorkflowAlterationActorCommandExecutor? alterationExecutor = null,
+        bool hasRedriver = true) =>
         new(
             queue,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             drainOrchestrator ?? new RecordingDrainOrchestrator(),
             _clock,
             alterationActorCommandExecutor: alterationExecutor ?? _alterationExecutor,
-            admissionController: admissionController);
+            admissionController: admissionController,
+            durabilityEvidence: DurabilityEvidence(hasRedriver));
+
+    // Both compositions carry the evidence a durable persistence provider (Groundwork) contributes on any host; only
+    // the resumption entry comes from WorkflowsRuntimeResumptionFeature. The no-re-driver side is therefore NOT an
+    // empty collection, so a router that asked "is there any evidence at all" rather than "is the resumption component
+    // named" would promise a delivery nobody owns and fail here rather than pass.
+    private static IEnumerable<IWorkflowDispatchDurabilityEvidence> DurabilityEvidence(bool hasRedriver)
+    {
+        string[] components = hasRedriver
+            ?
+            [
+                WorkflowDispatchDurabilityComponents.Checkpoint,
+                WorkflowDispatchDurabilityComponents.DispatchStore,
+                WorkflowDispatchDurabilityComponents.Outbox,
+                WorkflowDispatchDurabilityComponents.Scheduler,
+                WorkflowDispatchDurabilityComponents.Resumption
+            ]
+            :
+            [
+                WorkflowDispatchDurabilityComponents.Checkpoint,
+                WorkflowDispatchDurabilityComponents.DispatchStore,
+                WorkflowDispatchDurabilityComponents.Outbox,
+                WorkflowDispatchDurabilityComponents.Scheduler
+            ];
+        return components
+            .Select(component => new WorkflowDispatchDurabilityEvidence(component, WorkflowDispatchDurabilityLevel.Durable))
+            .ToArray();
+    }
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowExecutionCommandKind kind) =>
         new(
