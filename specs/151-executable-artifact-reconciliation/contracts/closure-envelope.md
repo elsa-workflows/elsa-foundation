@@ -1,0 +1,41 @@
+# Contract: Closure envelope wire format (spec 151, FormatVersion 1)
+
+The portable export/import unit — one JSON document per closure (clarified Q2). Produced by `IWorkflowArtifactClosureFactory`, consumed by the artifact reconciler and by studio#493's download.
+
+```jsonc
+{
+  "formatVersion": 1,                    // int; unknown/newer → reject loudly, no partial import
+  "rootArtifactId": "artifact-6f1c2a9b3d4e",
+  "artifacts": [
+    { /* WorkflowExecutable — full runtime shape: identity (artifactId, definitionId,
+         definitionVersionId, artifactVersion, artifactHash), node snapshot, input contract,
+         runtimeRequirements, storageDriverRequirements, dependencies (childArtifactId +
+         childArtifactHash + dispatchNodeIds), incident strategy, checkpoint cadence, variables.
+         Serialized WITHOUT recomputed projections (nodes/nodesById are rebuilt by the ctor). */ }
+    // ... transitive dependency closure members, topologically complete
+  ],
+  "sourceReferences": [
+    { /* WorkflowExecutableSourceReference of the EXPORTING engine, Scope == "Published" only.
+         Provenance/expectations — the importer mints its own references and never persists
+         these rows. TestRun-scope references are never exported (FR-B-011). */ }
+  ],
+  "triggerBindings": [
+    { /* WorkflowTriggerBinding rows active on the EXPORTING engine for closure members.
+         Expectations — the importer recomputes bindings via WorkflowTriggerIndexer with its
+         own minted publicationId/slotId; a node/stimulus-set mismatch between recomputed and
+         carried bindings is a broken-source diagnostic. */ }
+  ]
+}
+```
+
+## Invariants (validated at import; violation = per-file or per-artifact rejection)
+
+1. `rootArtifactId` ∈ `artifacts[].identity.artifactId`.
+2. Every `dependencies[]` edge of every member resolves within `artifacts` ∪ the store snapshot, with declared `childArtifactHash` equal to the resolved member's `identity.artifactHash` (`MissingArtifact` / `HashMismatch` / `ConflictingIdentity` / `Cycle` → reject the dependent, batch continues).
+3. Every `sourceReferences[].scope == "Published"`; version ids never `draft:`-prefixed.
+4. Artifact ids are content-addressed and stable — the importer MUST NOT mint or rewrite identities.
+5. Tenant is absent from artifacts by design; `tenantId` on carried references is ignored (the importer stamps its source-configured tenant option).
+
+## Versioning
+
+`formatVersion` follows the fail-loud discipline of the runtime document codec: readers accept exactly the versions they know; there is no silent upcast in v1. Envelope evolution adds upcasters behind a version bump, never in-place shape drift. Serialization goes through `IPayloadSerializer` with the runtime document serializer's converter set so store-round-tripped and exported artifacts are byte-consistent.
