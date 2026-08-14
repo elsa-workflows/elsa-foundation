@@ -6,7 +6,7 @@
 
 ## Summary
 
-Close the "runtime-only engine has nothing to execute" gap by (a) exporting a portable, self-contained **closure envelope** (artifact + transitive child artifacts + published references + trigger bindings) from a publish-capable engine through a pluggable export-target seam whose v1 target is an API download, and (b) importing/reconciling such envelopes into a design-free runtime's executable store behind a two-axis requirements gate (consumer capabilities + storage drivers, and per-node CLR type presence) that rejects at import, never at first activation. Two reviewed extractions carry the design: the requirements checker moves from `Publishing.Api` to the Runtime layer (`IRuntimeRequirementChecker`), and the definition-keyed activation authority (`IPublicationSlotStore`/`PublicationSlot`) moves from `Publishing.Core` to `Runtime.Core` so publish and import share **one activation ledger per engine**, with a namespace-attributed cross-authority guard preventing silent double activation. Triggering reuses the existing startup-task + shell-reload model (#1303 deferred).
+Close the "runtime-only engine has nothing to execute" gap by (a) exporting a portable, self-contained **closure envelope** (artifact + transitive child artifacts + published references + trigger bindings) from a publish-capable engine through a pluggable export-target seam whose v1 target is an API download, and (b) importing/reconciling such envelopes into a design-free runtime's executable store behind a two-axis requirements gate (consumer capabilities + storage drivers, and per-node CLR type presence) that rejects at import, never at first activation. Three reviewed extractions carry the design: the requirements checker moves from `Publishing.Api` to the Runtime layer (`IRuntimeRequirementChecker`); the definition-keyed activation authority (`IPublicationSlotStore`/`PublicationSlot`) moves from `Publishing.Core` to `Runtime.Core` so publish and import share **one activation ledger per engine**, with a namespace-attributed cross-authority guard preventing silent double activation; and the executable hasher moves to the runtime layer so the importer recomputes each received artifact's content hash before persistence (content-addressing invariant guard; signing stays deferred). Triggering reuses the existing startup-task + shell-reload model (#1303 deferred).
 
 ## Technical Context
 
@@ -68,8 +68,9 @@ specs/151-executable-artifact-reconciliation/
 ```text
 src/Elsa/Workflows/Runtime/
 ├── Core/                                  # MODIFIED: +WorkflowArtifactClosure, +IRuntimeRequirementChecker,
-│                                          #   +RuntimeRequirementCheckResult, +relocated IPublicationSlotStore/
-│                                          #   PublicationSlot/PublicationSlotTransitionResult
+│                                          #   +RuntimeRequirementCheckResult, +IWorkflowExecutableHasher,
+│                                          #   +relocated IPublicationSlotStore/PublicationSlot/
+│                                          #   PublicationSlotTransitionResult
 ├── Elsa.Workflows.Runtime.csproj          # MODIFIED: <Compile Remove> glob gains Reconciliation sibling;
 │   └── (impl project)                     #   +RuntimeRequirementChecker default, +in-memory slot store,
 │                                          #   AddWorkflowRuntime() registrations
@@ -114,4 +115,4 @@ docs/maps/* (regenerated), EXTENSION_POINTS.md files per research D9
 
 ## Next step
 
-`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker extraction + wrapper + classification fix; (2) slot-contract relocation + single runtime-family ledger (publishing slot store deleted, baselines updated) + cross-authority guard; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.
+`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker + hasher extractions + wrapper + classification fix; (2) slot-contract relocation + single runtime-family ledger (publishing slot store deleted, baselines updated) + cross-authority guard; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.

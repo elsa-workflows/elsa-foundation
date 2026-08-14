@@ -40,7 +40,7 @@ Compose a runtime-only engine — no design, no publishing, no compiler — with
 Drop `my-workflow-closure.json` into `/mnt/artifacts` and start the shell. At activation, the reconciler (single-node, distributed-locked, before readiness):
 
 1. parses each closure file (malformed/unknown formatVersion → loud rejection, no partial import);
-2. validates the dependency closure (missing child / hash mismatch / cycle → parent rejected);
+2. validates the dependency closure against the envelope alone (missing child / hash mismatch / cycle → parent rejected) and recomputes each artifact's content hash (corrupted payload → rejected before persistence);
 3. runs the requirements preflight — consumer capabilities, storage drivers, **and** CLR activity-type presence — rejecting unsatisfiable artifacts **at import** with a diagnostic naming what's missing (never an `UnknownActivityTypeException` at first activation);
 4. activates survivors: mints an `import:{sourceId}:…` publication, recomputes trigger bindings, flips the definition's slot (latest-wins, exactly one active version per definition).
 

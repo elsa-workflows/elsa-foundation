@@ -189,3 +189,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [148-authoring-schema-endpoints](../../specs/148-authoring-schema-endpoints/spec.md) | Authoring-Schema Endpoints for Headless Clients | Retrofit — documents behavior shipped in PR #1170 (issue #1164); source of truth for review and future evolution, not a driver of new implementation. | - | 0 | 0 | - |
 | [149-canonical-dependency-map](../../specs/149-canonical-dependency-map/spec.md) | Canonical Dependency Map | Draft | - | 0 | 0 | deferred, out of scope |
 | [150-package-version-computation](../../specs/150-package-version-computation/spec.md) | Package Version Computation and Selective Publishing | Draft | - | 0 | 0 | deferred, out of scope |
+| [151-executable-artifact-reconciliation](../../specs/151-executable-artifact-reconciliation/spec.md) | Executable Artifact Reconciliation | Draft | - | 0 | 0 | retained, deferred, out of scope |

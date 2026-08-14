@@ -25,6 +25,10 @@ Contract, `PublicationSlot`, and `PublicationSlotTransitionResult` move **unrena
 
 **Publication-id namespace (new convention, opaque strings):** publish = `publication-{shortId}`; import = `import:{sourceId}:{shortId}`. Cross-authority guard: an actor MUST NOT supersede an `ActivePublicationId` carrying the other namespace — reject with a diagnostic naming the conflicting authority.
 
+## `IWorkflowExecutableHasher` — extracted to `Elsa.Workflows.Runtime.Core` (FR-B-010; Greptile re-review)
+
+The canonical content-hash derivation (`ComputeHash(executable) → "sha256:…"`, `CreateArtifactId(prefix, hash)`) moves from `Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher` to a runtime-layer contract + default (third extraction, same pattern as the checker and slot authority). Its canonical payload reads only `WorkflowExecutable` model data, so the move is dependency-clean (verify exact set at task time). Consumers: the compiler (existing derivation site, now via the contract) and the importer (recompute-before-persist; mismatch → broken-source diagnostic). Deterministic and public — an integrity guard for the ADR 0038 content-addressing invariant, not a security boundary.
+
 ## `IWorkflowArtifactReconciliationSource` — `Elsa.Workflows.Runtime.Reconciliation.Core` (new; FR-B-002)
 
 ```csharp
