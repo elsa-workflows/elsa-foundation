@@ -1,0 +1,45 @@
+{
+  "manifest": "elsa3-reusable-activity-import",
+  "owner": "elsa3.activities.design.import",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [
+    {
+      "binding": "groundwork_documents",
+      "featureDefaultLogicalName": "groundwork_documents",
+      "canonicalJsonColumn": "content_json",
+      "schemaVersion": 1
+    }
+  ],
+  "storageUnits": [
+    {
+      "identity": "elsa3ReusableImportCollection",
+      "definitionDigest": "f36cac1867d17603eab7bf076b073d7ac2d426ef431c5dfd2c985f4ea6d15c40",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "elsa3ReusableImportDefinitionBinding",
+      "definitionDigest": "b432d20d76843777fda3cc4222805fef23e09e9ace18680bdd99e3baeb0b2aa0",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "elsa3ReusableImportReceipt",
+      "definitionDigest": "96e5499b2ced9c9c1c5d814a7b2c24061512bf1eb867a46f42a1627938190cd3",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

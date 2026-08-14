@@ -29,7 +29,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     private static readonly GroundworkCompositionFingerprint FixtureComposition =
         GroundworkCompositionFingerprint.Create("elsa-runtime-provider-fixture:v1");
     private static readonly string PackageVersion =
-        GroundworkProviderDriverSupport.PackageVersion(typeof(PostgreSqlDocumentStore).Assembly);
+        GroundworkProviderDriverSupport.PackageVersion(typeof(PostgreSqlPhysicalDocumentStore).Assembly);
     private static readonly GroundworkProviderDescriptor ProviderDescriptor = new(
         ProviderKey,
         ProviderIdentity,
@@ -94,7 +94,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
     {
         await ResetSchemaAsync(cancellationToken);
         _physicalSource = null;
-        _ = await CreateStoreAsync(cancellationToken);
+        _ = await OpenStoreAsync(cancellationToken);
     }
 
     protected override async ValueTask ResetPhysicalCoreAsync(
@@ -148,7 +148,7 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         CancellationToken cancellationToken) =>
         OpenClientCoreAsync(
             clientId,
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             GroundworkTestAccess.DefaultScoped,
             cancellationToken: cancellationToken);
 
@@ -158,15 +158,18 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
-        var store = await CreateStoreAsync(manifest, access, cancellationToken);
+        var (store, queries) = await OpenStoreAsync(manifest, access, cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton<IDocumentStore>(store)
+            .AddSingleton(queries)
+            .AddSingleton<IBoundedDocumentStore>(queries)
             .BuildServiceProvider();
         return new GroundworkProviderClient(
             clientId,
             services,
             services.GetRequiredService<IDocumentStore>(),
-            services.DisposeAsync);
+            services.DisposeAsync,
+            queries);
     }
 
     protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
@@ -457,26 +460,26 @@ public sealed class PostgreSqlGroundworkProviderDriver : GroundworkProviderDrive
         }
     }
 
-    private Task<PostgreSqlDocumentStore> CreateStoreAsync(CancellationToken cancellationToken) =>
-        CreateStoreAsync(
-            ElsaRuntimeStorageManifest.Create(),
+    private Task<GroundworkPhysicalTestStore<PostgreSqlPhysicalDocumentStore>> OpenStoreAsync(CancellationToken cancellationToken) =>
+        OpenStoreAsync(
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             GroundworkTestAccess.DefaultScoped,
             cancellationToken);
 
-    private Task<PostgreSqlDocumentStore> CreateStoreAsync(
+    private Task<GroundworkPhysicalTestStore<PostgreSqlPhysicalDocumentStore>> OpenStoreAsync(
         StorageManifest manifest,
         DocumentStoreAccess access,
         CancellationToken cancellationToken) =>
-        PostgreSqlDocumentStoreFactory.CreateAsync(
+        GroundworkPhysicalTestStores.OpenPostgreSqlAsync(
             RequireConnectionString(),
             manifest,
             new ProviderIdentity(ProviderIdentity, PackageVersion),
             access,
-            cancellationToken: cancellationToken);
+            cancellationToken);
 
     private async Task EnsurePlanProbeAsync(CancellationToken cancellationToken)
     {
-        var store = await CreateStoreAsync(cancellationToken);
+        var (store, _) = await OpenStoreAsync(cancellationToken);
         var result = await store.SaveAsync(
             new SaveDocumentRequest(
                 ProbeDocumentKind,

@@ -217,33 +217,38 @@ internal static class Program
         if (command.Request.Operation is GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle)
             return await OpenRuntimePhysicalStoreAsync(command, cancellationToken);
 
-        var manifest = ElsaRuntimeStorageManifest.Create();
+        // The parent opens its store from the physicalized runtime manifest; the child must compile the very
+        // same target or it lands on a different physical layout (and the logical manifest cannot be admitted
+        // physically at all — its outbox status projection carries no numeric precision).
+        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
         var provider = new ProviderIdentity(command.ProviderIdentity, command.ProviderVersion);
         var access = GroundworkTestAccess.DefaultScoped;
 
+        // Opened on the physical surface through the shared test recipe. The probe only saves and loads by
+        // id, so the paired query runtime is discarded; the parent already provisioned the target.
         return command.ProviderKey switch
         {
             "sqlite" => new StoreLease(
-                await SqliteDocumentStoreFactory.CreateAsync(
+                (await GroundworkPhysicalTestStores.OpenSqliteAsync(
                     command.State.ConnectionString,
                     manifest,
                     provider,
                     access,
-                    cancellationToken: cancellationToken)),
+                    cancellationToken)).Store),
             "sqlserver" => new StoreLease(
-                await SqlServerDocumentStoreFactory.CreateAsync(
+                (await GroundworkPhysicalTestStores.OpenSqlServerAsync(
                     command.State.ConnectionString,
                     manifest,
                     provider,
                     access,
-                    cancellationToken: cancellationToken)),
+                    cancellationToken)).Store),
             "postgresql" => new StoreLease(
-                await PostgreSqlDocumentStoreFactory.CreateAsync(
+                (await GroundworkPhysicalTestStores.OpenPostgreSqlAsync(
                     command.State.ConnectionString,
                     manifest,
                     provider,
                     access,
-                    cancellationToken: cancellationToken)),
+                    cancellationToken)).Store),
             "mongodb" => await OpenMongoDbAsync(command, manifest, provider, access, cancellationToken),
             _ => throw new ArgumentException("The process-probe provider is unsupported.", nameof(command))
         };
@@ -507,12 +512,13 @@ internal static class Program
         DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
-        var handle = await MongoDbDocumentStoreFactory.CreateAsync(
+        var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
             command.State.ConnectionString,
             command.State.MongoDatabaseName!,
             manifest,
             provider,
             access,
+            options: new MongoDbPhysicalDocumentStoreOptions { AutoApplyOnStartup = true },
             cancellationToken: cancellationToken);
         return new StoreLease(handle.Store, handle);
     }

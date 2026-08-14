@@ -327,8 +327,12 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         Assert.NotEmpty(designTables);
         Assert.NotEmpty(runtimeTables);
         Assert.Empty(designTables.Intersect(runtimeTables, StringComparer.Ordinal));
-        Assert.Contains(designTables, table => table.Contains("workflow_definition", StringComparison.Ordinal));
-        Assert.DoesNotContain(designTables, table => table.Contains("bookmark", StringComparison.Ordinal));
+        Assert.Contains(designTables, table => table.Contains(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, StringComparison.Ordinal));
+        Assert.Contains(runtimeTables, table => table.Contains(
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, StringComparison.Ordinal));
+        Assert.DoesNotContain(designTables, table => table.Contains(
+            ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -576,8 +580,7 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
         string identity,
         IReadOnlyCollection<(string Unit, string DocumentKind, string Table)> units)
     {
-#pragma warning disable GW0001 // preview.57 has no non-obsolete StorageUnit constructor; PhysicalStorage below is authoritative.
-        var storageUnits = units.Select(item => new StorageUnit(
+        var storageUnits = units.Select(item => StorageUnit.Create(
             new StorageUnitIdentity(item.Unit),
             item.DocumentKind,
             StorageIntent.PortableDocument(),
@@ -586,15 +589,9 @@ public sealed class GroundworkSchemaCliContractTests : IDisposable
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
-                PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(item.Table)))
-        }).ToArray();
-#pragma warning restore GW0001
+                PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(item.Table))))).ToArray();
         return new StorageManifest(
             new StorageManifestIdentity(identity),
             new StorageManifestOwner("elsa.tests"),

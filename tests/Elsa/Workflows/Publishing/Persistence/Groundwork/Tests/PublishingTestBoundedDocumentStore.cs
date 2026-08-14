@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
@@ -8,7 +9,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
 /// Keeps the legacy in-memory/standalone SQLite fixtures focused on Publishing behavior while production
 /// hosts execute the same <see cref="DocumentQuery"/> requests through certified physical runtimes.
 /// </summary>
-internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+internal sealed class PublishingTestBoundedDocumentStore(IDocumentEnumerationSource documents) : IBoundedDocumentStore
 {
     private static readonly IReadOnlyDictionary<string, (string Index, string Path)> Queries =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
@@ -25,57 +26,59 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore document
                 (PublishingGroundworkStorageManifest.ByExpiresAtIndex, PublishingGroundworkStorageManifest.ExpiresAtField)
         };
 
-    public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+    public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
     {
         var declaration = Resolve(query);
-        if (query.QueryIdentity == PublishingGroundworkStorageManifest.DeleteExpiredQuery)
-            return await QueryExpiredAsync(query, declaration, cancellationToken);
-
-        var comparison = AssertShape(query, declaration.Path);
-#pragma warning disable GW0004
-        var result = await documents.QueryAsync(
-            new DocumentStoreQuery(
-                query.DocumentKind,
-                declaration.Index,
-                comparison.Values[0]!,
-                query.Skip,
-                query.Take),
-            cancellationToken);
-#pragma warning restore GW0004
-        return new DocumentQueryResult(result, result.Count);
-    }
-
-    private async Task<DocumentQueryResult> QueryExpiredAsync(
-        DocumentQuery query,
-        (string Index, string Path) declaration,
-        CancellationToken cancellationToken)
-    {
+        var isExpiry = query.QueryIdentity == PublishingGroundworkStorageManifest.DeleteExpiredQuery;
         var comparison = AssertShape(
             query,
             declaration.Path,
-            QueryComparisonOperator.LessThanOrEqual);
-        if (query.Order.Count != 1 ||
-            query.Order[0].Path != declaration.Path ||
-            query.Order[0].Direction != global::Groundwork.Core.PhysicalStorage.PhysicalSortDirection.Ascending)
+            isExpiry ? QueryComparisonOperator.LessThanOrEqual : QueryComparisonOperator.Equal);
+        if (isExpiry &&
+            (query.Order.Count != 1 ||
+             query.Order[0].Path != declaration.Path ||
+             query.Order[0].Direction != global::Groundwork.Core.PhysicalStorage.PhysicalSortDirection.Ascending))
         {
             throw new InvalidOperationException(
                 $"Publishing test query '{query.QueryIdentity}' must order by '{declaration.Path}' ascending.");
         }
 
-#pragma warning disable GW0004
-        var all = await documents.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
-#pragma warning restore GW0004
-        var cutoff = DateTimeOffset.Parse(comparison.Values[0]!, CultureInfo.InvariantCulture);
-        var matches = all.Documents
-            .Select(document => (Document: document, ExpiresAt: ReadExpiresAt(document)))
-            .Where(entry => entry.ExpiresAt <= cutoff)
-            .OrderBy(entry => entry.ExpiresAt)
-            .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)
-            .ToArray();
+        // The declared surface carries no kind-wide read path, and standing in for one is exactly this
+        // double's job — so it enumerates the double's own contents through the test-only enumeration seam
+        // and evaluates the declared predicate here, the same predicate the physical runtimes push down to
+        // their projected columns in production.
+        var all = documents.Snapshot(query.DocumentKind);
+        var matches = isExpiry
+            ? MatchExpired(all, declaration.Path, comparison.Values[0]!)
+            : all
+                .Where(document => string.Equals(
+                    ReadPath(document, declaration.Path),
+                    comparison.Values[0],
+                    StringComparison.Ordinal))
+                .OrderBy(document => document.Id, StringComparer.Ordinal)
+                .ToArray();
+
         var window = matches.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             window = window.Take(take);
-        return new DocumentQueryResult(window.Select(entry => entry.Document).ToArray(), matches.Length);
+        return Task.FromResult(new DocumentQueryResult(window.ToArray(), matches.Length));
+    }
+
+    private static DocumentEnvelope[] MatchExpired(
+        IReadOnlyCollection<DocumentEnvelope> documents,
+        string path,
+        string cutoffValue)
+    {
+        var cutoff = DateTimeOffset.Parse(cutoffValue, CultureInfo.InvariantCulture);
+        return documents
+            .Select(document => (
+                Document: document,
+                ExpiresAt: DateTimeOffset.Parse(ReadPath(document, path)!, CultureInfo.InvariantCulture)))
+            .Where(entry => entry.ExpiresAt <= cutoff)
+            .OrderBy(entry => entry.ExpiresAt)
+            .ThenBy(entry => entry.Document.Id, StringComparer.Ordinal)
+            .Select(entry => entry.Document)
+            .ToArray();
     }
 
     public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
@@ -110,11 +113,17 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentStore document
         return comparison;
     }
 
-    private static DateTimeOffset ReadExpiresAt(DocumentEnvelope envelope)
+    /// <summary>Reads a canonical dotted JSON path, matching how the declared indexes address their fields.</summary>
+    private static string? ReadPath(DocumentEnvelope envelope, string path)
     {
         using var document = JsonDocument.Parse(envelope.ContentJson);
-        return document.RootElement
-            .GetProperty(PublishingGroundworkStorageManifest.ExpiresAtField)
-            .GetDateTimeOffset();
+        var element = document.RootElement;
+        foreach (var segment in path.Split('.'))
+        {
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(segment, out element))
+                return null;
+        }
+
+        return element.ValueKind == JsonValueKind.Null ? null : element.GetString();
     }
 }

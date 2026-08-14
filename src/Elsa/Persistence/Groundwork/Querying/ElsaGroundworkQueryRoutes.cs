@@ -1031,7 +1031,7 @@ public static class ElsaGroundworkQueryRoutes
             _ => PortablePhysicalType.String
         },
         Length: field.Kind == IndexValueKind.Keyword
-            ? field.Length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
+            ? field.Length ?? SharedDocumentsStorage.StringProjectionLength
             : null);
 
     private static BoundedQueryDeclaration ToBoundedQuery(ElsaGroundworkPhysicalQueryRoute route)

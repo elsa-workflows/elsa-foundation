@@ -252,7 +252,6 @@ public sealed class GroundworkNamedQueryExecutorTests
         public string SortKey { get; set; } = string.Empty;
     }
 
-#pragma warning disable GW0004 // The test double implements the complete compatibility document surface.
     private sealed class ScriptedSessionStore(params DocumentQueryResult[] pages) : IDocumentStore, IBoundedDocumentStore
     {
         private readonly Queue<DocumentQueryResult> _pages = new(pages);
@@ -334,6 +333,7 @@ public sealed class GroundworkNamedQueryExecutorTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the double answers on the bounded surface only.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) =>
@@ -353,11 +353,11 @@ public sealed class GroundworkNamedQueryExecutorTests
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+#pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
-#pragma warning restore GW0004
 }

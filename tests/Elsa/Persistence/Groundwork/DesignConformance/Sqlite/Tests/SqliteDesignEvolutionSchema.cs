@@ -67,8 +67,7 @@ public sealed class DesignEvolutionProbeGroundworkStorageManifestSource : IGroun
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            DesignEvolutionProbeManifest.Create(FeatureIdentity, DesignEvolutionProbeManifest.ProbeKind, DesignEvolutionProbeManifest.ProbeKind));
+        var manifest = DesignEvolutionProbeManifest.Create(FeatureIdentity, DesignEvolutionProbeManifest.ProbeKind, DesignEvolutionProbeManifest.ProbeKind);
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity, manifest, [], [], [], []));
     }
@@ -86,8 +85,7 @@ public sealed class DesignEvolutionCollisionGroundworkStorageManifestSource : IG
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            DesignEvolutionProbeManifest.Create(FeatureIdentity, "designEvolutionCollisionProbe", "workflowDefinition"));
+        var manifest = DesignEvolutionProbeManifest.Create(FeatureIdentity, "designEvolutionCollisionProbe", "workflowDefinition");
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity, manifest, [], [], [], []));
     }
@@ -147,7 +145,12 @@ internal static class DesignEvolutionProbeManifest
             new StorageManifestVersion(SchemaVersion),
             [Unit(documentKind, tableLogicalName, columns, logicalIndexes, physicalIndexes, queries)],
             new HashSet<string> { "optimistic-concurrency" },
-            []);
+            [])
+        {
+            // Matches what the production families declare, so the probe never introduces a shared
+            // document storage difference into the evolution comparison.
+            SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+        };
     }
 
     private static StorageUnit Unit(
@@ -158,8 +161,7 @@ internal static class DesignEvolutionProbeManifest
         PhysicalIndexDefinition[] physicalIndexes,
         BoundedQueryDeclaration[] boundedQueries)
     {
-#pragma warning disable GW0001 // Required bridge-release constructor value; the legacy declarations above are intentionally empty.
-        var unit = new StorageUnit(
+        return StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             "Design evolution probe",
             StorageIntent.PortableDocument(),
@@ -168,19 +170,11 @@ internal static class DesignEvolutionProbeManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.PhysicalEntityTable(tableLogicalName, columns, indexes: physicalIndexes)),
                 logicalIndexes,
-                boundedQueries)
-        };
+                boundedQueries));
     }
 
     private static LogicalIndexDeclaration LogicalIndex(string identity, string[] fields, bool unique = false) =>

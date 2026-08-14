@@ -216,17 +216,17 @@ public class GroundworkStorageCompositionTests
     {
         var first = Assert.Single(CreateManifest("feature", "first").StorageUnits) with
         {
-            PhysicalStorage = null
+            PhysicalStorage = SharedDocumentsStorage.Create("first", TenancyPolicy.Scoped, [], [])
         };
         var second = Assert.Single(CreateManifest("feature", "second").StorageUnits) with
         {
-            PhysicalStorage = null
+            PhysicalStorage = SharedDocumentsStorage.Create("second", TenancyPolicy.Scoped, [], [])
         };
-        var legacy = CreateManifest("feature", "unused") with
+        var manifest = CreateManifest("feature", "unused") with
         {
-            StorageUnits = [second, first]
+            StorageUnits = [second, first],
+            SharedDocumentStorages = [SharedDocumentsStorage.Definition]
         };
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(legacy);
 
         var resolution = new GroundworkPhysicalNameResolver().Resolve(
             manifest,
@@ -658,7 +658,7 @@ public class GroundworkStorageCompositionTests
     }
 
     [Fact]
-    public async Task Legacy_physicalization_bounds_projected_string_index_keys()
+    public async Task Shared_documents_recipe_bounds_projected_string_index_keys()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource()
             .CreateDeclarationAsync(CancellationToken.None);
@@ -673,7 +673,7 @@ public class GroundworkStorageCompositionTests
             Assert.InRange(
                 column.Length ?? 0,
                 1,
-                LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength));
+                SharedDocumentsStorage.StringProjectionLength));
     }
 
     [Fact]
@@ -910,7 +910,7 @@ public class GroundworkStorageCompositionTests
         string? physicalName = null,
         string schemaVersion = "1.0.0")
     {
-        var unit = new StorageUnit(
+        var unit = StorageUnit.Create(
             new StorageUnitIdentity(unitIdentity),
             unitIdentity,
             StorageIntent.PortableDocument(),
@@ -919,15 +919,10 @@ public class GroundworkStorageCompositionTests
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTableDefinition.DedicatedDocumentTable(
-                    physicalName ?? $"{unitIdentity}_documents")))
-        };
+                    physicalName ?? $"{unitIdentity}_documents"))));
         return new StorageManifest(
             new StorageManifestIdentity(featureIdentity),
             new StorageManifestOwner($"{featureIdentity}.owner"),

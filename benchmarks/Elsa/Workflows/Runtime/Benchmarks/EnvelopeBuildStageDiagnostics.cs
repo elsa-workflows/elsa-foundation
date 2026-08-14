@@ -65,18 +65,15 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
     {
         var metrics = new EnvelopeMetrics();
         var databasePath = Path.Combine(Path.GetTempPath(), $"envelope-stage-{Guid.NewGuid():N}.db");
-        IDocumentStore store = await SqliteDocumentStoreFactory.CreateAsync(
-            $"Data Source={databasePath}",
-            ElsaRuntimeStorageManifest.CreatePhysicalized(),
-            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            GroundworkTestAccess.DefaultScoped);
+        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
+        IDocumentStore store = opened.Store;
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(new RuntimeTestBoundedDocumentStore(store));
+                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
                 services.AddGroundworkRuntimeStores();
 
                 // (a) INNER durable-flush timer: replace the Groundwork checkpoint writer BEFORE coalescing captures it

@@ -6,44 +6,58 @@ using Groundwork.Documents.Store;
 namespace Elsa.Persistence.Groundwork.Testing;
 
 /// <summary>
-/// Adapts standalone provider fixtures to Runtime's admitted bounded-query contract. Production hosts obtain
-/// the equivalent route-bound query runtime from their provider initializer.
+/// Adapts an enumerable document double to Runtime's admitted bounded-query contract. Production hosts obtain
+/// the equivalent route-bound query runtime from their provider initializer; a real provider fixture gets one
+/// from <see cref="GroundworkPhysicalTestStores"/> instead of this evaluator.
 /// </summary>
-public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : IBoundedDocumentStore
+/// <remarks>
+/// Evaluation reads the double's whole document set for a kind and filters in memory, so it needs
+/// <see cref="IDocumentEnumerationSource"/> rather than a store query.
+/// </remarks>
+public sealed class RuntimeTestBoundedDocumentStore : IBoundedDocumentStore
 {
+    private readonly IDocumentEnumerationSource documents;
+
+    public RuntimeTestBoundedDocumentStore(IDocumentStore documents) =>
+        this.documents = documents as IDocumentEnumerationSource
+            ?? throw new ArgumentException(
+                "The Runtime test bounded store evaluates over an enumerable document double. A real provider " +
+                "store must be paired with its own route-bound query runtime instead.",
+                nameof(documents));
+
     public async Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
     {
         if (IsOrderedRangeQuery(query))
             return await QueryOrderedRangeAsync(query, cancellationToken);
 
-        var (index, path) = query.QueryIdentity switch
+        var path = query.QueryIdentity switch
         {
             ElsaRuntimeStorageManifest.ListAllQuery =>
-                (ElsaRuntimeStorageManifest.ByCollectionIndex, ElsaRuntimeStorageManifest.CollectionField),
+                ElsaRuntimeStorageManifest.CollectionField,
             ElsaRuntimeStorageManifest.ListByWorkflowExecutionQuery =>
-                (ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.WorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListByArtifactQuery =>
-                (ElsaRuntimeStorageManifest.ByArtifactIndex, ElsaRuntimeStorageManifest.ArtifactIdField),
+                ElsaRuntimeStorageManifest.ArtifactIdField,
             ElsaRuntimeStorageManifest.ListByParentActivityExecutionQuery =>
-                (ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex, ElsaRuntimeStorageManifest.ParentActivityExecutionIdField),
+                ElsaRuntimeStorageManifest.ParentActivityExecutionIdField,
             ElsaRuntimeStorageManifest.ListBookmarksByStimulusQuery =>
-                (ElsaRuntimeStorageManifest.ByStimulusIndex, ElsaRuntimeStorageManifest.StimulusHashField),
+                ElsaRuntimeStorageManifest.StimulusHashField,
             ElsaRuntimeStorageManifest.ListBookmarksByStimulusTypeQuery =>
-                (ElsaRuntimeStorageManifest.ByStimulusTypeIndex, ElsaRuntimeStorageManifest.StimulusTypeField),
+                ElsaRuntimeStorageManifest.StimulusTypeField,
             ElsaRuntimeStorageManifest.FindExecutableActivityTemplateByHashQuery =>
-                (ElsaRuntimeStorageManifest.ByTemplateHashIndex, ElsaRuntimeStorageManifest.TemplateHashField),
+                ElsaRuntimeStorageManifest.TemplateHashField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByParentQuery =>
-                (ElsaRuntimeStorageManifest.ByParentWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.ParentWorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByChildQuery =>
-                (ElsaRuntimeStorageManifest.ByChildWorkflowExecutionIndex, ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField),
+                ElsaRuntimeStorageManifest.ChildWorkflowExecutionIdField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByStatusQuery =>
-                (ElsaRuntimeStorageManifest.ByStatusIndex, ElsaRuntimeStorageManifest.StatusField),
+                ElsaRuntimeStorageManifest.StatusField,
             ElsaRuntimeStorageManifest.ListWorkflowDispatchesByTestScopeQuery =>
-                (ElsaRuntimeStorageManifest.ByTestScopeIndex, ElsaRuntimeStorageManifest.TestScopeIdField),
+                ElsaRuntimeStorageManifest.TestScopeIdField,
             "list-by-execution-scope" =>
-                (ElsaRuntimeStorageManifest.ByExecutionScopeIndex, ElsaRuntimeStorageManifest.ExecutionScopeIdField),
+                ElsaRuntimeStorageManifest.ExecutionScopeIdField,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery =>
-                (ElsaRuntimeStorageManifest.ByPublicationIndex, ElsaRuntimeStorageManifest.PublicationIdField),
+                ElsaRuntimeStorageManifest.PublicationIdField,
             _ => throw new InvalidOperationException($"Undeclared Runtime test query '{query.QueryIdentity}'.")
         };
         var clause = query.Clauses.Count == 1
@@ -55,26 +69,23 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
         if (comparison.Path != path || comparison.Operator != QueryComparisonOperator.Equal || comparison.Values.Count != 1)
             throw new InvalidOperationException($"Runtime test query '{query.QueryIdentity}' has an unexpected shape.");
 
-#pragma warning disable GW0004
-        var matches = await documents.QueryAsync(
-            new DocumentStoreQuery(query.DocumentKind, index, comparison.Values[0]!),
-            cancellationToken);
-#pragma warning restore GW0004
+        var matches = documents.Snapshot(query.DocumentKind)
+            .Where(document => Matches(document, comparison))
+            .OrderBy(document => document.Id, StringComparer.Ordinal)
+            .ToArray();
         IEnumerable<DocumentEnvelope> page = matches.Skip(query.Skip ?? 0);
         if (query.Take is { } take)
             page = page.Take(take);
-        return new DocumentQueryResult(page.ToArray(), matches.Count);
+        return new DocumentQueryResult(page.ToArray(), matches.Length);
     }
 
-    private async Task<DocumentQueryResult> QueryOrderedRangeAsync(
+    private Task<DocumentQueryResult> QueryOrderedRangeAsync(
         DocumentQuery query,
         CancellationToken cancellationToken)
     {
-#pragma warning disable GW0004
-        var all = await documents.QueryAsync(new PortableDocumentQuery(query.DocumentKind), cancellationToken);
-#pragma warning restore GW0004
+        cancellationToken.ThrowIfCancellationRequested();
         var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
-        var matches = all.Documents
+        var matches = documents.Snapshot(query.DocumentKind)
             .Where(document => comparisons.All(comparison => Matches(document, comparison)))
             .ToArray();
         Array.Sort(matches, (left, right) => Compare(left, right, query.Order));
@@ -85,12 +96,12 @@ public sealed class RuntimeTestBoundedDocumentStore(IDocumentStore documents) : 
                 .Select(group => group.First())
                 .ToArray();
         }
-        return TestKeysetContinuations.Page(
+        return Task.FromResult(TestKeysetContinuations.Page(
             query,
             "runtime-test",
             matches,
             static (document, path) => ReadComparable(document, path),
-            "The Runtime test continuation is invalid or belongs to another query.");
+            "The Runtime test continuation is invalid or belongs to another query."));
     }
 
     private static bool Matches(DocumentEnvelope document, DocumentQueryComparison comparison)

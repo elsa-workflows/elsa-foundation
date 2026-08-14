@@ -1228,7 +1228,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
 
@@ -1275,7 +1275,7 @@ public class GroundworkWorkflowDefinitionCommandTests
             CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) =>

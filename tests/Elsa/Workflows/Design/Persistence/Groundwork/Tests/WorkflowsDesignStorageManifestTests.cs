@@ -66,8 +66,6 @@ public sealed class WorkflowsDesignStorageManifestTests
             var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
 
             Assert.Equal(StorageUnitProvisioningMode.Declared, storage.ProvisioningMode);
-            Assert.Empty(unit.Indexes);
-            Assert.Empty(unit.Queries);
             Assert.All(storage.BoundedQueries, query =>
             {
                 Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
@@ -234,8 +232,6 @@ public sealed class WorkflowsDesignStorageManifestTests
             Assert.DoesNotContain(table.Indexes, index => index.LogicalName == "by-collection");
             Assert.All(storage.BoundedQueries, query =>
                 Assert.NotEqual("list-all", query.Identity));
-            Assert.Empty(unit.Indexes);
-            Assert.Empty(unit.Queries);
         }
     }
 }

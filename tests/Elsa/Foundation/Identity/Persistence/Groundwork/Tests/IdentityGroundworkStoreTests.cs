@@ -289,7 +289,7 @@ public sealed class IdentityGroundworkStoreTests
             DeleteDocumentRequest request,
             CancellationToken cancellationToken = default) => Fail<DocumentStoreWriteResult>();
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) => Fail<IReadOnlyList<DocumentEnvelope>>();

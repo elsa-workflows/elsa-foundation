@@ -81,6 +81,7 @@ internal sealed class TemporalProjectionDocumentStore : IDocumentStore, IBounded
         }
     }
 
+    #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
     public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         DocumentStoreQuery query,
         CancellationToken cancellationToken = default) =>
@@ -100,6 +101,7 @@ internal sealed class TemporalProjectionDocumentStore : IDocumentStore, IBounded
         PortableDocumentQuery query,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
+    #pragma warning restore GW0004
 
     public Task<DocumentQueryResult> QueryAsync(
         DocumentQuery query,

@@ -806,14 +806,18 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     }
 
     // Records the last (SchemaVersion, ContentJson) saved per document kind at the SaveDocumentRequest
-    // boundary. Only SaveAsync is exercised by the direct-save bridges; every other member throws so an
-    // unexpected access surfaces loudly instead of silently returning empty data.
-    private sealed class CapturingDocumentStore : IDocumentStore
+    // boundary. Only SaveAsync is exercised by the direct-save bridges. The pre-save probes some
+    // bridges issue (load-before-save, unique-index checks) report an empty store so the save
+    // proceeds and is captured; every other member throws so an unexpected access surfaces loudly.
+    private sealed class CapturingDocumentStore : IDocumentStore, IDocumentEnumerationSource
     {
         private readonly Dictionary<string, (string SchemaVersion, string ContentJson)> _captured = new(StringComparer.Ordinal);
         public DocumentStoreAccess Access { get; } = GroundworkTestAccess.DefaultScoped;
 
         public (string SchemaVersion, string ContentJson) Captured(string kind) => _captured[kind];
+
+        // The capture boundary retains nothing, so every bounded-query evaluator over it sees an empty store.
+        public IReadOnlyCollection<DocumentEnvelope> Snapshot(string documentKind) => [];
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
         {
@@ -831,19 +835,22 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The capturing store only records saves.");
 
+#pragma warning disable GW0004 // IDocumentStore compatibility surface the double must still declare.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             // Immutable content-addressed stores probe a secondary unique index before their first save.
             // The capture boundary represents an empty store, so that probe has no matches.
             Task.FromResult<IReadOnlyList<DocumentEnvelope>>([]);
 
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("The capturing store only records saves.");
+            // Same probe as above, reached through the bounded-query adapter: an empty capture boundary.
+            Task.FromResult(new DocumentQueryResult([], 0));
 
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The capturing store only records saves.");
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The capturing store only records saves.");
+#pragma warning restore GW0004
 
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 

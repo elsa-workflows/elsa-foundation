@@ -35,6 +35,10 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <!-- The manifest physical-surface golden suite pins every feature manifest's resolved schema
+         fingerprints, so the two manifest assemblies not already referenced above are added here. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Persistence\Groundwork\Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
   <ItemGroup>

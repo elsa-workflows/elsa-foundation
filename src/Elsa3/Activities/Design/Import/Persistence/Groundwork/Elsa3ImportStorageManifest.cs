@@ -3,11 +3,9 @@ using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
-using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa3.Activities.Design.Import.Persistence.Groundwork;
 
-#pragma warning disable GW0001 // Legacy physicalization bridge is the admitted provider-neutral document manifest seam.
 public static class Elsa3ImportStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
@@ -15,7 +13,7 @@ public static class Elsa3ImportStorageManifest
     public const string ReceiptDocumentKind = "elsa3ReusableImportReceipt";
     public const string DefinitionBindingDocumentKind = "elsa3ReusableImportDefinitionBinding";
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa3-reusable-activity-import"),
         new StorageManifestOwner("elsa3.activities.design.import"),
         new StorageManifestVersion(SchemaVersion),
@@ -25,7 +23,12 @@ public static class Elsa3ImportStorageManifest
             Unit(DefinitionBindingDocumentKind, "Elsa 3 reusable import definition binding")
         ],
         new HashSet<string> { "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Every unit stores its documents in the shared Groundwork document table, so the manifest declares
+        // that table itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     public static string ReceiptId(string idempotencyKey, ReusableActivityImportAccessScope accessScope) =>
         ReusableActivityImportIdentity.Create(
@@ -34,20 +37,23 @@ public static class Elsa3ImportStorageManifest
             accessScope.UserId,
             idempotencyKey);
 
-    private static StorageUnit Unit(string documentKind, string label) => new(
-        new StorageUnitIdentity(documentKind),
-        label,
-        StorageIntent.PortableDocument(),
-        LifecyclePolicy.AppendOnly,
-        IdentityPolicy.StringId(),
-        TenancyPolicy.Scoped,
-        ConcurrencyPolicy.Optimistic(),
-        SerializationPolicy.Json(),
-        [],
-        [],
-        PhysicalizationPolicy.Portable);
+    private static StorageUnit Unit(string documentKind, string label)
+    {
+        // The unit and its shared-documents recipe must agree on tenancy: the recipe prefixes every
+        // physical index with the storage-scope column exactly when the unit is tenant-scoped.
+        var tenancy = TenancyPolicy.Scoped;
+        return StorageUnit.Create(
+            new StorageUnitIdentity(documentKind),
+            label,
+            StorageIntent.PortableDocument(),
+            LifecyclePolicy.AppendOnly,
+            IdentityPolicy.StringId(),
+            tenancy,
+            ConcurrencyPolicy.Optimistic(),
+            SerializationPolicy.Json(),
+            SharedDocumentsStorage.Create(documentKind, tenancy, [], []));
+    }
 }
-#pragma warning restore GW0001
 
 public sealed class Elsa3ImportGroundworkStorageManifestSource : IGroundworkStorageManifestSource
 {
@@ -57,7 +63,7 @@ public sealed class Elsa3ImportGroundworkStorageManifestSource : IGroundworkStor
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var manifest = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Elsa3ImportStorageManifest.Create());
+        var manifest = Elsa3ImportStorageManifest.Create();
         return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
             FeatureIdentity,
             manifest,

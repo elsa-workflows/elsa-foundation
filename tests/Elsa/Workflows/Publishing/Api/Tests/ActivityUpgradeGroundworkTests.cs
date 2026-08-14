@@ -896,10 +896,12 @@ public sealed class ActivityUpgradeGroundworkTests
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) => inner.SaveAsync(request, cancellationToken);
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) => inner.LoadAsync(documentKind, id, cancellationToken);
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) => inner.DeleteAsync(request, cancellationToken);
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
+        #pragma warning restore GW0004
 
         public async Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,

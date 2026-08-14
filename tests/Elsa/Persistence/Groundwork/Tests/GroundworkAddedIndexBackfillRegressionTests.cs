@@ -1,11 +1,13 @@
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,13 +21,14 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // History: previously (Groundwork ≤ preview.10) added indexes were NOT backfilled — a document written
 // before a new index was declared stayed invisible to that index until its next save. That gap was guarded
 // by this test as a probe. Groundwork preview.16 (PR #21) added index-projection backfill: when a manifest
-// adds a portable index, RelationalMaterializerBase backfills the projection for pre-existing documents
-// inside the materialization transaction. This test now guards that fixed behavior. See docs/serialization.md.
+// adds an index, the projection for pre-existing documents is backfilled as part of admitting the added
+// projection column and index. This test now guards that fixed behavior. See docs/serialization.md.
 public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelper output)
 {
     private const string Kind = "probe";
     private const string StimulusField = "stimulusHash";
     private const string ByStimulus = "by-stimulus";
+    private const string ListByStimulus = "list-by-stimulus";
 
     [Fact]
     public async Task AddedIndex_BackfillsPreexistingDocuments()
@@ -36,14 +39,15 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
         try
         {
             // Phase 1: manifest WITHOUT the by-stimulus index. Write a document carrying a stimulusHash field.
-            var firstStore = await SqliteDocumentStoreFactory.CreateAsync(
+            var (firstStore, _) = await GroundworkPhysicalTestStores.OpenSqliteAsync(
                 connectionString, ManifestWithoutIndex(), Provider, DocumentStoreAccess.Global);
             await firstStore.SaveAsync(
                 new SaveDocumentRequest(Kind, "doc-1", "1.0.0", """{"stimulusHash":"hash-order","name":"pre-existing"}"""),
                 CancellationToken.None);
 
-            // Phase 2: reopen the SAME database with a manifest that ADDS the by-stimulus index, then query it.
-            var secondStore = await SqliteDocumentStoreFactory.CreateAsync(
+            // Phase 2: reopen the SAME database with a manifest that ADDS the by-stimulus index. Admitting the
+            // added projection column and index on open is what has to carry doc-1 across.
+            var (secondStore, queries) = await GroundworkPhysicalTestStores.OpenSqliteAsync(
                 connectionString, ManifestWithIndex(), Provider, DocumentStoreAccess.Global);
 
             // A freshly written document is always visible through the new index (control).
@@ -51,8 +55,14 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
                 new SaveDocumentRequest(Kind, "doc-2", "1.0.0", """{"stimulusHash":"hash-order","name":"post-index"}"""),
                 CancellationToken.None);
 
-            var results = await secondStore.QueryAsync(new DocumentStoreQuery(Kind, ByStimulus, "hash-order"), CancellationToken.None);
-            var ids = results.Select(e => e.Id).OrderBy(x => x).ToArray();
+            var results = await queries.QueryAsync(
+                new DocumentQuery(
+                    Kind,
+                    ListByStimulus,
+                    [DocumentQueryClause.Of(DocumentQueryComparison.Equal(StimulusField, "hash-order"))],
+                    take: 10),
+                CancellationToken.None);
+            var ids = results.Documents.Select(e => e.Id).OrderBy(x => x).ToArray();
 
             output.WriteLine($"Documents visible via added index for 'hash-order': [{string.Join(", ", ids)}]");
 
@@ -61,14 +71,15 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
             // the index was declared. So BOTH the pre-existing document (doc-1, written under the no-index
             // manifest) AND the post-index document (doc-2) are visible through the new index — no re-save
             // required. Prior to preview.16 only doc-2 was returned; this test guarded that gap as a probe.
-            // Backfill runs inside the materialization transaction (RelationalMaterializerBase), sharing
-            // single-field index semantics with save-time via RelationalIndexValues.TryGetIndexValue.
             Assert.Equal(new[] { "doc-1", "doc-2" }, ids);
         }
         finally
         {
-            if (File.Exists(dbPath))
-                File.Delete(dbPath);
+            foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
         }
     }
 
@@ -79,14 +90,17 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
     private static StorageManifest ManifestWithIndex() => Manifest(
         "1.1.0",
         indexes: [Keyword(ByStimulus, StimulusField)],
-        queries: [Query("list-by-stimulus", ByStimulus)]);
+        queries: [Query(ListByStimulus, ByStimulus)]);
 
-    private static StorageManifest Manifest(string version, IndexDeclaration[] indexes, PortableQueryDeclaration[] queries) => new(
+    private static StorageManifest Manifest(
+        string version,
+        SharedDocumentsIndex[] indexes,
+        BoundedQueryDeclaration[] queries) => new StorageManifest(
         new StorageManifestIdentity("elsa-probe"),
         new StorageManifestOwner("elsa.probe"),
         new StorageManifestVersion(version),
         [
-            new StorageUnit(
+            StorageUnit.Create(
                 new StorageUnitIdentity(Kind),
                 "Probe",
                 StorageIntent.PortableDocument(),
@@ -95,23 +109,24 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
                 TenancyPolicy.Global,
                 ConcurrencyPolicy.Optimistic(),
                 SerializationPolicy.Json(),
-                indexes,
-                queries,
-                PhysicalizationPolicy.Portable)
+                SharedDocumentsStorage.Create(Kind, TenancyPolicy.Global, indexes, queries))
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        []);
+        [])
+    {
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
-    private static IndexDeclaration Keyword(string identity, string field) => new(
-        identity,
-        [new IndexField(field)],
-        IndexValueKind.Keyword,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+    private static SharedDocumentsIndex Keyword(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.Keyword,
+            isUnique: false,
+            missingValueBehavior: MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static PortableQueryDeclaration Query(string name, string indexName) => new(
+    private static BoundedQueryDeclaration Query(string name, string indexName) => new(
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },

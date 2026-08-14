@@ -26,9 +26,10 @@ public sealed class PublishingGroundworkLifetimeTests
         new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddGroundworkPublishingStores();
-        services.AddScoped<IDocumentStore>(_ => new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
+        services.AddScoped(_ => new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
+        services.AddScoped<IDocumentStore>(sp => sp.GetRequiredService<InMemoryDocumentStore>());
         services.AddScoped<IBoundedDocumentStore>(sp =>
-            new PublishingTestBoundedDocumentStore(sp.GetRequiredService<IDocumentStore>()));
+            new PublishingTestBoundedDocumentStore(sp.GetRequiredService<InMemoryDocumentStore>()));
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddScoped<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();

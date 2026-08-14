@@ -885,7 +885,6 @@ public sealed class ReusableActivityImportOperationTests
         public JsonSerializerOptions GetOptions() => throw Failure();
     }
 
-#pragma warning disable GW0004 // Required legacy IDocumentStore members on the failure-injection test double.
     private sealed class FailingAtomicDocumentStore
         : IDocumentStore, IBoundedDocumentStore
     {
@@ -916,6 +915,7 @@ public sealed class ReusableActivityImportOperationTests
             CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) =>
@@ -935,6 +935,7 @@ public sealed class ReusableActivityImportOperationTests
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) =>
             inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
 
         public Task<DocumentQueryResult> QueryAsync(
             DocumentQuery query,
@@ -1016,6 +1017,7 @@ public sealed class ReusableActivityImportOperationTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
             DocumentStoreQuery query,
             CancellationToken cancellationToken = default) =>
@@ -1035,13 +1037,13 @@ public sealed class ReusableActivityImportOperationTests
             PortableDocumentQuery query,
             CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
+#pragma warning restore GW0004
 
         public Task<IDocumentUnitOfWork> BeginAsync(
             DocumentCommitScope scope,
             CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
     }
-#pragma warning restore GW0004
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

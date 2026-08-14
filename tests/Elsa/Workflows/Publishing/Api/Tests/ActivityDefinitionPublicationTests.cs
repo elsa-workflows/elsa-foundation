@@ -2427,10 +2427,12 @@ public sealed class ActivityDefinitionPublicationTests
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) => Inner.SaveAsync(request, cancellationToken);
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) => Inner.LoadAsync(documentKind, id, cancellationToken);
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) => Inner.DeleteAsync(request, cancellationToken);
+        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) => Inner.QueryAsync(query, cancellationToken);
         public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.QueryAsync(query, cancellationToken);
         public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.FirstOrDefaultAsync(query, cancellationToken);
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) => Inner.AnyAsync(query, cancellationToken);
+        #pragma warning restore GW0004
         public virtual Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) => Inner.BeginAsync(scope, cancellationToken);
 
         Task<DocumentQueryResult> IBoundedDocumentStore.QueryAsync(DocumentQuery query, CancellationToken cancellationToken) => Inner.QueryAsync(query, cancellationToken);

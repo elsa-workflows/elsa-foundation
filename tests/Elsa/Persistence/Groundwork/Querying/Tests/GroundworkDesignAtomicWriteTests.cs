@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core.Design;
 using System.Text.Json;
@@ -850,10 +851,13 @@ public sealed class GroundworkDesignAtomicWriteTests
             Unit(GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind, "Design operation ledger")
         ],
         new HashSet<string> { "optimistic-concurrency" },
-        []);
+        [])
+    {
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     private static StorageUnit Unit(string kind, string label) =>
-        new(
+        StorageUnit.Create(
             new StorageUnitIdentity(kind),
             label,
             StorageIntent.PortableDocument(),
@@ -862,9 +866,7 @@ public sealed class GroundworkDesignAtomicWriteTests
             TenancyPolicy.Global,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
+            SharedDocumentsStorage.Create(kind, TenancyPolicy.Global, [], []));
 
     private class DelegatingDocumentStore(IDocumentStore inner) : IDocumentStore
     {

@@ -64,11 +64,19 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests : IAsyncDisposabl
 
     private async Task<TenantStores> StoresAsync(string tenantId)
     {
+        // The Groundwork dashboard SQL still reads workflow definitions, drafts and executions out of the shared
+        // groundwork_documents table. Since wave 3 every manifest declares its physical storage, and a physically
+        // opened store routes those kinds into dedicated tables (workflowDefinition, workflowDefinitionDraft,
+        // workflow_execution_states) instead — so this fixture can only reproduce what the data source reads by
+        // opening on the retired portable surface. The data source is what has to change; until it does, this open
+        // stays portable and the package bump will surface it here.
+        #pragma warning disable GW0005
         var store = await SqliteDocumentStoreFactory.CreateAsync(
             $"Data Source={_path}",
             ElsaRuntimeStorageManifest.Create(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             DocumentStoreAccess.Scoped(new StorageScope(tenantId)));
+        #pragma warning restore GW0005
         return new(
             new(store, _serializer, new FixedAccessContextAccessor(
                 PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)))),

@@ -7,7 +7,6 @@ using Groundwork.Documents.UnitOfWork;
 namespace Elsa.Persistence.Groundwork.Testing;
 
 /// <summary>Hides an inner provider's bounded surface while preserving its complete document-store contract.</summary>
-#pragma warning disable GW0004 // This adapter intentionally implements the complete compatibility surface.
 public sealed class DocumentStoreOnlyAdapter(IDocumentStore inner) : IDocumentStore
 {
     public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
@@ -30,6 +29,7 @@ public sealed class DocumentStoreOnlyAdapter(IDocumentStore inner) : IDocumentSt
         CancellationToken cancellationToken = default) =>
         inner.DeleteAsync(request, cancellationToken);
 
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; each delegates to the inner store.
     public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         DocumentStoreQuery query,
         CancellationToken cancellationToken = default) =>
@@ -49,10 +49,10 @@ public sealed class DocumentStoreOnlyAdapter(IDocumentStore inner) : IDocumentSt
         PortableDocumentQuery query,
         CancellationToken cancellationToken = default) =>
         inner.AnyAsync(query, cancellationToken);
+#pragma warning restore GW0004
 
     public Task<IDocumentUnitOfWork> BeginAsync(
         DocumentCommitScope scope,
         CancellationToken cancellationToken = default) =>
         inner.BeginAsync(scope, cancellationToken);
 }
-#pragma warning restore GW0004

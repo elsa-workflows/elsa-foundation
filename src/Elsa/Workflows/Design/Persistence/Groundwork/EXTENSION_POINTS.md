@@ -63,8 +63,8 @@ material. Replace it only when specializing that complete Groundwork origination
 ## Storage manifest declaration
 
 `WorkflowsDesignGroundworkStorageManifestSource` (feature identity `elsa-workflows-design`) implements
-`IGroundworkStorageManifestSource`. It physicalizes `WorkflowsDesignStorageManifest.Create()` through
-`LegacyGroundworkStorageManifestPhysicalizer.Physicalize` and declares the read ports it owns
+`IGroundworkStorageManifestSource`. It contributes `WorkflowsDesignStorageManifest.Create()` and
+declares the read ports it owns
 (`IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`,
 `IWorkflowDefinitionListProjectionStore`, `IWorkflowDefinitionVersionLayoutStore`).
 

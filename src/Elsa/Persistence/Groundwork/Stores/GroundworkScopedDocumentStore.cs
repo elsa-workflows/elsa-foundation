@@ -40,7 +40,7 @@ public sealed class GroundworkScopedDocumentStore(
         CancellationToken cancellationToken = default) =>
         WithDocumentsAsync(store => store.DeleteAsync(request, cancellationToken), cancellationToken);
 
-#pragma warning disable GW0004
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; each routes through an ordinary scoped session.
     public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
         DocumentStoreQuery query,
         CancellationToken cancellationToken = default) =>

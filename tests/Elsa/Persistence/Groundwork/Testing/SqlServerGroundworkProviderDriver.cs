@@ -169,7 +169,7 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         CancellationToken cancellationToken) =>
         OpenClientCoreAsync(
             clientId,
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             GroundworkTestAccess.DefaultScoped,
             cancellationToken);
 
@@ -183,15 +183,17 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
         {
             ApplicationName = $"elsa-groundwork-driver-{clientId:N}"
         }.ConnectionString;
-        var store = await SqlServerDocumentStoreFactory.CreateAsync(
+        var (store, queries) = await GroundworkPhysicalTestStores.OpenSqlServerAsync(
             connectionString,
             manifest,
             new ProviderIdentity("groundwork-sqlserver", PackageVersion),
             access,
-            cancellationToken: cancellationToken);
+            cancellationToken);
         var services = new ServiceCollection()
             .AddSingleton(store)
             .AddSingleton<IDocumentStore>(store)
+            .AddSingleton(queries)
+            .AddSingleton<IBoundedDocumentStore>(queries)
             .BuildServiceProvider();
 
         return new GroundworkProviderClient(
@@ -202,7 +204,8 @@ public sealed class SqlServerGroundworkProviderDriver : GroundworkProviderDriver
             {
                 await services.DisposeAsync();
                 ClearPool(connectionString);
-            });
+            },
+            queries);
     }
 
     protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
