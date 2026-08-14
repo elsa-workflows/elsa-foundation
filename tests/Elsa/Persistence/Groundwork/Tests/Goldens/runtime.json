@@ -1,0 +1,6835 @@
+{
+  "manifest": "elsa-workflows-runtime",
+  "owner": "elsa.workflows.runtime",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [
+    {
+      "binding": "groundwork_documents",
+      "featureDefaultLogicalName": "groundwork_documents",
+      "canonicalJsonColumn": "content_json",
+      "schemaVersion": 1
+    }
+  ],
+  "storageUnits": [
+    {
+      "identity": "activityExecutionHierarchy",
+      "definitionFingerprint": "70fd3fc38528eaf03f512556a516c85bb06016c0fb220f671545d0856704c2d2",
+      "fingerprint": "fd72adcaeef9eae282d2f503776babc1d87a768f38914772a97df759267b3811",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-execution-scope",
+          "fields": [
+            {
+              "path": "executionScopeId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-hierarchy-order",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "executionSequence",
+              "valueKind": "Number"
+            },
+            {
+              "path": "activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution-and-hierarchy-page",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "executionSequence",
+              "valueKind": "Number"
+            },
+            {
+              "path": "activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution-scope-and-hierarchy-order",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "executionScopeId"
+            },
+            {
+              "path": "isScopeRoot",
+              "valueKind": "Boolean"
+            },
+            {
+              "path": "executionSequence",
+              "valueKind": "Number"
+            },
+            {
+              "path": "activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-latest-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-hierarchy-order",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "executionSequence",
+              "direction": "Descending"
+            },
+            {
+              "path": "activityExecutionId",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-execution-scope",
+          "indexIdentity": "by-execution-scope",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-hierarchy-page",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "executionSequence",
+              "direction": "Descending"
+            },
+            {
+              "path": "activityExecutionId",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-workflow-execution-and-scope",
+          "indexIdentity": "by-workflow-execution-scope-and-hierarchy-order",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "executionSequence",
+              "direction": "Ascending"
+            },
+            {
+              "path": "activityExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "executionScopeId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isScopeRoot",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "executionSequence",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "activityExecutionInspection",
+      "definitionFingerprint": "5eb649a5c2fd991f4a329c26e34d225e3ed55b0d479a8693863316367f9ffe0a",
+      "fingerprint": "37b6cf6c0c8817ea5cc3c51947deade48b74373bd8a6add2a76465c73f5c1ca1",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-summary-order",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "summary.executionSequence",
+              "valueKind": "Number"
+            },
+            {
+              "path": "summary.scheduledAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "summary.activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-summaries-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-summary-order",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "summary.executionSequence",
+              "direction": "Ascending"
+            },
+            {
+              "path": "summary.scheduledAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "summary.activityExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "activityExecutionState",
+      "definitionFingerprint": "544f15f0fbd05474fde36d1d85d57dd15f284211f9ec7b01172e2b3dcfd09cae",
+      "fingerprint": "e5db4aeb1ecbff05b6d4458788de6b76cac443dac6237cb3778b9a0cbdbe7368",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-parent-activity-execution",
+          "fields": [
+            {
+              "path": "state.parentActivityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-activity-execution-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "state.execution.activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-parent-and-activity-execution-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "state.parentActivityExecutionId"
+            },
+            {
+              "path": "state.execution.activityExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-parent-activity-execution",
+          "indexIdentity": "by-parent-activity-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-parent-activity-execution",
+          "indexIdentity": "by-workflow-parent-and-activity-execution-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.execution.activityExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.parentActivityExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-activity-execution-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.execution.activityExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "bookmarkState",
+      "definitionFingerprint": "b4d74f415ee33fb4eaa231967537895e788ed0ffa6ce09f466474912be93e410",
+      "fingerprint": "4ca897526f85b83f7c8331672c31ada6de0e891f9a6996bd11816937a28ffc38",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-stimulus",
+          "fields": [
+            {
+              "path": "stimulusHash"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-stimulus-and-type-and-bookmark-identity",
+          "fields": [
+            {
+              "path": "stimulusLookupKey"
+            },
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "bookmarkId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-stimulus-type",
+          "fields": [
+            {
+              "path": "stimulusType"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-stimulus-type-and-bookmark-identity",
+          "fields": [
+            {
+              "path": "stimulusTypeLookupKey"
+            },
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "bookmarkId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-bookmark-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "bookmarkId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-stimulus",
+          "indexIdentity": "by-stimulus",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-stimulus-and-type",
+          "indexIdentity": "by-stimulus-and-type-and-bookmark-identity",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "bookmarkId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "stimulusLookupKey",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-stimulus-type",
+          "indexIdentity": "by-stimulus-type-and-bookmark-identity",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "bookmarkId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "stimulusTypeLookupKey",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-bookmark-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "bookmarkId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "checkpointCommit",
+      "definitionFingerprint": "1c9ff4d8d15fc04b2100a8dd668d6e1d4263907b62b2d33207d4b8e6588b4874",
+      "fingerprint": "7a20847163b4a91eb19b09a73320adf5f0e24f1f833116ec212db6066663f834",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "controlPlaneState",
+      "definitionFingerprint": "76e8eca6ae5de6dd445f4d9e9e865d44ddacbfd3caa105b210907f97086b0208",
+      "fingerprint": "d1b2a5454614d2dd6e40229ab958521449425d6697cbc45339ae1b385fbb31fb",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "durableTimer",
+      "definitionFingerprint": "880f2f5eb3366fefb66fd0126ef6878f8cee72de4a075bebaf8e59e97aeac513",
+      "fingerprint": "ba4bdf2be0c207c152028115051ce79efbc416f9881060cfba0d3c7e2dd3f81a",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-claim-order",
+          "fields": [
+            {
+              "path": "claimOrderKey",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-due-time",
+          "fields": [
+            {
+              "path": "timer.dueTime"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-due-time-and-timer-id",
+          "fields": [
+            {
+              "path": "timer.dueTime",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "timer.timerId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-timer-id",
+          "fields": [
+            {
+              "path": "timer.timerId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-timer-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "timer.timerId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "claim-due",
+          "indexIdentity": "by-claim-order",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimOrderKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "claimOrderKey",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-due",
+          "indexIdentity": "by-due-time-and-timer-id",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "timer.dueTime",
+              "direction": "Ascending"
+            },
+            {
+              "path": "timer.timerId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "timer.dueTime",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-timer-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "timer.timerId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "durableValueState",
+      "definitionFingerprint": "55bffd94f33c225ef40bce92b8eec5ee79751192f7230974acf8c3f2637224f3",
+      "fingerprint": "d2a7b262267dbff11938f2a5bec6b7a098f14c7d1267551ec6609de2b76fa1fe",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-durable-value-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "durableValueId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-durable-value-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "durableValueId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "executableActivityTemplate",
+      "definitionFingerprint": "b1bb7967a7e4c82076b55d9b5f46533f17f763e66c4aa148c2ac937e12a93fa5",
+      "fingerprint": "4d96153990948c2c67aa5592d6c61dd57924f171212898ec94b3f5daf302e622",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection-and-document-id",
+          "fields": [
+            {
+              "path": "collection",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "template.templateId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-template-hash",
+          "fields": [
+            {
+              "path": "templateHash"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-by-template-hash",
+          "indexIdentity": "by-template-hash",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "templateHash",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-all",
+          "indexIdentity": "by-collection-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "template.templateId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "executableActivityTemplateHashClaim",
+      "definitionFingerprint": "3c512dfbd1fb7d5b4270d6766b663b41553dfd3be34d7a2126218b04cd315433",
+      "fingerprint": "078de5921e9e2c4c157e6ed64a9817b8cf249b598ab418ed8215736b94906c20",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "incidentState",
+      "definitionFingerprint": "3c4ec2ff3e8991163054370b0735eec59b7de466e397479d120e77b4dc1849c9",
+      "fingerprint": "31052fc68c41dac3f99072ea311af84113efb52a9f351f64e8029773a01a74dd",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-status-created-at-workflow-and-incident",
+          "fields": [
+            {
+              "path": "status",
+              "valueKind": "Number"
+            },
+            {
+              "path": "createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "workflowExecutionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "incidentId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-attention-by-status",
+          "indexIdentity": "by-status-created-at-workflow-and-incident",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "incidentId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "operationalState",
+      "definitionFingerprint": "1b435365e888915ae6588d72e454d16a48dda59636f7c22b36689be52d3949d1",
+      "fingerprint": "2a7f1795c08349280daab539f9da111265044aba2e12c1f8cf2c850020e98a2e",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection-workflow-execution-and-operational-state-id",
+          "fields": [
+            {
+              "path": "collection"
+            },
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "state.operationalStateId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-detected",
+          "fields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "valueKind": "Number"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-detected-heartbeat-owner",
+          "fields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "valueKind": "Number"
+            },
+            {
+              "path": "state.heartbeat.ownerId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-detected-lease-owner",
+          "fields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "valueKind": "Number"
+            },
+            {
+              "path": "state.executionLease.ownerId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-detected-ownerless",
+          "fields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "valueKind": "Number"
+            },
+            {
+              "path": "hasOperationalOwner",
+              "valueKind": "Boolean"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-heartbeat",
+          "fields": [
+            {
+              "path": "state.heartbeat.recordedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-heartbeat-owner",
+          "fields": [
+            {
+              "path": "state.heartbeat.ownerId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "state.heartbeat.recordedAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-lease-acquisition",
+          "fields": [
+            {
+              "path": "state.executionLease.acquiredAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-lease-acquisition-owner",
+          "fields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "state.executionLease.acquiredAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-lease-expiry",
+          "fields": [
+            {
+              "path": "state.executionLease.expiresAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recovery-lease-expiry-owner",
+          "fields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "state.executionLease.expiresAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-operational-state-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "state.operationalStateId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-heartbeat",
+          "indexIdentity": "by-recovery-heartbeat",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.heartbeat.recordedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.heartbeat.recordedAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-heartbeat-and-owner",
+          "indexIdentity": "by-recovery-heartbeat-owner",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.heartbeat.ownerId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.heartbeat.recordedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.heartbeat.ownerId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.heartbeat.recordedAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-lease-acquisition",
+          "indexIdentity": "by-recovery-lease-acquisition",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.executionLease.acquiredAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.executionLease.acquiredAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-lease-acquisition-and-owner",
+          "indexIdentity": "by-recovery-lease-acquisition-owner",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.executionLease.acquiredAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.executionLease.acquiredAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-lease-expiry",
+          "indexIdentity": "by-recovery-lease-expiry",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.executionLease.expiresAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.executionLease.expiresAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-by-lease-expiry-and-owner",
+          "indexIdentity": "by-recovery-lease-expiry-owner",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.executionLease.expiresAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.executionLease.ownerId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.executionLease.expiresAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-detected",
+          "indexIdentity": "by-recovery-detected",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-detected-by-heartbeat-owner",
+          "indexIdentity": "by-recovery-detected-heartbeat-owner",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.heartbeat.ownerId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.heartbeat.ownerId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-detected-by-lease-owner",
+          "indexIdentity": "by-recovery-detected-lease-owner",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.executionLease.ownerId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "state.executionLease.ownerId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-recovery-detected-ownerless",
+          "indexIdentity": "by-recovery-detected-ownerless",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "hasOperationalOwner",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.interruptedExecution.interruptedAt",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state.interruptedExecution.status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "hasOperationalOwner",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-all",
+          "indexIdentity": "by-collection-workflow-execution-and-operational-state-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "state.operationalStateId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution-and-operational-state-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state.operationalStateId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "postCommitOutbox",
+      "definitionFingerprint": "1fe3943a79cb7e5e6120873713fd72cd7dd832116bc9619037d32e9d026259b6",
+      "fingerprint": "08fc45775f582c00cf641e013e3d790406cc0a5cb38f47072c30245e45566635",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-claimable-by-intent-kind-time-recorded-id",
+          "fields": [
+            {
+              "path": "item.intent.kind"
+            },
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-claimable-by-workflow-and-intent-kind-time-recorded-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "item.intent.kind"
+            },
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-claimable-by-workflow-time-recorded-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-claimable-time-recorded-id",
+          "fields": [
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-deliverable-by-intent-kind-time-recorded-id",
+          "fields": [
+            {
+              "path": "item.intent.kind"
+            },
+            {
+              "path": "deliverableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-deliverable-by-workflow-and-intent-kind-time-recorded-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "item.intent.kind"
+            },
+            {
+              "path": "deliverableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-deliverable-by-workflow-time-recorded-id",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "deliverableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-deliverable-time-recorded-id",
+          "fields": [
+            {
+              "path": "deliverableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-claimable-at",
+          "fields": [
+            {
+              "path": "claimableAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-deliverable-at",
+          "fields": [
+            {
+              "path": "deliverableAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-intent-kind",
+          "fields": [
+            {
+              "path": "item.intent.kind"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-item-id",
+          "fields": [
+            {
+              "path": "item.outboxItemId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-recorded-at",
+          "fields": [
+            {
+              "path": "item.recordedAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-outbox-status",
+          "fields": [
+            {
+              "path": "item.status"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable",
+          "indexIdentity": "by-claimable-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable-by-intent-kind",
+          "indexIdentity": "by-claimable-by-intent-kind-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "item.intent.kind",
+              "direction": "Ascending"
+            },
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "item.intent.kind",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable-by-workflow",
+          "indexIdentity": "by-claimable-by-workflow-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable-by-workflow-and-intent-kind",
+          "indexIdentity": "by-claimable-by-workflow-and-intent-kind-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.intent.kind",
+              "direction": "Ascending"
+            },
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "item.intent.kind",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-deliverable",
+          "indexIdentity": "by-deliverable-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "deliverableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "deliverableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-deliverable-by-intent-kind",
+          "indexIdentity": "by-deliverable-by-intent-kind-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "item.intent.kind",
+              "direction": "Ascending"
+            },
+            {
+              "path": "deliverableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "item.intent.kind",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "deliverableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-deliverable-by-workflow",
+          "indexIdentity": "by-deliverable-by-workflow-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "deliverableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "deliverableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-deliverable-by-workflow-and-intent-kind",
+          "indexIdentity": "by-deliverable-by-workflow-and-intent-kind-time-recorded-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.intent.kind",
+              "direction": "Ascending"
+            },
+            {
+              "path": "deliverableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "item.outboxItemId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "item.intent.kind",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "deliverableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "publicationProjectionState",
+      "definitionFingerprint": "bded0be5ba384a09a86abb1e1acf29b408e0695635352683f06f9783496431e2",
+      "fingerprint": "b0ccded4a78fda9b2f873414aaf6675901a18e5832a8b849bab8ec88882ac438",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "recurringTriggerSchedule",
+      "definitionFingerprint": "57b015bbe92c8268ca523d7c3fd394e35f6b91b3142c22364aea4d81af07345e",
+      "fingerprint": "b93c0ee1e15d5039d54f8373e34cd7c895f12145c0880879ba60d621e4582524",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-active-next-occurrence-and-schedule-id",
+          "fields": [
+            {
+              "path": "schedule.isActive",
+              "valueKind": "Boolean"
+            },
+            {
+              "path": "schedule.nextOccurrence",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "schedule.scheduleId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-artifact",
+          "fields": [
+            {
+              "path": "artifactId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-artifact-and-schedule-id",
+          "fields": [
+            {
+              "path": "artifactId"
+            },
+            {
+              "path": "schedule.scheduleId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-next-occurrence",
+          "fields": [
+            {
+              "path": "schedule.nextOccurrence"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-publication",
+          "fields": [
+            {
+              "path": "schedule.publicationId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-publication-and-schedule-id",
+          "fields": [
+            {
+              "path": "schedule.publicationId"
+            },
+            {
+              "path": "schedule.scheduleId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-recurring-schedule-active",
+          "fields": [
+            {
+              "path": "schedule.isActive"
+            }
+          ],
+          "valueKind": "Boolean",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-recurring-schedule-id",
+          "fields": [
+            {
+              "path": "schedule.scheduleId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-artifact",
+          "indexIdentity": "by-artifact",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-publication",
+          "indexIdentity": "by-publication",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-due",
+          "indexIdentity": "by-active-next-occurrence-and-schedule-id",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "schedule.isActive",
+              "direction": "Ascending"
+            },
+            {
+              "path": "schedule.nextOccurrence",
+              "direction": "Ascending"
+            },
+            {
+              "path": "schedule.scheduleId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "schedule.isActive",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "schedule.nextOccurrence",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-artifact",
+          "indexIdentity": "by-artifact-and-schedule-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "schedule.scheduleId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "artifactId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-publication",
+          "indexIdentity": "by-publication-and-schedule-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "schedule.scheduleId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "schedule.publicationId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "schedulerPoison",
+      "definitionFingerprint": "7b292ceddd720ca471dc173402ec5bee819cf7557b6cb3df32ef7c69d3c61b08",
+      "fingerprint": "3a45981f4caa6ce27981d5ad4d56b4113cd4c514cbe4f4ee4b5ef6587d32ac48",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "schedulerState",
+      "definitionFingerprint": "35019ce99f1ceda60540cf75d48eb1527226b33910f71bcf8d51d468a2263c02",
+      "fingerprint": "9f2220e7febd55d6dd004ce7aab3a45d41aac89292ff7ad11281daf7d55e0528",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "schedulerWorkItem",
+      "definitionFingerprint": "e4597f4d989394e5697571e3f676cab00ed754d6d58207f44df4a535dcd8270c",
+      "fingerprint": "e0dfafa39a9c0a1807cc8f1407c2f038ba3a89478531c60042194c3d0dadd3af",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-scheduler-work-order",
+          "fields": [
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "orderKey"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-workflow-execution",
+          "fields": [
+            {
+              "path": "workflowExecutionId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-workflow-execution-and-scheduler-work-order",
+          "fields": [
+            {
+              "path": "collection"
+            },
+            {
+              "path": "workflowExecutionId"
+            },
+            {
+              "path": "orderKey"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-workflow-execution",
+          "indexIdentity": "by-scheduler-work-order",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "orderKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-pending-scheduler-workflow-executions",
+          "indexIdentity": "by-workflow-execution-and-scheduler-work-order",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "workflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "orderKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ],
+          "latestPerKeyPath": "workflowExecutionId"
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowAlterationJob",
+      "definitionFingerprint": "b21b386232490898c3bc675f73462d65581f2d3c79a83fc8a1c67d47100c5687",
+      "fingerprint": "e126c944e9dad187aea8737b291c87bab5b7331547a340ea8bd044281361a525",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "alteration_job_checkpoint",
+          "fields": [
+            {
+              "path": "checkpointCommitId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "alteration_jobs_counts",
+          "fields": [
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "status",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-claimable-at",
+          "fields": [
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-plan-and-capture-ordinal",
+          "fields": [
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "captureOrdinal",
+              "valueKind": "Number"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-plan-and-claimable-at",
+          "fields": [
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-plan-status-and-claimable-at",
+          "fields": [
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "status",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "jobId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "checkpointCommitId",
+          "fields": [
+            {
+              "path": "checkpointCommitId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "status",
+          "fields": [
+            {
+              "path": "status"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "count-by-plan-and-status",
+          "indexIdentity": "alteration_jobs_counts",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "find-by-checkpoint-commit-id",
+          "indexIdentity": "alteration_job_checkpoint",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "checkpointCommitId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable",
+          "indexIdentity": "by-claimable-at",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-claimable-by-plan",
+          "indexIdentity": "by-plan-and-claimable-at",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-pending-by-plan",
+          "indexIdentity": "alteration_jobs_counts",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-pending-claimable-by-plan",
+          "indexIdentity": "by-plan-status-and-claimable-at",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-running-claimable-by-plan",
+          "indexIdentity": "by-plan-status-and-claimable-at",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-plan",
+          "indexIdentity": "by-plan-and-capture-ordinal",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "captureOrdinal",
+              "direction": "Ascending"
+            },
+            {
+              "path": "jobId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "planId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowAlterationPlan",
+      "definitionFingerprint": "f5773bb68178f506cc962fd12df266480c038b130d0fadaecdab8bbb35486551",
+      "fingerprint": "4502ef4a74bdb4966db59a2a25c455d88576c2a84902cbf629ec34822387eb84",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-tenant-and-idempotency-key",
+          "fields": [
+            {
+              "path": "tenantPartition",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "idempotencyKeyHash",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "planId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-tenant-and-status",
+          "fields": [
+            {
+              "path": "tenantPartition",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "status",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "activeOrderKey",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "status",
+          "fields": [
+            {
+              "path": "status",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "activeOrderKey",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "unique-tenant-and-idempotency-key",
+          "fields": [
+            {
+              "path": "tenantIdempotencyKey",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-by-tenant-and-idempotency-key",
+          "indexIdentity": "by-tenant-and-idempotency-key",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "planId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "tenantPartition",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "idempotencyKeyHash",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "planId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-active",
+          "indexIdentity": "status",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "activeOrderKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "activeOrderKey",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-active-by-tenant",
+          "indexIdentity": "by-tenant-and-status",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "activeOrderKey",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "tenantPartition",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "activeOrderKey",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowDispatch",
+      "definitionFingerprint": "83f6ea20a4e94bf88136a30650fc771ec99df68033e84fe638e176e4b1b72f5e",
+      "fingerprint": "4069a3f3cc4db04a8d3544c5d31ff6f3cb91f30f48c8af0c551e7bd3f37dc384",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-child-workflow-execution",
+          "fields": [
+            {
+              "path": "childWorkflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-child-workflow-execution-and-status",
+          "fields": [
+            {
+              "path": "childWorkflowExecutionId"
+            },
+            {
+              "path": "status"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-created-at",
+          "fields": [
+            {
+              "path": "record.createdAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-dispatch-id",
+          "fields": [
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution-and-status",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            },
+            {
+              "path": "status"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution-status-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            },
+            {
+              "path": "status"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution-status-test-scope-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            },
+            {
+              "path": "status"
+            },
+            {
+              "path": "testScopeId"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-parent-workflow-execution-test-scope-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "parentWorkflowExecutionId"
+            },
+            {
+              "path": "testScopeId"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-status",
+          "fields": [
+            {
+              "path": "status"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-status-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "status"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-status-test-scope-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "status"
+            },
+            {
+              "path": "testScopeId"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-test-scope",
+          "fields": [
+            {
+              "path": "testScopeId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-test-scope-created-at-dispatch-id",
+          "fields": [
+            {
+              "path": "testScopeId"
+            },
+            {
+              "path": "record.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "record.dispatchId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-child-workflow-execution",
+          "indexIdentity": "by-child-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-child-workflow-execution-and-status",
+          "indexIdentity": "by-child-workflow-execution-and-status",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "childWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-parent-workflow-execution",
+          "indexIdentity": "by-parent-workflow-execution",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-parent-workflow-execution-and-status",
+          "indexIdentity": "by-parent-workflow-execution-and-status",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-status",
+          "indexIdentity": "by-status",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-test-scope",
+          "indexIdentity": "by-test-scope",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-parent-workflow-execution",
+          "indexIdentity": "by-parent-workflow-execution-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-parent-workflow-execution-and-status",
+          "indexIdentity": "by-parent-workflow-execution-status-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-parent-workflow-execution-and-test-scope",
+          "indexIdentity": "by-parent-workflow-execution-test-scope-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "testScopeId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "testScopeId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-parent-workflow-execution-status-and-test-scope",
+          "indexIdentity": "by-parent-workflow-execution-status-test-scope-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "testScopeId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "parentWorkflowExecutionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "testScopeId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-status",
+          "indexIdentity": "by-status-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-status-and-test-scope",
+          "indexIdentity": "by-status-test-scope-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "status",
+              "direction": "Ascending"
+            },
+            {
+              "path": "testScopeId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "status",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "testScopeId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-test-scope",
+          "indexIdentity": "by-test-scope-created-at-dispatch-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "testScopeId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.createdAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "record.dispatchId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "testScopeId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "record.createdAt",
+              "operations": [
+                "Equal",
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "record.dispatchId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowExecutable",
+      "definitionFingerprint": "e6917f6555d06fb74e128a36abed83192d04328ebf20b3dbe5739e59d0c2f020",
+      "fingerprint": "be0e34a2e3ab5a27ca43e3f4ad1ed560aa6fe035dbf178246961cf4c72b95dc5",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection-and-document-id",
+          "fields": [
+            {
+              "path": "collection",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "executable.identity.artifactId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-all",
+          "indexIdentity": "by-collection-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "executable.identity.artifactId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowExecutableCoordination",
+      "definitionFingerprint": "5eed5bcc94a0506c716ef73969432e9a1f8f103a6652ff08c5dc71502b9e7a13",
+      "fingerprint": "739bea3ab87b303ac8007d95bef133b20eeaaf760df1048924617fae023c50d7",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowExecutableSourceReference",
+      "definitionFingerprint": "0736d1d3230d40df67f0180fb4cfbf8fe6c8ddbf70f937e0254eadf0d1c3bdcf",
+      "fingerprint": "21f3b6568d014ab921cd4d73db5e2e1b6c6f198f910fe185fa0866ee591ce93a",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-artifact",
+          "fields": [
+            {
+              "path": "artifactId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-artifact-and-document-id",
+          "fields": [
+            {
+              "path": "artifactId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-artifact-retired-expiry-and-document-id",
+          "fields": [
+            {
+              "path": "artifactId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "isRetired",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection-and-document-id",
+          "fields": [
+            {
+              "path": "collection",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-collection-retired-expiry-and-document-id",
+          "fields": [
+            {
+              "path": "collection",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "isRetired",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-expires-at",
+          "fields": [
+            {
+              "path": "expiresAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-expiry-and-document-id",
+          "fields": [
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retired",
+          "fields": [
+            {
+              "path": "isRetired"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-retired-and-document-id",
+          "fields": [
+            {
+              "path": "isRetired",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-scope",
+          "fields": [
+            {
+              "path": "scope"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-scope-and-document-id",
+          "fields": [
+            {
+              "path": "scope",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-scope-retired-expiry-and-document-id",
+          "fields": [
+            {
+              "path": "scope",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "isRetired",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "batch-expired",
+          "indexIdentity": "by-expiry-and-document-id",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "expiresAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "batch-retired",
+          "indexIdentity": "by-retired-and-document-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "isRetired",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "find-live-by-artifact",
+          "indexIdentity": "by-artifact-retired-expiry-and-document-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "artifactId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isRetired",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-artifact",
+          "indexIdentity": "by-artifact",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-scope",
+          "indexIdentity": "by-scope",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-expired",
+          "indexIdentity": "by-expires-at",
+          "operations": [
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-retired",
+          "indexIdentity": "by-retired",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-all",
+          "indexIdentity": "by-collection-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-artifact",
+          "indexIdentity": "by-artifact-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "artifactId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-scope",
+          "indexIdentity": "by-scope-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "scope",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-live-all",
+          "indexIdentity": "by-collection-retired-expiry-and-document-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isRetired",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-live-by-scope",
+          "indexIdentity": "by-scope-retired-expiry-and-document-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "expiresAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "scope",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isRetired",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowExecutionState",
+      "definitionFingerprint": "987913f5975b3db6ab3faa386b3b644aeca0eb2ac0dade4a68a34fafed585e75",
+      "fingerprint": "28ddac7d21fde7c7796665f709e4eec38f94b21252574a465a841f210dbd8d9b",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "by-alteration-capture-tenant-and-execution",
+          "fields": [
+            {
+              "path": "historyTenantId"
+            },
+            {
+              "path": "historyAuthorityPartition"
+            },
+            {
+              "path": "historyWorkflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-attention-fault-history",
+          "fields": [
+            {
+              "path": "historyStatus",
+              "valueKind": "Number"
+            },
+            {
+              "path": "historySortTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-collection-and-pinned-artifact",
+          "fields": [
+            {
+              "path": "collection"
+            },
+            {
+              "path": "historyArtifactId"
+            },
+            {
+              "path": "historyWorkflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-collection-and-pinned-artifact-v2",
+          "fields": [
+            {
+              "path": "collection"
+            },
+            {
+              "path": "historyArtifactId"
+            },
+            {
+              "path": "historyWorkflowExecutionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-history-order",
+          "fields": [
+            {
+              "path": "historySortTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "page-alteration-capture",
+          "indexIdentity": "by-alteration-capture-tenant-and-execution",
+          "operations": [
+            "Equal",
+            "GreaterThanOrEqual",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "historyWorkflowExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "historyTenantId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "historyAuthorityPartition",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "historyDefinitionId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyStatus",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyRunKind",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyCorrelationId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "id",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyArtifactId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historySortTicks",
+              "valueKind": "Number",
+              "operations": [
+                "GreaterThanOrEqual",
+                "LessThanOrEqual"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "page-faulted-for-attention",
+          "indexIdentity": "by-attention-fault-history",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "historySortTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "historyStatus",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "historyTenantId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "page-history",
+          "indexIdentity": "by-history-order",
+          "operations": [
+            "Equal",
+            "GreaterThanOrEqual",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "historySortTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "historySortTicks",
+              "operations": [
+                "GreaterThanOrEqual",
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "historyTenantId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyDefinitionId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyStatus",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyRunKind",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyCorrelationId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "id",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyArtifactId",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "page-pinned-executable-artifact-ids",
+          "indexIdentity": "by-collection-and-pinned-artifact-v2",
+          "operations": [
+            "Equal",
+            "NotEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "historyArtifactId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "collection",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "historyArtifactId",
+              "valueKind": "Keyword",
+              "operations": [
+                "NotEqual"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "historyWorkflowExecutionId",
+              "valueKind": "Keyword",
+              "operations": [
+                "NotEqual"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ],
+          "latestPerKeyPath": "historyArtifactId"
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowTestScope",
+      "definitionFingerprint": "ef6398247a87507ed01ad14966e08768534530d752d8f936b58bf7693a7a04fd",
+      "fingerprint": "83c7367b064b52cd59b44536973988575b4b8e2340390a3f9cea28d9e2dad5c2",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-collection",
+          "fields": [
+            {
+              "path": "collection"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-expires-at",
+          "fields": [
+            {
+              "path": "expiresAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-scope-id",
+          "fields": [
+            {
+              "path": "scopeId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-state-and-expires-at",
+          "fields": [
+            {
+              "path": "state"
+            },
+            {
+              "path": "scopeId"
+            },
+            {
+              "path": "expiresAt",
+              "valueKind": "DateTime"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-state-and-scope-id",
+          "fields": [
+            {
+              "path": "state"
+            },
+            {
+              "path": "scopeId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-status",
+          "fields": [
+            {
+              "path": "state"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-all",
+          "indexIdentity": "by-collection",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-state",
+          "indexIdentity": "by-status",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-state-page",
+          "indexIdentity": "by-state-and-scope-id",
+          "operations": [
+            "Equal",
+            "GreaterThan"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state",
+              "direction": "Ascending"
+            },
+            {
+              "path": "scopeId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "scopeId",
+              "operations": [
+                "GreaterThan"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-open-by-expiry",
+          "indexIdentity": "by-state-and-expires-at",
+          "operations": [
+            "Equal",
+            "GreaterThan",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "None",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "state",
+              "direction": "Ascending"
+            },
+            {
+              "path": "scopeId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "state",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "scopeId",
+              "operations": [
+                "GreaterThan"
+              ]
+            },
+            {
+              "path": "expiresAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowTriggerBinding",
+      "definitionFingerprint": "970726d090ef5ade8e535ee898f1f280d3ffbe68fa9a170adcbc8d03be169999",
+      "fingerprint": "c806eee29f1744400354374f5fbc3c842e6c569a7cd3d3359c456516f9e8c645",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-active",
+          "fields": [
+            {
+              "path": "isActive"
+            }
+          ],
+          "valueKind": "Boolean",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-artifact",
+          "fields": [
+            {
+              "path": "artifactId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-artifact-and-trigger-binding-id",
+          "fields": [
+            {
+              "path": "artifactId"
+            },
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-publication",
+          "fields": [
+            {
+              "path": "publicationId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-publication-and-trigger-binding-id",
+          "fields": [
+            {
+              "path": "publicationId"
+            },
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-stimulus",
+          "fields": [
+            {
+              "path": "stimulusHash"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-stimulus-and-type",
+          "fields": [
+            {
+              "path": "stimulusLookupKey"
+            },
+            {
+              "path": "isActive",
+              "valueKind": "Boolean"
+            },
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-stimulus-type",
+          "fields": [
+            {
+              "path": "stimulusType"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-stimulus-type-and-active",
+          "fields": [
+            {
+              "path": "stimulusTypeLookupKey"
+            },
+            {
+              "path": "isActive",
+              "valueKind": "Boolean"
+            },
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-trigger-binding-id",
+          "fields": [
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-by-artifact",
+          "indexIdentity": "by-artifact-and-trigger-binding-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "triggerBindingId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "artifactId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-publication",
+          "indexIdentity": "by-publication-and-trigger-binding-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "triggerBindingId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "publicationId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-stimulus",
+          "indexIdentity": "by-stimulus",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-stimulus-and-type",
+          "indexIdentity": "by-stimulus-and-type",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "triggerBindingId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "stimulusLookupKey",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isActive",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-stimulus-type",
+          "indexIdentity": "by-stimulus-type-and-active",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "triggerBindingId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "stimulusTypeLookupKey",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "isActive",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

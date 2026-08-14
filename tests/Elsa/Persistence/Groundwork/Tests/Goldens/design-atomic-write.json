@@ -1,0 +1,93 @@
+{
+  "manifest": "elsa-design-atomic-write",
+  "owner": "elsa.design.atomic-write",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [],
+  "storageUnits": [
+    {
+      "identity": "designOperation",
+      "definitionFingerprint": "687a545c038943d74c5fbaf1c89126f66441c8e5f76c2abc9643d74671f0c24f",
+      "fingerprint": "035d13ba92c5e0c14b919fe8d2995d8557ed4b3bb1204d5ee3716c0052c67fd6",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(DedicatedDocumentTable)",
+      "logicalIndexes": [],
+      "boundedQueries": [],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "designPostCommitIntent",
+      "definitionFingerprint": "251c5b4f2b562b58b0fedcf86fda4091483fa3ec74a5f1e1cc447340d774979d",
+      "fingerprint": "4e2280e4ab0a27b074747f4729adc1f49992e1838b59b8703872c1afadeddc54",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(DedicatedDocumentTable)",
+      "logicalIndexes": [
+        {
+          "identity": "by-design-post-commit-intent-claimable",
+          "fields": [
+            {
+              "path": "claimableAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "recordedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "intentId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "list-claimable",
+          "indexIdentity": "by-design-post-commit-intent-claimable",
+          "operations": [
+            "Equal",
+            "LessThanOrEqual"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "claimableAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "recordedAt",
+              "direction": "Ascending"
+            },
+            {
+              "path": "intentId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "claimableAt",
+              "operations": [
+                "LessThanOrEqual"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}
