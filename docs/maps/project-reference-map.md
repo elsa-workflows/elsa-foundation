@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 154
 - Test projects: 100
-- Direct project references: 1244
+- Direct project references: 1245
 
 ## Projects
 
@@ -265,7 +265,7 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Http.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Http |
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Scheduling.Tests](../../tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
-| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.ReferenceGarbageCollection |
+| [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.ReferenceGarbageCollection<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Tracing.Tests](../../tests/Elsa/Workflows/Runtime/Tracing/Tests/Elsa.Workflows.Runtime.Tracing.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Tracing |
 | [Elsa3.Mapping.Tests](../../tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.SystemText<br>Elsa3.Activities.Design.Import.Persistence.Groundwork<br>Elsa3.Mapping |
 

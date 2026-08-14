@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -22,6 +23,7 @@ public sealed class RuntimeAdmissionControlTests
     private readonly FakeTimeProvider _clock = new(Now);
     private readonly StubAdmissionLoadSignal _signal = new();
     private readonly RuntimeAdmissionDiagnostics _diagnostics = new();
+    private readonly RecordingAlterationCommandExecutor _alterationExecutor = new();
 
     [Fact]
     public void TryAdmit_AdmitsWhileLoadIsBelowTheLimit()
@@ -109,14 +111,7 @@ public sealed class RuntimeAdmissionControlTests
     [Fact]
     public void AdaptiveLimit_FallsWhenSaturatedCompletionsRunSlow()
     {
-        var controller = NewController(new RuntimeAdmissionOptions
-        {
-            InitialLimit = 100,
-            MinLimit = 10,
-            MaxLimit = 200,
-            LatencyTolerance = 2,
-            DecreaseFactor = 0.5
-        });
+        var controller = NewController(AdaptiveOptions());
         CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));  // calibrates the baseline
         Assert.Equal(100, controller.Limit);
 
@@ -130,14 +125,7 @@ public sealed class RuntimeAdmissionControlTests
     [Fact]
     public void AdaptiveLimit_RisesWhenSaturatedCompletionsStayFast()
     {
-        var controller = NewController(new RuntimeAdmissionOptions
-        {
-            InitialLimit = 100,
-            MinLimit = 10,
-            MaxLimit = 200,
-            LatencyTolerance = 2,
-            IncreaseStep = 7
-        });
+        var controller = NewController(AdaptiveOptions());
         CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
         CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(15));
 
@@ -146,23 +134,55 @@ public sealed class RuntimeAdmissionControlTests
     }
 
     [Fact]
+    public void AdaptiveLimit_IgnoresACompletionThatDispatchedNothing()
+    {
+        // A command that opened a charge and never reached a scheduler dispatch never touched the writer this limit
+        // protects, so its duration measures something else. AlterWorkflow (#1325) is the live case: it is gated, but
+        // the alteration executor reaches no RecordDispatch call site at all, and its sub-millisecond exits — the
+        // duplicate-return after two store lookups, the claim-fence throw — are durations no real drain produces.
+        // Learning from one is worse than learning from an unsaturated sample, because the baseline update takes a
+        // faster sample OUTRIGHT: the collapsed baseline then makes the next genuine drain look like a latency
+        // blow-out and cuts the limit, on a host whose alteration pump re-pins it every sweep.
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));                 // calibrates at 500 ms
+
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(1), dispatches: 0);    // must teach nothing
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(900));                 // within 2x of 500 ms
+
+        // The 900 ms sample DID dispatch, so it still moves the limit — the guard skips uninformative samples, it
+        // does not switch adaptation off. Had the 1 ms sample been learned from, the limit would have stepped up on it
+        // and then been halved when 900 ms blew past a baseline collapsed to 1 ms.
+        Assert.Equal(107, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitIncreases);
+        Assert.Equal(0, _diagnostics.LimitDecreases);
+    }
+
+    [Fact]
+    public void AdaptiveLimit_DoesNotCalibrateTheBaselineOnACompletionThatDispatchedNothing()
+    {
+        // The placement half: the guard sits ABOVE the first-sample calibration. A zero-dispatch sample arriving
+        // first is the worst version of the same defect — it would become the baseline every later sample is judged
+        // against, with no decay path back, rather than one bad reading among many.
+        var controller = NewController(AdaptiveOptions());
+
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(1), dispatches: 0);
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));                 // the FIRST real sample
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(900));
+
+        Assert.Equal(107, controller.Limit);
+        Assert.Equal(0, _diagnostics.LimitDecreases);
+    }
+
+    [Fact]
     public void AdaptiveLimit_IgnoresUnsaturatedCompletions()
     {
         // A slow completion taken while the host was near-idle says the work was slow, not that the host was full.
         // Acting on it would let one quiet host ratchet itself down to the floor and start shedding for no reason.
-        var controller = NewController(new RuntimeAdmissionOptions
-        {
-            InitialLimit = 100,
-            MinLimit = 10,
-            MaxLimit = 200,
-            LatencyTolerance = 2,
-            DecreaseFactor = 0.5
-        });
+        var controller = NewController(AdaptiveOptions());
 
         CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
 
-        _signal.InFlightDispatches = 4;
-        CompleteSample(controller, TimeSpan.FromSeconds(30));
+        CompleteSample(controller, TimeSpan.FromSeconds(30), load: 4);
 
         Assert.Equal(100, controller.Limit);
         Assert.Equal(0, _diagnostics.LimitDecreases);
@@ -371,7 +391,8 @@ public sealed class RuntimeAdmissionControlTests
     public async Task Router_ShedsAResumeButParksTheWorkItem()
     {
         // A command naming a live execution is deferred, not dropped, so the work item stays queued for the
-        // resumption sweep. That is what makes Deferred a promise rather than a lie.
+        // resumption sweep to re-drive. The parking is conditional on that sweep existing, which is what the router
+        // reads off the resumption durability evidence composed here (#1320); the no-re-driver half is the next case.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var router = NewRouter(queue, AlwaysShed);
 
@@ -381,6 +402,52 @@ public sealed class RuntimeAdmissionControlTests
         Assert.True(result.ShedWorkQueued);
         Assert.False(result.DrainPerformed);
         Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Router_ShedsAResumeWithoutQueueingWhenNoResumptionRedriverIsComposed()
+    {
+        // #1320, resolution 1. Parking is a promise that someone re-drives the item, and only
+        // WorkflowsRuntimeResumptionFeature makes that true — AddWorkflowRuntime composes the gate but not the sweep.
+        // The reachable host is therefore a hand-composed or in-memory one, which is catalog-legal and is the shape
+        // most fixtures use; not a shell composing Groundwork runtime-store or unified persistence, since all nine of
+        // those features declare DependsOn "WorkflowsRuntimeResumption" and so auto-enable the sweep. On a host
+        // without it the parked item
+        // would have no owner at all, so the refusal degrades to the start shape: nothing durable written, nothing
+        // drained, and the caller's retry left as the only re-driver. Refusing loudly is the deliberate direction over
+        // a Deferred that reads like a delivery and silently is not one.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainOrchestrator = new RecordingDrainOrchestrator();
+        var router = NewRouter(queue, AlwaysShed, drainOrchestrator, hasRedriver: false);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark));
+
+        Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
+        Assert.False(result.DrainPerformed);
+        Assert.Equal(0, drainOrchestrator.DrainCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Router_ShedsWithoutQueueingWhenNoDurabilityEvidenceIsInjectedAtAll()
+    {
+        // The absent-enumerable default, which the container never produces — IEnumerable<T> always resolves, empty at
+        // worst — but a hand-composed router does. It has to read as "no re-driver", so that forgetting to wire the
+        // evidence costs a promise nobody could have kept rather than silently parking work with no owner.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = new WorkflowSchedulerCommandRouter(
+            queue,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            new RecordingDrainOrchestrator(),
+            _clock,
+            admissionController: AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark));
+
+        Assert.True(result.Shed);
+        Assert.False(result.ShedWorkQueued);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
     }
 
     // The single source of truth for which kinds bypass the admission gate, shared by both theories below so the
@@ -401,33 +468,42 @@ public sealed class RuntimeAdmissionControlTests
         return data;
     }
 
-    public static TheoryData<WorkflowExecutionCommandKind> GatedCommandKinds()
+    public static TheoryData<WorkflowExecutionCommandKind, bool> GatedCommandKinds()
     {
         // Computed from the enum rather than listed, so a kind added later defaults into the gated assertion — the
         // safe direction for a deny-list exemption — and widening IsSubjectToAdmission's exemption set by even one
-        // kind goes red here until this test names it deliberately.
-        var data = new TheoryData<WorkflowExecutionCommandKind>();
-        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>()
-                     .Except(AdmissionExemptKinds)
-                     // Routed to the alteration executor above the gate. NOT load-gated there: alterations have a
-                     // plan-registration admission, not a load bound. Tracked as a composition gap in #1320.
-                     .Where(kind => kind != WorkflowExecutionCommandKind.AlterWorkflow))
-            data.Add(kind);
+        // kind goes red here until this test names it deliberately. Crossed with both compositions, because the
+        // refusal shape now depends on a second thing (#1320): before PR #1291 only two gated kinds were asserted at
+        // all and a widened exemption passed the whole suite, so a dimension left unenumerated is exactly how this
+        // predicate has already been wrong once. Every kind under both answers closes that hole on the new dimension.
+        var data = new TheoryData<WorkflowExecutionCommandKind, bool>();
+        foreach (var kind in Enum.GetValues<WorkflowExecutionCommandKind>().Except(AdmissionExemptKinds))
+        foreach (var hasRedriver in new[] { true, false })
+            data.Add(kind, hasRedriver);
         return data;
     }
 
+    // Deliberately duplicated from WorkflowSchedulerCommandRouter.QueuesOnShed, so a change to the refusal shape has
+    // to be made twice; the reasoning for each half lives on that method's doc. Both halves are needed to park: a kind
+    // whose parked item a re-driver would run, and a re-driver composed to run it.
+    private static bool ExpectsQueueingOnShed(WorkflowExecutionCommandKind kind, bool hasRedriver) =>
+        kind is not (
+            WorkflowExecutionCommandKind.Start or
+            WorkflowExecutionCommandKind.AlterWorkflow) &&
+        hasRedriver;
+
     [Theory]
     [MemberData(nameof(GatedCommandKinds))]
-    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind)
+    public async Task Router_ShedsEveryGatedKindAtCapacity(WorkflowExecutionCommandKind kind, bool hasRedriver)
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var router = NewRouter(queue, AlwaysShed);
+        var router = NewRouter(queue, AlwaysShed, hasRedriver: hasRedriver);
 
         var result = await router.ProcessAsync(NewEnvelope(kind));
 
         Assert.True(result.Shed);
         Assert.False(result.DrainPerformed);
-        var expectQueued = kind != WorkflowExecutionCommandKind.Start;
+        var expectQueued = ExpectsQueueingOnShed(kind, hasRedriver);
         Assert.Equal(expectQueued, result.ShedWorkQueued);
         Assert.Equal(expectQueued ? 1 : 0, (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count);
     }
@@ -448,6 +524,70 @@ public sealed class RuntimeAdmissionControlTests
         Assert.False(result.Shed);
         Assert.True(result.DrainPerformed);
         Assert.Equal(1, drainOrchestrator.DrainCount);
+    }
+
+    [Fact]
+    public async Task Router_ChargesAnAdmittedAlterationForTheDurationOfTheExecutor()
+    {
+        // Three separate pins, one per assertion, all against the REAL load signal:
+        //   AmbientChargeWhileExecuting — the charge is still the flow's AMBIENT value after an await inside the
+        //     callee, which is what TryAdmit's nested-command exemption and RecordDispatch (Ambient.Value?.Add()) both
+        //     key off. Reading the signal's global counter cannot show this; only the ambient slot can. Swapping
+        //     DispatchRuntimeAdmissionLoadSignal's AsyncLocal<Charge?> for a ThreadLocal<Charge?> — the mutation that
+        //     drops ExecutionContext flow while leaving every counter intact — goes red on THIS assertion and nowhere
+        //     else in the class, whenever the Task.Yield continuation resumes on another thread. That is the usual
+        //     case rather than a guarantee, since the same worker may pick the continuation back up. (A plain static
+        //     field is not that mutation: it makes the charge process-global, so this assertion still passes and the
+        //     failures land on the burst and ambient-tracking cases instead.)
+        //   LoadWhileExecuting — the charge is still OPEN (not acquired and discarded above the hand-off), and its
+        //     weight is ONE. One unit is the whole weight and the assertion says so rather than manufacturing a bigger
+        //     number: the product has exactly one RecordDispatch call site, WorkflowSchedulerDrainer, reached only
+        //     through WorkflowDrainOrchestrator, which only the router's non-alteration branch drives. The work an
+        //     alteration commits is charged to whoever drains that execution next — uncounted under the exempt
+        //     RunSchedulerWork, charged to a subsequently admitted live command otherwise — never to the alteration.
+        //   InFlightDispatches — the charge is released on the way out.
+        var signal = new DispatchRuntimeAdmissionLoadSignal();
+        var executor = new RecordingAlterationCommandExecutor(signal);
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainOrchestrator = new RecordingDrainOrchestrator();
+        var router = NewRouter(
+            queue,
+            new RuntimeAdmissionController(signal, new RuntimeAdmissionOptions { InitialLimit = 100 }, _diagnostics, _clock),
+            drainOrchestrator,
+            executor);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.AlterWorkflow));
+
+        Assert.False(result.Shed);
+        Assert.Equal(1, _diagnostics.Admitted);
+        Assert.Equal(1, executor.ExecuteCount);
+        Assert.True(executor.AmbientChargeWhileExecuting);
+        Assert.Equal(1, executor.LoadWhileExecuting);
+        Assert.Equal(0, signal.InFlightDispatches);
+
+        // The hand-off is TERMINAL. An admitted alteration must neither park a work item — only the Noop fallback
+        // handler would match it, and it swallows silently — nor drain, and the alteration executor is the only thing
+        // that ever runs the command. Without these three, deleting the branch's `return` re-introduces exactly the
+        // silently-swallowed parked item this unit exists to avoid, and every other assertion above still holds.
+        Assert.False(result.DrainPerformed);
+        Assert.Equal(0, drainOrchestrator.DrainCount);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items);
+    }
+
+    [Fact]
+    public async Task Router_RefusesAnAlterationAboveTheHandOff()
+    {
+        // The refusal SHAPE for AlterWorkflow (shed, nothing queued, no drain) is pinned by
+        // Router_ShedsEveryGatedKindAtCapacity and is not repeated here. What only this case can pin is WHERE the
+        // refusal happens: above the hand-off, so the executor never runs and the job stays claimable for the
+        // alteration pump to re-claim once its lease lapses. Kept as its own Fact rather than folded into the theory,
+        // where an ExecuteCount assertion would be vacuously true for the other thirteen gated kinds.
+        var router = NewRouter(new InMemoryWorkflowSchedulerWorkQueue(), AlwaysShed);
+
+        var result = await router.ProcessAsync(NewEnvelope(WorkflowExecutionCommandKind.AlterWorkflow));
+
+        Assert.True(result.Shed);
+        Assert.Equal(0, _alterationExecutor.ExecuteCount);
     }
 
     [Fact]
@@ -505,6 +645,36 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, retried.Status);
     }
 
+    [Theory]
+    [InlineData(true, WorkflowExecutionCommandDispatchStatus.Duplicate)]
+    [InlineData(false, WorkflowExecutionCommandDispatchStatus.Accepted)]
+    public async Task Actor_ConsumesTheKeyOfAShedResumeOnlyWhenItWasActuallyQueued(
+        bool hasRedriver,
+        WorkflowExecutionCommandDispatchStatus expectedRetryStatus)
+    {
+        // The two halves of #1320 composed, which is where the defect lived: each half was correct on its own. The
+        // router decides the refusal shape and the agent reads the key rule off ShedWorkQueued, so with a re-driver a
+        // redelivery of the same deterministic key must answer Duplicate (the work is queued; running it twice is the
+        // hazard), and without one it must answer Accepted (nothing was written; Duplicate would strand the command
+        // with no queue anywhere holding it — a refusal that looks exactly like a delivery). Both directions are
+        // asserted because the silent failure is the one that reports success.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var router = NewRouter(queue, AlwaysShed, hasRedriver: hasRedriver);
+        using var provider = new InProcessWorkflowExecutionActorProvider(router);
+        var actor = await provider.GetAgentAsync(NewActivationRequest());
+        var envelope = NewEnvelope(WorkflowExecutionCommandKind.ResumeBookmark);
+
+        var shed = await actor.EnqueueAsync(envelope);
+        var queuedByTheShed = (await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))).Items.Count;
+        _signal.InFlightDispatches = 0; // the overload passes, so only the key rule can decide the retry
+        var retried = await actor.EnqueueAsync(envelope);
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, shed.Status);
+        Assert.Equal("true", shed.Metadata[RuntimeMetadataKeys.DispatchShed]);
+        Assert.Equal(expectedRetryStatus, retried.Status);
+        Assert.Equal(hasRedriver ? 1 : 0, queuedByTheShed);
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     private RuntimeAdmissionController NewController(RuntimeAdmissionOptions options) =>
@@ -519,32 +689,79 @@ public sealed class RuntimeAdmissionControlTests
         return NewController(new RuntimeAdmissionOptions { InitialLimit = 10, MinLimit = 10, MaxLimit = 10, RetryAfter = TimeSpan.FromSeconds(2) });
     }
 
-    // Admits at exactly half the current limit — the saturation boundary — so the sample is both admitted and
-    // counted as saturated whatever the limit has moved to by now.
-    private void CompleteSaturatedSample(IRuntimeAdmissionController controller, TimeSpan duration)
+    // The adaptive shape the limit-movement tests share: room to move in both directions, a 2x tolerance, and a
+    // halving decrease so one cut is unmistakable against one +7 step.
+    private static RuntimeAdmissionOptions AdaptiveOptions() => new()
     {
-        _signal.InFlightDispatches = (long)(controller.Limit / 2);
-        CompleteSample(controller, duration);
-    }
+        InitialLimit = 100,
+        MinLimit = 10,
+        MaxLimit = 200,
+        LatencyTolerance = 2,
+        DecreaseFactor = 0.5,
+        IncreaseStep = 7
+    };
 
-    private void CompleteSample(IRuntimeAdmissionController controller, TimeSpan duration)
+    // Admits at the lowest load the controller still calls saturated, whatever the limit has moved to by now.
+    // Rounded UP, not truncated: the controller's test is `ObservedLoad >= Limit / 2` against the double limit, so at
+    // an odd limit — 107 after one +7 step — truncation lands one unit BELOW the boundary and the sample is silently
+    // unsaturated. That is not a cosmetic difference: it made a mutation of the ChargedUnits guard survive here,
+    // because the sample meant to detect the collapsed baseline was never evaluated against it at all.
+    private void CompleteSaturatedSample(IRuntimeAdmissionController controller, TimeSpan duration, int dispatches = 1) =>
+        CompleteSample(controller, duration, dispatches, load: (long)Math.Ceiling(controller.Limit / 2));
+
+    // Defaults to one dispatch because that is the shape of every command the limiter is meant to learn from: a drain
+    // records at least one. dispatches: 0 is the zero-dispatch sample — an alteration, or anything else that opens a
+    // charge and never reaches the drainer — which must not be learned from at all.
+    private void CompleteSample(IRuntimeAdmissionController controller, TimeSpan duration, int dispatches = 1, long? load = null)
     {
+        if (load is { } value)
+            _signal.InFlightDispatches = value;
+
         var decision = controller.TryAdmit();
         Assert.True(decision.IsAdmitted);
+        for (var dispatch = 0; dispatch < dispatches; dispatch++)
+            _signal.RecordDispatch();
         _clock.Advance(duration);
         decision.Dispose();
     }
 
+    // The alteration executor is composed by default, the way a real runtime host composes it, so an AlterWorkflow
+    // case reaches the routing under test instead of the "not composed" throw. The resumption re-driver is composed by
+    // default too — as the real WorkflowsRuntimeResumptionFeature composes it, by contributing durability evidence for
+    // the resumption component — so a case that says nothing about #1320 keeps the parking behavior it was written for.
     private WorkflowSchedulerCommandRouter NewRouter(
         IWorkflowSchedulerWorkQueue queue,
         IRuntimeAdmissionController admissionController,
-        IWorkflowDrainOrchestrator? drainOrchestrator = null) =>
+        IWorkflowDrainOrchestrator? drainOrchestrator = null,
+        IWorkflowAlterationActorCommandExecutor? alterationExecutor = null,
+        bool hasRedriver = true) =>
         new(
             queue,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             drainOrchestrator ?? new RecordingDrainOrchestrator(),
             _clock,
-            admissionController: admissionController);
+            alterationActorCommandExecutor: alterationExecutor ?? _alterationExecutor,
+            admissionController: admissionController,
+            durabilityEvidence: DurabilityEvidence(hasRedriver));
+
+    // Both compositions carry the evidence a durable persistence provider (Groundwork) contributes on any host; only
+    // the resumption entry comes from WorkflowsRuntimeResumptionFeature. The no-re-driver side is therefore NOT an
+    // empty collection, so a router that asked "is there any evidence at all" rather than "is the resumption component
+    // named" would promise a delivery nobody owns and fail here rather than pass.
+    private static IEnumerable<IWorkflowDispatchDurabilityEvidence> DurabilityEvidence(bool hasRedriver)
+    {
+        string[] durableProviderComponents =
+        [
+            WorkflowDispatchDurabilityComponents.Checkpoint,
+            WorkflowDispatchDurabilityComponents.DispatchStore,
+            WorkflowDispatchDurabilityComponents.Outbox,
+            WorkflowDispatchDurabilityComponents.Scheduler
+        ];
+        return durableProviderComponents
+            .Concat(hasRedriver ? [WorkflowDispatchDurabilityComponents.Resumption] : [])
+            .Select(component => new WorkflowDispatchDurabilityEvidence(component, WorkflowDispatchDurabilityLevel.Durable))
+            .ToArray();
+    }
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope(WorkflowExecutionCommandKind kind) =>
         new(
@@ -569,8 +786,13 @@ public sealed class RuntimeAdmissionControlTests
             requestedBy: "test",
             requiredCapabilities: WorkflowExecutionActorCapabilities.None);
 
+    // Drives the in-flight reading from the test rather than from real work, but models the ONE thing the controller
+    // reads back off a completion faithfully: a charge starts at the seed unit and grows one per dispatch. A stub
+    // whose Units were pinned at 1 would report every sample as zero-dispatch and hide the ChargedUnits rule entirely.
     private sealed class StubAdmissionLoadSignal : IRuntimeAdmissionLoadSignal
     {
+        private StubCharge? _current;
+
         public long InFlightDispatches { get; set; }
 
         public bool HasAmbientCharge { get; set; }
@@ -578,18 +800,18 @@ public sealed class RuntimeAdmissionControlTests
         public IRuntimeAdmissionCharge? TryOpenCharge(double limit, out long observedLoad)
         {
             observedLoad = InFlightDispatches;
-            return observedLoad > 0 && observedLoad >= limit ? null : new NoopCharge();
+            return observedLoad > 0 && observedLoad >= limit ? null : OpenCharge();
         }
 
-        public IRuntimeAdmissionCharge OpenCharge() => new NoopCharge();
+        public IRuntimeAdmissionCharge OpenCharge() => _current = new StubCharge();
 
-        public void RecordDispatch()
-        {
-        }
+        public void RecordDispatch() => _current?.Add();
 
-        private sealed class NoopCharge : IRuntimeAdmissionCharge
+        private sealed class StubCharge : IRuntimeAdmissionCharge
         {
-            public long Units => 1;
+            public long Units { get; private set; } = 1;
+
+            public void Add() => Units++;
 
             public void Dispose()
             {
@@ -640,6 +862,28 @@ public sealed class RuntimeAdmissionControlTests
         public IRuntimeAdmissionCharge OpenCharge() => _inner.OpenCharge();
 
         public void RecordDispatch() => _inner.RecordDispatch();
+    }
+
+    // Stands in for the alteration actor executor. It records no dispatch of its own — matching the real executor,
+    // which reaches no RecordDispatch call site — and takes both of its readings AFTER an await, so they are what a
+    // genuinely resumed continuation inside the callee sees rather than something the fixture manufactured.
+    private sealed class RecordingAlterationCommandExecutor(IRuntimeAdmissionLoadSignal? loadSignal = null)
+        : IWorkflowAlterationActorCommandExecutor
+    {
+        public int ExecuteCount { get; private set; }
+
+        public long LoadWhileExecuting { get; private set; }
+
+        public bool AmbientChargeWhileExecuting { get; private set; }
+
+        public async ValueTask ExecuteAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            ExecuteCount++;
+            await Task.Yield();
+
+            LoadWhileExecuting = loadSignal?.InFlightDispatches ?? 0;
+            AmbientChargeWhileExecuting = loadSignal?.HasAmbientCharge ?? false;
+        }
     }
 
     private sealed class RecordingDrainOrchestrator : IWorkflowDrainOrchestrator
