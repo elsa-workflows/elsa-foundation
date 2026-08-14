@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Scoping;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
@@ -31,18 +32,14 @@ public sealed class WorkflowPortfolioProviderTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-portfolio-{Guid.NewGuid():N}.db");
         try
         {
-            // The Groundwork dashboard SQL still reads workflow definitions, drafts and executions out of the shared
-            // groundwork_documents table. Since wave 3 every manifest declares its physical storage, and a physically
-            // opened store routes those kinds into dedicated tables (workflowDefinition, workflowDefinitionDraft,
-            // workflow_execution_states) instead — so this fixture can only reproduce what the data source reads by
-            // opening on the retired portable surface. The data source is what has to change; until it does, this open
-            // stays portable and the package bump will surface it here.
-            #pragma warning disable GW0005
-            var store = await SqliteDocumentStoreFactory.CreateAsync(
+            // The all-features deployment schema is what production unified hosts open with: it routes
+            // definitions and drafts into their declared entity tables and keeps published source
+            // references in the shared documents table — exactly the layout the data source reads.
+            var store = await SqliteDocumentStoreFactory.OpenPhysicalAsync(
                 $"Data Source={path}", new GroundworkAllFeaturesDeploymentSchema().CreateManifest(),
                 new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
-            #pragma warning restore GW0005
+                DocumentStoreAccess.Scoped(new StorageScope("tenant-a")),
+                options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
             foreach (var definition in Enumerable.Range(0, 105).Select(index => Definition(index)))
                 await SaveDefinitionAsync(store, definition);
             foreach (var draft in Enumerable.Range(0, 30).Select(index => Draft(index)))
@@ -58,6 +55,7 @@ public sealed class WorkflowPortfolioProviderTests
         }
         finally
         {
+            SqliteConnection.ClearAllPools();
             File.Delete(path);
         }
     }

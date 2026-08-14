@@ -1,7 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 
@@ -16,11 +18,25 @@ public enum GroundworkRunHealthDialect
 /// Exact bounded Groundwork aggregate. Filtering, incident joining, outcome grouping, current-running count and
 /// top-five failures execute in the provider; only one row per requested bucket plus five definition rows crosses
 /// the application boundary.
+/// <para>
+/// Executions live in the physical entity table the runtime manifest declares for them
+/// (<see cref="ElsaRuntimeStorageManifest.WorkflowExecutionStateTableName"/>), so tenant, status and run kind
+/// are projected columns; only the start timestamp and the pinned definition id are read out of the document
+/// JSON. Incidents remain in the shared documents table.
+/// </para>
 /// </summary>
 public sealed class GroundworkWorkflowRunHealthDataSource(
     Func<DbConnection> connectionFactory,
     GroundworkRunHealthDialect dialect) : IWorkflowRunHealthDataSource
 {
+    private const string ExecutionsTable = ElsaRuntimeStorageManifest.WorkflowExecutionStateTableName;
+    private const string TenantIdColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdColumn;
+    private const string StatusColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusColumn;
+    private const string RunKindColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindColumn;
+    private const string ExecutionIdColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdColumn;
+
+    private static readonly DocumentEnvelopeDefinition Envelope = new();
+
     public bool IsAvailable => true;
 
     public async ValueTask<WorkflowRunHealthAggregate> QueryAsync(
@@ -56,6 +72,7 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = BuildBucketSql(request);
+        AddParameter(command, "incidentKind", ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
         AddCommonParameters(command, request.Query);
         foreach (var bucket in request.Buckets)
         {
@@ -82,11 +99,10 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT COUNT(*)
-            FROM groundwork_documents e
-            WHERE e.document_kind = @executionKind
-              AND {Json(e: true, "tenantId")} = @tenantId
-              AND {JsonInt("runKind")} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
-              AND {JsonInt("status")} = {(int)WorkflowExecutionStatus.Running};
+            FROM {ExecutionsTable} e
+            WHERE e.{TenantIdColumn} = @tenantId
+              AND e.{RunKindColumn} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
+              AND e.{StatusColumn} = {(int)WorkflowExecutionStatus.Running};
             """;
         AddCommonParameters(command, query);
         return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
@@ -99,15 +115,14 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     {
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
-            SELECT {SelectTop(5)}{Json(e: true, "pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
-            FROM groundwork_documents e
-            WHERE e.document_kind = @executionKind
-              AND {Json(e: true, "tenantId")} = @tenantId
-              AND {JsonInt("runKind")} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
-              AND {JsonInt("status")} = {(int)WorkflowExecutionStatus.Faulted}
-              AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
-              AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}
-            GROUP BY {Json(e: true, "pinnedExecutable", "definitionId")}
+            SELECT {SelectTop(5)}{ExecutionJson("pinnedExecutable", "definitionId")} AS definition_id, COUNT(*) AS failed_count
+            FROM {ExecutionsTable} e
+            WHERE e.{TenantIdColumn} = @tenantId
+              AND e.{RunKindColumn} {(query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}")}
+              AND e.{StatusColumn} = {(int)WorkflowExecutionStatus.Faulted}
+              AND {Instant(ExecutionJson("startedAt"))} >= {Instant("@from")}
+              AND {Instant(ExecutionJson("startedAt"))} < {Instant("@to")}
+            GROUP BY {ExecutionJson("pinnedExecutable", "definitionId")}
             ORDER BY failed_count DESC, definition_id
             {LimitClause(5)};
             """;
@@ -125,8 +140,9 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
     /// only 22 random bits, so a same-millisecond collision is a birthday problem at roughly 2^11 ids rather
     /// than a cryptographic improbability. <c>IncidentState</c> carries no tenant of its own, but every
     /// Groundwork row does: <c>storage_scope</c> is the physical tenant partition key that
-    /// <c>GroundworkScopedDocumentStore</c> writes from the ambient <c>PersistenceScope</c>. Joining on it
-    /// keeps a colliding id in another tenant's partition from being counted here.
+    /// <c>GroundworkScopedDocumentStore</c> writes from the ambient <c>PersistenceScope</c>, and the
+    /// execution entity table carries the same envelope column. Joining on it keeps a colliding id in
+    /// another tenant's partition from being counted here.
     /// </remarks>
     private string BuildBucketSql(WorkflowRunHealthDataQuery request)
     {
@@ -135,26 +151,25 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
         var testFilter = request.Query.IncludeTestRuns ? ">= 0" : $"<> {(int)WorkflowRunKind.TestRun}";
         return $"""
             {StatementPrefix}WITH executions AS (
-                SELECT e.storage_scope AS storage_scope,
-                       {Json(e: true, "workflowExecutionId")} AS execution_id,
-                       {JsonInt("status")} AS status,
-                       {Instant(Json(e: true, "startedAt"))} AS started_at
-                FROM groundwork_documents e
-                WHERE e.document_kind = @executionKind
-                  AND {Json(e: true, "tenantId")} = @tenantId
-                  AND {JsonInt("runKind")} {testFilter}
-                  AND {Json(e: true, "startedAt")} IS NOT NULL
-                  AND {Instant(Json(e: true, "startedAt"))} >= {Instant("@from")}
-                  AND {Instant(Json(e: true, "startedAt"))} < {Instant("@to")}
+                SELECT e.{Envelope.StorageScopeColumn} AS storage_scope,
+                       e.{ExecutionIdColumn} AS execution_id,
+                       e.{StatusColumn} AS status,
+                       {Instant(ExecutionJson("startedAt"))} AS started_at
+                FROM {ExecutionsTable} e
+                WHERE e.{TenantIdColumn} = @tenantId
+                  AND e.{RunKindColumn} {testFilter}
+                  AND {ExecutionJson("startedAt")} IS NOT NULL
+                  AND {Instant(ExecutionJson("startedAt"))} >= {Instant("@from")}
+                  AND {Instant(ExecutionJson("startedAt"))} < {Instant("@to")}
             ), incidents AS (
                 SELECT i.storage_scope AS storage_scope,
-                       {Json(e: false, "workflowExecutionId", alias: "i")} AS execution_id,
+                       {IncidentJson("workflowExecutionId")} AS execution_id,
                        COUNT(*) AS incident_count
-                FROM groundwork_documents i
-                JOIN executions e ON e.execution_id = {Json(e: false, "workflowExecutionId", alias: "i")}
+                FROM {SharedDocumentsStorage.LogicalName} i
+                JOIN executions e ON e.execution_id = {IncidentJson("workflowExecutionId")}
                                  AND e.storage_scope = i.storage_scope
                 WHERE i.document_kind = @incidentKind
-                GROUP BY i.storage_scope, {Json(e: false, "workflowExecutionId", alias: "i")}
+                GROUP BY i.storage_scope, {IncidentJson("workflowExecutionId")}
             ), bucketed AS (
                 SELECT CASE
                     {cases}
@@ -180,25 +195,19 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
             """;
     }
 
-    private string Json(bool e, string property, string? nested = null, string? alias = null)
-    {
-        alias ??= "e";
-        var path = e
-            ? nested is null ? new[] { "state", property } : new[] { "state", property, nested }
-            : new[] { property };
-        return dialect switch
-        {
-            GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.content_json, '$.{string.Join('.', path)}')",
-            GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.content_json, '$.{string.Join('.', path)}')",
-            _ => $"{alias}.content_json::jsonb #>> '{{{string.Join(',', path)}}}'"
-        };
-    }
+    /// <summary>Extracts a path under the execution document's <c>state</c> envelope member.</summary>
+    private string ExecutionJson(string property, string? nested = null) =>
+        JsonExtract("e", Envelope.CanonicalJsonColumn, nested is null ? ["state", property] : ["state", property, nested]);
 
-    private string JsonInt(string property) => dialect switch
+    /// <summary>Extracts a top-level path from an incident document in the shared documents table.</summary>
+    private string IncidentJson(string property) =>
+        JsonExtract("i", SharedDocumentsStorage.CanonicalJsonColumnName, [property]);
+
+    private string JsonExtract(string alias, string column, string[] path) => dialect switch
     {
-        GroundworkRunHealthDialect.Sqlite => $"COALESCE(CAST({Json(e: true, property)} AS INTEGER), 0)",
-        GroundworkRunHealthDialect.SqlServer => $"COALESCE(TRY_CAST({Json(e: true, property)} AS int), 0)",
-        _ => $"COALESCE(({Json(e: true, property)})::integer, 0)"
+        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.{column}, '$.{string.Join('.', path)}')",
+        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.{column}, '$.{string.Join('.', path)}')",
+        _ => $"{alias}.{column}::jsonb #>> '{{{string.Join(',', path)}}}'"
     };
 
     private string Instant(string expression) => dialect switch
@@ -222,8 +231,6 @@ public sealed class GroundworkWorkflowRunHealthDataSource(
 
     private void AddCommonParameters(DbCommand command, WorkflowRunHealthQuery query)
     {
-        AddParameter(command, "executionKind", ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind);
-        AddParameter(command, "incidentKind", ElsaRuntimeStorageManifest.IncidentStateDocumentKind);
         AddParameter(command, "tenantId", query.TenantId);
         AddParameter(command, "from", ProviderInstant(query.From));
         AddParameter(command, "to", ProviderInstant(query.To));

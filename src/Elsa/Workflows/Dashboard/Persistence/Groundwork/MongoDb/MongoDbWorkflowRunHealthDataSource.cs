@@ -13,12 +13,12 @@ namespace Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
 /// </summary>
 /// <remarks>
 /// Unlike the SQL dialects (<see cref="GroundworkWorkflowRunHealthDataSource"/>), MongoDB stores one
-/// physical collection per document kind (see <see cref="MongoDbGroundworkNames"/>) instead of a single
-/// shared table with a <c>document_kind</c> discriminator, so there is no analogous
-/// <c>GroundworkRunHealthDialect</c> member for it. The entity envelope is preserved as a native BSON
-/// sub-document under <c>content</c>, whose field paths mirror the JSON-path segments the SQL
-/// implementation extracts (for example <c>content.state.tenantId</c> mirrors <c>$.state.tenantId</c>),
-/// so the aggregation stages below read as the direct MongoDB counterpart of the SQL CTEs.
+/// physical collection per document kind (see <see cref="MongoDbGroundworkNames"/>) rather than routing
+/// each kind to its declared table, so there is no analogous <c>GroundworkRunHealthDialect</c> member for
+/// it. The entity envelope is preserved as a native BSON sub-document under <c>content</c>, whose field
+/// paths mirror the JSON-path segments the SQL implementation extracts (for example
+/// <c>content.state.tenantId</c> mirrors <c>$.state.tenantId</c>), so the aggregation stages below read
+/// as the direct MongoDB counterpart of the SQL CTEs.
 /// </remarks>
 public sealed class MongoDbWorkflowRunHealthDataSource(
     Func<IMongoDatabase> databaseFactory) : IWorkflowRunHealthDataSource

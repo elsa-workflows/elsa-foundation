@@ -6,6 +6,7 @@ using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Scoping;
+using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Scoping;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Data.Sqlite;
@@ -64,19 +65,15 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests : IAsyncDisposabl
 
     private async Task<TenantStores> StoresAsync(string tenantId)
     {
-        // The Groundwork dashboard SQL still reads workflow definitions, drafts and executions out of the shared
-        // groundwork_documents table. Since wave 3 every manifest declares its physical storage, and a physically
-        // opened store routes those kinds into dedicated tables (workflowDefinition, workflowDefinitionDraft,
-        // workflow_execution_states) instead — so this fixture can only reproduce what the data source reads by
-        // opening on the retired portable surface. The data source is what has to change; until it does, this open
-        // stays portable and the package bump will surface it here.
-        #pragma warning disable GW0005
-        var store = await SqliteDocumentStoreFactory.CreateAsync(
+        // The physicalized runtime manifest is what production hosts open with: it routes executions into
+        // the workflow_execution_states entity table the data source reads, and keeps incidents in the
+        // shared documents table.
+        var store = await SqliteDocumentStoreFactory.OpenPhysicalAsync(
             $"Data Source={_path}",
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
-            DocumentStoreAccess.Scoped(new StorageScope(tenantId)));
-        #pragma warning restore GW0005
+            DocumentStoreAccess.Scoped(new StorageScope(tenantId)),
+            options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
         return new(
             new(store, _serializer, new FixedAccessContextAccessor(
                 PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)))),
@@ -98,6 +95,7 @@ public sealed class GroundworkWorkflowRunHealthDataSourceTests : IAsyncDisposabl
 
     public ValueTask DisposeAsync()
     {
+        SqliteConnection.ClearAllPools();
         File.Delete(_path);
         return ValueTask.CompletedTask;
     }

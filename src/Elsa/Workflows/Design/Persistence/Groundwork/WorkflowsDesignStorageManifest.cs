@@ -25,6 +25,16 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionDraftCollection = WorkflowDefinitionDraftDocumentKind;
     public const string WorkflowDefinitionVersionLayoutCollection = WorkflowDefinitionVersionLayoutDocumentKind;
 
+    // Physical entity tables are named after their document kind; these are the projected column
+    // names their declarations bind below. Published so direct SQL readers — the dashboard portfolio
+    // tile — address the declared names rather than re-deriving them.
+    public const string DefinitionIdColumn = "definition_id";
+    public const string DefinitionTenantIdColumn = "tenant_id";
+    public const string DraftIdColumn = "draft_id";
+    public const string DraftDefinitionIdColumn = "definition_id";
+    public const string DraftLastModifiedAtColumn = "last_modified_at";
+    public const string DraftCreatedAtColumn = "created_at";
+
     public const string DefinitionIdField = "entity.id";
     public const string DefinitionNameField = "entity.name";
     public const string DefinitionDescriptionField = "entity.description";
@@ -146,10 +156,10 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionDocumentKind,
             "Workflow definition",
             [
-                Column("definition_id", DefinitionIdField, false, IdentityColumnLength),
+                Column(DefinitionIdColumn, DefinitionIdField, false, IdentityColumnLength),
                 Column("name", DefinitionNameField),
                 Column("description", DefinitionDescriptionField),
-                Column("tenant_id", DefinitionTenantIdField, length: IdentityColumnLength)
+                Column(DefinitionTenantIdColumn, DefinitionTenantIdField, length: IdentityColumnLength)
             ],
             indexes,
             physicalIndexes,
@@ -235,10 +245,10 @@ public static class WorkflowsDesignStorageManifest
             WorkflowDefinitionDraftDocumentKind,
             "Workflow definition draft",
             [
-                Column("draft_id", DraftIdField, false, IdentityColumnLength),
-                Column("definition_id", DraftDefinitionIdField, false, IdentityColumnLength),
-                DateTimeColumn("last_modified_at", DraftLastModifiedAtField, false),
-                DateTimeColumn("created_at", DraftCreatedAtField, false)
+                Column(DraftIdColumn, DraftIdField, false, IdentityColumnLength),
+                Column(DraftDefinitionIdColumn, DraftDefinitionIdField, false, IdentityColumnLength),
+                DateTimeColumn(DraftLastModifiedAtColumn, DraftLastModifiedAtField, false),
+                DateTimeColumn(DraftCreatedAtColumn, DraftCreatedAtField, false)
             ],
             indexes,
             physicalIndexes,

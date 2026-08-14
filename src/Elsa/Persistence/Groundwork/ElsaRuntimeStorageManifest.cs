@@ -326,6 +326,15 @@ public static class ElsaRuntimeStorageManifest
     public const string PagePinnedExecutableArtifactIdsQuery =
         "page-pinned-executable-artifact-ids";
 
+    // Physical entity table the execution-history route declares (see
+    // WorkflowExecutionHistoryStoragePhysicalizer). Published so direct SQL readers — the dashboard
+    // tiles — address the declared names rather than re-deriving them.
+    public const string WorkflowExecutionStateTableName = "workflow_execution_states";
+    public const string WorkflowExecutionHistoryWorkflowExecutionIdColumn = "history_workflow_execution_id";
+    public const string WorkflowExecutionHistoryTenantIdColumn = "history_tenant_id";
+    public const string WorkflowExecutionHistoryStatusColumn = "history_status";
+    public const string WorkflowExecutionHistoryRunKindColumn = "history_run_kind";
+
     // Alteration plans are admitted once and retain the protected envelope, immutable selector, and
     // sealed authority scope. Each captured target is represented by a separate job document so workers
     // can claim and checkpoint them independently without contending on the plan document.

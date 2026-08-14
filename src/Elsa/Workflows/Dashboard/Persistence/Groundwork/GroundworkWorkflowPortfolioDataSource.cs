@@ -1,20 +1,25 @@
 using System.Data.Common;
 using System.Text.Json;
 using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.PhysicalStorage;
 
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 
 /// <summary>
-/// Serves the workflow-portfolio tile from the Groundwork document tables directly.
+/// Serves the workflow-portfolio tile from the Groundwork tables directly.
 /// <para>
 /// The tile counts definitions and drafts (design lane) and how many of them are published (runtime lane).
-/// When both lanes share a target that is one statement. When a host puts them in different databases there
-/// is no single connection that can see both, so the counts are taken per target and correlated in memory.
+/// Definitions and drafts live in the physical entity tables the design manifest declares for them, so
+/// their ids, tenant and draft ordering are projected columns; published references remain in the shared
+/// documents table. When both lanes share a target that is one statement. When a host puts them in
+/// different databases there is no single connection that can see both, so the counts are taken per target
+/// and correlated in memory.
 /// </para>
 /// </summary>
 /// <param name="connectionFactory">Opens the design lane's database.</param>
@@ -34,6 +39,8 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
     /// rather than the execution history's. Exceeding it is reported rather than silently truncating a count.
     /// </summary>
     private const int SplitPublishedIdLimit = 100_000;
+
+    private static readonly DocumentEnvelopeDefinition Envelope = new();
 
     private readonly JsonSerializerOptions _jsonOptions = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
@@ -58,7 +65,7 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
             """;
         AddParameter(command, "tenantId", tenantId);
         AddParameter(command, "asOf", ProviderInstant(asOf));
-        AddKinds(command);
+        AddReferenceKind(command);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
         return new(
@@ -76,10 +83,9 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             {StatementPrefix}{BaseCtes(includePublished: false)}
-            SELECT content_json FROM current_drafts WHERE row_number = 1 ORDER BY definition_id;
+            SELECT document FROM current_drafts WHERE row_number = 1 ORDER BY definition_id;
             """;
         AddParameter(command, "tenantId", tenantId);
-        AddKinds(command);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -94,34 +100,32 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         var published = includePublished
             ? $"""
               , published AS (
-                  SELECT DISTINCT {Json("reference", "definitionId", "r")} AS definition_id
-                  FROM groundwork_documents r
+                  SELECT DISTINCT {ReferenceJson("definitionId")} AS definition_id
+                  FROM {SharedDocumentsStorage.LogicalName} r
                   WHERE r.document_kind = @referenceKind
-                    AND {JsonInt("reference", "scope", "r")} = {(int)WorkflowExecutableReferenceScope.Published}
-                    AND {Json("reference", "deletedAt", "r")} IS NULL
-                    AND ({Json("reference", "expiresAt", "r")} IS NULL OR {Instant(Json("reference", "expiresAt", "r"))} > {Instant("@asOf")})
+                    AND {ReferenceJsonInt("scope")} = {(int)WorkflowExecutableReferenceScope.Published}
+                    AND {ReferenceJson("deletedAt")} IS NULL
+                    AND ({ReferenceJson("expiresAt")} IS NULL OR {Instant(ReferenceJson("expiresAt"))} > {Instant("@asOf")})
               )
               """
             : string.Empty;
         return $"""
             WITH active AS (
-                SELECT {Json("entity", "id", "d")} AS definition_id
-                FROM groundwork_documents d
-                WHERE d.document_kind = @definitionKind
-                  AND {Json("entity", "tenantId", "d")} = @tenantId
-                  AND {Json("entity", "deletedAt", "d")} IS NULL
+                SELECT d.{WorkflowsDesignStorageManifest.DefinitionIdColumn} AS definition_id
+                FROM {DefinitionsTable} d
+                WHERE d.{WorkflowsDesignStorageManifest.DefinitionTenantIdColumn} = @tenantId
+                  AND {DefinitionJson("deletedAt")} IS NULL
             ), current_drafts AS (
-                SELECT {Json("entity", "workflowDefinitionId", "w")} AS definition_id,
-                       w.content_json,
+                SELECT w.{WorkflowsDesignStorageManifest.DraftDefinitionIdColumn} AS definition_id,
+                       w.{Envelope.CanonicalJsonColumn} AS document,
                        ROW_NUMBER() OVER (
-                           PARTITION BY {Json("entity", "workflowDefinitionId", "w")}
-                           ORDER BY {Instant(Json("entity", "lastModifiedAt", "w"))} DESC,
-                                    {Instant(Json("entity", "createdAt", "w"))} DESC,
-                                    {Json("entity", "id", "w")} DESC) AS row_number
-                FROM groundwork_documents w
-                JOIN active a ON a.definition_id = {Json("entity", "workflowDefinitionId", "w")}
-                WHERE w.document_kind = @draftKind
-                  AND {Json("entity", "tenantId", "w")} = @tenantId
+                           PARTITION BY w.{WorkflowsDesignStorageManifest.DraftDefinitionIdColumn}
+                           ORDER BY w.{WorkflowsDesignStorageManifest.DraftLastModifiedAtColumn} DESC,
+                                    w.{WorkflowsDesignStorageManifest.DraftCreatedAtColumn} DESC,
+                                    w.{WorkflowsDesignStorageManifest.DraftIdColumn} DESC) AS row_number
+                FROM {DraftsTable} w
+                JOIN active a ON a.definition_id = w.{WorkflowsDesignStorageManifest.DraftDefinitionIdColumn}
+                WHERE {DraftJson("tenantId")} = @tenantId
             )
             {published}
             """;
@@ -150,7 +154,6 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
                     SELECT definition_id FROM active;
                     """;
                 AddParameter(activeCommand, "tenantId", tenantId);
-                AddKinds(activeCommand);
                 await using var reader = await activeCommand.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
@@ -165,7 +168,6 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
                 SELECT COUNT(*) FROM current_drafts WHERE row_number = 1;
                 """;
             AddParameter(draftCommand, "tenantId", tenantId);
-            AddKinds(draftCommand);
             draftCount = Convert.ToInt32(await draftCommand.ExecuteScalarAsync(cancellationToken));
         }
 
@@ -186,15 +188,15 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         await using var command = runtimeConnection.CreateCommand();
         command.CommandText = $"""
             {StatementPrefix}
-            SELECT DISTINCT {Json("reference", "definitionId", "r")} AS definition_id
-            FROM groundwork_documents r
+            SELECT DISTINCT {ReferenceJson("definitionId")} AS definition_id
+            FROM {SharedDocumentsStorage.LogicalName} r
             WHERE r.document_kind = @referenceKind
-              AND {JsonInt("reference", "scope", "r")} = {(int)WorkflowExecutableReferenceScope.Published}
-              AND {Json("reference", "deletedAt", "r")} IS NULL
-              AND ({Json("reference", "expiresAt", "r")} IS NULL OR {Instant(Json("reference", "expiresAt", "r"))} > {Instant("@asOf")});
+              AND {ReferenceJsonInt("scope")} = {(int)WorkflowExecutableReferenceScope.Published}
+              AND {ReferenceJson("deletedAt")} IS NULL
+              AND ({ReferenceJson("expiresAt")} IS NULL OR {Instant(ReferenceJson("expiresAt"))} > {Instant("@asOf")});
             """;
         AddParameter(command, "asOf", ProviderInstant(asOf));
-        AddKinds(command);
+        AddReferenceKind(command);
 
         var published = 0;
         var seen = 0;
@@ -216,18 +218,39 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         return published;
     }
 
-    private string Json(string container, string property, string alias) => dialect switch
+    // The design entity tables are named after their document kind, which is camelCase — PostgreSQL folds
+    // unquoted identifiers, so they are addressed quoted (SQL Server via brackets, which need no session
+    // setting).
+    private string DefinitionsTable => QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+
+    private string DraftsTable => QuoteIdentifier(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
+
+    private string QuoteIdentifier(string identifier) => dialect == GroundworkRunHealthDialect.SqlServer
+        ? $"[{identifier}]"
+        : $"\"{identifier}\"";
+
+    /// <summary>Extracts a path under a definition document's <c>entity</c> member.</summary>
+    private string DefinitionJson(string property) => JsonExtract("d", Envelope.CanonicalJsonColumn, ["entity", property]);
+
+    /// <summary>Extracts a path under a draft document's <c>entity</c> member.</summary>
+    private string DraftJson(string property) => JsonExtract("w", Envelope.CanonicalJsonColumn, ["entity", property]);
+
+    /// <summary>Extracts a path under a source-reference document's <c>reference</c> member.</summary>
+    private string ReferenceJson(string property) =>
+        JsonExtract("r", SharedDocumentsStorage.CanonicalJsonColumnName, ["reference", property]);
+
+    private string ReferenceJsonInt(string property) => dialect switch
     {
-        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.content_json, '$.{container}.{property}')",
-        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.content_json, '$.{container}.{property}')",
-        _ => $"{alias}.content_json::jsonb #>> '{{{container},{property}}}'"
+        GroundworkRunHealthDialect.Sqlite => $"CAST({ReferenceJson(property)} AS INTEGER)",
+        GroundworkRunHealthDialect.SqlServer => $"TRY_CAST({ReferenceJson(property)} AS int)",
+        _ => $"({ReferenceJson(property)})::integer"
     };
 
-    private string JsonInt(string container, string property, string alias) => dialect switch
+    private string JsonExtract(string alias, string column, string[] path) => dialect switch
     {
-        GroundworkRunHealthDialect.Sqlite => $"CAST({Json(container, property, alias)} AS INTEGER)",
-        GroundworkRunHealthDialect.SqlServer => $"TRY_CAST({Json(container, property, alias)} AS int)",
-        _ => $"({Json(container, property, alias)})::integer"
+        GroundworkRunHealthDialect.Sqlite => $"json_extract({alias}.{column}, '$.{string.Join('.', path)}')",
+        GroundworkRunHealthDialect.SqlServer => $"JSON_VALUE({alias}.{column}, '$.{string.Join('.', path)}')",
+        _ => $"{alias}.{column}::jsonb #>> '{{{string.Join(',', path)}}}'"
     };
 
     private string Instant(string expression) => dialect switch
@@ -252,12 +275,8 @@ public sealed class GroundworkWorkflowPortfolioDataSource(
         command.Parameters.Add(parameter);
     }
 
-    private static void AddKinds(DbCommand command)
-    {
-        AddParameter(command, "definitionKind", WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
-        AddParameter(command, "draftKind", WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
+    private static void AddReferenceKind(DbCommand command) =>
         AddParameter(command, "referenceKind", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
-    }
 
     private sealed record PortfolioDraftDocument(
         string Collection,

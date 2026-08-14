@@ -10,7 +10,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork;
 
 /// <summary>
-/// Backs the workflow dashboard tiles with direct reads over the Groundwork document tables.
+/// Backs the workflow dashboard tiles with direct reads over the Groundwork tables — the physical entity
+/// tables the manifests declare for definitions, drafts and executions, plus the shared documents table.
 /// <para>
 /// Run health reads runtime documents only. The portfolio tile counts design-lane definitions and drafts and
 /// how many of them are published, which is a runtime-lane fact — so when a host puts those lanes in

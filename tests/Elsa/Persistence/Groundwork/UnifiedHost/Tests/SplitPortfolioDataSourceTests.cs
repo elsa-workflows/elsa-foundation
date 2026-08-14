@@ -1,9 +1,22 @@
-using Elsa.Persistence.Groundwork.Targets;
+using System.Text.Json;
+using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Serialization.Core;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork;
-using Microsoft.Data.Sqlite;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Capabilities;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.SchemaEvolution;
+using Groundwork.Core.Scoping;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Sqlite.Documents;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
@@ -20,6 +33,7 @@ public sealed class SplitPortfolioDataSourceTests : IAsyncLifetime
     private readonly string _sharedPath = Path.Combine(Path.GetTempPath(), $"portfolio-shared-{Guid.NewGuid():N}.db");
 
     private static readonly DateTimeOffset AsOf = new(2026, 8, 7, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Seeded = new(2026, 8, 1, 0, 0, 0, TimeSpan.Zero);
     private const string TenantId = "tenant-a";
 
     public async Task InitializeAsync()
@@ -74,7 +88,7 @@ public sealed class SplitPortfolioDataSourceTests : IAsyncLifetime
     public async Task A_design_target_with_no_definitions_never_queries_the_runtime_target()
     {
         var emptyDesign = Path.Combine(Path.GetTempPath(), $"portfolio-empty-{Guid.NewGuid():N}.db");
-        await CreateDocumentsTableAsync(emptyDesign);
+        await OpenAsync(emptyDesign, WorkflowsDesignStorageManifest.Create());
         try
         {
             var split = new GroundworkWorkflowPortfolioDataSource(
@@ -99,90 +113,73 @@ public sealed class SplitPortfolioDataSourceTests : IAsyncLifetime
     private static IPayloadSerializer PayloadSerializer() =>
         new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
-    private static async Task CreateDocumentsTableAsync(string path)
-    {
-        await using var connection = new SqliteConnection($"Data Source={path}");
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-            CREATE TABLE IF NOT EXISTS groundwork_documents (
-                document_kind TEXT NOT NULL,
-                id TEXT NOT NULL,
-                content_json TEXT NOT NULL);
-            """;
-        await command.ExecuteNonQueryAsync();
-    }
+    /// <summary>
+    /// Opens the database on Groundwork's physical surface with the given manifest, exactly as a
+    /// production host does, so the seeded rows land in the tables the data source reads.
+    /// </summary>
+    private static async Task<IDocumentStore> OpenAsync(string path, StorageManifest manifest) =>
+        await SqliteDocumentStoreFactory.OpenPhysicalAsync(
+            $"Data Source={path}",
+            manifest,
+            new ProviderIdentity("groundwork-sqlite", "1.0.0"),
+            DocumentStoreAccess.Scoped(new StorageScope(TenantId)),
+            options: new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = true });
 
     private static async Task SeedDesignAsync(string path)
     {
-        await CreateDocumentsTableAsync(path);
-        await using var connection = new SqliteConnection($"Data Source={path}");
-        await connection.OpenAsync();
-        foreach (var (kind, id, json) in DesignRows())
+        var store = await OpenAsync(path, WorkflowsDesignStorageManifest.Create());
+        foreach (var definitionId in new[] { "def-1", "def-2", "def-3" })
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "INSERT INTO groundwork_documents (document_kind, id, content_json) VALUES ($k, $i, $c);";
-            command.Parameters.AddWithValue("$k", kind);
-            command.Parameters.AddWithValue("$i", id);
-            command.Parameters.AddWithValue("$c", json);
-            await command.ExecuteNonQueryAsync();
+            var definition = new WorkflowDefinition
+            {
+                Id = definitionId, TenantId = TenantId, Name = definitionId,
+                CreatedAt = Seeded, LastModifiedAt = Seeded
+            };
+            await store.SaveAsync(new(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                definition.Id,
+                WorkflowsDesignStorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(
+                    new DefinitionDocument(WorkflowsDesignStorageManifest.WorkflowDefinitionCollection, definition),
+                    GroundworkDesignJson.Options)));
         }
+
+        var payloadSerializer = PayloadSerializer();
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-1", WorkflowDefinitionId = "def-1", TenantId = TenantId,
+            State = WorkflowDefinitionState.Empty,
+            StateSource = payloadSerializer.Serialize(WorkflowDefinitionState.Empty),
+            CreatedAt = Seeded, LastModifiedAt = Seeded
+        };
+        await store.SaveAsync(new(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft.Id,
+            WorkflowsDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(
+                new DraftDocument(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection, draft, []),
+                GroundworkDesignDocumentSerialization.Create(payloadSerializer))));
     }
 
     private static async Task SeedRuntimeAsync(string path)
     {
-        await CreateDocumentsTableAsync(path);
-        await using var connection = new SqliteConnection($"Data Source={path}");
-        await connection.OpenAsync();
-        foreach (var (kind, id, json) in RuntimeRows())
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "INSERT INTO groundwork_documents (document_kind, id, content_json) VALUES ($k, $i, $c);";
-            command.Parameters.AddWithValue("$k", kind);
-            command.Parameters.AddWithValue("$i", id);
-            command.Parameters.AddWithValue("$c", json);
-            await command.ExecuteNonQueryAsync();
-        }
+        var store = await OpenAsync(path, ElsaRuntimeStorageManifest.CreatePhysicalized());
+        var referenceStore = new GroundworkWorkflowExecutableSourceReferenceStore(
+            store, new GroundworkRuntimeDocumentSerializer());
+        // def-1 and def-2 are published; def-3's reference is expired before AsOf and must not count.
+        await referenceStore.SaveAsync(Reference("ref-1", "def-1", expiresAt: null));
+        await referenceStore.SaveAsync(Reference("ref-2", "def-2", expiresAt: null));
+        await referenceStore.SaveAsync(Reference("ref-3", "def-3", expiresAt: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
     }
 
-    private static IEnumerable<(string Kind, string Id, string Json)> DesignRows()
-    {
-        const string definitionKind = "workflowDefinition";
-        const string draftKind = "workflowDefinitionDraft";
-        foreach (var definitionId in new[] { "def-1", "def-2", "def-3" })
-        {
-            yield return (definitionKind, definitionId, DefinitionJson(definitionId));
-        }
+    private static WorkflowExecutableSourceReference Reference(string id, string definitionId, DateTimeOffset? expiresAt) =>
+        new(id, $"artifact-{id}", "WorkflowDefinitionVersion", $"version-{id}", "1",
+            definitionId, $"version-{id}", "1", Seeded, Seeded, WorkflowExecutableReferenceScope.Published, expiresAt);
 
-        yield return (draftKind, "draft-1", DraftJson("draft-1", "def-1"));
-    }
+    private sealed record DefinitionDocument(string Collection, WorkflowDefinition Entity);
 
-    private static string DefinitionJson(string definitionId) =>
-        "{\"entity\":{\"id\":\"" + definitionId + "\",\"tenantId\":\"" + TenantId + "\",\"deletedAt\":null}}";
-
-    private static string DraftJson(string draftId, string definitionId) =>
-        "{\"entity\":{\"id\":\"" + draftId + "\",\"tenantId\":\"" + TenantId +
-        "\",\"workflowDefinitionId\":\"" + definitionId +
-        "\",\"lastModifiedAt\":\"2026-08-01T00:00:00+00:00\",\"createdAt\":\"2026-08-01T00:00:00+00:00\"}}";
-
-    private static string ReferenceJson(
-        string definitionId,
-        WorkflowExecutableReferenceScope scope,
-        string? expiresAt) =>
-        "{\"reference\":{\"definitionId\":\"" + definitionId + "\",\"scope\":" + (int)scope +
-        ",\"deletedAt\":null,\"expiresAt\":" + (expiresAt is null ? "null" : "\"" + expiresAt + "\"") + "}}";
-
-    private static IEnumerable<(string Kind, string Id, string Json)> RuntimeRows()
-    {
-        const string referenceKind = "workflowExecutableSourceReference";
-        // def-1 and def-2 are published; def-3 is not. An expired reference must not count.
-        yield return (referenceKind, "ref-1",
-            ReferenceJson("def-1", WorkflowExecutableReferenceScope.Published, expiresAt: null));
-        yield return (referenceKind, "ref-2",
-            ReferenceJson("def-2", WorkflowExecutableReferenceScope.Published, expiresAt: null));
-        yield return (referenceKind, "ref-3",
-            ReferenceJson("def-3", WorkflowExecutableReferenceScope.Published, expiresAt: "2026-01-01T00:00:00+00:00"));
-    }
+    private sealed record DraftDocument(
+        string Collection,
+        WorkflowDefinitionDraft Entity,
+        IReadOnlyCollection<DesignMetadataRecord> Layout);
 }

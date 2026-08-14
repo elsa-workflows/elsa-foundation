@@ -14,7 +14,8 @@ namespace Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
 
 /// <summary>
 /// MongoDB counterpart of <see cref="GroundworkWorkflowPortfolioDataSource"/>. MongoDB stores one physical
-/// collection per document kind rather than a single shared table, so the SQL implementation's CTE joins
+/// collection per document kind rather than routing each kind to its declared table, so the SQL
+/// implementation's CTE joins
 /// become <c>$lookup</c> sub-pipelines here; the entity envelope is preserved as a native BSON sub-document
 /// under <c>content</c>, whose field paths mirror the JSON-path segments the SQL implementation extracts.
 /// </summary>

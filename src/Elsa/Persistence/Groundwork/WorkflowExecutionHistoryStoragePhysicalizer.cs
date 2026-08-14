@@ -12,15 +12,15 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 internal static class WorkflowExecutionHistoryStoragePhysicalizer
 {
-    private const string TableName = "workflow_execution_states";
+    private const string TableName = ElsaRuntimeStorageManifest.WorkflowExecutionStateTableName;
     private const string CollectionColumn = "collection";
     private const string SortTicksColumn = "history_sort_ticks";
-    private const string WorkflowExecutionIdColumn = "history_workflow_execution_id";
-    private const string TenantIdColumn = "history_tenant_id";
+    private const string WorkflowExecutionIdColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdColumn;
+    private const string TenantIdColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryTenantIdColumn;
     private const string AuthorityPartitionColumn = "history_authority_partition";
     private const string DefinitionIdColumn = "history_definition_id";
-    private const string StatusColumn = "history_status";
-    private const string RunKindColumn = "history_run_kind";
+    private const string StatusColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryStatusColumn;
+    private const string RunKindColumn = ElsaRuntimeStorageManifest.WorkflowExecutionHistoryRunKindColumn;
     private const string CorrelationIdColumn = "history_correlation_id";
     private const string ArtifactIdColumn = "history_artifact_id";
 

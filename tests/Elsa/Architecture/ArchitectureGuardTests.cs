@@ -423,18 +423,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Groundwork_stores_open_only_through_the_physical_factory_entry_points()
     {
-        // Known debt, deliberately visible: the Groundwork dashboard data sources still read workflow
-        // definitions, drafts and executions from the shared groundwork_documents table, which a physically
-        // opened store no longer routes them into. Their fixtures can only reproduce the layout the SQL reads
-        // by opening portably. Fixing the data sources retires both carve-outs — the package bump forces it.
-        var dashboardDataSourceFixtures = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "tests/Elsa/Workflows/Dashboard/Tests/WorkflowPortfolioProviderTests.cs",
-            "tests/Elsa/Workflows/Dashboard/Tests/GroundworkWorkflowRunHealthDataSourceTests.cs"
-        };
-
         var violations = GroundworkGuardSourceFiles("src", "tests", "benchmarks")
-            .Where(candidate => !dashboardDataSourceFixtures.Contains(candidate.RelativePath))
             .Select(candidate => new
             {
                 candidate.RelativePath,

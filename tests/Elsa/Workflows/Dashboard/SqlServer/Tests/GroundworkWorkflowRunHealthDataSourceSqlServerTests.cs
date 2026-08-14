@@ -24,8 +24,10 @@ public sealed class GroundworkWorkflowRunHealthDataSourceSqlServerTests(SqlServe
     {
         var driver = await fixture.RequireCleanDriverAsync();
 
+        // The physicalized runtime manifest is what production hosts open with: it routes executions into
+        // the workflow_execution_states entity table the data source reads.
         await using var client = await driver.OpenClientAsync(
-            ElsaRuntimeStorageManifest.Create(),
+            ElsaRuntimeStorageManifest.CreatePhysicalized(),
             DocumentStoreAccess.Scoped(new StorageScope("tenant-a")));
         var store = client.DocumentStore;
 
