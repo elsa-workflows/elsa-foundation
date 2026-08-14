@@ -23,6 +23,18 @@ public static class SharedDocumentsStorage
         LogicalName,
         new DocumentEnvelopeDefinition(CanonicalJsonColumn: CanonicalJsonColumnName));
 
+    // The scope column carries the envelope's default name: the bridge never renamed it, so the
+    // frozen recipe must not either.
+    private static readonly string StorageScopeColumnName = new DocumentEnvelopeDefinition().StorageScopeColumn;
+
+    /// <summary>
+    /// Declares a unit's physical storage in the shared document table. <paramref name="tenancy"/>
+    /// must be the same policy the owning <see cref="StorageUnit"/> declares — it decides whether
+    /// physical indexes are prefixed with the storage-scope column. Indexes marked
+    /// <see cref="SharedDocumentsIndex.Projected"/> must satisfy the frozen bridge eligibility rule
+    /// (single field, <see cref="MissingValueBehavior.Excluded"/>); the recipe throws otherwise
+    /// rather than silently changing the historical schema.
+    /// </summary>
     public static StorageUnitPhysicalStorage Create(
         string unitIdentity,
         TenancyPolicy tenancy,
@@ -84,7 +96,7 @@ public static class SharedDocumentsStorage
     {
         var columns = new List<PhysicalIndexColumnDefinition>();
         if (tenancy.Kind == TenancyKind.Scoped)
-            columns.Add(new PhysicalIndexColumnDefinition(new DocumentEnvelopeDefinition().StorageScopeColumn, columns.Count));
+            columns.Add(new PhysicalIndexColumnDefinition(StorageScopeColumnName, columns.Count));
         columns.Add(new PhysicalIndexColumnDefinition(columnName, columns.Count));
         return columns;
     }
