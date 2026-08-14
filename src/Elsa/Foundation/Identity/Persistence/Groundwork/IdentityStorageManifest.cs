@@ -1,9 +1,8 @@
-#pragma warning disable GW0001, GW0002, GW0003 // Identity still bridges legacy portable declarations into physical storage during the Groundwork migration.
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Physicalization;
 using Groundwork.Core.Queries;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork;
@@ -74,7 +73,7 @@ public static class IdentityStorageManifest
     public const string ListClaimMappingsByProviderQuery = "list-claim-mappings-by-provider";
     public const string ListExpiredMutationReceiptsQuery = "list-expired-mutation-receipts";
 
-    public static StorageManifest Create() => new(
+    public static StorageManifest Create() => new StorageManifest(
         new StorageManifestIdentity("elsa-identity"),
         new StorageManifestOwner("elsa.identity"),
         new StorageManifestVersion(SchemaVersion),
@@ -184,17 +183,23 @@ public static class IdentityStorageManifest
                 [ExpiredReceiptQuery("identity-mutation-receipt-by-expiry")])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Identity's units own dedicated physical tables, but they still share the Groundwork document
+        // envelope, so the manifest declares that shared storage itself rather than having a
+        // physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     private static StorageUnit Unit(
         string documentKind,
         string label,
         string tableName,
-        IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries,
+        IndexSpec[] indexes,
+        QuerySpec[] queries,
         TenancyPolicy? tenancy = null)
     {
-        return new StorageUnit(
+        return StorageUnit.Create(
             new StorageUnitIdentity(documentKind),
             label,
             StorageIntent.PortableDocument(),
@@ -203,11 +208,7 @@ public static class IdentityStorageManifest
             tenancy ?? TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            indexes,
-            queries,
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(PhysicalTable(documentKind, tableName, indexes, queries)),
                 logicalIndexes: indexes
@@ -228,15 +229,14 @@ public static class IdentityStorageManifest
                             index,
                             RequiresAdditiveV2(index, queries) ? V2(index.Identity) : index.Identity);
                     })
-                    .ToArray())
-        };
+                    .ToArray()));
     }
 
     private static PhysicalTableDefinition PhysicalTable(
         string documentKind,
         string tableName,
-        IReadOnlyCollection<IndexDeclaration> indexes,
-        IReadOnlyCollection<PortableQueryDeclaration> queries)
+        IReadOnlyCollection<IndexSpec> indexes,
+        IReadOnlyCollection<QuerySpec> queries)
     {
         var projectedColumns = indexes
             .SelectMany(index => index.Fields.Select(field => new
@@ -312,8 +312,8 @@ public static class IdentityStorageManifest
     }
 
     private static BoundedQueryDeclaration BoundedQuery(
-        PortableQueryDeclaration query,
-        IndexDeclaration index,
+        QuerySpec query,
+        IndexSpec index,
         string indexIdentity)
     {
         var path = index.Fields.Single().Path;
@@ -330,51 +330,45 @@ public static class IdentityStorageManifest
             predicateFields: [new BoundedQueryPredicateField(path, query.Operations)]);
     }
 
-    private static LogicalIndexDeclaration LogicalIndex(IndexDeclaration index, string identity) =>
+    private static LogicalIndexDeclaration LogicalIndex(IndexSpec index, string identity) =>
         new(identity, index.Fields, index.ValueKind, index.IsUnique, index.MissingValueBehavior);
 
     private static bool RequiresAdditiveV2(
-        IndexDeclaration index,
-        IReadOnlyCollection<PortableQueryDeclaration> queries) =>
+        IndexSpec index,
+        IReadOnlyCollection<QuerySpec> queries) =>
         !index.IsUnique && queries.Any(query =>
             query.IndexIdentity == index.Identity &&
             query.PagingSupport is QueryPagingSupport.Cursor or QueryPagingSupport.Offset);
 
     private static string V2(string identity) => $"{identity}{AdditiveIndexVersionSuffix}";
 
-    private static PortableQueryDeclaration Query(string name, string indexName) => new(
+    private static QuerySpec Query(string name, string indexName) => new(
         name,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
         QuerySortSupport.None,
         QueryPagingSupport.Cursor);
 
-    private static PortableQueryDeclaration ExpiredReceiptQuery(string indexName) => new(
+    private static QuerySpec ExpiredReceiptQuery(string indexName) => new(
         ListExpiredMutationReceiptsQuery,
         indexName,
         new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
         QuerySortSupport.Ascending,
         QueryPagingSupport.Cursor);
 
-    private static IndexDeclaration Keyword(string identity, params string[] fields) => new(
+    private static IndexSpec Keyword(string identity, params string[] fields) => new(
         identity,
         fields.Select(field => new IndexField(field)).ToArray(),
         IndexValueKind.Keyword,
         false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+        MissingValueBehavior.Excluded);
 
-    private static IndexDeclaration DateTimeIndex(string identity, string field) => new(
+    private static IndexSpec DateTimeIndex(string identity, string field) => new(
         identity,
         [new IndexField(field)],
         IndexValueKind.DateTime,
         false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
-        IndexPhysicalizationPolicy.Optimized);
+        MissingValueBehavior.Excluded);
 
     private static PortablePhysicalType PhysicalType(IndexValueKind valueKind) => valueKind switch
     {
@@ -392,5 +386,24 @@ public static class IdentityStorageManifest
             IdentityRoleDocumentKind => field is NormalizedRoleNameKeyField,
             _ => false
         };
+
+    /// <summary>
+    /// A unit's index intent, in exactly the shape the physical-table and logical-index builders read.
+    /// Identity derives its dedicated tables from these declarations rather than declaring the physical
+    /// layout twice.
+    /// </summary>
+    private sealed record IndexSpec(
+        string Identity,
+        IReadOnlyList<IndexField> Fields,
+        IndexValueKind ValueKind,
+        bool IsUnique,
+        MissingValueBehavior MissingValueBehavior);
+
+    /// <summary>A unit's bounded-query intent, before the physical index identity is resolved.</summary>
+    private sealed record QuerySpec(
+        string Identity,
+        string IndexIdentity,
+        IReadOnlySet<PortableQueryOperation> Operations,
+        QuerySortSupport SortSupport,
+        QueryPagingSupport PagingSupport);
 }
-#pragma warning restore GW0001, GW0002, GW0003

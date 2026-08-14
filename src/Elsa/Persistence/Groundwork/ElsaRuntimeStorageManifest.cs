@@ -30,7 +30,7 @@ public static class ElsaRuntimeStorageManifest
     public const int WorkflowDispatchIdProjectionLength = 76;
     public const int PostCommitOutboxItemIdProjectionLength =
         RuntimePostCommitOutboxIdentity.MaximumProjectionLength;
-    public const int StimulusHashProjectionLength = LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength;
+    public const int StimulusHashProjectionLength = SharedDocumentsStorage.StringProjectionLength;
     public const int StimulusTypeProjectionLength = 256;
     public const int WorkflowTriggerBindingStimulusTypeProjectionLength = 240;
 
@@ -589,7 +589,7 @@ public static class ElsaRuntimeStorageManifest
                                     DueWorkStoragePhysicalizer.AddRoutes(
                                         SchedulerWorkStoragePhysicalizer.AddRoutes(
                                             EnableCompatibilityCollectionPaging(
-                                                LegacyGroundworkStorageManifestPhysicalizer.Physicalize(Create()))))))))))))));
+                                                Create())))))))))))));
 
     private static StorageManifest EnableCompatibilityCollectionPaging(StorageManifest manifest) =>
         manifest with
@@ -917,24 +917,23 @@ public static class ElsaRuntimeStorageManifest
                 SchedulerWorkItemDocumentKind,
                 "Scheduler work queue item",
                 [
-                    new IndexDeclaration(
-                        SchedulerWorkByWorkflowOrderIndex,
-                        [new IndexField(SchedulerWorkOrderKeyField, IndexValueKind.Keyword)],
-                        IndexValueKind.Keyword,
-                        false,
-                        true,
-                        MissingValueBehavior.Excluded,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
-                        IndexPhysicalizationPolicy.Optimized),
-                    new IndexDeclaration(
-                        ByWorkflowExecutionIndex,
-                        [new IndexField(WorkflowExecutionIdField, IndexValueKind.Keyword)],
-                        IndexValueKind.Keyword,
-                        false,
-                        true,
-                        MissingValueBehavior.Excluded,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.StartsWith },
-                        IndexPhysicalizationPolicy.Optimized),
+                    // Prefix-scanned routes: no equality access pattern, so neither index is projected.
+                    new SharedDocumentsIndex(
+                        new LogicalIndexDeclaration(
+                            SchedulerWorkByWorkflowOrderIndex,
+                            [new IndexField(SchedulerWorkOrderKeyField, IndexValueKind.Keyword)],
+                            IndexValueKind.Keyword,
+                            false,
+                            MissingValueBehavior.Excluded),
+                        Projected: false),
+                    new SharedDocumentsIndex(
+                        new LogicalIndexDeclaration(
+                            ByWorkflowExecutionIndex,
+                            [new IndexField(WorkflowExecutionIdField, IndexValueKind.Keyword)],
+                            IndexValueKind.Keyword,
+                            false,
+                            MissingValueBehavior.Excluded),
+                        Projected: false),
                     Keyword(ByCollectionIndex, CollectionField)
                 ],
                 [
@@ -965,15 +964,16 @@ public static class ElsaRuntimeStorageManifest
                     Keyword(DurableTimerByWorkflowExecution, WorkflowExecutionIdField),
                     Keyword(ByTimerIdIndex, DurableTimerIdField),
                     DateTime(DurableTimerByDueTime, DurableTimerDueTimeField),
-                    new IndexDeclaration(
-                        DurableTimerByClaimOrder,
-                        [new IndexField(DurableTimerClaimOrderKeyField, IndexValueKind.Keyword)],
-                        IndexValueKind.Keyword,
-                        false,
-                        true,
-                        MissingValueBehavior.IncludedAsNull,
-                        new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual },
-                        IndexPhysicalizationPolicy.Optimized)
+                    // Claim sweeps must see timers whose claim-order key has no value, so the index
+                    // includes them as null — which also keeps it out of the projection.
+                    new SharedDocumentsIndex(
+                        new LogicalIndexDeclaration(
+                            DurableTimerByClaimOrder,
+                            [new IndexField(DurableTimerClaimOrderKeyField, IndexValueKind.Keyword)],
+                            IndexValueKind.Keyword,
+                            false,
+                            MissingValueBehavior.IncludedAsNull),
+                        Projected: false)
                 ],
                 [
                     Query("list-all", ByCollectionIndex),
@@ -1034,7 +1034,12 @@ public static class ElsaRuntimeStorageManifest
                 [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        []);
+        [])
+    {
+        // Every unit above stores into Groundwork's shared document table, so the manifest declares
+        // that table itself instead of having a physicalization wrapper inject it.
+        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
+    };
 
     internal static ProjectedColumnDefinition[] BoundStimulusProjectionColumns(
         IEnumerable<ProjectedColumnDefinition> columns,
@@ -1050,21 +1055,25 @@ public static class ElsaRuntimeStorageManifest
     private static StorageUnit Unit(
         string documentKind,
         string label,
-        IndexDeclaration[] indexes,
-        PortableQueryDeclaration[] queries) => new(
-        new StorageUnitIdentity(documentKind),
-        label,
-        StorageIntent.PortableDocument(),
-        LifecyclePolicy.Mutable,
-        IdentityPolicy.StringId(),
-        TenancyPolicy.Scoped,
-        ConcurrencyPolicy.Optimistic(),
-        SerializationPolicy.Json(),
-        indexes,
-        queries,
-        PhysicalizationPolicy.Portable);
+        IReadOnlyList<SharedDocumentsIndex> indexes,
+        IReadOnlyList<BoundedQueryDeclaration> queries)
+    {
+        // The unit and its shared-documents recipe must agree on tenancy: the recipe prefixes every
+        // physical index with the storage-scope column exactly when the unit is tenant-scoped.
+        var tenancy = TenancyPolicy.Scoped;
+        return StorageUnit.Create(
+            new StorageUnitIdentity(documentKind),
+            label,
+            StorageIntent.PortableDocument(),
+            LifecyclePolicy.Mutable,
+            IdentityPolicy.StringId(),
+            tenancy,
+            ConcurrencyPolicy.Optimistic(),
+            SerializationPolicy.Json(),
+            SharedDocumentsStorage.Create(documentKind, tenancy, indexes, queries));
+    }
 
-    private static PortableQueryDeclaration Query(
+    private static BoundedQueryDeclaration Query(
         string name,
         string indexName,
         IReadOnlySet<PortableQueryOperation>? operations = null,
@@ -1076,64 +1085,58 @@ public static class ElsaRuntimeStorageManifest
         sortSupport,
         pagingSupport);
 
-    private static IndexDeclaration Keyword(string identity, string field, bool isUnique = false) => new(
-        identity,
-        [new IndexField(field)],
-        IndexValueKind.Keyword,
-        isUnique,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex Keyword(string identity, string field, bool isUnique = false) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.Keyword,
+            isUnique,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static IndexDeclaration Keyword(string identity, string firstField, string secondField) => new(
-        identity,
-        [new IndexField(firstField), new IndexField(secondField)],
-        IndexValueKind.Keyword,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex Keyword(string identity, string firstField, string secondField) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(firstField), new IndexField(secondField)],
+            IndexValueKind.Keyword,
+            false,
+            MissingValueBehavior.Excluded),
+        // Two fields: the shared-documents projection only carries single-field indexes.
+        Projected: false);
 
-    private static IndexDeclaration Number(string identity, string field) => new(
-        identity,
-        [new IndexField(field)],
-        IndexValueKind.Number,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex Number(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.Number,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static IndexDeclaration Boolean(string identity, string field) => new(
-        identity,
-        [new IndexField(field)],
-        IndexValueKind.Boolean,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex Boolean(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.Boolean,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static IndexDeclaration DateTime(string identity, string field) => new(
-        identity,
-        [new IndexField(field)],
-        IndexValueKind.DateTime,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
-        IndexPhysicalizationPolicy.Optimized);
+    private static SharedDocumentsIndex DateTime(string identity, string field) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(field)],
+            IndexValueKind.DateTime,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 
-    private static IndexDeclaration ClaimableByPlanPlaceholder(string identity, string planIdField) => new(
-        identity,
-        [new IndexField(planIdField)],
-        IndexValueKind.Keyword,
-        false,
-        true,
-        MissingValueBehavior.Excluded,
-        new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal, PortableQueryOperation.LessThanOrEqual },
-        IndexPhysicalizationPolicy.Optimized);
-
+    private static SharedDocumentsIndex ClaimableByPlanPlaceholder(string identity, string planIdField) => new(
+        new LogicalIndexDeclaration(
+            identity,
+            [new IndexField(planIdField)],
+            IndexValueKind.Keyword,
+            false,
+            MissingValueBehavior.Excluded),
+        Projected: true);
 }

@@ -40,6 +40,27 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
     }
 
     [Fact]
+    public void ContributesResumptionDurabilityEvidence()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        // Not redundant with the readiness report: since #1320 this contribution steers a runtime WRITE decision.
+        // WorkflowSchedulerCommandRouter parks a shed command's work item only when some injected evidence names the
+        // resumption component, so deleting this registration silently flips every host composing this feature from
+        // "park, the sweep re-drives it" to "refuse, write nothing" — with no other test going red. Asserted through a
+        // built provider rather than a descriptor because the router reads Component off the resolved instance, and
+        // the contributing type is private to the feature.
+        var evidence = Assert.Single(
+            provider.GetServices<IWorkflowDispatchDurabilityEvidence>(),
+            candidate => candidate.Component == WorkflowDispatchDurabilityComponents.Resumption);
+        Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence.Level);
+    }
+
+    [Fact]
     public void MapsSettingsOntoOptions()
     {
         var services = new ServiceCollection();

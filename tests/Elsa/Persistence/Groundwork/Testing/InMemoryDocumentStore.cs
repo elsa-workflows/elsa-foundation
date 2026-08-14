@@ -133,9 +133,13 @@ public sealed class InMemoryDocumentStore : IDocumentStore, IBoundedDocumentStor
     private string ResolveIndexFieldPath(string documentKind, string indexName)
     {
         var unit = manifest.StorageUnits.Single(u => u.Identity.Value == documentKind);
-        var index = unit.Indexes.SingleOrDefault(i => i.Identity == indexName)
-            ?? throw new UndeclaredDocumentIndexException(documentKind, indexName);
-        return index.Fields[0].Path;
+
+        // Units that have migrated off the legacy declaration surface declare their indexes only on
+        // their physical storage; the legacy list still answers for the ones that have not.
+        var path = unit.Indexes.SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path
+                   ?? unit.PhysicalStorage?.LogicalIndexes
+                       .SingleOrDefault(i => i.Identity == indexName)?.Fields[0].Path;
+        return path ?? throw new UndeclaredDocumentIndexException(documentKind, indexName);
     }
 
     private static string? ReadField(string contentJson, string path)

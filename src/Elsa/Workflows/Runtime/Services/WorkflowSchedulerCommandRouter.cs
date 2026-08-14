@@ -16,6 +16,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     private readonly RuntimeBurstCacheOptions _burstCacheOptions;
     private readonly IWorkflowAlterationActorCommandExecutor? _alterationActorCommandExecutor;
     private readonly IRuntimeAdmissionController? _admissionController;
+    private readonly bool _hasResumptionRedriver;
 
     public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -26,7 +27,8 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         IWorkflowBurstScopeAccessor? burstScopeAccessor = null,
         RuntimeBurstCacheOptions? burstCacheOptions = null,
         IWorkflowAlterationActorCommandExecutor? alterationActorCommandExecutor = null,
-        IRuntimeAdmissionController? admissionController = null)
+        IRuntimeAdmissionController? admissionController = null,
+        IEnumerable<IWorkflowDispatchDurabilityEvidence>? durabilityEvidence = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
@@ -41,6 +43,15 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         _burstCacheOptions = burstCacheOptions ?? new RuntimeBurstCacheOptions();
         _alterationActorCommandExecutor = alterationActorCommandExecutor;
         _admissionController = admissionController;
+        // Read once per router, which is once per dispatched command (the router is scoped). This is a host-wide
+        // constant, so the obvious place for it is a singleton — but a singleton injecting this enumerable would be a
+        // captive dependency: Groundwork contributes five of these as Scoped (four runtime-store boundaries plus the
+        // distributed one), and containers built with ValidateScopes refuse that outright. The per-command cost is
+        // enumerating a handful of marker objects and no I/O: only .Component is read here, and the one contribution
+        // with a dependency at all (GroundworkCheckpointDurabilityEvidence) takes the singleton
+        // GroundworkStoreSessionSource.
+        _hasResumptionRedriver = durabilityEvidence?.Any(evidence =>
+            string.Equals(evidence.Component, WorkflowDispatchDurabilityComponents.Resumption, StringComparison.Ordinal)) ?? false;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
@@ -165,15 +176,30 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// Whether a shed command parks its work item for a later drain, or is refused outright with nothing written.
     /// </summary>
     /// <remarks>
-    /// <para>The rule is what would re-drive the parked item. A gated kind naming a live execution is parked for the
-    /// resumption sweep, which is what is meant to make <c>Deferred</c> a promise rather than a drop — a promise kept
-    /// only where <c>WorkflowsRuntimeResumptionFeature</c> is composed, which <c>AddWorkflowRuntime</c> does not do:
-    /// the open gap tracked by <b>#1320</b>, whose chosen resolution (degrade to the start-shaped refusal when no
-    /// re-driver is composed) is not implemented here. The two kinds below are refused outright instead, because for
-    /// them parking is worse than writing nothing: a queued <c>Start</c> would be run later by the sweep, so a caller
-    /// told "not taken, retry" would get the work done twice, and a queued <c>AlterWorkflow</c> would be matched only
-    /// by <c>NoopWorkflowSchedulerWorkHandler</c> and silently swallowed. Both have a re-driver that needs no parked
-    /// item: the caller's retry, and the alteration pump re-claiming the job once its lease lapses.</para>
+    /// <para>The rule is what would re-drive the parked item, so it has two halves and parking needs both. The kind
+    /// must be one whose parked item a re-driver would actually run: <c>Start</c> and <c>AlterWorkflow</c> are refused
+    /// outright because for them parking is worse than writing nothing — a queued <c>Start</c> would be run later by
+    /// the resumption sweep, so a caller told "not taken, retry" would get the work done twice, and a queued
+    /// <c>AlterWorkflow</c> would be matched only by <c>NoopWorkflowSchedulerWorkHandler</c> and silently swallowed.
+    /// Both have a re-driver that needs no parked item: the caller's retry, and the alteration pump re-claiming the job
+    /// once its lease lapses.</para>
+    /// <para>The second half is <b>#1320</b>, resolved here by refusing rather than promising. The sweep that makes
+    /// <c>Deferred</c> a promise rather than a drop is composed only by <c>WorkflowsRuntimeResumptionFeature</c>, which
+    /// <c>AddWorkflowRuntime</c> does not register, and on a host without it a parked item has no owner at all while
+    /// the agent has already consumed the caller's idempotency key against it (that consumption is keyed off
+    /// <c>ShedWorkQueued</c>, so it follows this decision rather than restating it). Such a host degrades to the
+    /// start-shaped refusal instead: shed, nothing written, key intact, the retry honest. The signal is an
+    /// <c>IWorkflowDispatchDurabilityEvidence</c> naming <c>WorkflowDispatchDurabilityComponents.Resumption</c> — the
+    /// component name only, not its durability level, so a process-local re-driver would also count; nothing in the
+    /// product contributes that component except the resumption feature. The evidence enumerable is optional, and an
+    /// absent one reads as "no re-driver", so a router composed by hand refuses in the conservative direction: it
+    /// writes nothing and tells the caller to retry, rather than parking work nobody has been shown to own.</para>
+    /// <para>What that evidence establishes is that the sweep is <b>registered</b>, not that it runs — the same caveat
+    /// the alteration pump carries above, <c>RuntimeResumptionPumpTask</c> being likewise an <c>IRecurringTask</c>. So
+    /// a host that composes the feature but no Tasks host contributes the evidence, parks, and never sweeps, which is
+    /// #1320 again in a composition this rule reads as safe. Which hosts reach the refusal, and why a shell-composed
+    /// one does not, live with the rest of this rule's reachability arithmetic in the admission entry of
+    /// <c>EXTENSION_POINTS.md</c> rather than being restated here.</para>
     /// <para>That swallow is systemic rather than an <c>AlterWorkflow</c> curiosity: <c>ContinueVolatileWait</c> and
     /// <c>DeliverSignal</c> have no handler anywhere and no faulting fallback either, and <c>NotifyParentActivity</c>
     /// shares that only on a host composing no <c>ActivitiesRuntimeFeature</c>, which registers its handler. So
@@ -182,9 +208,11 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
     /// named because it is the reachable one today. The <c>Noop</c> matching rule, the pump's registration and its <c>IRecurringTask</c>
     /// caveat, and the lease arithmetic live in the admission entry of <c>EXTENSION_POINTS.md</c>.</para>
     /// </remarks>
-    private static bool QueuesOnShed(WorkflowExecutionCommandKind kind) => kind is not (
-        WorkflowExecutionCommandKind.Start or
-        WorkflowExecutionCommandKind.AlterWorkflow);
+    private bool QueuesOnShed(WorkflowExecutionCommandKind kind) =>
+        _hasResumptionRedriver &&
+        kind is not (
+            WorkflowExecutionCommandKind.Start or
+            WorkflowExecutionCommandKind.AlterWorkflow);
 
     private async ValueTask<RuntimeSchedulerWorkItem> CreateWorkItemAsync(
         WorkflowExecutionCommandEnvelope envelope,

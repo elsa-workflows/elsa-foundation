@@ -1,0 +1,661 @@
+{
+  "manifest": "elsa-open-telemetry-diagnostics",
+  "owner": "elsa.diagnostics.open-telemetry",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [],
+  "storageUnits": [
+    {
+      "identity": "openTelemetryCaptureOperation",
+      "definitionDigest": "53b3c5557697f26ff485d8fa8d83d36504c2d882041d8dc1dc01242ec21e98eb",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(DedicatedDocumentTable)",
+      "logicalIndexes": [
+        {
+          "identity": "by-created-at",
+          "fields": [
+            {
+              "path": "createdAt"
+            }
+          ],
+          "valueKind": "DateTime",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "capture-operations-by-created-at",
+          "indexIdentity": "by-created-at",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [
+            {
+              "path": "createdAt",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "openTelemetryMetricInstrument",
+      "definitionDigest": "4f69d5b9f90c3476b83213914e030fb901f21a5f664ac8fd2cd448afb95c9233",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "by-kind",
+          "fields": [
+            {
+              "path": "kind"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-kind-v2",
+          "fields": [
+            {
+              "path": "kind"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-last-seen",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-resource",
+          "fields": [
+            {
+              "path": "resourceId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-resource-v2",
+          "fields": [
+            {
+              "path": "resourceId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-tie-breaker",
+          "fields": [
+            {
+              "path": "retentionTieBreaker"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-tie-breaker-v2",
+          "fields": [
+            {
+              "path": "retentionTieBreaker"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-v2",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "instruments-by-kind",
+          "indexIdentity": "by-kind-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "instruments-by-last-seen",
+          "indexIdentity": "by-retention-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "instruments-by-resource",
+          "indexIdentity": "by-resource-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "instruments-by-retention-tie-breaker",
+          "indexIdentity": "by-retention-tie-breaker-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Both",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "openTelemetryResource",
+      "definitionDigest": "349dc46190e6e5c35283d97ed59e2e59c00edbc37fc940bb3beba95c64cf765f",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "by-last-seen",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-resource-service",
+          "fields": [
+            {
+              "path": "serviceNameHash",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-resource-service-v2",
+          "fields": [
+            {
+              "path": "serviceNameHash",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-resource-status",
+          "fields": [
+            {
+              "path": "status"
+            }
+          ],
+          "valueKind": "Number",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-tie-breaker",
+          "fields": [
+            {
+              "path": "retentionTieBreaker"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-tie-breaker-v2",
+          "fields": [
+            {
+              "path": "retentionTieBreaker"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-retention-v2",
+          "fields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "valueKind": "Number"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "resources-by-last-seen",
+          "indexIdentity": "by-retention-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "resources-by-retention-tie-breaker",
+          "indexIdentity": "by-retention-tie-breaker-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Both",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "resources-by-service",
+          "indexIdentity": "by-resource-service-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "serviceNameHash",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "serviceNameComparisonKey",
+              "valueKind": "String",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": true
+            },
+            {
+              "path": "status",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "resources-by-status",
+          "indexIdentity": "by-retention-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "retentionTieBreaker",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "status",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": true
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "resources-filtered",
+          "indexIdentity": "by-retention-v2",
+          "operations": [
+            "Contains",
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": true,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "direction": "Descending"
+            },
+            {
+              "path": "retentionTieBreaker",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "lastSeenUtcTicks",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "retentionTieBreaker",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "status",
+              "valueKind": "Number",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "serviceNameHash",
+              "valueKind": "Keyword",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "idSearchKey",
+              "valueKind": "String",
+              "operations": [
+                "Contains"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "serviceNameComparisonKey",
+              "valueKind": "String",
+              "operations": [
+                "Equal"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "serviceNameSearchKey",
+              "valueKind": "String",
+              "operations": [
+                "Contains"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

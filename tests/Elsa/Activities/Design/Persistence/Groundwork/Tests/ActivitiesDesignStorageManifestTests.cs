@@ -27,8 +27,6 @@ public sealed class ActivitiesDesignStorageManifestTests
 
             Assert.Equal(StorageUnitProvisioningMode.Declared, storage.ProvisioningMode);
             Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, table.Form);
-            Assert.Empty(unit.Indexes);
-            Assert.Empty(unit.Queries);
         });
     }
 

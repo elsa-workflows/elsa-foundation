@@ -18,7 +18,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
@@ -871,8 +870,7 @@ public sealed class ActivityDraftTestRunTests
     private static StorageManifest CombinedStorageManifest()
     {
         var runtime = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var publishing = LegacyGroundworkStorageManifestPhysicalizer.Physicalize(
-            PublishingGroundworkStorageManifest.Create());
+        var publishing = PublishingGroundworkStorageManifest.Create();
         return new(
             new("elsa-activity-test-run-tests"),
             new("elsa.tests"),

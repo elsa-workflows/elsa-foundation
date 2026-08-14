@@ -67,8 +67,7 @@ public static class GroundworkDesignAtomicWriteStorageManifest
 
     public static StorageManifest Create()
     {
-#pragma warning disable GW0001 // The physical declaration below is the authoritative storage contract.
-        var operationUnit = new StorageUnit(
+        var operationUnit = StorageUnit.Create(
             new StorageUnitIdentity(DesignOperationDocumentKind),
             "Design operation ledger",
             StorageIntent.PortableDocument(),
@@ -77,20 +76,12 @@ public static class GroundworkDesignAtomicWriteStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-
-        operationUnit = operationUnit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(
                     PhysicalTableDefinition.DedicatedDocumentTable(DesignOperationPhysicalTableName)),
                 [],
-                [])
-        };
+                []));
 
         return new StorageManifest(
             new StorageManifestIdentity(FeatureIdentity),
@@ -188,8 +179,7 @@ public static class GroundworkDesignAtomicWriteStorageManifest
             ],
             linkedProjectionLogicalName: $"{DesignPostCommitIntentPhysicalTableName}_indexes");
 
-#pragma warning disable GW0001 // The physical declaration below is the authoritative storage contract.
-        var unit = new StorageUnit(
+        return StorageUnit.Create(
             new StorageUnitIdentity(DesignPostCommitIntentDocumentKind),
             "Design post-commit intent outbox",
             StorageIntent.PortableDocument(),
@@ -198,19 +188,11 @@ public static class GroundworkDesignAtomicWriteStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable);
-#pragma warning restore GW0001
-
-        return unit with
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 [claimable],
-                [route])
-        };
+                [route]));
     }
 }
 

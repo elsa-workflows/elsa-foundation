@@ -1,0 +1,886 @@
+{
+  "manifest": "elsa-workflows-design",
+  "owner": "elsa.workflows.design",
+  "version": "1.0.0",
+  "sharedDocumentStorages": [
+    {
+      "binding": "groundwork_documents",
+      "featureDefaultLogicalName": "groundwork_documents",
+      "canonicalJsonColumn": "content_json",
+      "schemaVersion": 1
+    }
+  ],
+  "storageUnits": [
+    {
+      "identity": "workflowDefinition",
+      "definitionDigest": "d99a3eb531802f380e38ecdbe3711269d338a7231cbeff9e963a5f5e69c97f4f",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "definition-by-description",
+          "fields": [
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-description-v2",
+          "fields": [
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-id-list",
+          "fields": [
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-id-list-v2",
+          "fields": [
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-id-point",
+          "fields": [
+            {
+              "path": "id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-name",
+          "fields": [
+            {
+              "path": "entity.name",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "definition-by-name-v2",
+          "fields": [
+            {
+              "path": "entity.name",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "definition-by-search",
+          "fields": [
+            {
+              "path": "entity.name",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-definition-by-id",
+          "indexIdentity": "definition-by-id-point",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "id",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-definitions-by-description",
+          "indexIdentity": "definition-by-description-v2",
+          "operations": [
+            "Contains",
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": true,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.description",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.description",
+              "operations": [
+                "Contains",
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "entity.name",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "list-definitions-by-id",
+          "indexIdentity": "definition-by-id-list-v2",
+          "operations": [
+            "Contains",
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": true,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.id",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.id",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "entity.name",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "list-definitions-by-name",
+          "indexIdentity": "definition-by-name-v2",
+          "operations": [
+            "Contains",
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": true,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.name",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.name",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        },
+        {
+          "identity": "search-definitions",
+          "indexIdentity": "definition-by-name-v2",
+          "operations": [
+            "Contains",
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": true,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.name",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.name",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ]
+            }
+          ],
+          "residualPredicateFields": [
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal",
+                "In"
+              ],
+              "isRequired": false
+            },
+            {
+              "path": "entity.description",
+              "valueKind": "Keyword",
+              "operations": [
+                "Contains",
+                "Equal"
+              ],
+              "isRequired": false
+            }
+          ],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowDefinitionDraft",
+      "definitionDigest": "293044e792661377c7dbcec7b1d64aed200c0450def9434fcf1e0e1a37051a53",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "draft-by-id",
+          "fields": [
+            {
+              "path": "id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "drafts-by-definition",
+          "fields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.lastModifiedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "entity.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "drafts-by-definition-v2",
+          "fields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.lastModifiedAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "entity.createdAt",
+              "valueKind": "DateTime"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-current-draft-by-definition",
+          "indexIdentity": "drafts-by-definition-v2",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.lastModifiedAt",
+              "direction": "Descending"
+            },
+            {
+              "path": "entity.createdAt",
+              "direction": "Descending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "First"
+          ]
+        },
+        {
+          "identity": "find-draft-by-id",
+          "indexIdentity": "draft-by-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "id",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-drafts-by-definition",
+          "indexIdentity": "drafts-by-definition-v2",
+          "operations": [
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.lastModifiedAt",
+              "direction": "Descending"
+            },
+            {
+              "path": "entity.createdAt",
+              "direction": "Descending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.workflowDefinitionId",
+              "operations": [
+                "Equal",
+                "In"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowDefinitionVersion",
+      "definitionDigest": "bff7cef39a5eb879087d1db154b7696999effcad4efb12c95e4f3ca0a4e1be93",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "latest-version-by-definition",
+          "fields": [
+            {
+              "path": "entity.definitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "version-by-definition-and-sort-key",
+          "fields": [
+            {
+              "path": "entity.definitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "version-by-id",
+          "fields": [
+            {
+              "path": "id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "versions-by-definition",
+          "fields": [
+            {
+              "path": "entity.definitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "versions-by-definition-v2",
+          "fields": [
+            {
+              "path": "entity.definitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "entity.id",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-latest-version",
+          "indexIdentity": "latest-version-by-definition",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Descending",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.semVerSortKey",
+              "direction": "Descending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Descending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.definitionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "First"
+          ]
+        },
+        {
+          "identity": "find-version-by-definition-and-sort-key",
+          "indexIdentity": "version-by-definition-and-sort-key",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "entity.definitionId",
+              "operations": [
+                "Equal"
+              ]
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "First"
+          ]
+        },
+        {
+          "identity": "find-version-by-id",
+          "indexIdentity": "version-by-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "id",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-versions-by-definition",
+          "indexIdentity": "versions-by-definition-v2",
+          "operations": [
+            "Equal",
+            "In"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Offset",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "entity.definitionId",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.semVerSortKey",
+              "direction": "Ascending"
+            },
+            {
+              "path": "entity.id",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "entity.definitionId",
+              "operations": [
+                "Equal",
+                "In"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Count",
+            "Documents"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowDefinitionVersionLayout",
+      "definitionDigest": "1a6d0b4637c78a87a8b451c11230b1bae6dca366437bdce086912c8e3f3d7758",
+      "provisioningMode": "Declared",
+      "policy": "Explicit(PhysicalEntityTable)",
+      "logicalIndexes": [
+        {
+          "identity": "layout-by-version",
+          "fields": [
+            {
+              "path": "entity.workflowDefinitionVersionId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": true,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-layout-by-version",
+          "indexIdentity": "layout-by-version",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "None",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [],
+          "predicateFields": [
+            {
+              "path": "entity.workflowDefinitionVersionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "First"
+          ]
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    }
+  ]
+}

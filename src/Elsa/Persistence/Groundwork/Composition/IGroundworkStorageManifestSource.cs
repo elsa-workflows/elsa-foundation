@@ -240,8 +240,6 @@ internal static class GroundworkCompositionImmutability
         RequiredIdentity(unit.Identity.Value, nameof(unit), "A storage-unit identity is required.");
         return unit with
         {
-            Indexes = Array.AsReadOnly(unit.Indexes.ToArray()),
-            Queries = Array.AsReadOnly(unit.Queries.ToArray()),
             PhysicalStorage = unit.PhysicalStorage is null
                 ? null
                 : new StorageUnitPhysicalStorage(

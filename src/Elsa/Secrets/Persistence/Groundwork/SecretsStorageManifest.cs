@@ -170,7 +170,7 @@ public static class SecretsStorageManifest
                     new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
                     isRequired: true)
             ]);
-        var unit = new StorageUnit(
+        var unit = StorageUnit.Create(
             new StorageUnitIdentity(SecretDocumentKind),
             "Secret",
             StorageIntent.PortableDocument(),
@@ -179,16 +179,11 @@ public static class SecretsStorageManifest
             TenancyPolicy.Scoped,
             ConcurrencyPolicy.Optimistic(),
             SerializationPolicy.Json(),
-            [],
-            [],
-            PhysicalizationPolicy.Portable)
-        {
-            PhysicalStorage = new StorageUnitPhysicalStorage(
+            new StorageUnitPhysicalStorage(
                 StorageUnitProvisioningMode.Declared,
                 PhysicalStoragePolicy.Explicit(definition),
                 [nameIndex, collectionIndex, filteredListIndex, filteredListV2Index],
-                [listRoute, unfilteredListRoute, searchRoute, legacyBackfillRoute])
-        };
+                [listRoute, unfilteredListRoute, searchRoute, legacyBackfillRoute]));
 
         return new StorageManifest(
             new StorageManifestIdentity("elsa-secrets"),

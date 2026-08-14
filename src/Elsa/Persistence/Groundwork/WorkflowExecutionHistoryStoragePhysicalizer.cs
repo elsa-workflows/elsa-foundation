@@ -485,7 +485,7 @@ internal static class WorkflowExecutionHistoryStoragePhysicalizer
             path,
             type,
             Length: type == PortablePhysicalType.String
-                ? length ?? LegacyGroundworkStorageManifestPhysicalizer.LegacyStringProjectionLength
+                ? length ?? SharedDocumentsStorage.StringProjectionLength
                 : null);
 
     private static BoundedQueryResidualPredicateField Residual(

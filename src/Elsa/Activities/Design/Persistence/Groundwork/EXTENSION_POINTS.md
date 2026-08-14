@@ -55,9 +55,8 @@ markers, and uncertain-commit reconciliation for workflow and activity design co
 ## Storage manifest declaration
 
 `ActivitiesDesignGroundworkStorageManifestSource` (feature identity `elsa-activities-design`)
-implements `IGroundworkStorageManifestSource`. It physicalizes
-`ActivitiesDesignStorageManifest.Create()` through
-`LegacyGroundworkStorageManifestPhysicalizer.Physicalize` and declares the read ports it owns
+implements `IGroundworkStorageManifestSource`. It contributes
+`ActivitiesDesignStorageManifest.Create()` and declares the read ports it owns
 (`IActivityDefinitionStore`, `IActivityDefinitionVersionStore`, `IActivityAvailabilitySettingsStore`,
 `IActivityDefinitionManagementProjectionStore`).
 
