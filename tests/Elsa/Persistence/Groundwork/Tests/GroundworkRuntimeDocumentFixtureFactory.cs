@@ -806,8 +806,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     }
 
     // Records the last (SchemaVersion, ContentJson) saved per document kind at the SaveDocumentRequest
-    // boundary. Only SaveAsync is exercised by the direct-save bridges; every other member throws so an
-    // unexpected access surfaces loudly instead of silently returning empty data.
+    // boundary. Only SaveAsync is exercised by the direct-save bridges. The pre-save probes some
+    // bridges issue (load-before-save, unique-index checks) report an empty store so the save
+    // proceeds and is captured; every other member throws so an unexpected access surfaces loudly.
     private sealed class CapturingDocumentStore : IDocumentStore
     {
         private readonly Dictionary<string, (string SchemaVersion, string ContentJson)> _captured = new(StringComparer.Ordinal);

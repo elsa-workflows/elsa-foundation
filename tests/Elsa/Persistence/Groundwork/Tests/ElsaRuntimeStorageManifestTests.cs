@@ -703,7 +703,7 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
-    public void Every_Query_Backed_Index_Is_An_Optimized_Physical_Projection()
+    public void Every_Equality_Routed_Index_Is_An_Optimized_Physical_Projection()
     {
         var manifest = ElsaRuntimeStorageManifest.Create();
 
