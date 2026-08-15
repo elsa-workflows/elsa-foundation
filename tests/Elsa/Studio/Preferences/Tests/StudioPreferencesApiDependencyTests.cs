@@ -77,7 +77,7 @@ public sealed class StudioPreferencesApiDependencyTests
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            var candidate = Path.Combine(
+            var candidate = Path.Join(
                 directory.FullName,
                 "src",
                 "Elsa",

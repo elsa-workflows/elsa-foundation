@@ -14,9 +14,9 @@ namespace Elsa.Studio.Preferences.Tests;
 
 public sealed class StudioPreferencesApiContractTests
 {
-    private static readonly string HttpBaselinePath = Path.Combine(
+    private static readonly string HttpBaselinePath = Path.Join(
         AppContext.BaseDirectory, "Baselines", "studio-preferences-http-fastendpoints.json");
-    private static readonly string OpenApiBaselinePath = Path.Combine(
+    private static readonly string OpenApiBaselinePath = Path.Join(
         AppContext.BaseDirectory, "Baselines", "studio-preferences-openapi-fastendpoints.json");
 
     [Fact]

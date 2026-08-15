@@ -7,12 +7,13 @@ namespace Elsa.Studio.Preferences.Tests.Support;
 
 internal static class StudioPreferencesCompatibilityEvidence
 {
-    private static readonly string HttpBaselinePath = Path.Combine(
+    private static readonly string HttpBaselinePath = Path.Join(
         AppContext.BaseDirectory, "Baselines", "studio-preferences-http-fastendpoints.json");
-    private static readonly string OpenApiBaselinePath = Path.Combine(
+    private static readonly string OpenApiBaselinePath = Path.Join(
         AppContext.BaseDirectory, "Baselines", "studio-preferences-openapi-fastendpoints.json");
-    private static readonly string ApprovalsPath = Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "../../../../../../Architecture/Baselines/rest-compatibility-approved-differences.json"));
+    private static readonly string ApprovalsPath = Path.GetFullPath(
+        "../../../../../../Architecture/Baselines/rest-compatibility-approved-differences.json",
+        AppContext.BaseDirectory);
 
     public static HttpCompatibilityObservation[] LoadLegacyHttp(string method) =>
         BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath)
