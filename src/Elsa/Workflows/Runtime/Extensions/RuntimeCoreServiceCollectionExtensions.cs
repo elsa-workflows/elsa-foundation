@@ -121,6 +121,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         // implementations would mean two definitions of identity. Extracted from Publishing so the
         // compiler (derivation) and the artifact importer (recompute-before-persist) share one.
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
+        // Replacement contract (§2.6.2) and the ONE activation ledger per engine (FR-B-006). Singleton
+        // because the in-memory fallback holds the slot state itself; Groundwork runtime persistence
+        // replaces this registration with the durable store.
+        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
