@@ -31,11 +31,20 @@ namespace Elsa.Workflows.Runtime.Services;
 /// fail loudly at startup naming what is absent, instead of making two very different states look
 /// equally supported.
 /// </para>
+/// <para>
+/// <paramref name="payloadSerializer"/> is required for the same reason, one level down. The gate's
+/// promise is "if this passes, activation resolves the type", and the only way to guarantee that is
+/// to read <c>TypeAlias</c> through the <em>same</em> path <c>ClrActivityActivator</c> uses. Reading
+/// the JSON property directly would work today — the descriptor is a single-property record with no
+/// converter — but it would leave a surface where the gate and the activator could silently disagree
+/// if one ever gained a custom converter.
+/// </para>
 /// </remarks>
 public sealed class RuntimeRequirementChecker(
     IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-    IWellKnownTypeRegistry typeRegistry) : IRuntimeRequirementChecker
+    IWellKnownTypeRegistry typeRegistry,
+    IPayloadSerializer payloadSerializer) : IRuntimeRequirementChecker
 {
     private static readonly string ClrDescriptorKind = typeof(ClrActivityDescriptor).FullName!;
 
@@ -154,35 +163,31 @@ public sealed class RuntimeRequirementChecker(
     }
 
     /// <summary>
-    /// Reads <see cref="ClrActivityDescriptor.TypeAlias"/> straight off the descriptor payload.
+    /// Reads <see cref="ClrActivityDescriptor.TypeAlias"/> through the same deserialization path
+    /// <c>ClrActivityActivator</c> uses, so the gate and the activator can never disagree about
+    /// which alias a node declares.
     /// </summary>
     /// <remarks>
-    /// Reading the single property directly keeps this check free of an <c>IPayloadSerializer</c>
-    /// dependency, which would otherwise be a second optional collaborator to reason about. The
-    /// lookup is case-insensitive because the alias survives whichever naming policy serialized it.
+    /// A payload the serializer cannot read is reported against the node as a missing type rather
+    /// than rethrown: the activator would fail on that node too, and a gate that aborts the whole
+    /// pass on one malformed node would lose the diagnostics for every other node in the artifact.
     /// </remarks>
-    private static bool TryReadTypeAlias(JsonElement payload, out string alias)
+    private bool TryReadTypeAlias(JsonElement payload, out string alias)
     {
         alias = string.Empty;
-        if (payload.ValueKind != JsonValueKind.Object)
-            return false;
 
-        foreach (var property in payload.EnumerateObject())
+        try
         {
-            if (!property.NameEquals(nameof(ClrActivityDescriptor.TypeAlias)) &&
-                !StringComparer.OrdinalIgnoreCase.Equals(property.Name, nameof(ClrActivityDescriptor.TypeAlias)))
-                continue;
-            if (property.Value.ValueKind != JsonValueKind.String)
-                return false;
-
-            var value = property.Value.GetString();
+            var value = payloadSerializer.Deserialize<ClrActivityDescriptor>(payload).TypeAlias;
             if (string.IsNullOrWhiteSpace(value))
                 return false;
 
             alias = value;
             return true;
         }
-
-        return false;
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }

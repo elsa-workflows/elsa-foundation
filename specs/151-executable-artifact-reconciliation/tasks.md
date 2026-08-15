@@ -53,6 +53,8 @@ Recorded at commit `100a5497c` so the §2.21.1 golden-rule checks (T040, T112) c
 | `Elsa.Workflows.Runtime.Api.Tests` | 93 passed, 0 failed | |
 | `Elsa.Architecture.Tests` | **330 passed, 37 FAILED** | **Already red before this feature.** Failures are in `CheckpointFenceEvidenceImporterTests` (16), `GroundworkCoverageLedgerTests` (13), plus `EfCoreSurfaceRatchetTests` and `ArchitectureGuardTests` — checkpoint-fence / mongodb evidence / coverage-ledger assertions, unrelated to spec 151. T040/T112 must compare against 37, not 0, and T070/T111 add new tests to a suite that is not currently green. |
 
+**Decision on the 37 (Joey, 2026-08-15): do not fix them during this feature.** They are out of spec-151 scope and chasing them now would stall the path to real-life testing. Revisit after the task list is complete — the resolution may be to converge the code *or* to change the architecture tests, and that is a call for Joey and Sipke together. Until then, treat 37 as the pass/fail line for this suite and isolate spec-151's own architecture tests (T070, T111) by filter rather than by whole-suite green.
+
 ## Conventions binding EVERY task in this feature
 
 Stated once here rather than repeated per task. These apply in all phases, not just the one you are working in.
