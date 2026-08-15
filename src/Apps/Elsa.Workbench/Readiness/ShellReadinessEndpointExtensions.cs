@@ -11,21 +11,22 @@ public static class ShellReadinessEndpointExtensions
         endpoints.MapGet("/health/ready", (IShellRegistry registry, ShellReadinessState state, IOptions<ShellReadinessOptions> options) =>
         {
             var shellName = options.Value.DefaultShellName;
+            var snapshot = state.Snapshot;
             var active = registry.GetActive(shellName);
-            if (active?.State == ShellLifecycleState.Active)
+            if (active?.State == ShellLifecycleState.Active
+                && snapshot.Status is ShellReadinessStatus.Ready or ShellReadinessStatus.Disabled)
             {
-                return Results.Json(new
-                {
-                    status = "ready",
-                    shell = shellName,
-                    generation = active.Descriptor.Generation,
-                    durationMs = state.Snapshot.Generation == active.Descriptor.Generation
-                        ? state.Snapshot.Duration?.TotalMilliseconds
-                        : null
-                });
+                var generation = active.Descriptor.Generation;
+                var response = new ShellReadinessReadyResponse(
+                    "ready",
+                    shellName,
+                    generation,
+                    snapshot.Status == ShellReadinessStatus.Ready && snapshot.Generation == generation
+                        ? snapshot.Duration?.TotalMilliseconds
+                        : null);
+                return Results.Json(response);
             }
 
-            var snapshot = state.Snapshot;
             return Results.Json(new
             {
                 status = snapshot.Status.ToString().ToLowerInvariant(),
@@ -37,3 +38,24 @@ public static class ShellReadinessEndpointExtensions
         return endpoints;
     }
 }
+
+/// <summary>
+/// The successful <c>/health/ready</c> payload.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A successful response always identifies the shell generation that is active when the response is built.
+/// During the initial warmup, HTTP 200 is withheld until the terminal readiness snapshot is published, so a
+/// successful warmup response for that generation includes <see cref="DurationMs"/>.
+/// </para>
+/// <para>
+/// <see cref="DurationMs"/> is intentionally nullable for a generation promoted by reload or external
+/// activation, because those paths do not publish a warmup duration. Such a generation is still ready when
+/// the active shell is serving and the readiness state is terminal.
+/// </para>
+/// </remarks>
+public sealed record ShellReadinessReadyResponse(
+    string Status,
+    string Shell,
+    int Generation,
+    double? DurationMs);

@@ -52,6 +52,32 @@ public sealed class ServerReadinessTests
     }
 
     [Fact]
+    public async Task ActiveGenerationRemainsUnavailableUntilTheWarmupSnapshotIsReady()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync(startReadinessWarmup: false);
+        var defaultGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        Assert.True(fixture.ReadinessState.TryBegin(ServerReadinessFixture.DefaultShellName));
+
+        var activation = fixture.Registry.GetOrActivateAsync(ServerReadinessFixture.DefaultShellName);
+        await defaultGate.WaitUntilEnteredAsync();
+        defaultGate.Release();
+        var shell = await activation;
+
+        var starting = await fixture.ReadReadyAsync();
+        Assert.Equal(ShellLifecycleState.Active, shell.State);
+        Assert.Equal(ShellReadinessStatus.Starting, fixture.ReadinessState.Snapshot.Status);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, starting.StatusCode);
+        Assert.Equal("starting", starting.Body.Status);
+        Assert.Null(starting.Body.DurationMs);
+
+        fixture.ReadinessState.MarkReady(shell.Descriptor.Generation);
+        var ready = await fixture.ReadReadyAsync();
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+        Assert.Equal(shell.Descriptor.Generation, ready.Body.Generation);
+        Assert.NotNull(ready.Body.DurationMs);
+    }
+
+    [Fact]
     public async Task ActivationFailureLeavesReadinessUnavailableAndLivenessHealthy()
     {
         await using var fixture = await ServerReadinessFixture.StartAsync();
