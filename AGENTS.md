@@ -246,5 +246,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/154-secrets-api-migration/plan.md`.
+`specs/155-structured-logs-api-migration/plan.md`.
 <!-- SPECKIT END -->
