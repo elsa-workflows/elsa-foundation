@@ -1,3 +1,6 @@
+using Elsa.Workflows.Runtime.Services;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -348,8 +351,11 @@ public sealed class PublishingHttpContractTests
             new InMemoryWorkflowExecutableSourceReferenceStore(),
             new InMemoryWorkflowExecutableStore(),
             new InMemoryExecutableActivityTemplateStore(),
-            [],
-            new RuntimeDurableValueStorageDriverRegistry([]),
+            new RuntimeRequirementChecker(
+                [],
+                new RuntimeDurableValueStorageDriverRegistry([]),
+                new WellKnownTypeRegistry(),
+                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
             TimeProvider.System);
         var handler = new RunRuntimeRequirementPreflightRequestHandler(service);
         var result = await handler.Handle(request, CancellationToken.None);

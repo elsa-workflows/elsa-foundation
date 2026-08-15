@@ -53,6 +53,9 @@ public sealed class ActivityActivationFailureHandler
         {
             UnknownActivityConsumerException => ActivityActivationFailureKind.MissingConsumer,
             UnsupportedActivityDescriptorSchemaException => ActivityActivationFailureKind.UnsupportedSchema,
+            // Must precede the InvalidDescriptor fallback: the descriptor is perfectly valid, it is
+            // the CLR type behind its alias that is absent from this host.
+            UnknownActivityTypeException => ActivityActivationFailureKind.MissingActivityType,
             _ => ActivityActivationFailureKind.InvalidDescriptor
         };
         return new(

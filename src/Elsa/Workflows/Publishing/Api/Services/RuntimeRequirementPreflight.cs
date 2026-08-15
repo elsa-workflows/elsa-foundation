@@ -19,8 +19,7 @@ public sealed class RuntimeRequirementPreflight(
     IWorkflowExecutableSourceReferenceReader sourceReferences,
     IWorkflowExecutableStore workflowExecutables,
     IExecutableActivityTemplateReader activityTemplates,
-    IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
-    IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+    IRuntimeRequirementChecker requirementChecker,
     TimeProvider timeProvider)
 {
     public const string ActiveRetainedArtifactsScope = "ActiveRetainedArtifacts";
@@ -48,12 +47,12 @@ public sealed class RuntimeRequirementPreflight(
                 continue;
             }
 
-            var (consumers, drivers, found) = await LoadRequirementsAsync(artifactId, cancellationToken);
+            var subject = await LoadRequirementsAsync(artifactId, cancellationToken);
             artifacts.Add(new(
                 artifactId,
                 true,
-                found,
-                found ? CheckCapabilities(consumers, drivers) : []));
+                subject is not null,
+                subject is null ? [] : CheckCapabilities(subject)));
         }
 
         var requirements = artifacts
@@ -88,63 +87,76 @@ public sealed class RuntimeRequirementPreflight(
         return artifactIds.Order(StringComparer.Ordinal).ToArray();
     }
 
-    private async ValueTask<(IReadOnlyCollection<RuntimeRequirement> Consumers,
-        IReadOnlyCollection<RuntimeStorageDriverRequirement> Drivers, bool Found)> LoadRequirementsAsync(
+    /// <summary>
+    /// Resolves the artifact's requirement set from the executable store, falling back to the
+    /// reusable-activity template store. Returns null when neither knows the artifact.
+    /// </summary>
+    /// <remarks>
+    /// The template fallback is preserved capability, not publishing residue — the shared checker
+    /// contract accepts template requirement sets precisely so this wrapper loses nothing by
+    /// delegating (2026-08-15 architect review, FR-B-005).
+    /// </remarks>
+    private async ValueTask<RuntimeRequirementCheckSubject?> LoadRequirementsAsync(
         string artifactId,
         CancellationToken cancellationToken)
     {
         var executable = await workflowExecutables.FindAsync(artifactId, cancellationToken);
         if (executable is not null)
-            return (executable.RuntimeRequirements, executable.StorageDriverRequirements, true);
+            return RuntimeRequirementCheckSubject.FromExecutable(executable);
 
         var template = await activityTemplates.FindAsync(artifactId, cancellationToken);
-        return template is null
-            ? ([], [], false)
-            : (template.RuntimeRequirements, template.StorageDriverRequirements, true);
+        return template is null ? null : RuntimeRequirementCheckSubject.FromTemplate(template);
     }
 
-    private IReadOnlyList<RuntimeCapabilityPreflight> CheckCapabilities(
-        IReadOnlyCollection<RuntimeRequirement> consumerRequirements,
-        IReadOnlyCollection<RuntimeStorageDriverRequirement> storageDriverRequirements)
+    /// <summary>
+    /// Projects the shared runtime verdict into this endpoint's view vocabulary.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The evaluation itself now lives in <see cref="IRuntimeRequirementChecker"/> (FR-B-005): the
+    /// logic moved to the Runtime layer unchanged, and this wrapper keeps the retained-set scoping,
+    /// the view shapes and the diagnostics that are genuinely publishing concerns.
+    /// </para>
+    /// <para>
+    /// The checker's third axis — per-node CLR activity-type presence — is deliberately NOT
+    /// projected here. That axis is the <em>import</em> gate's (FR-B-005a), and this endpoint's
+    /// <c>RuntimeCapabilityStatus</c> has no member for it: surfacing it would emit a new
+    /// <c>Status</c> string over the wire and change a published contract. Preserving this
+    /// endpoint's behaviour exactly is the §2.21.1 obligation on the extraction.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<RuntimeCapabilityPreflight> CheckCapabilities(RuntimeRequirementCheckSubject subject)
     {
-        var result = new List<RuntimeCapabilityPreflight>();
-        var consumersByKey = activityConsumers
-            .GroupBy(capability => capability.ConsumerKey, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .SelectMany(capability => capability.SupportedSchemaVersions)
-                    .Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal)
-                    .ToArray(),
-                StringComparer.Ordinal);
-        foreach (var requirement in consumerRequirements
-                     .Distinct()
-                     .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
-                     .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal))
-        {
-            IReadOnlyCollection<string> supported = consumersByKey.GetValueOrDefault(requirement.ConsumerKey) ?? [];
-            var status = supported.Contains(requirement.SchemaVersion, StringComparer.Ordinal)
-                ? RuntimeCapabilityStatus.Available
-                : supported.Count == 0 ? RuntimeCapabilityStatus.Missing : RuntimeCapabilityStatus.UnsupportedSchema;
-            result.Add(new(
-                RuntimeCapabilityKind.ActivityConsumer,
-                requirement.ConsumerKey,
-                requirement.SchemaVersion,
-                status,
-                supported.Order(StringComparer.Ordinal).ToArray()));
-        }
+        var verdict = requirementChecker.Check(subject);
+        var result = new List<RuntimeCapabilityPreflight>(verdict.Requirements.Count + verdict.StorageDrivers.Count);
 
-        foreach (var requirement in storageDriverRequirements.Distinct().OrderBy(x => x.DriverKey, StringComparer.Ordinal))
-            result.Add(new(
-                RuntimeCapabilityKind.DurableValueStorageDriver,
-                requirement.DriverKey,
-                null,
-                storageDrivers.Contains(requirement.DriverKey) ? RuntimeCapabilityStatus.Available : RuntimeCapabilityStatus.Missing,
-                []));
+        result.AddRange(verdict.Requirements.Select(entry => new RuntimeCapabilityPreflight(
+            RuntimeCapabilityKind.ActivityConsumer,
+            entry.ConsumerKey,
+            entry.SchemaVersion,
+            ToViewStatus(entry.Status),
+            entry.SupportedSchemaVersions)));
+
+        result.AddRange(verdict.StorageDrivers.Select(entry => new RuntimeCapabilityPreflight(
+            RuntimeCapabilityKind.DurableValueStorageDriver,
+            entry.DriverKey,
+            null,
+            ToViewStatus(entry.Status),
+            [])));
 
         return result;
     }
+
+    private static RuntimeCapabilityStatus ToViewStatus(RuntimeRequirementStatus status) => status switch
+    {
+        RuntimeRequirementStatus.Available => RuntimeCapabilityStatus.Available,
+        RuntimeRequirementStatus.Missing => RuntimeCapabilityStatus.Missing,
+        RuntimeRequirementStatus.UnsupportedSchema => RuntimeCapabilityStatus.UnsupportedSchema,
+        // MissingActivityType belongs to the import gate's axis, which this endpoint does not
+        // project (see CheckCapabilities). Reaching here means the checker emitted it on a
+        // consumer or driver entry, which it never does — fail loudly rather than mis-map it.
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unexpected runtime requirement status on a consumer or storage-driver entry.")
+    };
 
     private static IReadOnlyList<ActivityDiagnostic> BuildDiagnostics(IEnumerable<RuntimeArtifactPreflight> artifacts)
     {
@@ -168,6 +180,27 @@ public sealed class RuntimeRequirementPreflight(
                     subject,
                     Remediation: "Restore or republish the retained artifact before deployment.",
                     Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
+
+            // Activity-consumer failures previously produced no diagnostic at all: this loop was
+            // hardcoded to DurableValueStorageDriver, so an artifact could report IsReady == false
+            // with nothing in Diagnostics explaining which consumer was missing. Keys and message
+            // shape mirror ActivityPublicationReviewPolicy so both surfaces speak one vocabulary.
+            foreach (var capability in artifact.Capabilities.Where(x =>
+                         x.Kind == RuntimeCapabilityKind.ActivityConsumer &&
+                         x.Status != RuntimeCapabilityStatus.Available))
+                diagnostics.Add(new(
+                    capability.Status == RuntimeCapabilityStatus.UnsupportedSchema
+                        ? "activity.runtime.consumer-schema-unsupported"
+                        : "activity.runtime.consumer-missing",
+                    ActivityDiagnosticSeverity.Error,
+                    $"Required Runtime consumer '{capability.Key}' schema '{capability.SchemaVersion}' is unavailable.",
+                    subject,
+                    Remediation: "Deploy and register a Runtime consumer that supports the exact schema before deployment.",
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["consumerKey"] = capability.Key,
+                        ["schemaVersion"] = capability.SchemaVersion ?? ""
+                    }));
 
             foreach (var capability in artifact.Capabilities.Where(x =>
                          x.Kind == RuntimeCapabilityKind.DurableValueStorageDriver &&

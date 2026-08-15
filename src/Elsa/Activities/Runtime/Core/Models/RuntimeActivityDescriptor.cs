@@ -71,7 +71,15 @@ public enum ActivityActivationFailureKind
     MissingConsumer,
     UnsupportedSchema,
     InvalidDescriptor,
-    MissingStorageDriver
+    MissingStorageDriver,
+
+    /// <summary>
+    /// The node's CLR activity type is not registered in this host's well-known type registry.
+    /// Reaching this at activation means an artifact got past the import gate (FR-B-005a), so it
+    /// classifies as a non-retryable deployment incident like every sibling kind — defense in depth,
+    /// not the primary detection path.
+    /// </summary>
+    MissingActivityType
 }
 
 public enum RuntimeActivationCapabilityKind

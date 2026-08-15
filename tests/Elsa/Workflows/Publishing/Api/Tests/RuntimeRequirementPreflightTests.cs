@@ -1,3 +1,7 @@
+using Elsa.Activities.Design.Core.Models;
+using Elsa.Workflows.Runtime.Services;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Services;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -47,7 +51,7 @@ public sealed class RuntimeRequirementPreflightTests
         });
         await references.SaveAsync(Reference("ref-retired", "artifact-retired") with { DeletedAt = Now.AddMinutes(-1), DeletedReason = "retired" });
         await references.SaveAsync(Reference("ref-missing", "artifact-missing"));
-        var service = new RuntimeRequirementPreflight(references, executables, templates, consumers, drivers, new FixedTimeProvider(Now));
+        var service = new RuntimeRequirementPreflight(references, executables, templates, new RuntimeRequirementChecker(consumers, drivers, new WellKnownTypeRegistry(), new JsonPayloadSerializer(new JsonPayloadConverterRegistry())), new FixedTimeProvider(Now));
 
         var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
 
@@ -64,6 +68,23 @@ public sealed class RuntimeRequirementPreflightTests
         Assert.Contains(result.Diagnostics, x => x.Code == "activity.preflight.artifact-missing" && x.Subject.Id == "artifact-missing");
         Assert.Contains(result.Diagnostics, x => x.Code == "activity.runtime.storage-driver-missing" && x.Subject.Id == "artifact-1");
         Assert.DoesNotContain(result.Diagnostics, x => x.Subject.Id == "artifact-retired");
+
+        // Activity-consumer failures previously produced no diagnostic at all: BuildDiagnostics was
+        // hardcoded to DurableValueStorageDriver, so an artifact could report IsReady == false with
+        // nothing explaining which consumer was unavailable. Both statuses map to their own code,
+        // matching ActivityPublicationReviewPolicy's vocabulary.
+        var consumerMissing = Assert.Single(
+            result.Diagnostics,
+            x => x.Code == "activity.runtime.consumer-missing");
+        Assert.Equal(ActivityDiagnosticSeverity.Error, consumerMissing.Severity);
+        Assert.Equal("sample.missing", consumerMissing.Metadata["consumerKey"]);
+        Assert.Equal("1", consumerMissing.Metadata["schemaVersion"]);
+
+        var schemaUnsupported = Assert.Single(
+            result.Diagnostics,
+            x => x.Code == "activity.runtime.consumer-schema-unsupported");
+        Assert.Equal("sample.schema", schemaUnsupported.Metadata["consumerKey"]);
+        Assert.Equal("2", schemaUnsupported.Metadata["schemaVersion"]);
     }
 
     [Fact]
@@ -82,8 +103,11 @@ public sealed class RuntimeRequirementPreflightTests
             references,
             executables,
             templates,
-            consumers,
-            new RuntimeDurableValueStorageDriverRegistry([]),
+            new RuntimeRequirementChecker(
+                consumers,
+                new RuntimeDurableValueStorageDriverRegistry([]),
+                new WellKnownTypeRegistry(),
+                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
             new FixedTimeProvider(Now));
 
         var selected = await service.RunAsync(
@@ -120,6 +144,23 @@ public sealed class RuntimeRequirementPreflightTests
         Assert.Null(storageDriver.ConsumerKey);
         Assert.Equal("sample.external", storageDriver.StorageDriverKey);
         Assert.Null(handler.Classify(new InvalidOperationException("ordinary failure")));
+
+        // A missing CLR activity type used to be the one activation failure Classify returned null
+        // for, because UnknownActivityTypeException extended Exception directly rather than
+        // ActivityResolutionException. It now classifies as a non-retryable deployment incident like
+        // every sibling failure. The import gate (FR-B-005a) is the primary detection path; this is
+        // the defense in depth behind it, for an artifact that somehow activates past the gate.
+        var missingType = handler.Classify(new UnknownActivityTypeException("Acme.MissingActivity"), "artifact-1", "node-7");
+
+        Assert.NotNull(missingType);
+        Assert.Equal(ActivityActivationFailureKind.MissingActivityType, missingType!.Kind);
+        Assert.Equal(RuntimeActivationCapabilityKind.ActivityConsumer, missingType.CapabilityKind);
+        Assert.Equal(WellKnownRuntimeActivityConsumers.ClrActivity, missingType.ConsumerKey);
+        Assert.Equal("node-7", missingType.ExecutableNodeId);
+        Assert.Equal("false", missingType.Metadata[ActivityActivationFailureHandler.RetryEligibleMetadataKey]);
+        Assert.Equal(
+            ActivityActivationFailureHandler.DeploymentCorrectionRecoveryAction,
+            missingType.Metadata[ActivityActivationFailureHandler.RecoveryActionMetadataKey]);
     }
 
     private static WorkflowExecutable Executable(
