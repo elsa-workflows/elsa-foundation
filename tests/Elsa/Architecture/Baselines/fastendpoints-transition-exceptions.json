@@ -204,7 +204,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion.OtlpIngestionEndpointBase",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -215,7 +215,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.CollectorConfiguration.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -226,7 +226,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Logs.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -237,7 +237,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Metrics.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -248,7 +248,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Resources.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -259,7 +259,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Storage.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -270,7 +270,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Trace.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -281,7 +281,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Traces.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -290,7 +290,7 @@
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.StreamEndpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "01ae5de1cc80e096b0ada55f993980965a47730f568558fdf52e2ebf266d172a"
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -299,7 +299,7 @@
     "owner": "Elsa.Diagnostics.StructuredLogs",
     "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.RecentEndpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "0c67decbd707cc002c68bc5a12f3e7545b63faa55b418260bbfe251d0baa0d3a"
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
   },
   {
     "dynamicallyUnloadable": false,
@@ -308,7 +308,7 @@
     "owner": "Elsa.Diagnostics.StructuredLogs",
     "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.SourcesEndpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "0c67decbd707cc002c68bc5a12f3e7545b63faa55b418260bbfe251d0baa0d3a"
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
   },
   {
     "dynamicallyUnloadable": false,
@@ -317,7 +317,7 @@
     "owner": "Elsa.Diagnostics.StructuredLogs",
     "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.StreamEndpoint",
     "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "0c67decbd707cc002c68bc5a12f3e7545b63faa55b418260bbfe251d0baa0d3a"
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
   },
   {
     "dynamicallyUnloadable": false,

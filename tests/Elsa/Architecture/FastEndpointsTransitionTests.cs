@@ -13,7 +13,7 @@ public sealed class FastEndpointsTransitionTests
         var registrations = DiscoverRegistrations();
         Assert.NotEmpty(registrations);
 
-        var baselinePath = Path.Combine(AppContext.BaseDirectory, "Baselines", "fastendpoints-transition-exceptions.json");
+        var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "fastendpoints-transition-exceptions.json");
         var reviewed = BaselineFile.Load<FastEndpointsTransitionException[]>(baselinePath);
 
         var result = TransitionExceptionValidator.Reconcile(registrations, reviewed);
@@ -25,7 +25,8 @@ public sealed class FastEndpointsTransitionTests
     private static IReadOnlyList<FastEndpointsRegistration> DiscoverRegistrations()
     {
         var scanner = new FastEndpointsRegistrationScanner();
-        var documents = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var documents = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(IsRepositorySource)
             .Order(StringComparer.Ordinal)
             .Select(path => new FastEndpointsSourceDocument(
                 Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'),
@@ -36,6 +37,13 @@ public sealed class FastEndpointsTransitionTests
         return scanner.Scan(documents)
             .Where(registration => registration.Endpoints.Count > 0 || registration.DynamicRoute)
             .ToArray();
+    }
+
+    private static bool IsRepositorySource(string path)
+    {
+        var relativePath = Path.GetRelativePath(Path.Join(RepoRoot, "src"), path);
+        return !relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment => segment is "bin" or "obj");
     }
 
     private static string FindProjectOwner(string sourcePath)

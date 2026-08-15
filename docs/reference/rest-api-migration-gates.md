@@ -22,7 +22,7 @@ Intentional changes require an exact record in `rest-compatibility-approved-diff
 
 `endpoint-manifest.json` is the reviewed runtime inventory for the representative host. It is built from `EndpointDataSource`, not source-route inference. Its permission dispositions must resolve to one active feature-owned `IPermissionContributor`; the administrative `*` grant is never a catalog permission.
 
-`fastendpoints-transition-exceptions.json` freezes every discovered first-party FastEndpoints registration. Literals, cross-document constants, interpolated constants, and known route-helper compositions are resolved to exact routes and methods. Only genuinely runtime-computed routes use an exact normalized aggregate fingerprint of their owning source set; changing any owning source invalidates the exception. New, expanded, stale, ambiguous, owner-mismatched, or dynamically unloadable registrations fail.
+`fastendpoints-transition-exceptions.json` freezes every discovered first-party FastEndpoints registration. Literals, cross-document constants, interpolated constants, and known route-helper compositions are resolved to exact routes and methods. Only genuinely runtime-computed routes use an exact normalized aggregate fingerprint of their owning repository source set; generated `bin` and `obj` files are excluded so build order cannot change the evidence. Changing any owning source invalidates the exception. New, expanded, stale, ambiguous, owner-mismatched, or dynamically unloadable registrations fail.
 
 ## Collectibility evidence
 

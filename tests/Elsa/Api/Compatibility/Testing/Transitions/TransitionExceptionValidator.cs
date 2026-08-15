@@ -57,7 +57,7 @@ public sealed class TransitionExceptionValidator
                     $"Registry owner '{exception.Owner}' does not match discovered owner '{registration.Owner}'."));
             if (registration.DynamicRoute && !string.Equals(exception.SourceHash, registration.SourceHash, StringComparison.Ordinal))
                 issues.Add(new TransitionValidationIssue("DynamicRegistration", registration.Identity,
-                    "The reviewed owner-source fingerprint no longer matches the unresolved registration."));
+                    $"The reviewed owner-source fingerprint '{exception.SourceHash}' no longer matches the unresolved registration '{registration.SourceHash}'."));
             var expected = exception.Endpoints.ToHashSet();
             var actual = registration.Endpoints.ToHashSet();
             var expanded = actual.Except(expected).OrderBy(endpoint => endpoint.ToString(), StringComparer.Ordinal).ToArray();
@@ -74,11 +74,10 @@ public sealed class TransitionExceptionValidator
         }
 
         var discoveredIdentities = discovered.Select(registration => registration.Identity).ToHashSet(StringComparer.Ordinal);
-        foreach (var exception in registry)
+        foreach (var exception in registry.Where(exception => !discoveredIdentities.Contains(exception.RegistrationIdentity)))
         {
-            if (!discoveredIdentities.Contains(exception.RegistrationIdentity))
-                issues.Add(new TransitionValidationIssue("StaleException", exception.RegistrationIdentity,
-                    "The transition exception has no discovered FastEndpoints registration."));
+            issues.Add(new TransitionValidationIssue("StaleException", exception.RegistrationIdentity,
+                "The transition exception has no discovered FastEndpoints registration."));
         }
 
         return new TransitionValidationResult(issues

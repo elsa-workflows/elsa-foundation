@@ -50,19 +50,16 @@ public sealed class FastEndpointsRegistrationScanner
         var root = tree.GetCompilationUnitRoot();
         var sourceHash = ownerFingerprint;
         var registrations = new List<FastEndpointsRegistration>();
-        foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(IsFastEndpointsType))
         {
-            if (!IsFastEndpointsType(declaration))
-                continue;
-
             var routes = new List<EndpointIdentity>();
             var dynamicRoute = false;
             foreach (var invocation in declaration.Members.OfType<MethodDeclarationSyntax>()
                          .Where(method => method.Identifier.ValueText == "Configure")
-                         .SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>()))
+                         .SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                         .Where(invocation => TryGetHttpMethod(invocation.Expression, out _)))
             {
-                if (!TryGetHttpMethod(invocation.Expression, out var method))
-                    continue;
+                TryGetHttpMethod(invocation.Expression, out var method);
 
                 var routeExpression = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression;
                 if (constants.TryResolve(routeExpression, document.Owner, out var route))
@@ -159,10 +156,9 @@ public sealed class FastEndpointsRegistrationScanner
                 foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
                 {
                     var containingType = field.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-                    foreach (var variable in field.Declaration.Variables)
+                    foreach (var variable in field.Declaration.Variables.Where(variable => variable.Initializer?.Value is not null))
                     {
-                        if (variable.Initializer?.Value is not { } expression)
-                            continue;
+                        var expression = variable.Initializer!.Value;
                         index.Add(document.Owner, containingType, variable.Identifier.ValueText, expression);
                     }
                 }
@@ -258,10 +254,11 @@ public sealed class FastEndpointsRegistrationScanner
                 return false;
             }
 
-            foreach (var prefixName in new[] { "DomainPrefix", "Prefix", "BasePath" })
+            var prefix = new[] { "DomainPrefix", "Prefix", "BasePath" }
+                .Select(prefixName => TryGet(owner, $"{helperType}.{prefixName}", null, resolving, out var candidate) ? candidate : null)
+                .FirstOrDefault(candidate => candidate is not null);
+            if (prefix is not null)
             {
-                if (!TryGet(owner, $"{helperType}.{prefixName}", null, resolving, out var prefix))
-                    continue;
                 value = $"{prefix.TrimEnd('/')}/{suffix.TrimStart('/')}";
                 return true;
             }
@@ -278,9 +275,8 @@ public sealed class FastEndpointsRegistrationScanner
             out string value)
         {
             var candidates = scopeType is null ? new[] { key } : new[] { $"{scopeType}.{key}", key };
-            foreach (var candidate in candidates)
+            foreach (var scopedKey in candidates.Select(candidate => Key(owner, candidate)))
             {
-                var scopedKey = Key(owner, candidate);
                 if (_ambiguous.Contains(scopedKey) || !_definitions.TryGetValue(scopedKey, out var definition) ||
                     !resolving.Add(scopedKey))
                     continue;

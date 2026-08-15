@@ -124,15 +124,12 @@ public sealed class PermissionOwnershipValidator
         }
 
         var permissions = ParsePermissions(disposition.Value);
-        foreach (var permission in permissions)
+        foreach (var permission in permissions.Where(permission => permission != PermissionKey.Wildcard || permissions.Count == 1))
         {
             // The wildcard is valid as a grant alongside an action permission. It is not a
             // catalog declaration and therefore is intentionally omitted from the consumers.
-            if (permission != PermissionKey.Wildcard || permissions.Count == 1)
-            {
-                foreach (var method in entry.Methods)
-                    yield return new PermissionConsumption(new EndpointIdentity(entry.Route.Value, method), entry.Owner, permission);
-            }
+            foreach (var method in entry.Methods)
+                yield return new PermissionConsumption(new EndpointIdentity(entry.Route.Value, method), entry.Owner, permission);
         }
     }
 

@@ -104,7 +104,7 @@ public sealed class DomainManagementApiCompositionTests
             .ToArray();
         Assert.Single(captures.Distinct(StringComparer.Ordinal));
 
-        var baselinePath = Path.Combine(AppContext.BaseDirectory, "Baselines", "endpoint-manifest.json");
+        var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "endpoint-manifest.json");
         Assert.Equal(BaselineFile.Read(baselinePath), captures[0]);
 
         var manifest = new EndpointManifestBuilder(host.EndpointDataSources).Build();

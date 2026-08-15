@@ -77,12 +77,26 @@ public sealed class HttpCompatibilityEvidenceTests
         Assert.Equal("Completed", after.TerminalState);
     }
 
-    private sealed class FixedHandler(HttpStatusCode status, string mediaType, string body) : HttpMessageHandler
+    private sealed class FixedHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(status)
+        private readonly HttpResponseMessage _response;
+
+        public FixedHandler(HttpStatusCode status, string mediaType, string body)
+        {
+            _response = new HttpResponseMessage(status)
             {
                 Content = new StringContent(body, Encoding.UTF8, mediaType)
-            });
+            };
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(_response);
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _response.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }
