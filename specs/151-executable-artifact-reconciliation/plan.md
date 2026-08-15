@@ -42,11 +42,13 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 | §2.20 no premature provider decomposition | PASS | JSON source stays in the base project (one source kind); blob/OCI later triggers the split (research D1). |
 | §2.22.1 extension-point catalogs | PLANNED | New catalog for Reconciliation feature project + updates to Runtime, Publishing(+Api) catalogs + root index link (research D9). |
 | §2.23.1/.2 unit tests, §2.23.3 visibility, §2.23.5 exception wrapping | PLANNED | Registration + branch-covered tests enumerated in D9; `public sealed` impls; `InvalidWorkflowArtifactClosureException` wraps all infra failures. |
-| §E6 naming R1–R8 | PASS w/ 1 flag | Naming table research D8; single flag: `…Target` suffix is not R4-codified — pinned domain term (FR-B-010a), explicitly surfaced for reviewer judgment. |
+| §E6 naming R1–R8 | PASS w/ 2 flags | Naming table research D8. Two names surfaced for reviewer judgment, both intended and spec-pinned: (1) the `…Target` suffix is not R4-codified — pinned domain term (FR-B-010a); (2) `WorkflowActivationSource` uses `…Source` as an *ownership descriptor record*, not in R4's codified sense (`…Source` = a pull contract that returns items). Carried into implementation by tasks T081 and T021 respectively. |
 | §E5 computed versioning | PASS | No `<Version>` elements; new csprojs follow Line B; no `-p:Version` anywhere. |
 | §2.21.1 golden rule | PASS w/ recorded removal | **Not pure moves** (superseded by the 2026-08-15 architect review): the checker and hasher extractions are behavior-preserving relocations, but the activation authority is *superseded* — publishing's slot contract/store/in-memory impl are deleted, `PublicationActivator` becomes a caller, and the runtime-side rename sweep is total. Behavior preservation holds **by construction** (the coordinator absorbs the existing sequence verbatim, incl. compensation), and existing publishing + runtime tests must pass with wiring/naming changes only — a hard task-phase gate (tasks T040, T112). Tests whose *subject* is deleted are recorded in Complexity Tracking below per §2.21.1. |
 
 ## Complexity Tracking
+
+> **This section records a §2.21.1 test-removal approval, not a Constitution Check violation.** The plan template reserves Complexity Tracking for justifying violations; §2.21.1 independently names "the plan's *Complexity Tracking* section" as a sanctioned location for recording architect approval of a test removal. That is the use here — every Constitution Check gate above passes.
 
 ### Test removals — §2.21.1 recorded architect approval
 

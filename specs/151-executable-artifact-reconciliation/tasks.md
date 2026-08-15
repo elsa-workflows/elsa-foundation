@@ -41,6 +41,18 @@
 
 ---
 
+## Conventions binding EVERY task in this feature
+
+Stated once here rather than repeated per task. These apply in all phases, not just the one you are working in.
+
+- **§2.23.3 visibility** — feature classes are `public` and **NOT sealed** (§2.5 inheritance depends on it; a sealed feature class amputates the only sanctioned cross-feature coupling pattern). Logic-bearing implementations are `public sealed`. This bites hardest on T064/T065 and on every new service in Phase 2.
+- **§2.6.2 replacement contracts** — `IRuntimeRequirementChecker`, `IWorkflowExecutableHasher`, and `IWorkflowActivationAuthority` are **replacement contracts**: exactly one implementation is meaningful per engine. Their kind is declared through the extension-point catalogs' *Overridable contracts* section (T106 — the repo's declaration mechanism; there is no marker-interface convention in `src/`). Conflicts MUST be prevented at registration or diagnosed at startup — **silent last-write-wins is forbidden**. `TryAdd*` registration is the chosen prevention (first-wins, consistent with ADR 0033); where a stronger guarantee is warranted, the precedent is the dispatcher factory in `RuntimeCoreServiceCollectionExtensions.cs:377-396`, which enforces exactly one `IWorkflowExecutableStartPolicy` with an explicit diagnostic.
+- **§2.5 registration discipline** — every collaborator a feature owns is registered against a contract and injected as that contract, never as the concrete type; `ConfigureServices` is `virtual`.
+- **§2.23.5 exception wrapping** — no raw `JsonException`, `IOException`, or storage exception escapes a feature boundary; wrap in a domain exception carrying identifiers, preserve the original as `InnerException`.
+- **Tests are xunit only.** FluentAssertions is constitutionally absent from `Directory.Packages.props`.
+
+---
+
 ## Phase 1: Setup (project scaffolding)
 
 **Purpose**: create the two new projects and their test project so every later phase has a home. Blocks everything.
@@ -58,12 +70,6 @@
 ## Phase 2: Foundational (BLOCKING — all three extractions, the shared coordinator, the census back doors, and the envelope model)
 
 **Purpose**: everything below is a prerequisite for **every** user story. US1/US2 cannot import without the coordinator, hasher, and checker; US3 cannot export without the hasher and envelope. §2.21.1 governs the whole phase: behavior must be preserved — existing publishing/runtime tests must pass with **wiring or naming** changes only. (The checker and hasher moves are pure relocations; the activation authority is a *supersession* — see plan.md's Complexity Tracking entry for the recorded test-removal approval.)
-
-**Conventions binding every task in this feature** (stated once here rather than repeated per task):
-
-- **§2.23.3 visibility** — feature classes are `public` and **NOT sealed** (§2.5 inheritance depends on it; a sealed feature class amputates the only sanctioned cross-feature coupling pattern). Logic-bearing implementations are `public sealed`. This bites hardest on T064/T065 and on every new service in 2A–2E.
-- **§2.6.2 replacement contracts** — `IRuntimeRequirementChecker`, `IWorkflowExecutableHasher`, and `IWorkflowActivationAuthority` are **replacement contracts**: exactly one implementation is meaningful per engine. Their kind is declared through the extension-point catalogs' *Overridable contracts* section (T106 — the repo's declaration mechanism; there is no marker-interface convention in `src/`). Conflicts MUST be prevented at registration or diagnosed at startup — **silent last-write-wins is forbidden**. `TryAdd*` registration is the chosen prevention (first-wins, consistent with ADR 0033); where a stronger guarantee is warranted, the precedent is the dispatcher factory in `RuntimeCoreServiceCollectionExtensions.cs:377-396`, which enforces exactly one `IWorkflowExecutableStartPolicy` with an explicit diagnostic.
-- **§2.5 registration discipline** — every collaborator a feature owns is registered against a contract and injected as that contract, never as the concrete type; `ConfigureServices` is `virtual`.
 
 ### 2A — Extraction 1 of 3: requirements checker → Runtime (FR-B-005 / FR-B-005a)
 
@@ -200,7 +206,7 @@
 - [ ] T089 [P] [US3] §2.23.2 tests for the closure factory: transitive closure walk (parent → child → grandchild), Published-only enforcement, `TestRun`/draft exclusion (US3 scenario 6), missing-dependency rejection.
 - [ ] T090 [P] [US3] §2.23.1 + §2.23.2 tests for the export target seam and download target (fan-in registration resolves the built-in target; `InlinePayload` delivery) and for the endpoint handler (all four response cases from T086), plus a `DomainApiCapabilityRegistrationTests` assertion that the new rel is advertised.
 - [ ] T091 [US3] **Reconcile the FastEndpoints transition registry** for `Elsa.Workflows.Publishing.Api` per ADR 0068. This is **inventory bookkeeping, not a new architectural exception**: the module is already wholly transitional — all 19 of its existing registrations carry `removalOwner: "First-party REST API Consolidation"`, so the 20th route inherits that exit condition and migration wave. **Registry mechanic (verified against the #1346 branch — do not mistake this for a one-row edit)**: `sourceHash` is an **owner fingerprint**, `SHA256` over *every* `.cs` file in the owning project (`FastEndpointsRegistrationScanner.cs:29-31,51`), and all 19 Publishing.Api rows share one value. Spec 151 edits that project in T010, T011, T031, and T082–T087, so **every** Publishing.Api row's `sourceHash` must be restamped, plus a new row added for the export endpoint. Execution depends on merge order: if `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json` exists at implementation time ([#1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346) merged), restamp + add there; if not, record the pending row in [contracts/export-endpoint.md](contracts/export-endpoint.md) so it lands with that branch. No hard dependency on merge order either way.
-- [ ] T091a [US3] **Raise the registry-collision finding with the #1346 owner** (comment on [#1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346), cc [#1342](https://github.com/elsa-workflows/elsa-foundation/issues/1342)) — this is a cross-branch coordination step, not spec-151 work, and it wants doing **before** that branch merges. Two points: **(1)** the owner-fingerprint design means *any* edit to *any* file in a FastEndpoints-owning project invalidates every registry row for that owner — with 106 registrations across 21 owners, every concurrent branch collides and must restamp; **(2)** a rule question ADR 0068's text does not resolve — does a route added to a module that is *already wholly transitional*, inheriting an existing `removalOwner` and wave, require a fresh approved compatibility exception, or is it bookkeeping under the module's existing entry? This task list assumes the latter; if the ADR owner rules otherwise, obtain the architect approval and record the approving reviewer + linked PR on the new row.
+- [x] T091a **DONE 2026-08-15 — do not repeat** ([#1346 comment](https://github.com/elsa-workflows/elsa-foundation/issues/1346#issuecomment-5303337529)). Raised the registry-collision finding with the #1346 owner. Carries no story label: it was cross-branch coordination, not spec-151 implementation work. Recorded here for the audit trail; the content it raised was: Two points: **(1)** the owner-fingerprint design means *any* edit to *any* file in a FastEndpoints-owning project invalidates every registry row for that owner — with 106 registrations across 21 owners, every concurrent branch collides and must restamp; **(2)** a rule question ADR 0068's text does not resolve — does a route added to a module that is *already wholly transitional*, inheriting an existing `removalOwner` and wave, require a fresh approved compatibility exception, or is it bookkeeping under the module's existing entry? This task list assumes the latter. **Open until answered**: if the ADR owner rules otherwise, obtain the architect approval and record the approving reviewer + linked PR on the new row (T091). A related coordination note was also posted to [#1358](https://github.com/elsa-workflows/elsa-foundation/issues/1358#issuecomment-5303338640), telling that issue's fix not to add a fourth writer of serving state.
 - [ ] T092 [US3] Amend [contracts/export-endpoint.md](contracts/export-endpoint.md) with the endpoint-framework resolution (ADR 0068, capability gap, containment, registry entry, removal follow-up) so the contract doc stops implying FastEndpoints was the unexamined default.
 - [ ] T093 [US3] **SC-B-003 round-trip test**: export a parent-with-child closure from a publish-capable engine and import it into a fresh runtime that never saw the source definitions; assert parent + child execute with behavior parity versus compile-in-place (US3 scenario 5).
 
@@ -298,7 +304,7 @@ Phase 1 (Setup)
 - **Phase 2**: 2A, 2B, and 2E are mutually independent and can run concurrently with 2C's contract definition (T021–T022). 2D must wait for T024.
 - **Phase 3**: T052–T055 all in parallel (separate files in the new `.Core`).
 - **Phase 5**: T079 and T081 in parallel; T088–T090 in parallel after the endpoint lands.
-- **Phase 8**: T105–T107 in parallel; T108 after; T110 last among the doc/map tasks.
+- **Phase 8**: T105–T107 and T115 in parallel; T108 after T105; T110 last among the doc/map tasks (maps must be regenerated after every project/doc add).
 - All `[P]`-marked test tasks within a phase run concurrently.
 
 ---
