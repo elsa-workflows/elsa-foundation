@@ -30,7 +30,7 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 
 ## Constitution Check
 
-*Gates evaluated against Elsa constitution v4.0.0 + framework v4.0.0. Re-checked post-Phase-1: PASS (no Complexity Tracking entries).*
+*Gates evaluated against Elsa constitution v4.0.0 + framework v4.0.0. Re-checked post-Phase-1 and again post-`/speckit.analyze` (2026-08-15): PASS with one Complexity Tracking entry (below), recorded after the 2026-08-15 architect review turned the activation relocation into a supersession.*
 
 | Gate | Verdict | Evidence |
 |---|---|---|
@@ -44,7 +44,21 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 | §2.23.1/.2 unit tests, §2.23.3 visibility, §2.23.5 exception wrapping | PLANNED | Registration + branch-covered tests enumerated in D9; `public sealed` impls; `InvalidWorkflowArtifactClosureException` wraps all infra failures. |
 | §E6 naming R1–R8 | PASS w/ 1 flag | Naming table research D8; single flag: `…Target` suffix is not R4-codified — pinned domain term (FR-B-010a), explicitly surfaced for reviewer judgment. |
 | §E5 computed versioning | PASS | No `<Version>` elements; new csprojs follow Line B; no `-p:Version` anywhere. |
-| §2.21.1 golden rule | PASS | Relocations are pure moves (no rename/behavior change); existing publishing + runtime tests must pass unchanged — treated as a hard task-phase gate. |
+| §2.21.1 golden rule | PASS w/ recorded removal | **Not pure moves** (superseded by the 2026-08-15 architect review): the checker and hasher extractions are behavior-preserving relocations, but the activation authority is *superseded* — publishing's slot contract/store/in-memory impl are deleted, `PublicationActivator` becomes a caller, and the runtime-side rename sweep is total. Behavior preservation holds **by construction** (the coordinator absorbs the existing sequence verbatim, incl. compensation), and existing publishing + runtime tests must pass with wiring/naming changes only — a hard task-phase gate (tasks T040, T112). Tests whose *subject* is deleted are recorded in Complexity Tracking below per §2.21.1. |
+
+## Complexity Tracking
+
+### Test removals — §2.21.1 recorded architect approval
+
+§2.21.1 (restated by Elsa §E1) requires **explicit recorded architect approval** to remove a test, and states that a passing CI is not sufficient justification. The 2026-08-15 architect review (@sfmskywalker on PR [#1330](https://github.com/elsa-workflows/elsa-foundation/pull/1330)) resolved that publishing's slot store is **superseded and deleted** rather than relocated. That decision necessarily removes the *subject under test* of the publishing-family slot tests. Recording it here so the removal is approved in the sanctioned location rather than inferred from a green build.
+
+| Subject removed | Approving architect / record | Disposition of its tests |
+|---|---|---|
+| `IPublicationSlotStore`, `PublicationSlot`, `PublicationSlotIdentity`, `PublicationSlotTransitionResult` (`Publishing.Core`) | @sfmskywalker, PR #1330 review 2026-08-15 — *"two reconciliation inputs are justified; two independent activation authorities are not"* (spec.md Clarifications, 2026-08-15) | Objective **migrates** to the neutral runtime contracts: every behavioral assertion is re-homed onto `IWorkflowActivationAuthority` / `WorkflowActivationCoordinator` (tasks T037–T039). Only tests asserting the *publishing-family location* of the ledger are removed outright. |
+| `GroundworkPublicationSlotStore` + its publishing-family manifest entry | Same review, plus the "one physical ledger" resolution (spec.md Clarifications 2026-08-14 PR-review; research.md D3) | Objective migrates to the runtime-family Groundwork slot store (task T026). Groundwork historical-schema and target baselines update deliberately and by name (task T036). |
+| The in-memory slot implementation in `InMemoryPublicationStores.cs` | Same review | Objective migrates to the in-memory `IWorkflowActivationAuthority` default (task T023). |
+
+**Nothing else is removed.** `PublicationRecord`, publication policies, `IPublicationRecordStore` attempt history, and the publishing preflight views all stay in Publishing with their tests intact (spec.md Non-Goals). If any *other* test turns out to require deletion during implementation, §2.23.4 applies: flag it, do not delete it solo, and extend this table.
 
 ## Project Structure
 

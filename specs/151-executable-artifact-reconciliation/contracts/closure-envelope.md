@@ -22,7 +22,7 @@ The portable export/import unit — one JSON document per closure (clarified Q2)
   "triggerBindings": [
     { /* WorkflowTriggerBinding rows active on the EXPORTING engine for closure members.
          Expectations — the importer recomputes bindings via WorkflowTriggerIndexer with its
-         own minted publicationId/slotId; a node/stimulus-set mismatch between recomputed and
+         own minted activationId/slotId; a node/stimulus-set mismatch between recomputed and
          carried bindings is a broken-source diagnostic. */ }
   ]
 }
@@ -34,8 +34,8 @@ The portable export/import unit — one JSON document per closure (clarified Q2)
 2. Every `dependencies[]` edge of every member resolves **within `artifacts` alone**, with declared `childArtifactHash` equal to the resolved member's `identity.artifactHash` (`MissingArtifact` / `HashMismatch` / `ConflictingIdentity` / `Cycle` → reject the dependent, batch continues). This invariant is environment-independent: the closure is self-contained by contract (FR-B-010), so a file must never validate on one runtime and fail on another because of what happens to be in the store. Deduplication against already-imported store content happens **after** envelope validation, at persistence time only.
 3. Each member's canonical content hash, **recomputed by the runtime-owned executable hasher from the received payload**, equals its declared `identity.artifactHash` (and the id-embedded hash prefix) — mismatch rejects the member and its dependents before persistence (corruption/invariant guard; signing is the tamper-proofing follow-up).
 4. Every `sourceReferences[].scope == "Published"`; version ids never `draft:`-prefixed.
-4. Artifact ids are content-addressed and stable — the importer MUST NOT mint or rewrite identities.
-5. Tenant is absent from artifacts by design; `tenantId` on carried references is ignored (the importer stamps its source-configured tenant option).
+5. Artifact ids are content-addressed and stable — the importer MUST NOT mint or rewrite identities.
+6. Tenant is absent from artifacts by design; `tenantId` on carried references is ignored (the importer stamps its source-configured tenant option).
 
 ## Versioning
 

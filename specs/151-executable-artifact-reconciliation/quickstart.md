@@ -50,7 +50,7 @@ All gates run for a complete closure unit (root + dependencies) before anything 
 
 Copy the v2 closure into the folder and reload the shell via the existing shell-reload API (re-runs startup tasks — no new trigger machinery):
 
-- v2 becomes active; v1's publication is deactivated and its minted reference retired (`publication-replaced`). In-flight v1 instances finish on v1.
+- v2 becomes active; v1's activation is deactivated and its minted reference retired (`activation-replaced`). In-flight v1 instances finish on v1.
 - Re-running reconcile over an unchanged folder is a no-op (content-addressed create-only store + slot revision CAS) — exactly one active version per definition, no duplicates.
 - On a combined engine (US5), the activation slot's explicit ownership decides conflicts: the same artifact arriving via both publish and import is an idempotent no-op; a *different* artifact from the non-owning source is rejected loudly with a diagnostic naming the owning activation source — never a silent double activation.
 
