@@ -17,6 +17,9 @@ publishes validated endpoint generations atomically.
 
 The public delivery tracker is
 [program issue #1342](https://github.com/elsa-workflows/elsa-foundation/issues/1342).
+Program sequencing and status are coordinated on
+[GitHub Project 45](https://github.com/orgs/elsa-workflows/projects/45), a private organization
+project; public progress and validation evidence remain on the tracker and child issues.
 
 ## In Scope
 
@@ -78,6 +81,7 @@ and routing gates are complete. Later module waves receive separate issues rathe
 ## Linked Surfaces
 
 - [Program issue #1342](https://github.com/elsa-workflows/elsa-foundation/issues/1342)
+- [Delivery board: GitHub Project 45](https://github.com/orgs/elsa-workflows/projects/45)
 - [Spike issue #1329](https://github.com/elsa-workflows/elsa-foundation/issues/1329)
 - [Spike report](../reports/endpoint-framework-authorization-spike-2026-08.md)
 - [Foundation authorization contracts](../../src/Elsa/Foundation/Identity/Abstractions/Authorization/AuthorizationContracts.cs)
