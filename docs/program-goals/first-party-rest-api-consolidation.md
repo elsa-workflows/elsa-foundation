@@ -82,6 +82,7 @@ and routing gates are complete. Later module waves receive separate issues rathe
 
 - [Program issue #1342](https://github.com/elsa-workflows/elsa-foundation/issues/1342)
 - [Delivery board: GitHub Project 45](https://github.com/orgs/elsa-workflows/projects/45)
+- [ADR 0068: First-party REST APIs use ASP.NET Core Minimal APIs](../adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)
 - [Spike issue #1329](https://github.com/elsa-workflows/elsa-foundation/issues/1329)
 - [Spike report](../reports/endpoint-framework-authorization-spike-2026-08.md)
 - [Foundation authorization contracts](../../src/Elsa/Foundation/Identity/Abstractions/Authorization/AuthorizationContracts.cs)
