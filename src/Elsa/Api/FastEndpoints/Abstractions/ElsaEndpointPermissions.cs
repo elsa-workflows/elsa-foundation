@@ -1,5 +1,7 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Builder;
 
 namespace Elsa.Api.FastEndpoints.Abstractions;
 
@@ -31,5 +33,18 @@ public static class ElsaEndpointPermissions
         return permissions.Length == 0
             ? codec.Format(PermissionPolicyDescriptor.Single(PermissionNames.All))
             : codec.Format(PermissionPolicyDescriptor.Any(Compose(permissions)));
+    }
+
+    public static Action<RouteHandlerBuilder> StandardMetadata(Type endpointType, string[] permissions)
+    {
+        ArgumentNullException.ThrowIfNull(endpointType);
+        ArgumentNullException.ThrowIfNull(permissions);
+
+        var owner = endpointType.Assembly.GetName().Name ?? throw new InvalidOperationException(
+            $"Endpoint type '{endpointType.FullName}' has no stable assembly owner.");
+        return builder => builder
+            .WithOwner(owner)
+            .WithAuthoringModel(EndpointAuthoringModels.FastEndpoints)
+            .WithSecurityDisposition(EndpointSecurityDispositionMetadata.Permission(ComposePolicy(permissions)));
     }
 }

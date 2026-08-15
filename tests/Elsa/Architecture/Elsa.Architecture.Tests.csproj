@@ -5,6 +5,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="Baselines\rest-compatibility-approved-differences.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\endpoint-manifest.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\fastendpoints-transition-exceptions.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
@@ -23,9 +32,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
     <!-- spec 145: the split publish engine DependsOn the Events feature (host assembly); the stock-shell

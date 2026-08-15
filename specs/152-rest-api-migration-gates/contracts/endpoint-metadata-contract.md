@@ -6,11 +6,11 @@ Every enabled first-party REST endpoint must expose framework-neutral metadata s
 
 ## Contract
 
-- `EndpointOwnershipMetadata` contains one stable, non-empty owner identifier.
+- `EndpointOwnershipMetadata` contains one stable, non-empty owner identifier and classifies it as host, module, or dynamic shell; dynamic-shell ownership also records its shell and exact non-negative generation.
 - Permission-protected endpoints carry Foundation Identity's permission metadata and canonical authorization policy.
-- Intentionally public endpoints carry a typed public disposition.
+- Intentionally public endpoints carry a typed category/reason disposition plus standard anonymous-access metadata.
 - Host-credential endpoints carry a typed host-credential disposition and its owning host surface.
-- Named-policy endpoints carry a typed policy name and policy owner.
+- Named-policy endpoints carry a typed policy name and policy owner plus standard authorization metadata.
 - The four disposition forms are mutually exclusive as primary endpoint security.
 - Conventions operate on standard `IEndpointConventionBuilder`/route builders and do not introduce a custom endpoint DSL.
 

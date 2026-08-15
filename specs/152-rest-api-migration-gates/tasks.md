@@ -15,10 +15,10 @@
 
 **Purpose**: Establish the thin production metadata package, reusable test package, and repository references.
 
-- [ ] T001 Create `src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj` and add it to `Elsa.slnx` with only the ASP.NET Core framework dependency
-- [ ] T002 [P] Create `tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj` and add it to `Elsa.slnx` with TestHost, Roslyn, and test-support dependencies
-- [ ] T003 [P] Add deterministic JSON serialization and baseline loading helpers in `tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs` and `tests/Elsa/Api/Compatibility/Testing/Baselines/BaselineFile.cs`
-- [ ] T004 Add architecture-project references to the production metadata and compatibility-testing projects in `tests/Elsa/Architecture/Elsa.ArchitectureTests.csproj`
+- [x] T001 Create `src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj` and add it to `Elsa.Server.slnx` with only the ASP.NET Core framework dependency
+- [x] T002 [P] Create `tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj` and add it to `Elsa.Server.slnx` with TestHost, Roslyn, and test-support dependencies
+- [x] T003 [P] Add deterministic JSON serialization and baseline loading helpers in `tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs` and `tests/Elsa/Api/Compatibility/Testing/Baselines/BaselineFile.cs`
+- [x] T004 Add architecture-project references to the production metadata and compatibility-testing projects in `tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`
 
 ---
 
@@ -28,11 +28,11 @@
 
 **⚠️ CRITICAL**: No user-story implementation begins until these contracts are green.
 
-- [ ] T005 [P] Write failing metadata convention tests for owner and public/host/named-policy dispositions in `tests/Elsa/Api/Compatibility/Testing.Tests/EndpointMetadataConventionTests.cs`
-- [ ] T006 [P] Add immutable endpoint evidence keys and normalized route/method value objects in `tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs`
-- [ ] T007 Implement typed ownership and security-disposition metadata in `src/Elsa/Api/AspNetCore/EndpointOwnershipMetadata.cs` and `src/Elsa/Api/AspNetCore/EndpointSecurityDispositionMetadata.cs`
-- [ ] T008 Implement standard `IEndpointConventionBuilder` extensions in `src/Elsa/Api/AspNetCore/EndpointConventionBuilderExtensions.cs` and make T005 pass
-- [ ] T009 Enrich Foundation permission conventions and FastEndpoints endpoint bases with standard owner/authoring/security metadata in `src/Elsa/Identity/Features/Authorization/Extensions/PermissionEndpointConventionBuilderExtensions.cs` and `src/Elsa/Api/FastEndpoints/Endpoints/ElsaEndpoint.cs`
+- [x] T005 [P] Write failing metadata convention tests for owner and public/host/named-policy dispositions in `tests/Elsa/Api/Compatibility/Testing/Tests/EndpointMetadataConventionTests.cs`
+- [x] T006 [P] Add immutable endpoint evidence keys and normalized route/method value objects in `tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs`
+- [x] T007 Implement typed ownership and security-disposition metadata in `src/Elsa/Api/AspNetCore/EndpointOwnershipMetadata.cs` and `src/Elsa/Api/AspNetCore/EndpointSecurityDispositionMetadata.cs`
+- [x] T008 Implement standard `IEndpointConventionBuilder` extensions in `src/Elsa/Api/AspNetCore/EndpointConventionBuilderExtensions.cs` and make T005 pass
+- [x] T009 Enrich Foundation permission conventions and FastEndpoints endpoint bases with standard owner/authoring/security metadata in `src/Elsa/Foundation/Identity/Abstractions/Authorization/PermissionEndpointConventionBuilderExtensions.cs` and `src/Elsa/Api/FastEndpoints/Abstractions/`
 
 **Checkpoint**: Any ASP.NET Core endpoint-authoring model can publish the shared metadata contract.
 
@@ -46,16 +46,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Write failing canonical HTTP evidence tests for binding, JSON, status, ProblemDetails, paging/filtering, and bounded streaming in `tests/Elsa/Api/Compatibility/Testing.Tests/HttpCompatibilityEvidenceTests.cs`
-- [ ] T011 [P] [US1] Write failing consumed OpenAPI projection tests for parameters, request bodies, responses, media types, and schemas in `tests/Elsa/Api/Compatibility/Testing.Tests/OpenApiCompatibilityEvidenceTests.cs`
-- [ ] T012 [P] [US1] Write failing mutation and exact-approved-difference tests for every compatibility facet in `tests/Elsa/Api/Compatibility/Testing.Tests/CompatibilityComparerMutationTests.cs`
+- [x] T010 [P] [US1] Write failing canonical HTTP evidence tests for binding, JSON, status, ProblemDetails, paging/filtering, and bounded streaming in `tests/Elsa/Api/Compatibility/Testing/Tests/HttpCompatibilityEvidenceTests.cs`
+- [x] T011 [P] [US1] Write failing consumed OpenAPI projection tests for parameters, request bodies, responses, media types, and schemas in `tests/Elsa/Api/Compatibility/Testing/Tests/OpenApiCompatibilityEvidenceTests.cs`
+- [x] T012 [P] [US1] Write failing mutation and exact-approved-difference tests for every compatibility facet in `tests/Elsa/Api/Compatibility/Testing/Tests/CompatibilityComparerMutationTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [P] [US1] Implement canonical HTTP observation models and capture runner in `tests/Elsa/Api/Compatibility/Testing/Http/HttpCompatibilityCase.cs` and `tests/Elsa/Api/Compatibility/Testing/Http/HttpEvidenceCapture.cs`
-- [ ] T014 [P] [US1] Implement supplied-document OpenAPI canonical projection in `tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs`
-- [ ] T015 [US1] Implement facet-level deltas, exact approved differences, and strict unused-approval validation in `tests/Elsa/Api/Compatibility/Testing/Comparison/CompatibilityComparer.cs`
-- [ ] T016 [US1] Add an equivalent before/after authoring fixture and committed empty approval registry in `tests/Elsa/Architecture/RestCompatibilityTests.cs` and `tests/Elsa/Architecture/Baselines/rest-compatibility-approved-differences.json`
+- [x] T013 [P] [US1] Implement canonical HTTP observation models and capture runner in `tests/Elsa/Api/Compatibility/Testing/Http/HttpCompatibilityCase.cs` and `tests/Elsa/Api/Compatibility/Testing/Http/HttpEvidenceCapture.cs`
+- [x] T014 [P] [US1] Implement supplied-document OpenAPI canonical projection in `tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs`
+- [x] T015 [US1] Implement facet-level deltas, exact approved differences, and strict unused-approval validation in `tests/Elsa/Api/Compatibility/Testing/Comparison/CompatibilityComparer.cs`
+- [x] T016 [US1] Add an equivalent before/after authoring fixture and committed empty approval registry in `tests/Elsa/Architecture/RestCompatibilityTests.cs` and `tests/Elsa/Architecture/Baselines/rest-compatibility-approved-differences.json`
 
 **Checkpoint**: A canary module can prove authoring-only compatibility without duplicating capture or comparison rules.
 
@@ -69,20 +69,20 @@
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Write failing order-independence, route normalization, multi-method, and ten-capture stability tests in `tests/Elsa/Api/Compatibility/Testing.Tests/EndpointManifestBuilderTests.cs`
-- [ ] T018 [P] [US2] Write failing missing/ambiguous disposition and owner mutation tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
-- [ ] T019 [P] [US2] Write failing absent/conflicting permission owner, cross-owner consumption, and wildcard mutation tests in `tests/Elsa/Architecture/PermissionOwnershipTests.cs`
-- [ ] T020 [P] [US2] Write failing new/expanded/stale/ambiguous/dynamic FastEndpoints exception tests in `tests/Elsa/Architecture/FastEndpointsTransitionTests.cs`
+- [x] T017 [P] [US2] Write failing order-independence, route normalization, multi-method, and ten-capture stability tests in `tests/Elsa/Api/Compatibility/Testing/Tests/EndpointManifestBuilderTests.cs`
+- [x] T018 [P] [US2] Write failing missing/ambiguous disposition and owner mutation tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
+- [x] T019 [P] [US2] Write failing absent/conflicting permission owner, cross-owner consumption, and wildcard mutation tests in `tests/Elsa/Api/Compatibility/Testing/Tests/PermissionOwnershipValidatorTests.cs`
+- [x] T020 [P] [US2] Write failing new/expanded/stale/ambiguous/dynamic FastEndpoints exception tests in `tests/Elsa/Architecture/FastEndpointsTransitionTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T021 [P] [US2] Implement runtime `EndpointDataSource` manifest capture and deterministic serialization in `tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointManifestBuilder.cs`
-- [ ] T022 [P] [US2] Implement active permission-catalog provenance reconciliation in `tests/Elsa/Api/Compatibility/Testing/Security/PermissionOwnershipValidator.cs`
-- [ ] T023 [P] [US2] Implement Roslyn FastEndpoints registration discovery and exact exception reconciliation in `tests/Elsa/Api/Compatibility/Testing/Transitions/FastEndpointsRegistrationScanner.cs` and `tests/Elsa/Api/Compatibility/Testing/Transitions/TransitionExceptionValidator.cs`
-- [ ] T024 [US2] Replace route-regex security scanning with metadata-driven endpoint validation in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
-- [ ] T025 [US2] Capture the representative host baseline and current exact transition registry in `tests/Elsa/Architecture/Baselines/endpoint-manifest.json` and `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`
-- [ ] T026 [US2] Add or correct granular permission contributors and endpoint metadata required by the representative host in affected `src/modules/**/Features/**` endpoint and permission-contributor files
-- [ ] T027 [US2] Wire manifest stability, security disposition, permission ownership, and transition reconciliation into `tests/Elsa/Architecture/EndpointArchitectureTests.cs`
+- [x] T021 [P] [US2] Implement runtime `EndpointDataSource` manifest capture and deterministic serialization in `tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointManifestBuilder.cs`
+- [x] T022 [P] [US2] Implement active permission-catalog provenance reconciliation in `tests/Elsa/Api/Compatibility/Testing/Security/PermissionOwnershipValidator.cs`
+- [x] T023 [P] [US2] Implement Roslyn FastEndpoints registration discovery and exact exception reconciliation in `tests/Elsa/Api/Compatibility/Testing/Transitions/FastEndpointsRegistrationScanner.cs` and `tests/Elsa/Api/Compatibility/Testing/Transitions/TransitionExceptionValidator.cs`
+- [x] T024 [US2] Replace route-regex security scanning with metadata-driven endpoint validation in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
+- [x] T025 [US2] Capture the representative host baseline and current exact transition registry in `tests/Elsa/Architecture/Baselines/endpoint-manifest.json` and `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`
+- [x] T026 [US2] Add granular permission contributors for the representative Activities Design, API Capabilities, Expressions, Workflows Design, Workflows Publishing, and Workflows Runtime API features under their feature-owned `Authorization/` directories
+- [x] T027 [US2] Wire manifest stability, security disposition, permission ownership, and transition reconciliation into `tests/Elsa/Architecture/DomainManagementApiCompositionTests.cs`, `EndpointSecurityTests.cs`, and `FastEndpointsTransitionTests.cs`
 
 **Checkpoint**: The representative enabled first-party REST surface is deterministic, completely classified, and bounded against legacy expansion.
 
@@ -96,14 +96,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T028 [P] [US3] Write failing clean-cycle and deliberate route/DI/serializer retention tests in `tests/Elsa/Api/Compatibility/Testing.Tests/CollectibleEndpointHarnessTests.cs`
-- [ ] T029 [P] [US3] Write a failing architecture-level repeated weak-reference evidence test in `tests/Elsa/Architecture/CollectibleEndpointTests.cs`
+- [x] T028 [P] [US3] Write failing clean-cycle and deliberate route/DI/serializer retention tests in `tests/Elsa/Api/Compatibility/Testing/Tests/CollectibleEndpointHarnessTests.cs`
+- [x] T029 [P] [US3] Write a failing architecture-level repeated weak-reference evidence test in `tests/Elsa/Architecture/CollectibleEndpointTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T030 [US3] Implement Roslyn fixture compilation and non-inlined collectible-context lifecycle creation in `tests/Elsa/Api/Compatibility/Testing/Collectibility/CollectibleEndpointFixture.cs`
-- [ ] T031 [US3] Implement staged route, service, and serializer publication/release probes in `tests/Elsa/Api/Compatibility/Testing/Collectibility/RetentionStageProbe.cs`
-- [ ] T032 [US3] Implement bounded collection verification and weak-reference-only diagnostics in `tests/Elsa/Api/Compatibility/Testing/Collectibility/UnloadEvidence.cs` and make T028–T029 pass
+- [x] T030 [US3] Implement Roslyn fixture compilation and non-inlined collectible-context lifecycle creation in `tests/Elsa/Api/Compatibility/Testing/Collectibility/CollectibleEndpointFixture.cs`
+- [x] T031 [US3] Implement staged route, service, and serializer publication/release probes in `tests/Elsa/Api/Compatibility/Testing/Collectibility/RetentionStageProbe.cs`
+- [x] T032 [US3] Implement bounded collection verification and weak-reference-only diagnostics in `tests/Elsa/Api/Compatibility/Testing/Collectibility/UnloadEvidence.cs` and make T028–T029 pass
 
 **Checkpoint**: Unloadability claims use repeatable collectible-context evidence and identify the retention seam.
 
@@ -113,11 +113,11 @@
 
 **Purpose**: Integrate the reusable gates, remove duplication, document use, and run repository merge gates.
 
-- [ ] T033 [P] Update migration-consumer guidance and verification commands in `specs/152-rest-api-migration-gates/quickstart.md` and `docs/reference/rest-api-migration-gates.md`
-- [ ] T034 Remove superseded security-regex helpers and DRY repeated test-host/baseline setup across `tests/Elsa/Architecture/` and `tests/Elsa/Api/Compatibility/Testing/`
-- [ ] T035 Run focused compatibility and architecture test projects, full build, architecture guard, and all mutation fixtures documented in `specs/152-rest-api-migration-gates/quickstart.md`
-- [ ] T036 Regenerate all repository maps with `tools/maps/Elsa.Maps.Generator`, review every generated change, and run the generated-map freshness check
-- [ ] T037 Reconcile every acceptance criterion in `specs/152-rest-api-migration-gates/spec.md` and issue #1346 against test evidence, then record results in the PR and issue
+- [x] T033 [P] Update migration-consumer guidance and verification commands in `specs/152-rest-api-migration-gates/quickstart.md` and `docs/reference/rest-api-migration-gates.md`
+- [x] T034 Remove superseded security-regex helpers and DRY repeated test-host/baseline setup across `tests/Elsa/Architecture/` and `tests/Elsa/Api/Compatibility/Testing/`
+- [x] T035 Run focused compatibility and architecture test projects, full build, architecture guard, and all mutation fixtures documented in `specs/152-rest-api-migration-gates/quickstart.md`
+- [x] T036 Regenerate all repository maps with `tools/maps/Elsa.Maps.Generator`, review every generated change, and run the generated-map freshness check
+- [x] T037 Reconcile every acceptance criterion in `specs/152-rest-api-migration-gates/spec.md` and issue #1346 against test evidence, then record results in the PR and issue
 
 ---
 

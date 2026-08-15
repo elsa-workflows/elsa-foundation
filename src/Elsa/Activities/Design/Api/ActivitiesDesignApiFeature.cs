@@ -17,6 +17,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Activities.Design.Api.Capabilities;
+using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
 
@@ -100,6 +102,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
+        services.AddPermissionContributor<ActivityDesignPermissionContributor>();
     }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)

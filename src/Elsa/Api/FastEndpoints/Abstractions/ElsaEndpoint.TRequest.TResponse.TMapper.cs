@@ -10,5 +10,6 @@ public class ElsaEndpoint<TRequest, TResponse, TMapper> : Endpoint<TRequest, TRe
     protected void ConfigurePermissions(params string[] permissions)
     {
         Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
+        Description(ElsaEndpointPermissions.StandardMetadata(GetType(), permissions));
     }
 }

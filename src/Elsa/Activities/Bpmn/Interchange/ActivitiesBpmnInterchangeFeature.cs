@@ -2,6 +2,8 @@ using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Api.FastEndpoints;
+using Elsa.Activities.Bpmn.Interchange.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,5 +24,6 @@ public class ActivitiesBpmnInterchangeFeature : FastEndpointsFeatureBase
         base.ConfigureServices(services);
         services.AddSingleton<IBpmnDocumentImporter, BpmnDocumentImporter>();
         services.AddSingleton<IBpmnDocumentExporter, BpmnDocumentExporter>();
+        services.AddPermissionContributor<BpmnInterchangePermissionContributor>();
     }
 }

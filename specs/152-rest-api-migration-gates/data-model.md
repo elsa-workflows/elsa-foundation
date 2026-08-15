@@ -2,7 +2,9 @@
 
 ## Endpoint ownership metadata
 
-- `Owner`: stable first-party module or host identifier; required and non-empty.
+- `OwnerKind`: `Host`, `Module`, or `DynamicShell`.
+- `OwnerId`: stable first-party module, feature, or host identifier; required and non-empty.
+- `ShellId` and non-negative `Generation`: required only for `DynamicShell` ownership.
 - Applied once to each enabled endpoint. Conflicting values are invalid.
 
 ## Security disposition metadata
@@ -10,6 +12,7 @@
 - `Kind`: `Permission`, `Public`, `HostCredential`, or `NamedPolicy`.
 - `Value`: permission or policy name when required; absent for public access.
 - `Owner`: owner of a named policy or host-credential scheme when applicable.
+- `Category` and non-empty `Reason`: required only for intentional public access, alongside standard anonymous-access metadata.
 - Exactly one primary disposition is valid. Foundation permission metadata supplies the `Permission` form.
 
 ## Endpoint manifest entry
@@ -17,7 +20,7 @@
 - `Route`: normalized route pattern.
 - `Methods`: normalized, sorted HTTP methods.
 - `DisplayName`: diagnostic runtime identity.
-- `Owner`: endpoint owner.
+- `OwnerKind`, `Owner`, and optional dynamic-shell identity: endpoint ownership.
 - `AuthoringModel`: Minimal API, MVC, FastEndpoints, or another explicitly known source.
 - `SecurityDisposition`: one validated primary disposition.
 - `ContentTypes`: sorted declared request/response media types.
@@ -61,6 +64,7 @@ Entries sort by route, method, owner, and stable source identity. Equivalent par
 - `Routes` and `Methods`: exact normalized scope.
 - `RemovalOwner` and `FollowUp`: accountable migration record.
 - `DynamicallyUnloadable`: must be false.
+- `SourceHash`: exact normalized aggregate fingerprint of the owning source set, used only as a fail-closed fallback when a route is genuinely runtime-computed after cross-document constant and route-helper resolution.
 
 Every discovered FastEndpoints registration must match exactly one record; every record must match a discovered registration. Additions, stale records, ambiguous matches, and dynamic-module records fail.
 

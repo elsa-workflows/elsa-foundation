@@ -18,6 +18,9 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Graph.Design;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Compatibility.Testing.Baselines;
+using Elsa.Api.Compatibility.Testing.Manifests;
+using Elsa.Api.Compatibility.Testing.Security;
 using Elsa.Api.FastEndpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
@@ -25,6 +28,7 @@ using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
@@ -41,6 +45,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -87,6 +92,26 @@ public sealed class DomainManagementApiCompositionTests
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
         Assert.Equal(ExpectedCapabilities, capabilities.Capabilities.Select(x => x.Id).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Representative_host_manifest_is_stable_reviewed_and_permission_owned()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: true, allowAnonymous: false);
+
+        var captures = Enumerable.Range(0, 10)
+            .Select(_ => new EndpointManifestBuilder(host.EndpointDataSources).BuildJson())
+            .ToArray();
+        Assert.Single(captures.Distinct(StringComparer.Ordinal));
+
+        var baselinePath = Path.Combine(AppContext.BaseDirectory, "Baselines", "endpoint-manifest.json");
+        Assert.Equal(BaselineFile.Read(baselinePath), captures[0]);
+
+        var manifest = new EndpointManifestBuilder(host.EndpointDataSources).Build();
+        var permissions = new PermissionOwnershipValidator(host.Services.GetServices<IPermissionContributor>())
+            .Validate(manifest.Entries);
+        Assert.True(permissions.IsValid, string.Join(Environment.NewLine, permissions.Issues.Select(issue =>
+            $"{issue.Code}: {issue.Endpoint}: {issue.Message}")));
     }
 
     [Fact]
@@ -275,8 +300,14 @@ public sealed class DomainManagementApiCompositionTests
         ];
 
         public HttpClient Client { get; } = client;
+        public IServiceProvider Services => app.Services;
+        public IReadOnlyList<EndpointDataSource> EndpointDataSources => app.Services.GetServices<EndpointDataSource>()
+            .Select(source => new RepresentativeEndpointDataSource(source.Endpoints
+                .Where(endpoint => endpoint is not RouteEndpoint route || route.RoutePattern.RawText != "_test_url_cache_")
+                .ToArray()))
+            .ToArray();
 
-        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions)
+        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool allowAnonymous = true)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -321,7 +352,9 @@ public sealed class DomainManagementApiCompositionTests
                     "test"));
                 await next(context);
             });
-            app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
+            app.UseFastEndpoints(options => options.Endpoints.Configurator = allowAnonymous
+                ? endpoint => endpoint.AllowAnonymous()
+                : null);
             await app.StartAsync();
             return new CustomManagementHost(app, app.GetTestClient());
         }
@@ -343,6 +376,12 @@ public sealed class DomainManagementApiCompositionTests
             Client.Dispose();
             await app.DisposeAsync();
         }
+    }
+
+    private sealed class RepresentativeEndpointDataSource(IReadOnlyList<Microsoft.AspNetCore.Http.Endpoint> endpoints) : EndpointDataSource
+    {
+        public override IReadOnlyList<Microsoft.AspNetCore.Http.Endpoint> Endpoints => endpoints;
+        public override IChangeToken GetChangeToken() => new CancellationChangeToken(CancellationToken.None);
     }
 
     private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender

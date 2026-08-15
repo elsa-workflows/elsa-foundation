@@ -4,6 +4,8 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Capabilities;
+using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
@@ -86,5 +88,6 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
+        services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 }

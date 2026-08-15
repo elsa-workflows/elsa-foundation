@@ -3,8 +3,8 @@
 ## Verify the work unit
 
 ```bash
-dotnet test tests/Elsa/Architecture/Elsa.ArchitectureTests.csproj --no-restore
-dotnet test tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj --no-restore
+dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-restore
+dotnet test tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --no-restore
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
@@ -18,6 +18,8 @@ Run the repository build and affected solution gates before merge. Baselines are
 4. Capture before/after HTTP and supplied OpenAPI evidence with the shared compatibility helper.
 5. If behavior intentionally changes, add one exact approved-difference record with owner, reason, and follow-up. Do not add a broad ignore.
 6. Remove the matching FastEndpoints transition exception as the endpoint leaves the legacy authoring model.
+
+Literal routes, cross-document constants, interpolated constants, and the known route-helper compositions are resolved to exact routes and methods. Only genuinely runtime-computed routes use an exact normalized aggregate fingerprint of their owning source set; any owning-source edit requires deliberate review and registry reconciliation.
 
 ## Diagnose failures
 

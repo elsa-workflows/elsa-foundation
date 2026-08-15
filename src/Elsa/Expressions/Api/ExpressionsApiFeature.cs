@@ -5,6 +5,8 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Expressions.Api.Capabilities;
+using Elsa.Expressions.Api.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Expressions.Api;
 
@@ -23,5 +25,6 @@ public sealed class ExpressionsApiFeature : FastEndpointsFeatureBase
         base.ConfigureServices(services);
         services.AddRequestHandlersFrom(GetType().Assembly);
         services.AddApiCapability(ExpressionsApiCapabilities.StaticDeclaration);
+        services.AddPermissionContributor<ExpressionsPermissionContributor>();
     }
 }
