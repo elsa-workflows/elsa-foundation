@@ -190,3 +190,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [149-canonical-dependency-map](../../specs/149-canonical-dependency-map/spec.md) | Canonical Dependency Map | Draft | - | 0 | 0 | deferred, out of scope |
 | [150-package-version-computation](../../specs/150-package-version-computation/spec.md) | Package Version Computation and Selective Publishing | Draft | - | 0 | 0 | deferred, out of scope |
 | [151-foundation-identity-permission-policy-bridge](../../specs/151-foundation-identity-permission-policy-bridge/spec.md) | Foundation Identity Permission Policy Bridge | Draft | - | 56 | 0 | retained, deferred |
+| [152-rest-api-migration-gates](../../specs/152-rest-api-migration-gates/spec.md) | REST API Migration Compatibility and Authoring Gates | Complete | - | 37 | 0 | retained |

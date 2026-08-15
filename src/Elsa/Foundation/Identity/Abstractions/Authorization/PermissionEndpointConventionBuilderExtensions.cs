@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 
@@ -22,7 +23,11 @@ public static class PermissionEndpointConventionBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         var policy = new PermissionPolicyCodec().Format(descriptor);
-        builder.Add(endpointBuilder => endpointBuilder.Metadata.Add(new AuthorizeAttribute(policy)));
+        builder.Add(endpointBuilder =>
+        {
+            endpointBuilder.Metadata.Add(new AuthorizeAttribute(policy));
+            endpointBuilder.Metadata.Add(EndpointSecurityDispositionMetadata.Permission(policy));
+        });
         return builder;
     }
 }

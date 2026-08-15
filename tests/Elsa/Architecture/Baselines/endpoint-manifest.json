@@ -1,0 +1,319 @@
+{
+  "entries": [
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET capabilities",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Api.Capabilities",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Api.Capabilities.Models.ApiCapabilitiesDocument",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/capabilities"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.QVBJLUNBUEFCSUxJVElFUy5SRUFE"
+      },
+      "sourceIdentity": "ElsaApiCapabilitiesEndpointsGetCapabilities"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET design/activities/authoring-capabilities",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityAuthoringCapabilitiesView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/authoring-capabilities"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAuthoringCapabilitiesGet"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET design/activities/availability/diagnostics",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilityDiagnostics",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/availability/diagnostics"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilityListDiagnostics"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET design/activities/catalog",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityAuthoringCatalogView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/catalog"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsCatalogList"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET design/workflows/definitions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Design.Api.Models.WorkflowDefinitionListView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/workflows/definitions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaWorkflowsDesignApiEndpointsDefinitionsList"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET expressions/descriptors",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Expressions.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Expressions.Api.Models.ExpressionDescriptorsResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/expressions/descriptors"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.RVhQUkVTU0lPTlMuUkVBRA"
+      },
+      "sourceIdentity": "ElsaExpressionsApiEndpointsListExpressionDescriptors"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Core.Models.PublishedWorkflowView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/publish"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPublishWorkflowEndpoint"
+    },
+    {
+      "authoringModel": "FastEndpoints",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/executables",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/executables"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListWorkflowExecutablesEndpoint"
+    }
+  ]
+}

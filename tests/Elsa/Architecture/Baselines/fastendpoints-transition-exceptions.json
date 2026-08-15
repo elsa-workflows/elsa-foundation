@@ -1,0 +1,1158 @@
+[
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /interchange/bpmn/analyze"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Activities.Bpmn.Interchange",
+    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "37f0b43c1c5cf2f1e7852fe3124c62da31461c78366966b49564fe309de9825f"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /interchange/bpmn/export"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Activities.Bpmn.Interchange",
+    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "37f0b43c1c5cf2f1e7852fe3124c62da31461c78366966b49564fe309de9825f"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /interchange/bpmn/import"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Activities.Bpmn.Interchange",
+    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "37f0b43c1c5cf2f1e7852fe3124c62da31461c78366966b49564fe309de9825f"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /design/activities/availability/diagnostics"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Activities.Design.Api",
+    "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6abf4ac7012b73ff73c5812a655f8cef717f9536d42707ced56595794fc08a22"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "DELETE /design/activities/drafts/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Activities.Design.Api",
+    "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Discard",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6abf4ac7012b73ff73c5812a655f8cef717f9536d42707ced56595794fc08a22"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/proposals/{param}/approve"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.ApproveProposal",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/agent/audit"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.Audit",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/agent/bootstrap"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.Bootstrap",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/sessions/{param}/turns/{param}/cancel"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.CancelTurn",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/sessions"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.CreateSession",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/proposals/{param}/deny"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.DenyProposal",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/proposals/{param}/execute"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.ExecuteProposal",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/feedback"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.Feedback",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/agent/sessions/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.GetSession",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/agent/sessions/{param}/messages"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.PostMessage",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/agent/sessions/{param}/stream"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Agent.Api",
+    "registrationIdentity": "Elsa.Agent.Api.Endpoints.StreamSession",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "df227edf34c712a943b20db5e60dba5c9d95fbd86483804ebf6607b382ca8cf1"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /capabilities"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Api.Capabilities",
+    "registrationIdentity": "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "39a75a271f150515dd521cf074bf55dada140423e4fd0bbe2f4d5760b3f58091"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/attention/items"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Attention.Api",
+    "registrationIdentity": "Elsa.Attention.Api.Endpoints.GetAttentionItems",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "8e9dff979a9053375b2f78a51fe6a1a0ab1be91990128fdbc36e3a60fbb34817"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion.OtlpIngestionEndpointBase",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /diagnostics/opentelemetry/collector-configuration"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.CollectorConfiguration.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /diagnostics/opentelemetry/logs/search"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Logs.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /diagnostics/opentelemetry/metrics/search"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Metrics.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /diagnostics/opentelemetry/resources/search"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Resources.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /diagnostics/opentelemetry/storage"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Storage.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /diagnostics/opentelemetry/traces/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Trace.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /diagnostics/opentelemetry/traces/search"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Traces.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [],
+    "followUp": "#1350",
+    "owner": "Elsa.Diagnostics.OpenTelemetry",
+    "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.StreamEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "6418f3443e371252eeb7d2e10b04b7b7e31d90b013ca1029f70f73aa3523574d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [],
+    "followUp": "#1349",
+    "owner": "Elsa.Diagnostics.StructuredLogs",
+    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.RecentEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [],
+    "followUp": "#1349",
+    "owner": "Elsa.Diagnostics.StructuredLogs",
+    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.SourcesEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [],
+    "followUp": "#1349",
+    "owner": "Elsa.Diagnostics.StructuredLogs",
+    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.StreamEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /expressions/descriptors"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Expressions.Api",
+    "registrationIdentity": "Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "b223c6ab9d3706bbe6efaf20baaa2534461bc44b5c3a78d3506f102d25966c1c"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /expressions/variable-types"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Expressions.Api",
+    "registrationIdentity": "Elsa.Expressions.Api.Endpoints.ListVariableTypeDescriptors",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "b223c6ab9d3706bbe6efaf20baaa2534461bc44b5c3a78d3506f102d25966c1c"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /javascript/documents/render"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Expressions.JavaScript.Rendering",
+    "registrationIdentity": "Elsa.Expressions.JavaScript.Rendering.Endpoints.RenderEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "076c21e5cbe1ac3c3664249965229dedab87f52ad5f56a98d38d99b278418b37"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/bootstrap"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Bootstrap",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/capabilities"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Capabilities",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/challenge/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Challenge",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/identity/logout/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Logout",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/identity/refresh"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Refresh",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/session"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Session",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/token"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.Api",
+    "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Token",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0455c92b9c1c60842c9bf231ff6c606f3fb51fac7419a9544956d54c621244a4"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /_elsa/identity/login"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+    "registrationIdentity": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.Login",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0c793573ba163008765e7e1b3b152b3b4016a7baeaee7c7b262991e211a11767"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/identity/login"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+    "registrationIdentity": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginPage",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0c793573ba163008765e7e1b3b152b3b4016a7baeaee7c7b262991e211a11767"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /modularity/features/apply"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Modularity.Api",
+    "registrationIdentity": "Elsa.Modularity.Api.Endpoints.Apply",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "420a3030d18c9ca5dd69448e9b949c70b6763f30c14373a9f860e579c9fe3941"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /modularity/features"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Modularity.Api",
+    "registrationIdentity": "Elsa.Modularity.Api.Endpoints.List",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "420a3030d18c9ca5dd69448e9b949c70b6763f30c14373a9f860e579c9fe3941"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /secrets"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Create",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "DELETE /secrets/{param}"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Delete",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /secrets/descriptors"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Descriptors",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /secrets/{param}"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Get",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /secrets"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.List",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /secrets/picker"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Picker",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /secrets/{param}/revoke"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Revoke",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /secrets/{param}/rotate"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Rotate",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /secrets/{param}/test"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Test",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "PUT /secrets/{param}"
+    ],
+    "followUp": "#1348",
+    "owner": "Elsa.Secrets.Api",
+    "registrationIdentity": "Elsa.Secrets.Api.Endpoints.Secrets.Update",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "813bd3e4097a3846f9803bd2880f238bd47c0ea34cb3b9b0acd375b7dd13f35e"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/studio/preferences/{param}"
+    ],
+    "followUp": "#1347",
+    "owner": "Elsa.Studio.Preferences.Api",
+    "registrationIdentity": "Elsa.Studio.Preferences.Api.Endpoints.GetStudioPreference",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "91905da81700f1f9849a128f0bf78a782fc6185800bdfab552aef2b721752e3f"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "PUT /_elsa/studio/preferences/{param}"
+    ],
+    "followUp": "#1347",
+    "owner": "Elsa.Studio.Preferences.Api",
+    "registrationIdentity": "Elsa.Studio.Preferences.Api.Endpoints.PutStudioPreference",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "91905da81700f1f9849a128f0bf78a782fc6185800bdfab552aef2b721752e3f"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/workflows/dashboard/definitions"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Dashboard",
+    "registrationIdentity": "Elsa.Workflows.Dashboard.GetWorkflowPortfolio",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "bdede3a4703125b87d356f2c0a4496d04a9768320f1894927da11cb5a3f35115"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/workflows/dashboard/runs"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Dashboard",
+    "registrationIdentity": "Elsa.Workflows.Dashboard.GetWorkflowRunHealth",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "bdede3a4703125b87d356f2c0a4496d04a9768320f1894927da11cb5a3f35115"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/scoped-variables/analyze"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.AnalyzeScopedVariables",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/expression-tooling/completions"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.CompleteExpressionTooling",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /design/workflows/expression-tooling/descriptors"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.DescribeExpressionTooling",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/expression-tooling/hover"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.HoverExpressionTooling",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/activities/{param}/inputs/{param}/options"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ResolveActivityInputOptions",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/expression-tooling/context"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ResolveExpressionToolingContext",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/expression-tooling/symbols"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.SearchExpressionToolingSymbols",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/expression-tooling/validate"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ValidateExpressionTooling",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /design/workflows/definitions/submit/schema"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.SubmitSchema",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/workflows/drafts/{param}/promote"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /design/workflows/structures"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Design.Api",
+    "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Structures.List",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "d01ba1e1acecb5c0e0dee06aa7e46a4fb1962b3b03c5e30a75474aaf48f2aafa"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "DELETE /_elsa/execution-evidence"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.ExecutionEvidence",
+    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.DeleteEvidence",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "1fd80e2ef93670bae4edbf894d2b500dfd92290810e713108d2ef4db8a76bf8d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/execution-evidence"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.ExecutionEvidence",
+    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetCorrelatedEvidence",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "1fd80e2ef93670bae4edbf894d2b500dfd92290810e713108d2ef4db8a76bf8d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /_elsa/execution-evidence/workflows/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.ExecutionEvidence",
+    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetWorkflowEvidence",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "1fd80e2ef93670bae4edbf894d2b500dfd92290810e713108d2ef4db8a76bf8d"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/activity-drafts/{param}/test-runs"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/activity-test-runs/{param}/cancel"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.CancelActivityDraftTestRunEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/activity-drafts/{param}/test-runs/idempotency/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunByIdempotencyKeyEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/activity-test-runs/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /design/activities/publications/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityPublicationReceiptEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/workflows/{param}/slots/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetPublicationSlotEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/workflows/{param}/policy"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetWorkflowPublicationPolicyEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/incident-strategies"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListIncidentStrategies",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/workflows/{param}/slots"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListPublicationSlotsEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /publishing/value-conversion/profiles"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListValueConversionProfiles",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/activities/drafts/{param}/publication-preflight"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightActivityDraftPublicationEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}}/preflight"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightWorkflowPublicationEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/workflows/preflight"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightWorkflowPublicationSnapshotEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /design/activities/drafts/{param}/publish"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}}/publish"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/workflows/{param}/slots/{param}/restore"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.RestorePublicationSlotEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /publishing/preflight"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.RuntimeRequirementPreflightEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "PUT /publishing/workflows/{param}/policy"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.SetWorkflowPublicationPolicyEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "DELETE /publishing/workflows/{param}/slots/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.UnpublishPublicationSlotEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "54be7f7fd22a027191ccabbbdaa3175d6ad9e7dde2c406772fe9d197e02bb2c3"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /runtime/workflows/alteration-plans/{param}/cancel"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.CancelWorkflowAlterationPlanEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}/activity-executions/{param}/descendants"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionDescendantsEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}/activity-executions/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}/activity-executions/{param}/layout"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionLayoutEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}/activity-executions/{param}/value-evidence/{param}/payload"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionValuePayloadEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetInstance",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/dispatches/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowDispatchEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances/{param}/incidents"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListIncidentsEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/instances"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListInstances",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "66fa6518a16479c0abcbe1ce813cd913bde7dda8dea3911d8012e15fc0855f3a"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /javascript/execute"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa.Workflows.Runtime.JavaScript",
+    "registrationIdentity": "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Endpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "508b417c8f3faf142eadf8d8e55ef29eac592fbd491261f8ff038c85593a50fe"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /migration/elsa3/reusable-activities/collections/{param}/analysis"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa3.Activities.Design.Import",
+    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.AnalyzeReusableActivityCollectionEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "ba1badc7a9f3ac573ccd2310978d2e7e29783bda95caa2e6df9ab40a33794440"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /migration/elsa3/reusable-activities/collections/{param}/apply"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa3.Activities.Design.Import",
+    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ApplyReusableActivityImportEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "ba1badc7a9f3ac573ccd2310978d2e7e29783bda95caa2e6df9ab40a33794440"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /migration/elsa3/reusable-activities/collections/{param}/selection"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa3.Activities.Design.Import",
+    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ExpandReusableActivityImportSelectionEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "ba1badc7a9f3ac573ccd2310978d2e7e29783bda95caa2e6df9ab40a33794440"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /migration/elsa3/reusable-activities/imports/{param}"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa3.Activities.Design.Import",
+    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.GetReusableActivityImportStatusEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "ba1badc7a9f3ac573ccd2310978d2e7e29783bda95caa2e6df9ab40a33794440"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "POST /migration/elsa3/reusable-activities/collections"
+    ],
+    "followUp": "#1350",
+    "owner": "Elsa3.Activities.Design.Import",
+    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.UploadReusableActivityCollectionEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "ba1badc7a9f3ac573ccd2310978d2e7e29783bda95caa2e6df9ab40a33794440"
+  }
+]

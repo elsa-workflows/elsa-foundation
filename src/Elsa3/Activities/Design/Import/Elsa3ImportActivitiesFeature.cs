@@ -4,7 +4,9 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
+using Elsa3.Activities.Design.Import.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa3.Activities.Design.Import.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -54,5 +56,6 @@ public class Elsa3ImportActivitiesFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
 
         services.AddEventHandlersFrom(GetType().Assembly);
+        services.AddPermissionContributor<Elsa3ImportPermissionContributor>();
     }
 }

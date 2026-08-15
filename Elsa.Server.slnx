@@ -89,6 +89,7 @@
     <Project Path="src/Elsa/Attention/Api/Elsa.Attention.Api.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Api/">
+    <Project Path="src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <Project Path="src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
     <Project Path="src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
   </Folder>
@@ -388,6 +389,10 @@
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Api/" />
+  <Folder Name="/tests/Elsa/Api/Compatibility/Testing/">
+    <Project Path="tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
+    <Project Path="tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Api/Capabilities/">
     <Project Path="tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj" />
   </Folder>

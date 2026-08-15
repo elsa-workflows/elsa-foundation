@@ -1,6 +1,8 @@
 using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Authorization;
 using Elsa.Api.FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,5 +20,6 @@ public sealed class ApiCapabilitiesFeature : FastEndpointsFeatureBase
     {
         base.ConfigureServices(services);
         services.AddApiCapabilities();
+        services.AddPermissionContributor<ApiCapabilitiesPermissionContributor>();
     }
 }

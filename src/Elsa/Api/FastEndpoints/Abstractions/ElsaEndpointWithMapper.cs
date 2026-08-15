@@ -11,5 +11,6 @@ public abstract class ElsaEndpointWithMapper<TRequest, TMapper>
     protected void ConfigurePermissions(params string[] permissions)
     {
         Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
+        Description(ElsaEndpointPermissions.StandardMetadata(GetType(), permissions));
     }
 }
