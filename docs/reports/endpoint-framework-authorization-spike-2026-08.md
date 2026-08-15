@@ -53,7 +53,7 @@ a representative Elsa module migration before broad migration waves begin.
   ownership metadata. Binding, serialization, routing, filters, results, and policy execution stay
   with ASP.NET Core.
 - Do not recreate FastEndpoints as an Elsa-specific framework. Add a shared abstraction only when
-  at least two migrated modules need it and contract tests show that ASP.NET Core has no adequate
+  at least three consumers need it and contract tests show that ASP.NET Core has no adequate
   primitive.
 - New first-party REST APIs use Minimal APIs by default. A FastEndpoints addition during the
   transition requires a documented compatibility exception and may not be placed in an assembly
