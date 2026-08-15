@@ -9,6 +9,8 @@ namespace Elsa.Modularity.Api.Authorization;
 /// </summary>
 public static class ModuleManagementPermissionKeys
 {
+    public const string OwnerId = "elsa.modularity.module-management";
+
     public const string Read = "module-management.read";
 
     public const string Manage = "module-management.manage";
@@ -20,6 +22,8 @@ public static class ModuleManagementPermissionKeys
 public sealed class ModuleManagementPermissionContributor : IPermissionContributor
 {
     private const string Category = "Module management";
+
+    public string OwnerId => ModuleManagementPermissionKeys.OwnerId;
 
     public IEnumerable<Permission> Contribute()
     {

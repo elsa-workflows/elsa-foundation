@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -31,6 +32,14 @@ internal static class RuntimeApiEndpointTestFactory
                 return (current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
         }
         throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no request/response contract.");
+    }
+
+    public static void AssertPermissionPolicy(BaseEndpoint endpoint, params string[] permissions)
+    {
+        var expected = ElsaEndpointPermissions.ComposePolicy(permissions);
+        var policies = endpoint.Definition.PreBuiltUserPolicies!;
+        Xunit.Assert.NotEmpty(policies);
+        Xunit.Assert.All(policies, policy => Xunit.Assert.Equal(expected, policy));
     }
 
     public static BaseEndpoint Create(Type endpointType, params object[] providedDependencies)

@@ -32,6 +32,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     public static IServiceCollection AddFoundationAspNetCoreIdentity(this IServiceCollection services, Action<AspNetCoreIdentityOptions>? configure = null)
     {
         services.AddFoundationIdentityAbstractions();
+        services.AddNormalizedAuthenticationType("Elsa.Foundation.Identity");
         services.AddPersistenceCore();
 
         if (configure is not null)
@@ -74,6 +75,8 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     /// </param>
     public static IdentityBuilder AddIdentityCoreServices(this IServiceCollection services, bool isDevelopmentOrDemo = false)
     {
+        services.AddNormalizedAuthenticationType(AspNetCoreIdentityDefaults.CookieScheme);
+
         var builder = services
             .AddIdentityCore<AspNetCoreIdentityUser>(options =>
             {

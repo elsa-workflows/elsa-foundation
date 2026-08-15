@@ -45,10 +45,31 @@ feature), which defines the contracts both planes speak:
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 | `ISecurityDefaultGuard` | cross-cutting | Refuse weak/missing keys and non-HTTPS metadata outside development. |
 
-Because these contracts are provider-agnostic, a permission check (`[RequirePermission("...")]`)
-reads the same `elsa.identity.permission` claims whether the user signed in with a local password
-or an external IdP token. The provider plane's only job is to get a normalized principal onto the
-request.
+Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
+translate their existing `ConfigurePermissions(...)` calls into the same ASP.NET Core policies.
+Both paths reach one Foundation Identity evaluator and resource-handler pipeline.
+
+The provider plane must put a *trusted normalized principal* onto the request. Normalization strips
+incoming Elsa-internal claims, applies only mapping rules for the current tenant/provider, and then
+emits exactly one `elsa.identity.normalized = v1` marker. A marker alone is insufficient: its
+identity's exact runtime `AuthenticationType` must also be registered in
+`FoundationIdentityOptions.NormalizedAuthenticationTypes` (ordinal comparison). Permission
+authorization selects exactly one matching identity and passes only that identity to grant sources;
+zero or multiple matches are challenged so tenants/providers cannot be unioned accidentally.
+
+The built-in trusted runtime types are `Elsa.Foundation.Identity` for the normalized external
+principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests, and
+the OpenIddict validation scheme for validated bearer requests. OpenIddict's token-construction
+identity type (`openiddict`) is deliberately not trusted as an endpoint identity. Custom adapters
+call `AddNormalizedAuthenticationType(...)` only after implementing the same strip-map-mark rule.
+
+Permission keys are compared as Unicode NFC plus invariant uppercase using ordinal equality.
+Implications expand from grants toward requests and terminate safely on cycles. An explicit `*`
+grant satisfies an ordinary request, while requesting `*` itself requires that explicit grant.
+For a member, resource denial vetoes resource grant and the general evaluator; the evaluator runs
+only after every resource source abstains. Exceptions, timeouts, and HTTP request cancellation
+propagate as operational failures rather than becoming `403`.
 
 ---
 

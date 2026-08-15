@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Endpoints;
 using Elsa3.Activities.Design.Import.Models;
@@ -47,8 +48,10 @@ public sealed class ReusableActivityImportHttpContractTests
     {
         Assert.Equal(verb, Assert.Single(definition.Verbs));
         Assert.Equal(route, Assert.Single(definition.Routes));
-        Assert.Contains(permission, definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
+        Assert.All(
+            definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([permission]), policy));
         Assert.Null(definition.AnonymousVerbs);
     }
 

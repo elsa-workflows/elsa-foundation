@@ -25,8 +25,7 @@ public sealed class WorkflowDispatchInspectionTests
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
 
         Assert.Equal((request, response), RuntimeApiEndpointTestFactory.Contract(endpoint));
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -39,12 +38,9 @@ public sealed class WorkflowDispatchInspectionTests
         Assert.Equal(
             (typeof(RedriveWorkflowDispatch), typeof(WorkflowDispatchRedriveView)),
             RuntimeApiEndpointTestFactory.Contract(redrive));
-        Assert.Contains(PermissionNames.WorkflowRuntimeManage, redrive.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, redrive.Definition.AllowedPermissions!);
-        Assert.DoesNotContain(PermissionNames.WorkflowRuntimeRead, redrive.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(redrive, PermissionNames.WorkflowRuntimeManage);
         Assert.Null(redrive.Definition.AnonymousVerbs);
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, read.Definition.AllowedPermissions!);
-        Assert.DoesNotContain(PermissionNames.WorkflowRuntimeManage, read.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(read, PermissionNames.WorkflowRuntimeRead);
     }
 
     [Fact]

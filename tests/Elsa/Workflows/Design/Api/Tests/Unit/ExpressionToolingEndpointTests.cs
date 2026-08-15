@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -28,8 +29,9 @@ public sealed class ExpressionToolingEndpointTests
 
         endpoint.Configure();
 
-        Assert.Contains(PermissionNames.WorkflowDesignRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignRead]),
+            endpoint.Definition.PreBuiltUserPolicies!);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

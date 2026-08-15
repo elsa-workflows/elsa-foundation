@@ -1,3 +1,4 @@
+using Elsa.Api.FastEndpoints.Abstractions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Xunit;
@@ -11,7 +12,10 @@ public sealed class WorkflowDashboardEndpointSecurityTests
     {
         var endpoint = ConfiguredEndpoint("Elsa.Workflows.Dashboard.GetWorkflowRunHealth", new StubService());
 
-        Assert.Contains(WorkflowsDashboardPermissions.Read, endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([WorkflowsDashboardPermissions.Read]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -20,7 +24,10 @@ public sealed class WorkflowDashboardEndpointSecurityTests
     {
         var endpoint = ConfiguredEndpoint("Elsa.Workflows.Dashboard.GetWorkflowPortfolio", new StubPortfolioService());
 
-        Assert.Contains(WorkflowsDashboardPermissions.Read, endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([WorkflowsDashboardPermissions.Read]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

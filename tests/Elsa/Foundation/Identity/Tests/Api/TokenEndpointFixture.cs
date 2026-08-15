@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
@@ -7,14 +9,18 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using FastEndpoints;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
@@ -67,6 +73,12 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         options => options.IsDevelopmentOrDemo = true,
                         configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
 
+                    // Model an external JWT handler that authenticates a raw provider principal. The token
+                    // exchange must reject this identity until a provider-owned projection normalizes it.
+                    services.AddAuthentication()
+                        .AddScheme<AuthenticationSchemeOptions, ForgedExternalAuthenticationHandler>(
+                            ForgedExternalAuthenticationHandler.AuthenticationSchemeName, _ => { });
+
                     // Workstream C: the provider-agnostic Api surface (token endpoint lives here).
                     services.AddFoundationIdentityApi();
 
@@ -97,6 +109,13 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                             .MapGet("/protected", context =>
                                 context.Response.WriteAsync(context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? string.Empty))
                             .RequireAuthorization();
+                        endpoints
+                            .MapGet("/permission-protected", () => Results.Ok())
+                            .RequireAuthorization(new AuthorizeAttribute
+                            {
+                                AuthenticationSchemes = ForgedExternalAuthenticationHandler.AuthenticationSchemeName
+                            })
+                            .RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersManage);
                     });
                 });
             })
@@ -123,5 +142,30 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     {
         await _host.StopAsync();
         _host.Dispose();
+    }
+}
+
+internal sealed class ForgedExternalAuthenticationHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string AuthenticationSchemeName = "Elsa.Identity.Oidc.Jwt";
+    public const string Token = "forged-external";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.Authorization.ToString().Equals($"Bearer {Token}", StringComparison.Ordinal))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "external-attacker"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
+            new Claim(IdentityClaimTypes.Permission, DefaultIdentityPermissionKeys.IdentityUsersManage)
+        ], AuthenticationSchemeName);
+        return Task.FromResult(AuthenticateResult.Success(
+            new AuthenticationTicket(new ClaimsPrincipal(identity), AuthenticationSchemeName)));
     }
 }

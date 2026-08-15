@@ -1,8 +1,12 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
 
@@ -27,6 +31,8 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         Assert.Equal("user-7", jwt.Subject);
         Assert.Equal("tenant-x", jwt.GetClaim(IdentityClaimTypes.TenantId).Value);
         Assert.Equal("openiddict", jwt.GetClaim(IdentityClaimTypes.Provider).Value);
+        Assert.Equal("v1", jwt.GetClaim(IdentityClaimTypes.Normalized).Value);
+        Assert.Single(jwt.Claims, x => x.Type == IdentityClaimTypes.Normalized);
         Assert.True(jwt.TryGetClaim("oi_tkn_id", out _), "the JWT should reference its token-store entry");
 
         var permissions = jwt.Claims.Where(x => x.Type == IdentityClaimTypes.Permission).Select(x => x.Value).ToList();
@@ -49,6 +55,16 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         Assert.Equal("tenant-y", result.Principal.FindFirst(IdentityClaimTypes.TenantId)?.Value);
         Assert.Contains("identity.users.manage", result.Principal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value));
         Assert.Contains("user-8", result.Principal.FindAll("sub").Select(x => x.Value));
+        Assert.Equal(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, result.Principal.Identity!.AuthenticationType);
+    }
+
+    [Fact]
+    public void ProviderTrust_RegistersValidationRuntimeType_NotTokenConstructionType()
+    {
+        var options = _fixture.Services.GetRequiredService<IOptions<FoundationIdentityOptions>>().Value;
+
+        Assert.Contains(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, options.NormalizedAuthenticationTypes);
+        Assert.DoesNotContain("openiddict", options.NormalizedAuthenticationTypes);
     }
 
     [Fact]

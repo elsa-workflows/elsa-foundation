@@ -1,6 +1,8 @@
+using System.Collections.Frozen;
 using System.Security.Claims;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -20,6 +22,18 @@ public interface IPermissionCatalog
 /// </summary>
 public interface IPermissionContributor
 {
+    /// <summary>
+    /// Gets the stable owner identifier for permissions supplied by this contributor.
+    /// Existing contributors remain source-compatible; the implementation type is the
+    /// deterministic fallback when a contributor does not provide an explicit owner.
+    /// </summary>
+    string OwnerId => GetType().FullName ?? GetType().Name;
+
+    /// <summary>
+    /// Gets the fully qualified implementation type used for provenance diagnostics.
+    /// </summary>
+    string ContributorType => GetType().FullName ?? GetType().Name;
+
     IEnumerable<Permission> Contribute();
 }
 
@@ -50,9 +64,24 @@ public interface IClaimMappingRuleEvaluator
     bool Matches(ClaimsPrincipal principal, ClaimMappingRule rule);
 }
 
-public sealed record Permission(string Key, string DisplayName, string Category, string Description, IReadOnlySet<string>? Implies = null);
+public sealed record Permission(string Key, string DisplayName, string Category, string Description, IReadOnlySet<string>? Implies = null)
+{
+    /// <summary>
+    /// Stable module or feature owner. These are intentionally non-positional so adding
+    /// provenance does not break existing Permission constructors or deconstruction.
+    /// </summary>
+    public string OwnerId { get; init; } = string.Empty;
 
-public sealed record PermissionEvaluationContext(ClaimsPrincipal Principal, string Permission, string? TenantId = null, object? Resource = null);
+    /// <summary>
+    /// Fully qualified contributor implementation type that supplied this definition.
+    /// </summary>
+    public string ContributorType { get; init; } = string.Empty;
+}
+
+public sealed record PermissionEvaluationContext(ClaimsPrincipal Principal, string Permission, string? TenantId = null, object? Resource = null)
+{
+    public CancellationToken CancellationToken { get; init; }
+}
 
 public sealed record PermissionEvaluationResult(bool Succeeded, string? Failure = null)
 {
@@ -83,6 +112,8 @@ public sealed record ClaimsNormalizationResult(ClaimsPrincipal Principal, IReadO
 
 public static class IdentityClaimTypes
 {
+    public const string Normalized = "elsa.identity.normalized";
+
     public const string TenantId = "elsa.identity.tenant_id";
 
     public const string Provider = "elsa.identity.provider";
@@ -117,23 +148,48 @@ public static class DefaultIdentityPermissionKeys
 
 public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog, IPermissionContributor
 {
-    private static readonly IReadOnlyCollection<Permission> Permissions =
+    public const string DefaultOwnerId = "elsa.foundation.identity";
+
+    public string OwnerId => DefaultOwnerId;
+
+    public string ContributorType => typeof(DefaultIdentityPermissionCatalog).FullName!;
+
+    private static readonly IReadOnlyCollection<Permission> Permissions = Array.AsReadOnly<Permission>(
     [
-        new(DefaultIdentityPermissionKeys.IdentityUsersRead, "Read users", "Identity", "Read identity users."),
-        new(DefaultIdentityPermissionKeys.IdentityUsersManage, "Manage users", "Identity", "Create, update, disable, and link identity users.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }),
-        new(DefaultIdentityPermissionKeys.IdentityRolesRead, "Read roles", "Identity", "Read identity roles."),
-        new(DefaultIdentityPermissionKeys.IdentityRolesManage, "Manage roles", "Identity", "Create, update, and assign identity roles.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityRolesRead, DefaultIdentityPermissionKeys.IdentityPermissionsRead }),
-        new(DefaultIdentityPermissionKeys.IdentityPermissionsRead, "Read permissions", "Identity", "Read the shared identity permission catalog."),
-        new(DefaultIdentityPermissionKeys.IdentityApplicationsRead, "Read applications", "Identity", "Read registered applications and clients."),
-        new(DefaultIdentityPermissionKeys.IdentityApplicationsManage, "Manage applications", "Identity", "Create, update, and revoke applications and clients.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityApplicationsRead }),
-        new(DefaultIdentityPermissionKeys.IdentityProvidersRead, "Read providers", "Identity", "Read configured authentication providers."),
-        new(DefaultIdentityPermissionKeys.IdentityProvidersManage, "Manage providers", "Identity", "Create, update, test, and disable authentication providers.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityProvidersRead }),
-        new(DefaultIdentityPermissionKeys.IdentityCredentialsManage, "Manage credentials", "Identity", "Issue, rotate, and revoke non-interactive credentials.")
-    ];
+        Owned(DefaultIdentityPermissionKeys.IdentityUsersRead, "Read users", "Identity", "Read identity users."),
+        Owned(DefaultIdentityPermissionKeys.IdentityUsersManage, "Manage users", "Identity", "Create, update, disable, and link identity users.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityRolesRead, "Read roles", "Identity", "Read identity roles."),
+        Owned(DefaultIdentityPermissionKeys.IdentityRolesManage, "Manage roles", "Identity", "Create, update, and assign identity roles.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityRolesRead, DefaultIdentityPermissionKeys.IdentityPermissionsRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityPermissionsRead, "Read permissions", "Identity", "Read the shared identity permission catalog."),
+        Owned(DefaultIdentityPermissionKeys.IdentityApplicationsRead, "Read applications", "Identity", "Read registered applications and clients."),
+        Owned(DefaultIdentityPermissionKeys.IdentityApplicationsManage, "Manage applications", "Identity", "Create, update, and revoke applications and clients.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityApplicationsRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityProvidersRead, "Read providers", "Identity", "Read configured authentication providers."),
+        Owned(DefaultIdentityPermissionKeys.IdentityProvidersManage, "Manage providers", "Identity", "Create, update, test, and disable authentication providers.", new HashSet<string> { DefaultIdentityPermissionKeys.IdentityProvidersRead }),
+        Owned(DefaultIdentityPermissionKeys.IdentityCredentialsManage, "Manage credentials", "Identity", "Issue, rotate, and revoke non-interactive credentials.")
+    ]);
+
+    private static Permission Owned(string key, string displayName, string category, string description, IReadOnlySet<string>? implies = null) =>
+        new(key, displayName, category, description, implies?.ToFrozenSet(StringComparer.Ordinal))
+        {
+            OwnerId = DefaultOwnerId,
+            ContributorType = typeof(DefaultIdentityPermissionCatalog).FullName!
+        };
 
     public IReadOnlyCollection<Permission> List() => Permissions;
 
-    public Permission? Find(string key) => Permissions.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+    public Permission? Find(string key)
+    {
+        try
+        {
+            var canonicalKey = PermissionKey.Normalize(key);
+            return Permissions.FirstOrDefault(permission =>
+                string.Equals(PermissionKey.Normalize(permission.Key), canonicalKey, StringComparison.Ordinal));
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
 
     IEnumerable<Permission> IPermissionContributor.Contribute() => Permissions;
 }
@@ -154,92 +210,242 @@ public sealed class CompositePermissionCatalog : IPermissionCatalog
 
     public CompositePermissionCatalog(IEnumerable<IPermissionContributor> contributors)
     {
-        var identityKeys = new DefaultIdentityPermissionCatalog()
-            .List()
-            .Select(x => x.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ArgumentNullException.ThrowIfNull(contributors);
 
-        var byKey = new Dictionary<string, Permission>(StringComparer.OrdinalIgnoreCase);
+        var byKey = new Dictionary<string, Permission>(StringComparer.Ordinal);
 
         foreach (var contributor in contributors)
         {
-            var isIdentity = contributor is DefaultIdentityPermissionCatalog;
+            ArgumentNullException.ThrowIfNull(contributor);
+
+            var ownerId = string.IsNullOrWhiteSpace(contributor.OwnerId)
+                ? contributor.GetType().FullName ?? contributor.GetType().Name
+                : contributor.OwnerId;
+            var contributorType = string.IsNullOrWhiteSpace(contributor.ContributorType)
+                ? contributor.GetType().FullName ?? contributor.GetType().Name
+                : contributor.ContributorType;
 
             foreach (var permission in contributor.Contribute())
             {
-                if (!isIdentity && identityKeys.Contains(permission.Key))
-                    throw new InvalidOperationException(
-                        $"Permission contributor '{contributor.GetType().FullName}' attempted to contribute permission '{permission.Key}', which is a reserved identity permission and cannot be shadowed.");
+                ArgumentNullException.ThrowIfNull(permission);
 
-                if (byKey.TryGetValue(permission.Key, out var existing))
+                var canonicalKey = CanonicalizeCatalogKey(permission.Key, "key", ownerId, contributorType);
+                if (canonicalKey == PermissionKey.Wildcard)
                     throw new InvalidOperationException(
-                        $"Permission contributor '{contributor.GetType().FullName}' contributed duplicate permission key '{permission.Key}' (already contributed as '{existing.DisplayName}').");
+                        $"Permission contributor '{contributorType}' owned by '{ownerId}' cannot catalog reserved wildcard permission '{permission.Key}'.");
 
-                byKey.Add(permission.Key, permission);
+                if (permission.Implies is not null)
+                {
+                    foreach (var implied in permission.Implies)
+                    {
+                        var canonicalImplied = CanonicalizeCatalogKey(implied, "implication target", ownerId, contributorType);
+                        if (canonicalImplied == PermissionKey.Wildcard)
+                            throw new InvalidOperationException(
+                                $"Permission '{permission.Key}' contributed by '{contributorType}' owned by '{ownerId}' cannot imply reserved wildcard permission '{implied}'.");
+                    }
+                }
+
+                var ownedPermission = permission with
+                {
+                    OwnerId = ownerId,
+                    ContributorType = contributorType,
+                    Implies = permission.Implies?.ToFrozenSet(StringComparer.Ordinal)
+                };
+
+                if (byKey.TryGetValue(canonicalKey, out var existing))
+                {
+                    var reservedIdentity = string.Equals(existing.OwnerId, DefaultIdentityPermissionCatalog.DefaultOwnerId, StringComparison.Ordinal)
+                        ? " This is a reserved identity permission and cannot be shadowed."
+                        : string.Empty;
+                    throw new InvalidOperationException(
+                        $"Duplicate canonical permission key '{canonicalKey}' (declared as '{permission.Key}'; existing declaration '{existing.Key}'): existing owner '{existing.OwnerId}', contributor type '{existing.ContributorType}'; duplicate owner '{ownedPermission.OwnerId}', contributor type '{ownedPermission.ContributorType}'.{reservedIdentity}");
+                }
+
+                byKey.Add(canonicalKey, ownedPermission);
             }
         }
 
-        _byKey = byKey;
-        _permissions = byKey.Values.ToArray();
+        _byKey = byKey.ToFrozenDictionary(StringComparer.Ordinal);
+        _permissions = Array.AsReadOnly(_byKey
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => pair.Value)
+            .ToArray());
     }
 
     public IReadOnlyCollection<Permission> List() => _permissions;
 
-    public Permission? Find(string key) => _byKey.GetValueOrDefault(key);
+    public Permission? Find(string key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return null;
+
+        try
+        {
+            return _byKey.GetValueOrDefault(PermissionKey.Normalize(key));
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static string CanonicalizeCatalogKey(string key, string kind, string ownerId, string contributorType)
+    {
+        try
+        {
+            return PermissionKey.Normalize(key);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                $"Permission contributor '{contributorType}' owned by '{ownerId}' supplied malformed {kind} '{key}'.",
+                exception);
+        }
+    }
 }
 
 public sealed class ClaimsPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator
 {
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        context.CancellationToken.ThrowIfCancellationRequested();
+
+        var permissions = BuildCatalogIndex();
         var granted = context.Principal.Claims
             .Where(x => x.Type == IdentityClaimTypes.Permission)
             .Select(x => x.Value)
-            .SelectMany(ExpandGranted)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .Select(CanonicalizeClaim)
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .SelectMany(permission => ExpandGranted(permission, permissions, cancellationToken, context.CancellationToken))
+            .ToHashSet(StringComparer.Ordinal);
 
-        return ValueTask.FromResult(granted.Contains(context.Permission)
+        var requested = CanonicalizeRequested(context.Permission);
+        var succeeds = requested.Length > 0 &&
+            (granted.Contains(requested) || (requested != PermissionKey.Wildcard && granted.Contains(PermissionKey.Wildcard)));
+
+        return ValueTask.FromResult(succeeds
             ? PermissionEvaluationResult.Success
             : PermissionEvaluationResult.Denied($"Missing permission '{context.Permission}'."));
     }
 
-    private IEnumerable<string> ExpandGranted(string permission)
+    private IReadOnlyDictionary<string, Permission> BuildCatalogIndex()
     {
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var byKey = new Dictionary<string, Permission>(StringComparer.Ordinal);
+
+        foreach (var permission in catalog.List())
+        {
+            string key;
+            try
+            {
+                key = CanonicalizeCatalogKey(permission.Key);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidOperationException($"Permission catalog contains malformed key '{permission.Key}'.", exception);
+            }
+
+            if (key == PermissionKey.Wildcard)
+                throw new InvalidOperationException("The wildcard permission cannot be cataloged.");
+
+            if (!byKey.TryAdd(key, permission))
+                throw new InvalidOperationException($"Permission catalog contains duplicate canonical key '{key}'.");
+
+            if (permission.Implies is null)
+                continue;
+
+            foreach (var implied in permission.Implies)
+            {
+                string canonicalImplied;
+                try
+                {
+                    canonicalImplied = CanonicalizeCatalogKey(implied);
+                }
+                catch (ArgumentException exception)
+                {
+                    throw new InvalidOperationException($"Permission '{permission.Key}' contains malformed implication '{implied}'.", exception);
+                }
+
+                if (canonicalImplied == PermissionKey.Wildcard)
+                    throw new InvalidOperationException($"Permission '{permission.Key}' cannot imply the wildcard permission.");
+            }
+        }
+
+        return byKey;
+    }
+
+    private static IEnumerable<string> ExpandGranted(
+        string permission,
+        IReadOnlyDictionary<string, Permission> permissions,
+        CancellationToken cancellationToken,
+        CancellationToken contextCancellationToken)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
         var stack = new Stack<string>();
         stack.Push(permission);
 
         while (stack.TryPop(out var current))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            contextCancellationToken.ThrowIfCancellationRequested();
+
             if (!visited.Add(current))
                 continue;
 
             yield return current;
 
-            var catalogPermission = catalog.Find(current);
-            if (catalogPermission?.Implies is null)
+            if (current == PermissionKey.Wildcard)
+                continue;
+
+            if (!permissions.TryGetValue(current, out var catalogPermission))
+                continue;
+
+            if (catalogPermission.Implies is null)
                 continue;
 
             foreach (var implied in catalogPermission.Implies)
-                stack.Push(implied);
+                stack.Push(CanonicalizeCatalogKey(implied));
         }
     }
+
+    private static string? CanonicalizeClaim(string? permission)
+    {
+        if (string.IsNullOrWhiteSpace(permission))
+            return null;
+
+        try
+        {
+            return PermissionKey.Normalize(permission);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static string CanonicalizeRequested(string? permission) =>
+        string.IsNullOrWhiteSpace(permission) ? string.Empty : PermissionKey.Normalize(permission);
+
+    private static string CanonicalizeCatalogKey(string permission) => PermissionKey.Normalize(permission);
+
 }
 
 public sealed record AuthorizationPolicyProviderFallback(IAuthorizationPolicyProvider Provider);
 
 public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatter
 {
-    public const string Prefix = "Elsa.Permission:";
+    public const string Prefix = PermissionPolicyCodec.Prefix;
 
-    public string Format(string permission) => $"{Prefix}{permission}";
+    public string Format(string permission) => new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission));
 
     public bool TryParse(string policyName, out string permission)
     {
-        if (policyName.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+        var result = new PermissionPolicyCodec().Parse(policyName);
+        if (result is { Status: PermissionPolicyParseStatus.Valid, Descriptor.Mode: PermissionRequirementMode.Single })
         {
-            permission = policyName[Prefix.Length..];
-            return !string.IsNullOrWhiteSpace(permission);
+            permission = result.Descriptor.Permissions[0];
+            return true;
         }
 
         permission = string.Empty;
@@ -252,7 +458,7 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute
     public RequirePermissionAttribute(string permission)
     {
         Permission = permission;
-        Policy = PermissionPolicyNameFormatter.Prefix + permission;
+        Policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission));
     }
 
     public string Permission { get; }
@@ -260,20 +466,71 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;
 
+public sealed record PermissionSetAuthorizationRequirement : IAuthorizationRequirement
+{
+    public PermissionSetAuthorizationRequirement(PermissionRequirementMode mode, IReadOnlyList<string> permissions)
+    {
+        ArgumentNullException.ThrowIfNull(permissions);
+
+        if (mode is not (PermissionRequirementMode.Any or PermissionRequirementMode.All))
+            throw new ArgumentOutOfRangeException(nameof(mode));
+
+        var canonicalPermissions = permissions
+            .Select(PermissionKey.Normalize)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(permission => permission, StringComparer.Ordinal)
+            .ToArray();
+        if (canonicalPermissions.Length == 0)
+            throw new ArgumentException("At least one permission is required.", nameof(permissions));
+
+        Mode = mode;
+        Permissions = Array.AsReadOnly(canonicalPermissions);
+    }
+
+    public PermissionRequirementMode Mode { get; }
+
+    public IReadOnlyList<string> Permissions { get; }
+}
+
+internal sealed record NormalizedPermissionPrincipalRequirement : IAuthorizationRequirement;
+
 public sealed class RequirePermissionPolicyProvider(
     IOptions<AuthorizationOptions> options,
+    IPermissionPolicyCodec codec,
     IPermissionPolicyNameFormatter formatter,
     AuthorizationPolicyProviderFallback? fallback = null) : IAuthorizationPolicyProvider
 {
     private readonly DefaultAuthorizationPolicyProvider _defaultProvider = new(options);
 
+    public RequirePermissionPolicyProvider(
+        IOptions<AuthorizationOptions> options,
+        IPermissionPolicyNameFormatter formatter,
+        AuthorizationPolicyProviderFallback? fallback = null)
+        : this(options, new PermissionPolicyCodec(), formatter, fallback)
+    {
+    }
+
     public async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
-        if (!formatter.TryParse(policyName, out var permission))
+        var parseResult = codec.Parse(policyName);
+        if (parseResult.Status == PermissionPolicyParseStatus.MalformedReservedPolicy)
+            return null;
+
+        PermissionPolicyDescriptor descriptor;
+        if (parseResult is { Status: PermissionPolicyParseStatus.Valid, Descriptor: not null })
+            descriptor = parseResult.Descriptor;
+        else if (formatter.TryParse(policyName, out var permission))
+            descriptor = PermissionPolicyDescriptor.Single(permission);
+        else
             return fallback is not null ? await fallback.Provider.GetPolicyAsync(policyName) : await _defaultProvider.GetPolicyAsync(policyName);
 
+        IAuthorizationRequirement permissionRequirement = descriptor.Mode == PermissionRequirementMode.Single
+            ? new PermissionAuthorizationRequirement(descriptor.Permissions[0])
+            : new PermissionSetAuthorizationRequirement(descriptor.Mode, descriptor.Permissions);
+
         return new AuthorizationPolicyBuilder()
-            .AddRequirements(new PermissionAuthorizationRequirement(permission))
+            .RequireAuthenticatedUser()
+            .AddRequirements(new NormalizedPermissionPrincipalRequirement(), permissionRequirement)
             .Build();
     }
 
@@ -284,47 +541,163 @@ public sealed class RequirePermissionPolicyProvider(
         fallback?.Provider.GetFallbackPolicyAsync() ?? _defaultProvider.GetFallbackPolicyAsync();
 }
 
-public sealed class PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
-    : AuthorizationHandler<PermissionAuthorizationRequirement>
+public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAuthorizationRequirement>
 {
+    private readonly IPermissionEvaluator _evaluator;
+    private readonly IEnumerable<IPermissionResourceHandler> _resourceHandlers;
+    private readonly NormalizedPrincipalValidator? _validator;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
+
+    public PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
+    {
+        _evaluator = evaluator;
+        _resourceHandlers = resourceHandlers;
+    }
+
+    public PermissionAuthorizationHandler(
+        IPermissionEvaluator evaluator,
+        IEnumerable<IPermissionResourceHandler> resourceHandlers,
+        NormalizedPrincipalValidator validator,
+        IHttpContextAccessor httpContextAccessor)
+    {
+        _evaluator = evaluator;
+        _resourceHandlers = resourceHandlers;
+        _validator = validator;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionAuthorizationRequirement requirement)
     {
-        var tenantId = ResolveTenantId(context);
-        var evaluationContext = new PermissionEvaluationContext(context.User, requirement.Permission, tenantId, context.Resource);
-        var resourceDenied = false;
+        var outcome = await PermissionAuthorizationEvaluation.EvaluateAsync(
+            context,
+            PermissionKey.Normalize(requirement.Permission),
+            _evaluator,
+            _resourceHandlers,
+            _validator,
+            _httpContextAccessor);
 
-        foreach (var resourceHandler in resourceHandlers)
+        if (outcome == PermissionMemberOutcome.Granted)
+            context.Succeed(requirement);
+        else if (outcome == PermissionMemberOutcome.Denied)
+            context.Fail();
+    }
+}
+
+internal sealed class PermissionSetAuthorizationHandler(
+    IPermissionEvaluator evaluator,
+    IEnumerable<IPermissionResourceHandler> resourceHandlers,
+    NormalizedPrincipalValidator validator,
+    IHttpContextAccessor httpContextAccessor)
+    : AuthorizationHandler<PermissionSetAuthorizationRequirement>
+{
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        PermissionSetAuthorizationRequirement requirement)
+    {
+        if (requirement.Mode is not (PermissionRequirementMode.Any or PermissionRequirementMode.All))
         {
-            var resourceResult = await resourceHandler.EvaluateAsync(evaluationContext);
-            if (resourceResult is null)
-                continue;
+            context.Fail();
+            return;
+        }
 
-            if (resourceResult.Succeeded)
+        foreach (var permission in requirement.Permissions)
+        {
+            var outcome = await PermissionAuthorizationEvaluation.EvaluateAsync(
+                context,
+                permission,
+                evaluator,
+                resourceHandlers,
+                validator,
+                httpContextAccessor);
+
+            if (requirement.Mode == PermissionRequirementMode.Any && outcome == PermissionMemberOutcome.Granted)
             {
                 context.Succeed(requirement);
                 return;
             }
 
-            resourceDenied = true;
+            if (requirement.Mode == PermissionRequirementMode.All && outcome != PermissionMemberOutcome.Granted)
+            {
+                context.Fail();
+                return;
+            }
         }
 
-        var result = await evaluator.EvaluateAsync(evaluationContext);
-        if (result.Succeeded)
+        if (requirement.Mode == PermissionRequirementMode.All)
             context.Succeed(requirement);
-        else if (resourceDenied)
+        else
             context.Fail();
     }
+}
 
-    private static string? ResolveTenantId(AuthorizationHandlerContext context)
+internal enum PermissionMemberOutcome
+{
+    Untrusted,
+    Granted,
+    Denied
+}
+
+internal static class PermissionAuthorizationEvaluation
+{
+    public static async ValueTask<PermissionMemberOutcome> EvaluateAsync(
+        AuthorizationHandlerContext authorizationContext,
+        string permission,
+        IPermissionEvaluator evaluator,
+        IEnumerable<IPermissionResourceHandler> resourceHandlers,
+        NormalizedPrincipalValidator? validator,
+        IHttpContextAccessor? httpContextAccessor)
     {
-        if (context.Resource is not null)
+        ClaimsPrincipal principal;
+        if (validator is null)
+            return PermissionMemberOutcome.Untrusted;
+        else if (!validator.TryGetNormalizedPrincipal(authorizationContext.User, out principal))
+            return PermissionMemberOutcome.Untrusted;
+
+        var tenantId = ResolveTenantId(authorizationContext.Resource, principal);
+        var httpContext = authorizationContext.Resource as HttpContext ?? httpContextAccessor?.HttpContext;
+        var cancellationToken = httpContext?.RequestAborted ?? CancellationToken.None;
+        var evaluationContext = new PermissionEvaluationContext(principal, permission, tenantId, authorizationContext.Resource)
         {
-            var property = context.Resource.GetType().GetProperty("TenantId");
-            if (property?.GetValue(context.Resource) is string resourceTenantId && !string.IsNullOrWhiteSpace(resourceTenantId))
+            CancellationToken = cancellationToken
+        };
+        var resourceDenied = false;
+        var resourceGranted = false;
+
+        foreach (var resourceHandler in resourceHandlers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var resourceResult = await resourceHandler.EvaluateAsync(evaluationContext, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (resourceResult is null)
+                continue;
+
+            if (resourceResult.Succeeded)
+                resourceGranted = true;
+            else
+                resourceDenied = true;
+        }
+
+        if (resourceDenied)
+            return PermissionMemberOutcome.Denied;
+        if (resourceGranted)
+            return PermissionMemberOutcome.Granted;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = await evaluator.EvaluateAsync(evaluationContext, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return result.Succeeded ? PermissionMemberOutcome.Granted : PermissionMemberOutcome.Denied;
+    }
+
+    private static string? ResolveTenantId(object? resource, ClaimsPrincipal principal)
+    {
+        if (resource is not null)
+        {
+            var property = resource.GetType().GetProperty("TenantId");
+            if (property?.GetValue(resource) is string resourceTenantId && !string.IsNullOrWhiteSpace(resourceTenantId))
                 return resourceTenantId;
         }
 
-        return context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value;
+        return principal.FindFirst(IdentityClaimTypes.TenantId)?.Value;
     }
 }
 
@@ -368,6 +741,7 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
             context.AuthenticationType);
         identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, context.TenantId));
         identity.AddClaim(new Claim(IdentityClaimTypes.Provider, context.Provider));
+        identity.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
 
         foreach (var role in roles.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
             identity.AddClaim(new Claim(IdentityClaimTypes.Role, role));
@@ -379,5 +753,5 @@ public sealed class DefaultClaimsNormalizer(IClaimMappingRuleEvaluator evaluator
     }
 
     private static bool IsInternalIdentityClaim(string claimType) =>
-        claimType is IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
+        claimType is IdentityClaimTypes.Normalized or IdentityClaimTypes.TenantId or IdentityClaimTypes.Provider or IdentityClaimTypes.Role or IdentityClaimTypes.Permission;
 }

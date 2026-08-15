@@ -6,8 +6,10 @@ using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Security;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Abstractions.Extensions;
 
@@ -19,24 +21,57 @@ public static class FoundationIdentityServiceCollectionExtensions
             services.Configure(configure);
 
         services.AddAuthorizationCore();
+        services.AddHttpContextAccessor();
+        services.TryAddSingleton(new FoundationIdentityRegistrationState(services));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<FoundationIdentityOptions>, FoundationIdentityRegistrationValidator>());
+        services.AddOptions<FoundationIdentityOptions>().ValidateOnStart();
 
         services.TryAddScoped<IAuthenticationProviderResolver, DefaultAuthenticationProviderResolver>();
         services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
-        services.TryAddScoped<IPermissionEvaluator, ClaimsPermissionEvaluator>();
+        EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionAuthorizationHandler>());
-        services.TryAddSingleton<IPermissionPolicyNameFormatter, PermissionPolicyNameFormatter>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionSetAuthorizationHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, NormalizedPermissionPrincipalHandler>());
+        services.TryAddSingleton<NormalizedPrincipalValidator>();
+        services.TryAddSingleton<IPermissionPolicyCodec, PermissionPolicyCodec>();
+        EnsureReplacement<IPermissionPolicyNameFormatter, PermissionPolicyNameFormatter>(services, ServiceLifetime.Singleton);
         services.AddRequirePermissionPolicyProvider();
+        services.AddPermissionAuthorizationResultHandler();
         services.TryAddScoped<IClaimsNormalizer, DefaultClaimsNormalizer>();
         services.TryAddScoped<IIdentityEmailUniquenessPolicy, OptionsIdentityEmailUniquenessPolicy>();
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, DefaultIdentityPermissionCatalog>());
-        services.TryAddSingleton<IPermissionCatalog, CompositePermissionCatalog>();
+        EnsureReplacement<IPermissionCatalog, CompositePermissionCatalog>(services, ServiceLifetime.Singleton);
         services.TryAddScoped<ISecurityDefaultGuardEvaluator, SecurityDefaultGuardEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SigningKeySecurityDefaultGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
+        return services;
+    }
+
+    public static IServiceCollection ReplacePermissionEvaluator<TEvaluator>(this IServiceCollection services)
+        where TEvaluator : class, IPermissionEvaluator =>
+        Replace<IPermissionEvaluator, TEvaluator>(services, ServiceLifetime.Scoped);
+
+    public static IServiceCollection ReplacePermissionPolicyNameFormatter<TFormatter>(this IServiceCollection services)
+        where TFormatter : class, IPermissionPolicyNameFormatter =>
+        Replace<IPermissionPolicyNameFormatter, TFormatter>(services, ServiceLifetime.Singleton);
+
+    public static IServiceCollection ReplacePermissionCatalog<TCatalog>(this IServiceCollection services)
+        where TCatalog : class, IPermissionCatalog =>
+        Replace<IPermissionCatalog, TCatalog>(services, ServiceLifetime.Singleton);
+
+    public static IServiceCollection AddNormalizedAuthenticationType(this IServiceCollection services, string authenticationType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authenticationType);
+        services.Configure<FoundationIdentityOptions>(options =>
+        {
+            var types = options.NormalizedAuthenticationTypes.ToHashSet(StringComparer.Ordinal);
+            types.Add(authenticationType);
+            options.NormalizedAuthenticationTypes = types;
+        });
         return services;
     }
 
@@ -72,9 +107,15 @@ public static class FoundationIdentityServiceCollectionExtensions
 
     private static void AddRequirePermissionPolicyProvider(this IServiceCollection services)
     {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(FoundationIdentityPolicyProviderRegistration)))
+            return;
+
         var fallbackDescriptor = services.LastOrDefault(x => x.ServiceType == typeof(IAuthorizationPolicyProvider));
         if (fallbackDescriptor?.ImplementationType == typeof(RequirePermissionPolicyProvider))
-            return;
+        {
+            throw new InvalidOperationException(
+                $"Authorization policy provider '{typeof(RequirePermissionPolicyProvider).FullName}' exists without its Foundation registration marker.");
+        }
 
         if (fallbackDescriptor is not null)
         {
@@ -89,6 +130,110 @@ public static class FoundationIdentityServiceCollectionExtensions
             typeof(IAuthorizationPolicyProvider),
             typeof(RequirePermissionPolicyProvider),
             fallbackDescriptor?.Lifetime ?? ServiceLifetime.Singleton));
+        services.AddSingleton(new FoundationIdentityPolicyProviderRegistration());
+    }
+
+    private static void AddPermissionAuthorizationResultHandler(this IServiceCollection services)
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(FoundationIdentityResultHandlerRegistration)))
+            return;
+
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(IAuthorizationMiddlewareResultHandler) &&
+                                       descriptor.ImplementationType == typeof(PermissionAuthorizationMiddlewareResultHandler)))
+        {
+            throw new InvalidOperationException(
+                $"Authorization result handler '{typeof(PermissionAuthorizationMiddlewareResultHandler).FullName}' exists without its Foundation registration marker.");
+        }
+
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IAuthorizationMiddlewareResultHandler)).ToArray();
+        if (descriptors.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"Multiple '{typeof(IAuthorizationMiddlewareResultHandler).FullName}' registrations exist before Foundation Identity: " +
+                FoundationIdentityRegistrationValidator.Describe(descriptors));
+        }
+
+        ServiceLifetime lifetime;
+        if (descriptors.Length == 1)
+        {
+            var fallbackDescriptor = descriptors[0];
+            services.Remove(fallbackDescriptor);
+            lifetime = fallbackDescriptor.Lifetime;
+            services.Add(ServiceDescriptor.Describe(
+                typeof(AuthorizationMiddlewareResultHandlerFallback),
+                sp => new AuthorizationMiddlewareResultHandlerFallback((IAuthorizationMiddlewareResultHandler)CreateFromDescriptor(sp, fallbackDescriptor)),
+                lifetime));
+        }
+        else
+        {
+            lifetime = ServiceLifetime.Singleton;
+            services.AddSingleton(new AuthorizationMiddlewareResultHandlerFallback(new AuthorizationMiddlewareResultHandler()));
+        }
+
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IAuthorizationMiddlewareResultHandler),
+            typeof(PermissionAuthorizationMiddlewareResultHandler),
+            lifetime));
+        services.AddSingleton(new FoundationIdentityResultHandlerRegistration());
+    }
+
+    private static void EnsureReplacement<TContract, TImplementation>(IServiceCollection services, ServiceLifetime lifetime)
+        where TContract : class
+        where TImplementation : class, TContract
+    {
+        var contractType = typeof(TContract);
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == contractType).ToArray();
+        var markers = GetReplacementMarkers(services, contractType);
+
+        if (descriptors.Length == 0 && markers.Length == 0)
+        {
+            services.Add(ServiceDescriptor.Describe(contractType, typeof(TImplementation), lifetime));
+            services.AddSingleton(new FoundationIdentityReplacementRegistration(contractType, typeof(TImplementation)));
+            return;
+        }
+
+        if (descriptors.Length == 1 && markers.Length == 1 &&
+            (descriptors[0].ImplementationType == markers[0].ImplementationType ||
+             descriptors[0].ImplementationInstance?.GetType() == markers[0].ImplementationType))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Replacement contract '{contractType.FullName}' was registered outside its explicit Replace* method. " +
+            $"Descriptors: {FoundationIdentityRegistrationValidator.Describe(descriptors)}.");
+    }
+
+    private static IServiceCollection Replace<TContract, TImplementation>(IServiceCollection services, ServiceLifetime lifetime)
+        where TContract : class
+        where TImplementation : class, TContract
+    {
+        services.RemoveAll<TContract>();
+        RemoveReplacementMarkers(services, typeof(TContract));
+        services.Add(ServiceDescriptor.Describe(typeof(TContract), typeof(TImplementation), lifetime));
+        services.AddSingleton(new FoundationIdentityReplacementRegistration(typeof(TContract), typeof(TImplementation)));
+        return services;
+    }
+
+    private static FoundationIdentityReplacementRegistration[] GetReplacementMarkers(IServiceCollection services, Type contractType) =>
+        services
+            .Where(descriptor => descriptor.ServiceType == typeof(FoundationIdentityReplacementRegistration))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<FoundationIdentityReplacementRegistration>()
+            .Where(marker => marker.ContractType == contractType)
+            .ToArray();
+
+    private static void RemoveReplacementMarkers(IServiceCollection services, Type contractType)
+    {
+        for (var index = services.Count - 1; index >= 0; index--)
+        {
+            if (services[index].ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
+                services[index].ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
+                marker.ContractType == contractType)
+            {
+                services.RemoveAt(index);
+            }
+        }
     }
 
     private static object CreateFromDescriptor(IServiceProvider serviceProvider, ServiceDescriptor descriptor)

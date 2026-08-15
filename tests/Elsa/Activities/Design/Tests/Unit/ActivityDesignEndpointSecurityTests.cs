@@ -1,5 +1,6 @@
 using System.Reflection;
 using Elsa.Activities.Design.Api.Commands;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using FastEndpoints;
@@ -61,8 +62,13 @@ public sealed class ActivityDesignEndpointSecurityTests
     {
         var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
 
-        Assert.NotNull(definition.AllowedPermissions);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        var policyName = Assert.Single(definition.PreBuiltUserPolicies!.Distinct(StringComparer.Ordinal));
+        Assert.Contains(policyName,
+        new[]
+        {
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignRead]),
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignManage])
+        });
         Assert.Null(definition.AnonymousVerbs);
     }
 
@@ -73,7 +79,9 @@ public sealed class ActivityDesignEndpointSecurityTests
     {
         var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
 
-        Assert.Contains(PermissionNames.ActivityDesignManage, definition.AllowedPermissions!);
+        Assert.Contains(
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignManage]),
+            definition.PreBuiltUserPolicies!);
         Assert.Equal("POST", Assert.Single(definition.Verbs));
         Assert.Null(definition.AnonymousVerbs);
     }

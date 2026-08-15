@@ -248,8 +248,7 @@ public sealed class WorkflowExecutableInspectorTests
     {
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
 
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -259,9 +258,7 @@ public sealed class WorkflowExecutableInspectorTests
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(
             "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources");
 
-        Assert.Contains(PermissionNames.WorkflowPublishingRead, endpoint.Definition.AllowedPermissions!);
-        Assert.DoesNotContain(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowPublishingRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
         AssertProperties(RuntimeApiEndpointTestFactory.Contract(endpoint).Response,
             "ArtifactId", "SourceReferenceId", "AccessState", "AuthoredInputs", "CompiledInputs");

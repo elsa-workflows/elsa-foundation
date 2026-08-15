@@ -9,8 +9,9 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity.Abstractions`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
-| `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application replaces the whole catalog surface. To *add* permissions, prefer contributing an `IPermissionContributor` (below); the composite aggregates the default identity permissions with all contributions. |
-| `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. |
+| `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application replaces the whole catalog surface with `ReplacePermissionCatalog<T>()`. To *add* permissions, contribute an `IPermissionContributor` (below); the composite aggregates the active provider's contributions into one immutable snapshot. |
+| `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. Replace it with `ReplacePermissionEvaluator<T>()`; the shared handler still owns single/any/all and resource precedence. |
+| `IPermissionPolicyNameFormatter` | `PermissionPolicyNameFormatter` (`Elsa.Foundation.Identity.Abstractions`) | A compatibility host needs to parse an additional single-permission policy identity. Replace it with `ReplacePermissionPolicyNameFormatter<T>()`; new Elsa metadata always emits the canonical v1 grammar. |
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
 | `IClaimMappingRuleEvaluator` | `ClaimMappingRuleEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Mapping rules need richer matching than exact claim-type/value comparisons. |
@@ -29,15 +30,36 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
-- **Consumed by:** `CompositePermissionCatalog`, which aggregates every contributor. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; contributions may not shadow an identity permission key or duplicate another contribution (either throws at construction).
+- **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; canonical duplicates, padded keys, wildcard definitions, and wildcard implication targets fail during catalog construction with both ownership sources in the diagnostic.
 - **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.Modularity.ExtensionBuilder`) — the two host-control features that own `module-management.*` / `extension-builder.*` permissions per ADR 0037 *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 
 - **Kind:** Contributor (resource-specific authorization decision hook).
 - **Register:** `services.AddScoped<IPermissionResourceHandler, MyResourceHandler>()`.
-- **Consumed by:** `PermissionAuthorizationHandler` before falling back to `IPermissionEvaluator`.
+- **Consumed by:** the shared single/any/all permission handler before falling back to `IPermissionEvaluator`. For one member, every resource source runs in registration order: any denial vetoes grants; otherwise any grant succeeds; the evaluator runs only after unanimous abstention. Exceptions, timeouts, and request cancellation propagate and stop later sources. The protected resource is preserved, while the active HTTP request's `RequestAborted` token is supplied through both evaluator APIs.
 - **Known implementations:** none yet in this PR. Feature modules can contribute resource-specific checks while preserving backend source-of-truth enforcement *(cross-domain)*.
+
+## Endpoint permission metadata and trusted principals
+
+Minimal APIs and other standard ASP.NET Core endpoint builders use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`. Each extension emits one canonical
+`Elsa.Permission:v1:...` authorization policy. Legacy `Elsa.Permission:<permission>` names remain
+parse-only aliases for the compatibility window; malformed reserved v1 names fail closed.
+
+Permission policies accept exactly one authenticated identity whose runtime `AuthenticationType`
+is registered with `AddNormalizedAuthenticationType(...)` and which carries exactly one
+`elsa.identity.normalized = v1` marker. Provider packages register their observed post-authentication
+types only after guaranteeing strip-map-mark projection. Untrusted, unmarked, or ambiguous
+authenticated callers are challenged; a trusted normalized caller with no grant is forbidden.
+
+Foundation wraps one pre-existing `IAuthorizationMiddlewareResultHandler` (or the ASP.NET Core
+default) and delegates every unrelated outcome. Register a host result handler before Foundation;
+multiple prior handlers fail immediately and a handler added afterward fails startup validation.
+The evaluator, formatter, and catalog are single replacement contracts: use their `Replace*`
+methods before or after Foundation registration. Direct competing registrations are rejected rather
+than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
+remain additive fan-in seams.
 
 ### `ISecurityDefaultGuard`
 

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Expressions.Api.Handlers;
 using Elsa.Expressions.Api.Models;
@@ -26,8 +27,10 @@ public sealed class ExpressionDescriptorEndpointTests
     {
         var endpoint = FindEndpoint(route);
 
-        Assert.Contains(PermissionNames.ExpressionsRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.ExpressionsRead]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

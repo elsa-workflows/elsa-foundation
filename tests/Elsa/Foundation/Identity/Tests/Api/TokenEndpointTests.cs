@@ -84,6 +84,28 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Unnormalized_External_Principal_Cannot_Exchange_Forged_Internal_Permissions()
+    {
+        using var exchangeRequest = new HttpRequestMessage(HttpMethod.Get, TokenRoute);
+        exchangeRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", ForgedExternalAuthenticationHandler.Token);
+
+        var exchangeResponse = await _fixture.Client.SendAsync(exchangeRequest);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, exchangeResponse.StatusCode);
+
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/permission-protected");
+        protectedRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", ForgedExternalAuthenticationHandler.Token);
+
+        var protectedResponse = await _fixture.Client.SendAsync(protectedRequest);
+
+        // Untrusted identities are intentionally challenged rather than treated as normalized callers that
+        // merely lack a grant, so this is 401 (trusted-but-underprivileged callers receive 403).
+        Assert.Equal(HttpStatusCode.Unauthorized, protectedResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Form_Login_Without_A_Csrf_Token_Is_Rejected_And_Issues_No_Session()
     {
         var client = _fixture.Client;

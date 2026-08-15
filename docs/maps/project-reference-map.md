@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 154
 - Test projects: 100
-- Direct project references: 1247
+- Direct project references: 1249
 
 ## Projects
 
@@ -45,7 +45,7 @@ Records direct project references only.
 | [Elsa.Agent.GitHubCopilot](../../src/Elsa/Agent/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core<br>Elsa.Agent.Workflows |
 | [Elsa.Agent.Workflows](../../src/Elsa/Agent/Workflows/Elsa.Agent.Workflows.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core |
 | [Elsa.Api.Capabilities](../../src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj) | source | Elsa.Api | - | default | Elsa.Api.FastEndpoints<br>Elsa.Events.Core |
-| [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | Elsa.Api | - | default | Elsa.Mediator.Core<br>Elsa.Primitives |
+| [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | source | Elsa.Api | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | source | Elsa.Attention | - | default | Elsa.Api.FastEndpoints<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | - | default | - |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | - | default | - |
@@ -258,7 +258,7 @@ Records direct project references only.
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Sequence<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.CodeGeneration<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Workflows.Publishing.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.Groundwork |
 | [Elsa.Workflows.Publishing.Tests](../../tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Mediator.Core<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Workflows.Runtime.Api |
+| [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Workflows.Runtime.Attention.Tests](../../tests/Elsa/Workflows/Runtime/Attention/Tests/Elsa.Workflows.Runtime.Attention.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Workflows.Runtime.Attention |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |

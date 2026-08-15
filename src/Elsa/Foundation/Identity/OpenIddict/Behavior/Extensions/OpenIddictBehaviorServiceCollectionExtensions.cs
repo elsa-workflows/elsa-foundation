@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.OpenIddict.Extensions;
 
@@ -19,6 +20,7 @@ public static class OpenIddictBehaviorServiceCollectionExtensions
         Action<OpenIddictIdentityOptions>? configure = null)
     {
         services.AddFoundationIdentityAbstractions();
+        services.AddNormalizedAuthenticationType(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
 
         if (configure is not null)
             services.Configure(configure);
@@ -36,6 +38,12 @@ public static class OpenIddictBehaviorServiceCollectionExtensions
                 validation.UseLocalServer();
                 validation.EnableTokenEntryValidation();
                 validation.UseAspNetCore();
+                // IdentityModel otherwise uses the generic "AuthenticationTypes.Federation" runtime
+                // type. Give validated OpenIddict principals a provider-specific type so trusting this
+                // projection cannot accidentally trust a principal produced by another JWT handler.
+                validation.Configure(options =>
+                    options.TokenValidationParameters.AuthenticationType =
+                        OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
             });
 
         services.AddAuthentication().AddPolicyScheme(
