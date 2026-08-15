@@ -113,6 +113,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeBurstCacheOptions>();
         services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
         services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();
+        // Replacement contract (§2.6.2): exactly one requirements checker is meaningful per engine.
+        // TryAdd is the conflict prevention — a second registration cannot silently win. Shared by
+        // publishing's deployment preflight (which wraps it) and the artifact importer's gate (FR-B-005).
+        services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
