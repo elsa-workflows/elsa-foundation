@@ -10,6 +10,6 @@ public sealed class ActivityDesignPermissionContributor : IPermissionContributor
     public IEnumerable<Permission> Contribute() =>
     [
         new(PermissionNames.ActivityDesignRead, "Read activity designs", "Activity design", "Read activity catalogs and design metadata."),
-        new(PermissionNames.ActivityDesignManage, "Manage activity designs", "Activity design", "Create and change activity definitions.", new HashSet<string> { PermissionNames.ActivityDesignRead })
+        new(PermissionNames.ActivityDesignManage, "Manage activity designs", "Activity design", "Create and change activity definitions.")
     ];
 }

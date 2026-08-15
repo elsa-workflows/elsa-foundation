@@ -37,11 +37,8 @@ public sealed class PermissionOwnershipValidator
                 ? contributor.GetType().FullName ?? contributor.GetType().Name
                 : contributor.ContributorType.Trim();
 
-            foreach (var permission in contributor.Contribute())
+            foreach (var permission in contributor.Contribute().OfType<Permission>())
             {
-                if (permission is null)
-                    continue;
-
                 string key;
                 try
                 {

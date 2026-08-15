@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Serialization;
@@ -45,6 +46,19 @@ public sealed class HttpCompatibilityEvidenceTests
     }
 
     [Fact]
+    public async Task Automatically_bounds_event_streams_even_when_the_case_omits_the_streaming_flag()
+    {
+        using var client = new HttpClient(new FixedHandler(HttpStatusCode.OK, "text/event-stream", new string('x', 70_000)));
+        var testCase = new HttpCompatibilityCase(new EndpointIdentity("/events", "get"), "auto-bounded-stream",
+            () => new HttpRequestMessage(HttpMethod.Get, "http://localhost/events"));
+
+        var evidence = await HttpEvidenceCapture.CaptureAsync(client, testCase);
+
+        Assert.Equal(64 * 1024, evidence.Body.Length);
+        Assert.Equal("Bounded", evidence.TerminalState);
+    }
+
+    [Fact]
     public async Task Reads_an_ordinary_json_response_past_the_stream_bound()
     {
         var beforeBody = $"{{\"prefix\":\"{new string('x', 70_000)}\",\"tail\":\"before\"}}";
@@ -66,10 +80,9 @@ public sealed class HttpCompatibilityEvidenceTests
     private sealed class FixedHandler(HttpStatusCode status, string mediaType, string body) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
-            response.Content.Headers.ContentType = new(mediaType);
-            return Task.FromResult(response);
-        }
+            => Task.FromResult(new HttpResponseMessage(status)
+            {
+                Content = new StringContent(body, Encoding.UTF8, mediaType)
+            });
     }
 }

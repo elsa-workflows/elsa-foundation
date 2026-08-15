@@ -53,6 +53,31 @@ public sealed class EndpointManifestBuilderTests
     }
 
     [Fact]
+    public void Reconstructs_programmatically_authored_route_patterns_without_using_object_stringification()
+    {
+        var pattern = RoutePatternFactory.Pattern(
+            RoutePatternFactory.Segment(RoutePatternFactory.LiteralPart("orders")),
+            RoutePatternFactory.Segment(RoutePatternFactory.ParameterPart("id")));
+        var endpoint = BuildEndpoint(pattern, "orders", ["GET"]);
+
+        var manifest = new EndpointManifestBuilder([new TestEndpointDataSource([endpoint])]).Build();
+
+        Assert.Equal("/orders/{param}", manifest.Entries.Single().Route.Value);
+    }
+
+    [Fact]
+    public void Uses_public_route_diagnostics_metadata_for_non_route_endpoints()
+    {
+        var metadata = StandardMetadata("diagnostics", ["GET"]);
+        metadata.Add(new TestRouteDiagnosticsMetadata("/diagnostics"));
+        var endpoint = new Endpoint(_ => Task.CompletedTask, new EndpointMetadataCollection(metadata), "diagnostics");
+
+        var manifest = new EndpointManifestBuilder([new TestEndpointDataSource([endpoint])]).Build();
+
+        Assert.Equal("/diagnostics", manifest.Entries.Single().Route.Value);
+    }
+
+    [Fact]
     public void Rejects_missing_security_metadata_with_route_and_owner_context()
     {
         var dataSource = BuildDataSource("/orders", "orders", ["GET"], addSecurity: false);
@@ -92,12 +117,7 @@ public sealed class EndpointManifestBuilderTests
         IReadOnlyList<object>? extraMetadata = null,
         string? displayName = null)
     {
-        var metadata = new List<object>
-        {
-            new EndpointOwnershipMetadata(owner),
-            new EndpointAuthoringMetadata(EndpointAuthoringModels.MinimalApi),
-            new HttpMethodMetadata(methods)
-        };
+        var metadata = BaseMetadata(owner, methods);
         if (addSecurity)
         {
             var disposition = security ?? EndpointSecurityDispositionMetadata.Public("test", "Test fixture is intentionally public.");
@@ -107,14 +127,34 @@ public sealed class EndpointManifestBuilderTests
         }
         if (extraMetadata is not null)
             metadata.AddRange(extraMetadata);
-        var endpoint = new RouteEndpoint(
-            _ => Task.CompletedTask,
-            RoutePatternFactory.Parse(route),
-            0,
-            new EndpointMetadataCollection(metadata),
-            displayName ?? $"{owner}:{route}");
+        var endpoint = BuildEndpoint(RoutePatternFactory.Parse(route), owner, methods, metadata, displayName);
         return new TestEndpointDataSource([endpoint]);
     }
+
+    private static List<object> BaseMetadata(string owner, string[] methods) =>
+    [
+        new EndpointOwnershipMetadata(owner),
+        new EndpointAuthoringMetadata(EndpointAuthoringModels.MinimalApi),
+        new HttpMethodMetadata(methods)
+    ];
+
+    private static List<object> StandardMetadata(string owner, string[] methods)
+    {
+        var metadata = BaseMetadata(owner, methods);
+        metadata.Add(EndpointSecurityDispositionMetadata.Public("test", "Test fixture is intentionally public."));
+        metadata.Add(new AllowAnonymousAttribute());
+        return metadata;
+    }
+
+    private static RouteEndpoint BuildEndpoint(RoutePattern pattern, string owner, string[] methods,
+        IReadOnlyList<object>? metadata = null, string? displayName = null) => new(
+            _ => Task.CompletedTask,
+            pattern,
+            0,
+            new EndpointMetadataCollection(metadata ?? StandardMetadata(owner, methods)),
+            displayName ?? $"{owner}:{pattern.RawText ?? "programmatic"}");
+
+    private sealed record TestRouteDiagnosticsMetadata(string Route) : IRouteDiagnosticsMetadata;
 
     private sealed class TestEndpointDataSource(IReadOnlyList<Endpoint> endpoints) : EndpointDataSource
     {

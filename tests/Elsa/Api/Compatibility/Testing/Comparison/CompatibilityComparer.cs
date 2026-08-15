@@ -69,12 +69,7 @@ public static class CompatibilityComparer
             if (!valid.TryAdd(approval.Key, approval)) invalid.Add($"Duplicate approved difference: {approval.Key}");
         }
 
-        var remaining = new List<CompatibilityDelta>();
-        foreach (var delta in deltas)
-        {
-            if (valid.Remove(delta.Key, out _)) continue;
-            remaining.Add(delta);
-        }
+        var remaining = deltas.Where(delta => !valid.Remove(delta.Key, out _)).ToList();
         invalid.AddRange(valid.Values.OrderBy(x => x.Key, StringComparer.Ordinal)
             .Select(x => $"Unused approved difference: {x.Key}"));
         return new(remaining.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray(), invalid.Order(StringComparer.Ordinal).ToArray());

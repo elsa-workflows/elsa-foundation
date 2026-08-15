@@ -10,6 +10,6 @@ public sealed class WorkflowPublishingPermissionContributor : IPermissionContrib
     public IEnumerable<Permission> Contribute() =>
     [
         new(PermissionNames.WorkflowPublishingRead, "Read workflow publications", "Workflow publishing", "Read workflow publication state and validation results."),
-        new(PermissionNames.WorkflowPublishingManage, "Manage workflow publications", "Workflow publishing", "Publish, retract, and test workflow versions.", new HashSet<string> { PermissionNames.WorkflowPublishingRead })
+        new(PermissionNames.WorkflowPublishingManage, "Manage workflow publications", "Workflow publishing", "Publish, retract, and test workflow versions.")
     ];
 }

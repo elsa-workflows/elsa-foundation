@@ -10,7 +10,7 @@ public sealed class WorkflowRuntimePermissionContributor : IPermissionContributo
     public IEnumerable<Permission> Contribute() =>
     [
         new(PermissionNames.WorkflowRuntimeRead, "Read workflow runtime", "Workflow runtime", "Read executable and workflow-instance runtime state."),
-        new(PermissionNames.WorkflowRuntimeExecute, "Execute workflows", "Workflow runtime", "Start and interact with workflow executions.", new HashSet<string> { PermissionNames.WorkflowRuntimeRead }),
-        new(PermissionNames.WorkflowRuntimeManage, "Manage workflow runtime", "Workflow runtime", "Alter, cancel, and administer workflow executions.", new HashSet<string> { PermissionNames.WorkflowRuntimeRead })
+        new(PermissionNames.WorkflowRuntimeExecute, "Execute workflows", "Workflow runtime", "Start and interact with workflow executions."),
+        new(PermissionNames.WorkflowRuntimeManage, "Manage workflow runtime", "Workflow runtime", "Alter, cancel, and administer workflow executions.")
     ];
 }

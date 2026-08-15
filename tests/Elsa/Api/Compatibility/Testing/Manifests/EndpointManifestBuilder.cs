@@ -49,7 +49,7 @@ public sealed class EndpointManifestBuilder
     {
         ArgumentNullException.ThrowIfNull(endpoint);
         var route = endpoint is RouteEndpoint routeEndpoint
-            ? routeEndpoint.RoutePattern.RawText ?? routeEndpoint.RoutePattern.ToString()
+            ? routeEndpoint.RoutePattern.RawText ?? RenderRoutePattern(routeEndpoint.RoutePattern)
             : endpoint.Metadata.OfType<IRouteDiagnosticsMetadata>().FirstOrDefault()?.Route ?? endpoint.DisplayName ?? "/";
         route ??= "/";
         var normalizedRoute = new NormalizedRoute(route);
@@ -143,6 +143,24 @@ public sealed class EndpointManifestBuilder
             Generation = ownership?.Generation
         };
     }
+
+    private static string RenderRoutePattern(RoutePattern pattern) => "/" + string.Join("/", pattern.PathSegments.Select(segment =>
+        string.Concat(segment.Parts.Select(part => part switch
+        {
+            RoutePatternLiteralPart literal => literal.Content,
+            RoutePatternSeparatorPart separator => separator.Content,
+            RoutePatternParameterPart parameter => RenderParameter(parameter),
+            _ => throw new InvalidOperationException($"Unsupported route-pattern part '{part.GetType().FullName}'.")
+        }))));
+
+    private static string RenderParameter(RoutePatternParameterPart parameter)
+    {
+        var catchAll = parameter.IsCatchAll ? parameter.EncodeSlashes ? "*" : "**" : "";
+        var policies = string.Concat(parameter.ParameterPolicies.Select(policy => $":{policy.Content}"));
+        var defaultValue = parameter.Default is null ? "" : $"={parameter.Default}";
+        var optional = parameter.IsOptional ? "?" : "";
+        return $"{{{catchAll}{parameter.Name}{policies}{defaultValue}{optional}}}";
+    }
 }
 
 public sealed record EndpointManifestBuilderOptions(bool ValidateMetadata = true);
@@ -190,11 +208,4 @@ public sealed class EndpointManifestValidationException : InvalidOperationExcept
     public IReadOnlyList<string> Methods { get; }
     public IReadOnlyList<string> Problems { get; }
     public string? DisplayName { get; }
-}
-
-// Some framework endpoint implementations expose route diagnostics without being a RouteEndpoint.
-// Keep this optional seam local to the helper; normal ASP.NET Core routes use RouteEndpoint above.
-internal interface IRouteDiagnosticsMetadata
-{
-    string Route { get; }
 }

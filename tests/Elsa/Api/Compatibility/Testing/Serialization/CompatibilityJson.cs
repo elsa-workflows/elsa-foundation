@@ -53,8 +53,11 @@ public static class CompatibilityJson
         public override EndpointIdentity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             var value = reader.GetString();
-            var separator = value?.IndexOf(' ') ?? -1;
-            if (separator <= 0 || separator == value!.Length - 1)
+            if (string.IsNullOrEmpty(value))
+                throw new JsonException("Endpoint identities must use the 'METHOD /route' form.");
+
+            var separator = value.IndexOf(' ');
+            if (separator <= 0 || separator == value.Length - 1)
                 throw new JsonException("Endpoint identities must use the 'METHOD /route' form.");
             return new EndpointIdentity(value[(separator + 1)..], value[..separator]);
         }

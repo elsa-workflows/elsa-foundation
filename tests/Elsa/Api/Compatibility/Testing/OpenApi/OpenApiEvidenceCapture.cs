@@ -49,13 +49,14 @@ public static class OpenApiEvidenceCapture
     {
         var operations = new List<OpenApiOperationEvidence>();
         if (document["paths"] is not JsonObject paths) return new(operations);
-        foreach (var path in paths.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var path in paths.OrderBy(x => x.Key, StringComparer.Ordinal)
+                     .Where(x => x.Value is JsonObject)
+                     .Select(x => (x.Key, Item: (JsonObject)x.Value!)))
         {
-            if (path.Value is not JsonObject pathItem) continue;
-            foreach (var method in Methods)
+            foreach (var method in Methods.Where(method => path.Item[method] is JsonObject))
             {
-                if (pathItem[method] is not JsonObject operation) continue;
-                operations.Add(ProjectOperation(path.Key, method, pathItem, operation, document));
+                var operation = (JsonObject)path.Item[method]!;
+                operations.Add(ProjectOperation(path.Key, method, path.Item, operation, document));
             }
         }
         return new(operations);
@@ -118,9 +119,9 @@ public static class OpenApiEvidenceCapture
     {
         if (value is not JsonObject responses) return new JsonObject();
         var result = new JsonObject();
-        foreach (var response in responses.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var response in responses.OrderBy(x => x.Key, StringComparer.Ordinal).Where(x => x.Value is JsonObject))
         {
-            if (response.Value is not JsonObject item) continue;
+            var item = (JsonObject)response.Value!;
             result[response.Key] = new JsonObject { ["content"] = ProjectContent(item["content"]) };
         }
         return result;
@@ -130,9 +131,9 @@ public static class OpenApiEvidenceCapture
     {
         if (value is not JsonObject content) return new JsonObject();
         var result = new JsonObject();
-        foreach (var media in content.OrderBy(x => x.Key, StringComparer.Ordinal))
+        foreach (var media in content.OrderBy(x => x.Key, StringComparer.Ordinal).Where(x => x.Value is JsonObject))
         {
-            if (media.Value is not JsonObject item) continue;
+            var item = (JsonObject)media.Value!;
             result[media.Key.ToLowerInvariant()] = new JsonObject
             {
                 ["schema"] = item["schema"] is null ? null : ProjectSchema(item["schema"]!)
@@ -185,11 +186,16 @@ public static class OpenApiEvidenceCapture
     {
         if (node is not JsonObject obj) return node.DeepClone();
         var result = new JsonObject();
-        foreach (var key in new[] { "type", "format", "nullable", "required", "enum", "items", "properties", "additionalProperties", "$ref", "oneOf", "anyOf", "allOf" })
-            if (obj[key] is JsonNode value) result[key] = key == "properties" && value is JsonObject properties
+        foreach (var property in new[] { "type", "format", "nullable", "required", "enum", "items", "properties", "additionalProperties", "$ref", "oneOf", "anyOf", "allOf" }
+                     .Select(key => (Key: key, Value: obj[key]))
+                     .Where(property => property.Value is not null))
+        {
+            var value = property.Value!;
+            result[property.Key] = property.Key == "properties" && value is JsonObject properties
                 ? new JsonObject(properties.OrderBy(x => x.Key, StringComparer.Ordinal)
                     .ToDictionary(x => x.Key, x => (JsonNode?)ProjectSchema(x.Value!), StringComparer.Ordinal))
                 : value.DeepClone();
+        }
         return result;
     }
 }

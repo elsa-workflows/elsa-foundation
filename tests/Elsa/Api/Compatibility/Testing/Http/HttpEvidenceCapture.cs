@@ -25,15 +25,15 @@ public static class HttpEvidenceCapture
         using var request = testCase.CreateRequest();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         var contentType = response.Content.Headers.ContentType?.ToString() ?? "";
-        var (bytes, bounded) = await ReadResponseAsync(response, testCase, cancellationToken);
+        var isStreaming = testCase.BoundedStreaming || contentType.Contains("event-stream", StringComparison.OrdinalIgnoreCase);
+        var (bytes, bounded) = await ReadResponseAsync(response, testCase, isStreaming, cancellationToken);
         var text = Encoding.UTF8.GetString(bytes);
         var json = IsJson(contentType) && TryCanonicalJson(text, out var canonical) ? canonical : "";
         var body = json.Length == 0 ? NormalizeText(text) : json;
         var problem = contentType.Contains("problem+json", StringComparison.OrdinalIgnoreCase) || response.StatusCode >= System.Net.HttpStatusCode.BadRequest
             ? json : "";
-        var isStreaming = testCase.BoundedStreaming || contentType.Contains("event-stream", StringComparison.OrdinalIgnoreCase);
         var streaming = isStreaming
-            ? CaptureFrames(text, testCase.BoundedStreaming ? testCase.MaxStreamFrames : int.MaxValue) : "";
+            ? CaptureFrames(text, testCase.MaxStreamFrames) : "";
         var binding = testCase.Binding ?? DescribeRequest(request);
         var paging = testCase.PagingFiltering ?? DescribePaging(request, response);
         var headers = response.Headers.Concat(response.Content.Headers)
@@ -57,10 +57,10 @@ public static class HttpEvidenceCapture
         };
     }
 
-    private static async Task<(byte[] Bytes, bool Bounded)> ReadResponseAsync(HttpResponseMessage response, HttpCompatibilityCase testCase,
+    private static async Task<(byte[] Bytes, bool Bounded)> ReadResponseAsync(HttpResponseMessage response, HttpCompatibilityCase testCase, bool isStreaming,
         CancellationToken cancellationToken)
     {
-        if (!testCase.BoundedStreaming)
+        if (!isStreaming)
         {
             return (await response.Content.ReadAsByteArrayAsync(cancellationToken), false);
         }
