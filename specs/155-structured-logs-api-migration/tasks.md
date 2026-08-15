@@ -12,10 +12,10 @@
 
 **Purpose**: Prepare one deterministic real host, stable cases, bounded stream capture, and baseline locations without changing production endpoint behavior.
 
-- [ ] T001 Add TestHost, CShells ASP.NET Core/FastEndpoints, ASP.NET Core OpenAPI, Foundation Identity, `Elsa.Api.Compatibility.Testing`, and baseline copy dependencies in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj`
-- [ ] T002 Create deterministic authentication, source/store/feed, shared-writer, cursor, timing, and host-lifecycle fixtures in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsApiHost.cs`
-- [ ] T003 [P] Define stable ordinary HTTP and bounded SSE cases for default/custom paths, filters, invalid/repeated inputs, authorization, initial/resume streams, cursor failures, remote commits, heartbeat, and cancellation in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsCompatibilityCases.cs`
-- [ ] T004 [P] Add a reusable bounded stream reader that records status, headers, complete frames, reviewed timing bounds, cancellation, and terminal state without waiting for EOF in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsStreamReader.cs`
+- [x] T001 Add TestHost, CShells ASP.NET Core/FastEndpoints, ASP.NET Core OpenAPI, Foundation Identity, `Elsa.Api.Compatibility.Testing`, and baseline copy dependencies in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj`
+- [x] T002 Create deterministic authentication, source/store/feed, shared-writer, cursor, timing, and host-lifecycle fixtures in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsApiHost.cs`
+- [x] T003 [P] Define stable ordinary HTTP and bounded SSE cases for default/custom paths, filters, invalid/repeated inputs, authorization, initial/resume streams, cursor failures, remote commits, heartbeat, and cancellation in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsCompatibilityCases.cs`
+- [x] T004 [P] Add a reusable bounded stream reader that records status, headers, complete frames, reviewed timing bounds, cancellation, and terminal state without waiting for EOF in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Support/StructuredLogsStreamReader.cs`
 
 ---
 
@@ -25,11 +25,11 @@
 
 **⚠️ CRITICAL**: Do not modify production endpoint registrations, feature base type, SSE helper use, or `Elsa.Diagnostics.StructuredLogs.csproj` until T005-T008 have produced reviewed immutable evidence and T009 fails only because the replacement seam is absent.
 
-- [ ] T005 Capture canonical FastEndpoints observations for recent and sources across valid/invalid/default/custom-path cases, assert repeated stability, and commit `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-http-fastendpoints.json`
-- [ ] T006 Capture canonical bounded FastEndpoints SSE observations for headers, first entry, valid resume, generic cursor failures, exact frame bytes, heartbeat, and terminal state; commit them with the HTTP baseline in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-http-fastendpoints.json`
-- [ ] T007 Capture the actual standard ASP.NET Core OpenAPI document, project all three consumed operations, and commit `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-openapi-fastendpoints.json`
-- [ ] T008 Pin the three-route default/custom manifest, methods, permission policy, owner/authoring metadata, query/serialization behavior, cursor volatility validity, no-public-drop-frame rule, and ten-capture stability in `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiContractTests.cs`
-- [ ] T009 Add a failing replacement-seam test requiring `StructuredLogsFeature` to implement `IWebShellFeature`, publish three Minimal API routes exactly once, and uniquely catalog `Diagnostics:StructuredLogs` in `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiContractTests.cs`
+- [x] T005 Capture canonical FastEndpoints observations for recent and sources across valid/invalid/default/custom-path cases, assert repeated stability, and commit `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-http-fastendpoints.json`
+- [x] T006 Capture canonical bounded FastEndpoints SSE observations for headers, first entry, valid resume, generic cursor failures, exact frame bytes, heartbeat, and terminal state; commit them with the HTTP baseline in `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-http-fastendpoints.json`
+- [x] T007 Capture the actual standard ASP.NET Core OpenAPI document, project all three consumed operations, and commit `tests/Elsa/Diagnostics/StructuredLogs/Tests/Baselines/structured-logs-openapi-fastendpoints.json`
+- [x] T008 Pin the three-route default/custom manifest, methods, permission policy, owner/authoring metadata, query/serialization behavior, cursor volatility validity, no-public-drop-frame rule, and ten-capture stability in `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiContractTests.cs`
+- [x] T009 Add a failing replacement-seam test requiring `StructuredLogsFeature` to implement `IWebShellFeature`, publish three Minimal API routes exactly once, and uniquely catalog `Diagnostics:StructuredLogs` in `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiContractTests.cs`
 
 **Checkpoint**: Real immutable before evidence exists and has been reviewed; replacement requirements fail for the intended missing implementation only.
 

@@ -7,6 +7,7 @@ using Elsa.Diagnostics.StructuredLogs.Live;
 using Elsa.Diagnostics.StructuredLogs.Storage;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Elsa.Api.FastEndpoints.Sse;
@@ -21,6 +22,9 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 public sealed class StreamEndpointTests
 {
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
+    private static readonly IServiceProvider FactoryServices = new ServiceCollection()
+        .AddServicesForUnitTesting()
+        .BuildServiceProvider();
 
     [Fact]
     public async Task Two_hosts_tail_shared_durable_order_and_reconnect_exactly_once()
@@ -226,22 +230,20 @@ public sealed class StreamEndpointTests
             .Single(m => m.Name == nameof(Factory.Create)
                          && m.IsGenericMethodDefinition
                          && m.GetParameters() is [var first, var rest]
-                         && first.ParameterType == typeof(Action<DefaultHttpContext>)
+                         && first.ParameterType == typeof(DefaultHttpContext)
                          && rest.ParameterType == typeof(object[]))
             .MakeGenericMethod(endpointType);
 
-        Action<DefaultHttpContext> configureContext = context =>
-        {
-            if (lastEventId is not null)
-                context.Request.Headers["Last-Event-ID"] = lastEventId;
-            if (source is not null)
-                context.Request.QueryString = new QueryString($"?source={Uri.EscapeDataString(source)}");
-            context.Response.Body = body;
-        };
+        var context = new DefaultHttpContext { RequestServices = FactoryServices };
+        if (lastEventId is not null)
+            context.Request.Headers["Last-Event-ID"] = lastEventId;
+        if (source is not null)
+            context.Request.QueryString = new QueryString($"?source={Uri.EscapeDataString(source)}");
+        context.Response.Body = body;
 
         var endpoint = (BaseEndpoint)create.Invoke(
             null,
-            [configureContext, new object[] { feed, store, binder, streamWriter, options }])!;
+            [context, new object[] { feed, store, binder, streamWriter, options }])!;
 
         return (endpoint, body);
     }
