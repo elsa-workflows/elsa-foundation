@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 114
 
 ## Features
 
@@ -93,7 +93,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
-| StudioPreferencesApiFeature | FastEndpoints feature | Elsa.Studio.Preferences.Api | FastEndpointsFeatureBase | [StudioPreferencesApiFeature.cs](../../src/Elsa/Studio/Preferences/Api/StudioPreferencesApiFeature.cs) |
 | StudioPreferencesFeature | direct IShellFeature | Elsa.Studio.Preferences.Api | IShellFeature | [StudioPreferencesFeature.cs](../../src/Elsa/Studio/Preferences/Api/StudioPreferencesFeature.cs) |
 | StudioPreferencesGroundworkPersistenceFeature | direct IShellFeature | Elsa.Studio.Preferences.Persistence.Groundwork | IShellFeature | [StudioPreferencesGroundworkPersistenceFeature.cs](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/StudioPreferencesGroundworkPersistenceFeature.cs) |
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |

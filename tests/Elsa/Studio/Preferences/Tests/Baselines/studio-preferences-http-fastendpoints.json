@@ -1,0 +1,314 @@
+[
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "",
+    "case": "denied",
+    "contentType": "",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "403",
+    "statusCode": 403,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "case": "exact-read",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "\u0022rev-1\u0022"
+    },
+    "json": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "case": "implied-write-read",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "\u0022rev-1\u0022"
+    },
+    "json": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "case": "wildcard",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "\u0022rev-1\u0022"
+    },
+    "json": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-1\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022wide\u0022\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "",
+    "case": "resource-denied",
+    "contentType": "",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "403",
+    "statusCode": 403,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "",
+    "case": "unknown-namespace",
+    "contentType": "",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id",
+    "body": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13F9\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "invalid-host",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "GET /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13F9\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13F9\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "",
+    "case": "read-only",
+    "contentType": "",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "403",
+    "statusCode": 403,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-2\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022compact\u0022\n  }\n}",
+    "case": "exact-write",
+    "contentType": "application/json",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "\u0022rev-2\u0022"
+    },
+    "json": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-2\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022compact\u0022\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-2\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022compact\u0022\n  }\n}",
+    "case": "wildcard",
+    "contentType": "application/json",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/json",
+      "etag": "\u0022rev-2\u0022"
+    },
+    "json": "{\n  \u0022namespace\u0022: \u0022dashboard\u0022,\n  \u0022revision\u0022: \u0022rev-2\u0022,\n  \u0022schemaVersion\u0022: 1,\n  \u0022updatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022value\u0022: {\n    \u0022layout\u0022: \u0022compact\u0022\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "",
+    "case": "resource-denied",
+    "contentType": "",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "403",
+    "statusCode": 403,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "",
+    "case": "unknown-namespace",
+    "contentType": "",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FA\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "invalid-host",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FA\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FA\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022detail\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FB\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "case": "missing-precondition",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FB\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Use If-None-Match: * to create or one quoted If-Match revision to update.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FB\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "status": "422",
+    "statusCode": 422,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022detail\u0022: \u0022The preference document revision is stale.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022The preference document revision is stale.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 412,\n  \u0022title\u0022: \u0022Precondition Failed\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FC\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7232#section-4.2\u0022\n}",
+    "case": "stale-revision",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022The preference document revision is stale.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022The preference document revision is stale.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 412,\n  \u0022title\u0022: \u0022Precondition Failed\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FC\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7232#section-4.2\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022The preference document revision is stale.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022The preference document revision is stale.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 412,\n  \u0022title\u0022: \u0022Precondition Failed\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FC\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7232#section-4.2\u0022\n}",
+    "status": "412",
+    "statusCode": 412,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022detail\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FD\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "case": "validation",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FD\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Schema version 99 is not supported by namespace \\u0027dashboard\\u0027.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Unprocessable Entity\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FD\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc4918#section-11.2\u0022\n}",
+    "status": "422",
+    "statusCode": 422,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=namespace;header=X-Elsa-Studio-Host-Id;body=schemaVersion,value",
+    "body": "{\n  \u0022detail\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 413,\n  \u0022title\u0022: \u0022Payload Too Large\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FE\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.11\u0022\n}",
+    "case": "quota",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "PUT /_elsa/studio/preferences/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 413,\n  \u0022title\u0022: \u0022Payload Too Large\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FE\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.11\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022generalErrors\u0022,\n      \u0022reason\u0022: \u0022Studio preference namespace \\u0027dashboard\\u0027 accepts at most 65536 bytes; the value contains 70011 bytes.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/_elsa/studio/preferences/dashboard\u0022,\n  \u0022status\u0022: 413,\n  \u0022title\u0022: \u0022Payload Too Large\u0022,\n  \u0022traceId\u0022: \u00220HNNQV1SO13FE\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.11\u0022\n}",
+    "status": "413",
+    "statusCode": 413,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

@@ -586,28 +586,6 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "GET /_elsa/studio/preferences/{param}"
-    ],
-    "followUp": "#1347",
-    "owner": "Elsa.Studio.Preferences.Api",
-    "registrationIdentity": "Elsa.Studio.Preferences.Api.Endpoints.GetStudioPreference",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "91905da81700f1f9849a128f0bf78a782fc6185800bdfab552aef2b721752e3f"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "PUT /_elsa/studio/preferences/{param}"
-    ],
-    "followUp": "#1347",
-    "owner": "Elsa.Studio.Preferences.Api",
-    "registrationIdentity": "Elsa.Studio.Preferences.Api.Endpoints.PutStudioPreference",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "91905da81700f1f9849a128f0bf78a782fc6185800bdfab552aef2b721752e3f"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
       "GET /_elsa/workflows/dashboard/definitions"
     ],
     "followUp": "#1350",
