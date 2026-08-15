@@ -197,6 +197,11 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddLogging();
+        // The requirements checker (FR-B-005) requires a well-known type registry rather than
+        // treating it as optional: it is a gate, and a gate without its registry stops gating
+        // silently instead of degrading. The registry ships with the serialization feature, which
+        // every real runtime composes, so the fixture composes it too.
+        services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
         ReplaceWithScopedRuntimeStores(services);
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -215,6 +220,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         var observations = new SchedulerQueueScopeObservations();
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddLogging();
+        services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
         services.AddSingleton(observations);
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddScoped<IWorkflowSchedulerWorkQueue, ScopeTrackingSchedulerWorkQueue>();

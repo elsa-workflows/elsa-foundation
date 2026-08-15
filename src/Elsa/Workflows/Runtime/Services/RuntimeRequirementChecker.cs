@@ -20,20 +20,22 @@ namespace Elsa.Workflows.Runtime.Services;
 /// here is a defect, not an improvement.
 /// </para>
 /// <para>
-/// <paramref name="typeRegistry"/> is optional, matching the established runtime pattern
-/// (<c>WorkflowExecutableInputValidator</c>, <c>RuntimeActivityInputMaterializer</c>):
-/// <c>AddWorkflowRuntime()</c> must stay composable without the serialization feature, and the
-/// composition-root validation test enforces that. When no registry is composed the type axis is
-/// reported as <em>unevaluated</em> (an empty collection) rather than guessed in either direction —
-/// a runtime with no type registry cannot activate CLR activities at all, so neither "available"
-/// nor "missing" would be truthful. Every composition that actually imports artifacts registers the
-/// serialization feature, so the axis is live on the real import path.
+/// <paramref name="typeRegistry"/> is <b>required</b>, deliberately breaking with the nullable
+/// pattern used by <c>WorkflowExecutableInputValidator</c>, <c>RuntimeValueConversionExecutor</c>
+/// and <c>RuntimeActivityInputMaterializer</c>. Those services <em>degrade meaningfully</em> without
+/// a registry — a conversion falls back, validation gets lenient. This one does not: it is a
+/// <b>gate</b>, and a gate without its registry does not degrade, it simply stops gating. An
+/// artifact would then pass import and throw <c>UnknownActivityTypeException</c> at first activation
+/// in production, which is the exact failure US2 exists to prevent, and it would be near-impossible
+/// to trace back to a missing registration. A required dependency makes an unsupported composition
+/// fail loudly at startup naming what is absent, instead of making two very different states look
+/// equally supported.
 /// </para>
 /// </remarks>
 public sealed class RuntimeRequirementChecker(
     IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-    IWellKnownTypeRegistry? typeRegistry = null) : IRuntimeRequirementChecker
+    IWellKnownTypeRegistry typeRegistry) : IRuntimeRequirementChecker
 {
     private static readonly string ClrDescriptorKind = typeof(ClrActivityDescriptor).FullName!;
 
@@ -109,9 +111,6 @@ public sealed class RuntimeRequirementChecker(
     /// </remarks>
     private IReadOnlyList<ActivityTypeStatusEntry> CheckActivityTypes(IReadOnlyCollection<ExecutableNode> nodes)
     {
-        if (typeRegistry is null)
-            return [];
-
         var nodesByAlias = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var unreadable = new HashSet<string>(StringComparer.Ordinal);
 
@@ -140,7 +139,7 @@ public sealed class RuntimeRequirementChecker(
             .Select(pair => new ActivityTypeStatusEntry(
                 pair.Key,
                 pair.Value.Order(StringComparer.Ordinal).ToArray(),
-                typeRegistry!.TryGetTypeOrDefault(pair.Key, out _)
+                typeRegistry.TryGetTypeOrDefault(pair.Key, out _)
                     ? RuntimeRequirementStatus.Available
                     : RuntimeRequirementStatus.MissingActivityType))
             .ToList();

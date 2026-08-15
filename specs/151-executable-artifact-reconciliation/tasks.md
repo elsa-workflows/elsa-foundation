@@ -41,6 +41,18 @@
 
 ---
 
+## Verified test baselines (captured 2026-08-15, before any implementation code)
+
+Recorded at commit `100a5497c` so the §2.21.1 golden-rule checks (T040, T112) can tell *my* regression from *already broken*. Verified by running the suites in a clean worktree at that commit — measured, not inferred.
+
+| Suite | Baseline | Note |
+|---|---|---|
+| `dotnet build Elsa.Server.slnx` | 0 errors, 228 warnings | |
+| `Elsa.Workflows.Runtime.Tests` | 1653 passed, 0 failed | |
+| `Elsa.Workflows.Publishing.Tests` | 23 passed, 0 failed | |
+| `Elsa.Workflows.Runtime.Api.Tests` | 93 passed, 0 failed | |
+| `Elsa.Architecture.Tests` | **330 passed, 37 FAILED** | **Already red before this feature.** Failures are in `CheckpointFenceEvidenceImporterTests` (16), `GroundworkCoverageLedgerTests` (13), plus `EfCoreSurfaceRatchetTests` and `ArchitectureGuardTests` — checkpoint-fence / mongodb evidence / coverage-ledger assertions, unrelated to spec 151. T040/T112 must compare against 37, not 0, and T070/T111 add new tests to a suite that is not currently green. |
+
 ## Conventions binding EVERY task in this feature
 
 Stated once here rather than repeated per task. These apply in all phases, not just the one you are working in.
