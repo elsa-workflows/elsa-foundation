@@ -48,7 +48,8 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
 
     public static async Task<ServerReadinessFixture> StartAsync(
         bool warmDefaultShell = true,
-        string defaultShellName = DefaultShellName)
+        string defaultShellName = DefaultShellName,
+        bool startReadinessWarmup = true)
     {
         var routeInitialization = new RouteInitializationControl();
         var readinessState = new ShellReadinessState(TimeProvider.System);
@@ -66,7 +67,8 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         builder.Services.AddSingleton<IOptions<ShellReadinessOptions>>(Options.Create(readinessOptions));
         builder.Services.AddSingleton<ILogger<DefaultShellWarmup>>(warmupLogger);
         builder.Services.AddSingleton<DefaultShellWarmup>();
-        builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<DefaultShellWarmup>());
+        if (startReadinessWarmup)
+            builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<DefaultShellWarmup>());
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(ReadinessProbeFeature).Assembly)
             .WithWebRouting(options =>
