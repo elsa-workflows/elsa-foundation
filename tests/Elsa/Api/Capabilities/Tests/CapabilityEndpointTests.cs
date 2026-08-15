@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -21,8 +22,10 @@ public sealed class CapabilityEndpointTests
         var endpoint = CreateEndpoint();
 
         Assert.Contains("capabilities", endpoint.Definition.Routes);
-        Assert.Contains(PermissionNames.ApiCapabilitiesRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.ApiCapabilitiesRead]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

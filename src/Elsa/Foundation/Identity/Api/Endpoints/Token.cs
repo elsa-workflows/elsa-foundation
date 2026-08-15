@@ -19,7 +19,8 @@ namespace Elsa.Foundation.Identity.Api.Endpoints;
 internal sealed class Token(
     ITokenService tokens,
     IOptions<FoundationIdentityApiOptions> options,
-    IAuthenticationSchemeProvider schemes) : ElsaEndpointWithoutRequest<AccessTokenResponse>
+    IAuthenticationSchemeProvider schemes,
+    NormalizedPrincipalValidator principalValidator) : ElsaEndpointWithoutRequest<AccessTokenResponse>
 {
     public override void Configure()
     {
@@ -53,8 +54,16 @@ internal sealed class Token(
             return;
         }
 
-        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+        // Only provider-projected identities may cross the interactive-session -> first-party bearer trust
+        // boundary. In particular, never copy internal permission claims directly from an external JWT.
+        if (!principalValidator.TryGetNormalizedPrincipal(User, out var normalizedPrincipal))
+        {
+            await Send.UnauthorizedAsync(ct);
+            return;
+        }
+
+        var subject = normalizedPrincipal.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? normalizedPrincipal.FindFirstValue("sub");
 
         if (string.IsNullOrWhiteSpace(subject))
         {
@@ -62,8 +71,8 @@ internal sealed class Token(
             return;
         }
 
-        var tenantId = User.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
-        var permissions = User.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value).ToArray();
+        var tenantId = normalizedPrincipal.FindFirstValue(IdentityClaimTypes.TenantId) ?? "default";
+        var permissions = normalizedPrincipal.FindAll(IdentityClaimTypes.Permission).Select(x => x.Value).ToArray();
 
         var result = await tokens.IssueAsync(new TokenIssueRequest(subject, tenantId, permissions), ct);
         await Send.OkAsync(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), ct);

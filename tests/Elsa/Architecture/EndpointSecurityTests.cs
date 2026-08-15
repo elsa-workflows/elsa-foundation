@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Elsa.Api.Capabilities;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,8 +118,12 @@ public sealed partial class EndpointSecurityTests
         var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
         endpoint.Configure();
 
-        Assert.Contains(PermissionNames.ApiCapabilitiesRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        var policyName = Assert.Single(endpoint.Definition.PreBuiltUserPolicies!.Distinct(StringComparer.Ordinal));
+        var policy = new PermissionPolicyCodec().Parse(policyName);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
+        Assert.Equal(PermissionRequirementMode.Any, policy.Descriptor!.Mode);
+        Assert.Contains(PermissionKey.Normalize(PermissionNames.ApiCapabilitiesRead), policy.Descriptor.Permissions);
+        Assert.Contains(PermissionKey.Normalize(PermissionNames.All), policy.Descriptor.Permissions);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

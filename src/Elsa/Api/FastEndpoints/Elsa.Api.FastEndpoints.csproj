@@ -11,6 +11,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 	</ItemGroup>
 
 </Project>

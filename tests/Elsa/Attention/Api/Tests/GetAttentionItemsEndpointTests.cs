@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Attention.Api;
 using Elsa.Attention.Core;
@@ -17,7 +18,10 @@ public sealed class GetAttentionItemsEndpointTests
 
         endpoint.Configure();
 
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
         Assert.Contains(AttentionRoutes.Items, endpoint.Definition.Routes);
     }

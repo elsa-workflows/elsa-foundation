@@ -108,9 +108,8 @@ public sealed class WorkflowAlterationPlanApiTests
         var job = RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/alteration-plans/{planId}/jobs/{jobId}");
         var cancel = RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/alteration-plans/{planId}/cancel");
 
-        Assert.All([submit, cancel], endpoint => Assert.Contains(PermissionNames.WorkflowRuntimeManage, endpoint.Definition.AllowedPermissions!));
-        Assert.All([plan, page, job], endpoint => Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!));
-        Assert.All([submit, plan, page, job, cancel], endpoint => Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!));
+        Assert.All([submit, cancel], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeManage));
+        Assert.All([plan, page, job], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead));
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Api.FastEndpoints.Tests;
 
@@ -21,5 +22,29 @@ public sealed class ElsaEndpointPermissionsTests
     public void Compose_with_no_permissions_grants_only_the_wildcard()
     {
         Assert.Equal(new[] { PermissionNames.All }, ElsaEndpointPermissions.Compose([]));
+    }
+
+    [Fact]
+    public void ComposePolicy_with_no_permissions_uses_a_canonical_single_wildcard_policy()
+    {
+        var policy = ElsaEndpointPermissions.ComposePolicy([]);
+
+        Assert.Equal("Elsa.Permission:v1:s:Kg", policy);
+        var result = new PermissionPolicyCodec().Parse(policy);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, result.Status);
+        Assert.Equal(PermissionRequirementMode.Single, result.Descriptor!.Mode);
+        Assert.Equal([PermissionNames.All], result.Descriptor.Permissions);
+    }
+
+    [Fact]
+    public void ComposePolicy_with_actions_uses_one_canonical_any_policy_for_wildcard_or_actions()
+    {
+        var policy = ElsaEndpointPermissions.ComposePolicy(["write", "read", "READ"]);
+
+        Assert.Equal("Elsa.Permission:v1:a:Kg.UkVBRA.V1JJVEU", policy);
+        var result = new PermissionPolicyCodec().Parse(policy);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, result.Status);
+        Assert.Equal(PermissionRequirementMode.Any, result.Descriptor!.Mode);
+        Assert.Equal([PermissionNames.All, "READ", "WRITE"], result.Descriptor.Permissions);
     }
 }

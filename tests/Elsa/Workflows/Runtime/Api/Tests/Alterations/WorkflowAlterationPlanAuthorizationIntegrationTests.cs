@@ -6,6 +6,9 @@ using System.Text.Encodings.Web;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api;
@@ -842,6 +845,11 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             builder.Services.AddAuthentication(TestAuthenticationHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestAuthenticationHandler.SchemeName, _ => { });
             builder.Services.AddAuthorization();
+            builder.Services.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    TestAuthenticationHandler.SchemeName
+                });
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
             configureServices?.Invoke(builder.Services);
             builder.Services.AddScoped<IRequestSender, AlterationRequestSender>();
@@ -926,7 +934,12 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             if (!Request.Headers.TryGetValue("X-Test-Permission", out var permission) || string.IsNullOrWhiteSpace(permission))
                 return Task.FromResult(AuthenticateResult.NoResult());
             var identity = new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "operator-1"), new Claim("permissions", permission.ToString())],
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "operator-1"),
+                    new Claim("permissions", permission.ToString()),
+                    new Claim(IdentityClaimTypes.Permission, permission.ToString()),
+                    new Claim(IdentityClaimTypes.Normalized, "v1")
+                ],
                 SchemeName);
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
         }

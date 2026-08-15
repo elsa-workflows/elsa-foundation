@@ -12,7 +12,7 @@ Make Foundation Identity's existing ASP.NET Core policy provider the only permis
 
 **Language/Version**: C# / .NET 10 (`net10.0` repository default)
 
-**Primary Dependencies**: ASP.NET Core authorization, authorization-policy, `Microsoft.AspNetCore.Http` (for `AddHttpContextAccessor`), and routing abstractions; Foundation Identity Abstractions; CShells/FastEndpoints 7.2.0 only in the transitional adapter and integration fixture
+**Primary Dependencies**: The .NET 10 `Microsoft.AspNetCore.App` shared framework for current authorization, endpoint-routing, middleware-result, and `IHttpContextAccessor` contracts; Foundation Identity Abstractions; CShells/FastEndpoints 7.2.0 only in the transitional adapter and integration fixture
 
 **Storage**: N/A. The permission catalog is an immutable DI-built snapshot; shell/module replacement creates a new service provider and catalog.
 
@@ -39,7 +39,7 @@ Make Foundation Identity's existing ASP.NET Core policy provider the only permis
 | framework §2.6.1/§2.6.5 additive seams | `IPermissionContributor` and `IPermissionResourceHandler` remain intentional fan-in seams. The catalog owns aggregation/provenance; resource decisions are evaluated deterministically per permission member. | PASS |
 | framework §2.7 adapter/bridge | Foundation Identity owns policy semantics and standard metadata; FastEndpoints owns only its thin `Policies(...)` adapter. | PASS |
 | framework §2.8 extension methods | Three mechanical endpoint-convention extensions have far more than three consumers and contain no domain behavior; policy semantics stay in the provider/handlers. | PASS |
-| framework §§2.16/2.17 library boundaries | Reuse the existing Identity Abstractions package and add only standard ASP.NET Core `Microsoft.AspNetCore.Http` and `Microsoft.AspNetCore.Authorization.Policy` packages needed for endpoint metadata, result handling, and `AddHttpContextAccessor`; no framework reference, new project, or Elsa endpoint DSL is introduced. | PASS |
+| framework §§2.16/2.17 library boundaries | Reuse the existing Identity Abstractions package and target its already ASP.NET-specific contracts at the .NET 10 `Microsoft.AspNetCore.App` shared framework. The centrally pinned 2.3 packages do not expose modern `IEndpointConventionBuilder`; the framework reference avoids mixing legacy and current ASP.NET assemblies. No new project, FastEndpoints dependency, or Elsa endpoint DSL is introduced. | PASS (implementation-corrected) |
 | framework §2.21.1 golden rule | Existing routes, `ConfigurePermissions` call sites, wildcard administrator behavior, policy-provider fallback lifetime, token/session projection, and unrelated host policies remain covered. | PASS (test obligation) |
 | framework §§2.22/2.22.1 docs/catalog | Update both affected `EXTENSION_POINTS.md` files and the authentication integrator guide, including replacement, additive, legacy, and failure contracts. | PASS (documentation obligation) |
 | framework §2.23 tests | Contract, implementation, same-host HTTP, module registration/lifecycle, architecture, full build, and generated-map gates are specified. Tests are written failing-first. | PASS (test obligation) |
@@ -69,7 +69,7 @@ specs/151-foundation-identity-permission-policy-bridge/
 
 ```text
 src/Elsa/Foundation/Identity/Abstractions/
-├── Elsa.Foundation.Identity.Abstractions.csproj        # add Authorization.Policy + full Http package
+├── Elsa.Foundation.Identity.Abstractions.csproj        # current Microsoft.AspNetCore.App framework contracts
 ├── FoundationIdentityOptions.cs                        # trusted runtime authentication types, empty by default
 ├── Authorization/
 │   ├── AuthorizationContracts.cs                       # canonical keys, wildcard, requirements,

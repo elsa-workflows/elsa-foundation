@@ -10,6 +10,6 @@ public abstract class ElsaEndpointWithMapper<TRequest, TMapper>
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions(ElsaEndpointPermissions.Compose(permissions));
+        Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
     }
 }

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -23,8 +24,9 @@ public sealed class AuthoringSchemaEndpointContractTests
         var endpoint = FindEndpoint(route);
 
         Assert.Equal(["GET"], endpoint.Definition.Verbs);
-        Assert.Contains(PermissionNames.WorkflowDesignRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignRead]),
+            endpoint.Definition.PreBuiltUserPolicies!);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

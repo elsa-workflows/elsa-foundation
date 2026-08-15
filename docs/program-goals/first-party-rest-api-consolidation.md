@@ -53,7 +53,9 @@ project; public progress and validation evidence remain on the tracker and child
    [Minimal API target and bounded shared endpoint conventions](../adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)
    across the program's implementation slices.
 2. Route Minimal APIs and transitional FastEndpoints through one Foundation Identity permission
-   contract ([#1344](https://github.com/elsa-workflows/elsa-foundation/issues/1344)).
+   contract ([#1344](https://github.com/elsa-workflows/elsa-foundation/issues/1344)). This work unit
+   establishes canonical policies, normalized-principal trust, deterministic replacement contracts,
+   and the transitional FastEndpoints adapter used by the remaining migration slices.
 3. Route transport-adjacent activity-design and runtime-inspection authorization contexts through
    the same evaluator after the endpoint bridge lands
    ([#1356](https://github.com/elsa-workflows/elsa-foundation/issues/1356)).

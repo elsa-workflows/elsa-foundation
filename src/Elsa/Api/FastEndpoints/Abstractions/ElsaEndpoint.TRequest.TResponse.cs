@@ -6,7 +6,7 @@ public class ElsaEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse> w
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions(ElsaEndpointPermissions.Compose(permissions));
+        Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
     }
 
     protected void ThrowError(Exception exception, int statusCode = 500) => ThrowError(exception.Message, statusCode);

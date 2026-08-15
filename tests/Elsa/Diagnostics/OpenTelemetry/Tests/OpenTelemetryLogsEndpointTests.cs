@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Api.FastEndpoints.Abstractions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Xunit;
@@ -15,7 +16,10 @@ public sealed class OpenTelemetryLogsEndpointTests
 
         Assert.Equal(Http.POST.ToString(), Assert.Single(endpoint.Definition.Verbs));
         Assert.Equal("/diagnostics/opentelemetry/logs/search", Assert.Single(endpoint.Definition.Routes));
-        Assert.Contains("Diagnostics:OpenTelemetry", endpoint.Definition.AllowedPermissions!);
+        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
+        Assert.All(
+            endpoint.Definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy(["Diagnostics:OpenTelemetry"]), policy));
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
