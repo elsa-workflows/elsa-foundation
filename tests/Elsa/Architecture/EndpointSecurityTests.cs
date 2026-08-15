@@ -110,7 +110,9 @@ public sealed class EndpointSecurityTests
         var endpointCount = 0;
         foreach (var root in CurrentManagementEndpointRoots)
         {
-            var directory = Path.Combine(RepoRoot, root.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var relativePath = root.RelativePath.Replace('/', Path.DirectorySeparatorChar);
+            Assert.False(Path.IsPathRooted(relativePath), $"Endpoint root must be relative: {root.RelativePath}");
+            var directory = Path.Join(RepoRoot, relativePath);
             Assert.True(Directory.Exists(directory), $"Missing {root.Area} endpoint directory: {root.RelativePath}");
             foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
             {

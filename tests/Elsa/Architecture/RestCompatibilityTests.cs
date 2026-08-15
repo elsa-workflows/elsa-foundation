@@ -15,7 +15,7 @@ public sealed class RestCompatibilityTests
         var endpoint = new EndpointIdentity("/api/canary/{id}", "GET");
         var before = new CompatibilityEvidenceSet { Http = [Observation(endpoint)] };
         var after = new CompatibilityEvidenceSet { Http = [Observation(endpoint)] };
-        var approvalsPath = Path.Combine(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json");
+        var approvalsPath = Path.Join(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json");
         var approvals = BaselineFile.Load<ApprovedDifference[]>(approvalsPath);
 
         var result = CompatibilityComparer.Compare(before, after, approvals);
