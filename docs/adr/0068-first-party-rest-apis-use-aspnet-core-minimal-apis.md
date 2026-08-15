@@ -50,13 +50,14 @@ Each first-party module that owns static REST endpoints exposes an explicit mapp
 accepts `IEndpointRouteBuilder`, conventionally named `Map<Module>Api`:
 
 ```csharp
-public static void Map<Module>Api(this IEndpointRouteBuilder endpoints);
+public static void Map<Module>Api(IEndpointRouteBuilder endpoints);
 ```
 
-The contract is the explicit composition call and the standard ASP.NET Core route builder, not the
-exact method return type. A mapper may return a standard ASP.NET Core convention builder when useful,
-but it must not require an Elsa-specific endpoint builder. Route groups, handlers, filters, binding,
-results, and metadata remain ordinary ASP.NET Core constructs.
+The contract is the explicit composition call and the standard ASP.NET Core route builder, not
+extension-method syntax or the exact method return type. A mapper may be a module-owned static method
+and may return a standard ASP.NET Core convention builder when useful, but it must not require an
+Elsa-specific endpoint builder. Route groups, handlers, filters, binding, results, and metadata
+remain ordinary ASP.NET Core constructs.
 
 Process-global assembly discovery is not part of the target module contract. Module activation or
 an existing feature-composition hook calls each mapper explicitly, making endpoint ownership and
@@ -125,8 +126,8 @@ endpoint owners:
 - framework-neutral permission and [security-disposition](../glossary/elsa.md) metadata/extensions;
 - [route ownership metadata](../glossary/elsa.md) needed for inventory, collision diagnostics, and
   dynamic lifecycle;
-- thin ProblemDetails, validation, and OpenAPI conventions proven necessary by more than one
-  migrated module; and
+- thin ProblemDetails, validation, and OpenAPI conventions proven necessary by at least three
+  consumers, consistent with framework constitution sections 2.8 and 2.17; and
 - architecture and compatibility guards for those contracts.
 
 ASP.NET Core remains responsible for routing, binding, serialization, filters, results, CORS, rate
@@ -156,7 +157,7 @@ verified as a consumer contract.
 
 Streaming endpoints use ASP.NET Core response primitives and must preserve cancellation,
 backpressure, framing, heartbeat/idle behavior, resume semantics, and response cleanup. A shared
-streaming helper is justified only after multiple migrated modules demonstrate a capability gap in
+streaming helper is justified only after at least three consumers demonstrate a capability gap in
 the platform primitives.
 
 ### Specialized endpoint surfaces
@@ -171,6 +172,13 @@ the platform primitives.
 - **Workflow-authored HTTP endpoints.** These remain a distinct runtime publication model rather
   than pretending to be statically declared module mappings. At publication time they must carry
   explicit security disposition and route ownership metadata and participate in collision checks.
+  The matched endpoint metadata is the binding authority for execution: a request resolves the exact
+  shell generation and service provider recorded at publication, never whichever generation is
+  currently active for the same shell identifier. A complete candidate manifest is validated before
+  one atomic publication; rejection preserves the previous generation, while requests already bound
+  to it retain that exact generation through drain. Issue
+  [#1345](https://github.com/elsa-workflows/elsa-foundation/issues/1345) owns the publication,
+  resolution, drain, and collectible-context implementation and tests.
 - **[Dynamically unloadable endpoint modules](../glossary/elsa.md).** New unloadable REST modules use
   explicit Minimal API mapping
   and require repeatable collectible-`AssemblyLoadContext` evidence across routing, DI,
@@ -196,8 +204,23 @@ expanded FastEndpoints surface requires an approved compatibility exception that
 
 Convenience, familiarity, or avoiding a migration seam is not an exception. An approved exception
 still uses the shared Foundation Identity policy path and standard security/ownership metadata.
-The architecture guard rejects every new or expanded FastEndpoints registration that has no
-approved exception.
+
+The canonical, machine-readable exception registry is
+`tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`, created and enforced by
+[#1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346). Each entry identifies the
+owning module and feature, exact registration and route/method surface, capability-gap evidence,
+contract-test fixtures, linked approval issue or pull request, approving maintainer or architect,
+status, removal owner and issue, target migration wave, and confirmation that the assembly is not
+promised to be collectible. Only an `Approved` entry backed by the linked review is an allowlist
+entry; proposals and stale entries grant no exception. Closing the removal issue or completing the
+target wave expires the entry.
+
+The architecture guard combines a deterministic first-party endpoint inventory with registration
+ownership evidence. It rejects every new or expanded FastEndpoints registration that does not match
+an exact approved registry entry, and rejects expired, stale, or orphaned entries. Registry changes
+are reviewed architecture changes and may expand the surface only with a separately approved
+compatibility gap. The retirement gate is stricter than the registry: its scanner must report zero
+first-party FastEndpoints registrations, including registrations that still have an allowlist entry.
 
 ### Retirement criteria
 
@@ -253,7 +276,7 @@ implementations indefinitely.
 
 ## Constitutional alignment
 
-This decision uses standard ASP.NET Core adapters and module-local extension methods; it does not
+This decision uses standard ASP.NET Core adapters and module-local mapping methods; it does not
 introduce a new cross-feature structural pattern. Framework §2.24's closed pattern catalog remains
 draft and is therefore not treated as a ratified gate here. If the shared endpoint layer grows into
 a new framework or composition pattern, that proposal must return through the §2.24 ratification
