@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// authored-tree walk, and assembles the durable <see cref="WorkflowExecutable"/> artifact. Per-phase work is
 /// delegated to focused collaborators — <see cref="ActivityTreeProjector"/> (walk + validate),
 /// <see cref="ExecutableNodeCompiler"/> (node/resume-target compilation), and
-/// <see cref="WorkflowExecutableHasher"/> (content-addressable identity).
+/// <see cref="IWorkflowExecutableHasher"/> (content-addressable identity).
 /// </summary>
 public sealed class WorkflowExecutableCompiler(
     IWorkflowDefinitionVersionStore workflowVersions,
@@ -34,7 +34,7 @@ public sealed class WorkflowExecutableCompiler(
     ActivityTemplatePlacer templatePlacer,
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
-    WorkflowExecutableHasher hasher,
+    IWorkflowExecutableHasher hasher,
     ActivityTreeProjector activityTreeProjector,
     ExecutableNodeCompiler executableNodeCompiler,
     WorkflowExecutablePlacementSidecarContext? placementSidecars = null,
@@ -56,7 +56,7 @@ public sealed class WorkflowExecutableCompiler(
         ActivityTemplatePlacer templatePlacer,
         RuntimeInputBindingCompiler inputBindingCompiler,
         RuntimeOutputCaptureCompiler outputCaptureCompiler,
-        WorkflowExecutableHasher hasher,
+        IWorkflowExecutableHasher hasher,
         ActivityTreeProjector activityTreeProjector,
         ExecutableNodeCompiler executableNodeCompiler,
         WorkflowExecutablePlacementSidecarContext? placementSidecars,
@@ -88,7 +88,7 @@ public sealed class WorkflowExecutableCompiler(
         ActivityTemplatePlacer templatePlacer,
         RuntimeInputBindingCompiler inputBindingCompiler,
         RuntimeOutputCaptureCompiler outputCaptureCompiler,
-        WorkflowExecutableHasher hasher,
+        IWorkflowExecutableHasher hasher,
         ActivityTreeProjector activityTreeProjector,
         ExecutableNodeCompiler executableNodeCompiler,
         WorkflowExecutablePlacementSidecarContext? placementSidecars)

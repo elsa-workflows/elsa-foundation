@@ -41,7 +41,7 @@ public sealed class ActivityDraftTestRunService(
     IExecutableActivityTemplateStore activityTemplates,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
     ActivityTemplatePlacer placer,
-    WorkflowExecutableHasher hasher,
+    IWorkflowExecutableHasher hasher,
     IWorkflowExecutableStore workflowExecutables,
     IWorkflowStartDispatcher startDispatcher,
     IWorkflowTestScopeStore testScopeStore,

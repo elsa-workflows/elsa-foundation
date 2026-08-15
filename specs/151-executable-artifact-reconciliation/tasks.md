@@ -100,11 +100,11 @@ Stated once here rather than repeated per task. These apply in all phases, not j
 
 ### 2B — Extraction 2 of 3: executable hasher → Runtime, byte-stable (FR-B-010)
 
-- [ ] T016 [P] Add `IWorkflowExecutableHasher` (`ComputeHash(executable) → "sha256:…"`, `CreateArtifactId(prefix, hash)`) to `src/Elsa/Workflows/Runtime/Core/Contracts/`.
-- [ ] T017 Move `src/Elsa/Workflows/Publishing/Services/WorkflowExecutableHasher.cs` to `src/Elsa/Workflows/Runtime/Services/` as the default implementation. **The canonical algorithm and payload version MUST stay byte-stable** — the hash is identity (ADR 0038), so identical input MUST hash identically before and after the move. Verify at implementation time that the canonical payload reads only `WorkflowExecutable` model data (rootNodeId, incident strategy, ordinally-sorted nodes, input contract, dependencies); if it reaches anything Publishing-local, stop and escalate rather than altering the payload.
-- [ ] T018 **Golden-hash test** (2026-08-15 architect review, pinned): capture the pre-move hash of a fixture executable as a committed golden value and assert the relocated hasher reproduces it byte-for-byte. This is the extraction's acceptance gate, not a nice-to-have.
-- [ ] T019 Point the compiler's existing derivation site at `IWorkflowExecutableHasher` instead of the concrete Publishing type; delete the Publishing class once no references remain. Do **not** touch `ExecutableActivityTemplateBehaviorHasher` (`Publishing/Core/Services/`) — different concern, stays in Publishing.
-- [ ] T020 Register the hasher via `TryAdd` in `AddWorkflowRuntime()`.
+- [x] T016 [P] Add `IWorkflowExecutableHasher` (`ComputeHash(executable) → "sha256:…"`, `CreateArtifactId(prefix, hash)`) to `src/Elsa/Workflows/Runtime/Core/Contracts/`.
+- [x] T017 Move `src/Elsa/Workflows/Publishing/Services/WorkflowExecutableHasher.cs` to `src/Elsa/Workflows/Runtime/Services/` as the default implementation. **The canonical algorithm and payload version MUST stay byte-stable** — the hash is identity (ADR 0038), so identical input MUST hash identically before and after the move. Verify at implementation time that the canonical payload reads only `WorkflowExecutable` model data (rootNodeId, incident strategy, ordinally-sorted nodes, input contract, dependencies); if it reaches anything Publishing-local, stop and escalate rather than altering the payload.
+- [x] T018 **Golden-hash test** (2026-08-15 architect review, pinned): capture the pre-move hash of a fixture executable as a committed golden value and assert the relocated hasher reproduces it byte-for-byte. This is the extraction's acceptance gate, not a nice-to-have.
+- [x] T019 Point the compiler's existing derivation site at `IWorkflowExecutableHasher` instead of the concrete Publishing type; delete the Publishing class once no references remain. Do **not** touch `ExecutableActivityTemplateBehaviorHasher` (`Publishing/Core/Services/`) — different concern, stays in Publishing.
+- [x] T020 Register the hasher via `TryAdd` in `AddWorkflowRuntime()`.
 
 ### 2C — Extraction 3 of 3: neutral activation authority + ONE shared lifecycle coordinator (FR-B-006)
 

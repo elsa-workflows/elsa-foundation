@@ -117,6 +117,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         // TryAdd is the conflict prevention — a second registration cannot silently win. Shared by
         // publishing's deployment preflight (which wraps it) and the artifact importer's gate (FR-B-005).
         services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
+        // Replacement contract (§2.6.2): the hash IS artifact identity under ADR 0038, so two
+        // implementations would mean two definitions of identity. Extracted from Publishing so the
+        // compiler (derivation) and the artifact importer (recompute-before-persist) share one.
+        services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();

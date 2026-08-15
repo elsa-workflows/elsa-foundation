@@ -3,9 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Workflows.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Services;
+namespace Elsa.Workflows.Runtime.Services;
 
 /// <summary>
 /// Computes the content-addressable identity of a compiled workflow executable: the deterministic SHA-256
@@ -19,7 +20,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// canonical node tree (root node id plus the flattened, ordinally-ordered node renderings) and carries no
 /// source identity, so equal hash ⇔ equal behavior in both directions and executables are content-addressed.
 /// </remarks>
-public sealed class WorkflowExecutableHasher
+public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
 {
     private const string ArtifactHashPrefix = "sha256:";
     private const int ArtifactIdHashLength = 12;
