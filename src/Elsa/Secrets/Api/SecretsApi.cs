@@ -61,6 +61,7 @@ public static class SecretsApi
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Write)
             .WithMetadata(
                 descriptionMethod,
+                // The legacy endpoint returns 201 at runtime but advertises 200 in OpenAPI; preserve both contracts.
                 Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
                 Unauthorized(),
                 Forbidden())
@@ -463,6 +464,8 @@ public static class SecretsApi
         string[] contentTypes,
         CancellationToken cancellationToken)
     {
+        // The consumed legacy document represents requests, including GET/DELETE, as bodies and omits
+        // route/query parameters. Keep that non-standard shape until a separately approved contract change.
         operation.Parameters?.Clear();
         var schema = await context.GetOrCreateSchemaAsync(requestType, parameterDescription: null, cancellationToken);
         var document = context.Document ?? throw new InvalidOperationException("The OpenAPI document is unavailable.");

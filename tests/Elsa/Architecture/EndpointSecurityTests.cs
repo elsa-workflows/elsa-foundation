@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
@@ -190,8 +189,13 @@ public sealed class EndpointSecurityTests
 
         var mapper = File.ReadAllText(mapperPath);
         var contributor = File.ReadAllText(contributorPath);
-        var routeMappings = Regex.Matches(mapper, @"\bendpoints\.Map(?:Get|Post|Put|Delete)\s*\(", RegexOptions.CultureInvariant).Count;
-        var permissionPolicies = Regex.Matches(mapper, @"\.RequireAnyPermission\s*\(", RegexOptions.CultureInvariant).Count;
+        var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
+        var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+        var routeMappings = calls.Count(call =>
+            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax endpoint } &&
+            endpoint.Identifier.ValueText == "endpoints" &&
+            InvocationName(call) is "MapGet" or "MapPost" or "MapPut" or "MapDelete");
+        var permissionPolicies = calls.Count(call => InvocationName(call) == "RequireAnyPermission");
 
         Assert.Equal(10, routeMappings);
         Assert.Equal(10, permissionPolicies);
