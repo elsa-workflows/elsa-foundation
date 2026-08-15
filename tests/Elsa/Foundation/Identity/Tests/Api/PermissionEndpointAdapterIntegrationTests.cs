@@ -589,7 +589,7 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                         Context.RequestAborted);
                     throw new InvalidOperationException("The fixture normalizer was expected to fail.");
                 }
-                catch (Exception exception)
+                catch (InvalidOperationException exception)
                 {
                     state.AuthenticationTicketIssued = false;
                     state.AuthenticationTicketContainsNormalizedMarker = false;

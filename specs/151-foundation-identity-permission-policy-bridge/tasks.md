@@ -152,7 +152,7 @@ description: "Dependency-ordered implementation tasks for the Foundation Identit
 - [x] T053 If the map check is stale because of the new dependency, run the authorized full map refresh, review the generated findings, and stage every changed map plus `docs/maps/manifest.json` when changed.
 - [x] T054 Re-run the Roslyn mutation bite-proof and a denial/operational-failure mutation; inspect the full diff for route, method, payload, OpenAPI, discovery, public-constructor, and unrelated-policy drift.
 - [x] T055 Run `gh issue view 1344 --repo elsa-workflows/elsa-foundation --comments` and `gh pr list --repo elsa-workflows/elsa-foundation --state open --search "1344"` to re-check competing work, inspect `git status --short`, stage every reviewed changed path explicitly, and commit with `git commit -m "Unify Foundation permission authorization policies"`.
-- [ ] T056 Push `1305-permission-policy-bridge`, open or update the #1344 pull request, post focused/full/maps/diff/mutation evidence as a PR comment, move #1344/project status to Review, resolve review and CI findings, merge only on a green gate, move #1344/project status to Done, release the worktree claim, and verify the post-merge `Maps`, `CI`, and `HTTP workflow performance` runs on `main` are green.
+- [x] T056 Push `1305-permission-policy-bridge`, open or update the #1344 pull request, post focused/full/maps/diff/mutation evidence as a PR comment, move #1344/project status to Review, resolve review and CI findings, merge only on a green gate, move #1344/project status to Done, release the worktree claim, and verify the post-merge `Maps`, `CI`, and `HTTP workflow performance` runs on `main` are green.
 
 ---
 

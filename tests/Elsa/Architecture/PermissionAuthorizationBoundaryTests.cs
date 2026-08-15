@@ -284,7 +284,7 @@ public sealed class PermissionAuthorizationBoundaryTests
         get
         {
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
-            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+            while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                 directory = directory.Parent;
 
             return directory?.FullName
@@ -294,7 +294,7 @@ public sealed class PermissionAuthorizationBoundaryTests
 
     private sealed class TemporaryDirectory : IDisposable
     {
-        public TemporaryDirectory() => Path = System.IO.Path.Combine(
+        public TemporaryDirectory() => Path = System.IO.Path.Join(
             System.IO.Path.GetTempPath(),
             $"elsa-permission-boundary-{Guid.NewGuid():N}");
 
@@ -302,9 +302,15 @@ public sealed class PermissionAuthorizationBoundaryTests
 
         public void Write(string relativePath, string content)
         {
-            var fullPath = System.IO.Path.Combine(
-                Path,
-                relativePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            var normalizedRelativePath = relativePath.Replace('/', System.IO.Path.DirectorySeparatorChar);
+            if (System.IO.Path.IsPathRooted(normalizedRelativePath))
+                throw new ArgumentException("The fixture path must be relative.", nameof(relativePath));
+
+            var rootPath = System.IO.Path.GetFullPath(Path) + System.IO.Path.DirectorySeparatorChar;
+            var fullPath = System.IO.Path.GetFullPath(System.IO.Path.Join(rootPath, normalizedRelativePath));
+            if (!fullPath.StartsWith(rootPath, StringComparison.Ordinal))
+                throw new ArgumentException("The fixture path must remain inside the temporary directory.", nameof(relativePath));
+
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
             File.WriteAllText(fullPath, content);
         }
@@ -368,7 +374,7 @@ internal static class PermissionAuthorizationBoundaryScanner
 
     private static IEnumerable<string> EnumerateBoundaryFiles(string repositoryRoot)
     {
-        var sourceRoot = Path.Combine(repositoryRoot, "src", "Elsa");
+        var sourceRoot = Path.Join(repositoryRoot, "src", "Elsa");
         if (!Directory.Exists(sourceRoot))
             yield break;
 
@@ -434,9 +440,11 @@ internal static class PermissionAuthorizationBoundaryScanner
             }
         }
 
-        foreach (var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+        if (!directClaimAllowlisted)
         {
-            if (!directClaimAllowlisted && IsPermissionClaimsAny(invocation, model, aliases))
+            foreach (var invocation in tree.GetRoot().DescendantNodes()
+                         .OfType<InvocationExpressionSyntax>()
+                         .Where(invocation => IsPermissionClaimsAny(invocation, model, aliases)))
             {
                 Add(
                     diagnostics,
@@ -563,11 +571,9 @@ internal static class PermissionAuthorizationBoundaryScanner
                 AddReference(path);
         }
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (!assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location))
-                AddReference(assembly.Location);
-        }
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()
+                     .Where(assembly => !assembly.IsDynamic && !string.IsNullOrWhiteSpace(assembly.Location)))
+            AddReference(assembly.Location);
 
         AddReference(typeof(ClaimsPrincipal).Assembly.Location);
         AddReference(typeof(FastEndpoints.Factory).Assembly.Location);
