@@ -26,9 +26,8 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Studio.Preferences.Tests.Support;
 
 /// <summary>
-/// Deterministic plain ASP.NET Core hosts for the immutable FastEndpoints-before and
-/// Minimal-API-after captures. The consumed OpenAPI document always comes from ASP.NET Core's
-/// standard OpenAPI endpoint; no Swagger/FastEndpoints OpenAPI package is used.
+/// Deterministic plain ASP.NET Core host for migrated HTTP/OpenAPI evidence and mixed-authoring-model
+/// checks. Immutable pre-migration baselines remain the only source of legacy evidence.
 /// </summary>
 public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
 {
@@ -49,11 +48,9 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
 
     public IServiceProvider Services => host.Services;
 
-    public static Task<StudioPreferencesCanaryHost> StartAsync() => StartAsync(StudioPreferencesCanarySurface.LegacyFastEndpoints);
+    public static Task<StudioPreferencesCanaryHost> StartMigratedAsync() => StartAsync();
 
-    public static Task<StudioPreferencesCanaryHost> StartMigratedAsync() => StartAsync(StudioPreferencesCanarySurface.MigratedMinimalApi);
-
-    private static async Task<StudioPreferencesCanaryHost> StartAsync(StudioPreferencesCanarySurface surface)
+    private static async Task<StudioPreferencesCanaryHost> StartAsync()
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -83,9 +80,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                     new StudioPreferencesApiFeature().ConfigureServices(services);
                     services.AddFastEndpoints(options =>
                     {
-                        options.Assemblies = [surface == StudioPreferencesCanarySurface.LegacyFastEndpoints
-                            ? typeof(StudioPreferencesApiFeature).Assembly
-                            : typeof(UnrelatedFastEndpointsEndpoint).Assembly];
+                        options.Assemblies = [typeof(UnrelatedFastEndpointsEndpoint).Assembly];
                     });
                 });
                 webHost.Configure(app =>
@@ -106,8 +101,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                                 configurator.Configure(config);
                         });
 
-                        if (surface == StudioPreferencesCanarySurface.MigratedMinimalApi)
-                            MapMigratedFeature(endpoints);
+                        MapMigratedFeature(endpoints);
 
                         endpoints.MapOpenApi();
                     });
@@ -121,8 +115,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
     }
 
     public static async Task<IReadOnlyList<HttpCompatibilityObservation>> CaptureAsync(
-        IReadOnlyList<HttpCompatibilityCase> cases,
-        StudioPreferencesCanarySurface surface = StudioPreferencesCanarySurface.LegacyFastEndpoints)
+        IReadOnlyList<HttpCompatibilityCase> cases)
     {
         ArgumentNullException.ThrowIfNull(cases);
         var observations = new List<HttpCompatibilityObservation>(cases.Count);
@@ -131,7 +124,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         // keeps revisions, timestamps, and seeded documents deterministic across repeated captures.
         foreach (var testCase in cases)
         {
-            await using var canary = await StartAsync(surface);
+            await using var canary = await StartAsync();
             observations.Add(await HttpEvidenceCapture.CaptureAsync(canary.Client, testCase));
         }
 
@@ -247,12 +240,6 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
         }
     }
-}
-
-public enum StudioPreferencesCanarySurface
-{
-    LegacyFastEndpoints,
-    MigratedMinimalApi
 }
 
 internal sealed class UnrelatedFastEndpointsEndpoint : ElsaEndpointWithoutRequest<string>

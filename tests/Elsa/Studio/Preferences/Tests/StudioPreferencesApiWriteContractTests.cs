@@ -15,8 +15,7 @@ public sealed class StudioPreferencesApiWriteContractTests
     {
         var before = StudioPreferencesCompatibilityEvidence.LoadLegacyHttp("PUT");
         var after = await StudioPreferencesCanaryHost.CaptureAsync(
-            StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "PUT").ToArray(),
-            StudioPreferencesCanarySurface.MigratedMinimalApi);
+            StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "PUT").ToArray());
 
         var result = CompatibilityComparer.Compare(
             new CompatibilityEvidenceSet { Http = before },
