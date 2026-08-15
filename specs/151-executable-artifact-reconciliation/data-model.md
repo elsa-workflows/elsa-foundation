@@ -18,7 +18,7 @@ The single self-describing JSON closure envelope (clarified Q2). Not a persisted
 
 ## New: activation authority — `Elsa.Workflows.Runtime.Core` *(rev 2026-08-15: neutral names supersede the unrenamed relocation)*
 
-`IWorkflowActivationAuthority` over `WorkflowActivationSlot(SlotId, WorkflowDefinitionId, SlotName, ActiveActivationId, Source: WorkflowActivationSource, Revision, UpdatedAt)` with a CAS transition result carrying the replaced activation id. `WorkflowActivationSource` is the explicit ownership descriptor (e.g. publishing vs artifact-reconciliation + source id). Publishing's `IPublicationSlotStore`/`PublicationSlot` are superseded and deleted; the shared `WorkflowActivationCoordinator` is the only writer (both paths request activation through it). Persisted/wire-adjacent names elsewhere (`PublicationId`/`SlotId` fields on references and bindings, `PreparePublicationAsync`/`ActivatePublicationAsync` store members) are grandfathered per §E6 — the coordinator writes activation ids into those existing fields.
+`IWorkflowActivationAuthority` over `WorkflowActivationSlot(SlotId, WorkflowDefinitionId, SlotName, ActiveActivationId, Source: WorkflowActivationSource, Revision, UpdatedAt)` with a CAS transition result carrying the replaced activation id. `WorkflowActivationSource` is the explicit ownership descriptor (e.g. publishing vs artifact-reconciliation + source id). Publishing's `IPublicationSlotStore`/`PublicationSlot` are superseded and deleted; the shared `WorkflowActivationCoordinator` is the only writer (both paths request activation through it). The rename sweep is total runtime-side (aligned 2026-08-15): `PublicationId` fields become `ActivationId` on trigger bindings, source references, the source-selection model, and projection-state documents (manifest field constants + indexes included — no consumers, baselines already move); projection-store members rename to `PrepareActivationAsync`/`ActivateAsync`/`…ByActivationAsync`. `SlotId` and source-provenance facts (`Scope == Published`, `PublishedAt`) keep their names.
 
 - One ledger per engine, **physically as well as contractually**: a single durable implementation backed by a new slot document kind in the **runtime Groundwork store family** (registered with the other runtime stores); the publishing-family Groundwork slot store is deleted (no consumers yet → nothing to migrate; removes the dual-ledger composition-transition hole). In-memory default via `AddWorkflowRuntime()` (`TryAdd`) is the non-Groundwork fallback.
 - **Ownership + conflict rules** *(rev 2026-08-15 — supersedes the id-namespace convention)*: ownership lives in the slot's explicit `Source` field, never inferred from id prefixes (prefixes like `import:{sourceId}:…` may remain for diagnostics only). Rules: same artifact from any source → idempotent no-op; concurrent change → CAS on `Revision`; different artifact from a non-owning source → rejected with a diagnostic naming the owning source (ownership transfer = explicit operator action, post-v1).
@@ -49,8 +49,8 @@ Status enum gains `MissingActivityType` (or the type axis reuses `Missing` with 
 ## Imported rows (existing runtime entities, written by the importer)
 
 - **`WorkflowExecutable`** — written via `IWorkflowExecutableStore.SaveAsync` verbatim from the envelope (content-addressed, create-only; already-exists = idempotent no-op). The importer never mints identities (edge case pinned in spec).
-- **`WorkflowExecutableSourceReference`** — **minted** by the importer per activated artifact: `SourceKind`/`SourceId` from the source, `Scope = Published`, `PublicationId` = the opaque activation id minted via the shared coordinator (any prefix is diagnostics-only), `SlotId` = importer-derived (default slot per definition), `TenantId` from option, `DefinitionId`/`DefinitionVersionId`/`ArtifactVersion` copied from the artifact identity. Predecessor's minted reference retired with reason `"publication-replaced"` on supersession.
-- **`WorkflowTriggerBinding`** — recomputed via `WorkflowTriggerIndexer.PreparePublicationAsync(executable, publicationId, slotId)`; activated/deactivated through the existing publication projection semantics. Never copied from the envelope.
+- **`WorkflowExecutableSourceReference`** — **minted** by the importer per activated artifact: `SourceKind`/`SourceId` from the source, `Scope = Published`, `ActivationId` (renamed from `PublicationId`) = the opaque activation id minted via the shared coordinator (any prefix is diagnostics-only), `SlotId` = importer-derived (default slot per definition), `TenantId` from option, `DefinitionId`/`DefinitionVersionId`/`ArtifactVersion` copied from the artifact identity. Predecessor's minted reference retired with reason `"publication-replaced"` on supersession.
+- **`WorkflowTriggerBinding`** — recomputed via the runtime trigger indexer's prepare path (`WorkflowTriggerIndexer`, members renamed to activation vocabulary per the sweep) with the coordinator's activation id + slot id; activated/deactivated through the activation projection semantics. Never copied from the envelope.
 
 ## Relationships
 
@@ -58,8 +58,8 @@ Status enum gains `MissingActivityType` (or the type axis reuses `Missing` with 
 WorkflowArtifactClosure ──contains──> WorkflowExecutable (1..n, closure)
 WorkflowExecutable.Dependencies ──(ArtifactId+ArtifactHash)──> WorkflowExecutable (validated at import)
 WorkflowActivationSlot (DefinitionId, SlotName) ──ActiveActivationId + Source──> minted activation id
-minted WorkflowExecutableSourceReference ──PublicationId/SlotId (grandfathered field names)──> WorkflowActivationSlot entry
-WorkflowTriggerBinding ──PublicationId──> publication projection state (IsActive flip)
+minted WorkflowExecutableSourceReference ──ActivationId/SlotId──> WorkflowActivationSlot entry
+WorkflowTriggerBinding ──ActivationId──> activation projection state (IsActive flip)
 ```
 
 Nothing on any existing entity changes shape. The only new persisted record kind is the runtime-family slot document (registered in the runtime Groundwork store family, replacing the deleted publishing-family slot store); everything else reuses existing stores.
