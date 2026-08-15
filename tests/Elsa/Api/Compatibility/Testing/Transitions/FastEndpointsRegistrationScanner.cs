@@ -277,10 +277,10 @@ public sealed class FastEndpointsRegistrationScanner
             var candidates = scopeType is null ? new[] { key } : new[] { $"{scopeType}.{key}", key };
             foreach (var scopedKey in candidates
                          .Select(candidate => Key(owner, candidate))
-                         .Where(scopedKey => !_ambiguous.Contains(scopedKey) && _definitions.ContainsKey(scopedKey)))
+                         .Where(scopedKey => !_ambiguous.Contains(scopedKey) &&
+                                             _definitions.ContainsKey(scopedKey) &&
+                                             resolving.Add(scopedKey)))
             {
-                if (!resolving.Add(scopedKey))
-                    continue;
                 var definition = _definitions[scopedKey];
                 try
                 {
