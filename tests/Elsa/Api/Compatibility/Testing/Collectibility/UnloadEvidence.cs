@@ -54,6 +54,23 @@ public sealed class UnloadEvidence
     public static UnloadEvidence Verify(CollectibleEndpointCycle cycle, int maxAttempts = DefaultMaxCollectionAttempts)
     {
         ArgumentNullException.ThrowIfNull(cycle);
+        return Verify(cycle.CycleId, cycle.LoadContext, cycle.Assembly, cycle.EndpointType, maxAttempts);
+    }
+
+    /// <summary>
+    /// Verifies arbitrary collectible endpoint evidence without requiring the caller to expose
+    /// framework-specific route or service owners through the shared compatibility model.
+    /// </summary>
+    public static UnloadEvidence Verify(
+        Guid cycleId,
+        WeakReference loadContext,
+        WeakReference assembly,
+        WeakReference endpointType,
+        int maxAttempts = DefaultMaxCollectionAttempts)
+    {
+        ArgumentNullException.ThrowIfNull(loadContext);
+        ArgumentNullException.ThrowIfNull(assembly);
+        ArgumentNullException.ThrowIfNull(endpointType);
         if (maxAttempts is < 1 or > MaximumCollectionAttempts)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), maxAttempts,
                 $"Collection attempts must be between 1 and {MaximumCollectionAttempts}.");
@@ -63,7 +80,7 @@ public sealed class UnloadEvidence
         for (; attempts < maxAttempts; attempts++)
         {
             ForceCollection();
-            if (!cycle.LoadContext.IsAlive && !cycle.Assembly.IsAlive && !cycle.EndpointType.IsAlive)
+            if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive)
             {
                 collected = true;
                 attempts++;
@@ -71,14 +88,14 @@ public sealed class UnloadEvidence
             }
         }
 
-        var stage = collected ? RetentionStage.Clean : RetentionStageProbe.PublishedStage(cycle.CycleId);
+        var stage = collected ? RetentionStage.Clean : RetentionStageProbe.PublishedStage(cycleId);
         var diagnostic = collected ? null : Describe(stage);
         return new UnloadEvidence(
-            cycle.CycleId,
+            cycleId,
             stage,
-            cycle.LoadContext,
-            cycle.Assembly,
-            cycle.EndpointType,
+            loadContext,
+            assembly,
+            endpointType,
             collected,
             attempts,
             diagnostic);

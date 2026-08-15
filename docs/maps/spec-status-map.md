@@ -191,3 +191,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [150-package-version-computation](../../specs/150-package-version-computation/spec.md) | Package Version Computation and Selective Publishing | Draft | - | 0 | 0 | deferred, out of scope |
 | [151-foundation-identity-permission-policy-bridge](../../specs/151-foundation-identity-permission-policy-bridge/spec.md) | Foundation Identity Permission Policy Bridge | Draft | - | 56 | 0 | retained, deferred |
 | [152-rest-api-migration-gates](../../specs/152-rest-api-migration-gates/spec.md) | REST API Migration Compatibility and Authoring Gates | Complete | - | 37 | 0 | retained |
+| [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Draft | - | 35 | 0 | retained |
