@@ -16,13 +16,13 @@ The single self-describing JSON closure envelope (clarified Q2). Not a persisted
 
 **Validation rules**: `RootArtifactId` present in `Artifacts`; every `Dependencies` edge of every member resolves **inside `Artifacts` alone** — wire-format validity is environment-independent, so an envelope that is only complete because the target store happens to contain a child is a broken export and fails everywhere identically (the store is consulted only afterward, for idempotent skip-persistence of already-present members); declared `ArtifactHash` on edges matches the referenced member's identity hash; no cycles; **each member's canonical content hash recomputes to its declared `Identity.ArtifactHash`** (runtime-owned hasher, before persistence — corruption/invariant guard, not tamper-proofing); references restricted to `Scope == Published` (export-side enforcement, FR-B-011).
 
-## Relocated: activation authority — `Elsa.Workflows.Publishing.Core` → `Elsa.Workflows.Runtime.Core`
+## New: activation authority — `Elsa.Workflows.Runtime.Core` *(rev 2026-08-15: neutral names supersede the unrenamed relocation)*
 
-Moved **unrenamed** (clarified Q3/A2): `IPublicationSlotStore`, `PublicationSlot(SlotId, WorkflowDefinitionId, SlotName, ActivePublicationId, Revision, UpdatedAt)`, `PublicationSlotTransitionResult(Succeeded, Slot, ReplacedPublicationId, Failure)`.
+`IWorkflowActivationAuthority` over `WorkflowActivationSlot(SlotId, WorkflowDefinitionId, SlotName, ActiveActivationId, Source: WorkflowActivationSource, Revision, UpdatedAt)` with a CAS transition result carrying the replaced activation id. `WorkflowActivationSource` is the explicit ownership descriptor (e.g. publishing vs artifact-reconciliation + source id). Publishing's `IPublicationSlotStore`/`PublicationSlot` are superseded and deleted; the shared `WorkflowActivationCoordinator` is the only writer (both paths request activation through it). Persisted/wire-adjacent names elsewhere (`PublicationId`/`SlotId` fields on references and bindings, `PreparePublicationAsync`/`ActivatePublicationAsync` store members) are grandfathered per §E6 — the coordinator writes activation ids into those existing fields.
 
 - One ledger per engine, **physically as well as contractually**: a single durable implementation backed by a new slot document kind in the **runtime Groundwork store family** (registered with the other runtime stores); the publishing-family Groundwork slot store is deleted (no consumers yet → nothing to migrate; removes the dual-ledger composition-transition hole). In-memory default via `AddWorkflowRuntime()` (`TryAdd`) is the non-Groundwork fallback.
-- **Id namespace convention** (new, on the opaque `PublicationId` string): publish mints `publication-{shortId}` (existing); the importer mints `import:{sourceId}:{shortId}`. The namespace is the authority attribution for the cross-authority guard.
-- **State transitions**: `TryActivateAsync(definitionId, slotName, candidatePublicationId, expectedRevision)` — CAS on `Revision`; returns `ReplacedPublicationId`. Guard precondition (both actors): if the slot's `ActivePublicationId` carries the *other* actor's namespace → reject candidate (diagnostic naming the conflicting authority), no transition.
+- **Ownership + conflict rules** *(rev 2026-08-15 — supersedes the id-namespace convention)*: ownership lives in the slot's explicit `Source` field, never inferred from id prefixes (prefixes like `import:{sourceId}:…` may remain for diagnostics only). Rules: same artifact from any source → idempotent no-op; concurrent change → CAS on `Revision`; different artifact from a non-owning source → rejected with a diagnostic naming the owning source (ownership transfer = explicit operator action, post-v1).
+- **State transitions**: CAS-guarded `TryActivate(definitionId, slotName, candidateActivationId, source, expectedRevision)` — returns the replaced activation id; conflict rules above enforced at the transition.
 - **Supersession ordering** (FR-B-007): "newer" = SemVer sort key over `ArtifactVersion` (`SemVer.ToSortKey`, ordinal compare — the design-side comparator), evaluated against the active publication's minted source reference. Candidate ≤ active → skip; unparseable → reject at import.
 
 ## New: `RuntimeRequirementCheckResult` — `Elsa.Workflows.Runtime.Core`
@@ -49,7 +49,7 @@ Status enum gains `MissingActivityType` (or the type axis reuses `Missing` with 
 ## Imported rows (existing runtime entities, written by the importer)
 
 - **`WorkflowExecutable`** — written via `IWorkflowExecutableStore.SaveAsync` verbatim from the envelope (content-addressed, create-only; already-exists = idempotent no-op). The importer never mints identities (edge case pinned in spec).
-- **`WorkflowExecutableSourceReference`** — **minted** by the importer per activated artifact: `SourceKind`/`SourceId` from the source, `Scope = Published`, `PublicationId` = namespaced import id, `SlotId` = importer-derived (default slot per definition), `TenantId` from option, `DefinitionId`/`DefinitionVersionId`/`ArtifactVersion` copied from the artifact identity. Predecessor's minted reference retired with reason `"publication-replaced"` on supersession.
+- **`WorkflowExecutableSourceReference`** — **minted** by the importer per activated artifact: `SourceKind`/`SourceId` from the source, `Scope = Published`, `PublicationId` = the opaque activation id minted via the shared coordinator (any prefix is diagnostics-only), `SlotId` = importer-derived (default slot per definition), `TenantId` from option, `DefinitionId`/`DefinitionVersionId`/`ArtifactVersion` copied from the artifact identity. Predecessor's minted reference retired with reason `"publication-replaced"` on supersession.
 - **`WorkflowTriggerBinding`** — recomputed via `WorkflowTriggerIndexer.PreparePublicationAsync(executable, publicationId, slotId)`; activated/deactivated through the existing publication projection semantics. Never copied from the envelope.
 
 ## Relationships
@@ -57,8 +57,8 @@ Status enum gains `MissingActivityType` (or the type axis reuses `Missing` with 
 ```
 WorkflowArtifactClosure ──contains──> WorkflowExecutable (1..n, closure)
 WorkflowExecutable.Dependencies ──(ArtifactId+ArtifactHash)──> WorkflowExecutable (validated at import)
-PublicationSlot (DefinitionId, SlotName) ──ActivePublicationId──> minted PublicationId
-minted WorkflowExecutableSourceReference ──PublicationId/SlotId──> PublicationSlot entry
+WorkflowActivationSlot (DefinitionId, SlotName) ──ActiveActivationId + Source──> minted activation id
+minted WorkflowExecutableSourceReference ──PublicationId/SlotId (grandfathered field names)──> WorkflowActivationSlot entry
 WorkflowTriggerBinding ──PublicationId──> publication projection state (IsActive flip)
 ```
 

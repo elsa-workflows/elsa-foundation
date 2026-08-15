@@ -16,18 +16,43 @@ public interface IRuntimeRequirementChecker
 ```
 
 - Default `RuntimeRequirementChecker` in `Elsa.Workflows.Runtime`, registered by `AddWorkflowRuntime()` (`TryAddScoped`).
-- Consumers: publishing's `RuntimeRequirementPreflight` (thin wrapper — keeps retained-set scope, views, `ActivityDiagnostic` formatting; **gains** the missing activity-consumer diagnostics) and the artifact importer's gate (FR-B-005a).
+- Consumers: publishing's `RuntimeRequirementPreflight` (thin wrapper — keeps retained-set scope, views, `ActivityDiagnostic` formatting; **gains** the missing activity-consumer diagnostics) and the artifact importer's gate (FR-B-005a). The contract accepts requirement sets from **executables and reusable-activity templates** (architect review 2026-08-15 — the preflight's template validation is preserved capability).
 - Depends only on: `IRuntimeActivityConsumerCapability` (Activities.Runtime.Core), `IRuntimeDurableValueStorageDriverRegistry` (Runtime.Core), `IWellKnownTypeRegistry` (Serialization.Core). All already inside Runtime.Core's reference envelope.
 
-## `IPublicationSlotStore` — relocated to `Elsa.Workflows.Runtime.Core` (FR-B-006 / A2)
+## `IWorkflowActivationAuthority` + `WorkflowActivationCoordinator` — `Elsa.Workflows.Runtime.Core`/`Elsa.Workflows.Runtime` (FR-B-006, rev 2026-08-15)
 
-Contract, `PublicationSlot`, and `PublicationSlotTransitionResult` move **unrenamed** from `Elsa.Workflows.Publishing.Core.Contracts/Models`. Semantics unchanged (definition-keyed authority, `Revision` CAS, returns `ReplacedPublicationId`). Replacement contract with **one durable implementation, one physical home**: a slot document kind in the runtime Groundwork store family, registered with the other runtime stores; the publishing-family slot store is **deleted** (no consumers yet → nothing to migrate); in-memory default otherwise. Groundwork historical-schema baselines update as a named task.
+Neutral activation contracts **supersede** publishing's slot store (which is deleted, along with its Groundwork registration; no consumers → nothing to migrate):
 
-**Publication-id namespace (new convention, opaque strings):** publish = `publication-{shortId}`; import = `import:{sourceId}:{shortId}`. Cross-authority guard: an actor MUST NOT supersede an `ActivePublicationId` carrying the other namespace — reject with a diagnostic naming the conflicting authority.
+```csharp
+public interface IWorkflowActivationAuthority   // definition-keyed ledger, replacement contract
+{
+    Task<WorkflowActivationSlot?> FindAsync(string definitionId, string slotName, CancellationToken ct = default);
+    /// CAS transition. Enforces the conflict rules: same artifact → no-op success;
+    /// different artifact from a non-owning source → rejected transition result;
+    /// revision mismatch → concurrency failure.
+    Task<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationRequest request, CancellationToken ct = default);
+}
+
+public sealed record WorkflowActivationSlot(
+    string SlotId, string WorkflowDefinitionId, string SlotName,
+    string ActiveActivationId, WorkflowActivationSource Source, long Revision, DateTimeOffset UpdatedAt);
+
+public sealed record WorkflowActivationSource(string Kind, string? SourceId); // e.g. ("publishing", null), ("artifact-reconciliation", "prod-drop")
+
+public interface IWorkflowActivationCoordinator  // the ONLY activation entry point for every path
+{
+    /// Owns the complete lifecycle: root-write lease → source-reference mint →
+    /// binding + recurring-schedule projection prepare → authority CAS → projection
+    /// activate → observer notification → predecessor retire; compensates on failure.
+    Task<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken ct = default);
+}
+```
+
+One durable authority implementation, one physical home: an activation-slot document kind in the runtime Groundwork store family; in-memory default otherwise; Groundwork historical-schema baselines update as a named task. Publishing (`PublicationActivator`/publish handler) and the artifact reconciler are both *callers* of the coordinator — neither implements the sequence. Activation ids stay opaque; ownership is decided by the slot's `Source` field only (prefixes are diagnostics, never semantics).
 
 ## `IWorkflowExecutableHasher` — extracted to `Elsa.Workflows.Runtime.Core` (FR-B-010; Greptile re-review)
 
-The canonical content-hash derivation (`ComputeHash(executable) → "sha256:…"`, `CreateArtifactId(prefix, hash)`) moves from `Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher` to a runtime-layer contract + default (third extraction, same pattern as the checker and slot authority). Its canonical payload reads only `WorkflowExecutable` model data, so the move is dependency-clean (verify exact set at task time). Consumers: the compiler (existing derivation site, now via the contract) and the importer (recompute-before-persist; mismatch → broken-source diagnostic). Deterministic and public — an integrity guard for the ADR 0038 content-addressing invariant, not a security boundary.
+The canonical content-hash derivation (`ComputeHash(executable) → "sha256:…"`, `CreateArtifactId(prefix, hash)`) moves from `Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher` to a runtime-layer contract + default (third extraction, same pattern as the checker and slot authority). Its canonical payload reads only `WorkflowExecutable` model data, so the move is dependency-clean (verify exact set at task time). Consumers: the compiler (existing derivation site, now via the contract) and the importer (recompute-before-persist; mismatch → broken-source diagnostic). Deterministic and public — an integrity guard for the ADR 0038 content-addressing invariant, not a security boundary. Extraction constraint (architect review 2026-08-15): the canonical algorithm and payload version stay **byte-stable** — identical input hashes identically before and after the move, pinned by a golden-hash test.
 
 ## `IWorkflowArtifactReconciliationSource` — `Elsa.Workflows.Runtime.Reconciliation.Core` (new; FR-B-002)
 
@@ -48,8 +73,8 @@ v1 implementation: JSON folder/file source configured by `JsonWorkflowArtifactRe
 public interface IWorkflowArtifactReconciler
 {
     /// One pass over all registered sources: parse → closure validation (envelope-only) →
-    /// hash recompute → requirements gate → idempotency/supersession → activate (full
-    /// projection set: bindings + recurring schedules + observer notification). Isolation
+    /// hash recompute → requirements gate → idempotency/supersession → submit to the
+    /// shared IWorkflowActivationCoordinator (which owns the full lifecycle). Isolation
     /// unit = the closure file: all gates before any write; a failing member rejects the
     /// whole unit; rejections are diagnostics on the result, never batch failures.
     Task<WorkflowArtifactReconciliationResult> ReconcileAsync(CancellationToken ct = default);

@@ -6,7 +6,7 @@
 
 ## Summary
 
-Close the "runtime-only engine has nothing to execute" gap by (a) exporting a portable, self-contained **closure envelope** (artifact + transitive child artifacts + published references + trigger bindings) from a publish-capable engine through a pluggable export-target seam whose v1 target is an API download, and (b) importing/reconciling such envelopes into a design-free runtime's executable store behind a two-axis requirements gate (consumer capabilities + storage drivers, and per-node CLR type presence) that rejects at import, never at first activation. Three reviewed extractions carry the design: the requirements checker moves from `Publishing.Api` to the Runtime layer (`IRuntimeRequirementChecker`); the definition-keyed activation authority (`IPublicationSlotStore`/`PublicationSlot`) moves from `Publishing.Core` to `Runtime.Core` so publish and import share **one activation ledger per engine**, with a namespace-attributed cross-authority guard preventing silent double activation; and the executable hasher moves to the runtime layer so the importer recomputes each received artifact's content hash before persistence (content-addressing invariant guard; signing stays deferred). Triggering reuses the existing startup-task + shell-reload model (#1303 deferred).
+Close the "runtime-only engine has nothing to execute" gap by (a) exporting a portable, self-contained **closure envelope** (artifact + transitive child artifacts + published references + trigger bindings) from a publish-capable engine through a pluggable export-target seam whose v1 target is an API download, and (b) importing/reconciling such envelopes into a design-free runtime's executable store behind a two-axis requirements gate (consumer capabilities + storage drivers, and per-node CLR type presence) that rejects at import, never at first activation. Three reviewed extractions carry the design (all confirmed by the 2026-08-15 architect review, with refinements): the requirements checker moves from `Publishing.Api` to the Runtime layer (`IRuntimeRequirementChecker`, covering executables and templates); the activation authority becomes **new, neutrally named runtime contracts** (`IWorkflowActivationAuthority`/`WorkflowActivationSlot` with an explicit `WorkflowActivationSource` ownership field — superseding publishing's slot store, never inferring ownership from id prefixes) behind **one shared `WorkflowActivationCoordinator`** that owns the complete activation lifecycle for both publish and import; and the executable hasher moves to the runtime layer, byte-stable, so the importer recomputes each received artifact's content hash before persistence (content-addressing invariant guard; signing stays deferred). Triggering reuses the existing startup-task + shell-reload model (#1303 deferred).
 
 ## Technical Context
 
@@ -69,8 +69,8 @@ specs/151-executable-artifact-reconciliation/
 src/Elsa/Workflows/Runtime/
 ├── Core/                                  # MODIFIED: +WorkflowArtifactClosure, +IRuntimeRequirementChecker,
 │                                          #   +RuntimeRequirementCheckResult, +IWorkflowExecutableHasher,
-│                                          #   +relocated IPublicationSlotStore/PublicationSlot/
-│                                          #   PublicationSlotTransitionResult
+│                                          #   +IWorkflowActivationAuthority/WorkflowActivationSlot/
+│                                          #   WorkflowActivationSource, +IWorkflowActivationCoordinator
 ├── Elsa.Workflows.Runtime.csproj          # MODIFIED: <Compile Remove> glob gains Reconciliation sibling;
 │   └── (impl project)                     #   +RuntimeRequirementChecker default, +in-memory slot store,
 │                                          #   AddWorkflowRuntime() registrations
@@ -79,10 +79,10 @@ src/Elsa/Workflows/Runtime/
 │   └── Elsa.Workflows.Runtime.Reconciliation.csproj             # NEW: abstract+Json features, reconciler,
 │                                                                #   startup task, import gate
 src/Elsa/Workflows/Publishing/
-├── Core/                                  # MODIFIED: -relocated slot types; +IWorkflowArtifactExportTarget,
+├── Core/                                  # MODIFIED: -slot contract (superseded); +IWorkflowArtifactExportTarget,
 │                                          #   +WorkflowArtifactExportDelivery
-├── (engine)                               # MODIFIED: +IWorkflowArtifactClosureFactory + impl; publish-side
-│                                          #   cross-authority guard; recompile vs relocated contract
+├── (engine)                               # MODIFIED: +IWorkflowArtifactClosureFactory + impl; PublicationActivator +
+│                                          #   publish handler become callers of the shared activation coordinator
 ├── Api/                                   # MODIFIED: preflight → thin wrapper (+consumer diagnostics),
 │                                          #   +export endpoint, +DownloadWorkflowArtifactExportTarget,
 │                                          #   +capability rel workflow-executable-export, +permission, +route
@@ -115,4 +115,4 @@ docs/maps/* (regenerated), EXTENSION_POINTS.md files per research D9
 
 ## Next step
 
-`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker + hasher extractions + wrapper + classification fix; (2) slot-contract relocation + single runtime-family ledger (publishing slot store deleted, baselines updated) + cross-authority guard; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.
+`/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker + hasher extractions + wrapper + classification fix; (2) neutral activation authority + shared coordinator (absorbing PublicationActivator's sequence; publishing slot store deleted, baselines updated) + explicit ownership conflict rules; (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.
