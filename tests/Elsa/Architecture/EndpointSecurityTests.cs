@@ -179,6 +179,38 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
+    public void Secrets_minimal_api_declares_one_owned_secure_route_per_operation_and_catalog_owner()
+    {
+        var apiRoot = Path.Join(RepoRoot, "src", "Elsa", "Secrets", "Api");
+        var mapperPath = Path.Join(apiRoot, "SecretsApi.cs");
+        var contributorPath = Path.Join(apiRoot, "Authorization", "SecretsPermissionContributor.cs");
+        Assert.True(File.Exists(mapperPath), "The migrated Secrets API must expose its module-owned mapper.");
+        Assert.True(File.Exists(contributorPath), "The migrated Secrets API must expose its permission contributor.");
+
+        var mapper = File.ReadAllText(mapperPath);
+        var contributor = File.ReadAllText(contributorPath);
+        var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
+        var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+        var routeMappings = calls.Count(call =>
+            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax endpoint } &&
+            endpoint.Identifier.ValueText == "endpoints" &&
+            InvocationName(call) is "MapGet" or "MapPost" or "MapPut" or "MapDelete");
+        var permissionPolicies = calls.Count(call => InvocationName(call) == "RequireAnyPermission");
+
+        Assert.Equal(10, routeMappings);
+        Assert.Equal(10, permissionPolicies);
+        Assert.Contains("Elsa.Secrets.Api", mapper, StringComparison.Ordinal);
+        Assert.Contains("EndpointAuthoringModels.MinimalApi", mapper, StringComparison.Ordinal);
+        Assert.Contains("WithOwner", mapper, StringComparison.Ordinal);
+
+        foreach (var permission in new[] { "Read", "Write", "UpdateValue", "Delete", "Test", "Use", "Import", "Export" })
+            Assert.Contains($"SecretsPermissions.{permission}", contributor, StringComparison.Ordinal);
+
+        Assert.Contains("new HashSet<string>(StringComparer.Ordinal) { SecretsPermissions.Read }", contributor, StringComparison.Ordinal);
+        Assert.DoesNotContain("PermissionKey.Wildcard", contributor, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
     {
         var endpointType = typeof(ApiCapabilitiesFeature).Assembly.GetType(
