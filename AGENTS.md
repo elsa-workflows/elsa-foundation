@@ -246,5 +246,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/151-foundation-identity-permission-policy-bridge/plan.md`.
+`specs/152-rest-api-migration-gates/plan.md`.
 <!-- SPECKIT END -->
