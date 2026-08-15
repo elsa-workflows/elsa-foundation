@@ -49,7 +49,7 @@ Foundation authorization is already the correct common boundary. Both authoring 
 
 The legacy OpenAPI surface described the route namespace through request schemas instead of path parameters, including a required GET request body. Because that description is externally observable, the canary preserves it with explicit metadata and an operation transformer. A future contract version should correct the description through a deliberate approved difference rather than silently changing generated clients during framework migration.
 
-FastEndpoints' configured ProblemDetails representation was also observable. The Minimal implementation uses module-local result translation for the exact legacy status, title, type URI, error extension, and trace field. This is compatibility code, not a recommendation for a new shared endpoint framework.
+FastEndpoints' configured ProblemDetails representation was also observable. The Minimal implementation uses module-local result translation for the exact legacy status, title, type URI, error extension, and trace field. Compatibility comparisons normalize only the volatile per-request trace identifier value and separately require the field to remain present and non-empty. This is compatibility code, not a recommendation for a new shared endpoint framework.
 
 ### Collectibility trap
 

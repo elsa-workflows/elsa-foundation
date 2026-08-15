@@ -14,8 +14,9 @@ public sealed class StudioPreferencesApiWriteContractTests
     public async Task Migrated_put_http_evidence_matches_the_legacy_baseline_with_no_unapproved_differences()
     {
         var before = StudioPreferencesCompatibilityEvidence.LoadLegacyHttp("PUT");
-        var after = await StudioPreferencesCanaryHost.CaptureAsync(
-            StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "PUT").ToArray());
+        var after = StudioPreferencesCompatibilityEvidence.NormalizeVolatileFields(
+            await StudioPreferencesCanaryHost.CaptureAsync(
+                StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "PUT").ToArray()));
 
         var result = CompatibilityComparer.Compare(
             new CompatibilityEvidenceSet { Http = before },

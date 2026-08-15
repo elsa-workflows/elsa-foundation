@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.OpenApi;
@@ -33,6 +34,12 @@ public sealed class StudioPreferencesApiContractTests
             Assert.NotEmpty(observation.Binding);
             Assert.InRange(observation.StatusCode, 200, 599);
             Assert.Equal(observation.StatusCode.ToString(), observation.Status);
+            if (string.IsNullOrEmpty(observation.ProblemDetails))
+                return;
+
+            using var problem = JsonDocument.Parse(observation.ProblemDetails);
+            Assert.True(problem.RootElement.TryGetProperty("traceId", out var traceId));
+            Assert.False(string.IsNullOrWhiteSpace(traceId.GetString()));
         });
     }
 

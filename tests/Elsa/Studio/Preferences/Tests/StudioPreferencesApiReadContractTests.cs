@@ -13,8 +13,9 @@ public sealed class StudioPreferencesApiReadContractTests
     public async Task Migrated_get_http_evidence_matches_the_legacy_baseline_with_no_unapproved_differences()
     {
         var before = StudioPreferencesCompatibilityEvidence.LoadLegacyHttp("GET");
-        var after = await StudioPreferencesCanaryHost.CaptureAsync(
-            StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "GET").ToArray());
+        var after = StudioPreferencesCompatibilityEvidence.NormalizeVolatileFields(
+            await StudioPreferencesCanaryHost.CaptureAsync(
+                StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "GET").ToArray()));
 
         var result = CompatibilityComparer.Compare(
             new CompatibilityEvidenceSet { Http = before },
