@@ -27,8 +27,8 @@ project; public progress and validation evidence remain on the tracker and child
 - Shared permission metadata, policy extensions, catalog contributions, and adapter contract tests.
 - HTTP/OpenAPI compatibility snapshots and endpoint authorization/authoring guards.
 - Studio Preferences, Secrets, and Structured Logs proof migrations.
-- Endpoint ownership metadata, collision validation, atomic CShells publication, and exact-generation
-  binding.
+- [Route ownership metadata](../glossary/elsa.md), collision validation, atomic CShells publication,
+  and exact-generation binding.
 - Bounded remaining module waves and final FastEndpoints retirement.
 
 ## Out Of Scope
@@ -39,8 +39,9 @@ project; public progress and validation evidence remain on the tracker and child
   [Zero-EF Persistence](zero-ef-persistence.md).
 - Structured Logs/OpenTelemetry domain behavior, persistence, or Studio UI work; those remain under
   [Diagnostics Observability Readiness](diagnostics-observability-readiness.md).
-- Workflow-authored HTTP execution semantics beyond shared endpoint disposition and ownership
-  metadata.
+- Workflow-authored HTTP execution semantics beyond shared
+  [endpoint security disposition](../glossary/elsa.md) and
+  [route ownership metadata](../glossary/elsa.md).
 - Replacing HTTP/JSON with another protocol or redesigning existing public routes and DTOs.
 - Introducing or migrating MVC while no first-party MVC endpoint surface exists.
 - Weakening the server-side host-management credential boundary established by
@@ -48,11 +49,13 @@ project; public progress and validation evidence remain on the tracker and child
 
 ## Active Objectives
 
-1. Ratify the Minimal API target and bounded shared endpoint conventions
-   ([#1343](https://github.com/elsa-workflows/elsa-foundation/issues/1343)).
+1. Apply the accepted
+   [Minimal API target and bounded shared endpoint conventions](../adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)
+   across the program's implementation slices.
 2. Route Minimal APIs and transitional FastEndpoints through one Foundation Identity permission
    contract ([#1344](https://github.com/elsa-workflows/elsa-foundation/issues/1344)).
-3. Install HTTP/OpenAPI migration evidence and runtime endpoint disposition/authoring guards
+3. Install HTTP/OpenAPI migration evidence and runtime
+   [endpoint security disposition](../glossary/elsa.md)/authoring guards
    ([#1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346)).
 4. Prove the target with Studio Preferences as the canary
    ([#1347](https://github.com/elsa-workflows/elsa-foundation/issues/1347)), Secrets as the

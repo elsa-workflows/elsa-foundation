@@ -62,9 +62,21 @@ Process-global assembly discovery is not part of the target module contract. Mod
 an existing feature-composition hook calls each mapper explicitly, making endpoint ownership and
 lifecycle visible at the composition boundary.
 
+Every mapped endpoint carries immutable
+[route ownership metadata](../glossary/elsa.md). Its stable conceptual fields are:
+
+- `OwnerKind`: `Host`, `Module`, or `DynamicShell`;
+- `OwnerId`: the stable owning module or feature identifier; and
+- `ShellId` and `Generation`: required for `DynamicShell`, absent otherwise.
+
+The CLR implementation may split these fields across typed metadata records, but all fields must be
+available through the standard endpoint `Metadata` collection before publication. Display names and
+route paths are diagnostics, not ownership identities.
+
 ### Security disposition and authorization ownership
 
-Every first-party endpoint has one explicit primary security disposition:
+Every first-party endpoint has one explicit primary
+[endpoint security disposition](../glossary/elsa.md):
 
 1. **Permission protected.** Attach standard ASP.NET Core authorization metadata for a Foundation
    Identity policy. The endpoint-owning module contributes its permission definitions; Foundation
@@ -79,6 +91,21 @@ Every first-party endpoint has one explicit primary security disposition:
    access model is an ASP.NET Core policy rather than a Foundation permission, attach standard
    authorization metadata plus typed policy-disposition metadata naming its owner. Ordinary Elsa
    module permissions must not use this classification to bypass Foundation Identity.
+
+The stable disposition metadata exposes `Kind`, `OwnerId`, and the policy, permission, or credential
+reference used for enforcement. Public dispositions instead require `Category` and a non-empty
+`Reason`. Typed specializations may represent the four cases, but they must remain inspectable as one
+closed conceptual contract.
+
+The minimum metadata by surface is:
+
+| Surface | Required metadata |
+|---|---|
+| Ordinary module REST | Standard route/method metadata, module owner, and Foundation permission disposition |
+| Intentionally public | Owner, public category/reason, and standard anonymous-access metadata |
+| Host control | Host owner and credential-kind disposition |
+| Streaming | Owner and security disposition plus standard response content-type/OpenAPI metadata; framing and lifecycle remain contract-test obligations |
+| Workflow-authored dynamic HTTP | Dynamic-shell owner with shell/generation and an explicit public, permission, host-credential, or named-policy disposition |
 
 Authentication establishes a normalized principal before authorization. Provider-specific claim
 mapping stays outside endpoint mappings. Endpoint mappings declare policy requirements; they do not
@@ -95,8 +122,9 @@ boundary without duplicating that contract.
 The shared Elsa endpoint layer may contain only conventions that must remain consistent across
 endpoint owners:
 
-- framework-neutral permission and security-disposition metadata/extensions;
-- route ownership metadata needed for inventory, collision diagnostics, and dynamic lifecycle;
+- framework-neutral permission and [security-disposition](../glossary/elsa.md) metadata/extensions;
+- [route ownership metadata](../glossary/elsa.md) needed for inventory, collision diagnostics, and
+  dynamic lifecycle;
 - thin ProblemDetails, validation, and OpenAPI conventions proven necessary by more than one
   migrated module; and
 - architecture and compatibility guards for those contracts.
@@ -143,16 +171,16 @@ the platform primitives.
 - **Workflow-authored HTTP endpoints.** These remain a distinct runtime publication model rather
   than pretending to be statically declared module mappings. At publication time they must carry
   explicit security disposition and route ownership metadata and participate in collision checks.
-- **Dynamically unloadable modules.** New unloadable REST modules use explicit Minimal API mapping
+- **[Dynamically unloadable endpoint modules](../glossary/elsa.md).** New unloadable REST modules use
+  explicit Minimal API mapping
   and require repeatable collectible-`AssemblyLoadContext` evidence across routing, DI,
   serialization, and disposal. FastEndpoints is forbidden in assemblies promised to be
   dynamically unloadable.
-- **MVC.** No current first-party MVC endpoint surface exists. If one is introduced, it must consume
-  the same Foundation Identity policies and security/ownership metadata, with a permanent adapter
-  contract test and an explicit scope decision.
-- **Third-party endpoints.** Third-party authoring choices are outside this ADR, but their endpoints
-  must contribute standard ASP.NET Core endpoints and cannot bypass host security, collision, or
-  lifecycle rules when loaded into an Elsa host.
+- **MVC.** No current first-party MVC endpoint surface exists, so MVC authoring and adapter parity
+  are out of scope. Introducing MVC requires a separate scope and authorization decision.
+- **Third-party endpoints.** Third-party authoring choices and compatibility obligations are out of
+  scope. Independent host security, collision, and lifecycle rules still apply where their own
+  contracts say so; this ADR does not create those contracts.
 
 ### Transitional FastEndpoints exceptions
 
@@ -175,9 +203,9 @@ approved exception.
 
 FastEndpoints is retired from first-party REST authoring only when all of the following are true:
 
-- the runtime inventory reports zero unapproved first-party FastEndpoints registrations;
-- every migrated module passes its pinned HTTP, OpenAPI, security, coexistence, and unloadability
-  gates;
+- the runtime inventory reports zero remaining first-party FastEndpoints registrations;
+- every migrated module passes its pinned HTTP, OpenAPI, security, and coexistence gates, plus
+  unloadability gates when the module is promised to be collectible;
 - no first-party module depends on FastEndpoints endpoint bases or process-global discovery;
 - FastEndpoints packages, startup configuration, discovery, and transitional tests are removed;
 - dynamic and host-owned routes pass the approved ownership and collision policy; and

@@ -12,6 +12,9 @@ This is a point-in-time spike report, not a ratified architecture rule. It recor
 negative findings, recommendation, and proposed implementation units. No production code was
 changed during the spike; all prototype source was removed after its results were captured.
 
+The normative decision derived from this evidence is
+[ADR 0068: First-party REST APIs use ASP.NET Core Minimal APIs](../adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md).
+
 ## Decision
 
 Adopt **ASP.NET Core Minimal APIs as the target standard for all first-party REST APIs**, with
