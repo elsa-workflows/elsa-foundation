@@ -12,6 +12,9 @@ This is a point-in-time spike report, not a ratified architecture rule. It recor
 negative findings, recommendation, and proposed implementation units. No production code was
 changed during the spike; all prototype source was removed after its results were captured.
 
+The normative decision derived from this evidence is
+[ADR 0068: First-party REST APIs use ASP.NET Core Minimal APIs](../adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md).
+
 ## Decision
 
 Adopt **ASP.NET Core Minimal APIs as the target standard for all first-party REST APIs**, with
@@ -50,7 +53,7 @@ a representative Elsa module migration before broad migration waves begin.
   ownership metadata. Binding, serialization, routing, filters, results, and policy execution stay
   with ASP.NET Core.
 - Do not recreate FastEndpoints as an Elsa-specific framework. Add a shared abstraction only when
-  at least two migrated modules need it and contract tests show that ASP.NET Core has no adequate
+  at least three consumers need it and contract tests show that ASP.NET Core has no adequate
   primitive.
 - New first-party REST APIs use Minimal APIs by default. A FastEndpoints addition during the
   transition requires a documented compatibility exception and may not be placed in an assembly
