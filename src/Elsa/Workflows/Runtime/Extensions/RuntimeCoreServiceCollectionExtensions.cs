@@ -125,6 +125,13 @@ public static class RuntimeCoreServiceCollectionExtensions
         // because the in-memory fallback holds the slot state itself; Groundwork runtime persistence
         // replaces this registration with the durable store.
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        // Replacement contract (§2.6.2): the ONE activation lifecycle. A second coordinator would mean two
+        // paths driving their own copy of the sequence, which is the duplicated authority FR-B-006 removes.
+        // TryAdd is the conflict prevention. Scoped because it composes the scoped trigger indexer, lease
+        // manager and observers; the trigger serving spine itself stays optional (WorkflowsRuntimeTriggers
+        // registers it), so the coordinator resolves from a bare AddWorkflowRuntime() and refuses loudly if
+        // asked to activate without it.
+        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
