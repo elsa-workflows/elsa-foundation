@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
@@ -176,6 +177,33 @@ public sealed class EndpointSecurityTests
         Assert.Equal(8, contributors.Select(contributor => contributor.OwnerId).Distinct(StringComparer.Ordinal).Count());
         Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Issues.Select(issue =>
             $"{issue.Code}: {issue.Permission}: {issue.Message}")));
+    }
+
+    [Fact]
+    public void Secrets_minimal_api_declares_one_owned_secure_route_per_operation_and_catalog_owner()
+    {
+        var apiRoot = Path.Join(RepoRoot, "src", "Elsa", "Secrets", "Api");
+        var mapperPath = Path.Join(apiRoot, "SecretsApi.cs");
+        var contributorPath = Path.Join(apiRoot, "Authorization", "SecretsPermissionContributor.cs");
+        Assert.True(File.Exists(mapperPath), "The migrated Secrets API must expose its module-owned mapper.");
+        Assert.True(File.Exists(contributorPath), "The migrated Secrets API must expose its permission contributor.");
+
+        var mapper = File.ReadAllText(mapperPath);
+        var contributor = File.ReadAllText(contributorPath);
+        var routeMappings = Regex.Matches(mapper, @"\bendpoints\.Map(?:Get|Post|Put|Delete)\s*\(", RegexOptions.CultureInvariant).Count;
+        var permissionPolicies = Regex.Matches(mapper, @"\.RequireAnyPermission\s*\(", RegexOptions.CultureInvariant).Count;
+
+        Assert.Equal(10, routeMappings);
+        Assert.Equal(10, permissionPolicies);
+        Assert.Contains("Elsa.Secrets.Api", mapper, StringComparison.Ordinal);
+        Assert.Contains("EndpointAuthoringModels.MinimalApi", mapper, StringComparison.Ordinal);
+        Assert.Contains("WithOwner", mapper, StringComparison.Ordinal);
+
+        foreach (var permission in new[] { "Read", "Write", "UpdateValue", "Delete", "Test", "Use", "Import", "Export" })
+            Assert.Contains($"SecretsPermissions.{permission}", contributor, StringComparison.Ordinal);
+
+        Assert.Contains("new HashSet<string>(StringComparer.Ordinal) { SecretsPermissions.Read }", contributor, StringComparison.Ordinal);
+        Assert.DoesNotContain("PermissionKey.Wildcard", contributor, StringComparison.Ordinal);
     }
 
     [Fact]

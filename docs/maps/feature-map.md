@@ -88,7 +88,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SqliteGroundworkUnifiedPersistenceShellFeature | feature-base-derived | Elsa.Persistence.Groundwork.Sqlite.Unified | GroundworkUnifiedPersistenceShellFeatureBase | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
 | SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
-| SecretsApiFeature | FastEndpoints feature | Elsa.Secrets.Api | FastEndpointsFeatureBase | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
+| SecretsApiFeature | direct IWebShellFeature | Elsa.Secrets.Api | IWebShellFeature | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
 | SecretsAttentionFeature | direct IShellFeature | Elsa.Secrets.Attention | IShellFeature | [SecretsAttentionFeature.cs](../../src/Elsa/Secrets/Attention/SecretsAttentionFeature.cs) |
 | SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
