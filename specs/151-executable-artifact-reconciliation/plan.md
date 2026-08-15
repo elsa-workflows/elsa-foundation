@@ -62,6 +62,18 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 
 **Nothing else is removed.** `PublicationRecord`, publication policies, `IPublicationRecordStore` attempt history, and the publishing preflight views all stay in Publishing with their tests intact (spec.md Non-Goals). If any *other* test turns out to require deletion during implementation, §2.23.4 applies: flag it, do not delete it solo, and extend this table.
 
+### Behaviour change — §2.23.4 recorded decision: the coordinator does not reproduce publishing's projection leak
+
+**Approved by Joey, 2026-08-15**, on the recommendation below. Recorded here because §2.23.4 treats "the refactor resolved a bug the tests silently relied on" as an architect decision, never a solo one.
+
+**The defect.** On a pre-flip failure — projection-prepare throws, or the slot CAS conflicts — `PublicationActivator` marks the publication record failed and returns. Nothing deletes the bindings and recurring schedules it already prepared; `PublishWorkflowRequestHandler` only retires the reference. The prepared rows are inert (`IsActive = false`) but they accumulate, and research D3's writer census notes that restore/compensation *re-prepares from the store*, so stale prepared rows may be picked up on a later restore. Whether that makes it a correctness bug or only a hygiene bug is **not established** — it was not traced.
+
+**The decision.** `WorkflowActivationCoordinator` removes the candidate's projections and retires its reference on **every** failure path, restoring the predecessor only when the slot actually flipped. It does not reproduce the leak.
+
+**Why this is not deferred to a separate fix.** The coordinator is *new* code, not modified code — nothing calls it yet, so no existing behaviour changes at the moment it is written. Deliberately writing a known leak into a new component so a later commit can remove it is strictly worse than not writing it, and would require T029/T030 to reproduce the leak on purpose. It also contradicts the component's own charter: FR-B-006 makes the coordinator the **sole writer** of activation-relevant serving state, and a sole writer that leaves orphans behind is not one.
+
+**The gate that still applies.** No test asserts the leak — it is a leak, untested by construction. If Publishing.Api still passes 473/0 after T029/T030 retarget publishing onto the coordinator, this record is sufficient and there is nothing further to settle. **If a publishing test fails because it relied on the leaked rows, that is the §2.23.4 conversation with Sipke**, and it must happen before the retarget lands. Related: [#1358](https://github.com/elsa-workflows/elsa-foundation/issues/1358) is the same class of defect — orphaned serving state with no cleanup path — and the single-writer rule is the answer to both.
+
 ## Project Structure
 
 ### Documentation (this feature)
