@@ -29,7 +29,15 @@ public sealed class OpenTelemetryCompatibilityTests
         var expected = baseline.RootElement.GetProperty("http").EnumerateArray().ToArray();
         var approved = approvedDifferences.RootElement.GetProperty("differences").EnumerateArray()
             .ToLookup(item => $"{item.GetProperty("method").GetString()} {item.GetProperty("path").GetString()}", StringComparer.Ordinal);
+        var approvedEntries = approvedDifferences.RootElement.GetProperty("differences").EnumerateArray().ToArray();
         var cases = expected.Select(item => (Method: item.GetProperty("method").GetString()!, Path: item.GetProperty("item3").GetString()!, Body: item.GetProperty("item1").GetString() == "stream" ? null : item.GetProperty("item1").GetString() is { } name && name is "resources" or "traces" or "metrics" or "logs" ? "{}" : item.GetProperty("item1").GetString()?.StartsWith("otlp-", StringComparison.Ordinal) == true ? "" : null)).ToArray();
+        var consumedKeys = cases.Select(testCase => $"{testCase.Method} {testCase.Path}")
+            .Concat(baseline.RootElement.GetProperty("openApi").GetProperty("paths").EnumerateObject().SelectMany(path => path.Value.EnumerateObject().Select(method => $"{method.Name.ToUpperInvariant()} {path.Name}")))
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.All(approvedEntries, item => Assert.Contains($"{item.GetProperty("method").GetString()} {item.GetProperty("path").GetString()}", consumedKeys));
+        Assert.Equal(3, approvedEntries.Count(item => item.TryGetProperty("beforeStatus", out _)));
+        Assert.Equal(11, approvedEntries.Count(item => item.TryGetProperty("beforeOperationId", out _)));
+        var observedStatusKeys = new HashSet<string>(StringComparer.Ordinal);
 
         for (var index = 0; index < cases.Length; index++)
         {
@@ -48,6 +56,10 @@ public sealed class OpenTelemetryCompatibilityTests
                 : await response.Content.ReadAsStringAsync();
             Assert.Equal(expectedContentType, actualContentType);
             Assert.Equal(expectedBody, actualBody);
+            if (expectedStatus == StatusCodes.Status302Found)
+                Assert.NotNull(response.Headers.Location);
+            if (testCase.Path.StartsWith("/elsa/otlp/", StringComparison.Ordinal))
+                Assert.Null(response.Headers.Location);
             var key = $"{testCase.Method} {testCase.Path}";
             if (expectedStatus != actualStatus)
             {
@@ -55,8 +67,12 @@ public sealed class OpenTelemetryCompatibilityTests
                 Assert.True(difference.ValueKind != JsonValueKind.Undefined, $"Unregistered compatibility delta: {key} {expectedStatus}->{actualStatus}");
                 Assert.Equal(expectedStatus, difference.GetProperty("beforeStatus").GetInt32());
                 Assert.Equal(actualStatus, difference.GetProperty("afterStatus").GetInt32());
+                observedStatusKeys.Add(key);
             }
         }
+        Assert.Equal(
+            approvedEntries.Where(item => item.TryGetProperty("beforeStatus", out _)).Select(item => $"{item.GetProperty("method").GetString()} {item.GetProperty("path").GetString()}").Order(StringComparer.Ordinal),
+            observedStatusKeys.Order(StringComparer.Ordinal));
 
         var routes = host.Services.GetRequiredService<EndpointDataSourceAccessor>().Routes;
         var migrated = routes.Where(route => route.Route.StartsWith("/diagnostics/opentelemetry", StringComparison.Ordinal) || route.Route.StartsWith("/_elsa/studio/diagnostics/opentelemetry", StringComparison.Ordinal)).ToArray();
@@ -79,6 +95,13 @@ public sealed class OpenTelemetryCompatibilityTests
             ["/elsa/otlp/v1/logs"] = ("post", "OpenTelemetryOtlpLogs")
         };
         var openApiPaths = openApi.RootElement.GetProperty("paths");
+        var baselineOpenApiPaths = baseline.RootElement.GetProperty("openApi").GetProperty("paths");
+        var approvedOpenApi = approvedDifferences.RootElement.GetProperty("differences").EnumerateArray()
+            .Where(item => item.TryGetProperty("beforeOperationId", out _))
+            .ToLookup(item => $"{item.GetProperty("method").GetString()?.ToUpperInvariant()} {item.GetProperty("path").GetString()}", StringComparer.Ordinal);
+        var approvedStatusPaths = approvedDifferences.RootElement.GetProperty("differences").EnumerateArray()
+            .Where(item => item.TryGetProperty("beforeResponseStatuses", out _))
+            .ToLookup(item => $"{item.GetProperty("method").GetString()?.ToUpperInvariant()} {item.GetProperty("path").GetString()}", StringComparer.Ordinal);
         foreach (var (path, operation) in operations)
         {
             Assert.True(openApiPaths.TryGetProperty(path, out var pathItem), $"OpenAPI path missing: {path}; actual={string.Join(",", openApiPaths.EnumerateObject().Select(property => property.Name))}");
@@ -89,6 +112,18 @@ public sealed class OpenTelemetryCompatibilityTests
             Assert.True(openApiDifference.ValueKind != JsonValueKind.Undefined, $"Unregistered OpenAPI delta: {operation.Method.ToUpperInvariant()} {path}");
             Assert.Equal(openApiDifference.GetProperty("afterOperationId").GetString(), documentOperation.GetProperty("operationId").GetString());
             Assert.Equal(openApiDifference.GetProperty("afterTags").EnumerateArray().Select(tag => tag.GetString()), documentOperation.GetProperty("tags").EnumerateArray().Select(tag => tag.GetString()));
+
+            var baselineOperation = baselineOpenApiPaths.GetProperty(path).GetProperty(operation.Method);
+            if (baselineOperation.TryGetProperty("requestBody", out var baselineRequestBody))
+                Assert.True(documentOperation.TryGetProperty("requestBody", out var actualRequestBody) && JsonElement.DeepEquals(baselineRequestBody, actualRequestBody), $"OpenAPI requestBody changed: {operation.Method} {path}");
+            var baselineResponseStatuses = baselineOperation.GetProperty("responses").EnumerateObject().Select(response => response.Name).ToArray();
+            var actualResponseStatuses = documentOperation.GetProperty("responses").EnumerateObject().Select(response => response.Name).ToArray();
+            if (!baselineResponseStatuses.SequenceEqual(actualResponseStatuses, StringComparer.Ordinal))
+            {
+                var statusDifference = approvedStatusPaths[$"{operation.Method.ToUpperInvariant()} {path}"].SingleOrDefault();
+                Assert.True(statusDifference.ValueKind != JsonValueKind.Undefined, $"Unregistered OpenAPI response delta: {operation.Method.ToUpperInvariant()} {path}; before={string.Join(',', baselineResponseStatuses)}; after={string.Join(',', actualResponseStatuses)}");
+                Assert.Equal(statusDifference.GetProperty("afterResponseStatuses").EnumerateArray().Select(item => item.GetString()), actualResponseStatuses);
+            }
         }
     }
 

@@ -52,6 +52,28 @@ public sealed class OpenTelemetryAuthorizationTests
         }
     }
 
+    [Fact]
+    public async Task Authorized_query_binder_exercises_success_and_malformed_json_paths()
+    {
+        using var host = await StartHostAsync();
+        using var success = new HttpRequestMessage(HttpMethod.Post, "/diagnostics/opentelemetry/resources/search")
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
+        };
+        success.Headers.Add("X-Test-Identity", "exact");
+        using var successResponse = await host.GetTestClient().SendAsync(success);
+        Assert.Equal(HttpStatusCode.OK, successResponse.StatusCode);
+        Assert.Contains("items", await successResponse.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+
+        using var malformed = new HttpRequestMessage(HttpMethod.Post, "/diagnostics/opentelemetry/resources/search")
+        {
+            Content = new StringContent("{", System.Text.Encoding.UTF8, "application/json")
+        };
+        malformed.Headers.Add("X-Test-Identity", "exact");
+        using var malformedResponse = await host.GetTestClient().SendAsync(malformed);
+        Assert.Equal(HttpStatusCode.BadRequest, malformedResponse.StatusCode);
+    }
+
     private static async Task<IHost> StartHostAsync()
     {
         var host = new HostBuilder().ConfigureWebHost(webHost =>

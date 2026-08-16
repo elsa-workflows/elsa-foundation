@@ -8,7 +8,7 @@ The first branch commit, `db01e3ec1`, contains only the real-host FastEndpoints 
 
 ## After comparison
 
-`OpenTelemetryCompatibilityTests` uses one real TestServer client and compares all eleven methods/routes, statuses, response bodies/content types, redirects, and OpenAPI paths. Stable operation IDs and `OpenTelemetry` tags are asserted for every migrated and retained route. The only approved registry entries are the three retained root OTLP POST cases, where the old adapter returned 204 and the root Minimal API handler returns 200; registry SHA-256: `621b172f5dda132eafdd5ee6791c43e45e9e736d39c77c96f12b97f4d5b0f3fe`.
+`OpenTelemetryCompatibilityTests` uses one real TestServer client and compares all eleven methods/routes, statuses, response bodies/content types, redirect `Location` headers, and consumed OpenAPI paths, request bodies, operation IDs, tags, and response status sets. Stable operation IDs and `OpenTelemetry` tags are asserted for every migrated and retained route. The exact registry records the three retained root OTLP 204→200 status deltas, the trace 404 metadata addition, the stream 204→200 metadata change, and the eleven explicit operation identity/tag changes; registry SHA-256: `de7db504afecec2f9703c052d3c4b02d89be3fc6d3ac4f9e4d66b5510171a781`.
 
 ## Security and lifecycle evidence
 
