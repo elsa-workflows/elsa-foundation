@@ -7,7 +7,6 @@ using Elsa.Agent.Core.Models;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
-using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -38,18 +37,8 @@ public sealed class Wave4AgentFastEndpointsBaselineTests
     private static readonly string BaselineDirectory = Path.Join(AppContext.BaseDirectory, "Baselines");
 
     [Fact]
-    public async Task FastEndpoints_baseline_contains_exactly_eleven_agent_registrations()
+    public void FastEndpoints_baseline_contains_exactly_eleven_agent_registrations()
     {
-        var output = Environment.GetEnvironmentVariable("WAVE4_BASELINE_OUTPUT");
-        if (!string.IsNullOrWhiteSpace(output))
-        {
-            var captured = await CaptureAsync();
-            Directory.CreateDirectory(output);
-            File.WriteAllText(Path.Join(output, "wave4-agent-http-fastendpoints.json"), CompatibilityJson.Serialize(captured.Http));
-            File.WriteAllText(Path.Join(output, "wave4-agent-openapi-fastendpoints.json"), CompatibilityJson.Serialize(captured.OpenApi));
-            return;
-        }
-
         var baseline = BaselineFile.Load<HttpCompatibilityObservation[]>(
             Path.Join(BaselineDirectory, "wave4-agent-http-fastendpoints.json"));
         var openApi = BaselineFile.Load<OpenApiEvidenceDocument>(
@@ -101,17 +90,6 @@ public sealed class Wave4AgentFastEndpointsBaselineTests
         return request;
     }
 
-    /// <summary>Creates the old FE host and captures its consumed HTTP/OpenAPI evidence.</summary>
-    public static async Task<(IReadOnlyList<HttpCompatibilityObservation> Http, OpenApiEvidenceDocument OpenApi)> CaptureAsync()
-    {
-        await using var host = await Wave4AgentHost.StartAsync();
-        var observations = new List<HttpCompatibilityObservation>(Cases.Count);
-        foreach (var testCase in Cases)
-            observations.Add(await HttpEvidenceCapture.CaptureAsync(host.Client, testCase));
-
-        var rawOpenApi = await host.GetOpenApiAsync();
-        return (observations, OpenApiEvidenceCapture.Capture(rawOpenApi));
-    }
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]
