@@ -34,7 +34,7 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
             var units = providerName == "sqlite"
                 ? ElsaRuntimeV2StorageManifest.CreateUnits()
                 : FreshPhysicalUnits();
-            Assert.Equal(27, units.Count);
+            Assert.Equal(28, units.Count);
             Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
 
             foreach (var unit in units)
@@ -48,12 +48,7 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
                 Assert.Equal(unit.Id, session.Unit.Id);
                 Assert.Equal(unit.Name, session.Unit.Name);
                 var outcome = session.Upsert(
-                    new StorageValues(new Dictionary<string, object?>
-                    {
-                        [ElsaRuntimeV2StorageManifest.IdField] = $"matrix-{providerName}-{unit.Id.Value}",
-                        [ElsaRuntimeV2StorageManifest.SchemaVersionField] = ElsaRuntimeV2StorageManifest.SchemaVersion,
-                        [ElsaRuntimeV2StorageManifest.ContentField] = "{}"
-                    }),
+                    MatrixValues(unit, providerName),
                     WriteOptions.Unconditional);
                 Assert.True(outcome.Succeeded, $"Upsert failed for '{unit.Id.Value}' on {providerName}: {outcome.Status}.");
             });
@@ -74,7 +69,7 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
     {
         var units = FreshPhysicalUnits();
 
-        Assert.Equal(27, units.Count);
+        Assert.Equal(28, units.Count);
         Assert.Equal(units.Count, units.Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
         Assert.All(units, unit => Assert.Equal(unit.Id.Value, unit.Name));
@@ -101,6 +96,35 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
             "mongodb" => new MongoProviderFactory().Create(connectionString),
             _ => throw new ArgumentOutOfRangeException(nameof(providerName), providerName, null)
         };
+
+    private static StorageValues MatrixValues(StorageUnit unit, string providerName)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.IdField] = $"matrix-{providerName}-{unit.Id.Value}",
+            [ElsaRuntimeV2StorageManifest.SchemaVersionField] = ElsaRuntimeV2StorageManifest.SchemaVersion,
+            [ElsaRuntimeV2StorageManifest.ContentField] = "{}"
+        };
+        foreach (var column in unit.Columns.Where(column =>
+                     !column.IsNullable &&
+                     !values.ContainsKey(column.Name) &&
+                     !StringComparer.Ordinal.Equals(column.Name, unit.Concurrency.TokenColumn)))
+            values[column.Name] = RequiredValue(column.Type);
+        return new StorageValues(values);
+    }
+
+    private static object RequiredValue(PortableType type) => type switch
+    {
+        PortableType.String => "matrix",
+        PortableType.Int32 => 1,
+        PortableType.Int64 => 1L,
+        PortableType.Boolean => true,
+        PortableType.DateTimeOffset => DateTimeOffset.UnixEpoch,
+        PortableType.Guid => Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        PortableType.Binary => new byte[] { 1 },
+        PortableType.Decimal => 1m,
+        _ => throw new InvalidOperationException($"No provider-matrix value is declared for required type '{type}'.")
+    };
 
     private static string EnvironmentVariable(string providerName) =>
         $"GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING";

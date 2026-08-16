@@ -11,7 +11,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
     {
         var units = ElsaRuntimeV2StorageManifest.CreateUnits();
 
-        Assert.Equal(27, units.Count);
+        Assert.Equal(28, units.Count);
         Assert.Equal(
             [
                 "activityExecutionHierarchy", "activityExecutionInspection", "activityExecutionState",
@@ -20,7 +20,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 "postCommitOutbox", "publicationProjectionState", "recurringTriggerSchedule", "schedulerPoison",
                 "schedulerState", "schedulerWorkItem", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
                 "workflowExecutable", "workflowExecutableCoordination", "workflowExecutableSourceReference",
-                "workflowExecutionState", "workflowTestScope", "workflowTriggerBinding"
+                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope", "workflowTriggerBinding"
             ],
             units.Select(unit => unit.Id.Value).OrderBy(id => id, StringComparer.Ordinal));
 
@@ -70,6 +70,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["workflowExecutableCoordination"] = [],
             ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id"],
             ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
+            ["workflowRunHealthState"] = ["by_definition_and_started_at", "by_run_kind_and_started_at", "by_run_kind_status_definition_started_at", "by_run_kind_status_started_at", "by_started_at", "by_status_and_started_at"],
             ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
             ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"]
         };
@@ -100,6 +101,21 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryRunKindField, PortableType.Int32, null, nullable: true);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryCorrelationIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: true);
         Assert.Equal(MissingValueBehavior.Excluded, executionState.Indexes.Single(index => index.Name == "by_collection_and_pinned_artifact_v2").MissingValues);
+
+        var runHealth = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthDefinitionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: false);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunKindField, PortableType.Int32, null, nullable: false);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStartedAtField, PortableType.DateTimeOffset, null, nullable: true);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField, PortableType.Int32, null, nullable: false);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentCountField, PortableType.Int64, null, nullable: false);
+        AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentBearingCountField, PortableType.Int64, null, nullable: false);
+        Assert.Equal(
+            [ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile, ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningProfile, ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresProfile],
+            runHealth.AggregationProfiles.Select(profile => profile.Name));
+        Assert.All(runHealth.AggregationProfiles, profile => Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthAggregationMaxInputRows, profile.MaxInputRows));
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile).MaxGroups);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningProfile).MaxGroups);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresProfile).MaxGroups);
 
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),

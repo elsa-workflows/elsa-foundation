@@ -24,9 +24,9 @@
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
     <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.131" />
-    <PackageVersion Include="Groundwork.Kernel" Version="0.1.0-preview.3" />
-    <PackageVersion Include="Groundwork.Query.Model" Version="0.1.0-preview.3" />
-    <PackageVersion Include="Groundwork.Store" Version="0.1.0-preview.3" />
+    <PackageVersion Include="Groundwork.Kernel" Version="0.1.0-preview.4" />
+    <PackageVersion Include="Groundwork.Query.Model" Version="0.1.0-preview.4" />
+    <PackageVersion Include="Groundwork.Store" Version="0.1.0-preview.4" />
     <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.131" />
     <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.131" />
     <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.131" />

@@ -1,22 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <OutputType>Exe</OutputType>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.1.0-preview.4</GroundworkVersion>
   </PropertyGroup>
-
   <ItemGroup>
-    <Compile Include="Program.cs" />
     <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />
     <PackageReference Include="Groundwork.Query.Model" Version="$(GroundworkVersion)" />
     <PackageReference Include="Groundwork.Store" Version="$(GroundworkVersion)" />
     <PackageReference Include="Groundwork.Sqlite" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../../../../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 </Project>

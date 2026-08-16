@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -8,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Groundwork.Kernel;
 using Groundwork.Store;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Runtime;
 
@@ -38,6 +38,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
         ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
         ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind,
         ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
     ];
 
@@ -146,6 +147,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             stage.ApplyOutbox();
             stage.ApplyConsumedSchedulerWork();
             stage.ApplyDurableTimers();
+            stage.ApplyWorkflowRunHealthProjection();
             stage.StageMarker();
 
             // Exactly one commit call exists on the success path. If acknowledgement is ambiguous, the marker read
@@ -342,11 +344,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "durable value");
         }
 
+        var seenIncidents = new HashSet<string>(StringComparer.Ordinal);
         foreach (var change in stateChanges.Incidents)
         {
             RequireOperation(change, RuntimeStateChangeOperation.Append, RuntimeStateChangeOperation.Upsert, "incident");
             RequireId(change.StateId, change.State.IncidentId, "incident");
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "incident");
+            if (!seenIncidents.Add(change.StateId))
+                throw new InvalidOperationException(
+                    $"Incident '{change.StateId}' occurs more than once in one checkpoint commit.");
         }
 
         var ownershipStateId = $"ownership:{commit.WorkflowExecutionId}";
@@ -518,8 +524,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         private readonly CancellationToken cancellationToken;
         private readonly TimeProvider timeProvider;
         private readonly HashSet<string> touchedTestScopes = new(StringComparer.Ordinal);
+        private readonly HashSet<string> newIncidentIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, IStorageSession> unitSessions = new(StringComparer.Ordinal);
         private bool newWorkflowExecution;
+        private bool? workflowExistedBeforeCheckpoint;
 
         public StageContext(
             IGroundworkStorageSessionSource sessions,
@@ -594,8 +602,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             if (commit.StateChanges.WorkflowExecution is not { } change)
                 return;
 
-            newWorkflowExecution = Open(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind)
-                .Read(GroundworkRuntimeRowStore.Key(change.StateId)) is null;
+            workflowExistedBeforeCheckpoint = Open(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind)
+                .Read(GroundworkRuntimeRowStore.Key(change.StateId)) is not null;
+            newWorkflowExecution = !workflowExistedBeforeCheckpoint.Value;
             Apply(
                 ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
                 change,
@@ -726,6 +735,11 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             {
                 var entry = Open(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind)
                     .Read(GroundworkRuntimeRowStore.Key(change.StateId));
+                if (entry is null &&
+                    change.Operation is RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert)
+                {
+                    newIncidentIds.Add(change.StateId);
+                }
                 if (change.Operation == RuntimeStateChangeOperation.Append)
                 {
                     Stage(
@@ -751,6 +765,77 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         : WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
                             $"Incident '{change.StateId}' did not expose a provider revision.")));
             }
+        }
+
+        /// <summary>
+        /// Folds the workflow state and all incident changes for this execution into one optimistic
+        /// run-health projection write. The projection is intentionally absent from incident storage;
+        /// an incident-only write therefore fails closed when its execution projection is missing.
+        /// </summary>
+        public void ApplyWorkflowRunHealthProjection()
+        {
+            if (commit.StateChanges.WorkflowExecution is null && commit.StateChanges.Incidents.Count == 0)
+                return;
+
+            var healthSession = Open(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind);
+            var healthKey = GroundworkRuntimeRowStore.Key(commit.WorkflowExecutionId);
+            var existingHealthEntry = healthSession.Read(healthKey);
+            var existingHealth = existingHealthEntry is null
+                ? null
+                : GroundworkV2WorkflowRunHealthStorageConventions.Deserialize(existingHealthEntry.Values.Values);
+            var workflowExists = workflowExistedBeforeCheckpoint ??
+                                 Open(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind)
+                                     .Read(GroundworkRuntimeRowStore.Key(commit.WorkflowExecutionId)) is not null;
+
+            if (commit.StateChanges.WorkflowExecution is null && (!workflowExists || existingHealth is null))
+            {
+                throw new InvalidOperationException(
+                    $"An incident-only checkpoint for workflow execution '{commit.WorkflowExecutionId}' requires both the workflow and its run-health projection.");
+            }
+
+            if (commit.StateChanges.WorkflowExecution is { } workflowStateChange)
+            {
+                if (newWorkflowExecution && existingHealth is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"Workflow execution '{workflowStateChange.State.WorkflowExecutionId}' is new but already has a run-health projection.");
+                }
+
+                if (!newWorkflowExecution && existingHealth is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Workflow execution '{workflowStateChange.State.WorkflowExecutionId}' already exists but has no run-health projection.");
+                }
+            }
+
+            var incidentDelta = checked((long)newIncidentIds.Count);
+
+            var next = commit.StateChanges.WorkflowExecution is { } workflowChange
+                ? GroundworkV2WorkflowRunHealthStorageConventions.Values(
+                    workflowChange.State.WorkflowExecutionId,
+                    workflowChange.State.PinnedExecutable.DefinitionId,
+                    workflowChange.State.RunKind,
+                    existingHealth?.StartedAt ?? workflowChange.State.StartedAt,
+                    workflowChange.State.Status,
+                    checked((existingHealth?.IncidentCount ?? 0) + incidentDelta),
+                    checked((existingHealth?.IncidentBearingCount ?? 0) + (incidentDelta > 0 && (existingHealth?.IncidentCount ?? 0) == 0 ? 1 : 0)))
+                : GroundworkV2WorkflowRunHealthStorageConventions.Values(
+                    existingHealth! with
+                    {
+                        IncidentCount = checked(existingHealth.IncidentCount + incidentDelta),
+                        IncidentBearingCount = checked(existingHealth.IncidentBearingCount +
+                            (incidentDelta > 0 && existingHealth.IncidentCount == 0 ? 1 : 0))
+                    });
+
+            var options = existingHealthEntry is null
+                ? WriteOptions.CreateOnly
+                : WriteOptions.IfVersion(existingHealthEntry.Version ?? throw new InvalidDataException(
+                    $"Groundwork workflow run-health projection '{commit.WorkflowExecutionId}' did not expose an optimistic revision."));
+            StageValues(
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind,
+                next,
+                RuntimeStateChangeOperation.Upsert,
+                options);
         }
 
         public void ApplyAlterationJob()

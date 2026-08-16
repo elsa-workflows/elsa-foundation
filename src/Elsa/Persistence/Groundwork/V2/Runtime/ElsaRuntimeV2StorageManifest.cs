@@ -66,6 +66,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
     public const string SchedulerPoisonDocumentKind = "schedulerPoison";
     public const string DurableTimerDocumentKind = "durableTimer";
+    public const string WorkflowRunHealthStateDocumentKind = "workflowRunHealthState";
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
     public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
     public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
@@ -109,6 +110,12 @@ public static class ElsaRuntimeV2StorageManifest
     public const string DurableTimerDueTimeField = "timerDueTime";
     public const string DurableTimerIdField = "timerId";
     public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
+    public const string WorkflowRunHealthDefinitionIdField = "definitionId";
+    public const string WorkflowRunHealthRunKindField = "runKind";
+    public const string WorkflowRunHealthStartedAtField = "startedAt";
+    public const string WorkflowRunHealthStatusField = StatusField;
+    public const string WorkflowRunHealthIncidentCountField = "incidentCount";
+    public const string WorkflowRunHealthIncidentBearingCountField = "incidentBearingCount";
     public const string TriggerBindingIdField = "triggerBindingId";
     public const string WorkflowTriggerBindingIsActiveField = "isActive";
     public const string RecurringTriggerSchedulePublicationIdField = "schedulePublicationId";
@@ -186,6 +193,13 @@ public static class ElsaRuntimeV2StorageManifest
     public const string ByScopeIndex = "by_scope";
     public const string ByRetiredIndex = "by_retired";
     public const string WorkflowTriggerBindingByActive = "by_active";
+    public const string WorkflowRunHealthStatusProfile = "workflow_run_health_status";
+    public const string WorkflowRunHealthRunningProfile = "workflow_run_health_running";
+    public const string WorkflowRunHealthTopFailuresProfile = "workflow_run_health_top_failures";
+    public const int WorkflowRunHealthAggregationMaxInputRows = 100_000;
+    public const int WorkflowRunHealthStatusMaxGroups = 8;
+    public const int WorkflowRunHealthRunningMaxGroups = 1;
+    public const int WorkflowRunHealthTopFailuresMaxGroups = 1_000;
 
     private static readonly IReadOnlyList<StorageUnit> units = CreateAll();
 
@@ -225,6 +239,14 @@ public static class ElsaRuntimeV2StorageManifest
         Unit(SchedulerWorkItemDocumentKind, "runtime_scheduler_work_item", [String(SchedulerWorkOrderKeyField, SchedulerWorkOrderKeyProjectionLength), String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(CollectionField, RuntimeCollectionProjectionLength), String(SchedulerWorkClaimOwnerIdField, IdMaximumLength), Int64(SchedulerWorkFencingTokenField)], [IncludedIndex(BySchedulerWorkOrderIndex, WorkflowExecutionIdField, SchedulerWorkOrderKeyField), Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), IncludedIndex("by_workflow_execution_and_scheduler_work_order", CollectionField, WorkflowExecutionIdField, SchedulerWorkOrderKeyField)]),
         Unit(SchedulerPoisonDocumentKind, "runtime_scheduler_poison", [String(WorkflowExecutionIdField, 128)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField)]),
         Unit(DurableTimerDocumentKind, "runtime_durable_timer", [String(CollectionField, RuntimeCollectionProjectionLength), String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(DurableTimerIdField, RuntimeExecutionIdProjectionLength), DateTime(DurableTimerDueTimeField), String(DurableTimerClaimOrderKeyField, DurableTimerClaimOrderKeyProjectionLength)], [Index(ByCollectionIndex, CollectionField), Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index("by_due_time", DurableTimerDueTimeField), IncludedIndex("by_due_time_and_timer_id", DurableTimerDueTimeField, DurableTimerIdField), Index(ByTimerIdIndex, DurableTimerIdField), IncludedIndex("by_workflow_execution_and_timer_id", WorkflowExecutionIdField, DurableTimerIdField), IncludedIndex("by_claim_order", DurableTimerClaimOrderKeyField)]),
+        Unit(WorkflowRunHealthStateDocumentKind, "runtime_workflow_run_health_state", [String(WorkflowRunHealthDefinitionIdField, required: true), Int32(WorkflowRunHealthRunKindField, required: true), DateTime(WorkflowRunHealthStartedAtField), Int32(WorkflowRunHealthStatusField, required: true), Int64(WorkflowRunHealthIncidentCountField, required: true), Int64(WorkflowRunHealthIncidentBearingCountField, required: true)], [
+            Index("by_started_at", WorkflowRunHealthStartedAtField),
+            IncludedIndex("by_status_and_started_at", WorkflowRunHealthStatusField, WorkflowRunHealthStartedAtField),
+            IncludedIndex("by_definition_and_started_at", WorkflowRunHealthDefinitionIdField, WorkflowRunHealthStartedAtField),
+            IncludedIndex("by_run_kind_and_started_at", WorkflowRunHealthRunKindField, WorkflowRunHealthStartedAtField),
+            IncludedIndex("by_run_kind_status_started_at", WorkflowRunHealthRunKindField, WorkflowRunHealthStatusField, WorkflowRunHealthStartedAtField),
+            IncludedIndex("by_run_kind_status_definition_started_at", WorkflowRunHealthRunKindField, WorkflowRunHealthStatusField, WorkflowRunHealthDefinitionIdField, WorkflowRunHealthStartedAtField)
+        ], AddWorkflowRunHealthAggregations),
         Unit(WorkflowTriggerBindingDocumentKind, "runtime_workflow_trigger_binding", [String(StimulusHashField, StimulusHashProjectionLength), String(StimulusTypeField, WorkflowTriggerBindingStimulusTypeProjectionLength), String(StimulusLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), String(StimulusTypeLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), Boolean(WorkflowTriggerBindingIsActiveField), String(TriggerBindingIdField, RuntimeExecutionIdProjectionLength), String(ArtifactIdField, RuntimeExecutionIdProjectionLength), String(PublicationIdField, RuntimeExecutionIdProjectionLength)], [Index(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField), Index(ByArtifactIndex, ArtifactIdField), IncludedIndex("by_artifact_and_trigger_binding_id", ArtifactIdField, TriggerBindingIdField), Index(ByPublicationIndex, PublicationIdField), IncludedIndex("by_publication_and_trigger_binding_id", PublicationIdField, TriggerBindingIdField), Index(ByStimulusIndex, StimulusHashField), IncludedIndex("by_stimulus_and_type", StimulusLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), Index(ByStimulusTypeIndex, StimulusTypeField), IncludedIndex("by_stimulus_type_and_active", StimulusTypeLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), UniqueIndex("by_trigger_binding_id", TriggerBindingIdField)]),
         Unit(RecurringTriggerScheduleDocumentKind, "runtime_recurring_trigger_schedule", [String(CollectionField, 128), String(ArtifactIdField, 128), String(RecurringTriggerSchedulePublicationIdField, 128), String(RecurringTriggerScheduleIdField, 128), Boolean(RecurringTriggerScheduleIsActiveField), DateTime(RecurringTriggerScheduleNextOccurrenceField)], [IncludedIndex("by_active_next_occurrence_and_schedule_id", RecurringTriggerScheduleIsActiveField, RecurringTriggerScheduleNextOccurrenceField, RecurringTriggerScheduleIdField), Index(ByArtifactIndex, ArtifactIdField), IncludedIndex("by_artifact_and_schedule_id", ArtifactIdField, RecurringTriggerScheduleIdField), Index(ByCollectionIndex, CollectionField), Index("by_next_occurrence", RecurringTriggerScheduleNextOccurrenceField), Index(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField), IncludedIndex("by_publication_and_schedule_id", RecurringTriggerSchedulePublicationIdField, RecurringTriggerScheduleIdField), Index(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField), Index(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField)]),
         Unit(PublicationProjectionStateDocumentKind, "runtime_publication_projection_state", [], [])
@@ -234,7 +256,8 @@ public static class ElsaRuntimeV2StorageManifest
         string id,
         string name,
         IReadOnlyList<ColumnSpec> columns,
-        IReadOnlyList<IndexSpec> indexes)
+        IReadOnlyList<IndexSpec> indexes,
+        Action<StorageDeclarationBuilder>? configure = null)
     {
         var declaration = StorageUnit.Declare(id, name)
             .String(IdField, IdMaximumLength, column => column.Required())
@@ -248,10 +271,33 @@ public static class ElsaRuntimeV2StorageManifest
             column.AddTo(declaration);
         foreach (var index in indexes)
             index.AddTo(declaration);
+        configure?.Invoke(declaration);
 
-        var unit = declaration.Build() with
+        var built = declaration.Build();
+        var unit = built with
         {
-            SchemaVersion = StorageSchemaVersion
+            SchemaVersion = StorageSchemaVersion,
+            AggregationProfiles = built.AggregationProfiles
+                .Select(profile => profile.Name switch
+                {
+                    WorkflowRunHealthStatusProfile => profile with
+                    {
+                        MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
+                        MaxGroups = WorkflowRunHealthStatusMaxGroups
+                    },
+                    WorkflowRunHealthRunningProfile => profile with
+                    {
+                        MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
+                        MaxGroups = WorkflowRunHealthRunningMaxGroups
+                    },
+                    WorkflowRunHealthTopFailuresProfile => profile with
+                    {
+                        MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
+                        MaxGroups = WorkflowRunHealthTopFailuresMaxGroups
+                    },
+                    _ => profile
+                })
+                .ToArray()
         };
 
         var portability = PortabilityValidator.Validate(unit);
@@ -264,16 +310,31 @@ public static class ElsaRuntimeV2StorageManifest
         return unit;
     }
 
-    private static ColumnSpec String(string name, int maxLength = IdMaximumLength) =>
-        new(name, PortableType.String, maxLength);
+    private static void AddWorkflowRunHealthAggregations(StorageDeclarationBuilder declaration)
+    {
+        declaration.Aggregate(WorkflowRunHealthStatusProfile, aggregate => aggregate
+            .GroupBy(WorkflowRunHealthStatusField)
+            .Count("count")
+            .Sum("incidentTotal", WorkflowRunHealthIncidentCountField)
+            .Sum("incidentBearingTotal", WorkflowRunHealthIncidentBearingCountField));
+        declaration.Aggregate(WorkflowRunHealthRunningProfile, aggregate => aggregate
+            .GroupBy(WorkflowRunHealthStatusField)
+            .Count("count"));
+        declaration.Aggregate(WorkflowRunHealthTopFailuresProfile, aggregate => aggregate
+            .GroupBy(WorkflowRunHealthDefinitionIdField)
+            .Count("failedCount"));
+    }
 
-    private static ColumnSpec Int64(string name) => new(name, PortableType.Int64);
+    private static ColumnSpec String(string name, int maxLength = IdMaximumLength, bool required = false) =>
+        new(name, PortableType.String, maxLength, required);
 
-    private static ColumnSpec Int32(string name) => new(name, PortableType.Int32);
+    private static ColumnSpec Int64(string name, bool required = false) => new(name, PortableType.Int64, Required: required);
 
-    private static ColumnSpec DateTime(string name) => new(name, PortableType.DateTimeOffset);
+    private static ColumnSpec Int32(string name, bool required = false) => new(name, PortableType.Int32, Required: required);
 
-    private static ColumnSpec Boolean(string name) => new(name, PortableType.Boolean);
+    private static ColumnSpec DateTime(string name, bool required = false) => new(name, PortableType.DateTimeOffset, Required: required);
+
+    private static ColumnSpec Boolean(string name, bool required = false) => new(name, PortableType.Boolean, Required: required);
 
     private static IndexSpec Index(string name, params string[] columns) => new(name, columns, false);
 
@@ -282,26 +343,46 @@ public static class ElsaRuntimeV2StorageManifest
 
     private static IndexSpec UniqueIndex(string name, params string[] columns) => new(name, columns, true);
 
-    private sealed record ColumnSpec(string Name, PortableType Type, int? MaxLength = null)
+    private sealed record ColumnSpec(string Name, PortableType Type, int? MaxLength = null, bool Required = false)
     {
         public void AddTo(StorageDeclarationBuilder declaration)
         {
             switch (Type)
             {
                 case PortableType.String:
-                    declaration.String(Name, MaxLength ?? IdMaximumLength);
+                    declaration.String(Name, MaxLength ?? IdMaximumLength, column =>
+                    {
+                        if (Required)
+                            column.Required();
+                    });
                     break;
                 case PortableType.Int64:
-                    declaration.Int64(Name);
+                    declaration.Int64(Name, column =>
+                    {
+                        if (Required)
+                            column.Required();
+                    });
                     break;
                 case PortableType.DateTimeOffset:
-                    declaration.Timestamp(Name);
+                    declaration.Timestamp(Name, column =>
+                    {
+                        if (Required)
+                            column.Required();
+                    });
                     break;
                 case PortableType.Boolean:
-                    declaration.Boolean(Name);
+                    declaration.Boolean(Name, column =>
+                    {
+                        if (Required)
+                            column.Required();
+                    });
                     break;
                 case PortableType.Int32:
-                    declaration.Int32(Name);
+                    declaration.Int32(Name, column =>
+                    {
+                        if (Required)
+                            column.Required();
+                    });
                     break;
                 default:
                     throw new InvalidOperationException($"Runtime column '{Name}' has unsupported type '{Type}'.");
