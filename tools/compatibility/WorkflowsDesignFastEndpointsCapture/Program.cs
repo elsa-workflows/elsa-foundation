@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -130,10 +131,11 @@ static async Task<CaptureHost> StartHostAsync()
         .ConfigureWebHost(webHost =>
         {
             webHost.UseTestServer();
-            webHost.UseSetting(WebHostDefaults.ApplicationKey, "workflows-design-fastendpoints-capture");
+            webHost.UseSetting(WebHostDefaults.ApplicationKey, "Elsa.Workflows.Design.Api");
             webHost.ConfigureServices(services =>
             {
                 services.AddLogging();
+                services.AddSingleton<IHostEnvironment>(new CaptureHostEnvironment("Elsa.Workflows.Design.Api"));
                 services.AddRouting();
                 services.AddHttpContextAccessor();
                 services.AddAuthentication(CaptureAuthenticationHandler.SchemeName)
@@ -163,7 +165,16 @@ static async Task<CaptureHost> StartHostAsync()
         })
         .Build();
     await host.StartAsync();
+    Console.Error.WriteLine($"captureApplicationName={host.Services.GetRequiredService<IHostEnvironment>().ApplicationName}");
     return new CaptureHost(host);
+}
+
+sealed class CaptureHostEnvironment(string applicationName) : IHostEnvironment
+{
+    public string ApplicationName { get; set; } = applicationName;
+    public string EnvironmentName { get; set; } = Environments.Development;
+    public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
 }
 
 sealed class CaptureHost(IHost host) : IAsyncDisposable

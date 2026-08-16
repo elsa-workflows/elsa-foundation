@@ -14,6 +14,9 @@ rg -q 'FastEndpointsFeatureBase' "$worktree_dir/src/Elsa/Workflows/Design/Api/Wo
 test "$(git -C "$worktree_dir" ls-files 'src/Elsa/Workflows/Design/Api/Endpoints' | wc -l | tr -d ' ')" -ge 25
 mkdir -p "$worktree_dir/tools/compatibility"
 cp -R "$repo_root/tools/compatibility/WorkflowsDesignFastEndpointsCapture" "$worktree_dir/tools/compatibility/"
+mkdir -p "$worktree_dir/tests/Elsa/Api/Compatibility/Testing/OpenApi"
+cp "$repo_root/tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs" \
+    "$worktree_dir/tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs"
 
 WORKFLOWS_DESIGN_BEFORE_COMMIT=$(git -C "$worktree_dir" rev-parse HEAD) \
 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT="$capture_runner_commit" \

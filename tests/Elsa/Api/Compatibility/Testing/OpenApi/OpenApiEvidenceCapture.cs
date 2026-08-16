@@ -8,6 +8,9 @@ namespace Elsa.Api.Compatibility.Testing.OpenApi;
 public sealed record OpenApiOperationEvidence
 {
     public required EndpointIdentity Endpoint { get; init; }
+    public string OperationId { get; init; } = "";
+    public string Tags { get; init; } = "[]";
+    public string Security { get; init; } = "[]";
     public required string Parameters { get; init; }
     public required string RequestBody { get; init; }
     public required string Responses { get; init; }
@@ -15,7 +18,8 @@ public sealed record OpenApiOperationEvidence
     public required string Schemas { get; init; }
     public string Canonical => CompatibilityJson.Serialize(new Dictionary<string, object?>
     {
-        ["endpoint"] = Endpoint.ToString(), ["parameters"] = Parameters, ["requestBody"] = RequestBody,
+        ["endpoint"] = Endpoint.ToString(), ["operationId"] = OperationId, ["tags"] = Tags, ["security"] = Security,
+        ["parameters"] = Parameters, ["requestBody"] = RequestBody,
         ["responses"] = Responses, ["mediaTypes"] = MediaTypes, ["schemas"] = Schemas
     });
 }
@@ -74,6 +78,9 @@ public static class OpenApiEvidenceCapture
         return new OpenApiOperationEvidence
         {
             Endpoint = endpoint,
+            OperationId = operation["operationId"]?.GetValue<string>() ?? "",
+            Tags = CompatibilityJson.Canonicalize(operation["tags"] ?? new JsonArray()),
+            Security = CompatibilityJson.Canonicalize(operation["security"] ?? new JsonArray()),
             Parameters = CompatibilityJson.Canonicalize(parameters),
             RequestBody = CompatibilityJson.Canonicalize(requestBody),
             Responses = CompatibilityJson.Canonicalize(responses),
