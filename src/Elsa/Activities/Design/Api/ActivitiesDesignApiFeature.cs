@@ -22,6 +22,8 @@ using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
 
+#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
+
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Design")]
@@ -52,19 +54,10 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
-        {
-            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContext)))
-                services.AddScoped<IActivityDependencyAuthorizationContext>(sp =>
-                    sp.GetRequiredService<IActivityDependencyContext>());
-            else
-                services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        }
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContext)))
-            services.AddScoped<IActivityDependencyContext>(sp =>
-                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContext current
-                    ? current
-                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
+        var hasLegacyDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext));
+        var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
+        if (!hasLegacyDependencyHost)
+            services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
         {
             services.AddScoped<IActivityAuthoringContextAsync>(sp =>
@@ -72,22 +65,13 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
                     ? asyncContext
                     : new LegacyActivityAuthoringContextAdapter(sp.GetRequiredService<IActivityAuthoringContext>()));
         }
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync)))
-        {
-            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContextAsync)))
-                services.AddScoped<IActivityDependencyContextAsync>(sp =>
-                    sp.GetRequiredService<IActivityDependencyAuthorizationContextAsync>() is IActivityDependencyContextAsync current
-                        ? current
-                        : new LegacyActivityDependencyAsyncAliasAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContextAsync>()));
-            else
-                services.AddScoped<IActivityDependencyContextAsync>(sp =>
-                    sp.GetRequiredService<IActivityDependencyContext>() is IActivityDependencyContextAsync asyncContext
+        if (!hasAsyncDependencyHost)
+            services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                hasLegacyDependencyHost
+                    ? new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>())
+                    : sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
                         ? asyncContext
-                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyContext>()));
-        }
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContextAsync)))
-            services.AddScoped<IActivityDependencyAuthorizationContextAsync>(sp =>
-                sp.GetRequiredService<IActivityDependencyContextAsync>());
+                        : sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
@@ -166,3 +150,5 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             target.Sets = source.Sets;
     }
 }
+
+#pragma warning restore CS0618

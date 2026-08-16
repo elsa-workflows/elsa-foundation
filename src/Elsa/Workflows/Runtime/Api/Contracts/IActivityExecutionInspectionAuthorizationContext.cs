@@ -3,6 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Contracts;
 
+#pragma warning disable CS0618 // The public allow-all adapter intentionally implements the obsolete host contract.
+
 /// <summary>Request-scope inspection authorization; structure and captured-value grants are intentionally separate.</summary>
 [Obsolete("Use IActivityInspectionContextAsync. This interface will be removed in the next major version.")]
 public interface IActivityExecutionInspectionAuthorizationContext
@@ -20,15 +22,11 @@ public interface IActivityExecutionInspectionAuthorizationContext
     bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution);
 }
 
-/// <summary>Short compatibility alias for the synchronous inspection context.</summary>
-[Obsolete("Use IActivityInspectionContextAsync. This interface will be removed in the next major version.")]
-public interface IActivityInspectionContext : IActivityExecutionInspectionAuthorizationContext
-{
-}
-
-/// <summary>Original long-name asynchronous replacement seam retained for compatibility.</summary>
-[Obsolete("Use IActivityInspectionContextAsync. This interface will be removed in the next major version.")]
-public interface IActivityExecutionInspectionAuthorizationContextAsync
+/// <summary>
+/// Canonical short asynchronous replacement seam. Runtime readers use this contract for all permission decisions.
+/// </summary>
+[ReplacementContract]
+public interface IActivityInspectionContextAsync
 {
     string TenantScope { get; }
     string AuditSubject { get; }
@@ -43,17 +41,9 @@ public interface IActivityExecutionInspectionAuthorizationContextAsync
     ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Canonical short asynchronous replacement seam. Runtime readers use this contract for all permission decisions.
-/// </summary>
-[ReplacementContract]
-public interface IActivityInspectionContextAsync : IActivityExecutionInspectionAuthorizationContextAsync
-{
-}
-
 /// <summary>Explicit test/development adapter. Production API composition uses a fail-closed request adapter.</summary>
 public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
-    IActivityInspectionContext,
+    IActivityExecutionInspectionAuthorizationContext,
     IActivityInspectionContextAsync
 {
     public string TenantScope => "all-tenants";
@@ -76,3 +66,5 @@ public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
     public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(true);
 }
+
+#pragma warning restore CS0618

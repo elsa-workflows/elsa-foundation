@@ -154,7 +154,7 @@ public sealed class ActivityDesignFeatureCompositionTests
     {
         var services = MinimalServices();
         services.AddScoped<IActivityAuthoringContext, LegacyAuthoringContext>();
-        services.AddScoped<IActivityDependencyContext, LegacyDependencyContext>();
+        services.AddScoped<IActivityDependencyAuthorizationContext, LegacyDependencyContext>();
         new ActivitiesDesignApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
@@ -166,6 +166,42 @@ public sealed class ActivityDesignFeatureCompositionTests
         Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
         Assert.True(await authoring.CanAuthorProviderAsync("legacy"));
         Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
+    }
+
+    [Fact]
+    public void Dependency_replacement_contract_requires_marker_and_rejects_duplicate_descriptors()
+    {
+        var unmarked = new ServiceCollection();
+        Assert.Throws<InvalidOperationException>(() =>
+            unmarked.EnsureReplacementContract<UnmarkedDependencyContract, UnmarkedDependencyContract>());
+
+        var duplicate = new ServiceCollection();
+        duplicate.AddScoped<IActivityDependencyContextAsync, CustomDependencyContext>();
+        duplicate.AddScoped<IActivityDependencyContextAsync, SecondDependencyContext>();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            duplicate.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>());
+        Assert.Contains(nameof(CustomDependencyContext), exception.Message);
+        Assert.Contains(nameof(SecondDependencyContext), exception.Message);
+    }
+
+    [Fact]
+    public void Dependency_replacement_contract_resolves_default_custom_and_idempotent_markers()
+    {
+        var defaults = new ServiceCollection();
+        defaults.AddFoundationIdentityAbstractions();
+        defaults.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        defaults.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        using (var provider = defaults.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
+        using (var defaultScope = provider.CreateScope())
+            Assert.IsType<HttpContextActivityDesignAuthorizationContext>(defaultScope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>());
+
+        var custom = new ServiceCollection();
+        custom.AddFoundationIdentityAbstractions();
+        custom.AddScoped<IActivityDependencyContextAsync, CustomDependencyContext>();
+        new ActivitiesDesignApiFeature().ConfigureServices(custom);
+        using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = customProvider.CreateScope();
+        Assert.IsType<CustomDependencyContext>(scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>());
     }
 
     [Fact]
@@ -369,10 +405,25 @@ public sealed class ActivityDesignFeatureCompositionTests
         public bool CanManageActivityDefinitions => true;
     }
 
-    private sealed class LegacyDependencyContext : IActivityDependencyContext
+    private sealed class LegacyDependencyContext : IActivityDependencyAuthorizationContext
     {
         public string? TenantId => "legacy-tenant";
         public string AuthorizationProfile => "legacy-profile";
         public bool CanRead(ActivityDefinitionReference reference) => true;
+    }
+
+    private class UnmarkedDependencyContract : IActivityDependencyContextAsync
+    {
+        public string? TenantId => null;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => new("unmarked");
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => new(false);
+    }
+
+    private sealed class CustomDependencyContext : UnmarkedDependencyContract
+    {
+    }
+
+    private sealed class SecondDependencyContext : UnmarkedDependencyContract
+    {
     }
 }

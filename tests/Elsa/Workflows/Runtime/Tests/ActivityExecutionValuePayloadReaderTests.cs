@@ -213,7 +213,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     private sealed class Authorization(
         bool canResolve,
         string auditSubject,
-        bool canInspect) : IActivityInspectionContext, IActivityInspectionContextAsync
+        bool canInspect) : IActivityExecutionInspectionAuthorizationContext, IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:tenant-a";
         public string AuthorizationProfile => $"resolve:{canResolve}";
@@ -229,7 +229,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     }
 
     private sealed class ChangingSubjectAuthorization(params string[] auditSubjects)
-        : IActivityInspectionContext, IActivityInspectionContextAsync
+        : IActivityExecutionInspectionAuthorizationContext, IActivityInspectionContextAsync
     {
         public int AuditSubjectReads { get; private set; }
         public string TenantScope => "tenant:tenant-a";

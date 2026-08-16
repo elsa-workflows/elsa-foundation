@@ -1042,7 +1042,7 @@ public sealed class ActivityUpgradePlanTests
 
     private sealed class Authorization(
         string? tenantId = null,
-        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyContext, IActivityDependencyContextAsync
+        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext, IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => "global/manage";

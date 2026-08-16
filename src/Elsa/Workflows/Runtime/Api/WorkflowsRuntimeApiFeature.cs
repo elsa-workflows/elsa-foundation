@@ -19,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Api;
 
+#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
+
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
 [ManifestFeatureCategory("Runtime")]
@@ -56,6 +58,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        services.TryAddScoped<HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.Configure<ActivityExecutionHierarchyCursorOptions>(options =>
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);
         if (!string.IsNullOrWhiteSpace(WorkflowAlterationPayloadProtectionActiveKeyId))
@@ -74,35 +77,17 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         var assembly = GetType().Assembly;
         services.AddRequestHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
-        {
-            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContext)))
-                services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp =>
-                    sp.GetRequiredService<IActivityInspectionContext>());
-            else
-                services.AddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        }
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContext)))
-            services.AddScoped<IActivityInspectionContext>(sp =>
-                sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContext current
-                    ? current
-                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>()));
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync)))
-        {
-            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContextAsync)))
-                services.AddScoped<IActivityInspectionContextAsync>(sp =>
-                    sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContextAsync>() is IActivityInspectionContextAsync current
-                        ? current
-                        : new LegacyActivityInspectionAsyncAliasAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContextAsync>()));
-            else
-                services.AddScoped<IActivityInspectionContextAsync>(sp =>
-                    sp.GetRequiredService<IActivityInspectionContext>() is IActivityInspectionContextAsync asyncContext
+        var hasLegacyInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext));
+        var hasAsyncInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync));
+        if (!hasLegacyInspectionHost)
+            services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
+        if (!hasAsyncInspectionHost)
+            services.AddScoped<IActivityInspectionContextAsync>(sp =>
+                hasLegacyInspectionHost
+                    ? new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>())
+                    : sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContextAsync asyncContext
                         ? asyncContext
-                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityInspectionContext>()));
-        }
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContextAsync)))
-            services.AddScoped<IActivityExecutionInspectionAuthorizationContextAsync>(sp =>
-                sp.GetRequiredService<IActivityInspectionContextAsync>());
+                        : sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
@@ -120,3 +105,5 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 }
+
+#pragma warning restore CS0618

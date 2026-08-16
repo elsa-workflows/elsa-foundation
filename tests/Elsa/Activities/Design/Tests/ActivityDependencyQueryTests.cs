@@ -291,7 +291,7 @@ public sealed class ActivityDependencyQueryTests
         return document.RootElement.Clone();
     }
 
-    private sealed class TestAuthorizationContext(string? tenantId, string profile) : IActivityDependencyContext, IActivityDependencyContextAsync
+    private sealed class TestAuthorizationContext(string? tenantId, string profile) : IActivityDependencyAuthorizationContext, IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => profile;

@@ -6,8 +6,11 @@ using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Design.Api.Services;
+
+#pragma warning disable CS0618 // The implementation intentionally bridges the obsolete host contract.
 
 /// <summary>
 /// Default HTTP request adapter for reusable-activity authoring and dependency visibility.
@@ -17,7 +20,7 @@ namespace Elsa.Activities.Design.Api.Services;
 /// </summary>
 public sealed class HttpContextActivityDesignAuthorizationContext :
     IActivityAuthoringContext,
-    IActivityDependencyContext,
+    IActivityDependencyAuthorizationContext,
     IActivityAuthoringContextAsync,
     IActivityDependencyContextAsync
 {
@@ -31,8 +34,23 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     private readonly bool _trusted;
     private readonly string? _tenantId;
     private readonly string _actorId;
+    private readonly CancellationToken _requestCancellationToken;
     private Lazy<Task<AuthorizationSnapshot>>? _snapshot;
 
+    [Obsolete("Use the Foundation Identity-enabled constructor selected by dependency injection.")]
+    public HttpContextActivityDesignAuthorizationContext(IHttpContextAccessor httpContextAccessor)
+    {
+        ArgumentNullException.ThrowIfNull(httpContextAccessor);
+        _authorization = null!;
+        _principalValidator = null!;
+        _principal = new ClaimsPrincipal(new ClaimsIdentity());
+        _trusted = false;
+        _tenantId = null;
+        _actorId = string.Empty;
+        _requestCancellationToken = CancellationToken.None;
+    }
+
+    [ActivatorUtilitiesConstructor]
     public HttpContextActivityDesignAuthorizationContext(
         IHttpContextAccessor httpContextAccessor,
         IPermissionAuthorizationService authorization,
@@ -48,6 +66,7 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         _principal = _trusted ? normalizedPrincipal : new ClaimsPrincipal(new ClaimsIdentity());
         _tenantId = _trusted ? FindTenantId(_principal) : null;
         _actorId = _trusted ? FindActorId(_principal) : string.Empty;
+        _requestCancellationToken = httpContext?.RequestAborted ?? CancellationToken.None;
     }
 
     public string? TenantId => _tenantId;
@@ -137,9 +156,9 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
 
     private async Task<AuthorizationSnapshot> CreateSnapshotAsync()
     {
-        var canAuthor = await AuthorizeAsync(AuthorPermission, CancellationToken.None).ConfigureAwait(false);
-        var canReadProviderPayload = await AuthorizeAsync(ProviderPayloadReadPermission, CancellationToken.None).ConfigureAwait(false);
-        var canManage = await AuthorizeAsync(ActivityDesignManagePermission, CancellationToken.None).ConfigureAwait(false);
+        var canAuthor = await AuthorizeAsync(AuthorPermission, _requestCancellationToken).ConfigureAwait(false);
+        var canReadProviderPayload = await AuthorizeAsync(ProviderPayloadReadPermission, _requestCancellationToken).ConfigureAwait(false);
+        var canManage = await AuthorizeAsync(ActivityDesignManagePermission, _requestCancellationToken).ConfigureAwait(false);
         var profileMaterial = $"tenant:{_tenantId ?? "global"}|author:{canAuthor}|provider-payload:{canReadProviderPayload}|manage:{canManage}";
         var profile = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(profileMaterial))).ToLowerInvariant();
         return new AuthorizationSnapshot(canAuthor, canReadProviderPayload, canManage, profile);
@@ -210,7 +229,7 @@ public sealed class LegacyActivityAuthoringContextAdapter : IActivityAuthoringCo
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanManageActivityDefinitions);
 }
 
-public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContext, IActivityDependencyContextAsync
+public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContextAsync
 {
     private readonly IActivityDependencyAuthorizationContext _legacy;
 
@@ -218,24 +237,10 @@ public sealed class LegacyActivityDependencyContextAdapter : IActivityDependency
         _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
 
     public string? TenantId => _legacy.TenantId;
-    public string AuthorizationProfile => _legacy.AuthorizationProfile;
-    public bool CanRead(ActivityDefinitionReference reference) => _legacy.CanRead(reference);
     public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
     public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanRead(reference));
 }
 
-public sealed class LegacyActivityDependencyAsyncAliasAdapter : IActivityDependencyContextAsync
-{
-    private readonly IActivityDependencyAuthorizationContextAsync _legacy;
-
-    public LegacyActivityDependencyAsyncAliasAdapter(IActivityDependencyAuthorizationContextAsync legacy) =>
-        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
-
-    public string? TenantId => _legacy.TenantId;
-    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        _legacy.GetAuthorizationProfileAsync(cancellationToken);
-    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
-        _legacy.CanReadAsync(reference, cancellationToken);
-}
+#pragma warning restore CS0618

@@ -21,7 +21,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     public async Task Adapts_a_legacy_host_inspection_context_when_async_replacement_is_omitted()
     {
         var services = new ServiceCollection();
-        services.AddScoped<IActivityInspectionContext, LegacyInspectionContext>();
+        services.AddScoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
@@ -30,6 +30,42 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
         Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+    }
+
+    [Fact]
+    public void Inspection_replacement_contract_requires_marker_and_rejects_duplicate_descriptors()
+    {
+        var unmarked = new ServiceCollection();
+        Assert.Throws<InvalidOperationException>(() =>
+            unmarked.EnsureReplacementContract<UnmarkedInspectionContract, UnmarkedInspectionContract>());
+
+        var duplicate = new ServiceCollection();
+        duplicate.AddScoped<IActivityInspectionContextAsync, CustomInspectionContext>();
+        duplicate.AddScoped<IActivityInspectionContextAsync, SecondInspectionContext>();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            duplicate.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
+        Assert.Contains(nameof(CustomInspectionContext), exception.Message);
+        Assert.Contains(nameof(SecondInspectionContext), exception.Message);
+    }
+
+    [Fact]
+    public void Inspection_replacement_contract_resolves_default_custom_and_idempotent_markers()
+    {
+        var defaults = new ServiceCollection();
+        defaults.AddFoundationIdentityAbstractions();
+        defaults.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        defaults.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        using (var provider = defaults.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
+        using (var defaultScope = provider.CreateScope())
+            Assert.IsType<HttpContextActivityExecutionInspectionAuthorizationContext>(defaultScope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>());
+
+        var custom = new ServiceCollection();
+        custom.AddFoundationIdentityAbstractions();
+        custom.AddScoped<IActivityInspectionContextAsync, CustomInspectionContext>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(custom);
+        using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = customProvider.CreateScope();
+        Assert.IsType<CustomInspectionContext>(scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>());
     }
 
     [Fact]
@@ -59,7 +95,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             "tenant",
             new Dictionary<string, string>());
 
-    private sealed class LegacyInspectionContext : IActivityInspectionContext
+    private sealed class LegacyInspectionContext : IActivityExecutionInspectionAuthorizationContext
     {
         public string TenantScope => "tenant:legacy";
         public string AuthorizationProfile => "legacy-profile";
@@ -68,6 +104,25 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
         public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
+    }
+
+    private class UnmarkedInspectionContract : IActivityInspectionContextAsync
+    {
+        public string TenantScope => "tenant";
+        public string AuditSubject => "subject";
+        public string RequestCorrelationId => "request";
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => new("profile");
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+    }
+
+    private sealed class CustomInspectionContext : UnmarkedInspectionContract
+    {
+    }
+
+    private sealed class SecondInspectionContext : UnmarkedInspectionContract
+    {
     }
 
     [Fact]

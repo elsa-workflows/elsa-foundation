@@ -442,7 +442,7 @@ public class ActivityExecutionLayoutInspectionTests
         new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.AuthoredNode, "node-boundary")
     });
 
-    private sealed class Authorization(bool structure, bool values) : IActivityInspectionContext, IActivityInspectionContextAsync
+    private sealed class Authorization(bool structure, bool values) : IActivityExecutionInspectionAuthorizationContext, IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:a";
         public string AuthorizationProfile => $"structure:{structure};values:{values}";
