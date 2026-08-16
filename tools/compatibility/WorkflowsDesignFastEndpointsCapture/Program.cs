@@ -161,7 +161,7 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
         var path = route.Split('?', 2)[0];
         var routeParts = new[]
         {
-            path.Contains("activity", StringComparison.Ordinal) ? "activityVersionId" : null,
+            path.Contains("activities/", StringComparison.Ordinal) ? "activityVersionId" : null,
             path.Contains("inputs/name", StringComparison.Ordinal) ? "inputName" : null,
             path.Contains("definitions/sample", StringComparison.Ordinal) ? "definitionId" : null,
             path.Contains("drafts/sample", StringComparison.Ordinal) ? "draftId" : null,
