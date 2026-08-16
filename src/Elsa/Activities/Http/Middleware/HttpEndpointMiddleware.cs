@@ -20,7 +20,7 @@ namespace Elsa.Activities.Http.Middleware;
 /// The request middleware that turns an inbound HTTP request into an <see cref="HttpEndpoint"/> stimulus
 /// (async/202 baseline; spec 089 B routing, extended for mid-flow resume in D). A request whose path is under
 /// <see cref="HttpEndpointOptions.BasePath"/> (matched on a whole path segment, never a bare prefix) has its
-/// endpoint-relative path resolved against the per-shell <see cref="IRouteTable"/> via <see cref="IRouteMatcher"/>
+/// endpoint-relative path and method resolved against the per-shell <see cref="IRouteTable"/> via <see cref="IRouteMatcher"/>
 /// (ASP.NET route templates, e.g. <c>orders/{id}</c>); the matched template plus the request method form the
 /// stimulus identity (<see cref="HttpEndpointStimulus.Hash(string,string)"/>) dispatched through
 /// <see cref="IStimulusRouter"/> in <see cref="StimulusRoutingMode.StartAndResume"/> mode — it both starts new
@@ -128,12 +128,18 @@ public sealed class HttpEndpointMiddleware(
 
     private async Task HandleEndpointAsync(HttpContext context, string endpointPath)
     {
+        // The production route table exposes an additive snapshot lease. Holding it from route matching through
+        // dispatch binds this request to the exact generation it selected; older route-table implementations fall
+        // back to their existing enumerable behavior for compatibility.
+        using var snapshotLease = (routeTable as IRouteTableSnapshotProvider)?.AcquireSnapshot();
+        var routeSnapshot = snapshotLease?.Snapshot.Routes ?? routeTable.ToArray();
+
         // Resolve the concrete endpoint-relative path to a published route template (spec 089 B). The route
         // table holds endpoint-relative templates; TemplateMatcher wants rooted paths, so both sides get a
         // leading slash for the match. The route table enumerates most-specific-first (issue #592 item 1), so
         // "first match wins" is deterministic: a literal template (orders/list) beats a parameter template
         // (orders/{id}) regardless of publish/insertion order.
-        var (template, routeValues) = ResolveTemplate(endpointPath);
+        var (template, routeValues) = ResolveTemplate(endpointPath, context.Request.Method, routeSnapshot, routeMatcher);
         if (template is null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -404,14 +410,21 @@ public sealed class HttpEndpointMiddleware(
     /// Resolves the endpoint-relative path against the per-shell route table. Returns the matched template
     /// (endpoint-relative, as stored) plus its extracted route values, or (null, empty) when nothing matches.
     /// </summary>
-    private (string? Template, IReadOnlyDictionary<string, string> RouteValues) ResolveTemplate(string endpointPath)
+    private static (string? Template, IReadOnlyDictionary<string, string> RouteValues) ResolveTemplate(
+        string endpointPath,
+        string method,
+        IEnumerable<HttpRouteData> routeSnapshot,
+        IRouteMatcher routeMatcher)
     {
         var rootedPath = "/" + endpointPath;
 
-        foreach (var routeData in routeTable)
+        foreach (var routeData in routeSnapshot)
         {
             var template = routeData.Route;
             if (string.IsNullOrWhiteSpace(template))
+                continue;
+
+            if (routeData.Methods.Count > 0 && !routeData.Methods.Contains(method, StringComparer.OrdinalIgnoreCase))
                 continue;
 
             // Reuse the route table's precompiled matcher (issue #592 item 6) — no per-request template parse.

@@ -61,8 +61,7 @@ public sealed class HttpEndpointRoutesResolver(
         // legitimately register the same template, and a start trigger and a mid-flow bookmark may share one
         // template. Ordinal dedup keeps the route table one entry per concrete path; the ambiguity guard runs at
         // request time, not here.
-        var templates = new HashSet<string>(StringComparer.Ordinal);
-        var routes = new List<HttpRouteData>();
+        var candidates = new Dictionary<string, RouteCandidate>(StringComparer.Ordinal);
 
         // (1) Trigger bindings. Two bindings that share a (template, method) hash are legitimate when they belong
         // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
@@ -83,7 +82,7 @@ public sealed class HttpEndpointRoutesResolver(
                 claimantsByHash[binding.StimulusHash] = binding.DefinitionId;
             }
 
-            AddTemplate(binding.Metadata, templates, routes);
+            AddTemplate(binding.Metadata, candidates);
         }
 
         // (2) Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions).
@@ -93,19 +92,61 @@ public sealed class HttpEndpointRoutesResolver(
             new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
             cancellationToken);
         foreach (var bookmark in waiting.Matches)
-            AddTemplate(bookmark.Metadata, templates, routes);
+            AddTemplate(bookmark.Metadata, candidates);
 
-        return routes;
+        return candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray();
     }
 
-    private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, HashSet<string> templates, List<HttpRouteData> routes)
+    private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, IDictionary<string, RouteCandidate> candidates)
     {
         if (!metadata.TryGetValue(HttpEndpointRouting.TemplateMetadataKey, out var template) || string.IsNullOrWhiteSpace(template))
             return;
 
-        if (!templates.Add(template))
-            return;
+        if (!candidates.TryGetValue(template, out var candidate))
+        {
+            candidate = new RouteCandidate(template);
+            candidates.Add(template, candidate);
+        }
 
-        routes.Add(new HttpRouteData(template));
+        candidate.Add(metadata);
+    }
+
+    private sealed class RouteCandidate(string template)
+    {
+        private readonly HashSet<string> _methods = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _policies = new(StringComparer.Ordinal);
+        private bool _wildcardMethod;
+        private bool _authorize;
+
+        public void Add(IReadOnlyDictionary<string, string> metadata)
+        {
+            if (metadata.TryGetValue(HttpEndpointRouting.MethodMetadataKey, out var method) && !string.IsNullOrWhiteSpace(method))
+                _methods.Add(method.Trim().ToUpperInvariant());
+            else
+                _wildcardMethod = true;
+
+            var authorize = metadata.TryGetValue(HttpEndpointRouting.AuthorizeMetadataKey, out var authorizeValue) &&
+                            bool.TryParse(authorizeValue, out var parsedAuthorize) && parsedAuthorize;
+            _authorize |= authorize;
+            if (authorize && metadata.TryGetValue(HttpEndpointRouting.PolicyMetadataKey, out var policy) && !string.IsNullOrWhiteSpace(policy))
+                _policies.Add(policy.Trim());
+        }
+
+        public HttpRouteData ToRouteData()
+        {
+            var disposition = _authorize
+                ? _policies.Count == 0
+                    ? HttpRouteSecurityDispositionMetadata.AuthenticatedPrincipal("Elsa.Http")
+                    : HttpRouteSecurityDispositionMetadata.NamedPolicies(_policies, "Elsa.Http")
+                : HttpRouteSecurityDispositionMetadata.Public(
+                    "workflow-authored",
+                    "Workflow-authored HTTP endpoint does not require authorization.");
+
+            return new HttpRouteData(template)
+            {
+                Methods = _wildcardMethod ? [] : _methods.OrderBy(method => method, StringComparer.Ordinal).ToArray(),
+                Metadata = [disposition]
+            };
+        }
     }
 }

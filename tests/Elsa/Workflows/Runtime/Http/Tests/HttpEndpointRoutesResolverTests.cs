@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Http.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -41,6 +42,82 @@ public sealed class HttpEndpointRoutesResolverTests
 
         var route = Assert.Single(routes);
         Assert.Equal("orders/{id}", route.Route);
+        Assert.Equal(new[] { "DELETE", "GET" }, route.Methods);
+    }
+
+    [Fact]
+    public async Task ProjectsPublicSecurityDisposition_ForUnauthenticatedWorkflowRoute()
+    {
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "public", "GET"));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
+        Assert.Equal(HttpRouteSecurityDispositionKind.Public, disposition.Kind);
+        Assert.Equal("workflow-authored", disposition.Category);
+        Assert.NotNull(disposition.Reason);
+    }
+
+    [Fact]
+    public async Task ProjectsNamedPolicyDisposition_ForAuthorizedWorkflowRoute()
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = "orders",
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = "GET",
+            [Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true",
+            [Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey] = "orders.read"
+        };
+        await _store.SaveAsync(Bindings.Build("a1", "n1", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:authorized", metadata));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
+        Assert.Equal(HttpRouteSecurityDispositionKind.NamedPolicy, disposition.Kind);
+        Assert.Equal(["orders.read"], disposition.Values);
+        Assert.Equal("Elsa.Http", disposition.OwnerId);
+    }
+
+    [Fact]
+    public async Task ProjectsAuthenticatedPrincipalDisposition_ForAuthorizeOnlyWorkflowRoute()
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = "orders",
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = "GET",
+            [Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true"
+        };
+        await _store.SaveAsync(Bindings.Build("a1", "n1", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:authenticated", metadata));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
+        Assert.Equal(HttpRouteSecurityDispositionKind.AuthenticatedPrincipal, disposition.Kind);
+        Assert.Empty(disposition.Values);
+        Assert.Equal("Elsa.Http", disposition.OwnerId);
+    }
+
+    [Fact]
+    public async Task MixedAuthorizeOnlyAndNamedPolicyBindingsRemainFailClosedWithActualPolicies()
+    {
+        var authorizeOnlyMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = "orders",
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = "GET",
+            [Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true"
+        };
+        var namedPolicyMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = "orders",
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = "GET",
+            [Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true",
+            [Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey] = "orders.read"
+        };
+        await _store.SaveAsync(Bindings.Build("a1", "n1", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:auth-only", authorizeOnlyMetadata, "def-a"));
+        await _store.SaveAsync(Bindings.Build("a1", "n2", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:named", namedPolicyMetadata, "def-a"));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
+        Assert.Equal(HttpRouteSecurityDispositionKind.NamedPolicy, disposition.Kind);
+        Assert.Equal(["orders.read"], disposition.Values);
+        Assert.DoesNotContain("default", disposition.Values, StringComparer.Ordinal);
     }
 
     [Fact]

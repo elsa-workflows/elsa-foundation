@@ -1,9 +1,12 @@
-﻿using CShells.Features;
+﻿using CShells;
+using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Models;
 using Elsa.Http.Options;
 using Elsa.Http.Services;
 using Elsa.Primitives.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -53,6 +56,18 @@ public class HttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // Register in the child shell, after CShells has composed root endpoint sources into that shell. This
+        // keeps Foundation Host independent of Elsa.Http while allowing the adapter to see the real manifest.
+        services.TryAddScoped<IHttpRouteManifestProvider>(serviceProvider =>
+        {
+            var shellSettings = serviceProvider.GetService<ShellSettings>();
+            return shellSettings is null
+                ? new EmptyHttpRouteManifestProvider()
+                : new AspNetCoreHttpRouteManifestProvider(
+                    serviceProvider.GetServices<EndpointDataSource>(),
+                    shellSettings);
+        });
+
         RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
         RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
         RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);
@@ -126,5 +141,10 @@ public class HttpFeature : IShellFeature
     {
         var type = typeName.GetLoadedType();
         services.AddScoped(typeof(TService), type);
+    }
+
+    private sealed class EmptyHttpRouteManifestProvider : IHttpRouteManifestProvider
+    {
+        public IEnumerable<HttpRouteData> GetRoutes() => [];
     }
 }

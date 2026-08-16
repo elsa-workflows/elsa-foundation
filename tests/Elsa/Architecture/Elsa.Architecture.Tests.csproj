@@ -37,6 +37,7 @@
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />

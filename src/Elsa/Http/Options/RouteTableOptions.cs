@@ -15,4 +15,7 @@ public sealed class RouteTableOptions
 {
     /// <summary>A value unique to the owning shell (its settings id). Empty when unset (single-shell/test hosts).</summary>
     public string ShellDiscriminator { get; set; } = string.Empty;
+
+    /// <summary>The stable owner id stamped onto workflow-authored dynamic routes.</summary>
+    public string OwnerId { get; set; } = "Elsa.Http";
 }

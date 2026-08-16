@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Expose the internal RouteTable to its unit tests so the atomic-swap semantics can be asserted directly. -->
   </ItemGroup>
 
@@ -19,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Http.Core.csproj" />
+    <ProjectReference Include="..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\Caching\Core\Elsa.Caching.Core.csproj" />
     <ProjectReference Include="..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\Serialization\Core\Elsa.Serialization.Core.csproj" />
