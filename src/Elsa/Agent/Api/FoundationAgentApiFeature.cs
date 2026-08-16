@@ -1,8 +1,10 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
 using Elsa.Agent.Api.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Agent.Api;
 
@@ -13,11 +15,13 @@ namespace Elsa.Agent.Api;
     DisplayName = "Foundation Agent API",
     Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints."
 )]
-public sealed class FoundationAgentApiFeature : FastEndpointsFeatureBase
+public sealed class FoundationAgentApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.AddFoundationAgentApi();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        AgentApi.MapAgentApi(endpoints);
 }

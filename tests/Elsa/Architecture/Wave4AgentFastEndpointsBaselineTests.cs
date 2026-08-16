@@ -8,6 +8,7 @@ using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Api.Compatibility.Testing.Serialization;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using FastEndpoints;
@@ -58,7 +59,7 @@ public sealed class Wave4AgentFastEndpointsBaselineTests
         Assert.Equal(11, openApi.Operations.Count);
         Assert.Contains(baseline, item => item.Endpoint.Route.Value.EndsWith("/stream", StringComparison.Ordinal)
             && item.Streaming.Contains("data:", StringComparison.Ordinal)
-            && item.Streaming.Contains("\\n", StringComparison.Ordinal));
+            && item.Streaming.Contains("\n", StringComparison.Ordinal));
     }
 
     public static IReadOnlyList<HttpCompatibilityCase> Cases { get; } =
@@ -108,7 +109,8 @@ public sealed class Wave4AgentFastEndpointsBaselineTests
         foreach (var testCase in Cases)
             observations.Add(await HttpEvidenceCapture.CaptureAsync(host.Client, testCase));
 
-        return (observations, OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync()));
+        var rawOpenApi = await host.GetOpenApiAsync();
+        return (observations, OpenApiEvidenceCapture.Capture(rawOpenApi));
     }
 }
 
@@ -216,18 +218,127 @@ internal sealed class Wave4AgentAuthenticationHandler(
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var identity = Request.Headers[Wave4AgentHost.IdentityHeader].ToString();
-        if (!string.Equals(identity, "wildcard", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(identity))
             return Task.FromResult(AuthenticateResult.NoResult());
+
+        var parts = identity.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var grant = parts[0];
+        var actorId = parts.Length > 1 ? parts[1] : "actor-1";
+        var tenantId = parts.Length > 2 ? parts[2] : "tenant-1";
+        var permissions = grant switch
+        {
+            "wildcard" => new[] { PermissionKey.Wildcard },
+            "use" => new[] { "agent.use" },
+            "proposals" => new[] { "agent.proposals" },
+            "audit" => new[] { "agent.audit" },
+            _ => Array.Empty<string>()
+        };
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
-            new Claim(ClaimTypes.NameIdentifier, "actor-1"),
-            new Claim(IdentityClaimTypes.TenantId, "tenant-1"),
+            new Claim(ClaimTypes.NameIdentifier, actorId),
+            new Claim(IdentityClaimTypes.TenantId, tenantId),
             new Claim(IdentityClaimTypes.Normalized, "v1"),
-            new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard)
+            ..permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
         ], Scheme.Name));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
     }
+}
+
+/// <summary>Runs the identical fixed-service fixture with the Agent Minimal API mapper.</summary>
+internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
+{
+    private readonly IHost host;
+
+    private Wave4AgentMinimalApiHost(IHost host) => this.host = host;
+
+    public HttpClient Client => host.GetTestClient();
+
+    public static async Task<Wave4AgentMinimalApiHost> StartAsync(IAgentStreamingService? streaming = null)
+    {
+        var builder = new HostBuilder()
+            .ConfigureWebHost(webHost =>
+            {
+                webHost.UseTestServer();
+                webHost.UseSetting(WebHostDefaults.ApplicationKey, "testhost");
+                webHost.ConfigureServices(services =>
+                {
+                    services.AddLogging();
+                    services.AddRouting();
+                    services.AddAuthentication(Wave4AgentAuthenticationHandler.SchemeName)
+                        .AddScheme<AuthenticationSchemeOptions, Wave4AgentAuthenticationHandler>(
+                            Wave4AgentAuthenticationHandler.SchemeName, _ => { });
+                    services.AddAuthorization();
+                    services.AddFoundationIdentityAbstractions(options =>
+                        options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            Wave4AgentAuthenticationHandler.SchemeName
+                        });
+                    services.AddOpenApi();
+                    new FoundationAgentApiFeature().ConfigureServices(services);
+                    services.AddFastEndpoints(options =>
+                    {
+                        options.Assemblies = [typeof(Wave4FastEndpointsCanary).Assembly];
+                        options.Filter = type => type == typeof(Wave4FastEndpointsCanary);
+                    });
+                    services.Replace(ServiceDescriptor.Singleton<IAgentSessionService, Wave4FixedSessionService>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentPolicyEvaluator, Wave4FixedPolicyEvaluator>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentContextCollector, Wave4FixedContextCollector>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentContextSanitizer, Wave4FixedContextSanitizer>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentCapabilityCatalog, Wave4FixedCapabilityCatalog>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentProviderRegistry, Wave4FixedProviderRegistry>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentStreamingService>(streaming ?? new Wave4FixedStreamingService()));
+                    services.Replace(ServiceDescriptor.Singleton<IAgentFeedbackService, Wave4FixedFeedbackService>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentProposalService, Wave4FixedProposalService>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentAuditReader, Wave4FixedAuditReader>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink, Wave4FixedAuditSink>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry, Wave4FixedTurnRegistry>());
+                });
+                webHost.Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapFastEndpoints();
+                        AgentApi.MapAgentApi(endpoints);
+                        endpoints.MapOpenApi();
+                    });
+                });
+            });
+
+        var host = builder.Build();
+        await host.StartAsync();
+        return new(host);
+    }
+
+    public async Task<string> GetOpenApiAsync()
+    {
+        using var response = await Client.GetAsync("/openapi/v1.json");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await host.StopAsync();
+        host.Dispose();
+    }
+}
+
+internal sealed class Wave4FastEndpointsCanary : ElsaEndpointWithoutRequest<string>
+{
+    public const string Route = "/_wave4/fast-endpoints-canary";
+
+    public override void Configure()
+    {
+        Get(Route);
+        ConfigurePermissions("agent.use");
+    }
+
+    public override Task HandleAsync(CancellationToken cancellationToken) =>
+        Send.OkAsync("fast-endpoints-canary", cancellationToken);
 }
 
 internal static class Wave4AgentFixtures
@@ -238,7 +349,7 @@ internal static class Wave4AgentFixtures
         "session-1", "Agent session", "tenant-1", "actor-1", "conversation-1", "provider-1", "explain",
         Policy, AgentSessionStatus.Active, Now, Now, null, new Dictionary<string, string>());
     public static readonly AgentMessage Message = new(
-        "message-1", "session-1", AgentRole.User, "hello", AgentMessageStatus.Pending, null, Now, null, null, [], [] , []);
+        "message-1", "session-1", AgentRole.User, "hello", AgentMessageStatus.Pending, null, Now, null, null, [], [], []);
     public static readonly AgentActionProposal Proposal = new(
         "proposal-1", "session-1", null, "workflow.explain", "answer", "Proposal", "Summary", AgentRisk.ReadOnly,
         null, [], [], [], null, [], null, null, false, AgentActionProposalStatus.AwaitingApproval, null, null, Now, Now);
