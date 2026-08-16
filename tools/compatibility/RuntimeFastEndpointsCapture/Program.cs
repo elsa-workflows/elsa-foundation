@@ -102,6 +102,12 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
             route.Name == "execute" ? "{\"artifactId\":\"body-id\",\"sourceReferenceId\":\"body-source\"}" : "{\"dispatchId\":\"body-id\",\"requestId\":\"request-id\"}")));
     cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name != "cancel-alteration-plan").Select(route =>
         Create(route.Method, route.Name + "|trusted-malformed-json", route.Path, route.Template, "trusted", "{ malformed")));
+    cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name != "cancel-alteration-plan").Select(route =>
+        Create(route.Method, route.Name + "|trusted-literal-null", route.Path, route.Template, "trusted", "null", null)));
+    cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name != "cancel-alteration-plan").Select(route =>
+        Create(route.Method, route.Name + "|trusted-empty-body", route.Path, route.Template, "trusted", "", "application/json")));
+    cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name != "cancel-alteration-plan").Select(route =>
+        Create(route.Method, route.Name + "|trusted-absent-content-type", route.Path, route.Template, "trusted", "{}", null)));
     cases.Add(Create(HttpMethod.Get, "get-instance|trusted-not-found", "/runtime/workflows/instances/missing", "/runtime/workflows/instances/{workflowExecutionId}", "trusted"));
     cases.Add(Create(HttpMethod.Get, "get-activity-execution|trusted-not-found", "/runtime/workflows/instances/missing/activity-executions/missing", "/runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", "trusted"));
     cases.Add(Create(HttpMethod.Get, "list-incidents|trusted-not-found", "/runtime/workflows/instances/missing/incidents", "/runtime/workflows/instances/{workflowExecutionId}/incidents", "trusted"));
@@ -111,7 +117,7 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     cases.Add(Create(HttpMethod.Post, "submit-alteration-plan|trusted-missing-idempotency", "/runtime/workflows/alteration-plans", "/runtime/workflows/alteration-plans", "trusted", "{}"));
     return cases;
 
-    static HttpCompatibilityCase Create(HttpMethod method, string name, string route, string template, string? identity, string? body = null, string contentType = "application/json")
+    static HttpCompatibilityCase Create(HttpMethod method, string name, string route, string template, string? identity, string? body = null, string? contentType = "application/json")
     {
         return new(new(template, method.Method), name, () =>
         {
@@ -119,7 +125,11 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
             if (identity is not null)
                 request.Headers.TryAddWithoutValidation(CaptureAuthenticationHandler.IdentityHeader, identity);
             if (method != HttpMethod.Get && method != HttpMethod.Delete)
-                request.Content = new StringContent(body ?? "{}", Encoding.UTF8, contentType);
+            {
+                request.Content = contentType is null
+                    ? new ByteArrayContent(Encoding.UTF8.GetBytes(body ?? "{}"))
+                    : new StringContent(body ?? "{}", Encoding.UTF8, contentType);
+            }
             if (name.StartsWith("submit-alteration-plan", StringComparison.Ordinal) && !name.Contains("missing-idempotency", StringComparison.Ordinal))
                 request.Headers.TryAddWithoutValidation("Idempotency-Key", "capture-idempotency-key");
             return request;
