@@ -92,7 +92,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.Equal(Hash(openApiPath), root.GetProperty("openApiSha256").GetString());
         Assert.Equal(Hash(tracePath), root.GetProperty("handlerTraceSha256").GetString());
         Assert.Equal("#1372", root.GetProperty("issue").GetString());
-        Assert.Equal("ee6b9cf23f01e169fd6ce056f3c402db479d4e50", root.GetProperty("sourceCommit").GetString());
+        Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
+        Assert.Equal("3941846350023b8832090855d064825c67c98748", root.GetProperty("captureRunnerCommit").GetString());
         Assert.Equal(65, root.GetProperty("caseCount").GetInt32());
         Assert.Equal(27, root.GetProperty("operationCount").GetInt32());
 

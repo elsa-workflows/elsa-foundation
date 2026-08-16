@@ -44,8 +44,8 @@
   "openApiSha256": "cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5",
   "operationCount": 27,
   "registrationCount": 27,
-  "runnerCommit": "ef7d70429b197d85f1687b30dbc4414c221fbc59",
-  "sourceCommit": "ee6b9cf23f01e169fd6ce056f3c402db479d4e50",
+  "runnerCommit": "3941846350023b8832090855d064825c67c98748",
+  "sourceCommit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
   "traceAssertions": [
     "request-and-command-types-recorded",
     "lifecycle-body-properties-recorded",
