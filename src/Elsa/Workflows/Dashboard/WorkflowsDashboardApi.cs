@@ -18,8 +18,8 @@ public static class WorkflowsDashboardApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate portfolio = HandleWorkflowPortfolioAsync;
-        RequestDelegate health = HandleWorkflowRunHealthAsync;
+        var portfolio = new RequestDelegate(HandleWorkflowPortfolioAsync);
+        var health = new RequestDelegate(HandleWorkflowRunHealthAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -28,7 +28,7 @@ public static class WorkflowsDashboardApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowsDashboardPermissions.Read)
+            .RequirePermission(WorkflowsDashboardPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(WorkflowPortfolioSnapshot)),
@@ -40,7 +40,7 @@ public static class WorkflowsDashboardApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowsDashboardPermissions.Read)
+            .RequirePermission(WorkflowsDashboardPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(WorkflowRunHealthSnapshot)),

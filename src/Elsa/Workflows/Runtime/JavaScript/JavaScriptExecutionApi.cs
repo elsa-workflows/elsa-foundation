@@ -20,7 +20,7 @@ public static class JavaScriptExecutionApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate handler = HandleExecuteAsync;
+        var handler = new RequestDelegate(HandleExecuteAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -29,7 +29,7 @@ public static class JavaScriptExecutionApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, JavaScriptExecutionPermissions.Execute)
+            .RequirePermission(JavaScriptExecutionPermissions.Execute)
             .WithMetadata(
                 descriptionMethod,
                 new AcceptsMetadata(["application/json"], typeof(RequestModel), false),
@@ -39,10 +39,9 @@ public static class JavaScriptExecutionApi
                 new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
                 new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
     }
-
     private static async Task HandleExecuteAsync(HttpContext context)
     {
-        RequestModel? request;
+        var request = (RequestModel?)null;
         try
         {
             request = await context.Request.ReadFromJsonAsync(
@@ -111,5 +110,4 @@ public static class JavaScriptExecutionApi
     {
         return message.Replace(" Path: $ | ", " ", StringComparison.Ordinal);
     }
-
 }

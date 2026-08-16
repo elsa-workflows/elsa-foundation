@@ -18,7 +18,7 @@ public static class JavaScriptRenderingApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate handler = HandleRenderAsync;
+        var handler = new RequestDelegate(HandleRenderAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -27,7 +27,7 @@ public static class JavaScriptRenderingApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, JavaScriptRenderingPermissions.Render)
+            .RequirePermission(JavaScriptRenderingPermissions.Render)
             .WithMetadata(
                 descriptionMethod,
                 new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(object), ["application/json"]),

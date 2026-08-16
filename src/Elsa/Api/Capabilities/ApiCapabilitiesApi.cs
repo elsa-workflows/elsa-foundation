@@ -20,7 +20,7 @@ public static class ApiCapabilitiesApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate handler = HandleGetCapabilitiesAsync;
+        var handler = new RequestDelegate(HandleGetCapabilitiesAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -29,7 +29,7 @@ public static class ApiCapabilitiesApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, ApiCapabilitiesPermissions.Read)
+            .RequirePermission(ApiCapabilitiesPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(ApiCapabilitiesDocument)),

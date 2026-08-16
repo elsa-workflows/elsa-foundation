@@ -18,7 +18,7 @@ public static class AttentionApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate handler = HandleGetAttentionItemsAsync;
+        var handler = new RequestDelegate(HandleGetAttentionItemsAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -27,7 +27,7 @@ public static class AttentionApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, AttentionPermissions.Read)
+            .RequirePermission(AttentionPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(AttentionAggregationResult), ["application/json"]),

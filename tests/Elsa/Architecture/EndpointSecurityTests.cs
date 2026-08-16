@@ -253,9 +253,8 @@ public sealed class EndpointSecurityTests
         Assert.NotNull(security);
         var policy = new PermissionPolicyCodec().Parse(security!.Value!);
         Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
-        Assert.Equal(PermissionRequirementMode.Any, policy.Descriptor!.Mode);
-        Assert.Contains(PermissionKey.Normalize(PermissionNames.ApiCapabilitiesRead), policy.Descriptor.Permissions);
-        Assert.Contains(PermissionKey.Normalize(PermissionNames.All), policy.Descriptor.Permissions);
+        Assert.Equal(PermissionRequirementMode.Single, policy.Descriptor!.Mode);
+        Assert.Equal([PermissionKey.Normalize(PermissionNames.ApiCapabilitiesRead)], policy.Descriptor.Permissions);
         Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
     }
 

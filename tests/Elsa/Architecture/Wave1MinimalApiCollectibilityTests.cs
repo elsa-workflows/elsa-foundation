@@ -33,7 +33,7 @@ public sealed class Wave1MinimalApiCollectibilityTests
             "Elsa.Workflows.Dashboard.WorkflowsDashboardApi", "MapWorkflowsDashboardApi", "Elsa.Workflows.Dashboard.WorkflowsDashboardFeature", "Elsa.Workflows.Dashboard.WorkflowsDashboardJsonContext", "WorkflowPortfolioSnapshot", "{\"status\":\"ready\",\"generatedAt\":\"2026-01-01T00:00:00Z\",\"activeDefinitionCount\":0,\"publishedDefinitionCount\":0,\"unpublishedDraftCount\":0,\"invalidDraftCount\":0}" )
     ];
 
-[Fact]
+    [Fact]
     public void Every_wave_one_owner_releases_repeatedly_after_route_publication()
     {
         var failures = new List<string>();
@@ -67,14 +67,14 @@ public sealed class Wave1MinimalApiCollectibilityTests
             throw new InvalidOperationException($"Production assembly for {owner.Owner} is unavailable.");
 
         var cycleId = Guid.NewGuid();
-        AssemblyLoadContext? loadContext = new ProductionApiLoadContext($"Elsa.Wave1.{owner.Owner}.{cycle}.{Guid.NewGuid():N}");
+        var loadContext = (AssemblyLoadContext?)new ProductionApiLoadContext($"Elsa.Wave1.{owner.Owner}.{cycle}.{Guid.NewGuid():N}");
         // Snapshot the owner assembly before loading it. The feature-delivery loop can build
         // owner projects concurrently; loading directly from a shared bin path would make the
         // unload probe race the build outputs and produce nondeterministic harness retention.
         var assemblyBytes = File.ReadAllBytes(owner.AssemblyPath);
-        Assembly? assembly;
+        var assembly = (Assembly?)null;
         using (var assemblyStream = new MemoryStream(assemblyBytes, writable: false))
-            assembly = loadContext.LoadFromStream(assemblyStream);
+            assembly = loadContext!.LoadFromStream(assemblyStream);
         var mapperType = assembly.GetType(owner.MapperType, throwOnError: true)!;
         var mapper = mapperType.GetMethod(owner.MapperMethod, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException($"{owner.Owner} does not expose {owner.MapperMethod}.");
@@ -158,7 +158,7 @@ public sealed class Wave1MinimalApiCollectibilityTests
         typeInfoProperty = null;
         routes = null;
         services = null;
-        loadContext.Unload();
+        loadContext!.Unload();
         loadContext = null;
 
         return new CollectibilityEvidence(

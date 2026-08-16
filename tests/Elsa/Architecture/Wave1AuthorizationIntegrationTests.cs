@@ -92,12 +92,12 @@ public sealed class Wave1AuthorizationIntegrationTests : IAsyncLifetime
         Assert.Equal(expected, fast.StatusCode);
     }
 
-    private Task<HttpResponseMessage> SendAsync(string path, string? identity)
+    private async Task<HttpResponseMessage> SendAsync(string path, string? identity)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
         if (identity is not null)
             request.Headers.TryAddWithoutValidation(Wave1AuthenticationHandler.IdentityHeader, identity);
-        return _client.SendAsync(request);
+        return await _client.SendAsync(request);
     }
 
     private sealed class Wave1AuthorizationContributor : IPermissionContributor

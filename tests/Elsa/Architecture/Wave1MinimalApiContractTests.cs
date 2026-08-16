@@ -80,8 +80,7 @@ public sealed class Wave1MinimalApiContractTests
             Assert.Equal(EndpointAuthoringModels.MinimalApi, entry.AuthoringModel);
             Assert.Equal(EndpointSecurityDispositionKind.Permission, entry.SecurityDisposition!.Kind);
             var policy = new PermissionPolicyCodec().Parse(entry.SecurityDisposition.Value!);
-            Assert.Equal(PermissionRequirementMode.Any, policy.Descriptor!.Mode);
-            Assert.Contains(PermissionKey.Wildcard, policy.Descriptor.Permissions);
+            Assert.Equal(PermissionRequirementMode.Single, policy.Descriptor!.Mode);
             Assert.Contains(entry.Responses, response => response.StatusCode == StatusCodes.Status401Unauthorized);
             Assert.Contains(entry.Responses, response => response.StatusCode == StatusCodes.Status403Forbidden);
         });
@@ -100,7 +99,7 @@ public sealed class Wave1MinimalApiContractTests
         {
             var policy = new PermissionPolicyCodec().Parse(entry.SecurityDisposition!.Value!);
             Assert.Equal(
-                [PermissionKey.Wildcard, PermissionKey.Normalize(expectedPermissions["/" + entry.Route.Value.TrimStart('/')])],
+                [PermissionKey.Normalize(expectedPermissions["/" + entry.Route.Value.TrimStart('/')])],
                 policy.Descriptor!.Permissions);
         }
 
@@ -152,13 +151,16 @@ public sealed class Wave1MinimalApiContractTests
     public async Task Runtime_javascript_invalid_json_preserves_the_request_error_contract()
     {
         var endpoint = GetEndpoint("javascript/execute");
+        using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        using var requestBody = new MemoryStream(Encoding.UTF8.GetBytes("{invalid"));
+        using var responseBody = new MemoryStream();
         var context = new DefaultHttpContext
         {
-            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider()
+            RequestServices = services
         };
         context.Request.ContentType = "application/json";
-        context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("{invalid"));
-        context.Response.Body = new MemoryStream();
+        context.Request.Body = requestBody;
+        context.Response.Body = responseBody;
 
         await endpoint.RequestDelegate!(context);
 
@@ -169,13 +171,14 @@ public sealed class Wave1MinimalApiContractTests
     [Fact]
     public async Task Rendering_failure_is_a_json_server_error_and_not_a_framework_exception()
     {
-        var services = new ServiceCollection()
+        using var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IJavaScriptDeclarationsDocumentFactory>(new ThrowingDocumentFactory())
             .AddSingleton<IJavaScriptDeclarationsDocumentRenderer>(new NoopDocumentRenderer())
             .BuildServiceProvider();
+        using var responseBody = new MemoryStream();
         var context = new DefaultHttpContext { RequestServices = services };
-        context.Response.Body = new MemoryStream();
+        context.Response.Body = responseBody;
 
         await GetEndpoint("javascript/documents/render").RequestDelegate!(context);
 
@@ -186,8 +189,10 @@ public sealed class Wave1MinimalApiContractTests
     [Fact]
     public async Task Dashboard_without_tenant_scope_is_a_request_error()
     {
-        var context = new DefaultHttpContext { RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider() };
-        context.Response.Body = new MemoryStream();
+        using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        using var responseBody = new MemoryStream();
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Response.Body = responseBody;
 
         await GetEndpoint("/_elsa/workflows/dashboard/definitions").RequestDelegate!(context);
 

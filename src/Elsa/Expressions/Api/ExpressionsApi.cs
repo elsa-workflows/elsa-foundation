@@ -22,8 +22,8 @@ public static class ExpressionsApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate descriptors = HandleExpressionDescriptorsAsync;
-        RequestDelegate variables = HandleVariableTypeDescriptorsAsync;
+        var descriptors = new RequestDelegate(HandleExpressionDescriptorsAsync);
+        var variables = new RequestDelegate(HandleVariableTypeDescriptorsAsync);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -32,7 +32,7 @@ public static class ExpressionsApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, ExpressionsPermissions.Read)
+            .RequirePermission(ExpressionsPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(ExpressionDescriptorsResponse)),
@@ -44,7 +44,7 @@ public static class ExpressionsApi
             .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, ExpressionsPermissions.Read)
+            .RequirePermission(ExpressionsPermissions.Read)
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(VariableTypeDescriptorsResponse)),
