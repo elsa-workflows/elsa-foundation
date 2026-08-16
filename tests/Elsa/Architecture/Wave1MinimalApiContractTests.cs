@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Contracts;
@@ -10,6 +8,7 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Attention.Api;
 using Elsa.Expressions.Api;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
@@ -23,6 +22,8 @@ using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -187,6 +188,36 @@ public sealed class Wave1MinimalApiContractTests
     }
 
     [Fact]
+    public async Task Rendering_cancellation_propagates_instead_of_becoming_a_server_error()
+    {
+        using var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IJavaScriptDeclarationsDocumentFactory>(new CancellingDocumentFactory())
+            .AddSingleton<IJavaScriptDeclarationsDocumentRenderer>(new NoopDocumentRenderer())
+            .BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => GetEndpoint("javascript/documents/render").RequestDelegate!(context));
+    }
+
+    [Fact]
+    public async Task Runtime_javascript_cancellation_propagates_instead_of_becoming_a_server_error()
+    {
+        using var services = new ServiceCollection()
+            .AddLogging()
+            .AddSingleton<IJavaScriptScriptEvaluator>(new CancellingScriptEvaluator())
+            .BuildServiceProvider();
+        using var requestBody = new MemoryStream(Encoding.UTF8.GetBytes("{\"script\":\"return 1;\"}"));
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Request.ContentType = "application/json";
+        context.Request.Body = requestBody;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => GetEndpoint("javascript/execute").RequestDelegate!(context));
+    }
+
+    [Fact]
     public async Task Dashboard_without_tenant_scope_is_a_request_error()
     {
         using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
@@ -307,9 +338,9 @@ public sealed class Wave1MinimalApiContractTests
         }
 
         var consumedAfter = OpenApiEvidenceCapture.Capture(document);
-        var consumedBefore = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Combine(AppContext.BaseDirectory, "Baselines", "wave1-openapi-fastendpoints.json"));
+        var consumedBefore = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(AppContext.BaseDirectory, "Baselines", "wave1-openapi-fastendpoints.json"));
         var wave1Routes = consumedBefore.Operations.Select(operation => operation.Endpoint.Route.Value).ToHashSet(StringComparer.Ordinal);
-        var approvals = BaselineFile.Load<ApprovedDifference[]>(Path.Combine(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json"))
+        var approvals = BaselineFile.Load<ApprovedDifference[]>(Path.Join(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json"))
             .Where(approval => wave1Routes.Contains(approval.Endpoint))
             .ToArray();
         var comparison = CompatibilityComparer.Compare(
@@ -354,6 +385,18 @@ public sealed class Wave1MinimalApiContractTests
     {
         public ValueTask<JavaScriptDeclarationsDocument> Create(CancellationToken cancellationToken = default) =>
             ValueTask.FromException<JavaScriptDeclarationsDocument>(new InvalidOperationException("render unavailable"));
+    }
+
+    private sealed class CancellingDocumentFactory : IJavaScriptDeclarationsDocumentFactory
+    {
+        public ValueTask<JavaScriptDeclarationsDocument> Create(CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<JavaScriptDeclarationsDocument>(new OperationCanceledException());
+    }
+
+    private sealed class CancellingScriptEvaluator : IJavaScriptScriptEvaluator
+    {
+        public ValueTask<JsonElement?> EvaluateAsync(JavaScriptScriptEvaluationRequest request) =>
+            ValueTask.FromException<JsonElement?>(new OperationCanceledException());
     }
 
     private sealed class NoopDocumentRenderer : IJavaScriptDeclarationsDocumentRenderer

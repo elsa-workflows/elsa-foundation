@@ -50,7 +50,7 @@ public static class JavaScriptRenderingApi
                 contentType: "application/json")
                 .ExecuteAsync(context);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await Results.Json(
                     new JavaScriptRenderingFailureResponse(false, exception.Message),

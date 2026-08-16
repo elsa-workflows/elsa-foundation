@@ -1,7 +1,3 @@
-using System.Security.Claims;
-using System.Text;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
@@ -14,10 +10,10 @@ using Elsa.Attention.Core;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
-using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -34,6 +30,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -41,13 +41,13 @@ namespace Elsa.Architecture.Tests;
 [Collection(Wave1HostCollection.Name)]
 public sealed class Wave1MinimalApiCompatibilityTests
 {
-    private static readonly string BaselineDirectory = Path.Combine(AppContext.BaseDirectory, "Baselines");
+    private static readonly string BaselineDirectory = Path.Join(AppContext.BaseDirectory, "Baselines");
 
     [Fact]
     public async Task Minimal_api_after_evidence_matches_immutable_fastendpoints_before_evidence()
     {
-        var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Combine(BaselineDirectory, "wave1-http-fastendpoints.json"));
-        var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Combine(BaselineDirectory, "wave1-openapi-fastendpoints.json"));
+        var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "wave1-http-fastendpoints.json"));
+        var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "wave1-openapi-fastendpoints.json"));
 
         await using var host = await Wave1MinimalApiHost.StartAsync();
         var afterHttp = Wave1Cases.All.Select(testCase => HttpEvidenceCapture.CaptureAsync(host.Client, testCase));
@@ -59,7 +59,7 @@ public sealed class Wave1MinimalApiCompatibilityTests
 
         Assert.Equal(beforeHttp.Select(item => item.Endpoint + "|" + item.Case), afterHttpEvidence.Select(item => item.Endpoint + "|" + item.Case));
 
-        var registry = BaselineFile.Load<ApprovedDifference[]>(Path.Combine(BaselineDirectory, "rest-compatibility-approved-differences.json"));
+        var registry = BaselineFile.Load<ApprovedDifference[]>(Path.Join(BaselineDirectory, "rest-compatibility-approved-differences.json"));
         var wave1Routes = beforeOpenApi.Operations.Select(operation => operation.Endpoint.Route.Value).ToHashSet(StringComparer.Ordinal);
         var wave1Approvals = registry.Where(approval => wave1Routes.Contains(approval.Endpoint)).ToArray();
         Assert.Equal(2, wave1Approvals.Length);

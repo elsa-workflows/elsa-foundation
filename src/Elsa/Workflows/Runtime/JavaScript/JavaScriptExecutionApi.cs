@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -8,6 +7,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.JavaScript;
 
@@ -79,7 +79,7 @@ public static class JavaScriptExecutionApi
                     contentType: "application/json")
                 .ExecuteAsync(context);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             context.RequestServices.GetRequiredService<ILoggerFactory>()
                 .CreateLogger("Elsa.Workflows.Runtime.JavaScript")
