@@ -10,15 +10,16 @@ Groundwork provider drivers.
 | piece | state |
 |---|---|
 | CLI, run-request wire contract, native-plan staging | **done**, covered offline by `tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests` |
-| `capture-plan` for routeless workloads | **done** (`checkpoint-commit` is the only one) |
-| `capture-plan` for workloads with native routes | **not started** — refuses rather than fakes |
+| `capture-plan` for routeless workloads | **done** (`checkpoint-commit`) |
+| `capture-plan` for workloads with native routes | **done for SQLite** — public runtime queries and real provider plans; other providers fail closed |
 | adapter leaves | **done for the E3 baseline set**: `checkpoint-commit`, `bookmark-lookup`, `queue-drain`, and `outbox-drain` |
 
 All four leaves compose the real Groundwork runtime stores and execute frozen correctness through public
 runtime contracts. Mutating measurements prepare their invocation-specific fixture before the stopwatch;
 the timed body contains only the named public operation. `checkpoint-commit` can be measured on any of the
 four providers; SQLite and PostgreSQL have been run historically. The three new leaves require routed
-native-plan evidence, so an accepted matrix still waits for the route-capture side of `capture-plan`.
+native-plan evidence; the current capture leaf proves those routes on SQLite and refuses unsupported
+providers until a corresponding native-plan leaf is added.
 
 The repository-relative `tools/groundwork/run-e3-medium-baseline.py` validates one real evidence set per
 workload and prints the exact four `matrix medium` commands. Add `--execute` only after inspection:
@@ -75,7 +76,8 @@ whole hazard; otherwise, stop editing for the duration of the run.
 #    configuration to the requested one entry for entry, so these cannot be guessed.
 adapter-host probe-provider --provider sqlite
 
-# 1. Stage the native-plan evidence and copy the three values it prints.
+# 1. Stage the native-plan evidence and copy the three values it prints. For the three routed workloads,
+#    the current capture leaf is SQLite-only and executes the public runtime query leaves before staging.
 adapter-host capture-plan --workload checkpoint-commit --provider sqlite \
   --cohort tierb-001 --measurement-set groundwork-shared-linked \
   --adapter groundwork --form shared-documents-with-linked-index-tables --scale 100k \
@@ -106,9 +108,9 @@ removes the whole class of nondeterminism and keeps capture off the timed path.
 
 **A routeless workload still needs an evidence document.** `ArtifactAdmission.ValidateCorrectness` binds
 ~18 provenance fields between the request and the document and demands it unconditionally; the route list
-is only part of the binding. This is why `checkpoint-commit` (`requiredNativeRoutes: []`) is the right
-first slice — it exercises the whole provenance path without the route-capture and raw-plan-sanitization
-subsystem existing.
+is only part of the binding. This is why `checkpoint-commit` (`requiredNativeRoutes: []`) remains the simple
+provenance slice, while the routed leaves use the same staging contract after their public query plans have
+been captured and provider-validated.
 
 **The host shares `ArtifactStore.JsonOptions` via `InternalsVisibleTo` instead of copying it.** Those
 options are PascalCase and register no string-enum converter, so `ProcessKind` travels as a *number*. A

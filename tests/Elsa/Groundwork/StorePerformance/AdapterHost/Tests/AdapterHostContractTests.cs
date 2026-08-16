@@ -24,6 +24,19 @@ public sealed class AdapterHostContractTests : IDisposable
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
+    [Theory]
+    [InlineData("bookmark-lookup", "list-by-stimulus-and-type", "list-by-stimulus-type")]
+    [InlineData("queue-drain", "list-pending-scheduler-workflow-executions", "list-by-workflow-execution")]
+    [InlineData("outbox-drain", "list-claimable")]
+    public void Routed_capture_contract_covers_the_frozen_workload_routes(
+        string workloadId,
+        params string[] routeIdentities)
+    {
+        var workload = _catalog.Workloads[workloadId];
+
+        Assert.Equal(routeIdentities, RoutedNativePlanCapture.RequiredRouteIdentities(workload));
+    }
+
     /// <summary>
     /// Asserted on the serialized form rather than with record equality: <c>RunRequest</c> carries two
     /// dictionaries, and a positional record compares those by reference, so <c>Assert.Equal</c> on the

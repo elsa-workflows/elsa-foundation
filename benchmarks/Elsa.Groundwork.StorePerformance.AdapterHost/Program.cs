@@ -22,7 +22,7 @@ internal static class AdapterHostCli
             return (args.FirstOrDefault() ?? "help") switch
             {
                 "run" => await RunChildAsync(args[1..]),
-                "capture-plan" => CapturePlan(args[1..]),
+                "capture-plan" => await CapturePlanAsync(args[1..]),
                 "probe-provider" => await ProbeProviderAsync(args[1..]),
                 "help" or "--help" or "-h" => Help(),
                 var command => Fail($"Unknown command '{command}'.")
@@ -60,25 +60,23 @@ internal static class AdapterHostCli
 
     /// <summary>
     /// Captures the native-plan evidence document the matrix will commit to via
-    /// <c>--native-plan-evidence</c> and <c>--native-plan-sha256</c>. Routeless workloads need only the
-    /// provenance binding; a workload with <c>requiredNativeRoutes</c> needs real captured provider plans,
-    /// which is a separate leaf and is refused here rather than faked.
+    /// <c>--native-plan-evidence</c> and <c>--native-plan-sha256</c>. Routed workloads execute their public
+    /// runtime stores against the admitted bounded-query seam and then ask the provider driver to validate
+    /// each real native command before writing the evidence document and raw plans.
     /// </summary>
-    private static int CapturePlan(string[] args)
+    private static async Task<int> CapturePlanAsync(string[] args)
     {
         const string Command = "capture-plan";
         var workload = Workload(HostArguments.Require(args, Command, "--workload"));
         var provider = HostArguments.Require(args, Command, "--provider");
-        if (workload.RequiredNativeRoutes.Count > 0)
-            return Fail(
-                $"Workload '{workload.Id}' requires native-route evidence for {workload.RequiredNativeRoutes.Count} route(s) " +
-                $"({string.Join(", ", workload.RequiredNativeRoutes)}), which needs a provider plan-capture leaf. " +
-                "Only routeless workloads can be staged by this command today.");
         if (!workload.RequiredProviderEvidence.TryGetValue(provider, out var topology))
             return Fail($"Provider '{provider}' is not admitted by the frozen topology contract for '{workload.Id}'.");
 
         var identity = HostArguments.Require(args, Command, "--identity");
         var output = HostArguments.Require(args, Command, "--out");
+        var routes = workload.RequiredNativeRoutes.Count == 0
+            ? (IReadOnlyList<NativeRouteEvidence>)[]
+            : await RoutedNativePlanCapture.CaptureAsync(workload, provider, output, CancellationToken.None);
         var document = new NativePlanEvidenceDocument(
             2,
             HostArguments.Require(args, Command, "--cohort"),
@@ -99,7 +97,7 @@ internal static class AdapterHostCli
             workload.Input.Seed,
             workload.Input.FingerprintSha256,
             identity,
-            []);
+            routes);
 
         var digest = NativePlanEvidenceStaging.Write(output, document);
         var reference = NativePlanEvidenceStaging.ReferenceFor(workload.Id, provider);
@@ -161,6 +159,8 @@ internal static class AdapterHostCli
                            --adapter <adapter> --form <physical-form> --scale <scale> --commit <40-hex>
                            --composition <64-hex> --provider-version <version> --provider-setting <name=value>
                            --identity <native-plan-identity> --out <staging-directory>
+                  Routed workloads execute their public runtime query leaves and capture real provider plans;
+                  the current routed provider leaf is SQLite. Unsupported providers fail closed.
 
               run --request <run-request-json> --out <artifact-directory>
                   Spawned by `matrix --child-command`; not normally invoked by hand. Reads the staged

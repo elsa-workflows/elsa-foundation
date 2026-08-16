@@ -210,8 +210,8 @@ def main() -> int:
             "required real provider evidence is missing: "
             + ", ".join(missing)
             + ". The runner will not synthesize routed plans or round-trip figures. "
-              "Capture provider-native plans first; current AdapterHost capture-plan can create only the "
-              "routeless checkpoint-commit document."
+              "Capture provider-native plans first; the AdapterHost capture-plan command currently emits "
+              "routed evidence for SQLite and the routeless checkpoint-commit document."
         )
 
     try:
