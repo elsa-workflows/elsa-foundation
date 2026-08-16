@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core.Design;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
@@ -107,16 +108,78 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.False(versions.WasMutated);
     }
 
+    [Fact]
+    public async Task Synthetic_draft_id_is_used_as_the_store_key_and_does_not_fall_back_to_definition_lookup()
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "persisted-draft",
+            WorkflowDefinitionId = "definition-1",
+            State = WorkflowDefinitionState.Empty
+        };
+        var drafts = new MutableDraftStore(draft, []);
+        var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "1.0.0"), identityExists: false);
+        var publisher = new RecordingInlineEventPublisher(null);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+            new PreflightDraftPromotion("synthetic-draft", "1.0.0"), CancellationToken.None));
+
+        Assert.Equal("synthetic-draft", drafts.LastRequestedId);
+        Assert.Equal(0, versions.LatestCalls);
+        Assert.Equal(0, versions.IdentityCalls);
+        Assert.Equal(0, publisher.PublishCalls);
+    }
+
+    [Fact]
+    public async Task Promotion_preflight_reports_a_ready_exact_version_without_mutating_anything()
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-1",
+            WorkflowDefinitionId = "definition-1",
+            State = WorkflowDefinitionState.Empty,
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        var drafts = new MutableDraftStore(draft, []);
+        var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "1.0.0"), identityExists: false);
+        var publisher = new RecordingInlineEventPublisher(null);
+
+        var result = await new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+            new PreflightDraftPromotion("draft-1", "2.0.0"),
+            CancellationToken.None);
+
+        Assert.True(result.IsReady);
+        Assert.Equal("exact", result.AssignmentMode);
+        Assert.Equal("2.0.0", result.RequestedVersion);
+        Assert.Equal("2.0.0", result.ResolvedVersion);
+        Assert.Equal("1.0.0", result.LatestVersion);
+        Assert.Empty(result.Issues);
+        Assert.Equal(1, publisher.PublishCalls);
+        Assert.Equal(1, versions.LatestCalls);
+        Assert.Equal(1, versions.IdentityCalls);
+        Assert.False(versions.WasMutated);
+        Assert.Equal(WorkflowDefinitionState.Empty, draft.State);
+    }
+
     private sealed class MutableDraftStore(WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout)
         : IWorkflowDefinitionDraftStore
     {
         public WorkflowDefinitionDraft Draft { get; } = draft;
         public IReadOnlyCollection<DesignMetadataRecord> Layout { get; set; } = layout;
-        public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinitionDraft?>(Draft);
+        public string? LastRequestedId { get; private set; }
+        public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
+        {
+            LastRequestedId = draftId;
+            return Task.FromResult<WorkflowDefinitionDraft?>(draftId == Draft.Id ? Draft : null);
+        }
         public Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinitionDraft?>(Draft);
         public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>([Draft]);
         public Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult(Layout);
-        public Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) => Task.FromResult<DraftWithLayout?>(new(Draft, Layout));
+        public Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
+        {
+            LastRequestedId = draftId;
+            return Task.FromResult<DraftWithLayout?>(draftId == Draft.Id ? new(Draft, Layout) : null);
+        }
     }
 
     private sealed class RecordingUpdateDraftCommand(MutableDraftStore store) : IUpdateDraftCommand
