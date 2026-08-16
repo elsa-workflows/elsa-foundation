@@ -11,9 +11,6 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Persistence.Groundwork.Unified.Composition;
-using Elsa.Secrets.Core.Contracts;
-using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
@@ -22,15 +19,12 @@ using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
-using Elsa.Workflows.Runtime.Distributed.Contracts;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
-using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Physicalization;
+using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Core.SchemaEvolution;
 using Microsoft.Extensions.DependencyInjection;
@@ -123,7 +117,7 @@ public class GroundworkStorageCompositionTests
             provider);
 
         Assert.True(result.IsValid, string.Join("; ", result.Diagnostics.Select(x => x.Message)));
-        var primary = Assert.Single(result.ResolvedNames.Where(x => x.ObjectKind == PhysicalObjectKind.PrimaryStorage));
+        var primary = Assert.Single(result.ResolvedNames, x => x.ObjectKind == PhysicalObjectKind.PrimaryStorage);
         Assert.Equal("orders", primary.FeatureDefaultLogicalName);
         Assert.Equal("tenant_orders", primary.LogicalName);
         Assert.Equal("TENANT_ORDERS", primary.Identifier);
@@ -187,9 +181,9 @@ public class GroundworkStorageCompositionTests
             ProviderPhysicalNameNormalizer.Identity,
             owners);
 
-        var collision = Assert.Single(resolution.Collisions.Where(item =>
+        var collision = Assert.Single(resolution.Collisions, item =>
             item.PhysicalObjects.Any(physicalObject =>
-                physicalObject.ObjectKind == PhysicalObjectKind.PrimaryStorage)));
+                physicalObject.ObjectKind == PhysicalObjectKind.PrimaryStorage));
         Assert.Equal("shared_name", collision.Identifier);
         Assert.Equal(
             ["first-feature", "second-feature"],
@@ -204,9 +198,9 @@ public class GroundworkStorageCompositionTests
         ]);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
+        var diagnostic = Assert.Single(result.Diagnostics, item =>
             item.Code == "ELSA-GW-COMPOSITION-NAME-COLLISION" &&
-            item.Message.Contains("PrimaryStorage", StringComparison.Ordinal)));
+            item.Message.Contains("PrimaryStorage", StringComparison.Ordinal));
         Assert.Contains("first-feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("second-feature", diagnostic.Message, StringComparison.Ordinal);
     }
@@ -374,7 +368,7 @@ public class GroundworkStorageCompositionTests
         var result = Validate([second, first], [typeof(ITestStore)]);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "ELSA-GW-COMPOSITION-STORE-DUPLICATE"));
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "ELSA-GW-COMPOSITION-STORE-DUPLICATE");
         Assert.Contains("first", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("second", diagnostic.Message, StringComparison.Ordinal);
     }
@@ -389,7 +383,7 @@ public class GroundworkStorageCompositionTests
         ]);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "ELSA-GW-COMPOSITION-UNIT-COLLISION"));
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "ELSA-GW-COMPOSITION-UNIT-COLLISION");
         Assert.Contains("first-feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("second-feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("shared-unit", diagnostic.Message, StringComparison.Ordinal);
@@ -436,8 +430,8 @@ public class GroundworkStorageCompositionTests
         var result = Validate([declaration], providerCapabilities: capabilities);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x =>
-            x.Code == "ELSA-GW-COMPOSITION-ROUTE-MISSING"));
+        var diagnostic = Assert.Single(result.Diagnostics, x =>
+            x.Code == "ELSA-GW-COMPOSITION-ROUTE-MISSING");
         Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("unit", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("missing-query-route", diagnostic.Message, StringComparison.Ordinal);
@@ -461,7 +455,7 @@ public class GroundworkStorageCompositionTests
         var result = Validate([declaration], providerCapabilities: capabilities);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-INACTIVE"));
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-INACTIVE");
         Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("unit", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("atomic-route", diagnostic.Message, StringComparison.Ordinal);
@@ -496,8 +490,8 @@ public class GroundworkStorageCompositionTests
         var result = Validate([declaration], providerCapabilities: capabilities);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x =>
-            x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-UNSUPPORTED"));
+        var diagnostic = Assert.Single(result.Diagnostics, x =>
+            x.Code == "ELSA-GW-COMPOSITION-CAPABILITY-UNSUPPORTED");
         Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("unit", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("atomic-route", diagnostic.Message, StringComparison.Ordinal);
@@ -521,7 +515,7 @@ public class GroundworkStorageCompositionTests
         var result = Validate([declaration], providerCapabilities: capabilities);
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(x => x.Code == "ELSA-GW-COMPOSITION-TOPOLOGY-UNSUPPORTED"));
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "ELSA-GW-COMPOSITION-TOPOLOGY-UNSUPPORTED");
         Assert.Contains("feature", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("multi-document-transactions", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("file-backed-distinct-connections", diagnostic.Message, StringComparison.Ordinal);
@@ -537,8 +531,8 @@ public class GroundworkStorageCompositionTests
             targetCompiler: new DelegateTargetCompiler((_, _, _, _) => throw expected));
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
-            item.Code == "ELSA-GW-COMPOSITION-TARGET-COMPILE"));
+        var diagnostic = Assert.Single(result.Diagnostics, item =>
+            item.Code == "ELSA-GW-COMPOSITION-TARGET-COMPILE");
         Assert.Equal("composition.target", diagnostic.Target);
         Assert.Contains("groundwork-sqlite", diagnostic.Message, StringComparison.Ordinal);
     }
@@ -556,8 +550,8 @@ public class GroundworkStorageCompositionTests
                     routes)));
 
         Assert.False(result.IsValid);
-        var diagnostic = Assert.Single(result.Diagnostics.Where(item =>
-            item.Code == "ELSA-GW-COMPOSITION-TARGET-MISMATCH"));
+        var diagnostic = Assert.Single(result.Diagnostics, item =>
+            item.Code == "ELSA-GW-COMPOSITION-TARGET-MISMATCH");
         Assert.Equal("composition.target", diagnostic.Target);
         Assert.Contains("groundwork-sqlite", diagnostic.Message, StringComparison.Ordinal);
     }
@@ -610,8 +604,6 @@ public class GroundworkStorageCompositionTests
     [Theory]
     [InlineData("runtime", "elsa-workflows-runtime")]
     [InlineData("iam", "elsa-identity")]
-    [InlineData("secrets", "elsa-secrets")]
-    [InlineData("distributed-runtime", "elsa-workflows-runtime-distributed")]
     [InlineData("workflows-design", "elsa-workflows-design")]
     [InlineData("activities-design", "elsa-activities-design")]
     [InlineData("publishing", "elsa-workflows-publishing")]
@@ -679,7 +671,6 @@ public class GroundworkStorageCompositionTests
     [Theory]
     [InlineData("runtime", typeof(RuntimeGroundworkStorageManifestSource))]
     [InlineData("iam", typeof(IdentityGroundworkStorageManifestSource))]
-    [InlineData("distributed-runtime", typeof(DistributedGroundworkStorageManifestSource))]
     [InlineData("workflows-design", typeof(WorkflowsDesignGroundworkStorageManifestSource))]
     [InlineData("activities-design", typeof(ActivitiesDesignGroundworkStorageManifestSource))]
     [InlineData("publishing", typeof(PublishingGroundworkStorageManifestSource))]
@@ -689,9 +680,9 @@ public class GroundworkStorageCompositionTests
         RegisterFamily(services, family);
         RegisterFamily(services, family);
 
-        var descriptor = Assert.Single(services.Where(x =>
+        var descriptor = Assert.Single(services, x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == implementationType));
+            x.ImplementationType == implementationType);
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
 
@@ -705,13 +696,13 @@ public class GroundworkStorageCompositionTests
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 
-        var source = Assert.Single(services.Where(x =>
+        var source = Assert.Single(services, x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource));
         Assert.Equal(ServiceLifetime.Scoped, source.Lifetime);
         // The writer is bound to the design lane's target, so it is registered through a factory rather
         // than by implementation type; both design registrations still contribute exactly one.
-        var helper = Assert.Single(services.Where(x => x.ServiceType == typeof(IDesignAtomicWriter)));
+        var helper = Assert.Single(services, x => x.ServiceType == typeof(IDesignAtomicWriter));
         Assert.Equal(ServiceLifetime.Scoped, helper.Lifetime);
     }
 
@@ -913,7 +904,6 @@ public class GroundworkStorageCompositionTests
     {
         "runtime" => new RuntimeGroundworkStorageManifestSource(),
         "iam" => new IdentityGroundworkStorageManifestSource(),
-        "distributed-runtime" => new DistributedGroundworkStorageManifestSource(),
         "workflows-design" => new WorkflowsDesignGroundworkStorageManifestSource(),
         "activities-design" => new ActivitiesDesignGroundworkStorageManifestSource(),
         "publishing" => new PublishingGroundworkStorageManifestSource(),
@@ -971,8 +961,6 @@ public class GroundworkStorageCompositionTests
             typeof(IExternalIdentityStore),
             typeof(ITenantMembershipStore)
         ],
-        "secrets" => [typeof(ISecretRepository)],
-        "distributed-runtime" => [typeof(IExecutionPlacementStore), typeof(IExecutionCommandTransport)],
         "workflows-design" =>
         [
             typeof(IWorkflowDefinitionStore),
@@ -1009,12 +997,6 @@ public class GroundworkStorageCompositionTests
                 break;
             case "iam":
                 services.AddGroundworkIdentityStores();
-                break;
-            case "secrets":
-                services.AddGroundworkSecretsStore();
-                break;
-            case "distributed-runtime":
-                services.AddGroundworkDistributedRuntimeStores();
                 break;
             case "workflows-design":
                 services.AddGroundworkWorkflowsDesignStores();

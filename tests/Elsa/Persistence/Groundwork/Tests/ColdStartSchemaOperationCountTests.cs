@@ -33,7 +33,7 @@ public sealed class ColdStartSchemaOperationCountTests(ITestOutputHelper output)
     // Pinned fresh-database operation count for the reference deployment schema on SQLite. When a feature adds
     // or removes a storage unit / index this number changes on purpose — update it together with the baseline
     // report (docs/reports/cold-start-readiness-2026-07.md) and re-review the cold-start budget.
-    // 2026-08-16: the clean-break candidate's explicit six-family reference target provisions 940
+    // 2026-08-16: the transitional v1 reference target excludes the independently admitted v2 distributed units.
     // operations. Legacy diagnostics, Secrets, and Studio persistence are deliberately not folded into
     // this v1 document target; their Groundwork v2 adapters own independent units and admission.
     private const int ExpectedFreshDatabaseOperationCount = 940;
@@ -41,7 +41,6 @@ public sealed class ColdStartSchemaOperationCountTests(ITestOutputHelper output)
     private static IReadOnlyList<IGroundworkStorageManifestSource> ReferenceDeploymentSources() =>
     [
         new RuntimeGroundworkStorageManifestSource(),
-        new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),
         new GroundworkDesignAtomicWriteStorageManifestSource(),

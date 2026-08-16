@@ -25,7 +25,6 @@ public sealed class ProviderRecoveryContractTests
 {
     private const string ProviderMatrixOptIn = "ELSA_RUN_GROUNDWORK_PROVIDER_RECOVERY_MATRIX";
     private const string Tenant = "provider-recovery-contract";
-    private const string DistributedScope = "provider-recovery-distributed";
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 10, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
     private static readonly GroundworkStoreScenarioEvidence RecoveryEvidence =
@@ -212,70 +211,6 @@ public sealed class ProviderRecoveryContractTests
         Assert.NotNull(await applications.FindAsync(Tenant, application.Id));
     }
 
-    private static async Task AssertDistributedFailureAndRestartAsync(string providerKey)
-    {
-        foreach (var window in new[]
-                 {
-                     GroundworkDocumentStoreFailureWindows.OperationalRuntime.BeforeProviderDecision,
-                     GroundworkDocumentStoreFailureWindows.OperationalRuntime.DuringProviderDecision!.Value,
-                     GroundworkDocumentStoreFailureWindows.OperationalRuntime.AfterDurableDecision
-                 })
-        {
-            await using var driver = await CreatePhysicalDriverAsync(providerKey, new DistributedGroundworkStorageManifestSource());
-            var workflowExecutionId = $"recovery-distributed-{window.Value}";
-            var failures = new GroundworkFailureController();
-            failures.FailAt(window);
-
-            await using (var client = await driver.OpenPhysicalClientAsync(Access(DistributedScope)))
-            {
-                var decorated = new GroundworkFailureInjectingDocumentStore(
-                    client.DocumentStore,
-                    client.BoundedDocumentStore!,
-                    client.DocumentStore.Access,
-                    failures,
-                    GroundworkDocumentStoreFailureWindows.OperationalRuntime);
-                var transport = new GroundworkExecutionCommandTransport(
-                    decorated,
-                    new FixedAccessContextAccessor(DistributedScope),
-                    decorated);
-
-                var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
-                    transport.SendAsync(workflowExecutionId, Envelope(workflowExecutionId), Now).AsTask());
-                Assert.Equal(window, exception.Window);
-            }
-
-            await using var reopenedClient = await driver.OpenPhysicalClientAsync(Access(DistributedScope));
-            var reopened = Transport(reopenedClient);
-            var expectedCount = StringComparer.Ordinal.Equals(
-                window.Value,
-                GroundworkDocumentStoreFailureWindows.OperationalRuntime.BeforeProviderDecision.Value)
-                ? 0
-                : 1;
-            Assert.Equal(expectedCount, await reopened.CountPendingAsync(workflowExecutionId));
-        }
-    }
-
-    private static async Task AssertDistributedCancellationAndReuseAsync(string providerKey)
-    {
-        await using var driver = await CreatePhysicalDriverAsync(providerKey, new DistributedGroundworkStorageManifestSource());
-        await using var client = await driver.OpenPhysicalClientAsync(Access(DistributedScope));
-        var store = new GroundworkExecutionPlacementStore(client.DocumentStore, client.BoundedDocumentStore);
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            store.FindAsync("recovery-distributed-cancelled", cancelled.Token).AsTask());
-
-        var claim = new ExecutionPlacementClaim(
-            "recovery-distributed-cancelled",
-            "node-reused",
-            Now,
-            Now + LeaseDuration);
-        var saved = await store.TryClaimAsync(claim, Now);
-        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, saved.Outcome);
-        Assert.Equal("node-reused", (await store.FindAsync(claim.WorkflowExecutionId))!.OwnerId);
-    }
-
     private static async ValueTask<GroundworkProviderDriver> CreatePhysicalDriverAsync(
         string providerKey,
         IGroundworkStorageManifestSource manifestSource)
@@ -292,32 +227,12 @@ public sealed class ProviderRecoveryContractTests
     private static GroundworkSchedulerStateStore SchedulerState(GroundworkProviderClient client) =>
         new(client.DocumentStore, GroundworkProviderTestSerialization.Serializer, client.BoundedDocumentStore);
 
-    private static GroundworkExecutionCommandTransport Transport(GroundworkProviderClient client) =>
-        new(client.DocumentStore, new FixedAccessContextAccessor(DistributedScope), client.BoundedDocumentStore);
-
-    private static WorkflowExecutionCommandEnvelope Envelope(string workflowExecutionId) =>
-        new(
-            $"envelope-{workflowExecutionId}",
-            workflowExecutionId,
-            new WorkflowExecutionCommand(
-                $"command-{workflowExecutionId}",
-                workflowExecutionId,
-                WorkflowExecutionCommandKind.RunSchedulerWork,
-                Now,
-                null,
-                new Dictionary<string, string>()),
-            $"idempotency-{workflowExecutionId}",
-            WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            Now,
-            partition: new WorkflowExecutionPartition(DistributedScope));
-
     private static DocumentStoreAccess Access(string scope) =>
         DocumentStoreAccess.Scoped(new StorageScope(scope));
 
     private static IReadOnlyList<GroundworkStoreScenarioDefinition> AllDefinitions() =>
         GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Runtime)
             .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Identity))
-            .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.DistributedRuntime))
             .OrderBy(definition => definition.ScenarioId, StringComparer.Ordinal)
             .ToArray();
 
@@ -344,8 +259,6 @@ public sealed class ProviderRecoveryContractTests
             ],
             AssertIdentityRecoveryAsync,
             FailureWindows()),
-        Probe(["distributed-command-failure-and-restart"], AssertDistributedFailureAndRestartAsync, FailureWindows()),
-        Probe(["distributed-cancellation-dispose-and-reuse"], AssertDistributedCancellationAndReuseAsync)
     ];
 
     private static IReadOnlyList<string> FailureWindows() =>

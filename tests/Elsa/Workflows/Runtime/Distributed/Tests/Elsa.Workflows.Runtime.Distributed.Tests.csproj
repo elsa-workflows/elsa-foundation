@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Re-enabled when the shared runtime checkpoint family completes its v2 cutover; mixed v1/v2 composition is forbidden. -->
+    <Compile Remove="GroundworkTwoNodeAcceptanceTests.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />

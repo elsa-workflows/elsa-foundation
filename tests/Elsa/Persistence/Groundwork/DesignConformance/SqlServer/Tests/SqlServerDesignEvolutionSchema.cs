@@ -30,7 +30,6 @@ internal static class SqlServerDesignEvolutionSources
     public static readonly IReadOnlyList<Type> Baseline =
     [
         typeof(RuntimeGroundworkStorageManifestSource),
-        typeof(DistributedGroundworkStorageManifestSource),
         typeof(WorkflowsDesignGroundworkStorageManifestSource),
         typeof(ActivitiesDesignGroundworkStorageManifestSource),
         typeof(GroundworkDesignAtomicWriteStorageManifestSource),

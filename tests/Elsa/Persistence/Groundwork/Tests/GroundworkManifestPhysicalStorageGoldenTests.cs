@@ -27,7 +27,6 @@ public class GroundworkManifestPhysicalStorageGoldenTests
             ["publishing"] = PublishingGroundworkStorageManifest.Create,
             ["activities-design"] = ActivitiesDesignStorageManifest.Create,
             ["workflows-design"] = WorkflowsDesignStorageManifest.Create,
-            ["distributed"] = DistributedGroundworkStorageManifest.Create,
             ["identity"] = IdentityStorageManifest.Create
         };
 

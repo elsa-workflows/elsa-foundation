@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />

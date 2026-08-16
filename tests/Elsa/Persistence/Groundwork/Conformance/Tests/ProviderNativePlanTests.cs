@@ -50,7 +50,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(78, declared.Length);
+        Assert.Equal(74, declared.Length);
     }
 
     [Fact]
@@ -544,10 +544,8 @@ public sealed class ProviderNativePlanTests
     {
         var runtimeSource = new RuntimeGroundworkStorageManifestSource();
         var identitySource = new IdentityGroundworkStorageManifestSource();
-        var distributedSource = new DistributedGroundworkStorageManifestSource();
         var runtime = (await runtimeSource.CreateDeclarationAsync()).Manifest;
         var identity = (await identitySource.CreateDeclarationAsync()).Manifest;
-        var distributed = (await distributedSource.CreateDeclarationAsync()).Manifest;
 
         return
         [
@@ -572,8 +570,7 @@ public sealed class ProviderNativePlanTests
                                 IdentityStorageManifest.MutationReceiptExpiresAtField)
                         ],
                         take: 256)
-                ]),
-            Group(distributedSource, distributed, DistributedQueries())
+                ])
         ];
     }
 
@@ -1140,71 +1137,6 @@ public sealed class ProviderNativePlanTests
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
                 ])
-        ];
-    }
-
-    private static IReadOnlyList<DocumentQuery> DistributedQueries()
-    {
-        var now = Now.ToString("O", CultureInfo.InvariantCulture);
-        return
-        [
-            Documents(
-                DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
-                DistributedGroundworkStorageManifest.ListOwnedPlacementsQuery,
-                [
-                    Equal(DistributedGroundworkStorageManifest.OwnerIdLookupKeyField, "owner-lookup"),
-                    Equal(
-                        DistributedGroundworkStorageManifest.OwnerIdComparisonKeyField,
-                        "owner-comparison"),
-                    DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
-                        DistributedGroundworkStorageManifest.ExpiresAtField,
-                        now))
-                ],
-                [
-                    new DocumentQueryOrder(
-                        DistributedGroundworkStorageManifest.OwnerIdLookupKeyField),
-                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.ExpiresAtField),
-                    new DocumentQueryOrder(
-                        DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField)
-                ]),
-            Documents(
-                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-                DistributedGroundworkStorageManifest.LeaseVisibleCommandsQuery,
-                [
-                    Equal(
-                        DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
-                        "workflow-key"),
-                    LessThanOrEqual(DistributedGroundworkStorageManifest.VisibleAtField, now)
-                ],
-                [new DocumentQueryOrder(DistributedGroundworkStorageManifest.SequenceField)]),
-            Documents(
-                    DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-                    DistributedGroundworkStorageManifest.ListPendingExecutionIdsQuery,
-                    [
-                        Equal(
-                            DistributedGroundworkStorageManifest.CollectionField,
-                            DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind),
-                        LessThanOrEqual(
-                            DistributedGroundworkStorageManifest.VisibleAtField,
-                            now)
-                    ],
-                    [
-                        new DocumentQueryOrder(
-                            DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField),
-                        new DocumentQueryOrder(
-                            DistributedGroundworkStorageManifest.SequenceField,
-                            PhysicalSortDirection.Descending)
-                    ])
-                .LatestPerKey(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField),
-            new DocumentQuery(
-                DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-                DistributedGroundworkStorageManifest.CountPendingCommandsQuery,
-                [
-                    Equal(
-                        DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
-                        "workflow-key")
-                ],
-                resultOperation: BoundedQueryResultOperation.Count)
         ];
     }
 

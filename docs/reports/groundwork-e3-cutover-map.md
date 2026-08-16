@@ -53,17 +53,17 @@ The same-ID provider packages make the order strict: a project cannot load v1 an
 assemblies together. Intermediate green slices therefore have to be dependency-closed on one side of
 the boundary; they cannot be made green with binding aliases or compatibility shims.
 
-## Public API prerequisite discovered during cutover
+## Public API prerequisite resolved during cutover
 
-The shared-runtime wave requires an additive Groundwork v2 capability before it can preserve Elsa's
+The shared-runtime wave required an additive Groundwork v2 capability before it could preserve Elsa's
 tenant boundary. Elsa authorizes recovery and management reads with
 `PersistenceAccessContext.PrivilegedAcrossScopes`; its named-query path deliberately opens one audited
-session over every scope. V2 `StorageAccess` currently exposes only `Global` and `Scoped`, and all four
-providers reject `Global` access for a `Scoped` unit. Consequently, the current public API cannot
-express an across-scope query without weakening the unit to global storage or duplicating data.
+session over every scope. Groundwork candidate `4d2ca32` adds explicit audited across-scope access for
+scoped units and honest provider capability admission. Its package-only and native-provider
+conformance is green, so the shared-runtime wave may consume that public surface without weakening
+the unit to global storage or duplicating data.
 
-The required generic capability is explicit privileged across-scope access for a scoped unit, carrying
-a named purpose suitable for audit. Providers must inject/project the stored scope for queries, refuse
-scope-less point reads, preserve ordinary scoped isolation, and advertise/refuse the capability
-honestly. This blocks shared runtime/admin-query cutover, but not domain slices that use only ordinary
-global or single-scope access.
+The accepted generic contract carries a named audit purpose, injects/projects the stored scope for
+queries, refuses scope-less point reads, preserves ordinary scoped isolation, and advertises or
+refuses the capability honestly. Those invariants remain required in Elsa's shared-runtime tests; the
+API prerequisite itself no longer blocks that wave.
