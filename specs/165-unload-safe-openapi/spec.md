@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-16
 
-**Status**: In progress — implementation for #1392
+**Status**: Implemented — merged by #1394 as `efe280446cafc998cbeb305bf235527eafd30b19`
 
 **Program Goal**: First-party REST API Consolidation (#1342), prerequisite #1392
 
