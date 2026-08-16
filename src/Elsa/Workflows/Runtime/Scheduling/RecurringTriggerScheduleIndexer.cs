@@ -79,7 +79,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         return bindings;
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
         WorkflowExecutable executable,
         string publicationId,
         string slotId,
@@ -90,11 +90,11 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
 
         if (_providers.Count == 0)
-            return await _inner.PreparePublicationAsync(executable, publicationId, slotId, cancellationToken);
+            return await _inner.PrepareActivationAsync(executable, publicationId, slotId, cancellationToken);
 
         var schedules = MaterializeSchedules(executable, _timeProvider.GetUtcNow(), publicationId, slotId);
-        var bindings = await _inner.PreparePublicationAsync(executable, publicationId, slotId, cancellationToken);
-        await _store.PreparePublicationAsync(publicationId, schedules, cancellationToken);
+        var bindings = await _inner.PrepareActivationAsync(executable, publicationId, slotId, cancellationToken);
+        await _store.PrepareActivationAsync(publicationId, schedules, cancellationToken);
         return bindings;
     }
 

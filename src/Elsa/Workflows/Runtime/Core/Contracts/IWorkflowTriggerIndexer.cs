@@ -23,7 +23,7 @@ public interface IWorkflowTriggerIndexer
     /// <summary>
     /// Extracts and validates a publication-scoped projection, then persists it in prepared (non-serving) state.
     /// </summary>
-    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
         WorkflowExecutable executable,
         string publicationId,
         string slotId,

@@ -29,7 +29,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
-    public ValueTask PreparePublicationAsync(
+    public ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default)
@@ -53,7 +53,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
         string publicationId,
         CancellationToken cancellationToken = default) =>
         await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
@@ -92,7 +92,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
-    public ValueTask ActivatePublicationAsync(
+    public ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default)
@@ -115,7 +115,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         cancellationToken.ThrowIfCancellationRequested();

@@ -257,7 +257,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             .Where(binding =>
                 StringComparer.Ordinal.Equals(binding.ArtifactId, schedule.ArtifactId) &&
                 StringComparer.Ordinal.Equals(binding.ExecutableNodeId, schedule.ExecutableNodeId) &&
-                StringComparer.Ordinal.Equals(binding.PublicationId, schedule.PublicationId) &&
+                StringComparer.Ordinal.Equals(binding.ActivationId, schedule.PublicationId) &&
                 StringComparer.Ordinal.Equals(binding.SlotId, schedule.SlotId))
             .ToArray();
     }

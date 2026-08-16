@@ -80,7 +80,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             $"Recurring trigger schedule '{schedule.ScheduleId}' changed concurrently and was not overwritten.");
     }
 
-    public async ValueTask PreparePublicationAsync(
+    public async ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default)
@@ -138,12 +138,12 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             result.NextContinuation);
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
         string publicationId,
         CancellationToken cancellationToken = default) =>
         await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
 
-    public async ValueTask ActivatePublicationAsync(
+    public async ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default)
@@ -155,7 +155,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         await ActivatePublicationCoreAsync(publicationId, replacedPublicationId, cancellationToken);
     }
 
-    public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public async ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         await DeleteByPublicationCoreAsync(publicationId, cancellationToken);

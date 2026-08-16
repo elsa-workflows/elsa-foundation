@@ -73,7 +73,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             $"Workflow trigger binding '{binding.TriggerBindingId}' changed concurrently and was not overwritten.");
     }
 
-    public async ValueTask PreparePublicationAsync(
+    public async ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default)
@@ -85,7 +85,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         await PreparePublicationCoreAsync(publicationId, bindings, cancellationToken);
     }
 
-    public async ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+    public async ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
         WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
@@ -97,7 +97,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
             cancellationToken);
     }
 
-    public async ValueTask ActivatePublicationAsync(
+    public async ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default)
@@ -109,7 +109,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         await ActivatePublicationCoreAsync(publicationId, replacedPublicationId, cancellationToken);
     }
 
-    public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public async ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         await DeleteByPublicationCoreAsync(publicationId, cancellationToken);
@@ -237,7 +237,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
         {
             ArgumentNullException.ThrowIfNull(binding);
             WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
-            if (!StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
+            if (!StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
                 throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
         }

@@ -115,7 +115,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         await _pump.ExecuteAsync(CancellationToken.None);
 
         var started = Assert.Single(_startDispatcher.Requests);
-        Assert.Equal("publication-1", started.SourceSelection!.PublicationId);
+        Assert.Equal("publication-1", started.SourceSelection!.ActivationId);
         Assert.Equal("slot-blue", started.SourceSelection.SlotId);
     }
 
@@ -157,7 +157,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         CorrelationScope: null,
         Metadata: new Dictionary<string, string>(),
         CreatedAt: Now,
-        PublicationId: publicationId,
+        ActivationId: publicationId,
         SlotId: slotId);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

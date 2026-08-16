@@ -24,20 +24,20 @@ public sealed class RecurringTriggerScheduleIndexerTests
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-shared", "PT5M"));
         var executable = Executable("artifact-shared", TriggerNode("node-timer", "Elsa.Timer"));
 
-        await indexer.PreparePublicationAsync(executable, "publication-default-v1", "slot-default");
-        await indexer.PreparePublicationAsync(executable, "publication-blue", "slot-blue");
+        await indexer.PrepareActivationAsync(executable, "publication-default-v1", "slot-default");
+        await indexer.PrepareActivationAsync(executable, "publication-blue", "slot-blue");
 
         Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
-        var defaultSchedule = Assert.Single(await store.ListByPublicationAsync("publication-default-v1"));
-        var blueSchedule = Assert.Single(await store.ListByPublicationAsync("publication-blue"));
+        var defaultSchedule = Assert.Single(await store.ListByActivationAsync("publication-default-v1"));
+        var blueSchedule = Assert.Single(await store.ListByActivationAsync("publication-blue"));
         Assert.Equal("publication-default-v1", defaultSchedule.PublicationId);
         Assert.Equal("slot-default", defaultSchedule.SlotId);
         Assert.Equal("publication-blue", blueSchedule.PublicationId);
         Assert.Equal("slot-blue", blueSchedule.SlotId);
         Assert.NotEqual(defaultSchedule.ScheduleId, blueSchedule.ScheduleId);
 
-        await store.ActivatePublicationAsync("publication-default-v1", replacedPublicationId: null);
-        await store.ActivatePublicationAsync("publication-blue", replacedPublicationId: null);
+        await store.ActivateAsync("publication-default-v1", replacedPublicationId: null);
+        await store.ActivateAsync("publication-blue", replacedPublicationId: null);
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
@@ -45,8 +45,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
                 .Select(schedule => schedule.PublicationId)
                 .Order(StringComparer.Ordinal));
 
-        await indexer.PreparePublicationAsync(executable, "publication-default-v2", "slot-default");
-        await store.ActivatePublicationAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
+        await indexer.PrepareActivationAsync(executable, "publication-default-v2", "slot-default");
+        await store.ActivateAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],
@@ -54,8 +54,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
                 .Select(schedule => schedule.PublicationId)
                 .Order(StringComparer.Ordinal));
 
-        await store.DeleteByPublicationAsync("publication-default-v1");
-        await store.DeleteByPublicationAsync("publication-default-v2");
+        await store.DeleteByActivationAsync("publication-default-v1");
+        await store.DeleteByActivationAsync("publication-default-v2");
 
         var survivingSchedule = Assert.Single(await store.ListDueAsync(Now.AddMinutes(10), 10));
         Assert.Equal("publication-blue", survivingSchedule.PublicationId);

@@ -186,7 +186,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 break;
             case ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind:
                 await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
-                    .PreparePublicationAsync("publication-1", []);
+                    .PrepareActivationAsync("publication-1", []);
                 break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
@@ -359,7 +359,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         CorrelationScope: "order-42",
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
         CreatedAt: DateTimeOffset.UnixEpoch,
-        PublicationId: "publication-1",
+        ActivationId: "publication-1",
         SlotId: "slot-default",
         Cardinality: TriggerCardinality.FanOut);
 
@@ -515,7 +515,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         DeletedAt: null,
         DeletedReason: null,
         Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))],
-        PublicationId: "publication-1",
+        ActivationId: "publication-1",
         SlotId: "slot-default",
         ActivityPresentation:
         [

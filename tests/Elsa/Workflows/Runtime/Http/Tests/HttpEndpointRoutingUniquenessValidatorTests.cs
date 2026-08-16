@@ -39,7 +39,7 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
 
         var authoritative = Assert.Single((await _store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery(replacement.StimulusType, replacement.StimulusHash))).Items);
-        Assert.Equal("publication-current", authoritative.PublicationId);
+        Assert.Equal("publication-current", authoritative.ActivationId);
         Assert.Equal("slot-default", authoritative.SlotId);
     }
 
@@ -139,8 +139,8 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
 
     private async Task ActivateAsync(WorkflowTriggerBinding binding)
     {
-        await _store.PreparePublicationAsync(binding.PublicationId!, [binding]);
-        await _store.ActivatePublicationAsync(binding.PublicationId!, replacedPublicationId: null);
+        await _store.PrepareActivationAsync(binding.ActivationId!, [binding]);
+        await _store.ActivateAsync(binding.ActivationId!, replacedPublicationId: null);
     }
 
     private static WorkflowTriggerBinding PublicationBinding(
@@ -151,7 +151,7 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
         Bindings.HttpEndpoint(artifactId, "node-http", "orders/{id}", "GET", definitionId) with
         {
             TriggerBindingId = $"{publicationId}:node-http:orders-get",
-            PublicationId = publicationId,
+            ActivationId = publicationId,
             SlotId = slotId
         };
 }

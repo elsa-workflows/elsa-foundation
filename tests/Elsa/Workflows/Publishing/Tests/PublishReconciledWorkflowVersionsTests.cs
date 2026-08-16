@@ -351,7 +351,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             Scope: WorkflowExecutableReferenceScope.Published,
             DeletedAt: retired ? DateTimeOffset.UtcNow : null,
             DeletedReason: retired ? "activation-replaced" : null,
-            PublicationId: activationId,
+            ActivationId: activationId,
             SlotId: "slot-1");
 
     private sealed class SpySender : IRequestSender

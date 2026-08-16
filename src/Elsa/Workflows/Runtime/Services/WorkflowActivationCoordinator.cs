@@ -86,7 +86,7 @@ public sealed class WorkflowActivationCoordinator(
         var reference = command.Reference with
         {
             SourceReferenceId = WorkflowActivationReferenceIdentity.Create(command.ActivationId),
-            PublicationId = command.ActivationId,
+            ActivationId = command.ActivationId,
             SlotId = slotId
         };
 
@@ -301,7 +301,7 @@ public sealed class WorkflowActivationCoordinator(
         string slotId,
         CancellationToken cancellationToken)
     {
-        await triggerIndexer!.PreparePublicationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+        await triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
 
         if (recurringScheduleStore is null)
             return;
@@ -314,7 +314,7 @@ public sealed class WorkflowActivationCoordinator(
             recurringScheduleStore,
             command.ActivationId,
             cancellationToken);
-        await recurringScheduleStore.PreparePublicationAsync(command.ActivationId, schedules, cancellationToken);
+        await recurringScheduleStore.PrepareActivationAsync(command.ActivationId, schedules, cancellationToken);
     }
 
     private async ValueTask ActivateProjectionsAsync(
@@ -322,10 +322,10 @@ public sealed class WorkflowActivationCoordinator(
         string? replacedActivationId,
         CancellationToken cancellationToken)
     {
-        await triggerBindingStore!.ActivatePublicationAsync(activationId, replacedActivationId, cancellationToken);
+        await triggerBindingStore!.ActivateAsync(activationId, replacedActivationId, cancellationToken);
 
         if (recurringScheduleStore is not null)
-            await recurringScheduleStore.ActivatePublicationAsync(activationId, replacedActivationId, cancellationToken);
+            await recurringScheduleStore.ActivateAsync(activationId, replacedActivationId, cancellationToken);
     }
 
     private async ValueTask RetirePredecessorReferenceAsync(
@@ -484,18 +484,18 @@ public sealed class WorkflowActivationCoordinator(
         if (replacedActivationId is not { } replaced)
             return;
 
-        await triggerBindingStore!.ActivatePublicationAsync(replaced, command.ActivationId, CancellationToken.None);
+        await triggerBindingStore!.ActivateAsync(replaced, command.ActivationId, CancellationToken.None);
 
         if (recurringScheduleStore is not null)
-            await recurringScheduleStore.ActivatePublicationAsync(replaced, command.ActivationId, CancellationToken.None);
+            await recurringScheduleStore.ActivateAsync(replaced, command.ActivationId, CancellationToken.None);
     }
 
     private async ValueTask RemoveProjectionsAsync(string activationId)
     {
-        await triggerBindingStore!.DeleteByPublicationAsync(activationId, CancellationToken.None);
+        await triggerBindingStore!.DeleteByActivationAsync(activationId, CancellationToken.None);
 
         if (recurringScheduleStore is not null)
-            await recurringScheduleStore.DeleteByPublicationAsync(activationId, CancellationToken.None);
+            await recurringScheduleStore.DeleteByActivationAsync(activationId, CancellationToken.None);
     }
 
     private async ValueTask RetireFailedReferenceAsync(

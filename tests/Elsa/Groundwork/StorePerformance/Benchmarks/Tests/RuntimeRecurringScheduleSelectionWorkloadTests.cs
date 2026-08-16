@@ -204,7 +204,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             }
         }
 
-        public ValueTask PreparePublicationAsync(string publicationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (backing.Sync)
@@ -218,7 +218,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             }
         }
 
-        public ValueTask ActivatePublicationAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (backing.Sync)
@@ -320,7 +320,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
         public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The recurring schedule workload does not use artifact pages.");
 
-        public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 

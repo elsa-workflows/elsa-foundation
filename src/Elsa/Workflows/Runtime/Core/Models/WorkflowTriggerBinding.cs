@@ -22,7 +22,7 @@ public sealed record WorkflowTriggerBinding(
     string? CorrelationScope,
     IReadOnlyDictionary<string, string> Metadata,
     DateTimeOffset CreatedAt,
-    string? PublicationId = null,
+    string? ActivationId = null,
     string? SlotId = null,
     TriggerCardinality Cardinality = TriggerCardinality.FanOut,
     bool IsActive = true)
@@ -44,14 +44,14 @@ public sealed record WorkflowTriggerBinding(
         return BuildIdCore(artifactId, executableNodeId, stimulusHash);
     }
 
-    /// <summary>Builds a publication-scoped binding id so named slots may share one artifact safely.</summary>
-    public static string BuildId(string publicationId, string artifactId, string executableNodeId, string stimulusHash)
+    /// <summary>Builds an activation-scoped binding id so named slots may share one artifact safely.</summary>
+    public static string BuildId(string activationId, string artifactId, string executableNodeId, string stimulusHash)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
-        return BuildIdCore(publicationId, artifactId, executableNodeId, stimulusHash);
+        return BuildIdCore(activationId, artifactId, executableNodeId, stimulusHash);
     }
 
     public static void ValidateId(string triggerBindingId)

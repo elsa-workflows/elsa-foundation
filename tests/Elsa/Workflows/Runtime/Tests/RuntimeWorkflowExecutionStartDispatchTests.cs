@@ -28,21 +28,21 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
 
     [Theory]
     [InlineData("source", " ")]
-    [InlineData("publication", " ")]
+    [InlineData("activation", " ")]
     [InlineData("slot", " ")]
     public void SourceSelection_RejectsBlankValues(string field, string value)
     {
         var exception = Assert.Throws<ArgumentException>(() => field switch
         {
             "source" => new WorkflowExecutableSourceSelection(sourceReferenceId: value),
-            "publication" => new WorkflowExecutableSourceSelection(publicationId: value),
+            "activation" => new WorkflowExecutableSourceSelection(activationId: value),
             _ => new WorkflowExecutableSourceSelection(slotId: value)
         });
 
         Assert.Equal(field switch
         {
             "source" => "sourceReferenceId",
-            "publication" => "publicationId",
+            "activation" => "activationId",
             _ => "slotId"
         }, exception.ParamName);
     }
@@ -60,7 +60,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     {
         Assert.Throws<ArgumentException>(() => new WorkflowExecutableSourceSelection(
             sourceReferenceId: "reference-1",
-            publicationId: includePublication ? "publication-1" : null,
+            activationId: includePublication ? "publication-1" : null,
             slotId: includeSlot ? "slot-1" : null));
     }
 
@@ -394,7 +394,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             "artifact-1",
             "http-stimulus",
             sourceSelection: new WorkflowExecutableSourceSelection(
-                publicationId: selectPublication ? "publication-green" : null,
+                activationId: selectPublication ? "publication-green" : null,
                 slotId: selectPublication ? null : "slot-green")));
 
         Assert.Equal("ref-green", result.PinnedSource!.SourceReferenceId);
@@ -421,7 +421,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             "artifact-1",
             "http-stimulus",
             sourceSelection: new WorkflowExecutableSourceSelection(
-                publicationId: "publication-green",
+                activationId: "publication-green",
                 slotId: "slot-green")));
 
         Assert.Equal("version-green", result.PinnedSource!.DefinitionVersionId);
@@ -688,7 +688,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             PublishedAt: scope == WorkflowExecutableReferenceScope.Published ? _now : null,
             Scope: scope,
             ExpiresAt: expiresAt,
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: slotId);
 
     private static WorkflowExecutable NewExecutable(

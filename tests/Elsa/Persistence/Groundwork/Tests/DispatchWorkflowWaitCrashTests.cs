@@ -844,7 +844,7 @@ public sealed class DispatchWorkflowWaitCrashTests
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: slotId);
 
     private static ServiceProvider BuildProvider(

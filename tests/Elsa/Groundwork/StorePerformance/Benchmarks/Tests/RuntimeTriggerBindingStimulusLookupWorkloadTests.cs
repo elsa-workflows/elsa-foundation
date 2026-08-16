@@ -147,11 +147,11 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return new(binding);
         }
 
-        public ValueTask PreparePublicationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
         {
             if (fault == TriggerBindingLookupFault.DiscardPreparation)
                 return ValueTask.CompletedTask;
-            foreach (var existing in _bindings.Values.Where(binding => binding.PublicationId == publicationId).Select(binding => binding.TriggerBindingId).ToArray())
+            foreach (var existing in _bindings.Values.Where(binding => binding.ActivationId == publicationId).Select(binding => binding.TriggerBindingId).ToArray())
                 _bindings.Remove(existing);
             var prepared = fault == TriggerBindingLookupFault.DropPreparedBinding ? bindings.SkipLast(1) : bindings;
             foreach (var binding in prepared)
@@ -160,7 +160,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask ActivatePublicationAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
         {
             if (!_prepared.Contains(publicationId))
                 throw new InvalidOperationException("Publication was not prepared.");
@@ -178,12 +178,12 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
             new(Page(query, SelectForType(query)));
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default)
         {
             PublicationQueries.Add(query);
             var source = fault == TriggerBindingLookupFault.WrongPublicationProjection
                 ? _bindings.Values
-                : _bindings.Values.Where(binding => binding.PublicationId == query.PublicationId);
+                : _bindings.Values.Where(binding => binding.ActivationId == query.PublicationId);
             return new(Page(query, source));
         }
 
@@ -198,7 +198,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return new(ids.Length);
         }
 
-        public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         private IEnumerable<WorkflowTriggerBinding> SelectForExact(WorkflowTriggerBindingPageQuery query)
         {
@@ -236,7 +236,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
 
         private void SetActive(string publicationId, bool active)
         {
-            foreach (var binding in _bindings.Values.Where(binding => binding.PublicationId == publicationId).ToArray())
+            foreach (var binding in _bindings.Values.Where(binding => binding.ActivationId == publicationId).ToArray())
                 _bindings[binding.TriggerBindingId] = binding with { IsActive = active };
         }
 
@@ -289,7 +289,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
                 if (fault == TriggerBindingLookupFault.SwapBindingSourcePairs || fault == TriggerBindingLookupFault.WrongSourceArtifact)
                     items[0] = items[0] with { ArtifactId = "artifact-wrong" };
                 if (fault == TriggerBindingLookupFault.WrongSourcePublication)
-                    items[0] = items[0] with { PublicationId = "publication-wrong" };
+                    items[0] = items[0] with { ActivationId = "publication-wrong" };
                 if (fault == TriggerBindingLookupFault.WrongSourceTenant)
                     items[0] = items[0] with { TenantId = "tenant-wrong" };
             }

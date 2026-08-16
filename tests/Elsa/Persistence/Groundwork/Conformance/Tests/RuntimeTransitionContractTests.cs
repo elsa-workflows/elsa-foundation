@@ -226,10 +226,10 @@ public sealed class RuntimeTransitionContractTests
                 GroundworkProviderTestSerialization.Serializer,
                 secondClient.BoundedDocumentStore);
             var triggerPrepareOutcomes = await Task.WhenAll(
-                TryTransitionAsync(() => firstTriggerStore.PreparePublicationAsync(
+                TryTransitionAsync(() => firstTriggerStore.PrepareActivationAsync(
                     "publication-prepare-trigger",
                     [Binding("publication-prepare-trigger", "artifact-first", "node-first")]).AsTask()),
-                TryTransitionAsync(() => secondTriggerStore.PreparePublicationAsync(
+                TryTransitionAsync(() => secondTriggerStore.PrepareActivationAsync(
                     "publication-prepare-trigger",
                     [Binding("publication-prepare-trigger", "artifact-second", "node-second")]).AsTask()));
             Assert.Single(triggerPrepareOutcomes.Where(outcome => outcome));
@@ -244,31 +244,31 @@ public sealed class RuntimeTransitionContractTests
                 GroundworkProviderTestSerialization.Serializer,
                 secondClient.BoundedDocumentStore);
             var schedulePrepareOutcomes = await Task.WhenAll(
-                TryTransitionAsync(() => firstScheduleStore.PreparePublicationAsync(
+                TryTransitionAsync(() => firstScheduleStore.PrepareActivationAsync(
                     "publication-prepare-schedule",
                     [Schedule("publication-prepare-schedule", "artifact-first", "node-first")]).AsTask()),
-                TryTransitionAsync(() => secondScheduleStore.PreparePublicationAsync(
+                TryTransitionAsync(() => secondScheduleStore.PrepareActivationAsync(
                     "publication-prepare-schedule",
                     [Schedule("publication-prepare-schedule", "artifact-second", "node-second")]).AsTask()));
             Assert.Single(schedulePrepareOutcomes.Where(outcome => outcome));
-            Assert.Single(await firstScheduleStore.ListByPublicationAsync("publication-prepare-schedule"));
+            Assert.Single(await firstScheduleStore.ListByActivationAsync("publication-prepare-schedule"));
 
             await PrepareActivationRaceAsync(firstTriggerStore, firstScheduleStore);
             var triggerActivationOutcomes = await Task.WhenAll(
-                TryTransitionAsync(() => firstTriggerStore.ActivatePublicationAsync(
+                TryTransitionAsync(() => firstTriggerStore.ActivateAsync(
                     "publication-a",
                     "publication-old").AsTask()),
-                TryTransitionAsync(() => secondTriggerStore.ActivatePublicationAsync(
+                TryTransitionAsync(() => secondTriggerStore.ActivateAsync(
                     "publication-b",
                     "publication-old").AsTask()));
             Assert.Single(triggerActivationOutcomes.Where(outcome => outcome));
             triggerWinner = await FindActiveTriggerPublicationAsync(firstTriggerStore);
 
             var scheduleActivationOutcomes = await Task.WhenAll(
-                TryTransitionAsync(() => firstScheduleStore.ActivatePublicationAsync(
+                TryTransitionAsync(() => firstScheduleStore.ActivateAsync(
                     "publication-a",
                     "publication-old").AsTask()),
-                TryTransitionAsync(() => secondScheduleStore.ActivatePublicationAsync(
+                TryTransitionAsync(() => secondScheduleStore.ActivateAsync(
                     "publication-b",
                     "publication-old").AsTask()));
             Assert.Single(scheduleActivationOutcomes.Where(outcome => outcome));
@@ -294,9 +294,9 @@ public sealed class RuntimeTransitionContractTests
             ? "publication-b"
             : "publication-a";
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            restartedTriggerStore.ActivatePublicationAsync(triggerLoser, "publication-old").AsTask());
+            restartedTriggerStore.ActivateAsync(triggerLoser, "publication-old").AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            restartedScheduleStore.ActivatePublicationAsync(scheduleLoser, "publication-old").AsTask());
+            restartedScheduleStore.ActivateAsync(scheduleLoser, "publication-old").AsTask());
     }
 
     private static RuntimeDurableTimerClaimRequest ClaimRequest(string ownerId, DateTimeOffset now) =>
@@ -347,7 +347,7 @@ public sealed class RuntimeTransitionContractTests
             CorrelationScope: null,
             new Dictionary<string, string>(),
             Now,
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: "slot-a",
             IsActive: false);
 
@@ -377,16 +377,16 @@ public sealed class RuntimeTransitionContractTests
         {
             var artifactId = publicationId.Replace("publication-", "artifact-", StringComparison.Ordinal);
             var nodeId = publicationId.Replace("publication-", "node-", StringComparison.Ordinal);
-            await triggerStore.PreparePublicationAsync(
+            await triggerStore.PrepareActivationAsync(
                 publicationId,
                 [Binding(publicationId, artifactId, nodeId)]);
-            await scheduleStore.PreparePublicationAsync(
+            await scheduleStore.PrepareActivationAsync(
                 publicationId,
                 [Schedule(publicationId, artifactId, nodeId)]);
         }
 
-        await triggerStore.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
-        await scheduleStore.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await triggerStore.ActivateAsync("publication-old", replacedPublicationId: null);
+        await scheduleStore.ActivateAsync("publication-old", replacedPublicationId: null);
     }
 
     private static async Task<string> FindActiveTriggerPublicationAsync(
@@ -408,7 +408,7 @@ public sealed class RuntimeTransitionContractTests
         var active = new List<string>();
         foreach (var publicationId in new[] { "publication-a", "publication-b" })
         {
-            if (Assert.Single(await store.ListByPublicationAsync(publicationId)).IsActive)
+            if (Assert.Single(await store.ListByActivationAsync(publicationId)).IsActive)
                 active.Add(publicationId);
         }
 

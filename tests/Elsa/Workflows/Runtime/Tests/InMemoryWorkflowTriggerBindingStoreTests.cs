@@ -47,12 +47,12 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         var binding = Binding("artifact-1", "node-a") with
         {
             TriggerBindingId = new string('x', WorkflowTriggerBinding.MaximumIdLength + 1),
-            PublicationId = "publication-1",
+            ActivationId = "publication-1",
             SlotId = "default"
         };
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await store.PreparePublicationAsync("publication-1", [binding]));
+            await store.PrepareActivationAsync("publication-1", [binding]));
     }
 
     [Fact]
@@ -248,13 +248,13 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
     public async Task PublicationAndArtifactPages_AreOrderedBoundedAndQueryBound()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
-        await store.SaveAsync(Binding("artifact-c", "node", stimulusHash: "sha256:c") with { PublicationId = "publication-a", SlotId = "default" });
-        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:a") with { PublicationId = "publication-a", SlotId = "default" });
-        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:b") with { PublicationId = "publication-a", SlotId = "default" });
+        await store.SaveAsync(Binding("artifact-c", "node", stimulusHash: "sha256:c") with { ActivationId = "publication-a", SlotId = "default" });
+        await store.SaveAsync(Binding("artifact-a", "node", stimulusHash: "sha256:a") with { ActivationId = "publication-a", SlotId = "default" });
+        await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:b") with { ActivationId = "publication-a", SlotId = "default" });
 
-        var first = await store.ListByPublicationAsync(
+        var first = await store.ListByActivationAsync(
             new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
-        var second = await store.ListByPublicationAsync(
+        var second = await store.ListByActivationAsync(
             new WorkflowTriggerBindingPublicationPageQuery(
                 "publication-a",
                 limit: 2,
@@ -283,7 +283,7 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
                 $"node-{index:D3}",
                 stimulusHash: $"sha256:{index:D3}") with
             {
-                PublicationId = "publication-shared",
+                ActivationId = "publication-shared",
                 SlotId = "default"
             });
         }

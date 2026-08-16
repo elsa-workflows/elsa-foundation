@@ -2,7 +2,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 
 internal sealed record GroundworkPublicationProjectionState(
     string ProjectionKind,
-    string PublicationId,
+    string ActivationId,
     bool IsActive);
 
 internal static class GroundworkPublicationProjectionTransition
@@ -19,7 +19,7 @@ internal static class GroundworkPublicationProjectionTransition
             return true;
 
         throw new InvalidOperationException(
-            $"Publication projection '{candidate.PublicationId}' is active while its replaced projection '{replaced.PublicationId}' is still active.");
+            $"Publication projection '{candidate.ActivationId}' is active while its replaced projection '{replaced.ActivationId}' is still active.");
     }
 
     public static void EnsureCanActivate(
@@ -28,12 +28,12 @@ internal static class GroundworkPublicationProjectionTransition
         bool hasDistinctReplacement)
     {
         if (candidate.IsActive)
-            throw new InvalidOperationException($"Publication projection '{candidate.PublicationId}' is already active.");
+            throw new InvalidOperationException($"Publication projection '{candidate.ActivationId}' is already active.");
 
         if (hasDistinctReplacement && replaced?.IsActive != true)
         {
             throw new InvalidOperationException(
-                $"Publication projection '{candidate.PublicationId}' cannot replace a projection that is missing or no longer active.");
+                $"Publication projection '{candidate.ActivationId}' cannot replace a projection that is missing or no longer active.");
         }
     }
 }

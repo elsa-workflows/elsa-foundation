@@ -630,7 +630,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: slotId);
 
     private static T AssertSingle<T>(IReadOnlyCollection<T> values) =>

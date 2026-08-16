@@ -71,7 +71,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
 
         var selection = Assert.Single(dispatcher.Requests).SourceSelection;
         Assert.Equal("published-ref-1", selection!.SourceReferenceId);
-        Assert.Null(selection.PublicationId);
+        Assert.Null(selection.ActivationId);
         Assert.Null(selection.SlotId);
     }
 

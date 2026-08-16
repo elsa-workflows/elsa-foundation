@@ -13,7 +13,7 @@ public static class WorkflowTriggerBindingStoreExtensions
         CancellationToken cancellationToken = default) =>
         TraverseAsync(
             store,
-            continuationToken => store.ListByPublicationAsync(
+            continuationToken => store.ListByActivationAsync(
                 new WorkflowTriggerBindingPublicationPageQuery(
                     publicationId,
                     WorkflowTriggerBindingPublicationPageQuery.MaximumLimit,

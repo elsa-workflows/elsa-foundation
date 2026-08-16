@@ -61,7 +61,7 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
         return bindings;
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
         WorkflowExecutable executable,
         string publicationId,
         string slotId,
@@ -79,14 +79,14 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
                     binding.ArtifactId,
                     binding.ExecutableNodeId,
                     binding.StimulusHash),
-                PublicationId = publicationId,
+                ActivationId = publicationId,
                 SlotId = slotId,
                 IsActive = false
             })
             .ToArray();
 
         await ValidateAsync(executable.Identity.ArtifactId, bindings, cancellationToken);
-        await _store.PreparePublicationAsync(publicationId, bindings, cancellationToken);
+        await _store.PrepareActivationAsync(publicationId, bindings, cancellationToken);
         return bindings;
     }
 

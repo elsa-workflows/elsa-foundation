@@ -20,7 +20,7 @@ public interface IWorkflowTriggerBindingStore
     ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default);
 
     /// <summary>Atomically replaces one publication's prepared bindings without exposing them to serving queries.</summary>
-    ValueTask PreparePublicationAsync(
+    ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default) =>
@@ -31,7 +31,7 @@ public interface IWorkflowTriggerBindingStore
     /// publication. Callers whose business semantics require the complete publication projection must
     /// deliberately traverse the opaque continuation.
     /// </summary>
-    ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+    ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
         WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<WorkflowTriggerBindingPage>(
@@ -41,14 +41,14 @@ public interface IWorkflowTriggerBindingStore
     /// Makes one prepared publication visible and, when supplied, removes only the replaced publication from
     /// serving visibility. Rows are retained until publication-scoped cleanup.
     /// </summary>
-    ValueTask ActivatePublicationAsync(
+    ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped activation."));
 
     /// <summary>Deletes every binding owned by one publication without affecting shared artifacts or other slots.</summary>
-    ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
+    ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped deletion."));
 
     /// <summary>

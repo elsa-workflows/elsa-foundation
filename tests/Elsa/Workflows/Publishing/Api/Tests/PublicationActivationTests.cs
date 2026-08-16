@@ -288,7 +288,7 @@ public sealed class PublicationActivationTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
 
-        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
             string slotId,
@@ -310,7 +310,7 @@ public sealed class PublicationActivationTests
             ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(
                 new InvalidOperationException("Candidate trigger projection could not be prepared."));
 
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
             string slotId,
@@ -325,7 +325,7 @@ public sealed class PublicationActivationTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
 
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
             string slotId,
@@ -338,16 +338,16 @@ public sealed class PublicationActivationTests
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(binding);
 
-        public virtual ValueTask ActivatePublicationAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default) =>
+        public virtual ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
 
-        public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
+        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
 
-        public ValueTask PreparePublicationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) =>
+        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowTriggerBindingPage(query, [], 0, null));
 
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
@@ -368,7 +368,7 @@ public sealed class PublicationActivationTests
     {
         public string? CurrentPublicationId { get; private set; } = currentPublicationId;
 
-        public override ValueTask ActivatePublicationAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public override ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
         {
             CurrentPublicationId = publicationId;
             return ValueTask.CompletedTask;

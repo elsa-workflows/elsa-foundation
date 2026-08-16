@@ -31,7 +31,7 @@ public interface IRecurringTriggerScheduleStore
     ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default);
 
     /// <summary>Atomically replaces one publication's prepared schedules without exposing them to the pump.</summary>
-    ValueTask PreparePublicationAsync(
+    ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default) =>
@@ -52,20 +52,20 @@ public interface IRecurringTriggerScheduleStore
             new NotSupportedException("This recurring-schedule store does not support artifact-scoped pages."));
 
     /// <summary>Legacy complete traversal for publication-oriented commands.</summary>
-    async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+    async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
         string publicationId,
         CancellationToken cancellationToken = default) =>
         await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
 
     /// <summary>Activates one publication and deactivates only the explicitly replaced publication.</summary>
-    ValueTask ActivatePublicationAsync(
+    ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped activation."));
 
     /// <summary>Deletes schedules owned by one publication without affecting another publication of the artifact.</summary>
-    ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
+    ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped deletion."));
 
     /// <summary>Returns due schedules (NextOccurrence &lt;= <paramref name="asOf"/>), ordered by next occurrence then id, capped by <paramref name="limit"/>.</summary>

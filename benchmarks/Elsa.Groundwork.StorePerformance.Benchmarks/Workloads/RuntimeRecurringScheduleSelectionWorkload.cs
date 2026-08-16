@@ -152,13 +152,13 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         {
             var publicationId = PublicationId(publicationIndex);
             var schedules = SchedulesForPublication(publicationIndex, dueAt).ToArray();
-            await store.PreparePublicationAsync(publicationId, schedules, cancellationToken);
+            await store.PrepareActivationAsync(publicationId, schedules, cancellationToken);
         }
 
         for (var publicationIndex = 0; publicationIndex < ReplacementCandidatePublicationIndex; publicationIndex++)
-            await store.ActivatePublicationAsync(PublicationId(publicationIndex), replacedPublicationId: null, cancellationToken);
+            await store.ActivateAsync(PublicationId(publicationIndex), replacedPublicationId: null, cancellationToken);
 
-        await store.ActivatePublicationAsync(
+        await store.ActivateAsync(
             PublicationId(ReplacementCandidatePublicationIndex),
             PublicationId(ReplacedPublicationIndex),
             cancellationToken);

@@ -126,9 +126,9 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             });
         }
 
-        var first = await store.ListByPublicationAsync(
+        var first = await store.ListByActivationAsync(
             new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
-        var second = await store.ListByPublicationAsync(
+        var second = await store.ListByActivationAsync(
             new WorkflowTriggerBindingPublicationPageQuery(
                 "publication-a",
                 limit: 2,
@@ -191,7 +191,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             GroundworkTestSerialization.Serializer,
             observingStore);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-1",
             [PublicationBinding("publication-1", "artifact-1", "node-a", "slot-a")]);
 
@@ -216,16 +216,16 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             GroundworkTestSerialization.Serializer,
             observingStore);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-1",
             [PublicationBinding("publication-1", "artifact-1", "node-a", "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-2",
             [PublicationBinding("publication-2", "artifact-2", "node-b", "slot-b")]);
 
-        await store.ActivatePublicationAsync("publication-1", replacedPublicationId: null);
+        await store.ActivateAsync("publication-1", replacedPublicationId: null);
         var stagedBeforeReplacement = observingStore.StagedSaves.Count;
-        await store.ActivatePublicationAsync("publication-2", "publication-1");
+        await store.ActivateAsync("publication-2", "publication-1");
 
         var activationProjectionSaves = observingStore.StagedSaves
             .Skip(stagedBeforeReplacement)
@@ -249,20 +249,20 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             GroundworkTestSerialization.Serializer,
             fixture.BoundedDocumentStore);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-old",
             [PublicationBinding("publication-old", "artifact-old", "node-old", "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-a",
             [PublicationBinding("publication-a", "artifact-a", "node-a", "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-b",
             [PublicationBinding("publication-b", "artifact-b", "node-b", "slot-a")]);
-        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
-        await store.ActivatePublicationAsync("publication-a", "publication-old");
+        await store.ActivateAsync("publication-old", replacedPublicationId: null);
+        await store.ActivateAsync("publication-a", "publication-old");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
+            store.ActivateAsync("publication-b", "publication-old").AsTask());
 
         Assert.True(Assert.Single(await store.ListAllByPublicationAsync("publication-a")).IsActive);
         Assert.False(Assert.Single(await store.ListAllByPublicationAsync("publication-b")).IsActive);
@@ -295,7 +295,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "order-scope",
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero),
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: slotId,
             IsActive: false);
 

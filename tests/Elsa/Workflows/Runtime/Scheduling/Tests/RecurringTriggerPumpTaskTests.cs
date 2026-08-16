@@ -166,18 +166,18 @@ public sealed class RecurringTriggerPumpTaskTests
         var oldSchedule = PublicationSchedule("old", "publication-old");
         var candidateSchedule = PublicationSchedule("new", "publication-new");
 
-        await store.PreparePublicationAsync("publication-old", [oldSchedule]);
-        await store.PreparePublicationAsync("publication-new", [candidateSchedule]);
+        await store.PrepareActivationAsync("publication-old", [oldSchedule]);
+        await store.PrepareActivationAsync("publication-new", [candidateSchedule]);
         Assert.Empty(await store.ListDueAsync(Now, 10));
 
-        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await store.ActivateAsync("publication-old", replacedPublicationId: null);
         Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
 
-        await store.ActivatePublicationAsync("publication-new", "publication-old");
+        await store.ActivateAsync("publication-new", "publication-old");
         Assert.Equal("publication-new", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
 
         // Compensation restores the retired projection and makes the failed candidate invisible again.
-        await store.ActivatePublicationAsync("publication-old", "publication-new");
+        await store.ActivateAsync("publication-old", "publication-new");
         Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
     }
 
@@ -215,7 +215,7 @@ public sealed class RecurringTriggerPumpTaskTests
             CorrelationScope: null,
             Metadata: new Dictionary<string, string>(),
             CreatedAt: Now,
-            PublicationId: schedule.PublicationId,
+            ActivationId: schedule.PublicationId,
             SlotId: schedule.SlotId));
     }
 

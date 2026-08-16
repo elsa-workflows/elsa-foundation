@@ -181,14 +181,14 @@ public abstract class GroundworkPublicationProjectionStore<TItem>(
         var result = await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
-                ProjectionStateId(state.PublicationId),
+                ProjectionStateId(state.ActivationId),
                 schemaVersion,
                 content,
                 ExpectedVersion: expectedVersion),
             cancellationToken);
         if (result.Status != DocumentStoreWriteStatus.Saved)
             throw new InvalidOperationException(
-                $"{ProjectionNounSentenceStart} publication projection '{state.PublicationId}' could not be saved because the stored projection version changed.");
+                $"{ProjectionNounSentenceStart} publication projection '{state.ActivationId}' could not be saved because the stored projection version changed.");
     }
 
     private bool ProjectionsEqual(IEnumerable<TItem> existing, IEnumerable<TItem> prepared)

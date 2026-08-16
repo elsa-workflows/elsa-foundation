@@ -29,7 +29,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
-    public ValueTask PreparePublicationAsync(
+    public ValueTask PrepareActivationAsync(
         string publicationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default)
@@ -53,7 +53,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
+    public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
         WorkflowTriggerBindingPublicationPageQuery query,
         CancellationToken cancellationToken = default)
     {
@@ -63,14 +63,14 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, query.PublicationId))
+                .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, query.PublicationId))
                 .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
             return ValueTask.FromResult(CreatePage(query, matches));
         }
     }
 
-    public ValueTask ActivatePublicationAsync(
+    public ValueTask ActivateAsync(
         string publicationId,
         string? replacedPublicationId,
         CancellationToken cancellationToken = default)
@@ -93,7 +93,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
         cancellationToken.ThrowIfCancellationRequested();
@@ -191,7 +191,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         {
             ArgumentNullException.ThrowIfNull(binding);
             WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
-            if (!StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
+            if (!StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
                 throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
         }
@@ -217,7 +217,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     private void SetPublicationActivity(string publicationId, bool isActive)
     {
         foreach (var binding in _bindings.Values
-                     .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
+                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
                      .ToArray())
             _bindings[binding.TriggerBindingId] = binding with { IsActive = isActive };
     }
@@ -225,7 +225,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     private void RemoveByPublication(string publicationId)
     {
         foreach (var bindingId in _bindings.Values
-                     .Where(binding => StringComparer.Ordinal.Equals(binding.PublicationId, publicationId))
+                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
                      .Select(binding => binding.TriggerBindingId)
                      .ToArray())
             _bindings.Remove(bindingId);

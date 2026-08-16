@@ -192,17 +192,17 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         await using var fixture = CreateStore(provider);
         IRecurringTriggerScheduleStore store = NewStore(fixture);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-1",
             [
                 NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a"),
                 NewSchedule("artifact-1", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-1", slotId: "slot-a")
             ]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-2",
             [NewSchedule("artifact-1", "node-c", TimeSpan.FromMinutes(3), publicationId: "publication-2", slotId: "slot-b")]);
 
-        var schedules = await store.ListByPublicationAsync("publication-1");
+        var schedules = await store.ListByActivationAsync("publication-1");
 
         Assert.Equal(
             new[]
@@ -322,7 +322,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             GroundworkTestSerialization.Serializer,
             observingStore);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-1",
             [NewSchedule(
                 "artifact-1",
@@ -352,16 +352,16 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             GroundworkTestSerialization.Serializer,
             observingStore);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-1",
             [NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-2",
             [NewSchedule("artifact-2", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-2", slotId: "slot-b")]);
 
-        await store.ActivatePublicationAsync("publication-1", replacedPublicationId: null);
+        await store.ActivateAsync("publication-1", replacedPublicationId: null);
         var stagedBeforeReplacement = observingStore.StagedSaves.Count;
-        await store.ActivatePublicationAsync("publication-2", "publication-1");
+        await store.ActivateAsync("publication-2", "publication-1");
 
         var activationProjectionSaves = observingStore.StagedSaves
             .Skip(stagedBeforeReplacement)
@@ -382,7 +382,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         await using var fixture = CreateStore(provider);
         IRecurringTriggerScheduleStore store = NewStore(fixture);
 
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-old",
             [NewSchedule(
                 "artifact-old",
@@ -390,7 +390,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 TimeSpan.FromMinutes(1),
                 publicationId: "publication-old",
                 slotId: "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-a",
             [NewSchedule(
                 "artifact-a",
@@ -398,7 +398,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 TimeSpan.FromMinutes(1),
                 publicationId: "publication-a",
                 slotId: "slot-a")]);
-        await store.PreparePublicationAsync(
+        await store.PrepareActivationAsync(
             "publication-b",
             [NewSchedule(
                 "artifact-b",
@@ -406,14 +406,14 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 TimeSpan.FromMinutes(1),
                 publicationId: "publication-b",
                 slotId: "slot-a")]);
-        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
-        await store.ActivatePublicationAsync("publication-a", "publication-old");
+        await store.ActivateAsync("publication-old", replacedPublicationId: null);
+        await store.ActivateAsync("publication-a", "publication-old");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.ActivatePublicationAsync("publication-b", "publication-old").AsTask());
+            store.ActivateAsync("publication-b", "publication-old").AsTask());
 
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication-a")).IsActive);
-        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication-b")).IsActive);
+        Assert.True(Assert.Single(await store.ListByActivationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListByActivationAsync("publication-b")).IsActive);
     }
 
     [Theory]

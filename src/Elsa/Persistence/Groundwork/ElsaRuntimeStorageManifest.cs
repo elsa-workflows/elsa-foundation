@@ -105,7 +105,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ExecutableActivityTemplateIdField = "template.templateId";
     public const string WorkflowExecutableSourceReferenceIdField = "reference.sourceReferenceId";
     public const string ExecutionScopeIdField = "executionScopeId";
-    public const string PublicationIdField = "publicationId";
+    public const string PublicationIdField = "activationId";
     public const string ListAllQuery = "list-all";
     public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
     public const string ListPendingSchedulerWorkflowExecutionsQuery = "list-pending-scheduler-workflow-executions";
