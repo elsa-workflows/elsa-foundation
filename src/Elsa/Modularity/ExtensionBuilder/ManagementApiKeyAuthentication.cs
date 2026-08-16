@@ -42,6 +42,15 @@ public static class ManagementApiKeyAuthentication
         return null;
     }
 
+    /// <summary>Endpoint-filter adapter for host routes that use this management key.</summary>
+    public static ValueTask<object?> RequireAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var failure = Validate(context.HttpContext);
+        return failure is not null
+            ? new ValueTask<object?>(failure)
+            : next(context);
+    }
+
     /// <summary>
     /// Compares two API keys in constant time to avoid leaking the expected key through timing
     /// side channels.

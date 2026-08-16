@@ -6,7 +6,7 @@ namespace Elsa.Foundation.Host.ModuleManagement;
 /// turning it on or off requires a restart, by design. Requests are authenticated with a static API key sent
 /// in the <see cref="ApiKeyHeader"/> header; a blank key leaves the surface unreachable even when mapped.
 /// </summary>
-internal sealed record ModuleManagementOptions
+public sealed record ModuleManagementOptions
 {
     public const string SectionName = "Elsa:ModuleManagement";
     public const string ApiKeyHeader = "X-Elsa-Module-Management-Key";

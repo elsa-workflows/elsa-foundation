@@ -6,14 +6,18 @@
   </PropertyGroup>
 
   <!--
-    The whole point of this host: it compiles in NOTHING from Elsa. It is pure plumbing —
+    The whole point of this host: it compiles in no Elsa feature implementation. It is pure plumbing —
     Nuplane (the package feed + runtime assembly loader) and CShells (shell activation, routing,
     per-shell middleware). Every actual feature — activities, HTTP, persistence, and the Tasks
     feature that runs startup/background/recurring tasks — arrives as a package through the Nuplane
     feed and is discovered by CShells via NuplaneAssemblyProvider. Versions are centrally managed
-    in the repository-root Directory.Packages.props.
+    in the repository-root Directory.Packages.props. The shared Elsa.Api.AspNetCore reference below only
+    publishes the typed host endpoint metadata contract; it does not bring an Elsa feature into this host.
   -->
   <ItemGroup>
+    <!-- Shared typed endpoint ownership/security metadata; this host still compiles no Elsa feature implementation. -->
+    <ProjectReference Include="..\..\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
          transitively; those are the interfaces feed features implement against this host's CShells runtime. -->

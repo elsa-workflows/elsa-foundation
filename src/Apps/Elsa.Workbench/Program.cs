@@ -7,6 +7,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
+using Elsa.Api.AspNetCore;
 using Elsa.Workbench;
 using Elsa.Workbench.Boot;
 using Elsa.Workbench.Readiness;
@@ -383,7 +384,10 @@ if (bootTimeline is not null)
 
 app.UseCors(studioCorsPolicy);
 
-app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }));
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }))
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .AllowPublic("health", "Reports whether the Workbench root host is responding.");
 app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
@@ -397,7 +401,16 @@ app.MapShells();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapShellManagementApi("/_admin/shells");
+// ADR 0037: CShells host-control remains server-to-server management-key traffic. It is not a Foundation
+// user permission and the key is never exposed to browser clients.
+app.MapShellManagementApi("/_admin/shells")
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+        ManagementApiKeyAuthentication.HeaderName,
+        "Elsa.Workbench"))
+    .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench")
+    .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
 
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
 // note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
@@ -408,6 +421,9 @@ if (consoleLogStreamingEnabled)
 {
     var consoleLogEndpoints = app.MapGroup("");
     consoleLogEndpoints.RequireAuthorization();
+    consoleLogEndpoints.WithHostOwner("Elsa.Workbench")
+        .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
 app.Run();
