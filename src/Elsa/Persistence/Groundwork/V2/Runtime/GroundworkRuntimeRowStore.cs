@@ -18,8 +18,7 @@ public sealed class GroundworkRuntimeRowStore
     public GroundworkRuntimeRowStore(IStorageSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        if (session.Unit.Key.Columns.Count != 1 ||
-            !StringComparer.Ordinal.Equals(session.Unit.Key.Columns[0], ElsaRuntimeV2StorageManifest.IdField))
+        if (!session.Unit.Key.Columns.Contains(ElsaRuntimeV2StorageManifest.IdField, StringComparer.Ordinal))
         {
             throw new ArgumentException(
                 $"Runtime row sessions must use the '{ElsaRuntimeV2StorageManifest.IdField}' key column.",
