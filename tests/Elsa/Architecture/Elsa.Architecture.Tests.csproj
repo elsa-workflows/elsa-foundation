@@ -11,6 +11,10 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\fastendpoints-transition-exceptions.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave1-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave1-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

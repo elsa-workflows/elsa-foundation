@@ -34,7 +34,7 @@ public static class JavaScriptExecutionApi
                 descriptionMethod,
                 new AcceptsMetadata(["application/json"], typeof(RequestModel), false),
                 new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(object), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(object), ["application/json"]),
+                new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(JavaScriptExecutionProblemDetailsResponse), ["application/problem+json"]),
                 new ProducesResponseTypeMetadata(StatusCodes.Status500InternalServerError, typeof(object), ["application/json"]),
                 new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
                 new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
@@ -49,13 +49,9 @@ public static class JavaScriptExecutionApi
                 JavaScriptExecutionJsonContext.Default.RequestModel,
                 context.RequestAborted);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            await Results.Json(
-                    new JavaScriptExecutionErrorResponse("The request body is invalid."),
-                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionErrorResponse,
-                    statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context);
+            await WriteRequestProblemDetailsAsync(context, NormalizeJsonExceptionMessage(exception.Message));
             return;
         }
 
@@ -64,6 +60,7 @@ public static class JavaScriptExecutionApi
             await Results.Json(
                     new JavaScriptExecutionErrorResponse("Script is null"),
                     JavaScriptExecutionJsonContext.Default.JavaScriptExecutionErrorResponse,
+                    contentType: "application/json",
                     statusCode: StatusCodes.Status400BadRequest)
                 .ExecuteAsync(context);
             return;
@@ -78,7 +75,8 @@ public static class JavaScriptExecutionApi
                 new JavaScriptScriptEvaluationRequest(request.Script, arguments, context.RequestAborted));
             await Results.Json(
                     new JavaScriptExecutionSuccessResponse(true, result),
-                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionSuccessResponse)
+                    JavaScriptExecutionJsonContext.Default.JavaScriptExecutionSuccessResponse,
+                    contentType: "application/json")
                 .ExecuteAsync(context);
         }
         catch (Exception exception)
@@ -89,9 +87,29 @@ public static class JavaScriptExecutionApi
             await Results.Json(
                     new JavaScriptExecutionFailureResponse(false, exception.Message),
                     JavaScriptExecutionJsonContext.Default.JavaScriptExecutionFailureResponse,
+                    contentType: "application/json",
                     statusCode: StatusCodes.Status500InternalServerError)
                 .ExecuteAsync(context);
         }
+    }
+
+    private static Task WriteRequestProblemDetailsAsync(HttpContext context, string detail) =>
+        Results.Json(
+                new JavaScriptExecutionProblemDetailsResponse(
+                    detail,
+                    [new JavaScriptExecutionProblemError("serializerErrors", detail)],
+                    context.Request.Path.Value ?? "",
+                    StatusCodes.Status400BadRequest,
+                    "Bad Request",
+                    context.TraceIdentifier,
+                    "https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1"),
+                JavaScriptExecutionJsonContext.Default.JavaScriptExecutionProblemDetailsResponse,
+                contentType: "application/problem+json",
+                statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+
+    private static string NormalizeJsonExceptionMessage(string message)
+    {
+        return message.Replace(" Path: $ | ", " ", StringComparison.Ordinal);
     }
 
 }

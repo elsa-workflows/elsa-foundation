@@ -46,7 +46,8 @@ public static class JavaScriptRenderingApi
             var rendered = renderer.Render(document);
             await Results.Json(
                 new JavaScriptRenderingSuccessResponse(true, rendered),
-                JavaScriptRenderingJsonContext.Default.JavaScriptRenderingSuccessResponse)
+                JavaScriptRenderingJsonContext.Default.JavaScriptRenderingSuccessResponse,
+                contentType: "application/json")
                 .ExecuteAsync(context);
         }
         catch (Exception exception)
@@ -54,6 +55,7 @@ public static class JavaScriptRenderingApi
             await Results.Json(
                     new JavaScriptRenderingFailureResponse(false, exception.Message),
                     JavaScriptRenderingJsonContext.Default.JavaScriptRenderingFailureResponse,
+                    contentType: "application/json",
                     statusCode: StatusCodes.Status500InternalServerError)
                 .ExecuteAsync(context);
         }

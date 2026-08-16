@@ -42,7 +42,7 @@ public static class ApiCapabilitiesApi
         var document = await context.RequestServices
             .GetRequiredService<IApiCapabilityCatalog>()
             .GetAsync(context.RequestAborted);
-        await Results.Json(document, ApiCapabilitiesJsonContext.Default.ApiCapabilitiesDocument).ExecuteAsync(context);
+        await Results.Json(document, ApiCapabilitiesJsonContext.Default.ApiCapabilitiesDocument, contentType: "application/json").ExecuteAsync(context);
     }
 
     private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>

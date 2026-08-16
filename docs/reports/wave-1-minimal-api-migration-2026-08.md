@@ -17,17 +17,22 @@ six first-party owners and exactly eight FastEndpoints registrations:
 
 ## Evidence completed
 
-- Existing HTTP method, route, binding, JSON/error status, content-type, response metadata, and
-  runtime behavior were frozen in `Wave1MinimalApiContractTests` and the owner test suites. The
-  table-driven OpenAPI regression identifies the two deliberate JavaScript metadata corrections
-  instead of treating them as silent parity.
+- The exact pre-migration FastEndpoints HTTP observations are committed in
+  `Baselines/wave1-http-fastendpoints.json` (14 table-driven success, query-error, binding-error,
+  and handler-error cases, including malformed, missing, and valid-but-blank JavaScript bodies).
+  The after capture runs against a real Minimal API host and compares binding, JSON, status,
+  ProblemDetails, content type, headers, and body through `Elsa.Api.Compatibility.Testing`.
+  Any HTTP delta fails; none is waived.
 - Minimal API and FastEndpoints routes run concurrently through the same Foundation Identity policy
   provider and evaluator. The real-host matrix covers anonymous `401`, authenticated denied `403`,
   exact permission, implied permission, wildcard permission, and normalized authentication claims.
 - Every migrated route carries module owner, Minimal API authoring, permission, exact legacy
-  operation-id, and host-application tag metadata. A table-driven generated-OpenAPI regression
-  verifies all eight paths/methods, operation IDs, `testhost` tag preservation, response statuses,
-  response content types/schemas, and the runtime-JS `RequestModel` request schema.
+  operation-id, and host-application tag metadata. The committed
+  `Baselines/wave1-openapi-fastendpoints.json` freezes the consumed legacy operation projections,
+  including transitive schemas. The after document is projected by the shared OpenAPI evidence
+  capture and compared canonically for all eight operations; the direct regression also verifies
+  operation IDs, `testhost` tag preservation, response statuses/content types, complete schema
+  projections, and the runtime-JS `RequestModel` request schema.
 - Feature-local FastEndpoints registrations and the eight matching transition-baseline entries were
   removed. The executable transition ratchet is reduced from 164 to 156 entries across 12 owners.
 - Each owner is loaded and mapped three times through a collectible `AssemblyLoadContext`. The
@@ -70,8 +75,11 @@ request contract.
 The baseline probe also found two inaccurate legacy metadata declarations. JavaScript rendering and
 execution advertised `204` instead of their actual successful `200`, and omitted response statuses
 that the handlers can produce (`500` for rendering; `400` and `500` for execution). The migrated
-metadata intentionally advertises the truthful `200`/`400`/`500` matrix. These are explicit
-compatibility exceptions requiring reviewer approval; they are not silently counted as parity.
+metadata intentionally advertises the truthful `200`/`400`/`500` matrix. The two exact canonical
+OpenAPI deltas are recorded in the shared `rest-compatibility-approved-differences.json` registry;
+the Wave 1 test selects only those two endpoint-scoped entries, checks their reviewed expected and
+actual projections (including schemas), and lets the comparer reject every other delta or unused
+Wave 1 approval. They require reviewer approval and are not silently counted as parity.
 
 ## Validation commands
 

@@ -56,14 +56,14 @@ public static class ExpressionsApi
     {
         var sender = context.RequestServices.GetRequiredService<IRequestSender>();
         var response = await sender.Send(new ListExpressionDescriptors(), context.RequestAborted);
-        await Results.Json(response, ExpressionsJsonContext.Default.ExpressionDescriptorsResponse).ExecuteAsync(context);
+        await Results.Json(response, ExpressionsJsonContext.Default.ExpressionDescriptorsResponse, contentType: "application/json").ExecuteAsync(context);
     }
 
     private static async Task HandleVariableTypeDescriptorsAsync(HttpContext context)
     {
         var sender = context.RequestServices.GetRequiredService<IRequestSender>();
         var response = await sender.Send(new ListVariableTypeDescriptors(), context.RequestAborted);
-        await Results.Json(response, ExpressionsJsonContext.Default.VariableTypeDescriptorsResponse).ExecuteAsync(context);
+        await Results.Json(response, ExpressionsJsonContext.Default.VariableTypeDescriptorsResponse, contentType: "application/json").ExecuteAsync(context);
     }
 
     private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>

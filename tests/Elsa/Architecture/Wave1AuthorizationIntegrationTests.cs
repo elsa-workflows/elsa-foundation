@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
-[Collection(Wave1FastEndpointsCollection.Name)]
+[Collection(Wave1HostCollection.Name)]
 public sealed class Wave1AuthorizationIntegrationTests : IAsyncLifetime
 {
     private IHost _host = null!;
@@ -158,7 +158,7 @@ public sealed class Wave1AuthorizationIntegrationTests : IAsyncLifetime
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class Wave1FastEndpointsCollection
+public sealed class Wave1HostCollection
 {
-    public const string Name = "wave1-fastendpoints-host";
+    public const string Name = "wave1-host";
 }

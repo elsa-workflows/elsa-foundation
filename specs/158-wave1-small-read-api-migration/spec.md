@@ -14,7 +14,7 @@
 
 As a management API consumer, I can call the capabilities, attention, expression, JavaScript, and dashboard routes after the authoring migration without an unapproved route, method, binding, JSON, status, ProblemDetails, content-type, or consumed OpenAPI change. Legacy operation IDs, host-application tags, and the runtime-JavaScript `RequestModel` schema identifier remain stable.
 
-**Independent Test**: Compare immutable FastEndpoints-before observations with the eight Minimal API routes and run representative success and invalid-request cases.
+**Independent Test**: Compare the committed immutable FastEndpoints-before HTTP and consumed-OpenAPI fixtures with a real eight-route Minimal API host through `Elsa.Api.Compatibility.Testing`; run representative success, query-error, malformed-body, missing-body, and valid-but-blank-body cases.
 
 **Acceptance Scenarios**:
 
@@ -60,7 +60,7 @@ As a modular host maintainer, I can compose each migrated owner through an expli
 
 - **FR-001**: The system MUST replace exactly the eight listed FastEndpoints registrations with six explicit module-owned Minimal API mapping seams.
 - **FR-002**: The system MUST preserve the exact route and HTTP method contract for every migrated registration.
-- **FR-003**: The system MUST preserve request binding, JSON serialization, response status, ProblemDetails/plain-text behavior, response content types, and consumed OpenAPI metadata, except for the explicitly recorded JavaScript `204`/missing-error-status correction requiring reviewer approval.
+- **FR-003**: The system MUST preserve request binding, JSON serialization, response status, ProblemDetails/plain-text behavior, response content types, and consumed OpenAPI metadata, except for the two exact JavaScript OpenAPI projections recorded in the shared approval registry and requiring reviewer approval.
 - **FR-004**: Each migrated endpoint MUST carry one module owner, Minimal API authoring metadata, and exactly one security disposition.
 - **FR-005**: Protected routes MUST use Foundation Identity policy metadata and the shared evaluator; provider-specific claim mapping MUST remain outside endpoint handlers.
 - **FR-006**: `ApiCapabilitiesRead` and `expressions.read` MUST remain required; wildcard-only routes MUST gain module-owned action permissions without becoming public.
@@ -71,6 +71,7 @@ As a modular host maintainer, I can compose each migrated owner through an expli
 - **FR-011**: The wave MUST remain independently revertible and MUST NOT migrate owners outside #1367.
 - **FR-012**: The wave MUST preserve all eight legacy operation IDs, the host-application OpenAPI tag, and the runtime-JavaScript `RequestModel` schema identifier using standard ASP.NET Core metadata.
 - **FR-013**: The wave MUST record the legacy JavaScript `204` and omitted-error-status metadata as explicit compatibility exceptions and MUST NOT claim zero OpenAPI differences until those exceptions are reviewed.
+- **FR-014**: The wave MUST commit immutable FastEndpoints-before HTTP/OpenAPI fixtures, compare all consumed canonical response/request/schema projections through the shared comparer, and fail on any unapproved or unused Wave 1 approval.
 
 ### Key Entities
 

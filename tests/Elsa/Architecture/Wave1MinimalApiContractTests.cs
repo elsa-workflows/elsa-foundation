@@ -4,7 +4,10 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Compatibility.Testing.Baselines;
+using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Manifests;
+using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Attention.Api;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.JavaScript.Rendering;
@@ -160,7 +163,7 @@ public sealed class Wave1MinimalApiContractTests
         await endpoint.RequestDelegate!(context);
 
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
-        Assert.Equal("application/json", context.Response.ContentType?.Split(';')[0]);
+        Assert.Equal("application/problem+json", context.Response.ContentType?.Split(';')[0]);
     }
 
     [Fact]
@@ -225,7 +228,7 @@ public sealed class Wave1MinimalApiContractTests
                 "GET", "/_elsa/attention/items", "ElsaAttentionApiEndpointsGetAttentionItems",
                 new Dictionary<string, string[]>(StringComparer.Ordinal)
                 {
-                    ["200"] = ["application/json"], ["400"] = ["text/plain"], ["401"] = [], ["403"] = []
+                    ["200"] = ["application/json"], ["401"] = [], ["403"] = []
                 }),
             new OpenApiExpectation(
                 "GET", "/expressions/descriptors", "ElsaExpressionsApiEndpointsListExpressionDescriptors",
@@ -249,20 +252,20 @@ public sealed class Wave1MinimalApiContractTests
                 "POST", "/javascript/execute", "ElsaWorkflowsRuntimeJavaScriptActivitiesRunJavaScriptEndpoint",
                 new Dictionary<string, string[]>(StringComparer.Ordinal)
                 {
-                    ["200"] = ["application/json"], ["400"] = ["application/json"], ["401"] = [], ["403"] = [], ["500"] = ["application/json"]
+                    ["200"] = ["application/json"], ["400"] = ["application/problem+json"], ["401"] = [], ["403"] = [], ["500"] = ["application/json"]
                 },
                 RequestContentType: "application/json", RequestSchemaName: "RequestModel"),
             new OpenApiExpectation(
                 "GET", "/_elsa/workflows/dashboard/definitions", "ElsaWorkflowsDashboardGetWorkflowPortfolio",
                 new Dictionary<string, string[]>(StringComparer.Ordinal)
                 {
-                    ["200"] = ["application/json"], ["400"] = ["text/plain"], ["401"] = [], ["403"] = []
+                    ["200"] = ["application/json"], ["401"] = [], ["403"] = []
                 }),
             new OpenApiExpectation(
                 "GET", "/_elsa/workflows/dashboard/runs", "ElsaWorkflowsDashboardGetWorkflowRunHealth",
                 new Dictionary<string, string[]>(StringComparer.Ordinal)
                 {
-                    ["200"] = ["application/json"], ["400"] = ["text/plain"], ["401"] = [], ["403"] = []
+                    ["200"] = ["application/json"], ["401"] = [], ["403"] = []
                 })
         };
 
@@ -297,6 +300,18 @@ public sealed class Wave1MinimalApiContractTests
             var requestBody = operation.GetProperty("requestBody").GetProperty("content").GetProperty(expected.RequestContentType);
             Assert.True(requestBody.GetProperty("schema").GetProperty("$ref").GetString()?.Contains(expected.RequestSchemaName!, StringComparison.Ordinal) ?? false);
         }
+
+        var consumedAfter = OpenApiEvidenceCapture.Capture(document);
+        var consumedBefore = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Combine(AppContext.BaseDirectory, "Baselines", "wave1-openapi-fastendpoints.json"));
+        var wave1Routes = consumedBefore.Operations.Select(operation => operation.Endpoint.Route.Value).ToHashSet(StringComparer.Ordinal);
+        var approvals = BaselineFile.Load<ApprovedDifference[]>(Path.Combine(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json"))
+            .Where(approval => wave1Routes.Contains(approval.Endpoint))
+            .ToArray();
+        var comparison = CompatibilityComparer.Compare(
+            new CompatibilityEvidenceSet { OpenApi = consumedBefore },
+            new CompatibilityEvidenceSet { OpenApi = consumedAfter },
+            approvals);
+        Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Failures));
     }
 
     private sealed record OpenApiExpectation(

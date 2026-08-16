@@ -1,0 +1,240 @@
+[
+  {
+    "binding": "",
+    "body": "{\n  \u0022capabilities\u0022: [\n    {\n      \u0022contractVersion\u0022: \u00221\u0022,\n      \u0022id\u0022: \u0022wave1\u0022,\n      \u0022links\u0022: [\n        {\n          \u0022href\u0022: \u0022capabilities\u0022,\n          \u0022rel\u0022: \u0022self\u0022,\n          \u0022templated\u0022: false\n        }\n      ]\n    }\n  ]\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /capabilities",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022capabilities\u0022: [\n    {\n      \u0022contractVersion\u0022: \u00221\u0022,\n      \u0022id\u0022: \u0022wave1\u0022,\n      \u0022links\u0022: [\n        {\n          \u0022href\u0022: \u0022capabilities\u0022,\n          \u0022rel\u0022: \u0022self\u0022,\n          \u0022templated\u0022: false\n        }\n      ]\n    }\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022contributors\u0022: [],\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/attention/items",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022contributors\u0022: [],\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=contributorId",
+    "body": "Contributor IDs cannot be empty.",
+    "case": "invalid-filter",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/attention/items",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022items\u0022: []\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /expressions/descriptors",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022items\u0022: []\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022items\u0022: []\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /expressions/variable-types",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022items\u0022: []\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022document\u0022: \u0022{}\u0022,\n  \u0022success\u0022: true\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /javascript/documents/render",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022document\u0022: \u0022{}\u0022,\n  \u0022success\u0022: true\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=script",
+    "body": "{\n  \u0022success\u0022: true,\n  \u0022value\u0022: 1\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "POST /javascript/execute",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022success\u0022: true,\n  \u0022value\u0022: 1\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=script",
+    "body": "{\n  \u0022detail\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "invalid-json",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "POST /javascript/execute",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022\\u0027i\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=script",
+    "body": "{\n  \u0022detail\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "missing-body",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "POST /javascript/execute",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022serializerErrors\u0022,\n      \u0022reason\u0022: \u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/javascript/execute\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022wave1-trace\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=script",
+    "body": "{\n  \u0022error\u0022: \u0022Script is null\u0022\n}",
+    "case": "blank-script",
+    "contentType": "application/json",
+    "endpoint": "POST /javascript/execute",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022error\u0022: \u0022Script is null\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022error\u0022: \u0022Script is null\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022activeDefinitionCount\u0022: 1,\n  \u0022errorCode\u0022: null,\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022invalidDraftCount\u0022: 0,\n  \u0022publishedDefinitionCount\u0022: 1,\n  \u0022status\u0022: \u0022ready\u0022,\n  \u0022unpublishedDraftCount\u0022: 0\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/workflows/dashboard/definitions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022activeDefinitionCount\u0022: 1,\n  \u0022errorCode\u0022: null,\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022invalidDraftCount\u0022: 0,\n  \u0022publishedDefinitionCount\u0022: 1,\n  \u0022status\u0022: \u0022ready\u0022,\n  \u0022unpublishedDraftCount\u0022: 0\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "An authenticated tenant scope is required.",
+    "case": "missing-tenant",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/workflows/dashboard/definitions",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=from,to,bucket",
+    "body": "{\n  \u0022bucket\u0022: \u0022hour\u0022,\n  \u0022buckets\u0022: [],\n  \u0022cancelledCount\u0022: 0,\n  \u0022errorCode\u0022: null,\n  \u0022failedCount\u0022: 0,\n  \u0022failurePercentage\u0022: 0,\n  \u0022from\u0022: \u00222026-08-15T00:00:00\\u002B00:00\u0022,\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022highestFailureDefinitions\u0022: [],\n  \u0022incidentBearingPercentage\u0022: 0,\n  \u0022incidentBearingRunCount\u0022: 0,\n  \u0022incidentCount\u0022: 0,\n  \u0022includeTestRuns\u0022: false,\n  \u0022incompleteCount\u0022: 0,\n  \u0022runningCount\u0022: 0,\n  \u0022startedCount\u0022: 1,\n  \u0022status\u0022: \u0022ready\u0022,\n  \u0022succeededCount\u0022: 1,\n  \u0022timeZone\u0022: \u0022\u0022,\n  \u0022to\u0022: \u00222026-08-15T01:00:00\\u002B00:00\u0022\n}",
+    "case": "success",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/workflows/dashboard/runs",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022bucket\u0022: \u0022hour\u0022,\n  \u0022buckets\u0022: [],\n  \u0022cancelledCount\u0022: 0,\n  \u0022errorCode\u0022: null,\n  \u0022failedCount\u0022: 0,\n  \u0022failurePercentage\u0022: 0,\n  \u0022from\u0022: \u00222026-08-15T00:00:00\\u002B00:00\u0022,\n  \u0022generatedAt\u0022: \u00222026-08-15T12:00:00\\u002B00:00\u0022,\n  \u0022highestFailureDefinitions\u0022: [],\n  \u0022incidentBearingPercentage\u0022: 0,\n  \u0022incidentBearingRunCount\u0022: 0,\n  \u0022incidentCount\u0022: 0,\n  \u0022includeTestRuns\u0022: false,\n  \u0022incompleteCount\u0022: 0,\n  \u0022runningCount\u0022: 0,\n  \u0022startedCount\u0022: 1,\n  \u0022status\u0022: \u0022ready\u0022,\n  \u0022succeededCount\u0022: 1,\n  \u0022timeZone\u0022: \u0022\u0022,\n  \u0022to\u0022: \u00222026-08-15T01:00:00\\u002B00:00\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=from,to,bucket",
+    "body": "A valid ISO-8601 \u0027from\u0027 instant is required.",
+    "case": "invalid-query",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/workflows/dashboard/runs",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

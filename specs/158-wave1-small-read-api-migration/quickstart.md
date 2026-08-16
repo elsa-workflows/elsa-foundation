@@ -8,6 +8,7 @@ dotnet test tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj
 dotnet test tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj
 dotnet test tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --filter 'FullyQualifiedName~FastEndpointsTransitionTests|FullyQualifiedName~Wave1'
+dotnet test tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --no-restore
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 dotnet build Elsa.Server.slnx --no-restore
 ```

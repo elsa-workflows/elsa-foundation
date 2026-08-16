@@ -32,7 +32,6 @@ public static class WorkflowsDashboardApi
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(WorkflowPortfolioSnapshot)),
-                BadRequest(),
                 Unauthorized(),
                 Forbidden());
 
@@ -45,7 +44,6 @@ public static class WorkflowsDashboardApi
             .WithMetadata(
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(WorkflowRunHealthSnapshot)),
-                BadRequest(),
                 Unauthorized(),
                 Forbidden());
     }
@@ -55,14 +53,15 @@ public static class WorkflowsDashboardApi
         var tenantId = context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value;
         if (string.IsNullOrWhiteSpace(tenantId))
         {
-            await Results.Text("An authenticated tenant scope is required.", "text/plain", statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context);
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            await context.Response.WriteAsync("An authenticated tenant scope is required.", context.RequestAborted);
             return;
         }
 
         var service = context.RequestServices.GetRequiredService<IWorkflowPortfolioService>();
         var snapshot = await service.QueryAsync(tenantId, context.RequestAborted);
-        await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowPortfolioSnapshot).ExecuteAsync(context);
+        await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowPortfolioSnapshot, contentType: "application/json").ExecuteAsync(context);
     }
 
     private static async Task HandleWorkflowRunHealthAsync(HttpContext context)
@@ -95,20 +94,18 @@ public static class WorkflowsDashboardApi
                 includeTestRuns);
             var service = context.RequestServices.GetRequiredService<IWorkflowRunHealthService>();
             var snapshot = await service.QueryAsync(query, context.RequestAborted);
-            await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowRunHealthSnapshot).ExecuteAsync(context);
+            await Results.Json(snapshot, WorkflowsDashboardJsonContext.Default.WorkflowRunHealthSnapshot, contentType: "application/json").ExecuteAsync(context);
         }
         catch (WorkflowRunHealthQueryException exception)
         {
-            await Results.Text(exception.Message, "text/plain", statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context);
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            await context.Response.WriteAsync(exception.Message, context.RequestAborted);
         }
     }
 
     private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>
         new(statusCode, bodyType, ["application/json"]);
-
-    private static ProducesResponseTypeMetadata BadRequest() =>
-        new(StatusCodes.Status400BadRequest, typeof(string), ["text/plain"]);
 
     private static ProducesResponseTypeMetadata Unauthorized() =>
         new(StatusCodes.Status401Unauthorized, typeof(void), []);

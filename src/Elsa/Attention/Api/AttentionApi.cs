@@ -31,7 +31,6 @@ public static class AttentionApi
             .WithMetadata(
                 descriptionMethod,
                 new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(AttentionAggregationResult), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(string), ["text/plain"]),
                 new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
                 new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
     }
@@ -52,12 +51,13 @@ public static class AttentionApi
                     new AttentionQueryContext(principal, tenantId),
                     query.Length == 0 ? null : query),
                 context.RequestAborted);
-            await Results.Json(result, AttentionJsonContext.Default.AttentionAggregationResult).ExecuteAsync(context);
+            await Results.Json(result, AttentionJsonContext.Default.AttentionAggregationResult, contentType: "application/json").ExecuteAsync(context);
         }
         catch (AttentionQueryException exception)
         {
-            await Results.Text(exception.Message, "text/plain", statusCode: StatusCodes.Status400BadRequest)
-                .ExecuteAsync(context);
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            await context.Response.WriteAsync(exception.Message, context.RequestAborted);
         }
     }
 }
