@@ -1139,16 +1139,16 @@
   },
   {
     "binding": "route=activityExecutionId=missing,workflowExecutionId=missing;request=ActivityExecutionId=missing,WorkflowExecutionId=missing",
-    "body": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u00220HNNRNFO2ADMF\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
+    "body": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u0022capture-trace-id\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
     "case": "get-activity-execution|trusted-not-found",
     "contentType": "application/problem\u002Bjson",
     "endpoint": "GET /runtime/workflows/instances/{param}/activity-executions/{param}",
     "headers": {
       "content-type": "application/problem\u002Bjson"
     },
-    "json": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u00220HNNRNFO2ADMF\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
+    "json": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u0022capture-trace-id\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
     "pagingFiltering": "",
-    "problemDetails": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u00220HNNRNFO2ADMF\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
+    "problemDetails": "{\n  \u0022cursor\u0022: null,\n  \u0022detail\u0022: \u0022The requested activity execution was not found.\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022errorCode\u0022: \u0022activity.execution.not-found\u0022,\n  \u0022instance\u0022: \u0022/runtime/workflows/instances/missing/activity-executions/missing\u0022,\n  \u0022status\u0022: 404,\n  \u0022title\u0022: \u0022Activity execution not found\u0022,\n  \u0022traceId\u0022: \u0022capture-trace-id\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/activity-execution-not-found\u0022\n}",
     "status": "404",
     "statusCode": 404,
     "streaming": "",

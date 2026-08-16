@@ -12,10 +12,10 @@
     "concurrency",
     "alteration-statuses"
   ],
-  "httpSha256": "a44c68dc8be41a9db968f9e15c152047d0591e98aa7f34ddc865fedafbc47b20",
+  "httpSha256": "25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e",
   "openApiSha256": "990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4",
   "operationCount": 24,
   "registrationCount": 24,
-  "runnerCommit": "0eedd337f28afaff8dc8cc7853312b0625ca748f",
-  "sourceCommit": "ee6b9cf23f01e169fd6ce056f3c402db479d4e50"
+  "runnerCommit": "b8b9a4469b4ff283c916ed2e597758bef5a52a0b",
+  "sourceCommit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802"
 }
