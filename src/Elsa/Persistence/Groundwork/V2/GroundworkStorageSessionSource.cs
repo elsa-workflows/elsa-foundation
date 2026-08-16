@@ -16,6 +16,7 @@ public sealed class GroundworkStorageSessionSource(
     IServiceProvider services,
     GroundworkStorageUnitRegistry registry) :
     IGroundworkStorageSessionSource,
+    IGroundworkStorageCapabilitySource,
     IHostedService,
     IShellInitializer
 {
@@ -76,6 +77,9 @@ public sealed class GroundworkStorageSessionSource(
 
     public StorageUnit Unit(string unitId, string? targetName = null) =>
         registry.Require(unitId, targetName).Unit;
+
+    public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+        RequireConnection(GroundworkTargetNames.Normalize(targetName)).Capabilities;
 
     private Task AdmitAllAsync(CancellationToken cancellationToken)
     {
