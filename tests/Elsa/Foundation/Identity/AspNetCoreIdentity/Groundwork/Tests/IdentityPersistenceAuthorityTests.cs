@@ -38,11 +38,11 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests
             services.AddFoundationAspNetCoreIdentityGroundwork();
             services.AddFoundationAspNetCoreIdentityGroundwork();
 
-            Assert.Single(services.Where(descriptor =>
-                descriptor.ServiceType == typeof(IdentityPersistenceAuthority)));
-            Assert.Single(services.Where(descriptor =>
+            Assert.Single(services, descriptor =>
+                descriptor.ServiceType == typeof(IdentityPersistenceAuthority));
+            Assert.Single(services, descriptor =>
                 descriptor.ServiceType == typeof(IConfigureOptions<IdentityOptions>) &&
-                descriptor.ImplementationFactory is not null));
+                descriptor.ImplementationFactory is not null);
         }
 
         [Fact]
@@ -135,8 +135,8 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests
             services.AddFoundationAspNetCoreIdentityGroundwork();
             services.AddSingleton<EntityFrameworkCore.CompatibilityProbe.FrozenEfIdentityStore>();
             using var provider = services.BuildServiceProvider();
-            var hostedGuard = Assert.Single(provider.GetServices<IHostedService>().Where(service =>
-                service.GetType().Name.Contains("PersistenceAuthorityGuard", StringComparison.Ordinal)));
+            var hostedGuard = Assert.Single(provider.GetServices<IHostedService>(), service =>
+                service.GetType().Name.Contains("PersistenceAuthorityGuard", StringComparison.Ordinal));
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 hostedGuard.StartAsync(CancellationToken.None));
@@ -151,7 +151,8 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests
             services.AddFoundationAspNetCoreIdentityGroundwork();
             services.AddSingleton<EntityFrameworkCore.CompatibilityProbe.FrozenEfIdentityStore>();
             using var provider = services.BuildServiceProvider();
-            var shellGuard = Assert.Single(provider.GetServices<IShellInitializer>());
+            var shellGuard = Assert.Single(provider.GetServices<IShellInitializer>(), initializer =>
+                initializer.GetType().Name.Contains("PersistenceAuthorityGuard", StringComparison.Ordinal));
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 shellGuard.InitializeAsync(CancellationToken.None));

@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -12,21 +10,21 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// provider-neutral contract.
 /// </summary>
 public sealed class GroundworkCredentialStore(
-    IDocumentStore store,
+    GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor) : ICredentialStore, IRevisionAwareCredentialStore
 {
-    public async ValueTask<CredentialRecord?> FindAsync(
+    public ValueTask<CredentialRecord?> FindAsync(
         string tenantId,
         string credentialId,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityCredentialDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, credentialId),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
     public async ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default)
@@ -34,20 +32,20 @@ public sealed class GroundworkCredentialStore(
         await SaveCoreAsync(credential, expectedVersion: null, cancellationToken);
     }
 
-    public async ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(
+    public ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(
         string tenantId,
         string credentialId,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityCredentialDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, credentialId),
             cancellationToken);
 
-        return envelope is null
+        return ValueTask.FromResult(row is null
             ? null
-            : new IamRevisionedRecord<CredentialRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+            : new IamRevisionedRecord<CredentialRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
@@ -62,7 +60,7 @@ public sealed class GroundworkCredentialStore(
             await SaveCoreAsync(credential, expectedVersion, cancellationToken));
     }
 
-    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+    private ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
         CredentialRecord credential,
         long? expectedVersion,
         CancellationToken cancellationToken)
@@ -74,19 +72,15 @@ public sealed class GroundworkCredentialStore(
             IdentityCompositeDocumentId.Normalize(credential.TenantId),
             IdentityCompositeDocumentId.Normalize(credential.Id),
             credential);
-        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        return await store.SaveAsync(
-            new SaveDocumentRequest(
+        return ValueTask.FromResult(rows.Save(
+            GroundworkIdentityDocumentRows.Write(
                 IdentityStorageManifest.IdentityCredentialDocumentKind,
                 IdentityCompositeDocumentId.From(credential.TenantId, credential.Id),
-                IdentityStorageManifest.SchemaVersion,
-                content,
+                document,
                 expectedVersion),
-            cancellationToken);
+            cancellationToken));
     }
 
-    private static CredentialRecord Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IdentityCredentialDocument>(
-            envelope.ContentJson,
-            IdentityGroundworkJson.Options)!.Credential;
+    private static CredentialRecord Map(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<IdentityCredentialDocument>(row).Credential;
 }

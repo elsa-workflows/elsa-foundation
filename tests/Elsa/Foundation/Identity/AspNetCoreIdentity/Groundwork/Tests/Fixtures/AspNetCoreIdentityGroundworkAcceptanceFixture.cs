@@ -1,8 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Core.DependencyInjection;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
@@ -24,11 +23,10 @@ internal sealed class AspNetCoreIdentityGroundworkAcceptanceFixture : IAsyncDisp
     public static AspNetCoreIdentityGroundworkAcceptanceFixture Create()
     {
         var services = new ServiceCollection();
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
 
         services.AddLogging();
-        services.AddSingleton<IDocumentStore>(documents);
-        services.AddSingleton<IBoundedDocumentStore>(documents);
+        services.AddSingleton<IStorageProviderConnection>(persistence.Connection);
         services.AddPersistenceCore(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant);
         services.AddFoundationAspNetCoreIdentityGroundwork();
 

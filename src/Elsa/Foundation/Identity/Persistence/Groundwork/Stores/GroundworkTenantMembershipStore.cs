@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -11,33 +9,33 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// escaped composite <c>tenantId:userId</c> document id.
 /// </summary>
 public sealed class GroundworkTenantMembershipStore(
-    IDocumentStore store,
+    GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor,
     GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : ITenantMembershipStore, IRevisionAwareTenantMembershipStore
 {
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
-        relationshipCoordinator ?? new GroundworkIdentityAuthorityRelationshipCoordinator(store);
+        relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
 
-    public async ValueTask<TenantMembershipRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public ValueTask<TenantMembershipRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
-    public async ValueTask<IamRevisionedRecord<TenantMembershipRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public ValueTask<IamRevisionedRecord<TenantMembershipRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
             cancellationToken);
 
-        return envelope is null ? null : new IamRevisionedRecord<TenantMembershipRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<TenantMembershipRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
     public async ValueTask SaveAsync(TenantMembershipRecord membership, CancellationToken cancellationToken = default)
@@ -54,7 +52,7 @@ public sealed class GroundworkTenantMembershipStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+    private async ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
         TenantMembershipRecord membership,
         long? expectedVersion,
         bool enforceExpectedVersion,
@@ -76,6 +74,6 @@ public sealed class GroundworkTenantMembershipStore(
             cancellationToken);
     }
 
-    private static TenantMembershipRecord Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IdentityTenantMembershipDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.TenantMembership;
+    private static TenantMembershipRecord Map(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<IdentityTenantMembershipDocument>(row).TenantMembership;
 }

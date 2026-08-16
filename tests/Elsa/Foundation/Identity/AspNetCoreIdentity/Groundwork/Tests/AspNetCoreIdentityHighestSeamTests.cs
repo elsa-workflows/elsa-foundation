@@ -12,11 +12,9 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
-using Elsa.Persistence.Groundwork.Testing;
 using FastEndpoints;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -96,7 +94,7 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     [Fact]
     public async Task Production_seeded_groundwork_host_signs_in_authorizes_survives_restart_and_locks_out()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        using var documents = new AspNetCoreIdentityTestPersistence();
         await using (var firstHost = await ProductionSeededGroundworkWebHost.StartAsync(documents))
         {
             var firstClient = firstHost.CreateClient();
@@ -162,41 +160,48 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     [Trait("Category", "Sqlite")]
     public async Task File_backed_sqlite_authority_survives_close_and_reopen()
     {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        await driver.InitializeAsync();
-        await driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant));
+        var path = Path.Combine(Path.GetTempPath(), $"identity-aspnet-{Guid.NewGuid():N}.db");
         var sourceUser = AspNetCoreIdentityScenarioData.CreateIdentityUser(AspNetCoreIdentityScenarioData.PrimaryUser);
         var sourceRole = AspNetCoreIdentityScenarioData.CreateIdentityRole(AspNetCoreIdentityScenarioData.PrimaryRole);
         var login = new UserLoginInfo("github", "ada-external", "GitHub");
         var claim = new Claim(IdentityClaimTypes.Permission, "identity.users.read");
 
-        await using (var firstClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None))
+        try
         {
-            var stores = CreateSqliteStores(firstClient);
-            Assert.True((await stores.Users.CreateAsync(sourceUser, CancellationToken.None)).Succeeded);
-            Assert.True((await stores.Roles.CreateAsync(sourceRole, CancellationToken.None)).Succeeded);
-            await stores.Users.AddToRoleAsync(sourceUser, sourceRole.NormalizedName!, CancellationToken.None);
-            await stores.Users.AddClaimsAsync(sourceUser, [claim], CancellationToken.None);
-            await stores.Users.AddLoginAsync(sourceUser, login, CancellationToken.None);
-            await stores.Users.SetTokenAsync(sourceUser, "github", "refresh-token", "refresh-1", CancellationToken.None);
+            using (var firstPersistence = new AspNetCoreIdentityTestPersistence(
+                       new SqliteProviderFactory().Create($"Data Source={path}")))
+            {
+                var stores = CreateSqliteStores(firstPersistence);
+                Assert.True((await stores.Users.CreateAsync(sourceUser, CancellationToken.None)).Succeeded);
+                Assert.True((await stores.Roles.CreateAsync(sourceRole, CancellationToken.None)).Succeeded);
+                await stores.Users.AddToRoleAsync(sourceUser, sourceRole.NormalizedName!, CancellationToken.None);
+                await stores.Users.AddClaimsAsync(sourceUser, [claim], CancellationToken.None);
+                await stores.Users.AddLoginAsync(sourceUser, login, CancellationToken.None);
+                await stores.Users.SetTokenAsync(sourceUser, "github", "refresh-token", "refresh-1", CancellationToken.None);
+            }
+
+            using (var reopenedPersistence = new AspNetCoreIdentityTestPersistence(
+                       new SqliteProviderFactory().Create($"Data Source={path}")))
+            {
+                var stores = CreateSqliteStores(reopenedPersistence);
+                var reloadedByName = await stores.Users.FindByNameAsync(sourceUser.NormalizedUserName!, CancellationToken.None);
+                var reloadedByLogin = await stores.Users.FindByLoginAsync(login.LoginProvider, login.ProviderKey, CancellationToken.None);
+
+                Assert.NotNull(reloadedByName);
+                Assert.Equal(sourceUser.Id, reloadedByName!.Id);
+                Assert.Equal(sourceUser.Email, reloadedByName.Email);
+                Assert.Equal(sourceUser.PasswordHash, reloadedByName.PasswordHash);
+                Assert.NotNull(reloadedByLogin);
+                Assert.Equal(sourceUser.Id, reloadedByLogin!.Id);
+                Assert.Contains(await stores.Users.GetRolesAsync(reloadedByName, CancellationToken.None), value => value == sourceRole.Name);
+                Assert.Contains(await stores.Users.GetClaimsAsync(reloadedByName, CancellationToken.None), value => value.Type == claim.Type && value.Value == claim.Value);
+                Assert.Equal("refresh-1", await stores.Users.GetTokenAsync(reloadedByName, "github", "refresh-token", CancellationToken.None));
+            }
         }
-
-        await using (var reopenedClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None))
+        finally
         {
-            var stores = CreateSqliteStores(reopenedClient);
-            var reloadedByName = await stores.Users.FindByNameAsync(sourceUser.NormalizedUserName!, CancellationToken.None);
-            var reloadedByLogin = await stores.Users.FindByLoginAsync(login.LoginProvider, login.ProviderKey, CancellationToken.None);
-
-            Assert.NotNull(reloadedByName);
-            Assert.Equal(sourceUser.Id, reloadedByName!.Id);
-            Assert.Equal(sourceUser.Email, reloadedByName.Email);
-            Assert.Equal(sourceUser.PasswordHash, reloadedByName.PasswordHash);
-            Assert.NotNull(reloadedByLogin);
-            Assert.Equal(sourceUser.Id, reloadedByLogin!.Id);
-            Assert.Contains(await stores.Users.GetRolesAsync(reloadedByName, CancellationToken.None), value => value == sourceRole.Name);
-            Assert.Contains(await stores.Users.GetClaimsAsync(reloadedByName, CancellationToken.None), value => value.Type == claim.Type && value.Value == claim.Value);
-            Assert.Equal("refresh-1", await stores.Users.GetTokenAsync(reloadedByName, "github", "refresh-token", CancellationToken.None));
+            File.Delete(path);
+            File.Delete($"{path}.schema.lock");
         }
     }
 
@@ -229,15 +234,13 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     private static AspNetCoreIdentityScenarioData.Membership CrossTenantMembership() =>
         AspNetCoreIdentityScenarioData.Memberships.Single(membership => membership.Id == AspNetCoreIdentityScenarioData.Ids.CrossTenantMembership);
 
-    private static SqliteStores CreateSqliteStores(GroundworkProviderClient client)
+    private static SqliteStores CreateSqliteStores(AspNetCoreIdentityTestPersistence persistence)
     {
-        var bounded = client.BoundedDocumentStore
-            ?? throw new InvalidOperationException("The SQLite Groundwork provider client requires a bounded document-store runtime.");
         var accessor = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
             new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant)));
         return new SqliteStores(
-            new GroundworkIdentityUserStore(client.DocumentStore, accessor, bounded),
-            new GroundworkIdentityRoleStore(client.DocumentStore, accessor, bounded));
+            new GroundworkIdentityUserStore(persistence.Rows(accessor), accessor),
+            new GroundworkIdentityRoleStore(persistence.Rows(accessor), accessor));
     }
 
     private sealed record SqliteStores(GroundworkIdentityUserStore Users, GroundworkIdentityRoleStore Roles);
@@ -251,9 +254,9 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     private sealed class MultiTenantSignInHost : IAsyncDisposable
     {
         private readonly ServiceProvider _provider;
-        private readonly InMemoryDocumentStore _documents;
+        private readonly AspNetCoreIdentityTestPersistence _documents;
 
-        private MultiTenantSignInHost(ServiceProvider provider, InMemoryDocumentStore documents)
+        private MultiTenantSignInHost(ServiceProvider provider, AspNetCoreIdentityTestPersistence documents)
         {
             _provider = provider;
             _documents = documents;
@@ -262,11 +265,10 @@ public sealed class AspNetCoreIdentityHighestSeamTests
         public static MultiTenantSignInHost Create()
         {
             var services = new ServiceCollection();
-            var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+            var documents = new AspNetCoreIdentityTestPersistence();
 
             services.AddLogging();
-            services.AddSingleton<IDocumentStore>(documents);
-            services.AddSingleton<IBoundedDocumentStore>(documents);
+            services.AddSingleton<IStorageProviderConnection>(documents.Connection);
             services.AddPersistenceCore(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant);
             services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor());
             services.AddFoundationAspNetCoreIdentityGroundwork();
@@ -327,9 +329,9 @@ public sealed class AspNetCoreIdentityHighestSeamTests
     private sealed class HighestSeamHost : IAsyncDisposable
     {
         private readonly ServiceProvider _provider;
-        private readonly InMemoryDocumentStore _documents;
+        private readonly AspNetCoreIdentityTestPersistence _documents;
 
-        private HighestSeamHost(ServiceProvider provider, InMemoryDocumentStore documents, DefaultHttpContext context)
+        private HighestSeamHost(ServiceProvider provider, AspNetCoreIdentityTestPersistence documents, DefaultHttpContext context)
         {
             _provider = provider;
             _documents = documents;
@@ -343,12 +345,11 @@ public sealed class AspNetCoreIdentityHighestSeamTests
         public static HighestSeamHost Create()
         {
             var services = new ServiceCollection();
-            var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+            var documents = new AspNetCoreIdentityTestPersistence();
             var context = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
 
             services.AddLogging();
-            services.AddSingleton<IDocumentStore>(documents);
-            services.AddSingleton<IBoundedDocumentStore>(documents);
+            services.AddSingleton<IStorageProviderConnection>(documents.Connection);
             services.AddScoped<IPersistenceAccessContextAccessor>(_ =>
                 new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
                     new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant))));
@@ -415,7 +416,7 @@ public sealed class AspNetCoreIdentityHighestSeamTests
 
         public static async Task<HighestSeamWebHost> StartAsync()
         {
-            var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+            var documents = new AspNetCoreIdentityTestPersistence();
             var host = await new HostBuilder()
                 .UseEnvironment(Environments.Development)
                 .ConfigureWebHost(webHost =>
@@ -426,8 +427,7 @@ public sealed class AspNetCoreIdentityHighestSeamTests
                         services.AddLogging();
                         services.AddRouting();
                         services.AddAuthorization();
-                        services.AddSingleton<IDocumentStore>(documents);
-                        services.AddSingleton<IBoundedDocumentStore>(documents);
+                        services.AddSingleton<IStorageProviderConnection>(documents.Connection);
                         services.AddScoped<IPersistenceAccessContextAccessor>(_ =>
                             new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
                                 new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant))));
@@ -537,7 +537,7 @@ public sealed class AspNetCoreIdentityHighestSeamTests
             _host = host;
         }
 
-        public static async Task<ProductionSeededGroundworkWebHost> StartAsync(InMemoryDocumentStore documents)
+        public static async Task<ProductionSeededGroundworkWebHost> StartAsync(AspNetCoreIdentityTestPersistence documents)
         {
             var host = await new HostBuilder()
                 .UseEnvironment(Environments.Production)
@@ -549,8 +549,8 @@ public sealed class AspNetCoreIdentityHighestSeamTests
                         services.AddLogging();
                         services.AddRouting();
                         services.AddAuthorization();
-                        services.AddSingleton<IDocumentStore>(documents);
-                        services.AddSingleton<IBoundedDocumentStore>(documents);
+                        services.AddSingleton<IStorageProviderConnection>(
+                            new NonDisposingStorageProviderConnection(documents.Connection));
                         services.AddScoped<IPersistenceAccessContextAccessor>(_ =>
                             new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
                                 new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant))));

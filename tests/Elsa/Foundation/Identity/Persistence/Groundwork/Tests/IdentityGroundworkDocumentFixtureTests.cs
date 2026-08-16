@@ -2,9 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
@@ -53,20 +52,15 @@ public sealed class IdentityGroundworkDocumentFixtureTests
 
     [Theory]
     [MemberData(nameof(Kinds))]
-    public async Task Committed_Fixture_Loads_Through_The_Store_Under_The_Legacy_Stamp(string kind)
+    public async Task Committed_Fixture_Loads_Through_The_V2_Row_Store(string kind)
     {
         if (Regenerate)
             return;
 
         var fixtureContent = ReadCommittedFixture(kind);
 
-        // Discover the composite id the store assigns for the deterministic record, then re-seed the
-        // committed fixture bytes under that id in a fresh document store and read it back through the
-        // real store bridge.
-        var (id, _) = await CaptureAsync(kind);
-
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
-        await docStore.SaveAsync(new SaveDocumentRequest(kind, id, IdentityStorageManifest.SchemaVersion, fixtureContent));
+        SeedFixture(kind, fixtureContent, docStore);
 
         var spot = await ReadSpotCheckAsync(kind, docStore);
 
@@ -79,11 +73,89 @@ public sealed class IdentityGroundworkDocumentFixtureTests
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         await SaveDeterministicAsync(kind, docStore);
-        var envelope = docStore.Snapshot(kind).Single();
-        return (envelope.Id, envelope.ContentJson);
+        var id = DeterministicId(kind);
+        var row = Rows(kind, docStore).Read(kind, id)
+                  ?? throw new InvalidOperationException($"The deterministic Identity row '{kind}/{id}' was not written.");
+        return (row.Id, row.CanonicalJson);
     }
 
-    private static async Task SaveDeterministicAsync(string kind, IDocumentStore docStore)
+    private static void SeedFixture(string kind, string contentJson, IdentityTestPersistence persistence)
+    {
+        var projected = kind switch
+        {
+            var value when value == IdentityStorageManifest.IdentityUserDocumentKind => UserProjections(contentJson),
+            var value when value == IdentityStorageManifest.IdentityRoleDocumentKind => RoleProjections(contentJson),
+            var value when value == IdentityStorageManifest.IdentityClaimMappingDocumentKind => ClaimMappingProjections(contentJson),
+            var value when value == IdentityStorageManifest.ExternalLoginDocumentKind => ExternalLoginProjections(contentJson),
+            _ => new Dictionary<string, object?>()
+        };
+        var result = Rows(kind, persistence).Save(new GroundworkIdentityRowWrite(
+            kind,
+            DeterministicId(kind),
+            contentJson,
+            projected,
+            GroundworkIdentityRowWriteCondition.CreateOnly));
+        Assert.True(result.Succeeded, result.Message);
+    }
+
+    private static GroundworkIdentityRowStore Rows(string kind, IdentityTestPersistence persistence) =>
+        persistence.Rows(kind == IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind
+            ? IdentityGroundworkFixtures.GlobalAccessor()
+            : IdentityGroundworkFixtures.Accessor());
+
+    private static IReadOnlyDictionary<string, object?> UserProjections(string json)
+    {
+        var value = JsonSerializer.Deserialize<IdentityUserDocument>(json, IdentityGroundworkJson.Options)!;
+        return new Dictionary<string, object?>
+        {
+            [IdentityStorageManifest.NormalizedUserNameKeyField] = value.NormalizedUserNameKey,
+            [IdentityStorageManifest.NormalizedEmailKeyField] = value.NormalizedEmailKey
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> RoleProjections(string json)
+    {
+        var value = JsonSerializer.Deserialize<IdentityRoleDocument>(json, IdentityGroundworkJson.Options)!;
+        return new Dictionary<string, object?>
+        {
+            [IdentityStorageManifest.NormalizedRoleNameKeyField] = value.NormalizedRoleNameKey,
+            [IdentityStorageManifest.TenantIdField] = value.TenantId
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> ClaimMappingProjections(string json)
+    {
+        var value = JsonSerializer.Deserialize<IdentityClaimMappingDocument>(json, IdentityGroundworkJson.Options)!;
+        return new Dictionary<string, object?>
+        {
+            [IdentityStorageManifest.ProviderLookupKeyField] = value.ProviderLookupKey
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> ExternalLoginProjections(string json)
+    {
+        var value = JsonSerializer.Deserialize<IdentityExternalLoginDocument>(json, IdentityGroundworkJson.Options)!;
+        return new Dictionary<string, object?>
+        {
+            [IdentityStorageManifest.UserLookupKeyField] = value.UserLookupKey
+        };
+    }
+
+    private static string DeterministicId(string kind) => kind switch
+    {
+        var value when value == IdentityStorageManifest.IdentityUserDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "user-1"),
+        var value when value == IdentityStorageManifest.IdentityRoleDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "role-1"),
+        var value when value == IdentityStorageManifest.IdentityApplicationDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "app-1"),
+        var value when value == IdentityStorageManifest.IdentityCredentialDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "credential-1"),
+        var value when value == IdentityStorageManifest.IdentityClaimMappingDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "google", "claim-map-1"),
+        var value when value == IdentityStorageManifest.IdentityProviderConfigurationDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "google"),
+        var value when value == IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind => IdentityCompositeDocumentId.Normalize("google"),
+        var value when value == IdentityStorageManifest.ExternalLoginDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "google", "sub-123"),
+        var value when value == IdentityStorageManifest.IdentityTenantMembershipDocumentKind => IdentityCompositeDocumentId.From("tenant-1", "user-1"),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown identity row kind.")
+    };
+
+    private static async Task SaveDeterministicAsync(string kind, IdentityTestPersistence docStore)
     {
         switch (kind)
         {
@@ -121,7 +193,7 @@ public sealed class IdentityGroundworkDocumentFixtureTests
         }
     }
 
-    private static async Task<string?> ReadSpotCheckAsync(string kind, IDocumentStore docStore)
+    private static async Task<string?> ReadSpotCheckAsync(string kind, IdentityTestPersistence docStore)
     {
         if (kind == IdentityStorageManifest.IdentityUserDocumentKind)
             return (await IdentityGroundworkFixtures.UserStore(docStore).FindAsync("tenant-1", "user-1"))?.UserName;

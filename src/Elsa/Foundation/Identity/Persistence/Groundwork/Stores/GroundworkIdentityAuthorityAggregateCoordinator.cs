@@ -1,8 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -15,7 +14,7 @@ public enum GroundworkIdentityAuthorityConflict
 }
 
 public sealed record GroundworkIdentityAuthorityWriteResult(
-    DocumentStoreWriteResult WriteResult,
+    GroundworkIdentityWriteResult WriteResult,
     GroundworkIdentityAuthorityConflict Conflict = GroundworkIdentityAuthorityConflict.None);
 
 /// <summary>Owns atomic authority-root saves, reservations, and registry-driven aggregate deletes.</summary>
@@ -26,13 +25,13 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     public GroundworkIdentityAuthorityAggregateCoordinator(GroundworkIdentityAtomicWrite atomicWrite) =>
         _atomicWrite = atomicWrite ?? throw new ArgumentNullException(nameof(atomicWrite));
 
-    internal GroundworkIdentityAuthorityAggregateCoordinator(IDocumentStore directStore)
-        : this(new GroundworkIdentityAtomicWrite(directStore))
+    internal GroundworkIdentityAuthorityAggregateCoordinator(GroundworkIdentityRowStore rows)
+        : this(new GroundworkIdentityAtomicWrite(rows))
     {
     }
 
-    public static GroundworkIdentityAuthorityAggregateCoordinator ForDirectStore(IDocumentStore directStore) =>
-        new(directStore);
+    public static GroundworkIdentityAuthorityAggregateCoordinator ForRows(GroundworkIdentityRowStore rows) =>
+        new(rows);
 
     public async Task<GroundworkIdentityAuthorityWriteResult> SaveUserAsync(
         IdentityUserDocument document,
@@ -60,7 +59,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             async (unitOfWork, token) =>
             {
                 var userId = IdentityCompositeDocumentId.From(document.TenantId, document.UserId);
-                var existingEnvelope = await unitOfWork.LoadAsync(
+                var existingEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.IdentityUserDocumentKind,
                     userId,
                     token);
@@ -70,7 +69,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
 
                 var userNameReservation = UserNameReservation(document);
                 var reservationResult = await ReserveUserNameAsync(unitOfWork, userNameReservation, token);
-                if (reservationResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!reservationResult.Succeeded)
                 {
                     conflict = GroundworkIdentityAuthorityConflict.UserName;
                     return reservationResult;
@@ -81,7 +80,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                 {
                     emailReservation = EmailReservation(document);
                     var emailResult = await ReserveEmailAsync(unitOfWork, emailReservation, token);
-                    if (emailResult.Status is not DocumentStoreWriteStatus.Saved)
+                    if (!emailResult.Succeeded)
                     {
                         conflict = GroundworkIdentityAuthorityConflict.Email;
                         return emailResult;
@@ -104,7 +103,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                     merged,
                     expectedVersion ?? existingEnvelope?.Version ?? 0,
                     token);
-                if (userResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!userResult.Succeeded)
                     return userResult;
 
                 var oldUserNameKey = ReservationKey(document.TenantId, existing?.NormalizedUserName);
@@ -119,6 +118,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                 return userResult;
             },
             cancellationToken);
+        conflict = conflict == GroundworkIdentityAuthorityConflict.None
+            ? result.FailedUnitId switch
+            {
+                IdentityStorageManifest.UserNameReservationDocumentKind => GroundworkIdentityAuthorityConflict.UserName,
+                IdentityStorageManifest.EmailReservationDocumentKind => GroundworkIdentityAuthorityConflict.Email,
+                _ => GroundworkIdentityAuthorityConflict.None
+            }
+            : conflict;
         return new GroundworkIdentityAuthorityWriteResult(result, conflict);
     }
 
@@ -145,7 +152,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             async (unitOfWork, token) =>
             {
                 var roleId = IdentityCompositeDocumentId.From(document.TenantId, document.RoleId);
-                var existingEnvelope = await unitOfWork.LoadAsync(
+                var existingEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.IdentityRoleDocumentKind,
                     roleId,
                     token);
@@ -155,7 +162,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
 
                 var reservation = RoleNameReservation(document);
                 var reservationResult = await ReserveRoleNameAsync(unitOfWork, reservation, token);
-                if (reservationResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!reservationResult.Succeeded)
                 {
                     conflict = GroundworkIdentityAuthorityConflict.RoleName;
                     return reservationResult;
@@ -174,7 +181,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                     merged,
                     expectedVersion ?? existingEnvelope?.Version ?? 0,
                     token);
-                if (roleResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!roleResult.Succeeded)
                     return roleResult;
 
                 var oldRoleNameKey = ReservationKey(document.TenantId, existing?.NormalizedRoleName);
@@ -183,10 +190,13 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                 return roleResult;
             },
             cancellationToken);
+        if (conflict == GroundworkIdentityAuthorityConflict.None &&
+            result.FailedUnitId == IdentityStorageManifest.RoleNameReservationDocumentKind)
+            conflict = GroundworkIdentityAuthorityConflict.RoleName;
         return new GroundworkIdentityAuthorityWriteResult(result, conflict);
     }
 
-    public Task<DocumentStoreWriteResult> DeleteUserAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteUserAsync(
         string tenantId,
         string userId,
         long expectedVersion,
@@ -215,14 +225,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             mutation,
             async (unitOfWork, token) =>
             {
-                var userEnvelope = await unitOfWork.LoadAsync(
+                var userEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.IdentityUserDocumentKind,
                     IdentityCompositeDocumentId.From(tenantId, userId),
                     token);
                 if (userEnvelope is null)
-                    return DocumentStoreWriteResult.NotFound;
+                    return GroundworkIdentityWriteResult.NotFound(userId);
                 if (userEnvelope.Version != expectedVersion)
-                    return DocumentStoreWriteResult.ConcurrencyConflict;
+                    return GroundworkIdentityWriteResult.ConcurrencyConflict(userId);
 
                 var user = Deserialize<IdentityUserDocument>(userEnvelope);
                 ValidateUser(user);
@@ -268,14 +278,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
                     unitOfWork, ReservationKey(tenantId, user.NormalizedUserName), tenantId, userId, token);
                 await DeleteOwnedEmailReservationAsync(
                     unitOfWork, ReservationKey(tenantId, user.NormalizedEmail), tenantId, userId, token);
-                return await unitOfWork.DeleteAsync(
-                    new DeleteDocumentRequest(userEnvelope.DocumentKind, userEnvelope.Id, expectedVersion),
+                return unitOfWork.Delete(
+                    new GroundworkIdentityRowDelete(userEnvelope.UnitId, userEnvelope.Id, GroundworkIdentityRowWriteCondition.IfVersion(expectedVersion)),
                     token);
             },
             cancellationToken).AsTask();
     }
 
-    public Task<DocumentStoreWriteResult> DeleteRoleAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteRoleAsync(
         string tenantId,
         string roleId,
         long expectedVersion,
@@ -300,14 +310,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             mutation,
             async (unitOfWork, token) =>
             {
-                var roleEnvelope = await unitOfWork.LoadAsync(
+                var roleEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.IdentityRoleDocumentKind,
                     IdentityCompositeDocumentId.From(tenantId, roleId),
                     token);
                 if (roleEnvelope is null)
-                    return DocumentStoreWriteResult.NotFound;
+                    return GroundworkIdentityWriteResult.NotFound(roleId);
                 if (roleEnvelope.Version != expectedVersion)
-                    return DocumentStoreWriteResult.ConcurrencyConflict;
+                    return GroundworkIdentityWriteResult.ConcurrencyConflict(roleId);
 
                 var role = Deserialize<IdentityRoleDocument>(roleEnvelope);
                 ValidateRole(role);
@@ -342,15 +352,15 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
 
                 await DeleteOwnedRoleNameReservationAsync(
                     unitOfWork, ReservationKey(tenantId, role.NormalizedRoleName), tenantId, roleId, token);
-                return await unitOfWork.DeleteAsync(
-                    new DeleteDocumentRequest(roleEnvelope.DocumentKind, roleEnvelope.Id, expectedVersion),
+                return unitOfWork.Delete(
+                    new GroundworkIdentityRowDelete(roleEnvelope.UnitId, roleEnvelope.Id, GroundworkIdentityRowWriteCondition.IfVersion(expectedVersion)),
                     token);
             },
             cancellationToken).AsTask();
     }
 
     private static async Task DeleteUserChildrenAsync<TDocument>(
-        IDocumentUnitOfWork unitOfWork,
+        GroundworkIdentityMutationBatch unitOfWork,
         string documentKind,
         IReadOnlyCollection<string>? documentIds,
         Action<TDocument> validate,
@@ -364,23 +374,23 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
         }
     }
 
-    private static async Task<DocumentEnvelope> RequireEnvelopeAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityRow> RequireEnvelopeAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         string documentKind,
         string documentId,
         CancellationToken cancellationToken) =>
-        await unitOfWork.LoadAsync(documentKind, documentId, cancellationToken)
+        await unitOfWork.ReadAsync(documentKind, documentId, cancellationToken)
         ?? throw new InvalidOperationException(
             $"Registered identity aggregate child '{documentKind}/{documentId}' does not exist.");
 
-    private static async Task<DocumentStoreWriteResult> ReserveUserNameAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityWriteResult> ReserveUserNameAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         IdentityUserNameReservationDocument? reservation,
         CancellationToken cancellationToken)
     {
         if (reservation is null)
-            return DocumentStoreWriteResult.Saved(Placeholder(IdentityStorageManifest.UserNameReservationDocumentKind));
-        var existing = await unitOfWork.LoadAsync(
+            return Placeholder(IdentityStorageManifest.UserNameReservationDocumentKind);
+        var existing = await unitOfWork.ReadAsync(
             IdentityStorageManifest.UserNameReservationDocumentKind,
             reservation.UserNameReservationKey,
             cancellationToken);
@@ -388,8 +398,8 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
         {
             var current = Deserialize<IdentityUserNameReservationDocument>(existing);
             return SameOwner(current.TenantId, current.UserId, reservation.TenantId, reservation.UserId)
-                ? DocumentStoreWriteResult.Saved(existing)
-                : DocumentStoreWriteResult.ConcurrencyConflict;
+                ? GroundworkIdentityWriteResult.Saved(existing)
+                : GroundworkIdentityWriteResult.ConcurrencyConflict(existing.Id);
         }
 
         return await SaveAsync(
@@ -401,14 +411,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             cancellationToken);
     }
 
-    private static async Task<DocumentStoreWriteResult> ReserveEmailAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityWriteResult> ReserveEmailAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         IdentityEmailReservationDocument? reservation,
         CancellationToken cancellationToken)
     {
         if (reservation is null)
-            return DocumentStoreWriteResult.Saved(Placeholder(IdentityStorageManifest.EmailReservationDocumentKind));
-        var existing = await unitOfWork.LoadAsync(
+            return Placeholder(IdentityStorageManifest.EmailReservationDocumentKind);
+        var existing = await unitOfWork.ReadAsync(
             IdentityStorageManifest.EmailReservationDocumentKind,
             reservation.EmailReservationKey,
             cancellationToken);
@@ -416,8 +426,8 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
         {
             var current = Deserialize<IdentityEmailReservationDocument>(existing);
             return SameOwner(current.TenantId, current.UserId, reservation.TenantId, reservation.UserId)
-                ? DocumentStoreWriteResult.Saved(existing)
-                : DocumentStoreWriteResult.ConcurrencyConflict;
+                ? GroundworkIdentityWriteResult.Saved(existing)
+                : GroundworkIdentityWriteResult.ConcurrencyConflict(existing.Id);
         }
 
         return await SaveAsync(
@@ -429,14 +439,14 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
             cancellationToken);
     }
 
-    private static async Task<DocumentStoreWriteResult> ReserveRoleNameAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityWriteResult> ReserveRoleNameAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         IdentityRoleNameReservationDocument? reservation,
         CancellationToken cancellationToken)
     {
         if (reservation is null)
-            return DocumentStoreWriteResult.Saved(Placeholder(IdentityStorageManifest.RoleNameReservationDocumentKind));
-        var existing = await unitOfWork.LoadAsync(
+            return Placeholder(IdentityStorageManifest.RoleNameReservationDocumentKind);
+        var existing = await unitOfWork.ReadAsync(
             IdentityStorageManifest.RoleNameReservationDocumentKind,
             reservation.RoleNameReservationKey,
             cancellationToken);
@@ -444,8 +454,8 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
         {
             var current = Deserialize<IdentityRoleNameReservationDocument>(existing);
             return SameOwner(current.TenantId, current.RoleId, reservation.TenantId, reservation.RoleId)
-                ? DocumentStoreWriteResult.Saved(existing)
-                : DocumentStoreWriteResult.ConcurrencyConflict;
+                ? GroundworkIdentityWriteResult.Saved(existing)
+                : GroundworkIdentityWriteResult.ConcurrencyConflict(existing.Id);
         }
 
         return await SaveAsync(
@@ -458,7 +468,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     }
 
     private static async Task DeleteOwnedUserNameReservationAsync(
-        IDocumentUnitOfWork unitOfWork,
+        GroundworkIdentityMutationBatch unitOfWork,
         string? key,
         string tenantId,
         string userId,
@@ -466,7 +476,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     {
         if (key is null)
             return;
-        var envelope = await unitOfWork.LoadAsync(IdentityStorageManifest.UserNameReservationDocumentKind, key, cancellationToken);
+        var envelope = await unitOfWork.ReadAsync(IdentityStorageManifest.UserNameReservationDocumentKind, key, cancellationToken);
         if (envelope is null)
             return;
         var reservation = Deserialize<IdentityUserNameReservationDocument>(envelope);
@@ -475,7 +485,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     }
 
     private static async Task DeleteOwnedEmailReservationAsync(
-        IDocumentUnitOfWork unitOfWork,
+        GroundworkIdentityMutationBatch unitOfWork,
         string? key,
         string tenantId,
         string userId,
@@ -483,7 +493,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     {
         if (key is null)
             return;
-        var envelope = await unitOfWork.LoadAsync(IdentityStorageManifest.EmailReservationDocumentKind, key, cancellationToken);
+        var envelope = await unitOfWork.ReadAsync(IdentityStorageManifest.EmailReservationDocumentKind, key, cancellationToken);
         if (envelope is null)
             return;
         var reservation = Deserialize<IdentityEmailReservationDocument>(envelope);
@@ -493,7 +503,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     }
 
     private static async Task DeleteOwnedRoleNameReservationAsync(
-        IDocumentUnitOfWork unitOfWork,
+        GroundworkIdentityMutationBatch unitOfWork,
         string? key,
         string tenantId,
         string roleId,
@@ -501,7 +511,7 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     {
         if (key is null)
             return;
-        var envelope = await unitOfWork.LoadAsync(IdentityStorageManifest.RoleNameReservationDocumentKind, key, cancellationToken);
+        var envelope = await unitOfWork.ReadAsync(IdentityStorageManifest.RoleNameReservationDocumentKind, key, cancellationToken);
         if (envelope is null)
             return;
         var reservation = Deserialize<IdentityRoleNameReservationDocument>(envelope);
@@ -561,20 +571,20 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     }
 
     private static async Task RequireDeletedAsync(
-        IDocumentUnitOfWork unitOfWork,
-        DocumentEnvelope envelope,
+        GroundworkIdentityMutationBatch unitOfWork,
+        GroundworkIdentityRow envelope,
         CancellationToken cancellationToken)
     {
-        var result = await unitOfWork.DeleteAsync(
-            new DeleteDocumentRequest(envelope.DocumentKind, envelope.Id, envelope.Version),
+        var result = unitOfWork.Delete(
+            new GroundworkIdentityRowDelete(envelope.UnitId, envelope.Id, GroundworkIdentityRowWriteCondition.IfVersion(envelope.Version)),
             cancellationToken);
-        if (result.Status is not DocumentStoreWriteStatus.Deleted)
-            throw new InvalidOperationException($"Could not delete identity aggregate document '{envelope.DocumentKind}/{envelope.Id}'.");
+        if (result.Status is not WriteOutcomeStatus.Deleted)
+            throw new InvalidOperationException($"Could not delete identity aggregate row '{envelope.UnitId}/{envelope.Id}'.");
     }
 
-    private static void RequireSaved(DocumentStoreWriteResult result, string description)
+    private static void RequireSaved(GroundworkIdentityWriteResult result, string description)
     {
-        if (result.Status is not DocumentStoreWriteStatus.Saved)
+        if (!result.Succeeded)
             throw new InvalidOperationException($"Could not update the {description}; Groundwork returned {result.Status}.");
     }
 
@@ -584,24 +594,20 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     private static IReadOnlyCollection<string> SortedDistinct(IReadOnlyCollection<string>? values) =>
         (values ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 
-    private static Task<DocumentStoreWriteResult> SaveAsync<TDocument>(
-        IDocumentUnitOfWork unitOfWork,
+    private static Task<GroundworkIdentityWriteResult> SaveAsync<TDocument>(
+        GroundworkIdentityMutationBatch unitOfWork,
         string documentKind,
         string id,
         TDocument document,
         long? expectedVersion,
         CancellationToken cancellationToken) =>
-        unitOfWork.SaveAsync(
-            new SaveDocumentRequest(
-                documentKind,
-                id,
-                IdentityStorageManifest.SchemaVersion,
-                Serialize(document),
-                expectedVersion),
-            cancellationToken);
+        Task.FromResult(unitOfWork.Save(
+            GroundworkIdentityDocumentRows.Write(documentKind, id, document, expectedVersion),
+            cancellationToken));
 
-    private static DocumentEnvelope Placeholder(string kind) =>
-        new(kind, "none", IdentityStorageManifest.SchemaVersion, 0, "{}", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
+    private static GroundworkIdentityWriteResult Placeholder(string kind) =>
+        GroundworkIdentityWriteResult.Saved(new GroundworkIdentityRow(
+            kind, "none", IdentityStorageManifest.SchemaVersion, 0, "{}", new Dictionary<string, object?>()));
 
     private static void EnsureOwner(
         string actualTenantId,
@@ -628,6 +634,6 @@ public sealed class GroundworkIdentityAuthorityAggregateCoordinator
     private static string Serialize<TDocument>(TDocument document) =>
         JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
 
-    private static TDocument Deserialize<TDocument>(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<TDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!;
+    private static TDocument Deserialize<TDocument>(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<TDocument>(row);
 }

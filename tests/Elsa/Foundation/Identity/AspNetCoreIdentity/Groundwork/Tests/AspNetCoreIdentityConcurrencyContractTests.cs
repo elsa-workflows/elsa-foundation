@@ -6,10 +6,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
 using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
@@ -55,8 +52,8 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
         Assert.All(
             results.Where(result => !result.Succeeded),
             duplicate => Assert.Contains(duplicate.Errors, error => error.Code == nameof(IdentityErrorDescriber.DuplicateUserName)));
-        Assert.Single(fixture.Documents.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
-        Assert.Single(fixture.Documents.Snapshot(IdentityStorageManifest.UserNameReservationDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.UserNameReservationDocumentKind));
     }
 
     [Fact]
@@ -349,22 +346,27 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
     [Trait("Category", "Sqlite")]
     public async Task File_backed_sqlite_independent_clients_linearize_identity_races()
     {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        await driver.InitializeAsync();
-        await driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant));
-        await using var firstClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None);
-        await using var secondClient = await driver.OpenPhysicalClientAsync(access, CancellationToken.None);
-        var firstStores = CreateSqliteStores(firstClient);
-        var secondStores = CreateSqliteStores(secondClient);
-
-        for (var iteration = 0; iteration < SqliteRaceIterations; iteration++)
+        var path = Path.Combine(Path.GetTempPath(), $"identity-concurrency-{Guid.NewGuid():N}.db");
+        try
         {
-            await DuplicateCreateRaceAsync(firstStores.Users, secondStores.Users, iteration);
-            await StaleRevisionRaceAsync(firstStores.Users, secondStores.Users, iteration);
-            await LockoutRaceAsync(firstStores.Users, secondStores.Users, iteration);
-            await LinkDeleteRaceAsync(firstStores, secondStores, firstClient.DocumentStore, iteration);
-            await SeedLikeCreateRaceAsync(firstStores.Users, secondStores.Users, iteration);
+            using var persistence = new AspNetCoreIdentityTestPersistence(
+                new SqliteProviderFactory().Create($"Data Source={path}"));
+            var firstStores = CreateSqliteStores(persistence);
+            var secondStores = CreateSqliteStores(persistence);
+
+            for (var iteration = 0; iteration < SqliteRaceIterations; iteration++)
+            {
+                await DuplicateCreateRaceAsync(firstStores.Users, secondStores.Users, iteration);
+                await StaleRevisionRaceAsync(firstStores.Users, secondStores.Users, iteration);
+                await LockoutRaceAsync(firstStores.Users, secondStores.Users, iteration);
+                await LinkDeleteRaceAsync(firstStores, secondStores, persistence, iteration);
+                await SeedLikeCreateRaceAsync(firstStores.Users, secondStores.Users, iteration);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete($"{path}.schema.lock");
         }
     }
 
@@ -464,7 +466,7 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
     private static async Task LinkDeleteRaceAsync(
         SqliteStores linkStores,
         SqliteStores deleteStores,
-        IDocumentStore documentStore,
+        AspNetCoreIdentityTestPersistence persistence,
         int iteration)
     {
         var source = RaceUser($"link-delete-{iteration}");
@@ -495,7 +497,7 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
         var deleteTask = Task.Run(() => deleteStores.Users.DeleteAsync(deleteUser!, CancellationToken.None));
         await Task.WhenAll(linkTask, deleteTask);
 
-        await AssertNoUserRoleOrphanAsync(documentStore, source.TenantId, source.Id, role.Id);
+        await AssertNoUserRoleOrphanAsync(persistence, source.TenantId, source.Id, role.Id);
     }
 
     private static bool IsExpectedLinkDeleteRaceLoser(InvalidOperationException exception) =>
@@ -523,18 +525,17 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
     }
 
     private static async Task AssertNoUserRoleOrphanAsync(
-        IDocumentStore store,
+        AspNetCoreIdentityTestPersistence persistence,
         string tenantId,
         string userId,
         string roleId)
     {
+        var accessor = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)));
+        var rows = persistence.Rows(accessor);
         var linkId = IdentityDocumentId.From(tenantId, userId, roleId);
-        var user = await LoadUserDocumentOrDefaultAsync(store, tenantId, userId);
-        var role = await LoadRoleDocumentAsync(store, tenantId, roleId);
-        var link = await store.LoadAsync(
-            IdentityStorageManifest.UserRoleDocumentKind,
-            linkId,
-            CancellationToken.None);
+        var user = LoadUserDocumentOrDefault(rows, tenantId, userId);
+        var role = LoadRoleDocument(rows, tenantId, roleId);
+        var link = rows.Read(IdentityStorageManifest.UserRoleDocumentKind, linkId);
 
         Assert.NotNull(role);
         if (link is null)
@@ -549,43 +550,39 @@ public sealed class AspNetCoreIdentityConcurrencyContractTests
         Assert.Contains(linkId, role!.UserLinkIds ?? []);
     }
 
-    private static async Task<IdentityUserDocument?> LoadUserDocumentOrDefaultAsync(
-        IDocumentStore store,
+    private static IdentityUserDocument? LoadUserDocumentOrDefault(
+        GroundworkIdentityRowStore rows,
         string tenantId,
         string userId)
     {
-        var envelope = await store.LoadAsync(
+        var envelope = rows.Read(
             IdentityStorageManifest.IdentityUserDocumentKind,
-            IdentityCompositeDocumentId.From(tenantId, userId),
-            CancellationToken.None);
+            IdentityCompositeDocumentId.From(tenantId, userId));
         return envelope is null
             ? null
-            : JsonSerializer.Deserialize<IdentityUserDocument>(envelope.ContentJson, IdentityGroundworkJson.Options);
+            : JsonSerializer.Deserialize<IdentityUserDocument>(envelope.CanonicalJson, IdentityGroundworkJson.Options);
     }
 
-    private static async Task<IdentityRoleDocument?> LoadRoleDocumentAsync(
-        IDocumentStore store,
+    private static IdentityRoleDocument? LoadRoleDocument(
+        GroundworkIdentityRowStore rows,
         string tenantId,
         string roleId)
     {
-        var envelope = await store.LoadAsync(
+        var envelope = rows.Read(
             IdentityStorageManifest.IdentityRoleDocumentKind,
-            IdentityCompositeDocumentId.From(tenantId, roleId),
-            CancellationToken.None);
+            IdentityCompositeDocumentId.From(tenantId, roleId));
         return envelope is null
             ? null
-            : JsonSerializer.Deserialize<IdentityRoleDocument>(envelope.ContentJson, IdentityGroundworkJson.Options);
+            : JsonSerializer.Deserialize<IdentityRoleDocument>(envelope.CanonicalJson, IdentityGroundworkJson.Options);
     }
 
-    private static SqliteStores CreateSqliteStores(GroundworkProviderClient client)
+    private static SqliteStores CreateSqliteStores(AspNetCoreIdentityTestPersistence persistence)
     {
-        var bounded = client.BoundedDocumentStore
-            ?? throw new InvalidOperationException("The SQLite Groundwork provider client requires a bounded document-store runtime.");
         var accessor = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(
             new PersistenceScope(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant)));
         return new SqliteStores(
-            new GroundworkIdentityUserStore(client.DocumentStore, accessor, bounded),
-            new GroundworkIdentityRoleStore(client.DocumentStore, accessor, bounded));
+            new GroundworkIdentityUserStore(persistence.Rows(accessor), accessor),
+            new GroundworkIdentityRoleStore(persistence.Rows(accessor), accessor));
     }
 
     private static AspNetCoreIdentityScenarioData.User RaceUser(string suffix)

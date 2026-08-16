@@ -1,5 +1,3 @@
-using Groundwork.Documents.UnitOfWork;
-
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
 /// <summary>
@@ -12,11 +10,11 @@ public sealed record GroundworkIdentityAtomicMutation
     private GroundworkIdentityAtomicMutation(
         string operationName,
         IdentityRequestFingerprint requestFingerprint,
-        DocumentCommitScope commitScope)
+        IReadOnlyList<string> unitIds)
     {
         OperationName = operationName;
         RequestFingerprint = requestFingerprint;
-        CommitScope = commitScope;
+        UnitIds = unitIds;
         OperationId = IdentityDocumentId.From("atomic-mutation", operationName, requestFingerprint.Value);
         MutationReceiptId = IdentityDocumentId.From("mutation-receipt", OperationId);
     }
@@ -24,7 +22,7 @@ public sealed record GroundworkIdentityAtomicMutation
     public string OperationName { get; }
     public string OperationId { get; }
     public IdentityRequestFingerprint RequestFingerprint { get; }
-    public DocumentCommitScope CommitScope { get; }
+    public IReadOnlyList<string> UnitIds { get; }
     public string MutationReceiptId { get; }
 
     public static GroundworkIdentityAtomicMutation Create(
@@ -43,8 +41,7 @@ public sealed record GroundworkIdentityAtomicMutation
                 nameof(documentKinds));
         }
 
-        var commitScope = new DocumentCommitScope(
-            documentKinds.Distinct(StringComparer.Ordinal).ToArray());
-        return new GroundworkIdentityAtomicMutation(operationName, requestFingerprint, commitScope);
+        var unitIds = documentKinds.Distinct(StringComparer.Ordinal).ToArray();
+        return new GroundworkIdentityAtomicMutation(operationName, requestFingerprint, unitIds);
     }
 }

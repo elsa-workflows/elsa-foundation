@@ -1,7 +1,6 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Testing;
 using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
@@ -79,16 +78,16 @@ public sealed class AspNetCoreIdentityRoleStoreContractTests
         Assert.All(
             results.Where(result => !result.Succeeded),
             duplicate => Assert.Contains(duplicate.Errors, error => error.Code == nameof(IdentityErrorDescriber.DuplicateRoleName)));
-        Assert.Single(fixture.Documents.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind));
-        Assert.Single(fixture.Documents.Snapshot(IdentityStorageManifest.RoleNameReservationDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.RoleNameReservationDocumentKind));
     }
 
     [Fact]
     public async Task Same_role_name_is_allowed_in_different_tenants()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
-        var firstFixture = new AspNetCoreIdentityGroundworkStoreFixture("tenant-a", documents);
-        var secondFixture = new AspNetCoreIdentityGroundworkStoreFixture("tenant-b", documents);
+        var persistence = new AspNetCoreIdentityTestPersistence();
+        var firstFixture = new AspNetCoreIdentityGroundworkStoreFixture("tenant-a", persistence);
+        var secondFixture = new AspNetCoreIdentityGroundworkStoreFixture("tenant-b", persistence);
         var first = AspNetCoreIdentityScenarioData.CreateIdentityRole(AspNetCoreIdentityScenarioData.PrimaryRole);
         var second = AspNetCoreIdentityScenarioData.CreateIdentityRole(AspNetCoreIdentityScenarioData.PrimaryRole);
         first.Id = "role-a";
@@ -97,7 +96,8 @@ public sealed class AspNetCoreIdentityRoleStoreContractTests
 
         Assert.True((await firstFixture.RoleStore().CreateAsync(first, CancellationToken.None)).Succeeded);
         Assert.True((await secondFixture.RoleStore().CreateAsync(second, CancellationToken.None)).Succeeded);
-        Assert.Equal(2, documents.Snapshot(IdentityStorageManifest.RoleNameReservationDocumentKind).Count);
+        Assert.Single(firstFixture.Snapshot(IdentityStorageManifest.RoleNameReservationDocumentKind));
+        Assert.Single(secondFixture.Snapshot(IdentityStorageManifest.RoleNameReservationDocumentKind));
     }
 
     private static GroundworkIdentityRoleStore CreateStore() =>

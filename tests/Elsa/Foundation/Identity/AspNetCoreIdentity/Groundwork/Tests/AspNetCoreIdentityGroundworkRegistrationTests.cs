@@ -5,9 +5,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Authentication;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Scoping;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -97,8 +95,8 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
     public void Groundwork_registration_owns_session_invalidation_and_cookie_replay_validation()
     {
         var services = RegisterGroundworkIdentity();
-        var invalidator = Assert.Single(services.Where(descriptor =>
-            descriptor.ServiceType == typeof(IAuthenticationSessionInvalidator)));
+        var invalidator = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IAuthenticationSessionInvalidator));
         Assert.Equal(typeof(GroundworkIdentitySessionInvalidator), invalidator.ImplementationType);
         using var provider = services.BuildServiceProvider();
 
@@ -124,28 +122,20 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
     }
 
     [Fact]
-    public void Production_registration_backs_atomic_writes_with_the_registered_session_factory()
+    public void Production_registration_declares_the_v2_identity_units_and_atomic_write_seam()
     {
-        var sessionFactory = new StubSessionFactory();
-        var services = new ServiceCollection();
-        services.AddScoped<IGroundworkStoreSessionFactory>(_ => sessionFactory);
-        services.AddScoped<IDocumentStore>(_ => new InMemoryDocumentStore(IdentityStorageManifest.Create()));
-        RegisterGroundworkIdentity(services);
+        var services = RegisterGroundworkIdentity();
+        var registry = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .ImplementationInstance as GroundworkStorageUnitRegistry;
+        Assert.NotNull(registry);
+        Assert.Equal(17, registry!.Registrations.Count);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IGroundworkStorageSessionSource));
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
         var atomicWrite = scope.ServiceProvider.GetRequiredService<GroundworkIdentityAtomicWrite>();
-        var sessionFactoryField = typeof(GroundworkIdentityAtomicWrite).GetField(
-            "_sessionFactory",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        var directStoreField = typeof(GroundworkIdentityAtomicWrite).GetField(
-            "_directStore",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        Assert.NotNull(sessionFactoryField);
-        Assert.NotNull(directStoreField);
-        Assert.Same(sessionFactory, sessionFactoryField!.GetValue(atomicWrite));
-        Assert.Null(directStoreField!.GetValue(atomicWrite));
+        Assert.NotNull(atomicWrite);
     }
 
     private static IServiceCollection RegisterGroundworkIdentity()
@@ -169,28 +159,6 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
         return services;
     }
 
-    private sealed class StubSessionFactory : IGroundworkStoreSessionFactory
-    {
-        public ValueTask<GroundworkStoreSession> CreateAsync(
-            PersistenceAccessPolicy requiredPolicy,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<GroundworkStoreSession> CreateOrdinaryGlobalAsync(
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<TResult> ExecutePrivilegedAsync<TResult>(
-            Func<GroundworkStoreSession, CancellationToken, ValueTask<TResult>> operation,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<TResult> ExecutePrivilegedAcrossScopesAsync<TResult>(
-            Func<GroundworkStoreSession, CancellationToken, ValueTask<TResult>> operation,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
-
     private sealed class HostCookieEvents : CookieAuthenticationEvents;
 
     private static Type RequiredType(string typeName)
@@ -208,7 +176,7 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
 
     private static void AssertScoped<TService>(IServiceCollection services)
     {
-        var descriptor = Assert.Single(services.Where(candidate => candidate.ServiceType == typeof(TService)));
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(TService));
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
 }

@@ -4,8 +4,10 @@ using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Composition;
+using Groundwork.Kernel;
+using Groundwork.Store;
+using Groundwork.Testing;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
@@ -101,42 +103,79 @@ internal static class IdentityGroundworkFixtures
         RoleIds: new HashSet<string> { "role-1" },
         DirectPermissions: new HashSet<string> { "secrets:read" });
 
-    public static InMemoryDocumentStore NewDocumentStore() => new(IdentityStorageManifest.Create());
+    public static IdentityTestPersistence NewDocumentStore() => new();
 
-    public static GroundworkUserStore UserStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkUserStore UserStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkRoleStore RoleStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkRoleStore RoleStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkApplicationStore ApplicationStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkApplicationStore ApplicationStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkCredentialStore CredentialStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkCredentialStore CredentialStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkClaimMappingStore ClaimMappingStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkClaimMappingStore ClaimMappingStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkProviderConfigurationStore ProviderConfigurationStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkProviderConfigurationStore ProviderConfigurationStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkProviderConfigurationStore GlobalProviderConfigurationStore(IDocumentStore store) =>
-        new(store, new FixedAccessContextAccessor(PersistenceAccessContext.PrivilegedGlobal(
-            new PersistenceAccessPurpose("seed-global-provider-configuration"))));
+    public static GroundworkProviderConfigurationStore GlobalProviderConfigurationStore(IdentityTestPersistence persistence)
+    {
+        var access = new FixedAccessContextAccessor(PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("seed-global-provider-configuration")));
+        return new GroundworkProviderConfigurationStore(persistence.Rows(access), access);
+    }
 
-    public static GroundworkExternalIdentityStore ExternalIdentityStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkExternalIdentityStore ExternalIdentityStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
-    public static GroundworkTenantMembershipStore TenantMembershipStore(IDocumentStore store, string scope = "tenant-1") =>
-        new(store, Accessor(scope));
+    public static GroundworkTenantMembershipStore TenantMembershipStore(IdentityTestPersistence persistence, string scope = "tenant-1") =>
+        new(persistence.Rows(Accessor(scope)), Accessor(scope));
 
     public static IPersistenceAccessContextAccessor Accessor(string scope = "tenant-1") =>
         new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
+
+    public static IPersistenceAccessContextAccessor GlobalAccessor() =>
+        new FixedAccessContextAccessor(PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("identity-test-global")));
 
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
         : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
     }
+}
+
+internal sealed class IdentityTestPersistence : IGroundworkStorageSessionSource, IDisposable
+{
+    private readonly IReadOnlyDictionary<string, StorageUnit> units = IdentityV2StorageManifest.CreateUnits()
+        .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
+    private readonly IStorageProviderConnection connection;
+
+    public IdentityTestPersistence()
+    {
+        connection = new InMemoryProviderFactory().Create($"identity-tests:{Guid.NewGuid():N}");
+        foreach (var unit in units.Values)
+            connection.Schema.Apply(unit);
+    }
+
+    public GroundworkIdentityRowStore Rows(IPersistenceAccessContextAccessor access) => new(this, access);
+
+    public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+        connection.OpenSession(Unit(unitId, targetName), access);
+
+    public IUnitOfWork BeginUnitOfWork(
+        StorageAccess access,
+        BatchWriteOptions options,
+        IReadOnlyList<string> unitIds,
+        string? targetName = null) =>
+        connection.BeginUnitOfWork(access, options, unitIds.Select(id => Unit(id, targetName)).ToArray());
+
+    public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+
+    public void Dispose() => connection.Dispose();
 }

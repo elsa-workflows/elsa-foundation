@@ -1,11 +1,7 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Stores;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -16,52 +12,50 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// through the declared index.
 /// </summary>
 public sealed class GroundworkExternalIdentityStore(
-    IDocumentStore store,
+    GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IBoundedDocumentStore? boundedStore = null,
     GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore
 {
     private const int MaxRelationshipMaterialization = 100_000;
 
-    private readonly IBoundedDocumentStore? _boundedStore = boundedStore ?? store as IBoundedDocumentStore;
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
-        relationshipCoordinator ?? new GroundworkIdentityAuthorityRelationshipCoordinator(store);
+        relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
 
-    public async ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
+    public ValueTask<ExternalIdentityRecord?> FindBySubjectAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, providerSubject),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
-    public async ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
+    public ValueTask<IamRevisionedRecord<ExternalIdentityRecord>?> FindBySubjectWithRevisionAsync(string tenantId, string provider, string providerSubject, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider, providerSubject),
             cancellationToken);
 
-        return envelope is null ? null : new IamRevisionedRecord<ExternalIdentityRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+        return ValueTask.FromResult(row is null ? null : new IamRevisionedRecord<ExternalIdentityRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
-    public async ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = await BoundedDocumentQueryPager.QueryAllAsync(
-            BoundedStore,
+        var documents = rows.Query(
             IdentityStorageManifest.ExternalLoginDocumentKind,
-            IdentityStorageManifest.ListUserLoginsQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.UserLookupKeyField,
-                IdentityDocumentId.From(tenantId, userId)))],
-            cancellationToken,
-            MaxRelationshipMaterialization);
-        return documents.Select(Map).ToArray();
+                GroundworkIdentityRowComparison.Equal,
+                IdentityDocumentId.From(tenantId, userId),
+                IdentityV2StorageManifest.IdField,
+                Take: MaxRelationshipMaterialization),
+            cancellationToken);
+        return ValueTask.FromResult<IReadOnlyList<ExternalIdentityRecord>>(documents.Select(Map).ToArray());
     }
 
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
@@ -71,7 +65,7 @@ public sealed class GroundworkExternalIdentityStore(
             expectedVersion: null,
             enforceExpectedVersion: false,
             cancellationToken);
-        if (result.Status is not DocumentStoreWriteStatus.Saved)
+        if (!result.Succeeded)
         {
             throw new InvalidOperationException(
                 $"Groundwork external-identity save returned {result.Status}; use the revision-aware contract for an explicit owner rebind.");
@@ -87,7 +81,7 @@ public sealed class GroundworkExternalIdentityStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+    private async ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
         ExternalIdentityRecord externalIdentity,
         long? expectedVersion,
         bool enforceExpectedVersion,
@@ -117,9 +111,6 @@ public sealed class GroundworkExternalIdentityStore(
             cancellationToken);
     }
 
-    private IBoundedDocumentStore BoundedStore => _boundedStore
-        ?? throw new InvalidOperationException("External identity queries require an admitted bounded document-store runtime.");
-
-    private static ExternalIdentityRecord Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IdentityExternalLoginDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!.ExternalIdentity;
+    private static ExternalIdentityRecord Map(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<IdentityExternalLoginDocument>(row).ExternalIdentity;
 }
