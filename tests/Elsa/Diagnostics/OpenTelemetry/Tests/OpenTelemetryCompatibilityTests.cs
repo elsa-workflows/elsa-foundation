@@ -18,6 +18,11 @@ using System.Text.Json.Nodes;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
+internal sealed class OpenApiApprovalValidationException(string key, string reason) : Exception($"{key}: {reason}")
+{
+    public string Key { get; } = key;
+}
+
 public sealed class OpenTelemetryCompatibilityTests
 {
     [Fact]
@@ -240,65 +245,116 @@ public sealed class OpenTelemetryCompatibilityTests
     public void OpenApi_approval_validator_rejects_duplicate_and_noop_route_facets()
     {
         const string route = "{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Before\",\"afterOperationId\":\"After\"}";
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals($"[{route},{route}]", "[]", "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+        AssertApprovalFailure(() => ValidateSyntheticApprovals($"[{route},{route}]", "[]", "[]"), "route:GET /sample", "Duplicate approval facet.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Before\",\"afterOperationId\":\"Before\"}]",
             "[]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "route:GET /sample", "operationId before and after values must differ.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Before\"}]",
             "[]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "route:GET /sample", "Approval facet requires both beforeOperationId and afterOperationId.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[{\"method\":\"GET\",\"path\":\"/sample\",\"afterOperationId\":\"After\"}]",
             "[]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "route:GET /sample", "Approval facet requires both beforeOperationId and afterOperationId.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[{\"method\":\"GET\",\"path\":\"/sample\",\"reason\":\"stale\"}]",
             "[]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "route:GET /sample", "Approval does not declare a recognized changed facet.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[{\"method\":\"GET\",\"path\":\"/stale\",\"beforeOperationId\":\"Before\",\"afterOperationId\":\"After\"}]",
             "[]",
-            "[]"));
+            "[]"), "route:GET /stale", "Route is absent from the before document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Before\",\"afterOperationId\":\"After\",\"extra\":true}]",
+            "[]",
+            "[]"), "route:GET /sample", "Unknown approval property 'extra'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Wrong\",\"afterOperationId\":\"After\"}]",
+            "[]",
+            "[]"), "route:GET /sample", "before operationId does not match document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[{\"method\":\"GET\",\"path\":\"/sample\",\"beforeOperationId\":\"Before\",\"afterOperationId\":\"Wrong\"}]",
+            "[]",
+            "[]"), "route:GET /sample", "after operationId does not match document.");
     }
 
     [Fact]
     public void OpenApi_approval_validator_rejects_duplicate_and_noop_schema_facets()
     {
         const string schema = "{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"object\"},\"after\":{\"type\":\"string\"}}";
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals("[]", $"[{schema},{schema}]", "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+        AssertApprovalFailure(() => ValidateSyntheticApprovals("[]", $"[{schema},{schema}]", "[]"), "component:schema/Sample", "Duplicate approval facet.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"object\"},\"after\":{\"type\":\"object\"}}]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "component:schema/Sample", "before and after values must differ.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[{\"kind\":\"schema\",\"name\":\"Sample\",\"after\":{\"type\":\"string\"}}]",
-            "[]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[]"), "component:schema/Sample", "Approval is missing 'before'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"object\"}}]",
-            "[]"));
+            "[]"), "component:schema/Sample", "Approval is missing 'after'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"object\"},\"after\":{\"type\":\"string\"},\"extra\":true}]",
+            "[]"), "component:schema/Sample", "Unknown approval property 'extra'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"array\"},\"after\":{\"type\":\"string\"}}]",
+            "[]"), "component:schema/Sample", "before value does not match document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[{\"kind\":\"schema\",\"name\":\"Sample\",\"before\":{\"type\":\"object\"},\"after\":{\"type\":\"array\"}}]",
+            "[]"), "component:schema/Sample", "after value does not match document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[{\"kind\":\"schema\",\"name\":\"Missing\",\"before\":null,\"after\":{\"type\":\"string\"}}]",
+            "[]"), "component:schema/Missing", "after schema is absent from document.");
     }
 
     [Fact]
     public void OpenApi_approval_validator_rejects_duplicate_and_noop_document_facets()
     {
         const string document = "{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}],\"after\":[{\"name\":\"After\"}]}";
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals("[]", "[]", $"[{document},{document}]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+        AssertApprovalFailure(() => ValidateSyntheticApprovals("[]", "[]", $"[{document},{document}]"), "document:tags", "Duplicate approval facet.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[]",
-            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}],\"after\":[{\"name\":\"Before\"}]}]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}],\"after\":[{\"name\":\"Before\"}]}]"), "document:tags", "before and after values must differ.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[]",
-            "[{\"property\":\"tags\",\"after\":[{\"name\":\"After\"}]}]"));
-        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => ValidateSyntheticApprovals(
+            "[{\"property\":\"tags\",\"after\":[{\"name\":\"After\"}]}]"), "document:tags", "Approval is missing 'before'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
             "[]",
             "[]",
-            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}]}]"));
+            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}]}]"), "document:tags", "Approval is missing 'after'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[]",
+            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Wrong\"}],\"after\":[{\"name\":\"After\"}]}]"), "document:tags", "before value does not match document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[]",
+            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}],\"after\":[{\"name\":\"Wrong\"}]}]"), "document:tags", "after value does not match document.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[]",
+            "[{\"property\":\"tags\",\"before\":[{\"name\":\"Before\"}],\"after\":[{\"name\":\"After\"}],\"extra\":true}]"), "document:tags", "Unknown approval property 'extra'.");
+        AssertApprovalFailure(() => ValidateSyntheticApprovals(
+            "[]",
+            "[]",
+            "[{\"property\":\"missing\",\"before\":[],\"after\":[{\"name\":\"After\"}]}]"), "document:missing", "before property is absent from document.");
+    }
+
+    private static void AssertApprovalFailure(Action action, string key, string reason)
+    {
+        var exception = Assert.Throws<OpenApiApprovalValidationException>(action);
+        Assert.Equal(key, exception.Key);
+        Assert.Equal($"{key}: {reason}", exception.Message);
     }
 
     private static void ValidateSyntheticApprovals(string routes, string components, string documents)
@@ -319,6 +375,24 @@ public sealed class OpenTelemetryCompatibilityTests
 
     private static class OpenApiApprovalValidator
     {
+        private static readonly IReadOnlySet<string> RouteApprovalProperties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "method", "path", "reason",
+            "beforeOperationId", "afterOperationId",
+            "beforeTags", "afterTags",
+            "beforeResponseStatuses", "afterResponseStatuses"
+        };
+
+        private static readonly IReadOnlySet<string> ComponentApprovalProperties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "kind", "name", "before", "after", "reason"
+        };
+
+        private static readonly IReadOnlySet<string> DocumentApprovalProperties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "property", "before", "after", "reason"
+        };
+
         public static IReadOnlySet<string> Validate(
             JsonElement beforeDocument,
             JsonElement afterDocument,
@@ -351,40 +425,41 @@ public sealed class OpenTelemetryCompatibilityTests
             JsonElement approval,
             ISet<string> facetKeys)
         {
-            Assert.True(approval.TryGetProperty("method", out var methodElement), "Route approval is missing method.");
-            Assert.True(approval.TryGetProperty("path", out var pathElement), "Route approval is missing path.");
-            var method = methodElement.GetString()!;
-            var path = pathElement.GetString()!;
-            var routeKey = $"{method.ToUpperInvariant()} {path}";
-            Assert.True(TryGetOperation(beforeDocument, path, method, out var beforeOperation), $"Stale route approval: {routeKey} is absent from the before document.");
-            Assert.True(TryGetOperation(afterDocument, path, method, out var afterOperation), $"Stale route approval: {routeKey} is absent from the after document.");
+            var method = approval.TryGetProperty("method", out var methodElement) ? methodElement.GetString() : null;
+            var path = approval.TryGetProperty("path", out var pathElement) ? pathElement.GetString() : null;
+            var routeKey = $"route:{method?.ToUpperInvariant() ?? "<unknown>"} {path ?? "<unknown>"}";
+            Require(method is not null, routeKey, "Approval is missing 'method'.");
+            Require(path is not null, routeKey, "Approval is missing 'path'.");
+            ValidateProperties(approval, RouteApprovalProperties, routeKey);
+            Require(TryGetOperation(beforeDocument, path!, method!, out var beforeOperation), routeKey, "Route is absent from the before document.");
+            Require(TryGetOperation(afterDocument, path!, method!, out var afterOperation), routeKey, "Route is absent from the after document.");
 
             var facetCount = 0;
             if (TryGetChangedPair(approval, "beforeOperationId", "afterOperationId", routeKey, "operationId", out var beforeOperationId, out var afterOperationId))
             {
-                AssertOpenApiProperty(beforeOperation, "operationId", beforeOperationId, routeKey);
-                AssertOpenApiProperty(afterOperation, "operationId", afterOperationId, routeKey);
-                AddFacet(facetKeys, RouteFacetKey(routeKey, "operationId"));
+                AssertOpenApiProperty(beforeOperation, "operationId", beforeOperationId, routeKey, "before");
+                AssertOpenApiProperty(afterOperation, "operationId", afterOperationId, routeKey, "after");
+                AddFacet(facetKeys, RouteFacetKey($"{method!.ToUpperInvariant()} {path}", "operationId"), routeKey);
                 facetCount++;
             }
 
             if (TryGetChangedPair(approval, "beforeTags", "afterTags", routeKey, "tags", out var beforeTags, out var afterTags))
             {
-                AssertOpenApiProperty(beforeOperation, "tags", beforeTags, routeKey);
-                AssertOpenApiProperty(afterOperation, "tags", afterTags, routeKey);
-                AddFacet(facetKeys, RouteFacetKey(routeKey, "tags"));
+                AssertOpenApiProperty(beforeOperation, "tags", beforeTags, routeKey, "before");
+                AssertOpenApiProperty(afterOperation, "tags", afterTags, routeKey, "after");
+                AddFacet(facetKeys, RouteFacetKey($"{method!.ToUpperInvariant()} {path}", "tags"), routeKey);
                 facetCount++;
             }
 
             if (TryGetChangedPair(approval, "beforeResponseStatuses", "afterResponseStatuses", routeKey, "responseStatuses", out var beforeStatuses, out var afterStatuses))
             {
-                Assert.True(JsonElement.DeepEquals(beforeStatuses, GetResponseStatuses(beforeOperation)), $"Before response statuses do not match {routeKey}.");
-                Assert.True(JsonElement.DeepEquals(afterStatuses, GetResponseStatuses(afterOperation)), $"After response statuses do not match {routeKey}.");
-                AddFacet(facetKeys, RouteFacetKey(routeKey, "responseStatuses"));
+                Require(JsonElement.DeepEquals(beforeStatuses, GetResponseStatuses(beforeOperation)), routeKey, "before response statuses do not match document.");
+                Require(JsonElement.DeepEquals(afterStatuses, GetResponseStatuses(afterOperation)), routeKey, "after response statuses do not match document.");
+                AddFacet(facetKeys, RouteFacetKey($"{method!.ToUpperInvariant()} {path}", "responseStatuses"), routeKey);
                 facetCount++;
             }
 
-            Assert.True(facetCount > 0, $"Route approval has no recognized changed facets: {routeKey}.");
+            Require(facetCount > 0, routeKey, "Approval does not declare a recognized changed facet.");
         }
 
         private static void ValidateComponentApproval(
@@ -393,19 +468,21 @@ public sealed class OpenTelemetryCompatibilityTests
             JsonElement approval,
             ISet<string> facetKeys)
         {
-            Assert.True(approval.TryGetProperty("kind", out var kind), "Component approval is missing kind.");
-            Assert.Equal("schema", kind.GetString());
-            Assert.True(approval.TryGetProperty("name", out var nameElement), "Component approval is missing name.");
-            Assert.True(approval.TryGetProperty("before", out var before), "Component approval is missing before.");
-            Assert.True(approval.TryGetProperty("after", out var after), "Component approval is missing after.");
-            var name = nameElement.GetString()!;
-            Assert.False(JsonElement.DeepEquals(before, after), $"Component approval is a no-op: schema/{name}.");
+            var name = approval.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
+            var key = ComponentFacetKey(name ?? "<unknown>");
+            ValidateProperties(approval, ComponentApprovalProperties, key);
+            var kind = RequiredProperty(approval, "kind", key);
+            Require(kind.GetString() == "schema", key, "kind must be 'schema'.");
+            var before = RequiredProperty(approval, "before", key);
+            var after = RequiredProperty(approval, "after", key);
+            Require(name is not null, key, "Approval is missing 'name'.");
+            Require(!JsonElement.DeepEquals(before, after), key, "before and after values must differ.");
 
             var beforeSchemas = beforeDocument.GetProperty("components").GetProperty("schemas");
             var afterSchemas = afterDocument.GetProperty("components").GetProperty("schemas");
-            AssertSchemaValue(beforeSchemas, name, before, "before");
-            AssertSchemaValue(afterSchemas, name, after, "after");
-            AddFacet(facetKeys, ComponentFacetKey(name));
+            AssertSchemaValue(beforeSchemas, name!, before, "before", key);
+            AssertSchemaValue(afterSchemas, name!, after, "after", key);
+            AddFacet(facetKeys, key, key);
         }
 
         private static void ValidateDocumentApproval(
@@ -414,16 +491,18 @@ public sealed class OpenTelemetryCompatibilityTests
             JsonElement approval,
             ISet<string> facetKeys)
         {
-            Assert.True(approval.TryGetProperty("property", out var propertyElement), "Document approval is missing property.");
-            Assert.True(approval.TryGetProperty("before", out var before), "Document approval is missing before.");
-            Assert.True(approval.TryGetProperty("after", out var after), "Document approval is missing after.");
-            var property = propertyElement.GetString()!;
-            Assert.False(JsonElement.DeepEquals(before, after), $"Document approval is a no-op: {property}.");
-            Assert.True(beforeDocument.TryGetProperty(property, out var actualBefore), $"Stale document approval: {property} is absent from the before document.");
-            Assert.True(afterDocument.TryGetProperty(property, out var actualAfter), $"Stale document approval: {property} is absent from the after document.");
-            Assert.True(JsonElement.DeepEquals(before, actualBefore), $"Before document approval does not match {property}.");
-            Assert.True(JsonElement.DeepEquals(after, actualAfter), $"After document approval does not match {property}.");
-            AddFacet(facetKeys, DocumentFacetKey(property));
+            var property = approval.TryGetProperty("property", out var propertyElement) ? propertyElement.GetString() : null;
+            var key = DocumentFacetKey(property ?? "<unknown>");
+            ValidateProperties(approval, DocumentApprovalProperties, key);
+            Require(property is not null, key, "Approval is missing 'property'.");
+            var before = RequiredProperty(approval, "before", key);
+            var after = RequiredProperty(approval, "after", key);
+            Require(!JsonElement.DeepEquals(before, after), key, "before and after values must differ.");
+            Require(beforeDocument.TryGetProperty(property!, out var actualBefore), key, "before property is absent from document.");
+            Require(afterDocument.TryGetProperty(property!, out var actualAfter), key, "after property is absent from document.");
+            Require(JsonElement.DeepEquals(before, actualBefore), key, "before value does not match document.");
+            Require(JsonElement.DeepEquals(after, actualAfter), key, "after value does not match document.");
+            AddFacet(facetKeys, key, key);
         }
 
         private static bool TryGetChangedPair(
@@ -437,11 +516,11 @@ public sealed class OpenTelemetryCompatibilityTests
         {
             var hasBefore = approval.TryGetProperty(beforeName, out before);
             var hasAfter = approval.TryGetProperty(afterName, out after);
-            Assert.True(hasBefore == hasAfter, $"Approval facet must provide both {beforeName} and {afterName}: {routeKey} {facet}.");
+            Require(hasBefore == hasAfter, routeKey, $"Approval facet requires both {beforeName} and {afterName}.");
             if (!hasBefore)
                 return false;
 
-            Assert.False(JsonElement.DeepEquals(before, after), $"Route approval is a no-op: {routeKey} {facet}.");
+            Require(!JsonElement.DeepEquals(before, after), routeKey, $"{facet} before and after values must differ.");
             return true;
         }
 
@@ -458,27 +537,45 @@ public sealed class OpenTelemetryCompatibilityTests
             return statuses.RootElement.Clone();
         }
 
-        private static void AssertOpenApiProperty(JsonElement operation, string property, JsonElement expected, string routeKey)
+        private static void AssertOpenApiProperty(JsonElement operation, string property, JsonElement expected, string routeKey, string side)
         {
-            Assert.True(operation.TryGetProperty(property, out var actual), $"OpenAPI operation is missing {property}: {routeKey}.");
-            Assert.True(JsonElement.DeepEquals(expected, actual), $"OpenAPI {property} does not match {routeKey}.");
+            Require(operation.TryGetProperty(property, out var actual), routeKey, $"{side} {property} is absent from document.");
+            Require(JsonElement.DeepEquals(expected, actual), routeKey, $"{side} {property} does not match document.");
         }
 
-        private static void AssertSchemaValue(JsonElement schemas, string name, JsonElement expected, string side)
+        private static void AssertSchemaValue(JsonElement schemas, string name, JsonElement expected, string side, string key)
         {
             var exists = schemas.TryGetProperty(name, out var actual);
             if (expected.ValueKind == JsonValueKind.Null)
             {
-                Assert.False(exists, $"Expected schema/{name} to be absent on the {side} side.");
+                Require(!exists, key, $"{side} schema is present in document.");
                 return;
             }
 
-            Assert.True(exists, $"Expected schema/{name} to exist on the {side} side.");
-            Assert.True(JsonElement.DeepEquals(expected, actual), $"Schema/{name} does not match the {side} side.");
+            Require(exists, key, $"{side} schema is absent from document.");
+            Require(JsonElement.DeepEquals(expected, actual), key, $"{side} value does not match document.");
         }
 
-        private static void AddFacet(ISet<string> facetKeys, string key) =>
-            Assert.True(facetKeys.Add(key), $"Duplicate OpenAPI approval facet: {key}.");
+        private static JsonElement RequiredProperty(JsonElement approval, string property, string key)
+        {
+            Require(approval.TryGetProperty(property, out var value), key, $"Approval is missing '{property}'.");
+            return value;
+        }
+
+        private static void ValidateProperties(JsonElement approval, IReadOnlySet<string> allowedProperties, string key)
+        {
+            foreach (var property in approval.EnumerateObject())
+                Require(allowedProperties.Contains(property.Name), key, $"Unknown approval property '{property.Name}'.");
+        }
+
+        private static void AddFacet(ISet<string> facetKeys, string key, string diagnosticKey) =>
+            Require(facetKeys.Add(key), diagnosticKey, "Duplicate approval facet.");
+
+        private static void Require(bool condition, string key, string reason)
+        {
+            if (!condition)
+                throw new OpenApiApprovalValidationException(key, reason);
+        }
     }
 
     private static void CompareResponseObjects(
