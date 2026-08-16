@@ -571,6 +571,32 @@ public static class ElsaRuntimeStorageManifest
     public const string PageRecurringTriggerSchedulesByArtifactQuery = "page-by-artifact";
     public const string ListDueRecurringTriggerSchedulesQuery = "list-due";
 
+    // Durable activation ledger (FR-B-006). One document per (DefinitionId, SlotName) records which activation
+    // is live in that lane and which activation source owns it. This is the ONE ledger every activation path
+    // shares on an engine — the publish pipeline and the runtime artifact importer both transition it through
+    // IWorkflowActivationAuthority — which is what makes a dual-reconciliation overlap structurally detectable
+    // instead of silently double-activating. Deliberately keyed WITHOUT a tenant axis, consistent with the
+    // definition-keyed serving projections it decides for (WorkflowTriggerBinding, RecurringTriggerSchedule).
+    public const string WorkflowActivationSlotDocumentKind = "workflowActivationSlot";
+
+    /// <summary>Flat definition id used by <c>IWorkflowActivationAuthority.ListByDefinitionAsync</c>.</summary>
+    public const string WorkflowActivationSlotDefinitionIdField = "workflowDefinitionId";
+
+    /// <summary>
+    /// Flat live-activation id. Absent on a cleared slot, and the index excludes missing values, so a
+    /// deactivated slot cannot be found by the "already live elsewhere" guard.
+    /// </summary>
+    public const string WorkflowActivationSlotActiveActivationIdField = "activeActivationId";
+
+    /// <summary>Index serving the per-definition slot listing.</summary>
+    public const string WorkflowActivationSlotByDefinition = "by-definition";
+
+    /// <summary>Index enforcing "one activation is live in at most one slot" across definitions.</summary>
+    public const string WorkflowActivationSlotByActiveActivation = "by-active-activation";
+
+    public const string ListWorkflowActivationSlotsByDefinitionQuery = "list-by-definition";
+    public const string FindWorkflowActivationSlotByActiveActivationQuery = "find-by-active-activation";
+
     /// <summary>
     /// Creates the provider-facing runtime manifest, including every bounded composite route layered
     /// over the provider-neutral legacy declarations.
@@ -1031,7 +1057,18 @@ public static class ElsaRuntimeStorageManifest
                 PublicationProjectionStateDocumentKind,
                 "Publication projection state",
                 [],
-                [])
+                []),
+            Unit(
+                WorkflowActivationSlotDocumentKind,
+                "Workflow activation slot",
+                [
+                    Keyword(WorkflowActivationSlotByDefinition, WorkflowActivationSlotDefinitionIdField),
+                    Keyword(WorkflowActivationSlotByActiveActivation, WorkflowActivationSlotActiveActivationIdField)
+                ],
+                [
+                    Query(ListWorkflowActivationSlotsByDefinitionQuery, WorkflowActivationSlotByDefinition),
+                    Query(FindWorkflowActivationSlotByActiveActivationQuery, WorkflowActivationSlotByActiveActivation)
+                ])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         [])

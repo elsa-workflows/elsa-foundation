@@ -227,6 +227,12 @@ public static class GroundworkRuntimeStoreRegistration
         // start trigger until the workflow is republished.
         lane.Replace<IRecurringTriggerScheduleStore, GroundworkRecurringTriggerScheduleStore>();
 
+        // Durable activation ledger (FR-B-006). Without this swap the record of which activation is live per
+        // (DefinitionId, SlotName) lives only in the process-local in-memory authority, so a restart forgets
+        // which activation is serving — and two nodes would each believe they own an unclaimed slot — even
+        // though the projections that activation decided for are durable.
+        lane.Replace<IWorkflowActivationAuthority, GroundworkWorkflowActivationAuthority>();
+
         return services;
     }
 }

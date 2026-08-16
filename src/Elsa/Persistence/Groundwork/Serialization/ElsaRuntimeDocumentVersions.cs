@@ -44,7 +44,8 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
+        [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind] = 1
     };
 
     /// <summary>The current versions of every runtime document kind, keyed by document kind.</summary>
