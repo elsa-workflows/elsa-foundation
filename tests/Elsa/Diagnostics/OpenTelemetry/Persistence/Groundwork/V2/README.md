@@ -55,16 +55,21 @@ outside the harness.
 
 ## Adapter size
 
-The #268 baseline records 25 source files and 4,834 physical lines under
-`src/Elsa/Diagnostics/*/Persistence/Groundwork`. The clean-break v2 adapter comprises 11 C# files and
-2,056 physical lines in the same scope: 14 fewer files and 2,778 fewer lines (57.5%). These counts include
-feature, declaration, codec, and store files; they exclude tests, generated output, and benchmark harnesses.
+At the frozen E3 baseline `4418bb9e38641ec92960e7cf27efbd2e583cda04`, the diagnostics adapter
+comprised 24 C# files and 4,827 physical lines. The clean-break v2 adapter comprises 11 C# files and
+2,056 physical lines in the identical scope: 13 fewer files and 2,771 fewer lines (57.4%). The scope is
+all C# files matching
+`^src/Elsa/Diagnostics/(?:[^/]+/)?Persistence/Groundwork/.+\.cs$`; it deliberately includes the shared
+diagnostics composition package as well as the OpenTelemetry and Structured Logs adapters, and excludes
+tests, generated output, project files, and benchmark harnesses. This anchored count supersedes the
+unanchored approximate inventory in #268.
 
 For current implementation inventory, use:
 
 ```sh
-git diff --stat 4418bb9e38641ec92960e7cf27efbd2e583cda04 -- \
-  'src/Elsa/Diagnostics/*/Persistence/Groundwork'
+git ls-tree -r --name-only 4418bb9e38641ec92960e7cf27efbd2e583cda04 \
+  src/Elsa/Diagnostics | \
+  rg '^src/Elsa/Diagnostics/(?:[^/]+/)?Persistence/Groundwork/.+\.cs$'
 rg -n "Groundwork\.DiagnosticRecords" src tests -g '*.{cs,csproj}'
 ```
 
