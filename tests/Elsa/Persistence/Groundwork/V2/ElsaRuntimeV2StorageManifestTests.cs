@@ -93,6 +93,57 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
         AssertIndex(executionState, "by-collection-and-pinned-artifact-v2", ["collection", "historyArtifactId", "historyWorkflowExecutionId"], unique: true);
         Assert.DoesNotContain(executionState.Indexes, index => index.Name == ElsaRuntimeV2StorageManifest.ByCollectionIndex);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryArtifactIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryAuthorityPartitionField, PortableType.String, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryAuthorityPartitionProjectionLength, nullable: true);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryDefinitionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: true);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryRunKindField, PortableType.Int32, null, nullable: true);
+        AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryCorrelationIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: true);
+        Assert.Equal(MissingValueBehavior.Excluded, executionState.Indexes.Single(index => index.Name == "by-collection-and-pinned-artifact-v2").MissingValues);
+
+        AssertColumn(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyProjectionLength);
+        AssertColumn(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind),
+            ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyProjectionLength);
+        var bookmark = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusTypeProjectionLength);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind),
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchIdProjectionLength);
+        var triggerBindingColumns = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
+        AssertColumn(triggerBindingColumns, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(triggerBindingColumns, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(triggerBindingColumns, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingStimulusTypeProjectionLength);
+        var alterationPlan = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind);
+        AssertColumn(alterationPlan, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField, PortableType.String, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdempotencyKeyHashProjectionLength);
+        AssertColumn(alterationPlan, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyProjectionLength);
+        AssertColumn(alterationPlan, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanActiveOrderKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanActiveOrderKeyProjectionLength);
+        var operational = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind);
+        AssertColumn(operational, ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, PortableType.Int32, null);
+        AssertColumn(operational, ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength);
+        AssertColumn(operational, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength);
+        var outbox = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField, PortableType.Int32, null);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, PortableType.String, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindProjectionLength);
+
+        foreach (var unit in units)
+        {
+            var portability = PortabilityValidator.Validate(unit);
+            Assert.True(
+                portability.IsPortable,
+                $"{unit.Id.Value} has portability refusals: {string.Join("; ", portability.Refusals.Select(refusal => $"{refusal.Code} {refusal.Path}: {refusal.Message}"))}");
+        }
     }
 
     [Fact]
@@ -106,6 +157,135 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         Assert.Contains(references, reference => reference.Name == "Groundwork.Store");
     }
 
+    [Fact]
+    public void Legacy_physicalizer_projection_and_residual_fields_are_declared_in_v2_units()
+    {
+        var physicalizerFields = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.StimulusHashField,
+                ElsaRuntimeV2StorageManifest.StimulusTypeField,
+                ElsaRuntimeV2StorageManifest.StimulusLookupKeyField,
+                ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField,
+                ElsaRuntimeV2StorageManifest.BookmarkIdField
+            ],
+            [ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.DurableTimerIdField,
+                ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField,
+                ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyField
+            ],
+            [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.ArtifactIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField
+            ],
+            [ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField,
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField,
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField,
+                ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryHasOperationalOwnerField
+            ],
+            [ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField
+            ],
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantPartitionField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantIdempotencyKeyField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanStatusField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanActiveOrderKeyField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobPlanIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobCaptureOrdinalField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobClaimableAtField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobStatusField,
+                ElsaRuntimeV2StorageManifest.WorkflowAlterationJobCheckpointCommitIdField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.StateField,
+                ElsaRuntimeV2StorageManifest.ScopeIdField,
+                ElsaRuntimeV2StorageManifest.ExpiresAtField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.StatusField,
+                ElsaRuntimeV2StorageManifest.TestScopeIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField,
+                ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.CollectionField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistorySortTicksField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryTenantIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryAuthorityPartitionField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryDefinitionIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryStatusField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryRunKindField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryCorrelationIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryArtifactIdField
+            ],
+            [ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.StimulusHashField,
+                ElsaRuntimeV2StorageManifest.StimulusTypeField,
+                ElsaRuntimeV2StorageManifest.StimulusLookupKeyField,
+                ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField,
+                ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField,
+                ElsaRuntimeV2StorageManifest.TriggerBindingIdField,
+                ElsaRuntimeV2StorageManifest.ArtifactIdField,
+                ElsaRuntimeV2StorageManifest.PublicationIdField
+            ]
+        };
+
+        foreach (var (unitId, fields) in physicalizerFields)
+        {
+            var unit = ElsaRuntimeV2StorageManifest.Require(unitId);
+            var declared = unit.Columns.Select(column => column.Name).ToHashSet(StringComparer.Ordinal);
+            Assert.All(fields, field => Assert.Contains(field, declared));
+        }
+    }
+
     private static void AssertIndex(
         StorageUnit unit,
         string name,
@@ -117,5 +297,18 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         Assert.Equal(columns, index.Columns.Select(column => column.Column));
         Assert.Equal(included ? MissingValueBehavior.Included : MissingValueBehavior.Excluded, index.MissingValues);
         Assert.Equal(unique, index.IsUnique);
+    }
+
+    private static void AssertColumn(
+        StorageUnit unit,
+        string name,
+        PortableType type,
+        int? maxLength,
+        bool nullable = true)
+    {
+        var column = unit.Columns.Single(candidate => candidate.Name == name);
+        Assert.Equal(type, column.Type);
+        Assert.Equal(maxLength, column.MaxLength);
+        Assert.Equal(nullable, column.IsNullable);
     }
 }
