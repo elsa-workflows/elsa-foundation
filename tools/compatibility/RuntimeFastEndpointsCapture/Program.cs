@@ -1,11 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Collections;
-using System.Reflection;
-using System.Security.Claims;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Encodings.Web;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
@@ -29,6 +21,14 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);
@@ -121,7 +121,7 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     cases.AddRange(routes.Select(route =>
         Create(route.Method, route.Name + "|trusted-success", route.Path, route.Template, "trusted",
             route.Method == HttpMethod.Get ? null : route.Name == "submit-alteration-plan" ? "{\"target\":null,\"alterations\":[]}" : "{}")));
-    cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name is "execute" or "redrive-dispatch") .Select(route =>
+    cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name is "execute" or "redrive-dispatch").Select(route =>
         Create(route.Method, route.Name + "|trusted-route-body-precedence", route.Path.Replace("sample", "route-id", StringComparison.Ordinal), route.Template, "trusted",
             route.Name == "execute" ? "{\"artifactId\":\"body-id\",\"sourceReferenceId\":\"body-source\"}" : "{\"dispatchId\":\"body-id\",\"requestId\":\"request-id\"}")));
     cases.AddRange(routes.Where(route => route.Method != HttpMethod.Get && route.Name != "cancel-alteration-plan").Select(route =>
