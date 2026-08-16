@@ -5,11 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
-    <PackageReference Include="Groundwork.MongoDb" />
-    <PackageReference Include="Groundwork.PostgreSql" />
-    <PackageReference Include="Groundwork.Sqlite" />
-    <PackageReference Include="Groundwork.SqlServer" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.1.0-preview.1" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.1.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.1.0-preview.1" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.1.0-preview.1" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
@@ -33,7 +32,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\Groundwork\Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>

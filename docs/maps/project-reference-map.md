@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 155
+- Source projects: 156
 - Test projects: 104
-- Direct project references: 1253
+- Direct project references: 1254
 
 ## Projects
 
@@ -63,7 +63,7 @@ Records direct project references only.
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.EFCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Tasks.Core |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite |
-| [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.Groundwork.Composition |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | source | Elsa.Events | - | default | Elsa.Pipelines.Core |
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Elsa.Events | - | default | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Events.Strategies](../../src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj) | source | Elsa.Events | - | default | Elsa.Events.Core<br>Elsa.Primitives |
@@ -102,7 +102,7 @@ Records direct project references only.
 | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | source | Elsa.Persistence | - | default | Elsa.Primitives |
 | [Elsa.Persistence.EFCore](../../src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj) | source | Elsa.Persistence | - | default | Elsa.Events.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Persistence.EFCore.Sqlite](../../src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.EFCore |
-| [Elsa.Persistence.Groundwork.Composition](../../src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj) | source | Elsa.Persistence | - | default | Elsa.Events.Core |
+| [Elsa.Persistence.Groundwork.Composition](../../src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj) | source | Elsa.Persistence | - | default | Elsa.Events.Core<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Workflows.Runtime.Attention<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Persistence.Groundwork.MongoDb](../../src/Elsa/Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Unified |
 | [Elsa.Persistence.Groundwork.MongoDb.Unified](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb |
@@ -115,6 +115,7 @@ Records direct project references only.
 | [Elsa.Persistence.Groundwork.Sqlite](../../src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Unified |
 | [Elsa.Persistence.Groundwork.Sqlite.Unified](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/Elsa.Persistence.Groundwork.Sqlite.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Workflows.Dashboard.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.Unified](../../src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj) | source | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.Composition |
+| [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | source | Elsa.Persistence | - | default | - |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | - | default | - |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | - | default | Elsa.Primitives |
 | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | - | default | - |
@@ -122,13 +123,13 @@ Records direct project references only.
 | [Elsa.Secrets.Attention](../../src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj) | source | Elsa.Secrets | - | default | Elsa.Attention.Core<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | - | default | Elsa.Primitives |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | - | default | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |
-| [Elsa.Secrets.Persistence.Groundwork](../../src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj) | source | Elsa.Secrets | - | default | Elsa.Persistence.Groundwork.Composition<br>Elsa.Secrets<br>Elsa.Secrets.Core |
+| [Elsa.Secrets.Persistence.Groundwork](../../src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj) | source | Elsa.Secrets | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | - | default | Elsa.Serialization.Core |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
 | [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Studio.Preferences.Core](../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj) | source | Elsa.Studio | - | default | - |
-| [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | source | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.Composition<br>Elsa.Studio.Preferences.Core |
+| [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | source | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | - | default | - |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Tasks | - | default | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Elsa.Tasks | - | default | Elsa.Primitives<br>Elsa.Tasks.Core |
@@ -203,7 +204,7 @@ Records direct project references only.
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence.Groundwork |
 | [Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer](../../tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj) | test | Elsa.Diagnostics | net10.0 | false | - |
-| [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork |
+| [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
@@ -294,7 +295,7 @@ Records direct project references only.
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
 | Elsa.Modularity | 5 | 2 |
-| Elsa.Persistence | 16 | 22 |
+| Elsa.Persistence | 17 | 22 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |

@@ -5,8 +5,6 @@ using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.DiagnosticRecords;
-using Groundwork.SqlServer.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -107,11 +105,6 @@ public static class GroundworkSqlServerUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
-        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
-            _ => SqlServerDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
-        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
-            _ => SqlServerDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
-        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.SqlClient.SqlConnection(connectionString),

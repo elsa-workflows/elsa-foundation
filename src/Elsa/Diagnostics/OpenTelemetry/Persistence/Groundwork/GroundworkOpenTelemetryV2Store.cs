@@ -180,10 +180,10 @@ public sealed class GroundworkOpenTelemetryStore :
             return ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
         var trace = ToTrace(row);
         var tracePredicate = new[] { new Predicate.Equal(SpanColumns.TraceId, QueryConstant.Of(SpanColumns.TraceId, trace.TraceId)) };
-        var spans = Query(sessions.Spans, tracePredicate, SpanColumns.StartTime, maxQuerySize, descending: false, SpanColumns.SpanId)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetrySpan>).ToArray();
-        var logs = Query(sessions.Logs, tracePredicate.Select(predicate => Rebind(predicate, LogColumns.TraceId)), LogColumns.Timestamp, maxQuerySize, descending: false, LogColumns.Id)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
+        var spans = QueryAll(sessions.Spans, tracePredicate, SpanColumns.StartTime, maxQuerySize, cancellationToken, SpanColumns.SpanId)
+            .Select(V2OpenTelemetryCodec.Deserialize<TelemetrySpan>).ToArray();
+        var logs = QueryAll(sessions.Logs, tracePredicate.Select(predicate => Rebind(predicate, LogColumns.TraceId)), LogColumns.Timestamp, maxQuerySize, cancellationToken, LogColumns.Id)
+            .Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
         var resources = trace.ResourceIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(id => sessions.Resources.Read(new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
@@ -373,15 +373,28 @@ public sealed class GroundworkOpenTelemetryStore :
         var existing = sessions.Ledger.Read(key);
         if (existing is not null)
         {
-            if (!StringComparer.Ordinal.Equals(
-                    existing.Values.Values.GetValueOrDefault(V2OpenTelemetryStorageSchema.Fingerprint)?.ToString(),
-                    fingerprint))
-                throw new InvalidOperationException("The OpenTelemetry v2 batch identity was reused with different content.");
+            EnsureLedgerMatches(existing, fingerprint);
             return;
         }
         var result = sessions.Ledger.Insert(V2OpenTelemetryCodec.Ledger(batchId, fingerprint));
-        if (!result.Succeeded && result.Status != WriteOutcomeStatus.Replayed)
-            throw new IOException($"The OpenTelemetry capture ledger write returned {result.Status}.");
+        if (result.Succeeded || result.Status == WriteOutcomeStatus.Replayed)
+            return;
+
+        existing = sessions.Ledger.Read(key);
+        if (existing is not null)
+        {
+            EnsureLedgerMatches(existing, fingerprint);
+            return;
+        }
+        throw new IOException($"The OpenTelemetry capture ledger write returned {result.Status}.");
+    }
+
+    private static void EnsureLedgerMatches(StoredEntry existing, string fingerprint)
+    {
+        if (!StringComparer.Ordinal.Equals(
+                existing.Values.Values.GetValueOrDefault(V2OpenTelemetryStorageSchema.Fingerprint)?.ToString(),
+                fingerprint))
+            throw new InvalidOperationException("The OpenTelemetry v2 batch identity was reused with different content.");
     }
 
     private string? ServiceFor(IEnumerable<string> resourceIds, IReadOnlyDictionary<string, string> batchServices)
@@ -406,7 +419,17 @@ public sealed class GroundworkOpenTelemetryStore :
         ColumnRef orderColumn,
         int take,
         bool descending,
-        params ColumnRef[] tieBreakers)
+        params ColumnRef[] tieBreakers) =>
+        QueryPage(session, predicates, orderColumn, take, descending, null, tieBreakers);
+
+    private static QueryMaterializedResult QueryPage(
+        IStorageSession session,
+        IEnumerable<Predicate> predicates,
+        ColumnRef orderColumn,
+        int take,
+        bool descending,
+        int? offset,
+        IReadOnlyList<ColumnRef> tieBreakers)
     {
         var order = ImmutableArray.CreateBuilder<OrderTerm>();
         order.Add(new(orderColumn, descending ? OrderDirection.Descending : OrderDirection.Ascending, descending ? NullOrder.First : NullOrder.Last));
@@ -417,7 +440,28 @@ public sealed class GroundworkOpenTelemetryStore :
             All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
             order.ToImmutable(),
             Projection.All,
-            Paging.Keyset(take)));
+            offset is null ? Paging.Keyset(take) : Paging.OffsetLimit(offset.Value, take)));
+    }
+
+    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
+        IStorageSession session,
+        IEnumerable<Predicate> predicates,
+        ColumnRef orderColumn,
+        int pageSize,
+        CancellationToken cancellationToken,
+        params ColumnRef[] tieBreakers)
+    {
+        var rows = new List<IReadOnlyDictionary<string, object?>>();
+        var offset = 0;
+        QueryMaterializedResult page;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            page = QueryPage(session, predicates, orderColumn, pageSize, false, offset, tieBreakers);
+            rows.AddRange(page.Rows);
+            offset += page.Rows.Count;
+        } while (page.Rows.Count == pageSize);
+        return rows;
     }
 
     private static int Count(IStorageSession session, ColumnRef orderColumn) =>

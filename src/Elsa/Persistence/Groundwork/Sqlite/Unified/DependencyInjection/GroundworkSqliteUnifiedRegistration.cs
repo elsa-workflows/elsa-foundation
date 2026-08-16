@@ -5,8 +5,6 @@ using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.DiagnosticRecords;
-using Groundwork.Sqlite.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -141,11 +139,6 @@ public static class GroundworkSqliteUnifiedRegistration
             autoApplyOnStartup,
             skipInspectionWhenPlanUnchanged,
             storeCacheOptions);
-        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
-            _ => SqliteDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString));
-        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
-            _ => SqliteDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString));
-        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowRunHealth(
             _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),

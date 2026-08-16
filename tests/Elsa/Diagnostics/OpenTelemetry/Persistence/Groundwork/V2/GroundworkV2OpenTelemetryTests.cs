@@ -58,6 +58,41 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
+    public async Task SQLite_trace_detail_reads_every_span_and_log_beyond_the_query_page_size()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-otel-v2-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={path}");
+            await using var store = new GroundworkOpenTelemetryStore(
+                connection,
+                Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 2 }),
+                V2OpenTelemetryBinding.Default);
+            await using var lease = await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync();
+            var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+            var resource = new TelemetryResource("resource-page", "orders", null, "dotnet", new Dictionary<string, string?>(), now, TelemetryResourceStatus.Active);
+            var trace = new TelemetryTrace("trace-page", "root-page", "checkout", now, now.AddSeconds(1), TimeSpan.FromSeconds(1), SpanStatus.Ok, [resource.Id], [], 3);
+            var spans = Enumerable.Range(1, 3)
+                .Select(index => new TelemetrySpan($"span-record-{index}", trace.TraceId, $"span-{index}", null, resource.Id, "checkout", "server", now.AddTicks(index), now.AddTicks(index + 1), SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []))
+                .ToArray();
+            var logs = Enumerable.Range(1, 3)
+                .Select(index => new OtlpLogRecord($"log-{index}", resource.Id, now.AddTicks(index), "Information", 9, $"log {index}", trace.TraceId, $"span-{index}", new Dictionary<string, string?>()))
+                .ToArray();
+            await store.WriteAsync(DiagnosticsDrainBatchId.New(), new OpenTelemetryBatch([resource], [trace], spans, [], [], logs));
+
+            var detail = await store.GetTraceAsync(trace.TraceId);
+
+            Assert.Equal(["span-1", "span-2", "span-3"], detail!.Spans.Select(span => span.SpanId));
+            Assert.Equal(["log-1", "log-2", "log-3"], detail.Logs.Select(log => log.Id));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task SQLite_source_filter_is_applied_before_trace_reduction_and_exact_append_replays()
     {
         var path = Path.Combine(Path.GetTempPath(), $"elsa-otel-v2-{Guid.NewGuid():N}.db");
@@ -98,6 +133,43 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         static TelemetryTrace Trace(string id, TelemetryResource resource, DateTimeOffset start) =>
             new(id, null, "operation", start, start.AddSeconds(1), TimeSpan.FromSeconds(1), SpanStatus.Ok, [resource.Id], [], 1);
+    }
+
+    [Fact]
+    public async Task SQLite_concurrent_identical_batch_writers_converge()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-otel-v2-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={path}");
+            var options = Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 });
+            await using var first = new GroundworkOpenTelemetryStore(connection, options, V2OpenTelemetryBinding.Default);
+            await using var second = new GroundworkOpenTelemetryStore(connection, options, V2OpenTelemetryBinding.Default);
+            await using var firstLease = await ((IDiagnosticsPersistenceStartupResource)first).AcquireAsync();
+            await using var secondLease = await ((IDiagnosticsPersistenceStartupResource)second).AcquireAsync();
+            var now = new DateTimeOffset(2026, 8, 16, 13, 0, 0, TimeSpan.Zero);
+            var resource = new TelemetryResource("concurrent-resource", "orders", null, "dotnet", new Dictionary<string, string?>(), now, TelemetryResourceStatus.Active);
+            var trace = new TelemetryTrace("concurrent-trace", "concurrent-root", "checkout", now, now.AddSeconds(1), TimeSpan.FromSeconds(1), SpanStatus.Ok, [resource.Id], [], 1);
+            var span = new TelemetrySpan("concurrent-span-record", trace.TraceId, "concurrent-span", null, resource.Id, "checkout", "server", now, now.AddSeconds(1), SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []);
+            var batch = new OpenTelemetryBatch([resource], [trace], [span], [], [], []);
+            var batchId = DiagnosticsDrainBatchId.New();
+            using var start = new ManualResetEventSlim();
+
+            var writes = new[] { first, second }.Select(store => Task.Run(async () =>
+            {
+                start.Wait();
+                await store.WriteAsync(batchId, batch);
+            })).ToArray();
+            start.Set();
+            await Task.WhenAll(writes);
+
+            Assert.Equal([trace.TraceId], (await first.QueryTracesAsync(new OpenTelemetryTraceFilter())).Items.Select(item => item.TraceId));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
     }
 
     [Fact]

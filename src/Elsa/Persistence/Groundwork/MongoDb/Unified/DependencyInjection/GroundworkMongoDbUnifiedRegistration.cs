@@ -5,8 +5,6 @@ using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.DiagnosticRecords;
-using Groundwork.MongoDb.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MongoDB.Driver;
@@ -122,11 +120,6 @@ public static class GroundworkMongoDbUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
-        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
-            _ => MongoDbDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString, databaseName));
-        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
-            _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
-        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         // Resolved per lane rather than closed over this preset's single database. The preset is a
         // one-target default, not a promise that the lanes stay together: a host can bind the design lane to

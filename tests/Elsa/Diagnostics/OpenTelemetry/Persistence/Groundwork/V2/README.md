@@ -19,6 +19,11 @@ The live matrix uses `GROUNDWORK_V2_SQLITE_CONNECTION_STRING`,
 `GROUNDWORK_V2_MONGODB_CONNECTION_STRING`. CI must provide all four (or provision the declared
 Testcontainers fixtures); a local run skips only providers whose variables are absent.
 
+The verification recorded for this revision used locally packed Groundwork packages from candidate
+`fc29bd5`. The package currently published as `0.1.0-preview.1` predates the query source-predicate and
+runtime retention-override APIs consumed here. A refreshed Groundwork package publish is therefore a
+release/CI prerequisite; falling back to the v1 provider packages is not supported.
+
 The tests prove the trace list's declared `AggregationQuery.SourcePredicate` behavior with repeated
 trace groups, exact append replay, catalog/payload round-trip, deterministic ordering, and the
 ordinary-unit schema. They do not inspect private provider SQL or count a client-side retained scan.
@@ -35,24 +40,30 @@ unzip -p "$package_dir"/*.nupkg '*.nuspec' | rg \
   'Groundwork\.(DiagnosticRecords|Documents|Kernel|Query\.Model|Store)'
 ```
 
-## Trace-list benchmark plan
+## Trace-list benchmark evidence
 
-The adapter's before/after comparison is intentionally a plan until a stable Elsa workload fixture is
-available; no latency figures are claimed here. Run the same seeded corpus and filter mix against the
-old diagnostic-record adapter and this adapter on each provider, in warm and cold modes, recording
-wall-clock p50/p95, allocated bytes, result count, provider round trips, and rows examined. The
-before path is the retained-record scan plus client reduction; the v2 path is the declared trace
-aggregation with source filtering before reduction. Persist raw runs and the commit/package versions
-beside the report before publishing a comparison.
+`benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark` now runs the same deterministic corpus and
+trace-list route against the frozen Groundwork v1 child and this v2 adapter in separate processes. It binds
+the comparison to source/package provenance, canonical input, result count, and ordered result digest before
+printing timing statistics. No authoritative output artifact is committed yet, so no latency improvement is
+claimed and issue #268 remains open on that evidence.
+
+## Adapter size
+
+At the frozen E3 baseline `4418bb9e38641ec92960e7cf27efbd2e583cda04`, the diagnostics Groundwork
+adapter comprised 20 C# files and 4,668 physical lines under
+`src/Elsa/Diagnostics/*/Persistence/Groundwork`. The clean-break v2 adapter comprises 11 C# files and
+2,056 physical lines in the same scope. These counts include feature, declaration, codec, and store files;
+they exclude tests, generated output, and benchmark harnesses.
 
 For current implementation inventory, use:
 
 ```sh
-git diff --stat ade5578a6 -- src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork
-rg -n "Groundwork\.DiagnosticRecords|Groundwork\.Documents" \
-  src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork
+git diff --stat 4418bb9e38641ec92960e7cf27efbd2e583cda04 -- \
+  'src/Elsa/Diagnostics/*/Persistence/Groundwork'
+rg -n "Groundwork\.DiagnosticRecords" src tests -g '*.{cs,csproj}'
 ```
 
-The second command is expected to return no production adapter references. Broader Elsa diagnostics
-deployment manifests still own the legacy deployment contract and are an explicit integration seam;
-they are not silently treated as migrated by this isolated adapter proof.
+The second command is expected to return no references. Groundwork v1 packages used by persistence families
+outside diagnostics remain part of issue #269 and cannot share a shipping process with the same-ID v2
+provider packages; they are not a compatibility path for this adapter.

@@ -28,8 +28,11 @@ public sealed class GroundworkV2StructuredLogStoreTests
         services.AddGroundworkStorageProviderConnection(fixture.Connection);
 
         var descriptor = Assert.Single(services, service =>
-            service.ServiceType == typeof(IStorageProviderConnection));
+            service.ServiceType == typeof(IStorageProviderConnection) && !service.IsKeyedService);
         Assert.Same(fixture.Connection, descriptor.ImplementationInstance);
+        var keyedDescriptor = Assert.Single(services, service =>
+            service.ServiceType == typeof(IStorageProviderConnection) && service.IsKeyedService);
+        Assert.Same(fixture.Connection, keyedDescriptor.KeyedImplementationInstance);
     }
 
     [Fact]

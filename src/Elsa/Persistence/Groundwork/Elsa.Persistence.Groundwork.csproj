@@ -41,6 +41,9 @@
     <Compile Remove="Unified/**/*" />
     <EmbeddedResource Remove="Unified/**/*" />
     <None Remove="Unified/**/*" />
+    <Compile Remove="V2/**/*" />
+    <EmbeddedResource Remove="V2/**/*" />
+    <None Remove="V2/**/*" />
     <Compile Remove="PostgreSql/**/*" />
     <EmbeddedResource Remove="PostgreSql/**/*" />
     <None Remove="PostgreSql/**/*" />

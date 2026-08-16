@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
     <PackageReference Include="Groundwork.PostgreSql" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="CShells.Abstractions" />

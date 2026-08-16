@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
     <PackageReference Include="Groundwork.MongoDb" />
     <PackageReference Include="MongoDB.Driver" />
     <PackageReference Include="CShells.Abstractions" />

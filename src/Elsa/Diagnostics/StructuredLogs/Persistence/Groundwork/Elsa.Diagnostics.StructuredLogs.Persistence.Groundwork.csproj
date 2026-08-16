@@ -20,7 +20,7 @@
     <ProjectReference Include="..\..\..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
     <ProjectReference Include="..\..\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>

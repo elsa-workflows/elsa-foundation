@@ -65,15 +65,16 @@ The full correctness run passed 3/3 in 10 minutes 9 seconds on this checkout.
 
 The evidence boundary remains intentionally fail-closed. `checkpoint-commit` has no required native routes,
 but the other three workloads require real provider-specific raw plans. The current `capture-plan` command
-can create only the routeless checkpoint document; no routed plan-capture leaf exists yet. Consequently no
-honest retained round-trip measurements for the four-workload set can be published from this revision:
+captures those routes through the public runtime on SQLite; PostgreSQL, SQL Server, and MongoDB still refuse
+routed capture until equivalent provider leaves exist. No retained medium matrix artifact is committed, so
+no round-trip or timing figures are claimed from this revision:
 
 | Workload | Baseline result |
 |---|---|
-| `checkpoint-commit` | Executable leaf; no new retained matrix was run because this slice has no complete four-workload evidence set. |
-| `bookmark-lookup` | Executable leaf; retained matrix blocked on real native plans for both required routes. |
-| `queue-drain` | Executable leaf; retained matrix blocked on real native plans for both required routes. |
-| `outbox-drain` | Executable leaf; retained matrix blocked on the required `list-claimable` native plan. |
+| `checkpoint-commit` | Executable leaf; no retained medium matrix artifact is committed. |
+| `bookmark-lookup` | Executable leaf; SQLite can capture both required routes, while other providers fail closed. |
+| `queue-drain` | Executable leaf; SQLite can capture both required routes, while other providers fail closed. |
+| `outbox-drain` | Executable leaf; SQLite can capture the required `list-claimable` route, while other providers fail closed. |
 
 After building the Release AdapterHost once and capturing all required `medium`-scale plans without
 rebuilding, validate and print the exact per-workload commands with:

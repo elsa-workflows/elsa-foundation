@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>0.0.1-local</Version>
+    <Description>Provider-neutral Elsa composition services for the public Groundwork v2 storage runtime.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+</Project>
