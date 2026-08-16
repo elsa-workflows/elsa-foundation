@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Distributed.Services;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -173,7 +174,7 @@ public sealed class GroundworkV2DistributedStoreTests
     }
 
     [Fact]
-    public void RegistrationComposesOnlyV2SessionSourceAndScopedStores()
+    public void RegistrationComposesOnlyV2SessionSourceAndScopedStoresWithoutClaimingCheckpointFencing()
     {
         using var database = new TemporaryDatabase();
         using var connection = new SqliteProviderFactory().Create(database.ConnectionString);
@@ -184,7 +185,7 @@ public sealed class GroundworkV2DistributedStoreTests
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExecutionCommandTransport)).Lifetime);
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.FullName?.Contains("GroundworkLane", StringComparison.Ordinal) == true);
         using var provider = services.BuildServiceProvider();
-        Assert.True(provider.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>().IsAvailable);
+        Assert.False(provider.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>().IsAvailable);
     }
 
     [Theory]
@@ -221,6 +222,9 @@ public sealed class GroundworkV2DistributedStoreTests
             .ToDictionary(item => item.Component, item => item.Level, StringComparer.Ordinal);
         Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, evidence[WorkflowDispatchDurabilityComponents.Distribution]);
         Assert.Equal(WorkflowDispatchDurabilityLevel.Durable, evidence[WorkflowDispatchDurabilityComponents.DistributionPersistence]);
+        var actorProvider = Assert.IsType<DistributedWorkflowExecutionActorProvider>(
+            scope.ServiceProvider.GetRequiredService<IWorkflowExecutionActorProvider>());
+        Assert.False(actorProvider.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
     }
 
     [Fact]

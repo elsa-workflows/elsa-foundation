@@ -1,11 +1,8 @@
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
-using Groundwork.Kernel;
-using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -31,8 +28,8 @@ public static class GroundworkDistributedStoresRegistration
             provider.GetRequiredService<Elsa.Persistence.Core.IPersistenceAccessContextAccessor>(),
             targetName));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
-        services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability>(provider =>
-            new GroundworkWorkflowExecutionLeaseFencingCapability(provider, targetName)));
+        services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability>(
+            GroundworkDistributionLeaseFencingCapability.Instance));
         return services;
     }
 }
@@ -43,17 +40,13 @@ internal sealed class GroundworkDistributionDurabilityEvidence : IWorkflowDispat
     public WorkflowDispatchDurabilityLevel Level => WorkflowDispatchDurabilityLevel.Durable;
 }
 
-/// <summary>Reports atomic-commit admission from the selected public Groundwork v2 connection.</summary>
-public sealed class GroundworkWorkflowExecutionLeaseFencingCapability(IServiceProvider services, string? targetName) : IWorkflowExecutionLeaseFencingCapability
+/// <summary>
+/// The current v2 slice persists routing and transport only. Lease fencing stays unavailable until
+/// the active checkpoint commit path is admitted on the same provider-owned v2 connection.
+/// </summary>
+internal sealed class GroundworkDistributionLeaseFencingCapability : IWorkflowExecutionLeaseFencingCapability
 {
-    public bool IsAvailable
-    {
-        get
-        {
-            var target = GroundworkTargetNames.Normalize(targetName);
-            var connection = services.GetKeyedService<IStorageProviderConnection>(target) ??
-                (GroundworkTargetNames.IsDefault(target) ? services.GetService<IStorageProviderConnection>() : null);
-            return connection?.Capabilities.Any(capability => capability.Id == WellKnownCapabilities.AtomicCommit) == true;
-        }
-    }
+    public static GroundworkDistributionLeaseFencingCapability Instance { get; } = new();
+
+    public bool IsAvailable => false;
 }
