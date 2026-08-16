@@ -131,7 +131,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         using var cancellation = new CancellationTokenSource();
 
         var canceled = context.GetAuthorizationProfileAsync(cancellation.Token).AsTask();
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counter.Calls) > 0, TimeSpan.FromSeconds(1)));
+        await counter.Started.Task;
         cancellation.Cancel();
         var successful = context.GetAuthorizationProfileAsync().AsTask();
 
@@ -165,14 +165,34 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
         using var provider = services.BuildServiceProvider();
         var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var context = new HttpContextActivityDesignAuthorizationContext(
-            provider.GetRequiredService<IHttpContextAccessor>(),
+            accessor,
             service,
             provider.GetRequiredService<NormalizedPrincipalValidator>());
 
         Assert.False(await context.CanAuthorProviderAsync("provider"));
         Assert.False(await context.CanManageActivityDefinitionsAsync());
         Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+        Assert.Equal(0, service.Calls);
+
+        accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, "raw-user"),
+                new Claim("provider", "entra"),
+                new Claim("groups", "admins"),
+                new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission)
+            ], "test"))
+        };
+        var rawContext = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+        Assert.False(await rawContext.CanAuthorProviderAsync("provider"));
+        Assert.Equal("untrusted", await rawContext.GetAuthorizationProfileAsync());
         Assert.Equal(0, service.Calls);
     }
 
@@ -190,8 +210,16 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             service,
             provider.GetRequiredService<NormalizedPrincipalValidator>());
 
+        Assert.False(await context.CanAuthorProviderAsync(string.Empty));
+        Assert.False(await context.CanReadProviderPayloadAsync(string.Empty));
+        Assert.Equal(0, service.Calls);
         Assert.True(await context.CanAuthorProviderAsync("provider"));
         Assert.True(service.Calls > 0);
+
+        Assert.Throws<InvalidOperationException>(() => context.AuthorizationProfile);
+        Assert.Throws<InvalidOperationException>(() => context.CanAuthorProvider("provider"));
+        Assert.Throws<InvalidOperationException>(() => context.CanRead(new("ActivityVersion", "definition")));
+        Assert.Throws<InvalidOperationException>(() => context.CanManageActivityDefinitions);
     }
 
     [Fact]
@@ -205,36 +233,29 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
     }
 
     [Fact]
-    public async Task Canceled_snapshot_task_is_evicted_and_a_fresh_request_can_retry()
+    public async Task Canceled_snapshot_task_is_evicted_and_the_same_context_can_retry()
     {
-        var counter = new EvaluationCounter();
+        var probe = new SnapshotProbe();
         var services = CreateServices();
-        services.AddSingleton(counter);
-        services.ReplacePermissionEvaluator<DelayedPermissionEvaluator>();
+        services.AddSingleton(probe);
+        services.ReplacePermissionEvaluator<CancelOncePermissionEvaluator>();
         using var provider = services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
-        using var aborted = new CancellationTokenSource();
-        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a"), RequestAborted = aborted.Token };
+        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
         var first = new HttpContextActivityDesignAuthorizationContext(
             accessor,
             provider.GetRequiredService<IPermissionAuthorizationService>(),
             provider.GetRequiredService<NormalizedPrincipalValidator>());
         var pending = first.GetAuthorizationProfileAsync().AsTask();
 
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counter.Calls) > 0, TimeSpan.FromSeconds(1)));
-        aborted.Cancel();
+        await probe.Started.Task;
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
 
-        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
-        var retry = new HttpContextActivityDesignAuthorizationContext(
-            accessor,
-            provider.GetRequiredService<IPermissionAuthorizationService>(),
-            provider.GetRequiredService<NormalizedPrincipalValidator>());
-        Assert.False(string.IsNullOrWhiteSpace(await retry.GetAuthorizationProfileAsync()));
+        Assert.False(string.IsNullOrWhiteSpace(await first.GetAuthorizationProfileAsync()));
     }
 
     [Fact]
-    public async Task Faulted_snapshot_task_is_evicted_and_a_fresh_request_can_retry()
+    public async Task Faulted_snapshot_task_is_evicted_and_the_same_context_can_retry()
     {
         var services = CreateServices();
         services.ReplacePermissionEvaluator<FaultOncePermissionEvaluator>();
@@ -248,12 +269,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => first.GetAuthorizationProfileAsync().AsTask());
 
-        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
-        var retry = new HttpContextActivityDesignAuthorizationContext(
-            accessor,
-            provider.GetRequiredService<IPermissionAuthorizationService>(),
-            provider.GetRequiredService<NormalizedPrincipalValidator>());
-        Assert.False(string.IsNullOrWhiteSpace(await retry.GetAuthorizationProfileAsync()));
+        Assert.False(string.IsNullOrWhiteSpace(await first.GetAuthorizationProfileAsync()));
     }
 
     private static ServiceCollection CreateServices()
@@ -311,6 +327,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
     private sealed class EvaluationCounter
     {
         public int Calls;
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private sealed class DelayedPermissionEvaluator(EvaluationCounter counter) : IPermissionEvaluator
@@ -320,6 +337,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref counter.Calls);
+            counter.Started.TrySetResult();
             await Task.Delay(25, cancellationToken);
             return PermissionEvaluationResult.Denied();
         }
@@ -335,6 +353,29 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         {
             if (Interlocked.Increment(ref _calls) == 1)
                 throw new InvalidOperationException("synthetic snapshot failure");
+
+            return ValueTask.FromResult(PermissionEvaluationResult.Denied());
+        }
+    }
+
+    private sealed class SnapshotProbe
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class CancelOncePermissionEvaluator(SnapshotProbe probe) : IPermissionEvaluator
+    {
+        private int _calls;
+
+        public ValueTask<PermissionEvaluationResult> EvaluateAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                probe.Started.TrySetResult();
+                return ValueTask.FromCanceled<PermissionEvaluationResult>(new CancellationToken(true));
+            }
 
             return ValueTask.FromResult(PermissionEvaluationResult.Denied());
         }

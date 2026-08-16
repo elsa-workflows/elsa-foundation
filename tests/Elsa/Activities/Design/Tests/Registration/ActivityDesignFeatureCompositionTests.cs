@@ -28,6 +28,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Http;
@@ -164,8 +165,24 @@ public sealed class ActivityDesignFeatureCompositionTests
 
         Assert.IsType<LegacyActivityAuthoringContextAdapter>(authoring);
         Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
+        Assert.Equal("legacy-tenant", authoring.TenantId);
+        Assert.Equal("legacy-actor", authoring.ActorId);
+        Assert.Equal("legacy-profile", await authoring.GetAuthorizationProfileAsync());
         Assert.True(await authoring.CanAuthorProviderAsync("legacy"));
+        Assert.True(await authoring.CanReadProviderPayloadAsync("legacy"));
+        Assert.True(await authoring.CanManageActivityDefinitionsAsync());
+        Assert.Equal("legacy-tenant", dependencies.TenantId);
+        Assert.Equal("legacy-profile", await dependencies.GetAuthorizationProfileAsync());
         Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
+
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanAuthorProviderAsync("legacy", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanReadProviderPayloadAsync("legacy", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanManageActivityDefinitionsAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.CanReadAsync(new("ActivityVersion", "definition"), canceled.Token).AsTask());
     }
 
     [Fact]
@@ -202,6 +219,22 @@ public sealed class ActivityDesignFeatureCompositionTests
         using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = customProvider.CreateScope();
         Assert.IsType<CustomDependencyContext>(scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>());
+    }
+
+    [Fact]
+    public void Dependency_late_conflict_is_reported_by_startup_validation()
+    {
+        var services = MinimalServices();
+        services.AddFoundationIdentityAbstractions();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        services.AddScoped<IActivityDependencyContextAsync, SecondDependencyContext>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+        Assert.Contains("IActivityDependencyContextAsync", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecondDependencyContext), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exactly one tagged implementation", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

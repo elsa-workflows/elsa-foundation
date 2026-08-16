@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -29,7 +30,20 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
 
         Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
+        Assert.Equal("tenant:legacy", context.TenantScope);
+        Assert.Equal("legacy-actor", context.AuditSubject);
+        Assert.Equal("legacy-request", context.RequestCorrelationId);
+        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
         Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
+
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectStructureAsync(InspectionState(), canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectSensitiveValuesAsync(InspectionState(), canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanResolveSensitiveValuePayloadsAsync(InspectionState(), canceled.Token).AsTask());
     }
 
     [Fact]
@@ -66,6 +80,22 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = customProvider.CreateScope();
         Assert.IsType<CustomInspectionContext>(scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>());
+    }
+
+    [Fact]
+    public void Inspection_late_conflict_is_reported_by_startup_validation()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddScoped<IActivityInspectionContextAsync, SecondInspectionContext>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+        Assert.Contains("IActivityInspectionContextAsync", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecondInspectionContext), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exactly one tagged implementation", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
