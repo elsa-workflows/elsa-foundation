@@ -32,7 +32,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesScriptingFeature | direct IShellFeature | Elsa.Activities.Scripting | IShellFeature | [ActivitiesScriptingFeature.cs](../../src/Elsa/Activities/Scripting/ActivitiesScriptingFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
 | AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
-| FoundationAgentApiFeature | FastEndpoints feature | Elsa.Agent.Api | FastEndpointsFeatureBase | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
+| FoundationAgentApiFeature | direct IWebShellFeature | Elsa.Agent.Api | IWebShellFeature | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationAgentAbstractionsFeature | direct IShellFeature | Elsa.Agent.Core | IShellFeature | [FoundationAgentAbstractionsFeature.cs](../../src/Elsa/Agent/Core/FoundationAgentAbstractionsFeature.cs) |
 | GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
 | FoundationWorkflowsAgentFeature | direct IShellFeature | Elsa.Agent.Workflows | IShellFeature | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/FoundationWorkflowsAgentFeature.cs) |
