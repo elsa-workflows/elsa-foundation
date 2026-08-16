@@ -1,6 +1,4 @@
-using System.Net;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
+using CShells.AspNetCore.Features;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
@@ -17,17 +15,20 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
 /// <summary>
 /// Plan Workstream D "prove it": composes the enabled-by-default identity stack end to end (ASP.NET Core
 /// Identity + cookie sign-in + login, OpenIddict issuance + bearer validation, the identity API surface with
-/// its FastEndpoints claim-type bridge) in front of a real <see cref="ConfigurePermissions"/>-secured Elsa
+/// its shared Foundation permission-policy path) in front of a real <see cref="ConfigurePermissions"/>-secured Elsa
 /// endpoint — the same guard the D5 sweep applied across Design/Publishing/Activities. It asserts:
 /// (a) an anonymous request to the permission-secured endpoint is rejected with 401; and (b) the full
 /// login → token → bearer flow yields a token whose <c>elsa.identity.permission</c> claims satisfy
-/// <c>ConfigurePermissions()</c> (proving the claim-type bridge registered by the identity API feature).
+/// <c>ConfigurePermissions()</c> (proving the same normalized permission-policy evaluator is used).
 /// The Development-only behaviour of the ApiSecurity.AllowAnonymous kill-switch (c) is proven directly by
 /// <c>ApiSecurityConfiguratorTests</c> and <c>PerShellApiSecurityIntegrationTests</c>.
 /// </summary>
@@ -66,15 +67,12 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
                         options => options.IsDevelopmentOrDemo = true,
                         configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
 
-                    // Registers the identity API endpoints (login lives in the Identity assembly, token here)
-                    // and the IdentityClaimTypeFastEndpointsConfigurator that aligns FastEndpoints' permission
-                    // claim type with elsa.identity.permission.
+                    // Registers the identity API services. The protocol endpoints are mapped through the
+                    // explicit IWebShellFeature seam below; the unrelated canary remains FastEndpoints.
                     services.AddFoundationIdentityApi();
 
                     services.AddFastEndpoints(o => o.Assemblies =
                     [
-                        typeof(FoundationIdentityApiOptions).Assembly,   // token, session, …
-                        typeof(AspNetCoreIdentityDefaults).Assembly,     // login
                         typeof(SecuredPingEndpoint).Assembly             // the ConfigurePermissions() endpoint
                     ]);
                 });
@@ -83,11 +81,13 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
                     app.UseRouting();
                     app.UseAuthentication();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapFastEndpoints(config =>
-                        // The CShells FastEndpoints feature runs IFastEndpointsConfigurators for us in the real
-                        // host; this plain test host applies the identity claim-type alignment inline so the
-                        // permission-secured endpoint reads the token's elsa.identity.permission claims.
-                        config.Security.PermissionsClaimType = IdentityClaimTypes.Permission));
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapFastEndpoints(config =>
+                            config.Security.PermissionsClaimType = IdentityClaimTypes.Permission);
+                        ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
+                        ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
+                    });
                 });
             })
             .Build();

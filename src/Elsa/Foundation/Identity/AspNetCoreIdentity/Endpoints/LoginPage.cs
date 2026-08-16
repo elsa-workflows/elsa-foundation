@@ -1,8 +1,4 @@
 using System.Net;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 
@@ -13,26 +9,8 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 /// <c>returnUrl</c>. Non-local return URLs are dropped to prevent open redirects. The page embeds an
 /// antiforgery token (and sets the paired cookie) that the login POST validates for the HTML-form flow.
 /// </summary>
-public sealed class LoginPage(IAntiforgery antiforgery, IOptions<AspNetCoreIdentityOptions> options) : ElsaEndpointWithoutRequest
+public static class LoginPage
 {
-    public override void Configure()
-    {
-        Get("/" + AspNetCoreIdentityDefaults.LoginRoute);
-        AllowAnonymous();
-    }
-
-    public override async Task HandleAsync(CancellationToken ct)
-    {
-        var returnUrl = LocalUrl.Sanitize(Query<string>("returnUrl", isRequired: false), options.Value.AllowedReturnUrlOrigins);
-        var error = Query<string>("error", isRequired: false);
-
-        // Issues the antiforgery cookie on this response and returns the request token to embed in the form.
-        var tokens = antiforgery.GetAndStoreTokens(HttpContext);
-
-        HttpContext.Response.ContentType = "text/html; charset=utf-8";
-        await HttpContext.Response.WriteAsync(Render(returnUrl, error is not null, tokens.RequestToken), ct);
-    }
-
     /// <summary>
     /// Renders the self-contained dark-themed login page. <paramref name="returnUrl"/> is expected to be
     /// pre-sanitized (see <see cref="LocalUrl.Sanitize"/>) and is HTML-encoded before embedding.
