@@ -109,6 +109,28 @@ public sealed class FastEndpointsTransitionTests
     }
 
     [Fact]
+    public void Resolves_interpolated_route_constants_without_duplicating_interpolations()
+    {
+        const string source = """
+            public static class Routes
+            {
+                public const string Prefix = "/api";
+                public const string Orders = $"{Prefix}/orders";
+            }
+
+            public sealed class OrdersEndpoint : EndpointWithoutRequest
+            {
+                public override void Configure() => Get(Routes.Orders);
+            }
+            """;
+
+        var registration = Assert.Single(new FastEndpointsRegistrationScanner().Scan(source, "orders"));
+
+        Assert.False(registration.DynamicRoute);
+        Assert.Equal(["GET /api/orders"], registration.Endpoints.Select(endpoint => endpoint.ToString()));
+    }
+
+    [Fact]
     public void Rejects_duplicate_discovered_registration_identities()
     {
         var registration = Assert.Single(new FastEndpointsRegistrationScanner().Scan(Source, "orders"));
@@ -118,5 +140,92 @@ public sealed class FastEndpointsTransitionTests
         var result = TransitionExceptionValidator.Reconcile([registration, registration], [exact]);
 
         Assert.Contains("DuplicateRegistration", result.Issues.Select(issue => issue.Code));
+    }
+
+    [Fact]
+    public void Resolves_transitive_inheritance_and_inherited_route_configuration_but_excludes_abstract_bases()
+    {
+        const string source = """
+            namespace Features;
+
+            internal abstract class SharedRouteEndpoint<TRequest> : ElsaEndpoint<TRequest>
+            {
+                public override void Configure() => Get("/api/shared/{id}");
+            }
+
+            internal abstract class IndirectRouteEndpoint<TRequest> : SharedRouteEndpoint<TRequest> { }
+
+            internal sealed class InheritedEndpoint : IndirectRouteEndpoint<string> { }
+
+            internal sealed class OverriddenEndpoint : IndirectRouteEndpoint<string>
+            {
+                public override void Configure() => Post("/api/own");
+            }
+
+            internal sealed class CombinedEndpoint : IndirectRouteEndpoint<string>
+            {
+                public override void Configure()
+                {
+                    base.Configure();
+                    Put("/api/combined");
+                }
+            }
+            """;
+
+        var registrations = new FastEndpointsRegistrationScanner().Scan(source, "features");
+
+        Assert.Equal(
+            [
+                "Features.CombinedEndpoint",
+                "Features.InheritedEndpoint",
+                "Features.OverriddenEndpoint"
+            ],
+            registrations.Select(registration => registration.Identity));
+        Assert.Equal(["GET /api/shared/{param}"], registrations.Single(registration => registration.Identity.EndsWith("InheritedEndpoint", StringComparison.Ordinal)).Endpoints.Select(endpoint => endpoint.ToString()));
+        Assert.Equal(["POST /api/own"], registrations.Single(registration => registration.Identity.EndsWith("OverriddenEndpoint", StringComparison.Ordinal)).Endpoints.Select(endpoint => endpoint.ToString()));
+        Assert.Equal(
+            ["PUT /api/combined", "GET /api/shared/{param}"],
+            registrations.Single(registration => registration.Identity.EndsWith("CombinedEndpoint", StringComparison.Ordinal)).Endpoints.Select(endpoint => endpoint.ToString()));
+    }
+
+    [Fact]
+    public void Scans_multiple_methods_and_ignored_logs_sources_but_excludes_bin_and_obj_documents()
+    {
+        const string source = """
+            public sealed class MultiMethodEndpoint : EndpointWithoutRequest
+            {
+                public override void Configure()
+                {
+                    Get("/api/one");
+                    Post("/api/two");
+                }
+            }
+            """;
+
+        var registrations = new FastEndpointsRegistrationScanner().Scan(
+        [
+            new FastEndpointsSourceDocument("multi", source, "features", SourcePath: "src/Features/Endpoint.cs"),
+            new FastEndpointsSourceDocument("logs", source.Replace("MultiMethodEndpoint", "LogsEndpoint", StringComparison.Ordinal), "otel", SourcePath: "src/Elsa/Diagnostics/OpenTelemetry/Endpoints/OpenTelemetry/Logs/Endpoint.cs"),
+            new FastEndpointsSourceDocument("bin", source.Replace("MultiMethodEndpoint", "GeneratedEndpoint", StringComparison.Ordinal), "generated", SourcePath: "src/Features/bin/Debug/net10.0/Generated.cs"),
+            new FastEndpointsSourceDocument("obj", source.Replace("MultiMethodEndpoint", "GeneratedObjEndpoint", StringComparison.Ordinal), "generated", SourcePath: "src/Features/obj/Debug/net10.0/Generated.cs")
+        ]);
+
+        Assert.Equal(2, registrations.Count);
+        Assert.Contains(registrations, registration => registration.Identity == "MultiMethodEndpoint" && registration.Owner == "features");
+        Assert.Contains(registrations, registration => registration.Identity == "LogsEndpoint" && registration.Owner == "otel");
+        Assert.DoesNotContain(registrations, registration => registration.Identity.Contains("Generated", StringComparison.Ordinal));
+        Assert.Equal(["GET /api/one", "POST /api/two"], registrations.Single(registration => registration.Identity == "MultiMethodEndpoint").Endpoints.Select(endpoint => endpoint.ToString()));
+    }
+
+    [Fact]
+    public void Retirement_validation_rejects_every_registration_even_when_a_transition_exception_exists()
+    {
+        var registration = Assert.Single(new FastEndpointsRegistrationScanner().Scan(Source, "orders"));
+        var result = TransitionExceptionValidator.ValidateRetirement([registration]);
+
+        Assert.False(result.IsValid);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("FirstPartyFastEndpointsRegistration", issue.Code);
+        Assert.Contains("zero first-party registrations", issue.Message, StringComparison.Ordinal);
     }
 }

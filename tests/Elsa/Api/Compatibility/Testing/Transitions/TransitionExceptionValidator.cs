@@ -90,6 +90,20 @@ public sealed class TransitionExceptionValidator
         IEnumerable<FastEndpointsRegistration> registrations,
         IEnumerable<FastEndpointsTransitionException> exceptions) =>
         new TransitionExceptionValidator().Validate(registrations, exceptions);
+
+    /// <summary>Validates the stricter retirement gate, where no first-party registration is allowed.</summary>
+    public static TransitionValidationResult ValidateRetirement(IEnumerable<FastEndpointsRegistration> registrations)
+    {
+        ArgumentNullException.ThrowIfNull(registrations);
+        var issues = registrations
+            .Select(registration => new TransitionValidationIssue(
+                "FirstPartyFastEndpointsRegistration",
+                registration.Identity,
+                "FastEndpoints retirement requires zero first-party registrations, including reviewed exceptions."))
+            .OrderBy(issue => issue.RegistrationIdentity, StringComparer.Ordinal)
+            .ToArray();
+        return new TransitionValidationResult(issues);
+    }
 }
 
 public sealed record TransitionValidationIssue(string Code, string RegistrationIdentity, string Message);
