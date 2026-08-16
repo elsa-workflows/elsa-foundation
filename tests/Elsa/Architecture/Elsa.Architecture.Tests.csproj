@@ -21,6 +21,10 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave2-openapi-identities-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,6 +47,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
