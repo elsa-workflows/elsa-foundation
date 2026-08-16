@@ -31,7 +31,7 @@ internal static class GroundworkV2RuntimeLivenessCodec
                 [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind,
                 [ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField] = state.OperationalStateId,
                 [ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField] = state.InterruptedExecution is { } interrupted
-                    ? ((int)interrupted.Status).ToString(CultureInfo.InvariantCulture)
+                    ? (int)interrupted.Status
                     : null,
                 [ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField] = state.InterruptedExecution?.InterruptedAt,
                 [ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField] = state.ExecutionLease?.OwnerId,
@@ -63,12 +63,28 @@ internal static class GroundworkV2RuntimeLivenessCodec
             }
             : throw new InvalidDataException("Groundwork runtime liveness row did not contain JSON content.");
 
-        var envelope = JsonSerializer.Deserialize<RuntimeLivenessEnvelope>(content, Json) ??
+        RuntimeLivenessEnvelope envelope;
+        try
+        {
+            envelope = JsonSerializer.Deserialize<RuntimeLivenessEnvelope>(content, Json) ??
                        throw new InvalidDataException("Groundwork runtime liveness row content was empty.");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException("Groundwork runtime liveness row content was not a valid current envelope.", exception);
+        }
+
+        if (envelope.State is null)
+            throw new InvalidDataException("Groundwork runtime liveness row content did not contain a state.");
+
         if (!StringComparer.Ordinal.Equals(
                 envelope.Collection,
                 ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind) ||
-            !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, envelope.State.WorkflowExecutionId))
+            !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, envelope.State.WorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(envelope.State.WorkflowExecutionId,
+                RequiredString(values, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField)) ||
+            !StringComparer.Ordinal.Equals(envelope.State.OperationalStateId,
+                RequiredString(values, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField)))
         {
             throw new InvalidDataException("Groundwork runtime liveness row envelope does not match its current state.");
         }
@@ -76,6 +92,17 @@ internal static class GroundworkV2RuntimeLivenessCodec
         var rowId = RequiredString(values, ElsaRuntimeV2StorageManifest.IdField);
         if (!StringComparer.Ordinal.Equals(rowId, Identity(envelope.State.WorkflowExecutionId, envelope.State.OperationalStateId)))
             throw new InvalidDataException("Groundwork runtime liveness row identity does not match its current state.");
+
+        var rowCollection = RequiredString(values, ElsaRuntimeV2StorageManifest.CollectionField);
+        if (!StringComparer.Ordinal.Equals(rowCollection, envelope.Collection))
+            throw new InvalidDataException("Groundwork runtime liveness row collection does not match its current envelope.");
+
+        var envelopeHasOwner = envelope.State.ExecutionLease is not null || envelope.State.Heartbeat is not null;
+        if (envelope.HasOperationalOwner != envelopeHasOwner ||
+            RequiredBoolean(values, ElsaRuntimeV2StorageManifest.RecoveryHasOperationalOwnerField) != envelopeHasOwner)
+        {
+            throw new InvalidDataException("Groundwork runtime liveness row owner projection does not match its current envelope.");
+        }
 
         return envelope.State;
     }
@@ -91,10 +118,39 @@ internal static class GroundworkV2RuntimeLivenessCodec
             operationalStateId);
     }
 
-    private static string RequiredString(IReadOnlyDictionary<string, object?> values, string field) =>
-        values.TryGetValue(field, out var value) && value is string text && !string.IsNullOrWhiteSpace(text)
-            ? text
-            : throw new InvalidDataException($"Groundwork runtime liveness row is missing required string field '{field}'.");
+    private static string RequiredString(IReadOnlyDictionary<string, object?> values, string field)
+    {
+        if (values.TryGetValue(field, out var value))
+        {
+            if (value is string text && !string.IsNullOrWhiteSpace(text))
+                return text;
+
+            if (value is JsonElement { ValueKind: JsonValueKind.String } element &&
+                !string.IsNullOrWhiteSpace(element.GetString()))
+            {
+                return element.GetString()!;
+            }
+        }
+
+        throw new InvalidDataException($"Groundwork runtime liveness row is missing required string field '{field}'.");
+    }
+
+    private static bool RequiredBoolean(IReadOnlyDictionary<string, object?> values, string field)
+    {
+        if (values.TryGetValue(field, out var value))
+        {
+            if (value is bool boolean)
+                return boolean;
+
+            if (value is JsonElement { ValueKind: JsonValueKind.True })
+                return true;
+
+            if (value is JsonElement { ValueKind: JsonValueKind.False })
+                return false;
+        }
+
+        throw new InvalidDataException($"Groundwork runtime liveness row is missing required boolean field '{field}'.");
+    }
 
     private static JsonSerializerOptions CreateJsonOptions()
     {

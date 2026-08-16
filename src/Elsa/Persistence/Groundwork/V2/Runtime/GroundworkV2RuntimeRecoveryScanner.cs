@@ -55,38 +55,36 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryScanner
     private static IReadOnlyList<RecoveryRoute> Routes(RuntimeRecoveryScanRequest request, StorageUnit unit)
     {
         var table = new TableId(unit.Name);
-        var status = Column(table, ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, QueryType.String, true, 32);
+        var status = Column(table, ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, QueryType.Int32, true);
         var interruptedAt = Column(table, ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField, QueryType.DateTimeOffset, true);
-        var leaseOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField, QueryType.String, true, 128);
+        var leaseOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.IdMaximumLength);
         var leaseAcquiredAt = Column(table, ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField, QueryType.DateTimeOffset, true);
         var leaseExpiresAt = Column(table, ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField, QueryType.DateTimeOffset, true);
-        var heartbeatOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, QueryType.String, true, 128);
+        var heartbeatOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.IdMaximumLength);
         var heartbeatRecordedAt = Column(table, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField, QueryType.DateTimeOffset, true);
-        var hasOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryHasOperationalOwnerField, QueryType.Boolean, false);
-        var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, QueryType.String, false, 128);
-        var operationalState = Column(table, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField, QueryType.String, false, 128);
-        var detected = ((int)RuntimeInterruptionStatus.Detected).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var hasOwner = Column(table, ElsaRuntimeV2StorageManifest.RecoveryHasOperationalOwnerField, QueryType.Boolean, true);
+        var detected = (int)RuntimeInterruptionStatus.Detected;
 
         if (request.OwnerId is null)
         {
             return
             [
-                Route(Equal(status, detected), Order(interruptedAt, workflow, operationalState)),
-                Route(Due(leaseExpiresAt, request.Now), Order(leaseExpiresAt, workflow, operationalState)),
-                Route(Due(leaseAcquiredAt, request.Now.Subtract(request.LeaseTimeout)), Order(leaseAcquiredAt, workflow, operationalState)),
-                Route(Due(heartbeatRecordedAt, request.Now.Subtract(request.HeartbeatTimeout)), Order(heartbeatRecordedAt, workflow, operationalState))
+                Route(Equal(status, detected), Order(interruptedAt)),
+                Route(Due(leaseExpiresAt, request.Now), Order(leaseExpiresAt)),
+                Route(Due(leaseAcquiredAt, request.Now.Subtract(request.LeaseTimeout)), Order(leaseAcquiredAt)),
+                Route(Due(heartbeatRecordedAt, request.Now.Subtract(request.HeartbeatTimeout)), Order(heartbeatRecordedAt))
             ];
         }
 
         var owner = request.OwnerId;
         return
         [
-            Route(And(Equal(status, detected), Equal(leaseOwner, owner)), Order(interruptedAt, workflow, operationalState)),
-            Route(And(Equal(status, detected), Equal(heartbeatOwner, owner)), Order(interruptedAt, workflow, operationalState)),
-            Route(And(Equal(status, detected), Equal(hasOwner, false)), Order(interruptedAt, workflow, operationalState)),
-            Route(And(Equal(leaseOwner, owner), Due(leaseExpiresAt, request.Now)), Order(leaseExpiresAt, workflow, operationalState)),
-            Route(And(Equal(leaseOwner, owner), Due(leaseAcquiredAt, request.Now.Subtract(request.LeaseTimeout))), Order(leaseAcquiredAt, workflow, operationalState)),
-            Route(And(Equal(heartbeatOwner, owner), Due(heartbeatRecordedAt, request.Now.Subtract(request.HeartbeatTimeout))), Order(heartbeatRecordedAt, workflow, operationalState))
+            Route(And(Equal(status, detected), Equal(leaseOwner, owner)), Order(interruptedAt)),
+            Route(And(Equal(status, detected), Equal(heartbeatOwner, owner)), Order(interruptedAt)),
+            Route(And(Equal(status, detected), Equal(hasOwner, false)), Order(interruptedAt)),
+            Route(And(Equal(leaseOwner, owner), Due(leaseExpiresAt, request.Now)), Order(leaseExpiresAt)),
+            Route(And(Equal(leaseOwner, owner), Due(leaseAcquiredAt, request.Now.Subtract(request.LeaseTimeout))), Order(leaseAcquiredAt)),
+            Route(And(Equal(heartbeatOwner, owner), Due(heartbeatRecordedAt, request.Now.Subtract(request.HeartbeatTimeout))), Order(heartbeatRecordedAt))
         ];
     }
 

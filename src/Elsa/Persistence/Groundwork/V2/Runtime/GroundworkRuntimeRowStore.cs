@@ -15,13 +15,15 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkRuntimeRowStore
 {
+    private const string ProviderOwnedScopeColumn = "__groundwork_scope";
+
     public GroundworkRuntimeRowStore(IStorageSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        if (!session.Unit.Key.Columns.Contains(ElsaRuntimeV2StorageManifest.IdField, StringComparer.Ordinal))
+        if (!IsRuntimeKey(session.Unit.Key.Columns))
         {
             throw new ArgumentException(
-                $"Runtime row sessions must use the '{ElsaRuntimeV2StorageManifest.IdField}' key column.",
+                $"Runtime row sessions must use exactly the '{ElsaRuntimeV2StorageManifest.IdField}' key, optionally paired with the provider-owned scope column.",
                 nameof(session));
         }
 
@@ -136,4 +138,11 @@ public sealed class GroundworkRuntimeRowStore
 
         return new StorageValues(values);
     }
+
+    private static bool IsRuntimeKey(IReadOnlyList<string> keyColumns) =>
+        (keyColumns.Count == 1 &&
+         StringComparer.Ordinal.Equals(keyColumns[0], ElsaRuntimeV2StorageManifest.IdField)) ||
+        (keyColumns.Count == 2 &&
+         keyColumns.Contains(ElsaRuntimeV2StorageManifest.IdField, StringComparer.Ordinal) &&
+         keyColumns.Contains(ProviderOwnedScopeColumn, StringComparer.Ordinal));
 }

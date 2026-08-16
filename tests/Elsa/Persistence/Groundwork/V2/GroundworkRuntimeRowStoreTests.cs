@@ -61,6 +61,30 @@ public sealed class GroundworkRuntimeRowStoreTests
     }
 
     [Fact]
+    public void Adapter_accepts_only_id_or_id_with_provider_owned_scope_key()
+    {
+        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
+        var scopedProviderKeyUnit = unit with
+        {
+            Key = new KeyDefinition { Columns = ["__groundwork_scope", ElsaRuntimeV2StorageManifest.IdField] }
+        };
+
+        _ = new GroundworkRuntimeRowStore(new MemorySession(scopedProviderKeyUnit));
+
+        var arbitraryCompositeKeyUnit = unit with
+        {
+            Key = new KeyDefinition { Columns = [ElsaRuntimeV2StorageManifest.IdField, "other"] }
+        };
+        Assert.Throws<ArgumentException>(() => new GroundworkRuntimeRowStore(new MemorySession(arbitraryCompositeKeyUnit)));
+
+        var oversizedCompositeKeyUnit = unit with
+        {
+            Key = new KeyDefinition { Columns = ["__groundwork_scope", ElsaRuntimeV2StorageManifest.IdField, "other"] }
+        };
+        Assert.Throws<ArgumentException>(() => new GroundworkRuntimeRowStore(new MemorySession(oversizedCompositeKeyUnit)));
+    }
+
+    [Fact]
     public void Adapter_forwards_query_and_aggregate_requests_without_reinterpreting_them()
     {
         var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);

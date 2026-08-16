@@ -6,9 +6,11 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
+using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.SqlServer;
 using Groundwork.Store;
+using QueryPredicate = Groundwork.Query.Model.Predicate;
 using Xunit;
 using Xunit.Sdk;
 
@@ -38,10 +40,31 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
         await AssertStoreBehaviorAsync(runtime);
     }
 
+    [Fact]
+    public async Task Sqlite_recovery_routes_are_exactly_bounded_and_provider_ordered()
+    {
+        await using var runtime = NativeProviderRuntime.Create("sqlite", null);
+        using var connection = runtime.OpenConnection();
+        var unit = UniqueLivenessUnit();
+        connection.Schema.Apply(unit);
+
+        var source = new DirectSessionSource(connection, unit);
+        var scope = new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var scanner = new GroundworkV2RuntimeRecoveryScanner(source, scope);
+        var request = new RuntimeRecoveryScanRequest(Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10);
+
+        Assert.Empty(await scanner.ScanAsync(request));
+        AssertUnfilteredRecoveryRoutes(source, request.Limit);
+
+        source.QueryRequests.Clear();
+        Assert.Empty(await scanner.ScanAsync(new RuntimeRecoveryScanRequest(request.Now, request.LeaseTimeout, request.HeartbeatTimeout, request.Limit, "worker-a")));
+        AssertOwnerRecoveryRoutes(source, request.Limit);
+    }
+
     private static async Task AssertStoreBehaviorAsync(NativeProviderRuntime runtime)
     {
         using var connection = runtime.OpenConnection();
-        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind);
+        var unit = UniqueLivenessUnit();
         connection.Schema.Apply(unit);
 
         var source = new DirectSessionSource(connection, unit);
@@ -70,6 +93,7 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
 
         var replacement = State("wf-1", "op-1", owner: "worker-b", metadata: new Dictionary<string, string> { ["value"] = "replacement" });
         var saved = await storeA.TrySaveAsync(replacement, found.Revision);
+        Assert.Equal(ExecutionLivenessStateWriteStatus.Saved, saved.Status);
         Assert.True(saved.Succeeded);
         Assert.Equal(2, saved.Revision);
         Assert.Equal("replacement", (await storeA.FindAsync("wf-1", "op-1"))!.Metadata["value"]);
@@ -96,6 +120,7 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
         await storeA.SaveAsync(State("wf-recovery", "op-lease", "worker-a", leaseExpiresAt: Now.AddMinutes(-1)));
         await storeA.SaveAsync(State("wf-recovery", "op-heartbeat", "worker-a", leaseExpiresAt: Now.AddMinutes(5), heartbeatRecordedAt: Now.AddMinutes(-2)));
 
+        source.QueryRequests.Clear();
         var scanner = new GroundworkV2RuntimeRecoveryScanner(source, scopeA);
         var candidates = await scanner.ScanAsync(new RuntimeRecoveryScanRequest(Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10));
         Assert.Equal(
@@ -103,9 +128,116 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
             candidates.Select(candidate => candidate.OperationalStateId));
         Assert.Equal(RuntimeInterruptionReason.HostStopped, candidates.First().Reason);
 
+        AssertUnfilteredRecoveryRoutes(source, 10);
+
+        source.QueryRequests.Clear();
         var ownerCandidates = await scanner.ScanAsync(new RuntimeRecoveryScanRequest(Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10, "worker-a"));
-        Assert.Equal(["op-lease", "op-heartbeat"], ownerCandidates.Select(candidate => candidate.OperationalStateId));
-        Assert.DoesNotContain(ownerCandidates, candidate => candidate.OperationalStateId == "op-detected");
+        Assert.Equal(["op-detected", "op-lease", "op-heartbeat"], ownerCandidates.Select(candidate => candidate.OperationalStateId));
+
+        AssertOwnerRecoveryRoutes(source, 10);
+    }
+
+    private static StorageUnit UniqueLivenessUnit()
+    {
+        var declaredUnit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind);
+        var suffix = Guid.NewGuid().ToString("N");
+        return declaredUnit with
+        {
+            Id = new StorageUnitId($"{declaredUnit.Id.Value}-{suffix}"),
+            Name = $"{declaredUnit.Name}_{suffix}"
+        };
+    }
+
+    private static void AssertUnfilteredRecoveryRoutes(DirectSessionSource source, int limit)
+    {
+        Assert.Equal(4, source.QueryRequests.Count);
+        Assert.Equal(
+            [
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField
+            ],
+            source.QueryRequests.Select(request => Assert.Single(request.Order).Column.Name));
+        Assert.All(source.QueryRequests, request => Assert.Equal(limit, request.Paging.Limit));
+        Assert.Equal(
+            [
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField },
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField },
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField },
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField }
+            ],
+            source.QueryRequests.Select(request => PredicateColumns(request.Where).OrderBy(column => column, StringComparer.Ordinal).ToArray()));
+        var detectedPredicate = Assert.IsType<QueryPredicate.Equal>(source.QueryRequests[0].Where);
+        Assert.Equal(QueryType.Int32, detectedPredicate.Value.Type);
+        Assert.IsType<int>(detectedPredicate.Value.Value);
+    }
+
+    private static void AssertOwnerRecoveryRoutes(DirectSessionSource source, int limit)
+    {
+        Assert.Equal(6, source.QueryRequests.Count);
+        Assert.Equal(
+            [
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryInterruptedAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField,
+                ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField
+            ],
+            source.QueryRequests.Select(request => Assert.Single(request.Order).Column.Name));
+        Assert.All(source.QueryRequests, request => Assert.Equal(limit, request.Paging.Limit));
+        Assert.Equal(
+            [
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField }.OrderBy(column => column, StringComparer.Ordinal).ToArray(),
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField }.OrderBy(column => column, StringComparer.Ordinal).ToArray(),
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField, ElsaRuntimeV2StorageManifest.RecoveryHasOperationalOwnerField }.OrderBy(column => column, StringComparer.Ordinal).ToArray(),
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField, ElsaRuntimeV2StorageManifest.RecoveryLeaseExpiresAtField }.OrderBy(column => column, StringComparer.Ordinal).ToArray(),
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryLeaseOwnerIdField, ElsaRuntimeV2StorageManifest.RecoveryLeaseAcquiredAtField }.OrderBy(column => column, StringComparer.Ordinal).ToArray(),
+                new[] { ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField }.OrderBy(column => column, StringComparer.Ordinal).ToArray()
+            ],
+            source.QueryRequests.Select(request => PredicateColumns(request.Where).OrderBy(column => column, StringComparer.Ordinal).ToArray()));
+        Assert.All(
+            source.QueryRequests.Take(3),
+            request =>
+            {
+                var detected = EqualityFor(request.Where, ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField);
+                Assert.Equal(QueryType.Int32, detected.Value.Type);
+                Assert.IsType<int>(detected.Value.Value);
+            });
+    }
+
+    private static IReadOnlyCollection<string> PredicateColumns(QueryPredicate predicate) => predicate switch
+    {
+        QueryPredicate.Equal equal => [equal.Column.Name],
+        QueryPredicate.Range range => [range.Column.Name],
+        QueryPredicate.And and => and.Terms.SelectMany(PredicateColumns).ToArray(),
+        _ => []
+    };
+
+    private static QueryPredicate.Equal EqualityFor(QueryPredicate predicate, string field)
+    {
+        if (TryEqualityFor(predicate, field, out var equal))
+            return equal!;
+
+        throw new InvalidOperationException($"Predicate did not contain equality for '{field}'.");
+    }
+
+    private static bool TryEqualityFor(QueryPredicate predicate, string field, out QueryPredicate.Equal? equality)
+    {
+        if (predicate is QueryPredicate.Equal equal && StringComparer.Ordinal.Equals(equal.Column.Name, field))
+        {
+            equality = equal;
+            return true;
+        }
+
+        if (predicate is QueryPredicate.And and)
+            foreach (var term in and.Terms)
+                if (TryEqualityFor(term, field, out equality))
+                    return true;
+
+        equality = null;
+        return false;
     }
 
     private static ExecutionLivenessState State(
@@ -151,10 +283,19 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
 
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit) : IGroundworkStorageSessionSource
     {
+        private readonly Dictionary<StorageAccess, IStorageSession> sessions = [];
+
+        public List<QueryRequest> QueryRequests { get; } = [];
+
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
             Assert.Equal(unit.Id.Value, unitId);
-            return connection.OpenSession(unit, access);
+            if (sessions.TryGetValue(access, out var session))
+                return session;
+
+            session = new RecordingSession(connection.OpenSession(unit, access), QueryRequests);
+            sessions.Add(access, session);
+            return session;
         }
 
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
@@ -162,9 +303,33 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
 
         public StorageUnit Unit(string unitId, string? targetName = null)
         {
-            Assert.Equal(unit.Id.Value, unitId);
+            Assert.Equal(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, unitId);
             return unit;
         }
+    }
+
+    private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests) : IStorageSession, IConcurrencyStorageSession
+    {
+        public StorageUnit Unit => inner.Unit;
+        public StorageAccess Access => inner.Access;
+
+        public StoredEntry? Read(StorageKey key) => inner.Read(key);
+
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+        {
+            requests.Add(request);
+            return inner.Query(request, options);
+        }
+
+        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+
+        public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) =>
+            ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
     }
 
     private sealed class NativeProviderRuntime(string providerName, string connectionString, string? sqlitePath) : IAsyncDisposable

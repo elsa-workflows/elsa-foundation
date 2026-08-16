@@ -96,8 +96,8 @@ public sealed class GroundworkV2ExecutionLivenessStateStore : IExecutionLiveness
         ValidateIdentity(query.WorkflowExecutionId, "page workflow execution ID");
         cancellationToken.ThrowIfCancellationRequested();
         var table = new TableId(context.Unit.Name);
-        var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, QueryType.String, false, 128);
-        var operationalState = Column(table, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField, QueryType.String, false, 128);
+        var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var operationalState = Column(table, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
         var request = new QueryRequest(
             table,
             Equal(workflow, query.WorkflowExecutionId),
@@ -118,9 +118,9 @@ public sealed class GroundworkV2ExecutionLivenessStateStore : IExecutionLiveness
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
         var table = new TableId(context.Unit.Name);
-        var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField, QueryType.String, false, 128);
-        var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, QueryType.String, false, 128);
-        var operationalState = Column(table, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField, QueryType.String, false, 128);
+        var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField, QueryType.String, true, ElsaRuntimeV2StorageManifest.RuntimeCollectionProjectionLength);
+        var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var operationalState = Column(table, ElsaRuntimeV2StorageManifest.ExecutionLivenessOperationalStateIdField, QueryType.String, true, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
         var request = new QueryRequest(
             table,
             Equal(collection, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind),
