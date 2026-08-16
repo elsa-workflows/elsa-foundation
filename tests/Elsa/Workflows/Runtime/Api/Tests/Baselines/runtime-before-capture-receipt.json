@@ -1,6 +1,6 @@
 {
   "capture": "real-fastendpoints-historical-worktree",
-  "caseCount": 33,
+  "caseCount": 62,
   "categories": [
     "all-routes",
     "anonymous-401",
@@ -12,10 +12,10 @@
     "concurrency",
     "alteration-statuses"
   ],
-  "httpSha256": "5cc0dc9d15629991ded3d5a7b062bbe1c56cdaf3591511ae8eff6a7e82c3c22a",
+  "httpSha256": "ddad32426bf60549d503af0cd5ccab369134819591f95899e9afed22be08fd49",
   "openApiSha256": "990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4",
   "operationCount": 24,
   "registrationCount": 24,
-  "runnerCommit": "64188800d1c14fc990cfc405a9e41ecde1de9100",
+  "runnerCommit": "f4f2332e958c555a89b8e3d6ccfa05e8d0879a72",
   "sourceCommit": "ee6b9cf23f01e169fd6ce056f3c402db479d4e50"
 }
