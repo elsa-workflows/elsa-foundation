@@ -271,6 +271,7 @@
   <Folder Name="/src/Elsa/Workflows/Dashboard/Persistence/Groundwork/">
     <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
     <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/MongoDb/Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj" />
+    <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/">
     <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
@@ -576,6 +577,11 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Dashboard/">
     <Project Path="tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/" />
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/" />
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/">
+    <Project Path="tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Tests/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Dashboard/SqlServer/">
     <Project Path="tests/Elsa/Workflows/Dashboard/SqlServer/Tests/Elsa.Workflows.Dashboard.SqlServer.Tests.csproj" />

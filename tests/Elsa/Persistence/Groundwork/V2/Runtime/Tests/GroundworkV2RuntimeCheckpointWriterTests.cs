@@ -1,10 +1,10 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -953,6 +953,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                     ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
                     ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
                     ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind,
+                    ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind,
                     ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
                 ],
                 source.LastUnitIds);
@@ -1222,11 +1223,295 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind,
             ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
             ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+            ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind,
             ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
         };
         var stagedUnitIds = source.AllStaged.Select(write => write.Unit.Id.Value).ToHashSet(StringComparer.Ordinal);
         Assert.All(expectedUnits, unitId => Assert.Contains(unitId, stagedUnitIds));
         AssertProjectionFieldsDeclared(source.AllStaged);
+    }
+
+    [Fact]
+    public async Task Run_health_folds_multiple_incidents_once_and_preserves_started_at_on_update()
+    {
+        var source = new MemorySource();
+        var writer = NewWriter(source);
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var workflow = NewExecution("workflow-health") with
+        {
+            RunKind = WorkflowRunKind.PublishedRun,
+            StartedAt = startedAt
+        };
+        var firstIncident = NewIncident("incident-health-1", workflow.WorkflowExecutionId, startedAt);
+        var secondIncident = NewIncident("incident-health-2", workflow.WorkflowExecutionId, startedAt.AddSeconds(1));
+        var initialChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                workflow.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                workflow,
+                new Dictionary<string, string>()),
+            null,
+            [],
+            [],
+            [],
+            [
+                new RuntimeStateChange<IncidentState>(firstIncident.IncidentId, RuntimeStateChangeOperation.Append, firstIncident, new Dictionary<string, string>()),
+                new RuntimeStateChange<IncidentState>(secondIncident.IncidentId, RuntimeStateChangeOperation.Append, secondIncident, new Dictionary<string, string>())
+            ],
+            []);
+        var initialCommit = NewCommit("health-fold", workflow.WorkflowExecutionId) with { StateChanges = initialChanges };
+
+        await writer.CommitAsync(initialCommit, Immediate());
+
+        var healthUnit = ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind;
+        var healthEntry = source.Find(healthUnit, workflow.WorkflowExecutionId, "tenant-a");
+        Assert.NotNull(healthEntry);
+        var health = DeserializeRunHealth(healthEntry!);
+        Assert.Equal(2, health.IncidentCount);
+        Assert.Equal(1, health.IncidentBearingCount);
+        Assert.Equal(startedAt, health.StartedAt);
+        var healthWrites = source.AllStaged.Count(write => write.Unit.Id.Value == healthUnit);
+        Assert.Equal(1, healthWrites);
+
+        await writer.CommitAsync(initialCommit, Immediate());
+        Assert.Equal(healthWrites, source.AllStaged.Count(write => write.Unit.Id.Value == healthUnit));
+
+        var resolutionTime = startedAt.AddMinutes(1);
+        var resolvedIncident = new IncidentState(
+            firstIncident.IncidentId,
+            firstIncident.WorkflowExecutionId,
+            firstIncident.ActivityExecutionId,
+            firstIncident.ExecutableNodeId,
+            firstIncident.Severity,
+            IncidentStatus.Resolved,
+            new IncidentResolutionOutcome("test.resolve", resolutionTime, null, "test"),
+            firstIncident.FailureType,
+            firstIncident.Message,
+            firstIncident.CreatedAt,
+            resolutionTime,
+            firstIncident.Metadata);
+        var updatedWorkflow = workflow with
+        {
+            Status = WorkflowExecutionStatus.Completed,
+            StartedAt = startedAt.AddHours(1),
+            UpdatedAt = resolutionTime
+        };
+        var updateChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                workflow.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                updatedWorkflow,
+                new Dictionary<string, string>()),
+            null,
+            [],
+            [],
+            [],
+            [new RuntimeStateChange<IncidentState>(
+                resolvedIncident.IncidentId,
+                RuntimeStateChangeOperation.Upsert,
+                resolvedIncident,
+                new Dictionary<string, string>())],
+            []);
+
+        await writer.CommitAsync(
+            NewCommit("health-resolution", workflow.WorkflowExecutionId) with { StateChanges = updateChanges },
+            Immediate());
+
+        healthEntry = source.Find(healthUnit, workflow.WorkflowExecutionId, "tenant-a");
+        Assert.NotNull(healthEntry);
+        health = DeserializeRunHealth(healthEntry!);
+        Assert.Equal(2, health.IncidentCount);
+        Assert.Equal(1, health.IncidentBearingCount);
+        Assert.Equal(startedAt, health.StartedAt);
+        Assert.Equal(WorkflowExecutionStatus.Completed, health.Status);
+        Assert.Equal(2, source.AllStaged.Count(write => write.Unit.Id.Value == healthUnit));
+    }
+
+    [Fact]
+    public async Task Run_health_projection_rolls_back_with_workflow_and_incidents()
+    {
+        var source = new MemorySource { FailCommitBeforeApply = true };
+        var workflow = NewExecution("workflow-health-rollback") with { RunKind = WorkflowRunKind.PublishedRun };
+        var incident = NewIncident("incident-health-rollback", workflow.WorkflowExecutionId, workflow.StartedAt ?? DateTimeOffset.UtcNow);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                workflow.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                workflow,
+                new Dictionary<string, string>()),
+            null,
+            [],
+            [],
+            [],
+            [new RuntimeStateChange<IncidentState>(incident.IncidentId, RuntimeStateChangeOperation.Append, incident, new Dictionary<string, string>())],
+            []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("health-rollback", workflow.WorkflowExecutionId) with { StateChanges = changes },
+                Immediate()).AsTask());
+
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind, incident.IncidentId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "health-rollback", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Run_health_concurrent_revision_change_rejects_the_entire_checkpoint()
+    {
+        var source = new MemorySource();
+        var workflow = NewExecution("workflow-health-race") with
+        {
+            RunKind = WorkflowRunKind.PublishedRun,
+            Status = WorkflowExecutionStatus.Running
+        };
+        var initialChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                workflow.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                workflow,
+                new Dictionary<string, string>()),
+            null,
+            [],
+            [],
+            [],
+            [],
+            []);
+        await NewWriter(source).CommitAsync(
+            NewCommit("health-race-initial", workflow.WorkflowExecutionId) with { StateChanges = initialChanges },
+            Immediate());
+
+        var healthUnit = ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind;
+        var initialHealth = source.Find(healthUnit, workflow.WorkflowExecutionId, "tenant-a")!;
+        source.BeforeCommit = _ =>
+        {
+            source.BeforeCommit = null;
+            source.ReplaceRow(
+                "tenant-a",
+                healthUnit,
+                workflow.WorkflowExecutionId,
+                initialHealth.Values,
+                initialHealth.Version!.Value + 1);
+        };
+        var completed = workflow with { Status = WorkflowExecutionStatus.Completed };
+        var updateChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                completed.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                completed,
+                new Dictionary<string, string>()),
+            null,
+            [],
+            [],
+            [],
+            [],
+            []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("health-race-update", completed.WorkflowExecutionId) with { StateChanges = updateChanges },
+                Immediate()).AsTask());
+
+        Assert.Equal(
+            WorkflowExecutionStatus.Running,
+            DeserializeRunHealth(source.Find(healthUnit, workflow.WorkflowExecutionId, "tenant-a")!).Status);
+        Assert.Null(source.Find(
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            "health-race-update",
+            "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Run_health_rejects_an_existing_workflow_without_its_projection()
+    {
+        var source = new MemorySource();
+        var workflow = NewExecution("workflow-health-missing") with { RunKind = WorkflowRunKind.PublishedRun };
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
+            workflow.WorkflowExecutionId,
+            new { workflowExecutionId = workflow.WorkflowExecutionId },
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = workflow.WorkflowExecutionId
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("health-missing", workflow.WorkflowExecutionId) with
+                {
+                    StateChanges = new RuntimeCheckpointStateChangeSet(
+                        new RuntimeStateChange<WorkflowExecutionState>(
+                            workflow.WorkflowExecutionId,
+                            RuntimeStateChangeOperation.Upsert,
+                            workflow,
+                            new Dictionary<string, string>()),
+                        null,
+                        [],
+                        [],
+                        [],
+                        [],
+                        [])
+                },
+                Immediate()).AsTask());
+
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "health-missing", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Run_health_rejects_a_new_workflow_with_an_orphan_projection()
+    {
+        var source = new MemorySource();
+        var workflow = NewExecution("workflow-health-orphan") with { RunKind = WorkflowRunKind.PublishedRun };
+        var startedAt = workflow.StartedAt ?? DateTimeOffset.UtcNow;
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind,
+            workflow.WorkflowExecutionId,
+            new
+            {
+                workflowExecutionId = workflow.WorkflowExecutionId,
+                definitionId = workflow.PinnedExecutable.DefinitionId,
+                runKind = workflow.RunKind,
+                startedAt,
+                status = workflow.Status,
+                incidentCount = 0L,
+                incidentBearingCount = 0L
+            },
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthDefinitionIdField] = workflow.PinnedExecutable.DefinitionId,
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunKindField] = (int)workflow.RunKind,
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthStartedAtField] = startedAt,
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField] = (int)workflow.Status,
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentCountField] = 0L,
+                [ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentBearingCountField] = 0L
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("health-orphan", workflow.WorkflowExecutionId) with
+                {
+                    StateChanges = new RuntimeCheckpointStateChangeSet(
+                        new RuntimeStateChange<WorkflowExecutionState>(
+                            workflow.WorkflowExecutionId,
+                            RuntimeStateChangeOperation.Upsert,
+                            workflow,
+                            new Dictionary<string, string>()),
+                        null,
+                        [],
+                        [],
+                        [],
+                        [],
+                        [])
+                },
+                Immediate()).AsTask());
+
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "health-orphan", "tenant-a"));
+        Assert.NotNull(source.Find(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
     }
 
     private static void AssertProjectionFieldsDeclared(IEnumerable<RowWrite> writes)
@@ -1298,19 +1583,51 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     private static RuntimeCheckpointPersistenceDecision Immediate() =>
         new(RuntimeCheckpointPersistenceMode.Immediate);
 
-    private static RuntimeCheckpointCommit NewCommit(string commitId) =>
+    private static RuntimeCheckpointCommit NewCommit(string commitId, string workflowExecutionId = "workflow-1") =>
         new(
             commitId,
             new RuntimeCheckpoint(
                 $"checkpoint-{commitId}",
                 "runtime",
-                "workflow-1",
+                workflowExecutionId,
                 DateTimeOffset.UtcNow,
                 [],
                 new Dictionary<string, string>()),
             new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
             [],
             new Dictionary<string, string>());
+
+    private static IncidentState NewIncident(
+        string incidentId,
+        string workflowExecutionId,
+        DateTimeOffset createdAt) =>
+        new(
+            incidentId,
+            workflowExecutionId,
+            null,
+            "node",
+            IncidentSeverity.Error,
+            IncidentStatus.Blocking,
+            null,
+            "TestFailure",
+            "test failure",
+            createdAt,
+            null,
+            new Dictionary<string, string>());
+
+    private static RunHealthProjection DeserializeRunHealth(StoredEntry entry) =>
+        JsonSerializer.Deserialize<RunHealthProjection>(
+            (string)entry.Values.Values[ElsaRuntimeV2StorageManifest.ContentField]!,
+            Json) ?? throw new InvalidDataException("Run-health projection content was empty.");
+
+    private sealed record RunHealthProjection(
+        string WorkflowExecutionId,
+        string DefinitionId,
+        WorkflowRunKind RunKind,
+        DateTimeOffset? StartedAt,
+        WorkflowExecutionStatus Status,
+        long IncidentCount,
+        long IncidentBearingCount);
 
     // Independent test oracle for the persisted identity. The production convention is intentionally
     // internal; this keeps the checkpoint-writer/store compatibility assertion from merely reusing it.

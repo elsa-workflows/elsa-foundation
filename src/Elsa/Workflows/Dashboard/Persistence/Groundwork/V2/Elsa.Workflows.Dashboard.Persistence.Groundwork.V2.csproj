@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../../Elsa.Workflows.Dashboard.csproj" />
+    <ProjectReference Include="../../../../../Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
+  </ItemGroup>
+</Project>
