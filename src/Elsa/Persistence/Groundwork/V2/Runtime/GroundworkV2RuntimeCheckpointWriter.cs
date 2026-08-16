@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -22,13 +21,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
-    static GroundworkV2RuntimeCheckpointWriter()
-    {
-        Json.Converters.Add(new JsonStringEnumConverter());
-    }
-
     private static readonly string[] CommitUnitIds =
     [
         ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
@@ -467,7 +459,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     private static CheckpointMarker DeserializeMarker(IReadOnlyDictionary<string, object?> values)
     {
         var content = ReadContent(values);
-        var marker = JsonSerializer.Deserialize<CheckpointMarker>(content, Json) ??
+        var marker = GroundworkV2RuntimeJson.Deserialize<CheckpointMarker>(content) ??
                      throw new InvalidDataException("Groundwork runtime checkpoint marker content was empty.");
         var rowId = ReadRequiredString(values, ElsaRuntimeV2StorageManifest.IdField);
         if (!StringComparer.Ordinal.Equals(marker.CommitId, rowId))
@@ -689,10 +681,25 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             }
         }
 
-        public void ApplyDurableValues() => ApplyMany(
-            ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind,
-            commit.StateChanges.DurableValues,
-            ProjectDurableValue);
+        public void ApplyDurableValues()
+        {
+            foreach (var change in commit.StateChanges.DurableValues)
+            {
+                var physicalId = GroundworkV2DurableValueStorageConventions.PhysicalId(
+                    change.State.WorkflowExecutionId,
+                    change.State.DurableValueId);
+                if (change.Operation == RuntimeStateChangeOperation.Delete)
+                {
+                    StageDelete(ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind, physicalId);
+                    continue;
+                }
+
+                StageValues(
+                    ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind,
+                    GroundworkV2DurableValueStorageConventions.Values(change.State),
+                    change.Operation);
+            }
+        }
 
         public void ApplyActivityScopeCleanups()
         {
@@ -1149,7 +1156,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         private StorageUnit Unit(string unitId) =>
             sessions.Unit(unitId, targetName);
 
-        private static string Serialize(object value) => JsonSerializer.Serialize(value, value.GetType(), Json);
+        private static string Serialize(object value) => GroundworkV2RuntimeJson.Serialize(value);
 
         private RuntimeStaleFencingTokenException NewStaleFence(
             RuntimeFencingRejectionReason reason,
@@ -1200,13 +1207,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryExecutionSequenceField] = state.ExecutionSequence,
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryScheduledAtField] = state.ScheduledAt,
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField] = state.ActivityExecutionId
-            };
-
-        private static IReadOnlyDictionary<string, object?> ProjectDurableValue(DurableValueState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.DurableValueIdField] = state.DurableValueId
             };
 
         private static IReadOnlyDictionary<string, object?> ProjectIncident(IncidentState state) =>
@@ -1316,7 +1316,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
         private static T Deserialize<T>(IReadOnlyDictionary<string, object?> values)
         {
-            var result = JsonSerializer.Deserialize<T>(ReadContent(values), Json);
+            var result = GroundworkV2RuntimeJson.Deserialize<T>(ReadContent(values));
             return result ?? throw new InvalidDataException($"Groundwork runtime row could not deserialize as {typeof(T).Name}.");
         }
 
