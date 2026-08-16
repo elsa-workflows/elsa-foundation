@@ -788,7 +788,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton(externalPayloadStore ?? new InMemoryExternalPayloadStore());
         if (authorization is not null)
             services.AddSingleton(authorization);
-        services.AddSingleton<IActivityExecutionInspectionAuthorizationContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
+        services.AddSingleton<IActivityInspectionContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);
@@ -854,7 +854,7 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<TimeProvider>(clock);
         services.AddScoped<IActivityActivationStrategy, SuspendingActivityActivationStrategy>();
         services.AddSingleton(externalPayloadStore ?? new InMemoryExternalPayloadStore());
-        services.AddSingleton<IActivityExecutionInspectionAuthorizationContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
+        services.AddSingleton<IActivityInspectionContext, AllowAllActivityExecutionInspectionAuthorizationContext>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new GraphActivitiesRuntimeFeature().ConfigureServices(services);

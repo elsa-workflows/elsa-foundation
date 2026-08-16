@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed class ListIncidentsRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization)
+    IActivityInspectionContextAsync authorization)
     : IRequestHandler<ListIncidents, ListIncidentsResponse>
 {
     public async Task<ListIncidentsResponse> Handle(ListIncidents request, CancellationToken cancellationToken)

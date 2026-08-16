@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Activities.Design.Api.Contracts;
 
@@ -14,7 +15,8 @@ public sealed record ActivityProviderAuthorizationResource(string ProviderKey, s
 /// must change whenever permissions that affect structural results change, so cursors cannot cross
 /// authorization contexts.
 /// </summary>
-public interface IActivityDependencyAuthorizationContext
+[Obsolete("Use IActivityDependencyContextAsync. This interface will be removed in the next major version.")]
+public interface IActivityDependencyContext
 {
     string? TenantId { get; }
 
@@ -24,7 +26,8 @@ public interface IActivityDependencyAuthorizationContext
 }
 
 /// <summary>Asynchronous replacement seam for request-scoped dependency authorization.</summary>
-public interface IActivityDependencyAuthorizationContextAsync
+[ReplacementContract]
+public interface IActivityDependencyContextAsync
 {
     string? TenantId { get; }
 

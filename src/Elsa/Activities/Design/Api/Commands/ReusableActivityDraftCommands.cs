@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using System.Text.Json.Serialization;
 using RouteParam = FastEndpoints.RouteParamAttribute;
@@ -10,6 +11,7 @@ namespace Elsa.Activities.Design.Api.Commands;
 /// Required host adapter for tenant scoping and provider-source authorization. T033 supplies the
 /// shell registration; authoring handlers deliberately have no global/null fallback.
 /// </summary>
+[Obsolete("Use IActivityAuthoringContextAsync. This interface will be removed in the next major version.")]
 public interface IActivityAuthoringContext
 {
     string? TenantId { get; }
@@ -31,6 +33,7 @@ public interface IActivityAuthoringContext
 /// canonical evaluator. The synchronous interface remains for one compatibility window and is not
 /// used by production handlers.
 /// </summary>
+[ReplacementContract]
 public interface IActivityAuthoringContextAsync
 {
     string? TenantId { get; }

@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityExecutionValuePayloadReader(
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionInspectionStore inspections,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization,
+    IActivityInspectionContextAsync authorization,
     IActivityExecutionValuePayloadAuditSink auditSink,
     TimeProvider timeProvider) : IActivityExecutionValuePayloadReader
 {

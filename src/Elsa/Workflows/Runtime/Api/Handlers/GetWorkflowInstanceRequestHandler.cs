@@ -15,7 +15,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
     IIncidentStateStore incidentStateStore,
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization,
+    IActivityInspectionContextAsync authorization,
     RuntimeCheckpointCadenceInspector checkpointCadenceInspector)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {

@@ -618,7 +618,7 @@ public sealed class ActivityTemplatePlacementTests
             ValueTask.CompletedTask;
     }
 
-    private sealed class AllowStructureAuthorization : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
+    private sealed class AllowStructureAuthorization : IActivityInspectionContext, IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:a";
         public string AuthorizationProfile => "structure:true";

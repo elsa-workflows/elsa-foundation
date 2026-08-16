@@ -135,7 +135,7 @@ public sealed class ListIncidentsRequestHandlerTests
             metadata: metadata);
 
     private sealed class TestAuthorization(bool canInspectStructure, bool canInspectSensitiveValues)
-        : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
+        : IActivityInspectionContext, IActivityInspectionContextAsync
     {
         public string TenantScope => "test";
         public string AuthorizationProfile => "test";

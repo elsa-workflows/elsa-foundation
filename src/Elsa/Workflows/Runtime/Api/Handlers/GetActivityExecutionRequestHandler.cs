@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed class GetActivityExecutionRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionInspectionStore inspectionStore,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization,
+    IActivityInspectionContextAsync authorization,
     IActivityExecutionHierarchyStore? hierarchyStore = null)
     : IRequestHandler<GetActivityExecution, GetActivityExecutionResponse>
 {

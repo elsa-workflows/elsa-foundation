@@ -17,7 +17,7 @@ public sealed class ActivityUpgradePlanner(
     IActivityUpgradeApplyReceiptStore receiptStore,
     IActivityUpgradePublishedDraftResolver publishedDraftResolver,
     IActivityUpgradeDiffBuilder diffBuilder,
-    IActivityDependencyAuthorizationContextAsync authorization,
+    IActivityDependencyContextAsync authorization,
     IIdentityGenerator identityGenerator,
     ISystemClock clock) : IActivityUpgradePlanner, IActivityUpgradePlanRefresher
 {

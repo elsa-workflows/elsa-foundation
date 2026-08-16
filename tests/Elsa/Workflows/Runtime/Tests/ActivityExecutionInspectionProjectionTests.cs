@@ -158,7 +158,7 @@ public class ActivityExecutionInspectionProjectionTests
             User = Principal("tenant-a", HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)
         };
         using var provider = IdentityProvider();
-        var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+        var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>(), provider.GetRequiredService<NormalizedPrincipalValidator>());
         var sameTenant = new WorkflowExecutionState(
             "wf", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running, null,
             DateTimeOffset.UnixEpoch, null, null, null, null, null, "tenant-a", new Dictionary<string, string>());
@@ -175,7 +175,7 @@ public class ActivityExecutionInspectionProjectionTests
         Assert.False(await authorization.CanInspectSensitiveValuesAsync(sameTenant));
         Assert.Equal(structureOnlyProfile, await authorization.GetAuthorizationProfileAsync());
 
-        var replacement = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+        var replacement = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>(), provider.GetRequiredService<NormalizedPrincipalValidator>());
         Assert.True(await replacement.CanInspectSensitiveValuesAsync(sameTenant));
         Assert.NotEqual(structureOnlyProfile, await replacement.GetAuthorizationProfileAsync());
     }
@@ -192,27 +192,29 @@ public class ActivityExecutionInspectionProjectionTests
         };
         using var provider = IdentityProvider();
         var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
-            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>(), provider.GetRequiredService<NormalizedPrincipalValidator>());
 
         Assert.Empty(authorization.AuditSubject);
 
         context.User = new ClaimsPrincipal(new ClaimsIdentity(
         [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
             new Claim(ClaimTypes.NameIdentifier, "stable-subject-1"),
             new Claim(ClaimTypes.Name, "mutable-display-name")
         ], "test"));
         authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
-            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>(), provider.GetRequiredService<NormalizedPrincipalValidator>());
         Assert.Equal("stable-subject-1", authorization.AuditSubject);
 
         context.User = new ClaimsPrincipal(new ClaimsIdentity(
         [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
             new Claim(ClaimTypes.NameIdentifier, " "),
             new Claim("sub", "oidc-subject-1"),
             new Claim(ClaimTypes.Name, "mutable-display-name")
         ], "test"));
         authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
-            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>(), provider.GetRequiredService<NormalizedPrincipalValidator>());
         Assert.Equal("oidc-subject-1", authorization.AuditSubject);
     }
 
@@ -281,7 +283,7 @@ public class ActivityExecutionInspectionProjectionTests
             null);
     }
 
-    private sealed class DenyStructureAuthorization : IActivityExecutionInspectionAuthorizationContextAsync
+    private sealed class DenyStructureAuthorization : IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:b";
         public string AuditSubject => "test";

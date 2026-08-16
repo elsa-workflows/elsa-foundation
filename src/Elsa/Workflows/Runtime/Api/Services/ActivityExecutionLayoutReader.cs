@@ -11,7 +11,7 @@ public sealed class ActivityExecutionLayoutReader(
     IActivityExecutionHierarchyStore hierarchy,
     IWorkflowExecutableStore executables,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization)
+    IActivityInspectionContextAsync authorization)
 {
     public async ValueTask<ActivityExecutionLayoutView?> ReadAsync(
         string workflowExecutionId,

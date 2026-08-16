@@ -52,13 +52,23 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        services.TryAddScoped<IActivityAuthoringContextAsync>(sp =>
-            sp.GetRequiredService<IActivityAuthoringContext>() as IActivityAuthoringContextAsync
-            ?? throw new InvalidOperationException("The registered authoring authorization context must implement the asynchronous context seam."));
-        services.TryAddScoped<IActivityDependencyAuthorizationContextAsync>(sp =>
-            sp.GetRequiredService<IActivityDependencyAuthorizationContext>() as IActivityDependencyAuthorizationContextAsync
-            ?? throw new InvalidOperationException("The registered dependency authorization context must implement the asynchronous context seam."));
+        services.TryAddScoped<IActivityDependencyContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
+        {
+            services.AddScoped<IActivityAuthoringContextAsync>(sp =>
+                sp.GetRequiredService<IActivityAuthoringContext>() is IActivityAuthoringContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityAuthoringContextAdapter(sp.GetRequiredService<IActivityAuthoringContext>()));
+        }
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync)))
+        {
+            services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                sp.GetRequiredService<IActivityDependencyContext>() is IActivityDependencyContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyContext>()));
+        }
+        services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>

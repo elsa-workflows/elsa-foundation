@@ -17,33 +17,37 @@ namespace Elsa.Activities.Design.Api.Services;
 /// </summary>
 public sealed class HttpContextActivityDesignAuthorizationContext :
     IActivityAuthoringContext,
-    IActivityDependencyAuthorizationContext,
+    IActivityDependencyContext,
     IActivityAuthoringContextAsync,
-    IActivityDependencyAuthorizationContextAsync
+    IActivityDependencyContextAsync
 {
     public const string AuthorPermission = "activities.design.author";
     public const string ProviderPayloadReadPermission = "activities.design.provider-payload.read";
     public const string ActivityDesignManagePermission = "activity-design.manage";
 
     private readonly IPermissionAuthorizationService _authorization;
+    private readonly NormalizedPrincipalValidator _principalValidator;
     private readonly ClaimsPrincipal _principal;
+    private readonly bool _trusted;
     private readonly string? _tenantId;
     private readonly string _actorId;
     private Lazy<Task<AuthorizationSnapshot>>? _snapshot;
 
     public HttpContextActivityDesignAuthorizationContext(
         IHttpContextAccessor httpContextAccessor,
-        IPermissionAuthorizationService authorization)
+        IPermissionAuthorizationService authorization,
+        NormalizedPrincipalValidator principalValidator)
     {
         ArgumentNullException.ThrowIfNull(httpContextAccessor);
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
+        _principalValidator = principalValidator ?? throw new ArgumentNullException(nameof(principalValidator));
 
         var httpContext = httpContextAccessor.HttpContext;
-        _principal = httpContext?.User is { } user
-            ? new ClaimsPrincipal(user)
-            : new ClaimsPrincipal(new ClaimsIdentity());
-        _tenantId = FindTenantId(_principal);
-        _actorId = FindActorId(_principal);
+        var rawPrincipal = httpContext?.User ?? new ClaimsPrincipal(new ClaimsIdentity());
+        _trusted = _principalValidator.TryGetNormalizedPrincipal(rawPrincipal, out var normalizedPrincipal);
+        _principal = _trusted ? normalizedPrincipal : new ClaimsPrincipal(new ClaimsIdentity());
+        _tenantId = _trusted ? FindTenantId(_principal) : null;
+        _actorId = _trusted ? FindActorId(_principal) : string.Empty;
     }
 
     public string? TenantId => _tenantId;
@@ -63,7 +67,7 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     [Obsolete("Use IActivityAuthoringContextAsync.CanManageActivityDefinitionsAsync.")]
     public bool CanManageActivityDefinitions => throw SynchronousAccess();
 
-    [Obsolete("Use IActivityDependencyAuthorizationContextAsync.CanReadAsync.")]
+    [Obsolete("Use IActivityDependencyContextAsync.CanReadAsync.")]
     public bool CanRead(ActivityDefinitionReference reference) => throw SynchronousAccess();
 
     public async ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default)
@@ -86,7 +90,9 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         EvaluateSnapshotAsync(snapshot => snapshot.CanManage, cancellationToken);
 
     public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, _tenantId));
+        cancellationToken.IsCancellationRequested
+            ? ValueTask.FromCanceled<bool>(cancellationToken)
+            : ValueTask.FromResult(_trusted && (reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, _tenantId)));
 
     private async ValueTask<bool> EvaluateSnapshotAsync(
         Func<AuthorizationSnapshot, bool> selector,
@@ -96,24 +102,38 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         return selector(snapshot);
     }
 
-    private Task<AuthorizationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
+    private async Task<AuthorizationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
         var existing = Volatile.Read(ref _snapshot);
-        if (existing is not null)
-            return existing.Value;
+        if (existing is null)
+        {
+            var created = new Lazy<Task<AuthorizationSnapshot>>(
+                CreateSnapshotAsync,
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            existing = Interlocked.CompareExchange(ref _snapshot, created, null) ?? created;
+        }
 
-        var created = new Lazy<Task<AuthorizationSnapshot>>(
-            () => CreateSnapshotAsync(cancellationToken),
-            LazyThreadSafetyMode.ExecutionAndPublication);
-        var winner = Interlocked.CompareExchange(ref _snapshot, created, null) ?? created;
-        return winner.Value;
+        var snapshotTask = existing.Value;
+        try
+        {
+            // The computation is shared independently of any one caller. A canceled waiter
+            // must not poison the cached snapshot for concurrent callers; cancellation is
+            // applied to each wait instead.
+            return await snapshotTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (snapshotTask.IsCanceled || snapshotTask.IsFaulted)
+                Interlocked.CompareExchange(ref _snapshot, null, existing);
+            throw;
+        }
     }
 
-    private async Task<AuthorizationSnapshot> CreateSnapshotAsync(CancellationToken cancellationToken)
+    private async Task<AuthorizationSnapshot> CreateSnapshotAsync()
     {
-        var canAuthor = await AuthorizeAsync(AuthorPermission, cancellationToken).ConfigureAwait(false);
-        var canReadProviderPayload = await AuthorizeAsync(ProviderPayloadReadPermission, cancellationToken).ConfigureAwait(false);
-        var canManage = await AuthorizeAsync(ActivityDesignManagePermission, cancellationToken).ConfigureAwait(false);
+        var canAuthor = await AuthorizeAsync(AuthorPermission, CancellationToken.None).ConfigureAwait(false);
+        var canReadProviderPayload = await AuthorizeAsync(ProviderPayloadReadPermission, CancellationToken.None).ConfigureAwait(false);
+        var canManage = await AuthorizeAsync(ActivityDesignManagePermission, CancellationToken.None).ConfigureAwait(false);
         var profileMaterial = $"tenant:{_tenantId ?? "global"}|author:{canAuthor}|provider-payload:{canReadProviderPayload}|manage:{canManage}";
         var profile = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(profileMaterial))).ToLowerInvariant();
         return new AuthorizationSnapshot(canAuthor, canReadProviderPayload, canManage, profile);
@@ -160,4 +180,37 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         bool CanReadProviderPayload,
         bool CanManage,
         string Profile);
+}
+
+public sealed class LegacyActivityAuthoringContextAdapter : IActivityAuthoringContextAsync
+{
+    private readonly IActivityAuthoringContext _legacy;
+
+    public LegacyActivityAuthoringContextAdapter(IActivityAuthoringContext legacy) =>
+        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
+
+    public string? TenantId => _legacy.TenantId;
+    public string ActorId => _legacy.ActorId;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
+    public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanAuthorProvider(providerKey));
+    public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanReadProviderPayload(providerKey));
+    public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanManageActivityDefinitions);
+}
+
+public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContextAsync
+{
+    private readonly IActivityDependencyContext _legacy;
+
+    public LegacyActivityDependencyContextAdapter(IActivityDependencyContext legacy) =>
+        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
+
+    public string? TenantId => _legacy.TenantId;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
+    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanRead(reference));
 }

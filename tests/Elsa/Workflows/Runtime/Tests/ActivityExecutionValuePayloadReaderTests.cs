@@ -154,7 +154,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
             RuntimePayloadCaptureMode captureMode = RuntimePayloadCaptureMode.Payload,
             bool includePayload = true,
             Exception? auditFailure = null,
-            IActivityExecutionInspectionAuthorizationContextAsync? authorization = null)
+            IActivityInspectionContextAsync? authorization = null)
         {
             var workflows = new InMemoryWorkflowExecutionStateStore();
             var inspections = new InMemoryActivityExecutionInspectionStore();
@@ -213,7 +213,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     private sealed class Authorization(
         bool canResolve,
         string auditSubject,
-        bool canInspect) : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
+        bool canInspect) : IActivityInspectionContext, IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:tenant-a";
         public string AuthorizationProfile => $"resolve:{canResolve}";
@@ -229,7 +229,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     }
 
     private sealed class ChangingSubjectAuthorization(params string[] auditSubjects)
-        : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
+        : IActivityInspectionContext, IActivityInspectionContextAsync
     {
         public int AuditSubjectReads { get; private set; }
         public string TenantScope => "tenant:tenant-a";

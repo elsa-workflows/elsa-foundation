@@ -101,7 +101,7 @@ public sealed class ActivityDependencyReader(
     IActivityDirectDependencyStore directStore,
     IActivityDependencyProjectionStore projectionStore,
     IActivityDependencyCursorCodec cursorCodec,
-    IActivityDependencyAuthorizationContextAsync authorization,
+    IActivityDependencyContextAsync authorization,
     IOptions<ActivityDependencyReaderOptions> options)
 {
     public async Task<ActivityDependencyPageView> ReadAsync(

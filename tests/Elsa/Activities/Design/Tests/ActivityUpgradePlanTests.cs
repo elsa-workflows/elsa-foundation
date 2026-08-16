@@ -689,7 +689,7 @@ public sealed class ActivityUpgradePlanTests
         IActivityUpgradeDiffBuilder? diffBuilder = null,
         IActivityUpgradeApplyReceiptStore? receipts = null,
         IActivityUpgradePublishedDraftResolver? resolver = null,
-        IActivityDependencyAuthorizationContextAsync? authorization = null) =>
+        IActivityDependencyContextAsync? authorization = null) =>
         new(
             new Discovery(discovery),
             store,
@@ -1042,7 +1042,7 @@ public sealed class ActivityUpgradePlanTests
 
     private sealed class Authorization(
         string? tenantId = null,
-        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext, IActivityDependencyAuthorizationContextAsync
+        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyContext, IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => "global/manage";

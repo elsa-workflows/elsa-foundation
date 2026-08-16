@@ -17,6 +17,21 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
     [Fact]
+    public async Task Adapts_a_legacy_host_inspection_context_when_async_replacement_is_omitted()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityInspectionContext, LegacyInspectionContext>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
+
+        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
+        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+    }
+
+    [Fact]
     public void Registers_runtime_diagnostics_settings_command_handler()
     {
         var services = new ServiceCollection();
@@ -26,6 +41,32 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<ICommandHandler<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>>();
+    }
+
+    private static WorkflowExecutionState InspectionState() =>
+        new(
+            "workflow",
+            new("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running,
+            null,
+            DateTimeOffset.UnixEpoch,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "tenant",
+            new Dictionary<string, string>());
+
+    private sealed class LegacyInspectionContext : IActivityInspectionContext
+    {
+        public string TenantScope => "tenant:legacy";
+        public string AuthorizationProfile => "legacy-profile";
+        public string AuditSubject => "legacy-actor";
+        public string RequestCorrelationId => "legacy-request";
+        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
+        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 
     [Fact]

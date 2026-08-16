@@ -136,7 +136,7 @@ public sealed class ActivityDesignFeatureCompositionTests
 
         using var scope = provider.CreateScope();
         var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
-        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContextAsync>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
 
         Assert.Same(authoring, dependencies);
         Assert.True(await authoring.CanAuthorProviderAsync("elsa.activity-graph"));
@@ -145,6 +145,25 @@ public sealed class ActivityDesignFeatureCompositionTests
         Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-a")));
         Assert.False(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-b")));
         Assert.NotEmpty(await dependencies.GetAuthorizationProfileAsync());
+    }
+
+    [Fact]
+    public async Task ActivitiesDesignApiFeature_adapts_legacy_host_contexts_when_async_replacements_are_omitted()
+    {
+        var services = MinimalServices();
+        services.AddScoped<IActivityAuthoringContext, LegacyAuthoringContext>();
+        services.AddScoped<IActivityDependencyContext, LegacyDependencyContext>();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+
+        Assert.IsType<LegacyActivityAuthoringContextAdapter>(authoring);
+        Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
+        Assert.True(await authoring.CanAuthorProviderAsync("legacy"));
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
     }
 
     [Fact]
@@ -336,5 +355,22 @@ public sealed class ActivityDesignFeatureCompositionTests
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
+    }
+
+    private sealed class LegacyAuthoringContext : IActivityAuthoringContext
+    {
+        public string? TenantId => "legacy-tenant";
+        public string ActorId => "legacy-actor";
+        public string AuthorizationProfile => "legacy-profile";
+        public bool CanAuthorProvider(string providerKey) => providerKey == "legacy";
+        public bool CanReadProviderPayload(string providerKey) => providerKey == "legacy";
+        public bool CanManageActivityDefinitions => true;
+    }
+
+    private sealed class LegacyDependencyContext : IActivityDependencyContext
+    {
+        public string? TenantId => "legacy-tenant";
+        public string AuthorizationProfile => "legacy-profile";
+        public bool CanRead(ActivityDefinitionReference reference) => true;
     }
 }

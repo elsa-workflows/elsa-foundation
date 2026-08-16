@@ -74,10 +74,16 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         var assembly = GetType().Assembly;
         services.AddRequestHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
-        services.TryAddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        services.TryAddScoped<IActivityExecutionInspectionAuthorizationContextAsync>(sp =>
-            sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() as IActivityExecutionInspectionAuthorizationContextAsync
-            ?? throw new InvalidOperationException("The registered inspection authorization context must implement the asynchronous context seam."));
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContext)))
+            services.AddScoped<IActivityInspectionContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync)))
+        {
+            services.AddScoped<IActivityInspectionContextAsync>(sp =>
+                sp.GetRequiredService<IActivityInspectionContext>() is IActivityInspectionContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityInspectionContext>()));
+        }
+        services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
         services.TryAddScoped<RuntimeCheckpointCadenceInspector>();

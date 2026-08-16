@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityExecutionHierarchyReader(
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionHierarchyStore hierarchy,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization)
+    IActivityInspectionContextAsync authorization)
 {
     public async ValueTask<ActivityExecutionHierarchyPageView?> ReadAsync(
         string workflowExecutionId,

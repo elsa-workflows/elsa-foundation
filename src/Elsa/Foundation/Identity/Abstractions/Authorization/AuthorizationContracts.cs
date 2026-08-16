@@ -48,6 +48,7 @@ public interface IPermissionEvaluator
 /// principal validation, resource-handler precedence, catalog-backed evaluator, and cancellation
 /// semantics as the endpoint policy handlers.
 /// </summary>
+[ReplacementContract]
 public interface IPermissionAuthorizationService
 {
     ValueTask<PermissionEvaluationResult> AuthorizeAsync(
@@ -75,6 +76,11 @@ public interface IClaimsNormalizer
 public interface IClaimMappingRuleEvaluator
 {
     bool Matches(ClaimsPrincipal principal, ClaimMappingRule rule);
+}
+
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class ReplacementContractAttribute : Attribute
+{
 }
 
 public sealed record Permission(string Key, string DisplayName, string Category, string Description, IReadOnlySet<string>? Implies = null)
@@ -554,19 +560,29 @@ public sealed class RequirePermissionPolicyProvider(
         fallback?.Provider.GetFallbackPolicyAsync() ?? _defaultProvider.GetFallbackPolicyAsync();
 }
 
-public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAuthorizationRequirement>
+public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAuthorizationRequirement>
 {
     private readonly IPermissionAuthorizationService _authorization;
 
+    public PermissionAuthorizationHandler(IPermissionAuthorizationService authorization)
+    {
+        _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
+    }
+
+    [Obsolete("Use the IPermissionAuthorizationService constructor. This compatibility constructor fails closed when no trusted principal validator is supplied and will be removed in the next major version.")]
     public PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
     {
         _authorization = new PermissionAuthorizationService(evaluator, resourceHandlers, validator: null, httpContextAccessor: null);
     }
 
+    [Obsolete("Use the IPermissionAuthorizationService constructor. This compatibility constructor will be removed in the next major version.")]
     public PermissionAuthorizationHandler(
-        IPermissionAuthorizationService authorization)
+        IPermissionEvaluator evaluator,
+        IEnumerable<IPermissionResourceHandler> resourceHandlers,
+        NormalizedPrincipalValidator validator,
+        IHttpContextAccessor httpContextAccessor)
     {
-        _authorization = authorization;
+        _authorization = new PermissionAuthorizationService(evaluator, resourceHandlers, validator, httpContextAccessor);
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionAuthorizationRequirement requirement)
@@ -584,11 +600,6 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAut
             context.Fail();
     }
 }
-
-// Keep the source-compatible public handler constructor while giving the built-in DI registration
-// one unambiguous constructor that always reaches the canonical authorization service.
-internal sealed class RegisteredPermissionAuthorizationHandler(IPermissionAuthorizationService authorization)
-    : PermissionAuthorizationHandler(authorization);
 
 internal sealed class PermissionSetAuthorizationHandler(
     IPermissionAuthorizationService authorization)

@@ -30,8 +30,19 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);
-        services.TryAddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, RegisteredPermissionAuthorizationHandler>());
+        EnsureReplacement<IPermissionAuthorizationService, PermissionAuthorizationService>(services, ServiceLifetime.Scoped);
+        // The public handler retains obsolete source-compatible constructors. Use an explicit
+        // factory so the DI container cannot select an obsolete constructor by accident. A
+        // separate marker keeps repeated Foundation registration idempotent because the DI
+        // enumerable helper rejects factory descriptors as indistinguishable.
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(FoundationPermissionAuthorizationHandlerRegistration)))
+        {
+            services.Add(ServiceDescriptor.Describe(
+                typeof(IAuthorizationHandler),
+                sp => new PermissionAuthorizationHandler(sp.GetRequiredService<IPermissionAuthorizationService>()),
+                ServiceLifetime.Scoped));
+            services.AddSingleton<FoundationPermissionAuthorizationHandlerRegistration>();
+        }
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionSetAuthorizationHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, NormalizedPermissionPrincipalHandler>());
         services.TryAddSingleton<NormalizedPrincipalValidator>();
@@ -55,6 +66,49 @@ public static class FoundationIdentityServiceCollectionExtensions
     public static IServiceCollection ReplacePermissionEvaluator<TEvaluator>(this IServiceCollection services)
         where TEvaluator : class, IPermissionEvaluator =>
         Replace<IPermissionEvaluator, TEvaluator>(services, ServiceLifetime.Scoped);
+
+    public static IServiceCollection ReplacePermissionAuthorizationService<TService>(this IServiceCollection services)
+        where TService : class, IPermissionAuthorizationService =>
+        Replace<IPermissionAuthorizationService, TService>(services, ServiceLifetime.Scoped);
+
+    /// <summary>
+    /// Registers the default for a replacement contract while preserving one explicit host
+    /// registration. A second registration is a composition error, never a last-write-wins choice.
+    /// </summary>
+    public static IServiceCollection EnsureReplacementContract<TContract, TDefault>(
+        this IServiceCollection services,
+        ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        where TContract : class
+        where TDefault : class, TContract
+    {
+        if (typeof(TContract).GetCustomAttributes(typeof(ReplacementContractAttribute), inherit: false).Length == 0)
+            throw new InvalidOperationException($"Replacement contract '{typeof(TContract).FullName}' must be marked with {nameof(ReplacementContractAttribute)}.");
+
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(TContract)).ToArray();
+        if (descriptors.Length > 1)
+            throw new InvalidOperationException(
+                $"Replacement contract '{typeof(TContract).FullName}' has conflicting registrations: " +
+                FoundationIdentityRegistrationValidator.Describe(descriptors));
+
+        var descriptor = descriptors.SingleOrDefault();
+        if (descriptor is null)
+        {
+            services.Add(ServiceDescriptor.Describe(typeof(TContract), typeof(TDefault), lifetime));
+            descriptor = services.Last(x => x.ServiceType == typeof(TContract));
+        }
+
+        if (!services.Any(item => item.ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
+                                 item.ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
+                                 marker.ContractType == typeof(TContract)))
+        {
+            services.AddSingleton(new FoundationIdentityReplacementRegistration(
+                typeof(TContract),
+                descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ?? typeof(TDefault),
+                descriptor));
+        }
+
+        return services;
+    }
 
     public static IServiceCollection ReplacePermissionPolicyNameFormatter<TFormatter>(this IServiceCollection services)
         where TFormatter : class, IPermissionPolicyNameFormatter =>
@@ -189,13 +243,18 @@ public static class FoundationIdentityServiceCollectionExtensions
         if (descriptors.Length == 0 && markers.Length == 0)
         {
             services.Add(ServiceDescriptor.Describe(contractType, typeof(TImplementation), lifetime));
-            services.AddSingleton(new FoundationIdentityReplacementRegistration(contractType, typeof(TImplementation)));
+            services.AddSingleton(new FoundationIdentityReplacementRegistration(
+                contractType,
+                typeof(TImplementation),
+                services.Last(x => x.ServiceType == contractType)));
             return;
         }
 
         if (descriptors.Length == 1 && markers.Length == 1 &&
-            (descriptors[0].ImplementationType == markers[0].ImplementationType ||
-             descriptors[0].ImplementationInstance?.GetType() == markers[0].ImplementationType))
+            (markers[0].Descriptor is not null
+                ? ReferenceEquals(descriptors[0], markers[0].Descriptor)
+                : descriptors[0].ImplementationType == markers[0].ImplementationType ||
+                  descriptors[0].ImplementationInstance?.GetType() == markers[0].ImplementationType))
         {
             return;
         }
@@ -212,7 +271,10 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.RemoveAll<TContract>();
         RemoveReplacementMarkers(services, typeof(TContract));
         services.Add(ServiceDescriptor.Describe(typeof(TContract), typeof(TImplementation), lifetime));
-        services.AddSingleton(new FoundationIdentityReplacementRegistration(typeof(TContract), typeof(TImplementation)));
+        services.AddSingleton(new FoundationIdentityReplacementRegistration(
+            typeof(TContract),
+            typeof(TImplementation),
+            services.Last(x => x.ServiceType == typeof(TContract))));
         return services;
     }
 

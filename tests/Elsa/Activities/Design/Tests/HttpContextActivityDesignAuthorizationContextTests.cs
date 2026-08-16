@@ -20,9 +20,10 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         using var provider = services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        var validator = provider.GetRequiredService<NormalizedPrincipalValidator>();
 
         accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
-        var resourceContext = new HttpContextActivityDesignAuthorizationContext(accessor, authorization);
+        var resourceContext = new HttpContextActivityDesignAuthorizationContext(accessor, authorization, validator);
         Assert.True(await resourceContext.CanAuthorProviderAsync("resource-granted"));
         Assert.False(await resourceContext.CanReadProviderPayloadAsync("resource-granted"));
         Assert.True(await resourceContext.CanReadProviderPayloadAsync("payload-only"));
@@ -32,7 +33,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         {
             User = Principal("tenant-a", HttpContextActivityDesignAuthorizationContext.AuthorPermission)
         };
-        var vetoedContext = new HttpContextActivityDesignAuthorizationContext(accessor, authorization);
+        var vetoedContext = new HttpContextActivityDesignAuthorizationContext(accessor, authorization, validator);
         Assert.False(await vetoedContext.CanAuthorProviderAsync("blocked"));
     }
 
@@ -48,7 +49,8 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
         var context = new HttpContextActivityDesignAuthorizationContext(
             accessor,
-            provider.GetRequiredService<IPermissionAuthorizationService>());
+            provider.GetRequiredService<IPermissionAuthorizationService>(),
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
 
         var profiles = await Task.WhenAll(
             Enumerable.Range(0, 32)
@@ -56,6 +58,50 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
 
         Assert.All(profiles, profile => Assert.Equal(profiles[0], profile));
         Assert.Equal(3, counter.Calls);
+    }
+
+    [Fact]
+    public async Task Canceled_waiter_does_not_cancel_the_shared_snapshot_for_another_caller()
+    {
+        var counter = new EvaluationCounter();
+        var services = CreateServices();
+        services.AddSingleton(counter);
+        services.ReplacePermissionEvaluator<DelayedPermissionEvaluator>();
+        using var provider = services.BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            provider.GetRequiredService<IPermissionAuthorizationService>(),
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+        using var cancellation = new CancellationTokenSource();
+
+        var canceled = context.GetAuthorizationProfileAsync(cancellation.Token).AsTask();
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counter.Calls) > 0, TimeSpan.FromSeconds(1)));
+        cancellation.Cancel();
+        var successful = context.GetAuthorizationProfileAsync().AsTask();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceled);
+        Assert.False(string.IsNullOrWhiteSpace(await successful));
+        Assert.Equal(3, counter.Calls);
+    }
+
+    [Fact]
+    public async Task Mixed_principal_uses_only_the_single_trusted_identity()
+    {
+        var services = CreateServices();
+        using var provider = services.BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext { User = MixedPrincipal() };
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            provider.GetRequiredService<IPermissionAuthorizationService>(),
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.Equal("tenant-trusted", context.TenantId);
+        Assert.Equal("actor-trusted", context.ActorId);
+        Assert.False(await context.CanAuthorProviderAsync("provider"));
+        Assert.False(await context.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-untrusted")));
     }
 
     private static ServiceCollection CreateServices()
@@ -73,6 +119,20 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             new Claim(IdentityClaimTypes.TenantId, tenantId),
             ..permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
         ], "test"));
+
+    private static ClaimsPrincipal MixedPrincipal() =>
+        new ClaimsPrincipal([
+            new ClaimsIdentity(
+        [
+            new Claim(IdentityClaimTypes.TenantId, "tenant-untrusted"),
+            new Claim(ClaimTypes.NameIdentifier, "actor-untrusted"),
+            new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission)
+        ], "untrusted"), new ClaimsIdentity(
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, "tenant-trusted"),
+            new Claim(ClaimTypes.NameIdentifier, "actor-trusted")
+        ], "test")]);
 
     private sealed class ProviderResourceHandler : IPermissionResourceHandler
     {

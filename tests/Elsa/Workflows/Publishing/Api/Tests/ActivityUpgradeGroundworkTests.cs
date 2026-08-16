@@ -878,7 +878,7 @@ public sealed class ActivityUpgradeGroundworkTests
                         [])
                     : null);
     }
-    private sealed class AllowAllAuthorization : IActivityDependencyAuthorizationContext, IActivityDependencyAuthorizationContextAsync
+    private sealed class AllowAllAuthorization : IActivityDependencyContext, IActivityDependencyContextAsync
     {
         public string? TenantId => null;
         public string AuthorizationProfile => "access";

@@ -12,7 +12,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityExecutionInspectionAuthorizationContextAsync authorization)
+    IActivityInspectionContextAsync authorization)
     : IRequestHandler<ListWorkflowInstances, WorkflowInstanceListView>
 {
     private const int PagedDefaultTake = 25;

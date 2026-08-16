@@ -57,7 +57,7 @@ authenticated callers are challenged; a trusted normalized caller with no grant 
 Foundation wraps one pre-existing `IAuthorizationMiddlewareResultHandler` (or the ASP.NET Core
 default) and delegates every unrelated outcome. Register a host result handler before Foundation;
 multiple prior handlers fail immediately and a handler added afterward fails startup validation.
-The evaluator, formatter, and catalog are single replacement contracts: use their `Replace*`
+The evaluator, authorization service, formatter, and catalog are single replacement contracts: use their `Replace*`
 methods before or after Foundation registration. Direct competing registrations are rejected rather
 than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
 remain additive fan-in seams.
@@ -65,8 +65,8 @@ remain additive fan-in seams.
 ### Async authorization context replacement window
 
 Feature APIs that need authorization during request handling should depend on their asynchronous
-context sibling (`IActivityAuthoringContextAsync`, `IActivityDependencyAuthorizationContextAsync`,
-or `IActivityExecutionInspectionAuthorizationContextAsync`) and call the async methods with the
+context sibling (`IActivityAuthoringContextAsync`, `IActivityDependencyContextAsync`,
+or `IActivityInspectionContextAsync`) and call the async methods with the
 request cancellation token. These contexts delegate decisions to `IPermissionAuthorizationService`;
 they do not inspect permission claims themselves. Provider-specific or resource-specific rules receive
 a stable resource object and remain in `IPermissionResourceHandler` implementations.

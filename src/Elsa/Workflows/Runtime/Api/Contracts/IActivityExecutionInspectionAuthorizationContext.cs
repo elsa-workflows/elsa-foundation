@@ -1,9 +1,11 @@
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Contracts;
 
 /// <summary>Request-scope inspection authorization; structure and captured-value grants are intentionally separate.</summary>
-public interface IActivityExecutionInspectionAuthorizationContext
+[Obsolete("Use IActivityInspectionContextAsync. This interface will be removed in the next major version.")]
+public interface IActivityInspectionContext
 {
     string TenantScope { get; }
     string AuthorizationProfile { get; }
@@ -19,11 +21,12 @@ public interface IActivityExecutionInspectionAuthorizationContext
 }
 
 /// <summary>
-/// Asynchronous replacement seam for <see cref="IActivityExecutionInspectionAuthorizationContext"/>.
+/// Asynchronous replacement seam for <see cref="IActivityInspectionContext"/>.
 /// Runtime readers use this contract for all permission decisions, while the synchronous interface
 /// remains source-compatible during the advisory replacement window.
 /// </summary>
-public interface IActivityExecutionInspectionAuthorizationContextAsync
+[ReplacementContract]
+public interface IActivityInspectionContextAsync
 {
     string TenantScope { get; }
     string AuditSubject { get; }
@@ -40,8 +43,8 @@ public interface IActivityExecutionInspectionAuthorizationContextAsync
 
 /// <summary>Explicit test/development adapter. Production API composition uses a fail-closed request adapter.</summary>
 public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
-    IActivityExecutionInspectionAuthorizationContext,
-    IActivityExecutionInspectionAuthorizationContextAsync
+    IActivityInspectionContext,
+    IActivityInspectionContextAsync
 {
     public string TenantScope => "all-tenants";
     public string AuthorizationProfile => "structure+values";
