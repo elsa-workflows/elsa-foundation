@@ -1,8 +1,13 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.ExecutionEvidence.Authorization;
+using Elsa.Workflows.ExecutionEvidence.Endpoints;
 using Elsa.Workflows.ExecutionEvidence.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.ExecutionEvidence;
 
@@ -17,7 +22,7 @@ namespace Elsa.Workflows.ExecutionEvidence;
         "Records what a workflow execution did into a process-local, in-memory buffer and exposes it over HTTP so an "
         + "automated test can assert over it. Evidence is never persisted, is not replicated across nodes, and is lost "
         + "on restart or once the buffer caps evict it — enable this on test hosts only, not in production.")]
-public sealed class WorkflowsExecutionEvidenceFeature : FastEndpointsFeatureBase
+public sealed class WorkflowsExecutionEvidenceFeature : IWebShellFeature
 {
     [ManifestSetting(
         DisplayName = "Maximum records per workflow",
@@ -54,9 +59,8 @@ public sealed class WorkflowsExecutionEvidenceFeature : FastEndpointsFeatureBase
         DefaultValue = "true")]
     public bool RedactSensitiveValues { get; set; } = true;
 
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.AddExecutionEvidence(options =>
         {
             options.MaxRecordsPerWorkflow = MaxRecordsPerWorkflow;
@@ -65,5 +69,9 @@ public sealed class WorkflowsExecutionEvidenceFeature : FastEndpointsFeatureBase
             options.MaxInlineValueLength = MaxInlineValueLength;
             options.RedactSensitiveValues = RedactSensitiveValues;
         });
+        services.AddPermissionContributor<ExecutionEvidencePermissionContributor>();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        ExecutionEvidenceApi.MapExecutionEvidenceApi(endpoints);
 }

@@ -13,7 +13,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | Feature class | Kind | Project | Base/interface | File |
 |---|---|---|---|---|
 | ActivitiesBpmnFeature | direct IShellFeature | Elsa.Activities.Bpmn | IShellFeature | [ActivitiesBpmnFeature.cs](../../src/Elsa/Activities/Bpmn/ActivitiesBpmnFeature.cs) |
-| ActivitiesBpmnInterchangeFeature | FastEndpoints feature | Elsa.Activities.Bpmn.Interchange | FastEndpointsFeatureBase | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
+| ActivitiesBpmnInterchangeFeature | direct IWebShellFeature | Elsa.Activities.Bpmn.Interchange | IWebShellFeature | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | ActivitiesDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.Groundwork | IShellFeature | [ActivitiesDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkPersistenceFeature.cs) |
@@ -67,7 +67,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
 | FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
-| ModularityApiFeature | FastEndpoints feature | Elsa.Modularity.Api | FastEndpointsFeatureBase | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
+| ModularityApiFeature | direct IWebShellFeature | Elsa.Modularity.Api | IWebShellFeature | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
 | ModularityAttentionFeature | direct IShellFeature | Elsa.Modularity.Attention | IShellFeature | [ModularityAttentionFeature.cs](../../src/Elsa/Modularity/Attention/ModularityAttentionFeature.cs) |
 | GroundworkPersistenceShellFeatureBase | direct IShellFeature | Elsa.Persistence.Groundwork | IShellFeature | [GroundworkPersistenceShellFeatureBase.cs](../../src/Elsa/Persistence/Groundwork/GroundworkPersistenceShellFeatureBase.cs) |
 | GroundworkRuntimePersistenceShellFeatureBase | feature-base-derived | Elsa.Persistence.Groundwork | GroundworkPersistenceShellFeatureBase | [GroundworkRuntimePersistenceShellFeatureBase.cs](../../src/Elsa/Persistence/Groundwork/GroundworkRuntimePersistenceShellFeatureBase.cs) |
@@ -106,7 +106,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Design.Persistence.Groundwork | IShellFeature | [WorkflowsDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkPersistenceFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
-| WorkflowsExecutionEvidenceFeature | FastEndpoints feature | Elsa.Workflows.ExecutionEvidence | FastEndpointsFeatureBase | [WorkflowsExecutionEvidenceFeature.cs](../../src/Elsa/Workflows/ExecutionEvidence/WorkflowsExecutionEvidenceFeature.cs) |
+| WorkflowsExecutionEvidenceFeature | direct IWebShellFeature | Elsa.Workflows.ExecutionEvidence | IWebShellFeature | [WorkflowsExecutionEvidenceFeature.cs](../../src/Elsa/Workflows/ExecutionEvidence/WorkflowsExecutionEvidenceFeature.cs) |
 | WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs) |
 | WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | PublishingGroundworkFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.Groundwork | IShellFeature | [PublishingGroundworkFeature.cs](../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkFeature.cs) |
@@ -124,6 +124,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeRecurringTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |
 | WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Tracing | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
-| Elsa3ImportActivitiesFeature | FastEndpoints feature | Elsa3.Activities.Design.Import | FastEndpointsFeatureBase | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
+| Elsa3ImportActivitiesFeature | direct IWebShellFeature | Elsa3.Activities.Design.Import | IWebShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3ImportActivitiesGroundworkFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.Groundwork | IShellFeature | [Elsa3ImportActivitiesGroundworkFeature.cs](../../src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3ImportActivitiesGroundworkFeature.cs) |
 | Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |

@@ -1,0 +1,67 @@
+[
+  {
+    "endpoint": "GET /_elsa/execution-evidence",
+    "operationId": "ElsaWorkflowsExecutionEvidenceEndpointsGetCorrelatedEvidence",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "DELETE /_elsa/execution-evidence",
+    "operationId": "ElsaWorkflowsExecutionEvidenceEndpointsDeleteEvidence",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "GET /_elsa/execution-evidence/workflows/{param}",
+    "operationId": "ElsaWorkflowsExecutionEvidenceEndpointsGetWorkflowEvidence",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /interchange/bpmn/analyze",
+    "operationId": "ElsaActivitiesBpmnInterchangeEndpointsAnalyzeBpmnDocumentEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /interchange/bpmn/export",
+    "operationId": "ElsaActivitiesBpmnInterchangeEndpointsExportBpmnDocumentEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /interchange/bpmn/import",
+    "operationId": "ElsaActivitiesBpmnInterchangeEndpointsImportBpmnDocumentEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections",
+    "operationId": "Elsa3ActivitiesDesignImportEndpointsUploadReusableActivityCollectionEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "GET /migration/elsa3/reusable-activities/collections/{param}/analysis",
+    "operationId": "Elsa3ActivitiesDesignImportEndpointsAnalyzeReusableActivityCollectionEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/apply",
+    "operationId": "Elsa3ActivitiesDesignImportEndpointsApplyReusableActivityImportEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/selection",
+    "operationId": "Elsa3ActivitiesDesignImportEndpointsExpandReusableActivityImportSelectionEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "GET /migration/elsa3/reusable-activities/imports/{param}",
+    "operationId": "Elsa3ActivitiesDesignImportEndpointsGetReusableActivityImportStatusEndpoint",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "GET /modularity/features",
+    "operationId": "ElsaModularityApiEndpointsList",
+    "tags": ["Elsa.Architecture.Tests"]
+  },
+  {
+    "endpoint": "POST /modularity/features/apply",
+    "operationId": "ElsaModularityApiEndpointsApply",
+    "tags": ["Elsa.Architecture.Tests"]
+  }
+]
