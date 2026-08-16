@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -65,6 +66,24 @@ public sealed class HostEndpointMetadataTests
     }
 
     [Fact]
+    public void Foundation_host_Dockerfile_includes_its_project_reference_graph()
+    {
+        var projectPath = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Foundation.Host", "Elsa.Foundation.Host.csproj");
+        var dockerfile = ReadSource("src/Apps/Elsa.Foundation.Host/Dockerfile");
+        var projectReferences = DiscoverProjectReferences(projectPath);
+
+        Assert.NotEmpty(projectReferences);
+        foreach (var referencedProjectPath in projectReferences)
+        {
+            var relativeProjectPath = Path.GetRelativePath(RepoRoot, referencedProjectPath).Replace('\\', '/');
+            var relativeProjectDirectory = Path.GetDirectoryName(relativeProjectPath)!.Replace('\\', '/');
+
+            Assert.Contains($"COPY {relativeProjectPath} {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
+            Assert.Contains($"COPY {relativeProjectDirectory}/ {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void Retained_host_mappers_do_not_introduce_foundation_user_permissions()
     {
         var paths = new[]
@@ -90,6 +109,27 @@ public sealed class HostEndpointMetadataTests
 
     private static string ReadSource(string relativePath) =>
         File.ReadAllText(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    private static IReadOnlyCollection<string> DiscoverProjectReferences(string rootProjectPath)
+    {
+        var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Queue<string>();
+        pending.Enqueue(Path.GetFullPath(rootProjectPath));
+
+        while (pending.TryDequeue(out var projectPath))
+        {
+            var projectDirectory = Path.GetDirectoryName(projectPath)!;
+            var document = XDocument.Load(projectPath);
+            foreach (var include in document.Descendants("ProjectReference").Select(element => element.Attribute("Include")?.Value).OfType<string>())
+            {
+                var referencedProjectPath = Path.GetFullPath(Path.Combine(projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
+                if (discovered.Add(referencedProjectPath))
+                    pending.Enqueue(referencedProjectPath);
+            }
+        }
+
+        return discovered;
+    }
 
     private static string RepoRoot
     {

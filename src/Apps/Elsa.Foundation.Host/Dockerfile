@@ -4,9 +4,10 @@
 #
 # Build context MUST be the repository root, because restore relies on repo-root
 # configuration (Directory.Build.props, Directory.Packages.props, NuGet.config).
-# This host has NO project references — every feature arrives at runtime as a
-# .nupkg through the Nuplane directory feed at /app/packages — so, unlike the
-# Workbench image, only the host project itself is copied. Example:
+# Every feature still arrives at runtime as a .nupkg through the Nuplane
+# directory feed at /app/packages. The host has one compile-time infrastructure
+# reference for shared endpoint metadata, so its project and sources must also
+# be present in the Docker build context. Example:
 #
 #   docker build -f src/Apps/Elsa.Foundation.Host/Dockerfile \
 #                -t elsa-foundation-host:local-<sha> .
@@ -26,15 +27,18 @@ WORKDIR /src
 # self-contained and needs no user-level NuGet config.
 COPY Directory.Build.props Directory.Packages.props NuGet.config ./
 
-# The host project. No project references to bring along.
+# Restore inputs: the host plus its shared endpoint-metadata project.
 COPY src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/Apps/Elsa.Foundation.Host/
+COPY src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/Elsa/Api/AspNetCore/
 # NU1603: tolerate a restore-only warning when a transitive preview dependency
 # resolves to a newer available version; does not relax real code warnings.
 RUN dotnet restore src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
     -p:WarningsNotAsErrors=NU1603
 
-# Now the host sources and publish (framework-dependent, portable).
+# Now the host and shared infrastructure sources; publish framework-dependent
+# and portable.
 COPY src/Apps/Elsa.Foundation.Host/ src/Apps/Elsa.Foundation.Host/
+COPY src/Elsa/Api/AspNetCore/ src/Elsa/Api/AspNetCore/
 RUN dotnet publish src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
     -c Release \
     --no-restore \
