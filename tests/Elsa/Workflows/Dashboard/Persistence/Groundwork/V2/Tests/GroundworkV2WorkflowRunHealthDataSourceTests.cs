@@ -287,27 +287,35 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
     }
 
     [Fact]
-    public async Task Native_source_uses_aggregate_only_and_keeps_one_call_per_status_bucket()
+    public async Task Native_source_uses_one_bucket_aggregate_for_a_31_day_hourly_request()
     {
         var accessor = new FixedAccessContextAccessor(
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var recording = new AggregateOnlySessionSource(source);
         var dataSource = new GroundworkV2WorkflowRunHealthDataSource(recording, accessor);
         var from = DateTimeOffset.UnixEpoch;
+        var buckets = Enumerable.Range(0, 744)
+            .Select(index => new WorkflowRunHealthBucketRange(
+                index,
+                from.AddHours(index),
+                from.AddHours(index + 1)))
+            .ToArray();
         var query = new WorkflowRunHealthQuery(
             from,
-            from.AddHours(2),
+            from.AddHours(buckets.Length),
             "Etc/UTC",
             WorkflowRunHealthBucketSize.Hour,
             "tenant-a");
 
-        await dataSource.QueryAsync(new(query, [
-            new(0, from, from.AddHours(1)),
-            new(1, from.AddHours(1), from.AddHours(2))
-        ]));
+        var result = await dataSource.QueryAsync(new(query, buckets));
 
+        Assert.Equal(744, result.Buckets.Count);
+        Assert.All(result.Buckets, bucket => Assert.Equal(0, bucket.StartedCount));
         Assert.Equal(3, recording.AggregateCount);
         Assert.Equal(0, recording.QueryCount);
+        Assert.Single(
+            recording.AggregationQueries,
+            aggregation => aggregation.Profile == ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile);
         Assert.Contains(
             recording.AggregationQueries,
             query => query.Take == 5 && query.OrderByTerms.Count == 2);
