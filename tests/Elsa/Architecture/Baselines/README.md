@@ -51,7 +51,7 @@ retains the scanner with every category required to be empty, including all tran
 FastEndpoints registrations while bounded Minimal API migration waves land. The architecture scanner
 resolves endpoint inheritance transitively across source documents, expands inherited route
 configuration, includes ignored source folders, excludes `bin`/`obj` and abstract bases, and pins the
-current baseline at 164 concrete registrations across 18 owners. The registry is not a retirement
+current baseline at 156 concrete registrations across 12 owners after the completed Wave 1 reduction. The registry is not a retirement
 allowlist: `TransitionExceptionValidator.ValidateRetirement` requires zero first-party registrations,
 including entries still covered by this file. See
 [`first-party-rest-api-inventory-2026-08.md`](../../../docs/reports/first-party-rest-api-inventory-2026-08.md)

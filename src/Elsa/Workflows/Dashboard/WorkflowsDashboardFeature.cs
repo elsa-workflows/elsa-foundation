@@ -1,11 +1,13 @@
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
+using CShells.AspNetCore.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Dashboard;
 
@@ -17,11 +19,10 @@ namespace Elsa.Workflows.Dashboard;
     DisplayName = "Workflow Dashboard",
     Description = "Provides exact workflow run-health dashboard data.",
     DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsDesignApi", "WorkflowDesignValidations" })]
-public sealed class WorkflowsDashboardFeature : FastEndpointsFeatureBase
+public sealed class WorkflowsDashboardFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.TryAddScoped<IWorkflowRunHealthDataSource>(provider =>
         {
             var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -40,4 +41,7 @@ public sealed class WorkflowsDashboardFeature : FastEndpointsFeatureBase
         services.AddOptions<WorkflowPortfolioOptions>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, WorkflowsDashboardPermissionContributor>());
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        WorkflowsDashboardApi.MapWorkflowsDashboardApi(endpoints);
 }

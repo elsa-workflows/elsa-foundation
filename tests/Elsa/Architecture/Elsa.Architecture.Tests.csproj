@@ -19,6 +19,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="xunit" />
@@ -38,8 +39,11 @@
     <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
     <ProjectReference Include="..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
     <!-- spec 145: the split publish engine DependsOn the Events feature (host assembly); the stock-shell
          composition test must be able to discover it. -->
@@ -53,6 +57,8 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />

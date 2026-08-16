@@ -33,7 +33,6 @@ public sealed class CapabilitySecurityTests
                 .WithWebRouting(options => options.EnablePathRouting = true)
                 .AddShell("tenant-a", shell => shell
                     .WithPath("tenant-a")
-                    .WithFeature<FastEndpointsFeature>(feature => feature.EndpointRoutePrefix = string.Empty)
                     .WithFeature<ApiCapabilitiesFeature>()
                     .WithFeature<FoundationIdentityAbstractionsFeature>()
                     .WithFeature<OidcAuthenticationFeature>());

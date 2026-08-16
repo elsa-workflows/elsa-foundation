@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
@@ -10,7 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
   </ItemGroup>
 

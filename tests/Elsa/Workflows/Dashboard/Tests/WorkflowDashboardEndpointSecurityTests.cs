@@ -1,64 +1,48 @@
-using Elsa.Api.FastEndpoints.Abstractions;
-using FastEndpoints;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Tests;
 
 public sealed class WorkflowDashboardEndpointSecurityTests
 {
-    [Fact]
-    public void RunHealthEndpointRequiresExplicitDashboardReadPermissionAndIsNotAnonymous()
+    [Theory]
+    [InlineData("/_elsa/workflows/dashboard/runs")]
+    [InlineData("/_elsa/workflows/dashboard/definitions")]
+    public void Dashboard_routes_require_explicit_read_permission_and_are_not_anonymous(string route)
     {
-        var endpoint = ConfiguredEndpoint("Elsa.Workflows.Dashboard.GetWorkflowRunHealth", new StubService());
+        var endpoint = GetEndpoint(route);
 
-        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
-        Assert.All(
-            endpoint.Definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([WorkflowsDashboardPermissions.Read]), policy));
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        var owner = Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>());
+        Assert.Equal("Elsa.Workflows.Dashboard", owner.OwnerId);
+        Assert.Equal(EndpointAuthoringModels.MinimalApi, endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model);
+        var security = Assert.IsType<EndpointSecurityDispositionMetadata>(
+            endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        Assert.Equal(EndpointSecurityDispositionKind.Permission, security.Kind);
+        var policy = new PermissionPolicyCodec().Parse(security.Value!);
+        Assert.Contains(PermissionKey.Normalize(WorkflowsDashboardPermissions.Read), policy.Descriptor!.Permissions);
+        Assert.DoesNotContain(endpoint.Metadata, item => item is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute);
     }
 
-    [Fact]
-    public void PortfolioEndpointRequiresExplicitDashboardReadPermissionAndIsNotAnonymous()
+    private static RouteEndpoint GetEndpoint(string route)
     {
-        var endpoint = ConfiguredEndpoint("Elsa.Workflows.Dashboard.GetWorkflowPortfolio", new StubPortfolioService());
-
-        Assert.NotEmpty(endpoint.Definition.PreBuiltUserPolicies!);
-        Assert.All(
-            endpoint.Definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([WorkflowsDashboardPermissions.Read]), policy));
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        WorkflowsDashboardApi.MapWorkflowsDashboardApi(routes);
+        var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .SingleOrDefault(candidate => candidate.RoutePattern.RawText == route);
+        Assert.NotNull(endpoint);
+        return endpoint!;
     }
 
-    private static BaseEndpoint ConfiguredEndpoint(string typeName, object dependency)
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
-        var endpointType = typeof(WorkflowsDashboardFeature).Assembly.GetType(typeName, throwOnError: true)!;
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create)
-                              && method.IsGenericMethodDefinition
-                              && method.GetParameters() is [var first, var rest]
-                              && first.ParameterType == typeof(Action<DefaultHttpContext>)
-                              && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null,
-            [(Action<DefaultHttpContext>)(_ => { }), new[] { dependency }])!;
-
-        endpoint.Configure();
-        return endpoint;
-    }
-
-    private sealed class StubService : IWorkflowRunHealthService
-    {
-        public ValueTask<WorkflowRunHealthSnapshot> QueryAsync(
-            WorkflowRunHealthQuery query,
-            CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("Configuration-only endpoint test.");
-    }
-
-    private sealed class StubPortfolioService : IWorkflowPortfolioService
-    {
-        public ValueTask<WorkflowPortfolioSnapshot> QueryAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("Configuration-only endpoint test.");
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }
