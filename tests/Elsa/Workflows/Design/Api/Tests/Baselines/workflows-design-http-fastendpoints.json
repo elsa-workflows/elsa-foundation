@@ -1,0 +1,461 @@
+[
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "analyze-scoped-variables",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/scoped-variables/analyze",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "complete-expression-tooling",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/expression-tooling/completions",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "describe-expression-tooling",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/expression-tooling/descriptors",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "hover-expression-tooling",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/expression-tooling/hover",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "resolve-activity-input-options",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/activities/{param}/inputs/{param}/options",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "resolve-expression-tooling-context",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/expression-tooling/context",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "search-expression-tooling-symbols",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/expression-tooling/symbols",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "validate-expression-tooling",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/expression-tooling/validate",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "add-definition",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/definitions",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "delete-definition",
+    "contentType": "",
+    "endpoint": "DELETE /design/workflows/definitions/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "delete-definition-permanently",
+    "contentType": "",
+    "endpoint": "DELETE /design/workflows/definitions/{param}/permanent",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "get-definition",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/definitions/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "list-definitions",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/definitions",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "restore-definition",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/definitions/{param}/restore",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "submit-definition",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/definitions/submit",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "submit-definition-schema",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/definitions/submit/schema",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "update-definition",
+    "contentType": "",
+    "endpoint": "PATCH /design/workflows/definitions/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "discard-draft",
+    "contentType": "",
+    "endpoint": "DELETE /design/workflows/drafts/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "get-draft",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/drafts/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "promote-draft",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/drafts/{param}/promote",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "promotion-preflight",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/drafts/{param}/promotion-preflight",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "replace-draft",
+    "contentType": "",
+    "endpoint": "PUT /design/workflows/drafts/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "draft-validations",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/drafts/{param}/validations",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "list-structures",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/structures",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "add-version",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/versions/ingest",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "get-version",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/versions/{param}",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "list-versions",
+    "contentType": "",
+    "endpoint": "GET /design/workflows/definitions/{param}/versions",
+    "headers": {
+      "content-length": "0"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

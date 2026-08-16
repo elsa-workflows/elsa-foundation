@@ -1,0 +1,14 @@
+{
+  "owner": "Elsa.Workflows.Design.Api",
+  "issue": "#1372",
+  "sourceCommit": "c04d8dbbe",
+  "source": "FastEndpoints registrations from Elsa.Workflows.Design.Api before Minimal API replacement",
+  "captureHost": "Elsa Workbench composition with WorkflowsDesignApiFeature and FastEndpoints",
+  "httpFixture": "workflows-design-http-fastendpoints.json",
+  "openApiFixture": "workflows-design-openapi-fastendpoints.json",
+  "httpSha256": "c4963da060fab4920e4594baef980607bc0fde4abe3f2f005a090d33cff47ece",
+  "openApiSha256": "4d5c8515328fdb2d320045798c3c3fa1f6f419240c0c0e3261a5e3fe42698da5",
+  "capturedAtUtc": "2026-08-16T14:11:00Z",
+  "volatileHeaders": ["date", "server"],
+  "registrationCount": 27
+}

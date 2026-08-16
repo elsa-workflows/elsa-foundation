@@ -21,6 +21,11 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Baselines/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

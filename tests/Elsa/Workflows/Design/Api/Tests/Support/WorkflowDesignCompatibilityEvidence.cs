@@ -1,0 +1,37 @@
+using Elsa.Api.Compatibility.Testing.Baselines;
+using Elsa.Api.Compatibility.Testing.Comparison;
+using Elsa.Api.Compatibility.Testing.Http;
+using Elsa.Api.Compatibility.Testing.OpenApi;
+
+namespace Elsa.Workflows.Design.Api.Tests.Support;
+
+internal static class WorkflowDesignCompatibilityEvidence
+{
+    public const string HttpFileName = "workflows-design-http-fastendpoints.json";
+    public const string OpenApiFileName = "workflows-design-openapi-fastendpoints.json";
+    public const string ProvenanceFileName = "workflows-design-before-provenance.json";
+
+    private static readonly string HttpBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", HttpFileName);
+    private static readonly string OpenApiBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", OpenApiFileName);
+
+    public static IReadOnlyList<HttpCompatibilityObservation> LoadLegacyHttp() =>
+        BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath)
+            .Select(NormalizeVolatileHeaders)
+            .ToArray();
+
+    public static OpenApiEvidenceDocument LoadLegacyOpenApi() =>
+        BaselineFile.Load<OpenApiEvidenceDocument>(OpenApiBaselinePath);
+
+    public static string ReadHttpBaseline() => BaselineFile.Read(HttpBaselinePath);
+    public static string ReadOpenApiBaseline() => BaselineFile.Read(OpenApiBaselinePath);
+
+    public static ApprovedDifference[] LoadApprovals() => [];
+
+    private static HttpCompatibilityObservation NormalizeVolatileHeaders(HttpCompatibilityObservation observation)
+    {
+        var headers = observation.Headers
+            .Where(pair => pair.Key is not ("date" or "server"))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        return observation with { Headers = headers };
+    }
+}
