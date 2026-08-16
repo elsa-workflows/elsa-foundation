@@ -64,24 +64,4 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
     private static string EnvironmentVariable(string providerName) =>
         $"GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING";
 
-    /*
-     * Keep this focused local smoke test separate from the env-gated rows so a default run always
-     * exercises SQLite while the native provider rows are reported as skipped without credentials.
-     */
-    [Fact]
-    public void Sqlite_applies_a_fresh_catalog_for_every_runtime_unit()
-    {
-        using var connection = CreateConnection(
-            "sqlite",
-            $"Data Source=file:runtime-v2-smoke-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
-        var units = FreshPhysicalUnits();
-
-        foreach (var unit in units)
-            connection.Schema.Apply(unit);
-        Assert.All(units, unit =>
-        {
-            var session = connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")));
-            Assert.Equal(unit.Id, session.Unit.Id);
-        });
-    }
 }

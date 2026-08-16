@@ -45,7 +45,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var expectedIndexes = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["activityExecutionHierarchy"] = ["by-execution-scope", "by-workflow-execution", "by-workflow-execution-and-hierarchy-order", "by-workflow-execution-and-hierarchy-page", "by-workflow-execution-scope-and-hierarchy-order"],
+            ["activityExecutionHierarchy"] = ["by-execution-scope", "by-workflow-execution", "by-workflow-execution-and-hierarchy-order", "by-workflow-execution-scope-and-hierarchy-order"],
             ["activityExecutionInspection"] = ["by-workflow-execution", "by-workflow-execution-and-summary-order"],
             ["activityExecutionState"] = ["by-parent-activity-execution", "by-workflow-execution", "by-workflow-execution-and-activity-execution-id", "by-workflow-parent-and-activity-execution-id"],
             ["bookmarkState"] = ["by-stimulus", "by-stimulus-and-type-and-bookmark-identity", "by-stimulus-type", "by-stimulus-type-and-bookmark-identity", "by-workflow-execution", "by-workflow-execution-and-bookmark-id"],
@@ -155,6 +155,29 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         Assert.Contains(references, reference => reference.Name == "Groundwork.Kernel");
         Assert.Contains(references, reference => reference.Name == "Groundwork.Query.Model");
         Assert.Contains(references, reference => reference.Name == "Groundwork.Store");
+    }
+
+    [Fact]
+    public void Every_unit_has_unique_provider_index_signatures()
+    {
+        foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+        {
+            var duplicateSignatures = unit.Indexes
+                .GroupBy(index => new
+                {
+                    Columns = string.Join(
+                        ",",
+                        index.Columns.Select(column => $"{column.Column}:{column.Direction}")),
+                    index.IsUnique,
+                    index.MissingValues
+                })
+                .Where(group => group.Count() > 1)
+                .ToArray();
+
+            Assert.True(
+                duplicateSignatures.Length == 0,
+                $"Unit '{unit.Id.Value}' declares duplicate provider index signatures: {string.Join("; ", duplicateSignatures.Select(group => string.Join(", ", group.Select(index => index.Name))))}");
+        }
     }
 
     [Fact]
