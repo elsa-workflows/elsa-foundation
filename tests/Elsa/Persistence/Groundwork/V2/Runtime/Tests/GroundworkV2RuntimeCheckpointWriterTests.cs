@@ -5,10 +5,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
+using Groundwork.Sqlite;
 using Groundwork.Store;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -102,22 +104,96 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     }
 
     [Fact]
+    public async Task Unsupported_activity_scope_cleanup_is_refused_before_provider_io()
+    {
+        var source = new MemorySource();
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: [new ActivityScopeCleanupRequest("workflow-1", "scope-1", [], [], [], [])],
+            workflowDispatchCancellations: null);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("cleanup-refused") with { StateChanges = changes }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+    }
+
+    [Fact]
+    public async Task Boundary_validation_rejects_cross_workflow_and_reserved_ownership_before_provider_io()
+    {
+        var source = new MemorySource();
+        var writer = NewWriter(source);
+        var foreignExecution = NewExecution("workflow-foreign");
+        var foreignChanges = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                foreignExecution.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                foreignExecution,
+                new Dictionary<string, string>()),
+            null,
+            [], [], [], [], []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.CommitAsync(NewCommit("foreign-workflow") with { StateChanges = foreignChanges }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+
+        var ownershipChanges = new RuntimeCheckpointStateChangeSet(
+            null,
+            null,
+            [], [], [],
+            [],
+            [new RuntimeStateChange<ExecutionLivenessState>(
+                "ownership:workflow-1",
+                RuntimeStateChangeOperation.Upsert,
+                NewLiveness("lease", "owner", 1),
+                new Dictionary<string, string>())]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.CommitAsync(NewCommit("reserved-ownership") with { StateChanges = ownershipChanges }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+    }
+
+    [Fact]
+    public async Task Test_scope_admission_is_deduplicated_when_execution_and_dispatch_share_a_scope()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var scope = new WorkflowTestScope("scope-deduplicated", now.AddMinutes(5), "tenant-a", new WorkflowExecutionPartition("partition-a"));
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+            scope.ScopeId,
+            new WorkflowTestScopeRecord(scope, WorkflowTestScopeState.Open, now.AddMinutes(-1)),
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+                [ElsaRuntimeV2StorageManifest.StateField] = WorkflowTestScopeState.Open.ToString(),
+                [ElsaRuntimeV2StorageManifest.ScopeIdField] = scope.ScopeId,
+                [ElsaRuntimeV2StorageManifest.ExpiresAtField] = scope.ExpiresAt
+            });
+
+        var execution = NewExecution("workflow-1") with { TestScope = scope, RunKind = WorkflowRunKind.TestRun };
+        var dispatch = NewDispatch("workflow-1", WorkflowDispatchStatus.Pending, scope);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>("workflow-1", RuntimeStateChangeOperation.Upsert, execution, new Dictionary<string, string>()),
+            null,
+            [], [], [], [], [],
+            workflowDispatches: [new RuntimeStateChange<WorkflowDispatchRecord>(dispatch.DispatchId, RuntimeStateChangeOperation.Upsert, dispatch, new Dictionary<string, string>())]);
+
+        await NewWriter(source).CommitAsync(NewCommit("scope-deduplicated") with { StateChanges = changes }, Immediate());
+
+        Assert.Equal(
+            1,
+            source.LastUnitOfWork!.Staged.Count(write => write.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind));
+    }
+
+    [Fact]
     public async Task A_stale_execution_fence_is_rejected_before_any_checkpoint_row_is_staged()
     {
         var source = new MemorySource();
-        source.SeedLiveness(new ExecutionLivenessState(
-            "ownership:workflow-1",
-            "workflow-1",
-            new RuntimeExecutionLease(
-                "lease-current",
-                "workflow-1",
-                "owner-current",
-                DateTimeOffset.UtcNow.AddMinutes(-1),
-                DateTimeOffset.UtcNow.AddMinutes(5),
-                2),
-            null,
-            null,
-            null));
+        source.SeedLiveness(NewLiveness("lease-current", "owner-current", 2));
         var writer = NewWriter(source);
         var commit = NewCommit("stale") with
         {
@@ -128,6 +204,277 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             () => writer.CommitAsync(commit, Immediate()).AsTask());
         Assert.Empty(source.LastUnitOfWork!.Staged);
         Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "stale", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task A_fence_change_after_pre_read_is_translated_to_stale_fence_and_rolls_back()
+    {
+        var source = new MemorySource();
+        source.SeedLiveness(NewLiveness("lease-a", "owner-a", 1), version: 1);
+        source.BeforeCommit = _ => source.SeedLiveness(NewLiveness("lease-b", "owner-b", 2), version: 2);
+        var commit = NewCommit("fence-race") with
+        {
+            ExpectedFence = new RuntimeExecutionFence("lease-a", "owner-a", 1)
+        };
+
+        var exception = await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() =>
+            NewWriter(source).CommitAsync(commit, Immediate()).AsTask());
+
+        Assert.Equal(2, exception.CurrentFencingToken);
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "fence-race", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Test_scope_admission_is_a_cas_and_a_concurrent_close_rolls_back_the_checkpoint()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var scope = new WorkflowTestScope("scope-1", now.AddMinutes(5), "tenant-a", new WorkflowExecutionPartition("partition-a"));
+        var open = new WorkflowTestScopeRecord(scope, WorkflowTestScopeState.Open, now.AddMinutes(-1));
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+            scope.ScopeId,
+            open,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+                [ElsaRuntimeV2StorageManifest.StateField] = WorkflowTestScopeState.Open.ToString(),
+                [ElsaRuntimeV2StorageManifest.ScopeIdField] = scope.ScopeId,
+                [ElsaRuntimeV2StorageManifest.ExpiresAtField] = scope.ExpiresAt
+            });
+        var execution = NewExecution("workflow-1") with { TestScope = scope, RunKind = WorkflowRunKind.TestRun };
+        source.BeforeCommit = _ =>
+        {
+            var closing = new WorkflowTestScopeRecord(
+                scope,
+                WorkflowTestScopeState.Closing,
+                open.CreatedAt,
+                now,
+                closeReason: WorkflowTestScopeCloseReason.ExplicitTeardown);
+            source.SeedRow("tenant-a", ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, scope.ScopeId, closing, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+                [ElsaRuntimeV2StorageManifest.StateField] = WorkflowTestScopeState.Closing.ToString(),
+                [ElsaRuntimeV2StorageManifest.ScopeIdField] = scope.ScopeId,
+                [ElsaRuntimeV2StorageManifest.ExpiresAtField] = scope.ExpiresAt
+            }, version: 2);
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("scope-race") with
+            {
+                StateChanges = new RuntimeCheckpointStateChangeSet(
+                    new RuntimeStateChange<WorkflowExecutionState>("workflow-1", RuntimeStateChangeOperation.Upsert, execution, new Dictionary<string, string>()),
+                    null, [], [], [], [], [])
+            }, Immediate()).AsTask());
+
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, "workflow-1", "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "scope-race", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task A_scheduler_claim_reclaim_race_rolls_back_and_reports_claim_lost()
+    {
+        var source = new MemorySource();
+        var workItemId = "work-item-1";
+        var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
+        source.SeedRow("tenant-a", unit, workItemId, new
+        {
+            workItemId,
+            workflowExecutionId = "workflow-1",
+            claimOwnerId = "owner-a",
+            fencingToken = 1L
+        }, new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = "workflow-1",
+            [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1"
+        });
+        source.BeforeCommit = _ => source.SeedRow("tenant-a", unit, workItemId, new
+        {
+            workItemId,
+            workflowExecutionId = "workflow-1",
+            claimOwnerId = "owner-b",
+            fencingToken = 2L
+        }, new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = "workflow-1",
+            [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1"
+        }, version: 2);
+
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null,
+            null,
+            [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", workItemId, "owner-a", 1)]);
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkConsumeConflictException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("consume-race") with { StateChanges = changes }, Immediate()).AsTask());
+
+        Assert.NotNull(source.Find(unit, workItemId, "tenant-a"));
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "consume-race", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task A_scheduler_claim_without_owner_and_token_content_fails_closed()
+    {
+        var source = new MemorySource();
+        var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
+        source.SeedRow(
+            "tenant-a",
+            unit,
+            "work-item-without-claim",
+            new { workflowExecutionId = "workflow-1" },
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = "workflow-1",
+                [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
+                [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1"
+            });
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", "work-item-without-claim", "owner-a", 1)]);
+
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkConsumeConflictException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("consume-without-claim") with { StateChanges = changes }, Immediate()).AsTask());
+
+        Assert.Empty(source.LastUnitOfWork!.Staged);
+        Assert.NotNull(source.Find(unit, "work-item-without-claim", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task A_dispatch_cancellation_race_is_cas_protected_and_does_not_overwrite_successor_state()
+    {
+        var source = new MemorySource();
+        var pending = NewDispatch("workflow-1", WorkflowDispatchStatus.Pending);
+        var unit = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind;
+        source.SeedRow("tenant-a", unit, pending.DispatchId, pending, new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
+            [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
+            [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
+            [ElsaRuntimeV2StorageManifest.StatusField] = pending.Status.ToString(),
+            [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = pending.CreatedAt,
+            [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = pending.DispatchId
+        });
+        source.BeforeCommit = _ =>
+        {
+            var started = pending.TransitionTo(WorkflowDispatchStatus.Started, pending.UpdatedAt.AddSeconds(1));
+            source.SeedRow("tenant-a", unit, pending.DispatchId, started, new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
+                [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = started.ParentWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = started.ChildWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.StatusField] = started.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = started.CreatedAt,
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = started.DispatchId
+            }, version: 2);
+        };
+        var cancellation = new WorkflowDispatchCancellationRequest(
+            pending.DispatchId,
+            pending.ParentWorkflowExecutionId,
+            pending.ParentActivityExecutionId,
+            pending.ChildWorkflowExecutionId,
+            DateTimeOffset.UtcNow);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: [cancellation]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("dispatch-race") with { StateChanges = changes }, Immediate()).AsTask());
+
+        var stored = source.Find(unit, pending.DispatchId, "tenant-a");
+        Assert.NotNull(stored);
+        Assert.Contains("Started", (string)stored!.Values.Values[ElsaRuntimeV2StorageManifest.ContentField]!);
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "dispatch-race", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Hierarchy_uses_provenance_scope_and_marks_only_the_scope_root()
+    {
+        var source = new MemorySource();
+        var activityId = "activity-root";
+        var inspection = NewInspection(activityId);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: [new RuntimeStateChange<ActivityExecutionInspectionProjection>(activityId, RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())],
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null);
+
+        await NewWriter(source).CommitAsync(NewCommit("hierarchy-provenance") with { StateChanges = changes }, Immediate());
+
+        var hierarchy = source.LastUnitOfWork!.Staged.Single(write =>
+            write.Unit.Id.Value == ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind);
+        var content = (string)hierarchy.Values!.Values[ElsaRuntimeV2StorageManifest.ContentField]!;
+        Assert.Contains("activity-root", content);
+        Assert.True((bool)hierarchy.Values.Values[ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyIsScopeRootField]!);
+    }
+
+    [Fact]
+    public async Task Exact_uow_refuses_an_undeclared_hierarchy_unit_open()
+    {
+        var source = new MemorySource { OmitHierarchyFromAdmission = true };
+        var activityId = "activity-undeclared";
+        var inspection = NewInspection(activityId);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: [new RuntimeStateChange<ActivityExecutionInspectionProjection>(activityId, RuntimeStateChangeOperation.Upsert, inspection, new Dictionary<string, string>())]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source).CommitAsync(NewCommit("undeclared-hierarchy") with { StateChanges = changes }, Immediate()).AsTask());
+
+        Assert.Contains("was not admitted", exception.Message, StringComparison.Ordinal);
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "undeclared-hierarchy", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Bookmark_lookup_projections_are_delimiter_safe_hashes()
+    {
+        var source = new MemorySource();
+        var bookmark = new BookmarkState(
+            "bookmark-1",
+            "workflow-1",
+            "activity-1",
+            "node",
+            "resume",
+            "type:with:delimiters",
+            "hash|with|delimiters",
+            null,
+            new Dictionary<string, string>(),
+            DateTimeOffset.UtcNow,
+            null);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [],
+            [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId, RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>())],
+            [], [], []);
+
+        await NewWriter(source).CommitAsync(NewCommit("bookmark-lookup") with { StateChanges = changes }, Immediate());
+
+        var row = source.LastUnitOfWork!.Staged.Single(write => write.Unit.Id.Value == ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
+        var pair = (string)row.Values!.Values[ElsaRuntimeV2StorageManifest.StimulusLookupKeyField]!;
+        var type = (string)row.Values.Values[ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField]!;
+        Assert.NotEqual(bookmark.StimulusHash, pair);
+        Assert.NotEqual(bookmark.StimulusType, type);
+        Assert.Equal(64, pair.Length);
+        Assert.Equal(64, type.Length);
     }
 
     [Fact]
@@ -164,6 +511,115 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         Assert.Equal(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, staged[^1].Unit.Id.Value);
         Assert.Equal(RowWriteMode.Insert, staged[^1].Mode);
         Assert.Equal(WritePreconditionKind.CreateOnly, staged[^1].Options.Precondition.Kind);
+        Assert.Contains(
+            ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
+            source.LastUnitOfWork.AdmittedUnitIds);
+    }
+
+    [SkippableFact]
+    [Trait("Category", "Sqlite")]
+    public async Task Sqlite_exact_uow_commits_marker_and_replays_through_the_native_provider()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-checkpoint-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            Skip.If(
+                !connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)),
+                "The installed SQLite Groundwork package does not evidence AtomicCommit; run with the preview.2 candidate/local package for this vertical gate.");
+            foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+                connection.Schema.Apply(unit);
+
+            var source = new NativeSessionSource(connection);
+            var writer = new GroundworkV2RuntimeCheckpointWriter(
+                source,
+                new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            var commit = NewCommit("sqlite-native");
+
+            await writer.CommitAsync(commit, Immediate());
+            await writer.CommitAsync(commit, Immediate());
+
+            Assert.Equal(1, source.UnitOfWorkCount);
+            Assert.Equal(BatchWriteOptions.Exact, source.LastOptions);
+            Assert.Equal(
+                [
+                    ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
+                    ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
+                    ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
+                    ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind,
+                    ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind,
+                    ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+                    ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+                    ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+                    ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind,
+                    ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
+                ],
+                source.LastUnitIds);
+            Assert.NotNull(source.Open(
+                ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+                StorageAccess.Scoped(new StorageScope("tenant-a"))).Read(GroundworkRuntimeRowStore.Key(commit.CommitId)));
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Sqlite")]
+    public void Sqlite_native_exact_uow_enforces_admission_and_if_version_outcomes()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-checkpoint-uow-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind);
+            connection.Schema.Apply(unit);
+            var access = StorageAccess.Scoped(new StorageScope("tenant-a"));
+            var values = GroundworkRuntimeRowStore.Values(
+                "native-uow",
+                ElsaRuntimeV2StorageManifest.SchemaVersion,
+                "{}",
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
+                });
+
+            using (var unitOfWork = connection.BeginUnitOfWork(access, BatchWriteOptions.Exact, [unit]))
+            {
+                unitOfWork.OpenSession(unit);
+                unitOfWork.Stage(RowWrite.Insert(unit, values, WriteOptions.CreateOnly));
+                Assert.True(unitOfWork.CommitWithOutcomes().IsSuccessful);
+            }
+
+            var entry = connection.OpenSession(unit, access).Read(GroundworkRuntimeRowStore.Key("native-uow"));
+            Assert.NotNull(entry);
+            Assert.NotNull(entry!.Version);
+
+            using (var staleUnitOfWork = connection.BeginUnitOfWork(access, BatchWriteOptions.Exact, [unit]))
+            {
+                staleUnitOfWork.Stage(RowWrite.ConditionalUpsert(unit, values, WriteOptions.IfVersion(entry.Version!.Value - 1)));
+                var exception = Assert.Throws<BatchWriteException>(staleUnitOfWork.CommitWithOutcomes);
+                Assert.Contains(exception.Outcomes, outcome => outcome.Outcome.Status == WriteOutcomeStatus.ConcurrencyConflict);
+            }
+
+            var unchanged = connection.OpenSession(unit, access).Read(GroundworkRuntimeRowStore.Key("native-uow"));
+            Assert.Equal(entry.Version, unchanged?.Version);
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
     }
 
     private static GroundworkV2RuntimeCheckpointWriter NewWriter(MemorySource source, string scope = "tenant-a") =>
@@ -186,17 +642,118 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             [],
             new Dictionary<string, string>());
 
+    private static WorkflowExecutionState NewExecution(string workflowExecutionId) =>
+        new(
+            workflowExecutionId,
+            new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running,
+            null,
+            DateTimeOffset.UtcNow,
+            null,
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            null,
+            "tenant-a",
+            new Dictionary<string, string>());
+
+    private static ActivityExecutionInspectionProjection NewInspection(string activityId, string? executionScopeId = null) =>
+        new(
+            activityId,
+            "workflow-1",
+            "node",
+            "authored",
+            "Activity",
+            "1",
+            ActivityExecutionStatus.Completed,
+            null,
+            7,
+            DateTimeOffset.UtcNow,
+            null,
+            DateTimeOffset.UtcNow,
+            "checkpoint",
+            "checkpoint",
+            DateTimeOffset.UtcNow,
+            new ActivitySchedulingProvenance(null, null, null, null, null, null, executionScopeId ?? activityId, null, new Dictionary<string, string>()),
+            [], [], [], [], new Dictionary<string, string>());
+
+    private static ExecutionLivenessState NewLiveness(string leaseId, string ownerId, long token) =>
+        new(
+            "ownership:workflow-1",
+            "workflow-1",
+            new RuntimeExecutionLease(
+                leaseId,
+                "workflow-1",
+                ownerId,
+                DateTimeOffset.UtcNow.AddMinutes(-1),
+                DateTimeOffset.UtcNow.AddMinutes(5),
+                token),
+            null,
+            null,
+            null);
+
+    private static WorkflowDispatchRecord NewDispatch(
+        string parentWorkflowExecutionId,
+        WorkflowDispatchStatus status,
+        WorkflowTestScope? testScope = null)
+    {
+        var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, "activity-1");
+        var now = DateTimeOffset.UtcNow;
+        return new WorkflowDispatchRecord(
+            identity.DispatchId,
+            parentWorkflowExecutionId,
+            "activity-1",
+            identity.ChildWorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            new WorkflowExecutableSourceProvenance("source", "kind", "source-id", null, "definition", "version", "1", null, null),
+            WorkflowDispatchMode.WaitForCompletion,
+            status,
+            null,
+            "tenant-a",
+            new WorkflowExecutionPartition("partition-a"),
+            testScope is null ? WorkflowRunKind.PublishedRun : WorkflowRunKind.TestRun,
+            WorkflowExecutionAuthoritySnapshot.CreateRoot("tester"),
+            [],
+            now,
+            now,
+            testScope: testScope);
+    }
+
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class NativeSessionSource(IStorageProviderConnection connection) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
+    {
+        public int UnitOfWorkCount { get; private set; }
+        public BatchWriteOptions? LastOptions { get; private set; }
+        public IReadOnlyList<string> LastUnitIds { get; private set; } = [];
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
+
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            connection.OpenSession(ElsaRuntimeV2StorageManifest.Require(unitId), access);
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null)
+        {
+            UnitOfWorkCount++;
+            LastOptions = options;
+            LastUnitIds = unitIds.ToArray();
+            return connection.BeginUnitOfWork(access, options, unitIds.Select(ElsaRuntimeV2StorageManifest.Require).ToArray());
+        }
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => ElsaRuntimeV2StorageManifest.Require(unitId);
     }
 
     private sealed class MemorySource : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         private readonly MemoryBacking backing = new();
         public bool AdvertiseAtomicCommit { get; init; } = true;
+        public bool OmitHierarchyFromAdmission { get; init; }
         public bool FailCommitBeforeApply { get; set; }
         public bool ThrowAfterApply { get; set; }
+        public Action<MemoryUnitOfWork>? BeforeCommit { get; set; }
         public int UnitOfWorkCount { get; private set; }
         public MemoryUnitOfWork? LastUnitOfWork { get; private set; }
 
@@ -209,7 +766,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null)
         {
             UnitOfWorkCount++;
-            LastUnitOfWork = new MemoryUnitOfWork(access, backing, this);
+            var admittedUnitIds = OmitHierarchyFromAdmission
+                ? unitIds.Where(unitId => unitId != ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind).ToArray()
+                : unitIds;
+            LastUnitOfWork = new MemoryUnitOfWork(access, backing, this, admittedUnitIds);
             return LastUnitOfWork;
         }
 
@@ -218,7 +778,20 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         public StoredEntry? Find(string unitId, string id, string scope) =>
             backing.Read(scope, unitId, id);
 
-        public void SeedLiveness(ExecutionLivenessState state)
+        public void SeedRow(string scope, string unitId, string id, object content, IReadOnlyDictionary<string, object?>? projections = null, long version = 1)
+        {
+            var values = GroundworkRuntimeRowStore.Values(
+                id,
+                ElsaRuntimeV2StorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(content, content.GetType(), Json),
+                projections);
+            backing.Write(scope, unitId, id, values, version);
+        }
+
+        public void ReplaceRow(string scope, string unitId, string id, StorageValues values, long version) =>
+            backing.Write(scope, unitId, id, values, version);
+
+        public void SeedLiveness(ExecutionLivenessState state, long version = 1)
         {
             var operationalStateId = state.OperationalStateId;
             var identity = $"{state.WorkflowExecutionId.Length}:{state.WorkflowExecutionId}{operationalStateId}";
@@ -247,7 +820,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                     [ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField] = null,
                     [ElsaRuntimeV2StorageManifest.RecoveryHeartbeatRecordedAtField] = null
                 });
-            backing.Write("tenant-a", ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, identity, values, 1);
+            backing.Write("tenant-a", ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, identity, values, version);
         }
 
         public sealed class MemoryBacking
@@ -283,17 +856,26 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         public sealed class MemoryUnitOfWork(
             StorageAccess access,
             MemoryBacking backing,
-            MemorySource owner) : IUnitOfWork
+            MemorySource owner,
+            IReadOnlyList<string> admittedUnitIds) : IUnitOfWork
         {
             public List<RowWrite> Staged { get; } = [];
+            public IReadOnlyList<string> AdmittedUnitIds { get; } = admittedUnitIds.ToArray();
             private bool rolledBack;
 
-            public IStorageSession OpenSession(StorageUnit unit) => new MemorySession(unit, access, backing);
+            public IStorageSession OpenSession(StorageUnit unit)
+            {
+                if (!AdmittedUnitIds.Contains(unit.Id.Value, StringComparer.Ordinal))
+                    throw new InvalidOperationException($"Unit '{unit.Id.Value}' was not admitted to the exact UOW.");
+                return new MemorySession(unit, access, backing);
+            }
 
             public void Stage(RowWrite write)
             {
                 if (rolledBack)
                     throw new InvalidOperationException("The unit of work has rolled back.");
+                if (!AdmittedUnitIds.Contains(write.Unit.Id.Value, StringComparer.Ordinal))
+                    throw new InvalidOperationException($"Unit '{write.Unit.Id.Value}' was not admitted to the exact UOW.");
                 Staged.Add(write);
             }
 
@@ -303,6 +885,18 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             {
                 if (owner.FailCommitBeforeApply)
                     throw new InvalidOperationException("simulated atomic failure");
+                owner.BeforeCommit?.Invoke(this);
+                var conflicts = Staged
+                    .Where(write => !PreconditionSatisfied(write))
+                    .ToHashSet();
+                if (conflicts.Count > 0)
+                {
+                    return new BatchWriteReport(Staged.Select(write => new RowWriteOutcome(
+                        write,
+                        new WriteOutcome(
+                            conflicts.Contains(write) ? WriteOutcomeStatus.ConcurrencyConflict : WriteOutcomeStatus.Upserted,
+                            conflicts.Contains(write) ? null : 1))).ToArray());
+                }
                 foreach (var write in Staged)
                     Apply(write);
                 if (owner.ThrowAfterApply)
@@ -344,6 +938,21 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
 
                 var version = (existing?.Version ?? 0) + 1;
                 backing.Write(access.Scope.Value, write.Unit.Id.Value, id, write.Values!, version);
+            }
+
+            private bool PreconditionSatisfied(RowWrite write)
+            {
+                var id = write.Mode == RowWriteMode.Delete
+                    ? (string)write.Key!.Values[ElsaRuntimeV2StorageManifest.IdField]!
+                    : (string)write.Values!.Values[ElsaRuntimeV2StorageManifest.IdField]!;
+                var existing = backing.Read(access.Scope!.Value, write.Unit.Id.Value, id);
+                return write.Options.Precondition.Kind switch
+                {
+                    WritePreconditionKind.Unconditional => true,
+                    WritePreconditionKind.CreateOnly => existing is null,
+                    WritePreconditionKind.IfVersion => existing?.Version == write.Options.Precondition.Version,
+                    _ => false
+                };
             }
         }
     }

@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -22,6 +25,11 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    static GroundworkV2RuntimeCheckpointWriter()
+    {
+        Json.Converters.Add(new JsonStringEnumConverter());
+    }
 
     private static readonly string[] CommitUnitIds =
     [
@@ -80,6 +88,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 "Groundwork runtime checkpoints require one explicit persistence scope; global and across-scope access are refused.");
         }
 
+        ValidateCommitBoundary(commit);
         EnsureTenantScope(context, commit);
         if (commit.StateChanges.ActivityScopeCleanups.Count > 0)
         {
@@ -121,10 +130,40 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             stage.BeginCommit();
             var report = await unitOfWork.CommitWithOutcomesAsync(cancellationToken);
             if (!report.IsSuccessful)
+            {
+                if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, RowWriteMode.ConditionalUpsert))
+                    throw ReadCurrentFence(access, commit);
+                if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete))
+                    throw new RuntimeSchedulerWorkConsumeConflictException(
+                        commit.WorkflowExecutionId,
+                        commit.StateChanges.ConsumedSchedulerWorkItems
+                            .Select(item => item.WorkItemId)
+                            .FirstOrDefault() ?? string.Empty);
                 throw new InvalidOperationException(
                     $"Groundwork rejected runtime checkpoint '{commit.CommitId}' with {report.Failed} failed row outcomes.");
+            }
 
             return stage.Result;
+        }
+        catch (BatchWriteException exception) when (ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, RowWriteMode.ConditionalUpsert) ||
+                                                    ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete))
+        {
+            try
+            {
+                unitOfWork.Rollback();
+            }
+            catch
+            {
+                // Preserve the provider's attributed conflict. Providers require the caller to roll back after a batch failure.
+            }
+
+            if (ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, RowWriteMode.ConditionalUpsert))
+                throw ReadCurrentFence(access, commit);
+            throw new RuntimeSchedulerWorkConsumeConflictException(
+                commit.WorkflowExecutionId,
+                commit.StateChanges.ConsumedSchedulerWorkItems
+                    .Select(item => item.WorkItemId)
+                    .FirstOrDefault() ?? string.Empty);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -162,6 +201,203 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             context.EnsureTenantScope(workflowExecution.State.TenantId);
         foreach (var dispatch in commit.StateChanges.WorkflowDispatches)
             context.EnsureTenantScope(dispatch.State.TenantId);
+    }
+
+    private static bool ContainsConflict(IEnumerable<RowWriteOutcome> outcomes, string unitId, RowWriteMode mode) =>
+        outcomes.Any(outcome =>
+            outcome.Write.Unit.Id.Value == unitId &&
+            outcome.Write.Mode == mode &&
+            outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound);
+
+    private RuntimeStaleFencingTokenException ReadCurrentFence(StorageAccess access, RuntimeCheckpointCommit commit)
+    {
+        var operationalStateId = $"ownership:{commit.WorkflowExecutionId}";
+        var identity = GroundworkV2RuntimeLivenessCodec.Identity(commit.WorkflowExecutionId, operationalStateId);
+        var unit = sessions.Unit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, targetName);
+        var entry = sessions.Open(unit.Id.Value, access, targetName).Read(GroundworkRuntimeRowStore.Key(identity));
+        if (entry is null)
+            return new(
+                commit.WorkflowExecutionId,
+                commit.ExpectedFence?.FencingToken ?? 0,
+                0,
+                RuntimeFencingRejectionReason.NoActiveLease);
+
+        var state = GroundworkV2RuntimeLivenessCodec.Deserialize(entry.Values.Values);
+        var currentToken = state.ExecutionLease?.FencingToken ?? ReadHighestIssuedToken(state);
+        var reason = state.ExecutionLease is null
+            ? RuntimeFencingRejectionReason.NoActiveLease
+            : state.ExecutionLease.IsExpired(timeProvider.GetUtcNow())
+                ? RuntimeFencingRejectionReason.ExpiredLease
+                : RuntimeFencingRejectionReason.StaleToken;
+        return new(
+            commit.WorkflowExecutionId,
+            commit.ExpectedFence?.FencingToken ?? 0,
+            currentToken,
+            reason);
+    }
+
+    private static long ReadHighestIssuedToken(ExecutionLivenessState state)
+    {
+        if (state.Metadata.TryGetValue(Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OwnershipFencingToken, out var raw) &&
+            long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token))
+            return token;
+        return state.ExecutionLease?.FencingToken ?? 0;
+    }
+
+    // Keep the v2 adapter's admission boundary identical to the established checkpoint funnel. These checks are
+    // intentionally before capability discovery, marker reads, UOW creation, or any provider I/O.
+    private static void ValidateCommitBoundary(RuntimeCheckpointCommit commit)
+    {
+        var stateChanges = commit.StateChanges;
+        if (stateChanges.WorkflowExecution is { } workflow)
+        {
+            RequireOperation(workflow, RuntimeStateChangeOperation.Upsert, "workflow execution");
+            RequireId(workflow.StateId, workflow.State.WorkflowExecutionId, "workflow execution");
+            RequireWorkflow(workflow.State.WorkflowExecutionId, commit.WorkflowExecutionId, "workflow execution");
+        }
+
+        if (stateChanges.Scheduler is { } scheduler)
+        {
+            RequireOperation(scheduler, RuntimeStateChangeOperation.Upsert, "scheduler");
+            RequireId(scheduler.StateId, scheduler.State.WorkflowExecutionId, "scheduler");
+            RequireWorkflow(scheduler.State.WorkflowExecutionId, commit.WorkflowExecutionId, "scheduler");
+        }
+
+        foreach (var change in stateChanges.ActivityExecutions)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "activity execution");
+            RequireId(change.StateId, change.State.Execution.ActivityExecutionId, "activity execution");
+            RequireWorkflow(change.State.Execution.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution");
+            change.State.EnsureValueFlowCompatible();
+            change.State.EnsureSupersessionCompatible();
+            RequireMatchingScope(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId, "activity execution");
+            RequireMatchingAttempt(change.State.Attempt, change.State.Provenance.Attempt, "activity execution");
+        }
+
+        foreach (var change in stateChanges.ActivityExecutionInspections)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "activity execution inspection");
+            RequireId(change.StateId, change.State.ActivityExecutionId, "activity execution inspection");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution inspection");
+            RequireMatchingScope(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId, "activity execution inspection");
+            RequireMatchingAttempt(change.State.Attempt, change.State.Provenance.Attempt, "activity execution inspection");
+        }
+
+        foreach (var change in stateChanges.Bookmarks)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete, "bookmark");
+            RequireId(change.StateId, change.State.BookmarkId, "bookmark");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "bookmark");
+        }
+
+        foreach (var change in stateChanges.DurableValues)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete, "durable value");
+            RequireId(change.StateId, change.State.DurableValueId, "durable value");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "durable value");
+        }
+
+        foreach (var change in stateChanges.Incidents)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Append, RuntimeStateChangeOperation.Upsert, "incident");
+            RequireId(change.StateId, change.State.IncidentId, "incident");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "incident");
+        }
+
+        var ownershipStateId = $"ownership:{commit.WorkflowExecutionId}";
+        foreach (var change in stateChanges.Operational)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "operational state");
+            RequireId(change.StateId, change.State.OperationalStateId, "operational state");
+            RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "operational state");
+            if (StringComparer.Ordinal.Equals(change.State.OperationalStateId, ownershipStateId))
+                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+        }
+
+        var seenDispatches = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
+        foreach (var change in stateChanges.WorkflowDispatches)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "workflow dispatch");
+            RequireId(change.StateId, change.State.DispatchId, "workflow dispatch");
+            WorkflowDispatchLifecycle.ValidateCheckpointOwnership(commit.WorkflowExecutionId, change.State);
+            if (seenDispatches.TryGetValue(change.StateId, out var duplicate) &&
+                !WorkflowDispatchLifecycle.RecordsEqual(duplicate, change.State))
+                throw new InvalidOperationException($"Workflow dispatch '{change.StateId}' occurs more than once with conflicting state.");
+            seenDispatches[change.StateId] = change.State;
+        }
+
+        foreach (var request in stateChanges.WorkflowDispatchCancellations)
+            RequireWorkflow(request.ParentWorkflowExecutionId, commit.WorkflowExecutionId, "workflow dispatch cancellation");
+
+        foreach (var consumed in stateChanges.ConsumedSchedulerWorkItems)
+        {
+            RequireWorkflow(consumed.WorkflowExecutionId, commit.WorkflowExecutionId, "consumed scheduler work item");
+            if (string.IsNullOrWhiteSpace(consumed.ClaimOwnerId) || consumed.FencingToken < 0)
+                throw new InvalidOperationException("Consumed scheduler work items require a non-empty claim owner and non-negative fencing token.");
+        }
+
+        foreach (var change in stateChanges.PostCommitOutbox)
+        {
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "post-commit outbox");
+            RequireId(change.StateId, change.State.OutboxItemId, "post-commit outbox");
+            RequireWorkflow(change.State.Intent.WorkflowExecutionId, commit.WorkflowExecutionId, "post-commit outbox");
+        }
+
+        if (stateChanges.AlterationJobTerminalChange is { } alteration &&
+            !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
+            throw new InvalidOperationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
+
+        if (stateChanges.ActivityScopeCleanups.Any(cleanup =>
+                !StringComparer.Ordinal.Equals(cleanup.WorkflowExecutionId, commit.WorkflowExecutionId)))
+            throw new InvalidOperationException("Activity scope cleanup WorkflowExecutionId must match the checkpoint workflow execution ID.");
+    }
+
+    private static void RequireOperation<TState>(
+        RuntimeStateChange<TState> change,
+        RuntimeStateChangeOperation expected,
+        string label)
+    {
+        if (change.Operation != expected)
+            throw new InvalidOperationException($"The Groundwork checkpoint writer can only project {label} '{expected}' changes.");
+    }
+
+    private static void RequireOperation<TState>(
+        RuntimeStateChange<TState> change,
+        RuntimeStateChangeOperation first,
+        RuntimeStateChangeOperation second,
+        string label)
+    {
+        var operation = change.Operation;
+        if (operation != first && operation != second)
+            throw new InvalidOperationException($"The Groundwork checkpoint writer can only project {label} '{first}' or '{second}' changes.");
+    }
+
+    private static void RequireId(string actual, string expected, string label)
+    {
+        if (!StringComparer.Ordinal.Equals(actual, expected))
+            throw new InvalidOperationException($"{label} state change StateId must match its model identity.");
+    }
+
+    private static void RequireWorkflow(string actual, string expected, string label)
+    {
+        if (!StringComparer.Ordinal.Equals(actual, expected))
+            throw new InvalidOperationException($"{label} workflow execution ID must match the checkpoint workflow execution ID.");
+    }
+
+    private static void RequireMatchingScope(string? stateScope, string? provenanceScope, string label)
+    {
+        if (stateScope is not null && provenanceScope is not null &&
+            !StringComparer.Ordinal.Equals(stateScope, provenanceScope))
+            throw new InvalidOperationException($"{label} ExecutionScopeId must match its scheduling provenance when both are present.");
+    }
+
+    private static void RequireMatchingAttempt(
+        ActivityExecutionAttemptLineage? stateAttempt,
+        ActivityExecutionAttemptLineage? provenanceAttempt,
+        string label)
+    {
+        if (stateAttempt is not null && provenanceAttempt is not null && stateAttempt != provenanceAttempt)
+            throw new InvalidOperationException($"{label} Attempt must match its scheduling provenance when both are present.");
     }
 
     private CheckpointMarker? ReadMarker(StorageAccess access, string commitId)
@@ -230,6 +466,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         private readonly string fingerprint;
         private readonly CancellationToken cancellationToken;
         private readonly TimeProvider timeProvider;
+        private readonly HashSet<string> touchedTestScopes = new(StringComparer.Ordinal);
         private readonly Dictionary<string, IStorageSession> unitSessions = new(StringComparer.Ordinal);
 
         public StageContext(
@@ -343,13 +580,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     continue;
                 }
 
-                var hierarchy = new HierarchyProjection(
-                    change.State.ActivityExecutionId,
-                    change.State.WorkflowExecutionId,
-                    change.State.ExecutionScopeId ?? string.Empty,
-                    change.State.ExecutionSequence,
-                    change.State.ActivityExecutionId,
-                    string.IsNullOrEmpty(change.State.ExecutionScopeId));
+                var hierarchy = ActivityExecutionHierarchyProjector.FromInspection(change.State);
                 StageUpsert(
                     ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
                     change.StateId,
@@ -358,7 +589,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     {
                         [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = hierarchy.WorkflowExecutionId,
                         [ElsaRuntimeV2StorageManifest.ExecutionScopeIdField] = hierarchy.ExecutionScopeId,
-                        [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyIsScopeRootField] = hierarchy.IsScopeRoot,
+                        [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyIsScopeRootField] = StringComparer.Ordinal.Equals(hierarchy.ExecutionScopeId, hierarchy.ActivityExecutionId),
                         [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyExecutionSequenceField] = hierarchy.ExecutionSequence,
                         [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyActivityExecutionIdField] = hierarchy.ActivityExecutionId
                     });
@@ -416,22 +647,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 }
 
                 var values = GroundworkV2RuntimeLivenessCodec.Values(change.State);
-                var ownershipStateId = $"ownership:{commit.WorkflowExecutionId}";
-                if (commit.ExpectedFence is not null && StringComparer.Ordinal.Equals(change.StateId, ownershipStateId))
-                {
-                    var existing = Open(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind)
-                        .Read(GroundworkRuntimeRowStore.Key(GroundworkV2RuntimeLivenessCodec.Identity(commit.WorkflowExecutionId, ownershipStateId)));
-                    if (existing is null)
-                        throw NewStaleFence(RuntimeFencingRejectionReason.NoActiveLease, 0, commit.ExpectedFence.FencingToken);
-                    unitOfWork.Stage(RowWrite.ConditionalUpsert(
-                        Unit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind),
-                        values,
-                        WriteOptions.IfVersion(existing.Version ?? 0)));
-                }
-                else
-                {
-                    StageValues(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, values, change.Operation);
-                }
+                StageValues(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, values, change.Operation);
             }
         }
 
@@ -457,7 +673,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
                         request.DispatchId,
                         WorkflowDispatchLifecycle.CancelBeforeAdmission(existing, request.RequestedAt),
-                        ProjectDispatch);
+                        ProjectDispatch,
+                        WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
+                            $"Workflow dispatch '{request.DispatchId}' did not expose a provider revision.")));
                 }
                 else if (existing.Status == WorkflowDispatchStatus.Started &&
                          !WorkflowDispatchLifecycle.IsCancellationRequested(existing))
@@ -466,7 +684,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
                         request.DispatchId,
                         WorkflowDispatchLifecycle.MarkCancellationRequested(existing, request.RequestedAt),
-                        ProjectDispatch);
+                        ProjectDispatch,
+                        WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
+                            $"Workflow dispatch '{request.DispatchId}' did not expose a provider revision.")));
                 }
             }
         }
@@ -489,7 +709,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 if (workflowExecutionId is not null && !StringComparer.Ordinal.Equals(workflowExecutionId, consumed.WorkflowExecutionId))
                     throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
                 ValidateSchedulerClaim(values, consumed);
-                StageDelete(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, consumed.WorkItemId);
+                // The public exact-UOW precondition is a provider revision CAS. Groundwork v2 does not expose a
+                // composite owner+token precondition, so this revision guard is deliberately fail-closed: a claim
+                // renewal that advances the revision can be reported claim-lost even though owner+token are stable.
+                StageDelete(
+                    ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+                    consumed.WorkItemId,
+                    WriteOptions.IfVersion(entry.Version ?? throw new RuntimeSchedulerWorkConsumeConflictException(
+                        consumed.WorkflowExecutionId,
+                        consumed.WorkItemId)));
             }
         }
 
@@ -532,6 +760,17 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             {
                 throw new InvalidOperationException($"Workflow test scope '{expected.ScopeId}' is not open at checkpoint '{commit.CommitId}'.");
             }
+
+            if (!touchedTestScopes.Add(expected.ScopeId))
+                return;
+
+            // Admission is a same-value CAS, not merely a pre-read. A concurrent close/expire operation therefore
+            // conflicts with this checkpoint and rolls back every staged row in the exact UOW.
+            unitOfWork.Stage(RowWrite.ConditionalUpsert(
+                Unit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind),
+                entry.Values,
+                WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
+                    $"Workflow test scope '{expected.ScopeId}' did not expose a provider revision."))));
         }
 
         private void Apply<TState>(
@@ -583,14 +822,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             string unitId,
             string id,
             TState content,
-            Func<TState, IReadOnlyDictionary<string, object?>> projection)
+            Func<TState, IReadOnlyDictionary<string, object?>> projection,
+            WriteOptions? options = null)
         {
             var values = GroundworkRuntimeRowStore.Values(
                 id,
                 ElsaRuntimeV2StorageManifest.SchemaVersion,
                 Serialize(content!),
                 projection(content));
-            StageValues(unitId, values, RuntimeStateChangeOperation.Upsert);
+            StageValues(unitId, values, RuntimeStateChangeOperation.Upsert, options);
         }
 
         private void StageUpsert(
@@ -600,19 +840,24 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             IReadOnlyDictionary<string, object?> projections) =>
             Stage(unitId, id, content, projections, RuntimeStateChangeOperation.Upsert);
 
-        private void StageValues(string unitId, StorageValues values, RuntimeStateChangeOperation operation)
+        private void StageValues(
+            string unitId,
+            StorageValues values,
+            RuntimeStateChangeOperation operation,
+            WriteOptions? options = null)
         {
             var unit = Unit(unitId);
             var write = operation switch
             {
-                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, WriteOptions.CreateOnly),
-                _ => RowWrite.Upsert(unit, values, WriteOptions.Unconditional)
+                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, options ?? WriteOptions.CreateOnly),
+                RuntimeStateChangeOperation.Upsert when options is not null => RowWrite.ConditionalUpsert(unit, values, options),
+                _ => RowWrite.Upsert(unit, values, options ?? WriteOptions.Unconditional)
             };
             unitOfWork.Stage(write);
         }
 
-        private void StageDelete(string unitId, string id) =>
-            unitOfWork.Stage(RowWrite.Delete(Unit(unitId), GroundworkRuntimeRowStore.Key(id), WriteOptions.Unconditional));
+        private void StageDelete(string unitId, string id, WriteOptions? options = null) =>
+            unitOfWork.Stage(RowWrite.Delete(Unit(unitId), GroundworkRuntimeRowStore.Key(id), options ?? WriteOptions.Unconditional));
 
         private IStorageSession Open(string unitId) =>
             unitSessions.TryGetValue(unitId, out var session)
@@ -677,8 +922,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.WorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.StimulusHashField] = state.StimulusHash,
                 [ElsaRuntimeV2StorageManifest.StimulusTypeField] = state.StimulusType,
-                [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField] = state.StimulusHash,
-                [ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField] = state.StimulusType,
+                [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField] = StimulusLookupKey.FromPair(state.StimulusType, state.StimulusHash),
+                [ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField] = StimulusLookupKey.FromType(state.StimulusType),
                 [ElsaRuntimeV2StorageManifest.BookmarkIdField] = state.BookmarkId
             };
 
@@ -736,16 +981,27 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 }
                 : null;
             if (content is null)
-                return;
+                throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
 
-            using var document = JsonDocument.Parse(content);
+            using var document = ParseSchedulerContent(content, consumed);
             var root = document.RootElement;
             var owner = FindString(root, "claimOwnerId") ?? FindString(root, "ownerId");
             var token = FindInt64(root, "fencingToken");
-            if (owner is null && token is null)
-                return;
-            if (!StringComparer.Ordinal.Equals(owner, consumed.ClaimOwnerId) || token != consumed.FencingToken)
+            if (owner is null || token is null ||
+                !StringComparer.Ordinal.Equals(owner, consumed.ClaimOwnerId) || token != consumed.FencingToken)
                 throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+        }
+
+        private static JsonDocument ParseSchedulerContent(string content, ConsumedSchedulerWorkItem consumed)
+        {
+            try
+            {
+                return JsonDocument.Parse(content);
+            }
+            catch (JsonException)
+            {
+                throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+            }
         }
 
         private static string? FindString(JsonElement root, string propertyName)
@@ -789,14 +1045,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             return result ?? throw new InvalidDataException($"Groundwork runtime row could not deserialize as {typeof(T).Name}.");
         }
 
-        private sealed record HierarchyProjection(
-            string Id,
-            string WorkflowExecutionId,
-            string ExecutionScopeId,
-            long ExecutionSequence,
-            string ActivityExecutionId,
-            bool IsScopeRoot);
-
         private sealed record AlterationJobTerminalProjection(
             string JobId,
             WorkflowAlterationJobStatus Status,
@@ -813,4 +1061,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         string Fingerprint,
         IReadOnlyCollection<string> PendingPostCommitWorkIds,
         IReadOnlyCollection<string> ConsumedSchedulerWorkItemIds);
+
+    private static class StimulusLookupKey
+    {
+        public static string FromPair(string stimulusType, string stimulusHash) =>
+            Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");
+
+        public static string FromType(string stimulusType) => Hash(stimulusType);
+
+        private static string Hash(string value) =>
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    }
 }
