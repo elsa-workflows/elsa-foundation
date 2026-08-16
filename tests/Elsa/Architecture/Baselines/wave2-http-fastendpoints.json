@@ -1,0 +1,367 @@
+[
+  {
+    "binding": "method=POST;uri=http://localhost/interchange/bpmn/analyze;content-type=",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "POST /interchange/bpmn/analyze",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/interchange/bpmn/analyze;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022elementCounts\u0022: {\n    \u0022endEvent\u0022: 1,\n    \u0022sequenceFlow\u0022: 2,\n    \u0022startEvent\u0022: 1,\n    \u0022task\u0022: 1\n  },\n  \u0022issues\u0022: [],\n  \u0022processIds\u0022: [\n    \u0022wave2-process\u0022\n  ]\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /interchange/bpmn/analyze",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022elementCounts\u0022: {\n    \u0022endEvent\u0022: 1,\n    \u0022sequenceFlow\u0022: 2,\n    \u0022startEvent\u0022: 1,\n    \u0022task\u0022: 1\n  },\n  \u0022issues\u0022: [],\n  \u0022processIds\u0022: [\n    \u0022wave2-process\u0022\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/interchange/bpmn/analyze;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022The document is not well-formed XML.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "case": "wildcard-invalid-xml",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /interchange/bpmn/analyze",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022The document is not well-formed XML.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022The document is not well-formed XML.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/interchange/bpmn/import;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022analysis\u0022: {\n    \u0022elementCounts\u0022: {\n      \u0022endEvent\u0022: 1,\n      \u0022sequenceFlow\u0022: 2,\n      \u0022startEvent\u0022: 1,\n      \u0022task\u0022: 1\n    },\n    \u0022issues\u0022: [],\n    \u0022processIds\u0022: [\n      \u0022wave2-process\u0022\n    ]\n  },\n  \u0022processNode\u0022: {\n    \u0022activityVersionId\u0022: \u0022Elsa.BpmnProcess\u0022,\n    \u0022inputs\u0022: [],\n    \u0022nodeId\u0022: \u0022wave2-wave2-process\u0022,\n    \u0022outputs\u0022: [],\n    \u0022structure\u0022: {\n      \u0022kind\u0022: \u0022elsa.bpmn.structure\u0022,\n      \u0022payload\u0022: {\n        \u0022activities\u0022: [],\n        \u0022diagram\u0022: null,\n        \u0022elements\u0022: [\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-start\u0022,\n            \u0022elementType\u0022: \u0022startEvent\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: null,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          },\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-task\u0022,\n            \u0022elementType\u0022: \u0022task\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: \u0022Wave 2 task\u0022,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          },\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-end\u0022,\n            \u0022elementType\u0022: \u0022endEvent\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: null,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          }\n        ],\n        \u0022isTransaction\u0022: false,\n        \u0022lanes\u0022: [],\n        \u0022messageFlows\u0022: [],\n        \u0022pools\u0022: [],\n        \u0022sequenceFlows\u0022: [\n          {\n            \u0022conditionOutcome\u0022: null,\n            \u0022flowId\u0022: \u0022wave2-flow-1\u0022,\n            \u0022isDefault\u0022: false,\n            \u0022name\u0022: null,\n            \u0022sourceRef\u0022: \u0022wave2-start\u0022,\n            \u0022targetRef\u0022: \u0022wave2-task\u0022\n          },\n          {\n            \u0022conditionOutcome\u0022: null,\n            \u0022flowId\u0022: \u0022wave2-flow-2\u0022,\n            \u0022isDefault\u0022: false,\n            \u0022name\u0022: null,\n            \u0022sourceRef\u0022: \u0022wave2-task\u0022,\n            \u0022targetRef\u0022: \u0022wave2-end\u0022\n          }\n        ],\n        \u0022variables\u0022: []\n      },\n      \u0022schemaVersion\u0022: \u00221.0.0\u0022\n    }\n  },\n  \u0022processNodes\u0022: [\n    {\n      \u0022node\u0022: {\n        \u0022activityVersionId\u0022: \u0022Elsa.BpmnProcess\u0022,\n        \u0022inputs\u0022: [],\n        \u0022nodeId\u0022: \u0022wave2-wave2-process\u0022,\n        \u0022outputs\u0022: [],\n        \u0022structure\u0022: {\n          \u0022kind\u0022: \u0022elsa.bpmn.structure\u0022,\n          \u0022payload\u0022: {\n            \u0022activities\u0022: [],\n            \u0022diagram\u0022: null,\n            \u0022elements\u0022: [\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-start\u0022,\n                \u0022elementType\u0022: \u0022startEvent\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: null,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              },\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-task\u0022,\n                \u0022elementType\u0022: \u0022task\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: \u0022Wave 2 task\u0022,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              },\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-end\u0022,\n                \u0022elementType\u0022: \u0022endEvent\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: null,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              }\n            ],\n            \u0022isTransaction\u0022: false,\n            \u0022lanes\u0022: [],\n            \u0022messageFlows\u0022: [],\n            \u0022pools\u0022: [],\n            \u0022sequenceFlows\u0022: [\n              {\n                \u0022conditionOutcome\u0022: null,\n                \u0022flowId\u0022: \u0022wave2-flow-1\u0022,\n                \u0022isDefault\u0022: false,\n                \u0022name\u0022: null,\n                \u0022sourceRef\u0022: \u0022wave2-start\u0022,\n                \u0022targetRef\u0022: \u0022wave2-task\u0022\n              },\n              {\n                \u0022conditionOutcome\u0022: null,\n                \u0022flowId\u0022: \u0022wave2-flow-2\u0022,\n                \u0022isDefault\u0022: false,\n                \u0022name\u0022: null,\n                \u0022sourceRef\u0022: \u0022wave2-task\u0022,\n                \u0022targetRef\u0022: \u0022wave2-end\u0022\n              }\n            ],\n            \u0022variables\u0022: []\n          },\n          \u0022schemaVersion\u0022: \u00221.0.0\u0022\n        }\n      },\n      \u0022participantId\u0022: null,\n      \u0022participantName\u0022: null,\n      \u0022processId\u0022: \u0022wave2-process\u0022\n    }\n  ]\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /interchange/bpmn/import",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022analysis\u0022: {\n    \u0022elementCounts\u0022: {\n      \u0022endEvent\u0022: 1,\n      \u0022sequenceFlow\u0022: 2,\n      \u0022startEvent\u0022: 1,\n      \u0022task\u0022: 1\n    },\n    \u0022issues\u0022: [],\n    \u0022processIds\u0022: [\n      \u0022wave2-process\u0022\n    ]\n  },\n  \u0022processNode\u0022: {\n    \u0022activityVersionId\u0022: \u0022Elsa.BpmnProcess\u0022,\n    \u0022inputs\u0022: [],\n    \u0022nodeId\u0022: \u0022wave2-wave2-process\u0022,\n    \u0022outputs\u0022: [],\n    \u0022structure\u0022: {\n      \u0022kind\u0022: \u0022elsa.bpmn.structure\u0022,\n      \u0022payload\u0022: {\n        \u0022activities\u0022: [],\n        \u0022diagram\u0022: null,\n        \u0022elements\u0022: [\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-start\u0022,\n            \u0022elementType\u0022: \u0022startEvent\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: null,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          },\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-task\u0022,\n            \u0022elementType\u0022: \u0022task\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: \u0022Wave 2 task\u0022,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          },\n          {\n            \u0022attachedToRef\u0022: null,\n            \u0022cancelActivity\u0022: true,\n            \u0022childNodeId\u0022: null,\n            \u0022compensationHandlerElementId\u0022: null,\n            \u0022defaultFlowId\u0022: null,\n            \u0022elementId\u0022: \u0022wave2-end\u0022,\n            \u0022elementType\u0022: \u0022endEvent\u0022,\n            \u0022eventDefinitions\u0022: [],\n            \u0022isForCompensation\u0022: false,\n            \u0022isTransaction\u0022: false,\n            \u0022laneId\u0022: null,\n            \u0022listenerNodeId\u0022: null,\n            \u0022loopCharacteristics\u0022: null,\n            \u0022name\u0022: null,\n            \u0022properties\u0022: {},\n            \u0022triggeredByEvent\u0022: false\n          }\n        ],\n        \u0022isTransaction\u0022: false,\n        \u0022lanes\u0022: [],\n        \u0022messageFlows\u0022: [],\n        \u0022pools\u0022: [],\n        \u0022sequenceFlows\u0022: [\n          {\n            \u0022conditionOutcome\u0022: null,\n            \u0022flowId\u0022: \u0022wave2-flow-1\u0022,\n            \u0022isDefault\u0022: false,\n            \u0022name\u0022: null,\n            \u0022sourceRef\u0022: \u0022wave2-start\u0022,\n            \u0022targetRef\u0022: \u0022wave2-task\u0022\n          },\n          {\n            \u0022conditionOutcome\u0022: null,\n            \u0022flowId\u0022: \u0022wave2-flow-2\u0022,\n            \u0022isDefault\u0022: false,\n            \u0022name\u0022: null,\n            \u0022sourceRef\u0022: \u0022wave2-task\u0022,\n            \u0022targetRef\u0022: \u0022wave2-end\u0022\n          }\n        ],\n        \u0022variables\u0022: []\n      },\n      \u0022schemaVersion\u0022: \u00221.0.0\u0022\n    }\n  },\n  \u0022processNodes\u0022: [\n    {\n      \u0022node\u0022: {\n        \u0022activityVersionId\u0022: \u0022Elsa.BpmnProcess\u0022,\n        \u0022inputs\u0022: [],\n        \u0022nodeId\u0022: \u0022wave2-wave2-process\u0022,\n        \u0022outputs\u0022: [],\n        \u0022structure\u0022: {\n          \u0022kind\u0022: \u0022elsa.bpmn.structure\u0022,\n          \u0022payload\u0022: {\n            \u0022activities\u0022: [],\n            \u0022diagram\u0022: null,\n            \u0022elements\u0022: [\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-start\u0022,\n                \u0022elementType\u0022: \u0022startEvent\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: null,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              },\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-task\u0022,\n                \u0022elementType\u0022: \u0022task\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: \u0022Wave 2 task\u0022,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              },\n              {\n                \u0022attachedToRef\u0022: null,\n                \u0022cancelActivity\u0022: true,\n                \u0022childNodeId\u0022: null,\n                \u0022compensationHandlerElementId\u0022: null,\n                \u0022defaultFlowId\u0022: null,\n                \u0022elementId\u0022: \u0022wave2-end\u0022,\n                \u0022elementType\u0022: \u0022endEvent\u0022,\n                \u0022eventDefinitions\u0022: [],\n                \u0022isForCompensation\u0022: false,\n                \u0022isTransaction\u0022: false,\n                \u0022laneId\u0022: null,\n                \u0022listenerNodeId\u0022: null,\n                \u0022loopCharacteristics\u0022: null,\n                \u0022name\u0022: null,\n                \u0022properties\u0022: {},\n                \u0022triggeredByEvent\u0022: false\n              }\n            ],\n            \u0022isTransaction\u0022: false,\n            \u0022lanes\u0022: [],\n            \u0022messageFlows\u0022: [],\n            \u0022pools\u0022: [],\n            \u0022sequenceFlows\u0022: [\n              {\n                \u0022conditionOutcome\u0022: null,\n                \u0022flowId\u0022: \u0022wave2-flow-1\u0022,\n                \u0022isDefault\u0022: false,\n                \u0022name\u0022: null,\n                \u0022sourceRef\u0022: \u0022wave2-start\u0022,\n                \u0022targetRef\u0022: \u0022wave2-task\u0022\n              },\n              {\n                \u0022conditionOutcome\u0022: null,\n                \u0022flowId\u0022: \u0022wave2-flow-2\u0022,\n                \u0022isDefault\u0022: false,\n                \u0022name\u0022: null,\n                \u0022sourceRef\u0022: \u0022wave2-task\u0022,\n                \u0022targetRef\u0022: \u0022wave2-end\u0022\n              }\n            ],\n            \u0022variables\u0022: []\n          },\n          \u0022schemaVersion\u0022: \u00221.0.0\u0022\n        }\n      },\n      \u0022participantId\u0022: null,\n      \u0022participantName\u0022: null,\n      \u0022processId\u0022: \u0022wave2-process\u0022\n    }\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/interchange/bpmn/export;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022xml\u0022: \u0022\\u003Cdefinitions xmlns:bpmndi=\\u0022http://www.omg.org/spec/BPMN/20100524/DI\\u0022 xmlns:dc=\\u0022http://www.omg.org/spec/DD/20100524/DC\\u0022 xmlns:di=\\u0022http://www.omg.org/spec/DD/20100524/DI\\u0022 id=\\u0022wave2-process-definitions\\u0022 targetNamespace=\\u0022https://elsa-workflows.io/schemas/bpmn\\u0022 xmlns=\\u0022http://www.omg.org/spec/BPMN/20100524/MODEL\\u0022 xmlns:elsa=\\u0022https://elsa-workflows.io/schemas/bpmn\\u0022\\u003E\\n  \\u003Cprocess id=\\u0022wave2-process\\u0022 isExecutable=\\u0022true\\u0022\\u003E\\n    \\u003CstartEvent id=\\u0022wave2-start\\u0022\\u003E\\n      \\u003Coutgoing\\u003Ewave2-flow-1\\u003C/outgoing\\u003E\\n    \\u003C/startEvent\\u003E\\n    \\u003Ctask id=\\u0022wave2-task\\u0022 name=\\u0022Wave 2 task\\u0022\\u003E\\n      \\u003Cincoming\\u003Ewave2-flow-1\\u003C/incoming\\u003E\\n      \\u003Coutgoing\\u003Ewave2-flow-2\\u003C/outgoing\\u003E\\n    \\u003C/task\\u003E\\n    \\u003CendEvent id=\\u0022wave2-end\\u0022\\u003E\\n      \\u003Cincoming\\u003Ewave2-flow-2\\u003C/incoming\\u003E\\n    \\u003C/endEvent\\u003E\\n    \\u003CsequenceFlow id=\\u0022wave2-flow-1\\u0022 sourceRef=\\u0022wave2-start\\u0022 targetRef=\\u0022wave2-task\\u0022 /\\u003E\\n    \\u003CsequenceFlow id=\\u0022wave2-flow-2\\u0022 sourceRef=\\u0022wave2-task\\u0022 targetRef=\\u0022wave2-end\\u0022 /\\u003E\\n  \\u003C/process\\u003E\\n  \\u003Cbpmndi:BPMNDiagram id=\\u0022wave2-process-diagram\\u0022\\u003E\\n    \\u003Cbpmndi:BPMNPlane id=\\u0022wave2-process-plane\\u0022 bpmnElement=\\u0022wave2-process\\u0022\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-start_di\\u0022 bpmnElement=\\u0022wave2-start\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u002240\\u0022 y=\\u0022102\\u0022 width=\\u002236\\u0022 height=\\u002236\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-task_di\\u0022 bpmnElement=\\u0022wave2-task\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u0022156\\u0022 y=\\u002280\\u0022 width=\\u0022100\\u0022 height=\\u002280\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-end_di\\u0022 bpmnElement=\\u0022wave2-end\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u0022336\\u0022 y=\\u0022102\\u0022 width=\\u002236\\u0022 height=\\u002236\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNEdge id=\\u0022wave2-flow-1_di\\u0022 bpmnElement=\\u0022wave2-flow-1\\u0022\\u003E\\n        \\u003Cdi:waypoint x=\\u002276\\u0022 y=\\u0022120\\u0022 /\\u003E\\n        \\u003Cdi:waypoint x=\\u0022156\\u0022 y=\\u0022120\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNEdge\\u003E\\n      \\u003Cbpmndi:BPMNEdge id=\\u0022wave2-flow-2_di\\u0022 bpmnElement=\\u0022wave2-flow-2\\u0022\\u003E\\n        \\u003Cdi:waypoint x=\\u0022256\\u0022 y=\\u0022120\\u0022 /\\u003E\\n        \\u003Cdi:waypoint x=\\u0022336\\u0022 y=\\u0022120\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNEdge\\u003E\\n    \\u003C/bpmndi:BPMNPlane\\u003E\\n  \\u003C/bpmndi:BPMNDiagram\\u003E\\n\\u003C/definitions\\u003E\u0022\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /interchange/bpmn/export",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022xml\u0022: \u0022\\u003Cdefinitions xmlns:bpmndi=\\u0022http://www.omg.org/spec/BPMN/20100524/DI\\u0022 xmlns:dc=\\u0022http://www.omg.org/spec/DD/20100524/DC\\u0022 xmlns:di=\\u0022http://www.omg.org/spec/DD/20100524/DI\\u0022 id=\\u0022wave2-process-definitions\\u0022 targetNamespace=\\u0022https://elsa-workflows.io/schemas/bpmn\\u0022 xmlns=\\u0022http://www.omg.org/spec/BPMN/20100524/MODEL\\u0022 xmlns:elsa=\\u0022https://elsa-workflows.io/schemas/bpmn\\u0022\\u003E\\n  \\u003Cprocess id=\\u0022wave2-process\\u0022 isExecutable=\\u0022true\\u0022\\u003E\\n    \\u003CstartEvent id=\\u0022wave2-start\\u0022\\u003E\\n      \\u003Coutgoing\\u003Ewave2-flow-1\\u003C/outgoing\\u003E\\n    \\u003C/startEvent\\u003E\\n    \\u003Ctask id=\\u0022wave2-task\\u0022 name=\\u0022Wave 2 task\\u0022\\u003E\\n      \\u003Cincoming\\u003Ewave2-flow-1\\u003C/incoming\\u003E\\n      \\u003Coutgoing\\u003Ewave2-flow-2\\u003C/outgoing\\u003E\\n    \\u003C/task\\u003E\\n    \\u003CendEvent id=\\u0022wave2-end\\u0022\\u003E\\n      \\u003Cincoming\\u003Ewave2-flow-2\\u003C/incoming\\u003E\\n    \\u003C/endEvent\\u003E\\n    \\u003CsequenceFlow id=\\u0022wave2-flow-1\\u0022 sourceRef=\\u0022wave2-start\\u0022 targetRef=\\u0022wave2-task\\u0022 /\\u003E\\n    \\u003CsequenceFlow id=\\u0022wave2-flow-2\\u0022 sourceRef=\\u0022wave2-task\\u0022 targetRef=\\u0022wave2-end\\u0022 /\\u003E\\n  \\u003C/process\\u003E\\n  \\u003Cbpmndi:BPMNDiagram id=\\u0022wave2-process-diagram\\u0022\\u003E\\n    \\u003Cbpmndi:BPMNPlane id=\\u0022wave2-process-plane\\u0022 bpmnElement=\\u0022wave2-process\\u0022\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-start_di\\u0022 bpmnElement=\\u0022wave2-start\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u002240\\u0022 y=\\u0022102\\u0022 width=\\u002236\\u0022 height=\\u002236\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-task_di\\u0022 bpmnElement=\\u0022wave2-task\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u0022156\\u0022 y=\\u002280\\u0022 width=\\u0022100\\u0022 height=\\u002280\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNShape id=\\u0022wave2-end_di\\u0022 bpmnElement=\\u0022wave2-end\\u0022\\u003E\\n        \\u003Cdc:Bounds x=\\u0022336\\u0022 y=\\u0022102\\u0022 width=\\u002236\\u0022 height=\\u002236\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNShape\\u003E\\n      \\u003Cbpmndi:BPMNEdge id=\\u0022wave2-flow-1_di\\u0022 bpmnElement=\\u0022wave2-flow-1\\u0022\\u003E\\n        \\u003Cdi:waypoint x=\\u002276\\u0022 y=\\u0022120\\u0022 /\\u003E\\n        \\u003Cdi:waypoint x=\\u0022156\\u0022 y=\\u0022120\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNEdge\\u003E\\n      \\u003Cbpmndi:BPMNEdge id=\\u0022wave2-flow-2_di\\u0022 bpmnElement=\\u0022wave2-flow-2\\u0022\\u003E\\n        \\u003Cdi:waypoint x=\\u0022256\\u0022 y=\\u0022120\\u0022 /\\u003E\\n        \\u003Cdi:waypoint x=\\u0022336\\u0022 y=\\u0022120\\u0022 /\\u003E\\n      \\u003C/bpmndi:BPMNEdge\\u003E\\n    \\u003C/bpmndi:BPMNPlane\\u003E\\n  \\u003C/bpmndi:BPMNDiagram\\u003E\\n\\u003C/definitions\\u003E\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/modularity/features;content-type=",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "GET /modularity/features",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/modularity/features;content-type=",
+    "body": "{\n  \u0022features\u0022: [],\n  \u0022revision\u0022: \u0022baseline\u0022\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /modularity/features",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022features\u0022: [],\n  \u0022revision\u0022: \u0022baseline\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/modularity/features/apply;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022catalog\u0022: {\n    \u0022features\u0022: [],\n    \u0022revision\u0022: \u0022baseline\u0022\n  },\n  \u0022featureDescriptorCount\u0022: 0,\n  \u0022reloadedShellCount\u0022: 0\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /modularity/features/apply",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022catalog\u0022: {\n    \u0022features\u0022: [],\n    \u0022revision\u0022: \u0022baseline\u0022\n  },\n  \u0022featureDescriptorCount\u0022: 0,\n  \u0022reloadedShellCount\u0022: 0\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/modularity/features/apply;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Feature catalog revision \\u0027conflict\\u0027 is stale. Current revision is \\u0027baseline\\u0027.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "case": "wildcard-conflict",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /modularity/features/apply",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Feature catalog revision \\u0027conflict\\u0027 is stale. Current revision is \\u0027baseline\\u0027.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Feature catalog revision \\u0027conflict\\u0027 is stale. Current revision is \\u0027baseline\\u0027.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "status": "409",
+    "statusCode": 409,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/execution-evidence?correlationId=wave2;content-type=",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "GET /_elsa/execution-evidence",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/execution-evidence?correlationId=wave2\u0026after=0\u0026waitMs=1;content-type=",
+    "body": "{\n  \u0022firstSequence\u0022: 1,\n  \u0022lastSequence\u0022: 2,\n  \u0022matchedWorkflows\u0022: 1,\n  \u0022records\u0022: [\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: null,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-wave2\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022WorkflowStarted\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 1,\n      \u0022status\u0022: \u0022Running\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-workflow\u0022\n    },\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: \u0022Wave2.Activity\u0022,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-child\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022Activity\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:01\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 2,\n      \u0022status\u0022: \u0022Completed\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-child\u0022\n    }\n  ],\n  \u0022terminal\u0022: true\n}",
+    "case": "wildcard-correlation-page",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/execution-evidence",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022firstSequence\u0022: 1,\n  \u0022lastSequence\u0022: 2,\n  \u0022matchedWorkflows\u0022: 1,\n  \u0022records\u0022: [\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: null,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-wave2\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022WorkflowStarted\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 1,\n      \u0022status\u0022: \u0022Running\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-workflow\u0022\n    },\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: \u0022Wave2.Activity\u0022,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-child\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022Activity\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:01\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 2,\n      \u0022status\u0022: \u0022Completed\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-child\u0022\n    }\n  ],\n  \u0022terminal\u0022: true\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/execution-evidence/workflows/wave2-workflow?after=0\u0026waitMs=1;content-type=",
+    "body": "{\n  \u0022firstSequence\u0022: 1,\n  \u0022lastSequence\u0022: 1,\n  \u0022matchedWorkflows\u0022: 1,\n  \u0022records\u0022: [\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: null,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-wave2\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022WorkflowStarted\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 1,\n      \u0022status\u0022: \u0022Running\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-workflow\u0022\n    }\n  ],\n  \u0022terminal\u0022: true\n}",
+    "case": "wildcard-workflow-page",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/execution-evidence/workflows/{param}",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022firstSequence\u0022: 1,\n  \u0022lastSequence\u0022: 1,\n  \u0022matchedWorkflows\u0022: 1,\n  \u0022records\u0022: [\n    {\n      \u0022activityExecutionId\u0022: null,\n      \u0022activityType\u0022: null,\n      \u0022authoredActivityId\u0022: null,\n      \u0022checkpointId\u0022: \u0022checkpoint-wave2\u0022,\n      \u0022correlationId\u0022: \u0022wave2\u0022,\n      \u0022kind\u0022: \u0022WorkflowStarted\u0022,\n      \u0022message\u0022: null,\n      \u0022name\u0022: null,\n      \u0022occurredAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022outcomes\u0022: null,\n      \u0022sequence\u0022: 1,\n      \u0022status\u0022: \u0022Running\u0022,\n      \u0022value\u0022: null,\n      \u0022valueDisposition\u0022: null,\n      \u0022workflowExecutionId\u0022: \u0022wave2-workflow\u0022\n    }\n  ],\n  \u0022terminal\u0022: true\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=DELETE;uri=http://localhost/_elsa/execution-evidence?workflowExecutionId=wave2-workflow;content-type=",
+    "body": "",
+    "case": "wildcard-workflow",
+    "contentType": "",
+    "endpoint": "DELETE /_elsa/execution-evidence",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "204",
+    "statusCode": 204,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=DELETE;uri=http://localhost/_elsa/execution-evidence?all=true;content-type=",
+    "body": "",
+    "case": "wildcard-all",
+    "contentType": "",
+    "endpoint": "DELETE /_elsa/execution-evidence",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "204",
+    "statusCode": 204,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/execution-evidence?correlationId=;content-type=",
+    "body": "A non-empty \u0027correlationId\u0027 query parameter is required.",
+    "case": "wildcard-invalid-correlation",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/execution-evidence",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/migration/elsa3/reusable-activities/collections;content-type=",
+    "body": "",
+    "case": "anonymous",
+    "contentType": "",
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/migration/elsa3/reusable-activities/collections;content-type=multipart/form-data; boundary=\u0022wave2-boundary\u0022",
+    "body": "{\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022contentLength\u0022: 156,\n  \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022expiresAt\u0022: \u00222026-08-16T13:00:00\\u002B00:00\u0022,\n  \u0022sourceVersionCount\u0022: 1\n}",
+    "case": "wildcard-upload-multipart",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "location": "/migration/elsa3/reusable-activities/collections/wave2-collection/analysis"
+    },
+    "json": "{\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022contentLength\u0022: 156,\n  \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022expiresAt\u0022: \u00222026-08-16T13:00:00\\u002B00:00\u0022,\n  \u0022sourceVersionCount\u0022: 1\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "201",
+    "statusCode": 201,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/migration/elsa3/reusable-activities/collections/wave2-collection/analysis?offset=2\u0026limit=1;content-type=",
+    "body": "{\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022diagnostics\u0022: [\n    {\n      \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n      \u0022cycle\u0022: [],\n      \u0022guidance\u0022: null,\n      \u0022isError\u0022: false,\n      \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n      \u0022metadata\u0022: {},\n      \u0022path\u0022: null,\n      \u0022pathSegments\u0022: [],\n      \u0022severity\u0022: 1\n    }\n  ],\n  \u0022isComplete\u0022: true,\n  \u0022items\u0022: [\n    {\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityTypeKey\u0022: \u0022Wave2.Activity\u0022,\n      \u0022canApply\u0022: true,\n      \u0022dependencies\u0022: [],\n      \u0022diagnostics\u0022: [\n        {\n          \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n          \u0022cycle\u0022: [],\n          \u0022guidance\u0022: null,\n          \u0022isError\u0022: false,\n          \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n          \u0022metadata\u0022: {},\n          \u0022path\u0022: null,\n          \u0022pathSegments\u0022: [],\n          \u0022severity\u0022: 1\n        }\n      ],\n      \u0022directStarts\u0022: [],\n      \u0022isReusable\u0022: true,\n      \u0022rewrites\u0022: [],\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceFingerprint\u0022: \u0022fingerprint-wave2\u0022,\n      \u0022sourceVersion\u0022: 1,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022limit\u0022: 1,\n  \u0022nextOffset\u0022: null,\n  \u0022offset\u0022: 2,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022processed\u0022: 1,\n  \u0022processedDiagnostics\u0022: 1,\n  \u0022total\u0022: 3,\n  \u0022totalDiagnostics\u0022: 1\n}",
+    "case": "wildcard-page",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /migration/elsa3/reusable-activities/collections/{param}/analysis",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022diagnostics\u0022: [\n    {\n      \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n      \u0022cycle\u0022: [],\n      \u0022guidance\u0022: null,\n      \u0022isError\u0022: false,\n      \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n      \u0022metadata\u0022: {},\n      \u0022path\u0022: null,\n      \u0022pathSegments\u0022: [],\n      \u0022severity\u0022: 1\n    }\n  ],\n  \u0022isComplete\u0022: true,\n  \u0022items\u0022: [\n    {\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityTypeKey\u0022: \u0022Wave2.Activity\u0022,\n      \u0022canApply\u0022: true,\n      \u0022dependencies\u0022: [],\n      \u0022diagnostics\u0022: [\n        {\n          \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n          \u0022cycle\u0022: [],\n          \u0022guidance\u0022: null,\n          \u0022isError\u0022: false,\n          \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n          \u0022metadata\u0022: {},\n          \u0022path\u0022: null,\n          \u0022pathSegments\u0022: [],\n          \u0022severity\u0022: 1\n        }\n      ],\n      \u0022directStarts\u0022: [],\n      \u0022isReusable\u0022: true,\n      \u0022rewrites\u0022: [],\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceFingerprint\u0022: \u0022fingerprint-wave2\u0022,\n      \u0022sourceVersion\u0022: 1,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022limit\u0022: 1,\n  \u0022nextOffset\u0022: null,\n  \u0022offset\u0022: 2,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022processed\u0022: 1,\n  \u0022processedDiagnostics\u0022: 1,\n  \u0022total\u0022: 3,\n  \u0022totalDiagnostics\u0022: 1\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/migration/elsa3/reusable-activities/collections/wave2-collection/selection;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022addedDependencySourceVersionIds\u0022: [],\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022expandedSourceVersionIds\u0022: [\n    \u0022source-v1\u0022\n  ],\n  \u0022isReady\u0022: true,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022requestedSourceVersionIds\u0022: [\n    \u0022source-v1\u0022\n  ]\n}",
+    "case": "wildcard-valid",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/selection",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022addedDependencySourceVersionIds\u0022: [],\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022diagnostics\u0022: [],\n  \u0022expandedSourceVersionIds\u0022: [\n    \u0022source-v1\u0022\n  ],\n  \u0022isReady\u0022: true,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022requestedSourceVersionIds\u0022: [\n    \u0022source-v1\u0022\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/migration/elsa3/reusable-activities/collections/wave2-collection/selection;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022detail\u0022: \u0022The reviewed import plan is invalid.\u0022,\n  \u0022diagnostics\u0022: [\n    {\n      \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n      \u0022cycle\u0022: [],\n      \u0022guidance\u0022: null,\n      \u0022isError\u0022: false,\n      \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n      \u0022metadata\u0022: {},\n      \u0022path\u0022: null,\n      \u0022pathSegments\u0022: [],\n      \u0022severity\u0022: 1\n    }\n  ],\n  \u0022errorCode\u0022: \u0022elsa3.import.validation-failed\u0022,\n  \u0022instance\u0022: \u0022/migration/elsa3/reusable-activities/collections/wave2-collection/selection\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Elsa 3 import validation failed\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/elsa3.import.validation-failed\u0022\n}",
+    "case": "wildcard-validation-error",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/selection",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022The reviewed import plan is invalid.\u0022,\n  \u0022diagnostics\u0022: [\n    {\n      \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n      \u0022cycle\u0022: [],\n      \u0022guidance\u0022: null,\n      \u0022isError\u0022: false,\n      \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n      \u0022metadata\u0022: {},\n      \u0022path\u0022: null,\n      \u0022pathSegments\u0022: [],\n      \u0022severity\u0022: 1\n    }\n  ],\n  \u0022errorCode\u0022: \u0022elsa3.import.validation-failed\u0022,\n  \u0022instance\u0022: \u0022/migration/elsa3/reusable-activities/collections/wave2-collection/selection\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Elsa 3 import validation failed\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/elsa3.import.validation-failed\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022The reviewed import plan is invalid.\u0022,\n  \u0022diagnostics\u0022: [\n    {\n      \u0022code\u0022: \u0022ELS3-WAVE2-DIAGNOSTIC\u0022,\n      \u0022cycle\u0022: [],\n      \u0022guidance\u0022: null,\n      \u0022isError\u0022: false,\n      \u0022message\u0022: \u0022Wave 2 deterministic diagnostic.\u0022,\n      \u0022metadata\u0022: {},\n      \u0022path\u0022: null,\n      \u0022pathSegments\u0022: [],\n      \u0022severity\u0022: 1\n    }\n  ],\n  \u0022errorCode\u0022: \u0022elsa3.import.validation-failed\u0022,\n  \u0022instance\u0022: \u0022/migration/elsa3/reusable-activities/collections/wave2-collection/selection\u0022,\n  \u0022status\u0022: 422,\n  \u0022title\u0022: \u0022Elsa 3 import validation failed\u0022,\n  \u0022type\u0022: \u0022https://elsa.dev/problems/elsa3.import.validation-failed\u0022\n}",
+    "status": "422",
+    "statusCode": 422,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=POST;uri=http://localhost/migration/elsa3/reusable-activities/collections/wave2-collection/apply;content-type=application/json; charset=utf-8",
+    "body": "{\n  \u0022accessScope\u0022: {\n    \u0022tenantId\u0022: \u0022tenant-wave2\u0022,\n    \u0022tenantScope\u0022: \u0022tenant:tenant-wave2\u0022,\n    \u0022userId\u0022: \u0022user-wave2\u0022\n  },\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022completedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022idempotencyKey\u0022: \u0022wave2-idempotency\u0022,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022receiptId\u0022: \u0022receipt-wave2\u0022,\n  \u0022selectionFingerprint\u0022: \u0022selection-fingerprint-wave2\u0022,\n  \u0022sources\u0022: [\n    {\n      \u0022activityDefinitionDisposition\u0022: 0,\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionNavigationIdentity\u0022: \u0022activity-navigation-wave2\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityVersionDisposition\u0022: 0,\n      \u0022activityVersionNavigationIdentity\u0022: \u0022version-navigation-wave2\u0022,\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowDisposition\u0022: 0,\n      \u0022workflowNavigationIdentity\u0022: \u0022workflow-navigation-wave2\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022status\u0022: 0\n}",
+    "case": "wildcard-applied",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/apply",
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "location": "/migration/elsa3/reusable-activities/imports/wave2-idempotency"
+    },
+    "json": "{\n  \u0022accessScope\u0022: {\n    \u0022tenantId\u0022: \u0022tenant-wave2\u0022,\n    \u0022tenantScope\u0022: \u0022tenant:tenant-wave2\u0022,\n    \u0022userId\u0022: \u0022user-wave2\u0022\n  },\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022completedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022idempotencyKey\u0022: \u0022wave2-idempotency\u0022,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022receiptId\u0022: \u0022receipt-wave2\u0022,\n  \u0022selectionFingerprint\u0022: \u0022selection-fingerprint-wave2\u0022,\n  \u0022sources\u0022: [\n    {\n      \u0022activityDefinitionDisposition\u0022: 0,\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionNavigationIdentity\u0022: \u0022activity-navigation-wave2\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityVersionDisposition\u0022: 0,\n      \u0022activityVersionNavigationIdentity\u0022: \u0022version-navigation-wave2\u0022,\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowDisposition\u0022: 0,\n      \u0022workflowNavigationIdentity\u0022: \u0022workflow-navigation-wave2\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022status\u0022: 0\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "201",
+    "statusCode": 201,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/migration/elsa3/reusable-activities/imports/wave2-idempotency;content-type=",
+    "body": "{\n  \u0022accessScope\u0022: {\n    \u0022tenantId\u0022: \u0022tenant-wave2\u0022,\n    \u0022tenantScope\u0022: \u0022tenant:tenant-wave2\u0022,\n    \u0022userId\u0022: \u0022user-wave2\u0022\n  },\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022completedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022idempotencyKey\u0022: \u0022wave2-idempotency\u0022,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022receiptId\u0022: \u0022receipt-wave2\u0022,\n  \u0022selectionFingerprint\u0022: \u0022selection-fingerprint-wave2\u0022,\n  \u0022sources\u0022: [\n    {\n      \u0022activityDefinitionDisposition\u0022: 0,\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionNavigationIdentity\u0022: \u0022activity-navigation-wave2\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityVersionDisposition\u0022: 0,\n      \u0022activityVersionNavigationIdentity\u0022: \u0022version-navigation-wave2\u0022,\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowDisposition\u0022: 0,\n      \u0022workflowNavigationIdentity\u0022: \u0022workflow-navigation-wave2\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022status\u0022: 0\n}",
+    "case": "wildcard-status",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /migration/elsa3/reusable-activities/imports/{param}",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022accessScope\u0022: {\n    \u0022tenantId\u0022: \u0022tenant-wave2\u0022,\n    \u0022tenantScope\u0022: \u0022tenant:tenant-wave2\u0022,\n    \u0022userId\u0022: \u0022user-wave2\u0022\n  },\n  \u0022collectionHandle\u0022: \u0022wave2-collection\u0022,\n  \u0022completedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n  \u0022idempotencyKey\u0022: \u0022wave2-idempotency\u0022,\n  \u0022planId\u0022: \u0022wave2-plan\u0022,\n  \u0022receiptId\u0022: \u0022receipt-wave2\u0022,\n  \u0022selectionFingerprint\u0022: \u0022selection-fingerprint-wave2\u0022,\n  \u0022sources\u0022: [\n    {\n      \u0022activityDefinitionDisposition\u0022: 0,\n      \u0022activityDefinitionId\u0022: \u0022activity-definition\u0022,\n      \u0022activityDefinitionNavigationIdentity\u0022: \u0022activity-navigation-wave2\u0022,\n      \u0022activityDefinitionVersionId\u0022: \u0022activity-version\u0022,\n      \u0022activityVersionDisposition\u0022: 0,\n      \u0022activityVersionNavigationIdentity\u0022: \u0022version-navigation-wave2\u0022,\n      \u0022sourceDefinitionId\u0022: \u0022source-definition\u0022,\n      \u0022sourceVersionId\u0022: \u0022source-v1\u0022,\n      \u0022workflowDefinitionId\u0022: \u0022workflow-definition\u0022,\n      \u0022workflowDisposition\u0022: 0,\n      \u0022workflowNavigationIdentity\u0022: \u0022workflow-navigation-wave2\u0022,\n      \u0022workflowVersionId\u0022: \u0022workflow-version\u0022\n    }\n  ],\n  \u0022status\u0022: 0\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]
+

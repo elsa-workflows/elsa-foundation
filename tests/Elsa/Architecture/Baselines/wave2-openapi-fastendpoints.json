@@ -1,0 +1,96 @@
+{
+  "operations": [
+    {
+      "endpoint": "GET /_elsa/execution-evidence",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ExecutionEvidencePage\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "DELETE /_elsa/execution-evidence",
+      "mediaTypes": "[]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"204\": {\n    \"content\": {}\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "GET /_elsa/execution-evidence/workflows/{param}",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ExecutionEvidencePage\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /interchange/bpmn/analyze",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/AnalyzeBpmnDocumentRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/BpmnImportAnalysis\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /interchange/bpmn/export",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/ExportBpmnDocumentRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ExportBpmnDocumentResult\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /interchange/bpmn/import",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/ImportBpmnDocumentRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/BpmnImportResult\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /migration/elsa3/reusable-activities/collections",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ReusableActivityImportUploadResult\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "GET /migration/elsa3/reusable-activities/collections/{param}/analysis",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ReusableActivityImportAnalysisPage\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/apply",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/ReusableActivityImportApplyHttpRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ReusableActivityImportReceipt\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /migration/elsa3/reusable-activities/collections/{param}/selection",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/ReusableActivityImportSelectionRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ReusableActivityImportSelectionReadiness\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "GET /migration/elsa3/reusable-activities/imports/{param}",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/ReusableActivityImportReceipt\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "GET /modularity/features",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/FeatureCatalogResponse\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    },
+    {
+      "endpoint": "POST /modularity/features/apply",
+      "mediaTypes": "[\n  \"application/json\"\n]",
+      "parameters": "[]",
+      "requestBody": "{\n  \"content\": {\n    \"application/json\": {\n      \"schema\": {\n        \"$ref\": \"#/components/schemas/FeatureApplyRequest\"\n      }\n    }\n  },\n  \"required\": true\n}",
+      "responses": "{\n  \"200\": {\n    \"content\": {\n      \"application/json\": {\n        \"schema\": {\n          \"$ref\": \"#/components/schemas/FeatureApplyResult\"\n        }\n      }\n    }\n  },\n  \"401\": {\n    \"content\": {}\n  },\n  \"403\": {\n    \"content\": {}\n  }\n}"
+    }
+  ]
+}
+
