@@ -21,6 +21,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+if (args.Contains("--v1-v2", StringComparer.Ordinal))
+{
+    await CompareGroundworkVersionsAsync(args);
+    return;
+}
+
 var options = BenchmarkOptions.Parse(args);
 var corpus = TraceCorpus.Create(options.Seed, options.TraceCount);
 
@@ -71,7 +77,69 @@ static async Task<Measurement> RunAsync(
 
     var statistics = Statistics.Create(samples);
     Console.WriteLine($"{name}: n={statistics.Count} mean={statistics.MeanMilliseconds:F3}ms p50={statistics.P50Milliseconds:F3}ms p95={statistics.P95Milliseconds:F3}ms p99={statistics.P99Milliseconds:F3}ms");
-    return new(name, statistics, corpus.ExpectedMatches);
+    return new(name, statistics, corpus.ExpectedMatches, corpus.Fingerprint);
+}
+
+static async Task CompareGroundworkVersionsAsync(string[] args)
+{
+    var options = BenchmarkOptions.Parse(args);
+    var childPath = Option(args, "--v1-child") ?? throw new ArgumentException("--v1-v2 requires --v1-child <path-to-v1-child.dll>.");
+    if (!File.Exists(childPath))
+        throw new FileNotFoundException("The isolated Groundwork v1 child was not found.", childPath);
+
+    var child = new ProcessStartInfo
+    {
+        FileName = "dotnet",
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        CreateNoWindow = true
+    };
+    child.ArgumentList.Add(childPath);
+    child.ArgumentList.Add("--warmups");
+    child.ArgumentList.Add(options.Warmups.ToString());
+    child.ArgumentList.Add("--samples");
+    child.ArgumentList.Add(options.Samples.ToString());
+    child.ArgumentList.Add("--traces");
+    child.ArgumentList.Add(options.TraceCount.ToString());
+    child.ArgumentList.Add("--seed");
+    child.ArgumentList.Add(options.Seed.ToString());
+
+    using var process = Process.Start(child) ?? throw new InvalidOperationException("Unable to start the isolated Groundwork v1 child.");
+    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+    var stderrTask = process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+    var stdout = await stdoutTask;
+    var stderr = await stderrTask;
+    if (process.ExitCode != 0)
+        throw new InvalidOperationException($"The Groundwork v1 child failed with exit code {process.ExitCode}: {stderr}");
+
+    var before = JsonSerializer.Deserialize<Measurement>(stdout.Trim()) ??
+                 throw new InvalidDataException("The Groundwork v1 child did not emit a measurement JSON object.");
+    var corpus = TraceCorpus.Create(options.Seed, options.TraceCount);
+    if (!string.Equals(before.CorpusSha256, corpus.Fingerprint, StringComparison.Ordinal))
+        throw new InvalidDataException($"The Groundwork v1 child used a different corpus (reported '{before.CorpusSha256}', expected '{corpus.Fingerprint}').");
+    var after = await RunAsync("groundwork-v2-target", CreateGroundworkStoreAsync, corpus, options);
+    var ratio = after.Statistics.P95Milliseconds / before.Statistics.P95Milliseconds;
+
+    Console.WriteLine(JsonSerializer.Serialize(
+        new GroundworkVersionComparison(
+            "otel-trace-list-provider-route-groundwork-v1-v2",
+            DateTimeOffset.UtcNow,
+            options,
+            corpus.Fingerprint,
+            before,
+            after,
+            ratio),
+        new JsonSerializerOptions { WriteIndented = true }));
+}
+
+static string? Option(string[] args, string name)
+{
+    for (var index = 0; index < args.Length - 1; index++)
+        if (string.Equals(args[index], name, StringComparison.Ordinal))
+            return args[index + 1];
+    return null;
 }
 
 static void Validate(OpenTelemetryTraceResult result, int expected, string store, string phase)
@@ -324,7 +392,7 @@ internal sealed record Statistics(int Count, double MeanMilliseconds, double P50
     }
 }
 
-internal sealed record Measurement(string Name, Statistics Statistics, int ExpectedMatches);
+internal sealed record Measurement(string Name, Statistics Statistics, int ExpectedMatches, string? CorpusSha256 = null);
 
 internal sealed record BenchmarkReport(
     string Benchmark,
@@ -334,3 +402,12 @@ internal sealed record BenchmarkReport(
     Measurement Oracle,
     Measurement Target,
     double TargetToOracleP95Ratio);
+
+internal sealed record GroundworkVersionComparison(
+    string Benchmark,
+    DateTimeOffset GeneratedAtUtc,
+    BenchmarkOptions Options,
+    string CorpusSha256,
+    Measurement Before,
+    Measurement After,
+    double AfterToBeforeP95Ratio);
