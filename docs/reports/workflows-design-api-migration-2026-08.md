@@ -19,7 +19,8 @@ implied/manage and wildcard behavior is evaluator-owned.
 
 ## Immutable before evidence
 
-The baseline-first history is:
+The baseline-first history (the post-migration correction commits are being replayed before the final
+integration commit) is:
 
 ```text
 9d10c2392  freeze FastEndpoints before evidence
@@ -32,19 +33,21 @@ e53de6de8  Minimal API migration
 f862437e4  generated maps
 ```
 
-The runner was executed detached from the pre-migration runner commit `e2ddf35608e3b1ccf6a6423d4fa275faccd9ddba`
-against the W5 main FastEndpoints source `ee6b9cf23f01e169fd6ce056f3c402db479d4e50`. It captured all
-27 OpenAPI operations and 39 HTTP observations: anonymous 401s for every route, authenticated success,
-exact binding/content-type failures, ProblemDetails/domain errors, paging/filtering, headers, concurrency,
-preflight nonmutation, and permanent-delete status outcomes. Fixture hashes are:
+The corrected runner was executed detached from commit `9e66682b666ef1e348a2e654970f1f3b77bfcc71`
+against the pre-migration FastEndpoints source `ee6b9cf23f01e169fd6ce056f3c402db479d4e50`. It captured all
+27 OpenAPI operations and 65 uniquely keyed HTTP observations: anonymous 401s for every route, one
+authenticated route case for every route, exact binding/content-type failures, ProblemDetails/domain errors,
+paging/filtering, headers, concurrency, preflight nonmutation, and permanent-delete status outcomes. The
+handler trace is canonically sorted and two independent captures produce the same hash. Fixture hashes are:
 
 | Fixture | SHA-256 |
 | --- | --- |
-| `workflows-design-http-fastendpoints.json` | `f9e19ea8b6119f8664cce18b7b23b4d229aa82ad33ee4fcc04bb02fca0103a33` |
+| `workflows-design-http-fastendpoints.json` | `f515dde81efe0492d8468608038d1d26c4317af3aeee0c390771de4b607a1230` |
 | `workflows-design-openapi-fastendpoints.json` | `cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5` |
+| `workflows-design-handler-trace-fastendpoints.json` | `e504eec0d38d66703718731bbe27924ac098765636fa516a7777b7922ac58a18` |
 
 The receipt records the full runner commit, source commit, counts, categories, and both hashes.
-The after comparison consumes all 39 HTTP cases and 27 OpenAPI operations with no content-length
+The after comparison consumes all 65 HTTP cases and 27 OpenAPI operations with no content-length
 normalization. Exact bidirectional approval, unused-approval, reverse-approval, and fixture mutation
 tests are bite-proof. W5's transition baseline was 112 registrations; this branch removes exactly the
 27 Workflows Design registrations, leaving the integrated 85-entry ratchet (Activity Design 38,
@@ -58,9 +61,9 @@ Publishing 23, Runtime 24).
   lookups, exact synthetic draft route precedence, and prove the draft/store remain unmodified.
 - The expanded FE and after HTTP corpus covers promotion 404/409/500, permanent-delete 404/501/500,
   paging/filtering, malformed/non-JSON binding, and authenticated nonmutation behavior.
-- Three collectible architecture cycles invoke the mapped descriptor delegate, authenticated
-  metadata, provider registration, source-generated serialization, endpoint publication, DI disposal,
-  and weak-reference unload checks.
+- Three collectible architecture cycles invoke the authentication/authorization middleware, mapped
+  descriptor delegate, provider registration, source-generated serialization, endpoint publication,
+  DI disposal, and weak-reference unload checks.
 
 ## E2E evidence
 
@@ -81,7 +84,7 @@ immutable version reads, list/get/version/draft/validation reads, and 404 handli
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 110/110; the immutable baseline suite passed 8/8.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 121/121; the immutable baseline suite passed 8/8.
 - Architecture: the focused EndpointSecurity/collectibility suite passed 8/8 (three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 441/441.
 - Full solution build: `dotnet restore Elsa.Server.slnx --ignore-failed-sources` followed by `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
