@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_root=$(git rev-parse --show-toplevel)
-source_commit=${WORKFLOWS_DESIGN_BEFORE_COMMIT:-d402ea48b^}
+baseline_anchor=$(git log --all --format='%H' --grep='freeze FastEndpoints before evidence' -n 1)
+source_commit=${WORKFLOWS_DESIGN_BEFORE_COMMIT:-$(git rev-parse "$baseline_anchor^")}
 capture_runner_commit=$(git rev-parse HEAD)
 worktree_dir=$(mktemp -d "${TMPDIR:-/tmp}/elsa-workflows-design-before.XXXXXX")
 output_dir=${1:-"$repo_root/tests/Elsa/Workflows/Design/Api/Tests/Baselines"}
