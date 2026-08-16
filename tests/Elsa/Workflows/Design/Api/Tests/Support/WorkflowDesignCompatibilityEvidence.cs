@@ -33,7 +33,7 @@ internal static class WorkflowDesignCompatibilityEvidence
     private static HttpCompatibilityObservation NormalizeVolatileHeaders(HttpCompatibilityObservation observation)
     {
         var headers = observation.Headers
-            .Where(pair => pair.Key is not ("date" or "server"))
+            .Where(pair => pair.Key is not ("date" or "server" or "content-length"))
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         return observation with { Headers = headers };
     }

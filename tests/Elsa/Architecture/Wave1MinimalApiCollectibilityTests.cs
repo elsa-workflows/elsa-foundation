@@ -30,7 +30,9 @@ public sealed class Wave1MinimalApiCollectibilityTests
         ("Elsa.Workflows.Runtime.JavaScript", typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptExecutionApi).Assembly.Location,
             "Elsa.Workflows.Runtime.JavaScript.JavaScriptExecutionApi", "MapJavaScriptExecutionApi", "Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesEndpointsFeature", "Elsa.Workflows.Runtime.JavaScript.JavaScriptExecutionJsonContext", "RequestModel", "{\"script\":\"return 1;\"}"),
         ("Elsa.Workflows.Dashboard", typeof(Elsa.Workflows.Dashboard.WorkflowsDashboardApi).Assembly.Location,
-            "Elsa.Workflows.Dashboard.WorkflowsDashboardApi", "MapWorkflowsDashboardApi", "Elsa.Workflows.Dashboard.WorkflowsDashboardFeature", "Elsa.Workflows.Dashboard.WorkflowsDashboardJsonContext", "WorkflowPortfolioSnapshot", "{\"status\":\"ready\",\"generatedAt\":\"2026-01-01T00:00:00Z\",\"activeDefinitionCount\":0,\"publishedDefinitionCount\":0,\"unpublishedDraftCount\":0,\"invalidDraftCount\":0}")
+            "Elsa.Workflows.Dashboard.WorkflowsDashboardApi", "MapWorkflowsDashboardApi", "Elsa.Workflows.Dashboard.WorkflowsDashboardFeature", "Elsa.Workflows.Dashboard.WorkflowsDashboardJsonContext", "WorkflowPortfolioSnapshot", "{\"status\":\"ready\",\"generatedAt\":\"2026-01-01T00:00:00Z\",\"activeDefinitionCount\":0,\"publishedDefinitionCount\":0,\"unpublishedDraftCount\":0,\"invalidDraftCount\":0}"),
+        ("Elsa.Workflows.Design.Api", typeof(Elsa.Workflows.Design.Api.WorkflowsDesignApi).Assembly.Location,
+            "Elsa.Workflows.Design.Api.WorkflowsDesignApi", "MapWorkflowsDesignApi", "Elsa.Workflows.Design.Api.WorkflowsDesignApiFeature", "Elsa.Workflows.Design.Api.WorkflowsDesignJsonContext", "ActivityStructuresResponse", "{\"items\":[],\"fingerprint\":\"sha256:\"}")
     ];
 
     [Fact]

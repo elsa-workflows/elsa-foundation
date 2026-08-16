@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Api.FastEndpoints;
+using CShells.AspNetCore.Features;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Workflows.Design.Core.Extensions;
@@ -14,6 +14,8 @@ using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Capabilities;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -27,12 +29,10 @@ namespace Elsa.Workflows.Design.Api;
     Description = "Contains endpoints to manage data in the Workflows Design Domain",
     DependsOn = new object[] { "ApiCapabilities" }
 )]
-public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
+public class WorkflowsDesignApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         var assembly = GetType().Assembly;
 
         services.AddEventHandlersFrom(assembly);
@@ -52,4 +52,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
     }
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        WorkflowsDesignApi.MapWorkflowsDesignApi(endpoints);
 }

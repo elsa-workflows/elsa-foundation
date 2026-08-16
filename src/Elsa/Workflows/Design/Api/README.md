@@ -6,7 +6,7 @@ The ownership and lifecycle rules are specified in [`specs/092-domain-owned-apis
 
 ## Composition
 
-Add `WorkflowsDesignApiFeature` to the active shell and compose a Workflow Design persistence provider. The feature registers its FastEndpoints slice, mediator handlers, scoped-variable authoring services, and contextual input-option resolver. Activity input options also read the Activity Design definition/version stores, so a host exposing that operation must compose Activity Design persistence.
+Add `WorkflowsDesignApiFeature` to the active shell and compose a Workflow Design persistence provider. The feature registers its Minimal API mapper, mediator handlers, scoped-variable authoring services, and contextual input-option resolver. Activity input options also read the Activity Design definition/version stores, so a host exposing that operation must compose Activity Design persistence.
 
 This package does not reference or depend on `Elsa.Workbench`; the server application is only one possible reference composition.
 
@@ -22,7 +22,7 @@ All routes are relative to the active shell route base.
 | Authoring | `POST /design/workflows/scoped-variables/analyze`, `POST /design/workflows/activities/{activityVersionId}/inputs/{inputName}/options` |
 | Authoring schema | `GET /design/workflows/definitions/submit/schema`, `GET /design/workflows/structures` |
 
-Definition reads and authoring analysis require `workflow-design.read`; mutations and direct ingestion require `workflow-design.manage`. The shared wildcard permission remains supported. Authentication and RFC 7807 error handling come from the common FastEndpoints API infrastructure. Context-sensitive option responses are non-cacheable.
+Definition reads and authoring analysis require `workflow-design.read`; mutations and direct ingestion require `workflow-design.manage`. The shared wildcard permission remains supported. Authentication and RFC 7807 error handling come from the shared identity and ASP.NET Core endpoint conventions. Context-sensitive option responses are non-cacheable.
 
 The authoring-schema endpoints make the design API a complete headless authoring surface (issue #1164). `GET .../definitions/submit/schema` returns a versioned, fingerprinted JSON Schema for the submit body, generated at request time from the actual wire types so it cannot drift from the contract. `GET .../structures` enumerates the composite-activity structure kinds registered in the active shell (`IActivityStructureHandler` set) with each kind's `schemaVersion`, scoped-variable support, and a generated JSON Schema of its authored payload. Polymorphic argument values and activity-owned structure payloads intentionally render as unconstrained schemas in the submit-body document; per-kind payload shapes come from the structures endpoint instead.
 

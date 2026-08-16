@@ -158,7 +158,7 @@
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsCatalogList"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
         "application/json"
