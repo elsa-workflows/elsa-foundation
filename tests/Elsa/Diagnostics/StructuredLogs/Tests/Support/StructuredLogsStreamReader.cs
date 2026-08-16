@@ -35,7 +35,7 @@ public static class StructuredLogsStreamReader
         if (onHeaders is not null)
             await onHeaders(response);
         var stopwatch = Stopwatch.StartNew();
-        var bytes = new MemoryStream();
+        using var bytes = new MemoryStream();
         var frames = new List<string>();
         var frameOffset = 0;
         var buffer = new byte[Math.Min(8 * 1024, Math.Max(1, options.MaxBytes))];

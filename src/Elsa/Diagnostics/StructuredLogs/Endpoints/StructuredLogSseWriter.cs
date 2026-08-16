@@ -90,6 +90,7 @@ public sealed class StructuredLogSseWriter
                 }
                 catch (OperationCanceledException) when (streamCts.IsCancellationRequested)
                 {
+                    // Cancellation is the expected completion signal for the pending read during teardown.
                 }
             }
         }

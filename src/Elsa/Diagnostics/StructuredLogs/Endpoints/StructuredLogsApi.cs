@@ -120,7 +120,7 @@ public static class StructuredLogsApi
         var isResume = request.Headers.TryGetValue("Last-Event-ID", out var lastEventId);
         if (isResume)
         {
-            if (!StructuredLogReplayCursor.TryParse(lastEventId.ToString(), out var cursor))
+            if (!StructuredLogReplayCursor.TryParse(lastEventId.ToString(), out var cursor) || cursor is null)
             {
                 await RejectCursorAsync(context, liveCts);
                 return;
@@ -202,7 +202,11 @@ public static class StructuredLogsApi
         {
             wakeEnumerator = live.GetAsyncEnumerator(cancellationToken);
         }
-        catch
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Wake hints are an optimization. Durable polling remains authoritative if the local feed fails.
         }
@@ -233,7 +237,11 @@ public static class StructuredLogsApi
                     {
                         pendingWake = wakeEnumerator!.MoveNextAsync().AsTask();
                     }
-                    catch
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
                     {
                         feedCompleted = true;
                     }
@@ -254,7 +262,7 @@ public static class StructuredLogsApi
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception exception) when (exception is not OperationCanceledException)
                     {
                         feedCompleted = true;
                     }
@@ -274,15 +282,7 @@ public static class StructuredLogsApi
                 var completed = await Task.WhenAny(pendingWake, Task.Delay(TimeSpan.FromMilliseconds(100)));
                 wakeStillPending = completed != pendingWake;
                 if (!wakeStillPending)
-                {
-                    try
-                    {
-                        await pendingWake;
-                    }
-                    catch
-                    {
-                    }
-                }
+                    _ = pendingWake.Exception; // Observe an optional wake-feed fault during bounded teardown.
             }
 
             if (wakeEnumerator is not null && !wakeStillPending)
@@ -291,8 +291,21 @@ public static class StructuredLogsApi
                 {
                     await wakeEnumerator.DisposeAsync();
                 }
-                catch
+                catch (OperationCanceledException)
                 {
+                    // Cancellation is expected while the request-owned feed is shutting down.
+                }
+                catch (ObjectDisposedException)
+                {
+                    // A feed may have already released its reader in response to cancellation.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Some async iterators reject disposal after a terminal or overlapping operation.
+                }
+                catch (NotSupportedException)
+                {
+                    // Some custom wake feeds do not support explicit asynchronous disposal.
                 }
             }
         }
