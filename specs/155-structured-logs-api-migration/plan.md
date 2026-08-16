@@ -90,7 +90,7 @@ tests/Elsa/Diagnostics/StructuredLogs/Tests/
 ├── StructuredLogsApiCollectibilityTests.cs
 ├── StructuredLogsApiCoexistenceTests.cs
 ├── StructuredLogsApiContractTests.cs
-├── StructuredLogsApiStreamingTests.cs
+├── StreamEndpointTests.cs
 └── Elsa.Diagnostics.StructuredLogs.Tests.csproj
 
 tests/Elsa/Architecture/Baselines/
