@@ -37,6 +37,8 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
             throw new WorkflowRunHealthQueryException(
                 $"At most {MaximumBucketCount} workflow run-health buckets may be queried at once.");
         }
+        ValidateBuckets(request.Query, request.Buckets);
+        var bucketStarts = CreateBucketStarts(request.Query, request.Buckets);
         cancellationToken.ThrowIfCancellationRequested();
 
         var query = request.Query;
@@ -47,9 +49,7 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
             access,
             targetName);
 
-        var bucketCounts = request.Buckets
-            .Select(bucket => QueryBucket(session, unit, query, bucket, cancellationToken))
-            .ToDictionary(result => result.Index, result => result.Counts);
+        var bucketCounts = QueryBuckets(session, unit, query, request.Buckets, bucketStarts, cancellationToken);
         var runningCount = QueryRunning(session, unit, query, cancellationToken);
         var failures = QueryTopFailures(session, unit, query, cancellationToken);
 
@@ -72,31 +72,124 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
             failures));
     }
 
-    private static BucketResult QueryBucket(
+    private static IReadOnlyDictionary<int, BucketCounts> QueryBuckets(
         IStorageSession session,
         StorageUnit unit,
         WorkflowRunHealthQuery query,
-        WorkflowRunHealthBucketRange bucket,
+        IReadOnlyCollection<WorkflowRunHealthBucketRange> buckets,
+        IReadOnlyDictionary<DateTimeOffset, int> bucketStarts,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var startedAt = Column(unit, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStartedAtField);
         var predicate = new Predicate.And([
-            Range(startedAt, bucket.From, bucket.To),
             RunKindPredicate(unit, query.IncludeTestRuns)
         ]);
-        var result = session.Aggregate(new AggregationQuery(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile)
+        var profile = query.Bucket == WorkflowRunHealthBucketSize.Hour
+            ? ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile
+            : ElsaRuntimeV2StorageManifest.WorkflowRunHealthDailyProfile;
+        var aggregationQuery = new AggregationQuery(profile)
         {
-            SourcePredicate = predicate
-        });
-        var counts = new BucketCounts();
+            SourcePredicate = predicate,
+            TimeRange = new AggregationTimeRange(query.From, query.To),
+            TimeBucketOrigin = query.Bucket == WorkflowRunHealthBucketSize.Hour ? query.From : null,
+            TimeZoneId = query.Bucket == WorkflowRunHealthBucketSize.Day ? query.TimeZone : null
+        };
+        var result = session.Aggregate(aggregationQuery);
+        var counts = buckets.ToDictionary(bucket => bucket.Index, _ => new BucketCounts());
         foreach (var row in result.Rows)
-            counts.Add(
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var bucketStart = ReadDateTimeOffset(row, ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketField);
+            var bucketIndex = FindBucketIndex(bucketStart, buckets, bucketStarts);
+            if (bucketIndex is null)
+                continue;
+            counts[bucketIndex.Value].Add(
                 ReadInt32(row, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField),
                 ReadInt64(row, "count"),
                 ReadInt64(row, "incidentTotal"),
                 ReadInt64(row, "incidentBearingTotal"));
-        return new BucketResult(bucket.Index, counts);
+        }
+        return counts;
+    }
+
+    private static void ValidateBuckets(
+        WorkflowRunHealthQuery query,
+        IReadOnlyCollection<WorkflowRunHealthBucketRange> buckets)
+    {
+        if (buckets.Count == 0)
+            throw new WorkflowRunHealthQueryException("At least one workflow run-health bucket is required.");
+
+        var ordered = buckets.ToArray();
+        var indexes = new HashSet<int>();
+        if (ordered[0].From != query.From)
+            throw new WorkflowRunHealthQueryException(
+                "Workflow run-health buckets must start at the query's inclusive 'from' instant.");
+
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var bucket = ordered[index];
+            if (!indexes.Add(bucket.Index))
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket indexes must be unique.");
+            if (bucket.From >= bucket.To)
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket ranges must be non-empty and ordered.");
+            if (bucket.From < query.From || bucket.To > query.To)
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket ranges must be contained within the query range.");
+            if (index > 0 && ordered[index - 1].To != bucket.From)
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket ranges must be contiguous, ordered, and non-overlapping.");
+        }
+
+        if (ordered[^1].To != query.To)
+            throw new WorkflowRunHealthQueryException(
+                "Workflow run-health buckets must end at the query's exclusive 'to' instant.");
+    }
+
+    private static IReadOnlyDictionary<DateTimeOffset, int> CreateBucketStarts(
+        WorkflowRunHealthQuery query,
+        IReadOnlyCollection<WorkflowRunHealthBucketRange> buckets)
+    {
+        var kind = query.Bucket == WorkflowRunHealthBucketSize.Hour
+            ? AggregationTimeBucketKind.FixedUtc
+            : AggregationTimeBucketKind.LocalCalendarDay;
+        var width = query.Bucket == WorkflowRunHealthBucketSize.Hour
+            ? TimeSpan.FromHours(1)
+            : TimeSpan.Zero;
+        var result = new Dictionary<DateTimeOffset, int>();
+        var ordered = buckets.ToArray();
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var bucket = ordered[index];
+            var start = AggregationTimeBucketCalculator.Bucket(
+                bucket.From,
+                kind,
+                width,
+                query.TimeZone,
+                query.Bucket == WorkflowRunHealthBucketSize.Hour ? query.From : null);
+            if (index > 0 && start != bucket.From)
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket starts must align with the selected native aggregation profile.");
+            if (!result.TryAdd(start, bucket.Index) && query.Bucket == WorkflowRunHealthBucketSize.Day)
+                throw new WorkflowRunHealthQueryException(
+                    "Workflow run-health bucket ranges must map to distinct native aggregation buckets.");
+        }
+        return result;
+    }
+
+    private static int? FindBucketIndex(
+        DateTimeOffset bucketStart,
+        IReadOnlyCollection<WorkflowRunHealthBucketRange> buckets,
+        IReadOnlyDictionary<DateTimeOffset, int> bucketStarts)
+    {
+        if (bucketStarts.TryGetValue(bucketStart, out var exactIndex))
+            return exactIndex;
+
+        foreach (var bucket in buckets)
+            if (bucketStart >= bucket.From && bucketStart < bucket.To)
+                return bucket.Index;
+        return null;
     }
 
     private static int QueryRunning(
@@ -216,6 +309,19 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
     private static int ReadInt32(AggregationRow row, string field) =>
         checked((int)ReadInt64(row, field));
 
+    private static DateTimeOffset ReadDateTimeOffset(AggregationRow row, string field)
+    {
+        if (!row.Values.TryGetValue(field, out var value) || value is null)
+            throw new InvalidDataException(
+                $"Groundwork workflow run-health aggregation did not return timestamp field '{field}'.");
+        if (value is DateTimeOffset timestamp)
+            return timestamp;
+        if (value is DateTime dateTime)
+            return new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Utc));
+        throw new InvalidDataException(
+            $"Groundwork workflow run-health aggregation field '{field}' was not a timestamp.");
+    }
+
     private static long ReadInt64(AggregationRow row, string field)
     {
         if (!row.Values.TryGetValue(field, out var value) || value is null)
@@ -231,8 +337,6 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
                 $"Groundwork workflow run-health aggregation field '{field}' was not numeric.", exception);
         }
     }
-
-    private sealed record BucketResult(int Index, BucketCounts Counts);
 
     private sealed class BucketCounts
     {
