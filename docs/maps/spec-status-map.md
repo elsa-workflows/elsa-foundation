@@ -194,3 +194,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Draft | - | 35 | 0 | retained |
 | [154-secrets-api-migration](../../specs/154-secrets-api-migration/spec.md) | Secrets API Minimal API Migration | Draft | - | 42 | 0 | retained, out of scope |
 | [155-structured-logs-api-migration](../../specs/155-structured-logs-api-migration/spec.md) | Structured Logs API Minimal API Migration | Draft | - | 46 | 0 | retained, out of scope |
+| [156-retained-host-route-metadata](../../specs/156-retained-host-route-metadata/spec.md) | Retained Host Route Ownership and Security Metadata | Draft | - | 14 | 0 | retained |

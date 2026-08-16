@@ -29,8 +29,17 @@ public static class EndpointConventionBuilderExtensions
         where TBuilder : IEndpointConventionBuilder
     {
         AddMetadata(builder, EndpointSecurityDispositionMetadata.HostCredential(credential, owner));
+        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
         return AddMetadata(builder, new AuthorizeAttribute { AuthenticationSchemes = credential });
     }
+
+    /// <summary>
+    /// Records a host-credential filter that is enforced by an endpoint filter
+    /// rather than ASP.NET Core authorization middleware.
+    /// </summary>
+    public static TBuilder WithHostCredentialEnforcement<TBuilder>(this TBuilder builder, string credential, string owner)
+        where TBuilder : IEndpointConventionBuilder =>
+        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
 
     public static TBuilder RequireNamedPolicy<TBuilder>(this TBuilder builder, string policy, string owner)
         where TBuilder : IEndpointConventionBuilder

@@ -67,6 +67,7 @@ public sealed class EndpointManifestBuilder
         var owners = ownerMetadata.Select(x => x.Owner).Distinct(StringComparer.Ordinal).ToArray();
         var authoringMetadata = endpoint.Metadata.OfType<EndpointAuthoringMetadata>().ToArray();
         var dispositions = endpoint.Metadata.OfType<EndpointSecurityDispositionMetadata>().ToArray();
+        var hostCredentialEnforcement = endpoint.Metadata.OfType<EndpointHostCredentialEnforcementMetadata>().ToArray();
         var allowsAnonymous = endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null;
         var hasAuthorization = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count > 0;
         var problems = new List<string>();
@@ -78,8 +79,16 @@ public sealed class EndpointManifestBuilder
             problems.Add(dispositions.Length == 0 ? "missing security disposition" : "ambiguous security dispositions");
         if (authoringMetadata.Length != 1)
             problems.Add(authoringMetadata.Length == 0 ? "missing endpoint authoring model" : "ambiguous endpoint authoring models");
+        if (hostCredentialEnforcement.Length > 1)
+            problems.Add("ambiguous host credential enforcement metadata");
         if (dispositions.Length == 1)
         {
+            if (hostCredentialEnforcement.Length == 1 && dispositions[0].Kind != EndpointSecurityDispositionKind.HostCredential)
+                problems.Add("host credential enforcement metadata conflicts with security disposition");
+            if (hostCredentialEnforcement.Length == 1 &&
+                (hostCredentialEnforcement[0].Credential != dispositions[0].Value ||
+                 hostCredentialEnforcement[0].Owner != dispositions[0].Owner))
+                problems.Add("host credential enforcement metadata conflicts with host credential disposition");
             if (dispositions[0].Kind != EndpointSecurityDispositionKind.Public && allowsAnonymous)
                 problems.Add("protected security disposition conflicts with anonymous endpoint metadata");
             if (dispositions[0].Kind == EndpointSecurityDispositionKind.Public)
@@ -89,7 +98,8 @@ public sealed class EndpointManifestBuilder
                 if (hasAuthorization)
                     problems.Add("public security disposition conflicts with authorization endpoint metadata");
             }
-            else if (!hasAuthorization)
+            else if (!hasAuthorization &&
+                     !(dispositions[0].Kind == EndpointSecurityDispositionKind.HostCredential && hostCredentialEnforcement.Length == 1))
             {
                 problems.Add("protected security disposition is missing authorization endpoint metadata");
             }

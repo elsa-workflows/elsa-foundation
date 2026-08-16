@@ -88,6 +88,31 @@ public sealed class EndpointManifestBuilderTests
         Assert.Equal("/orders", exception.Route.Value);
     }
 
+    [Fact]
+    public void Accepts_host_credential_disposition_enforced_by_a_custom_endpoint_filter()
+    {
+        var metadata = BaseMetadata("Elsa.Workbench", ["POST"]);
+        metadata[0] = EndpointOwnershipMetadata.Host("Elsa.Workbench");
+        metadata.Add(EndpointSecurityDispositionMetadata.HostCredential(
+            "X-Elsa-Module-Management-Key",
+            "Elsa.Workbench"));
+        metadata.Add(new EndpointHostCredentialEnforcementMetadata(
+            "X-Elsa-Module-Management-Key",
+            "Elsa.Workbench"));
+
+        var endpoint = BuildEndpoint(
+            RoutePatternFactory.Parse("/_admin/shells/reload-all"),
+            "Elsa.Workbench",
+            ["POST"],
+            metadata);
+
+        var manifest = new EndpointManifestBuilder([new TestEndpointDataSource([endpoint])]).Build();
+
+        var entry = Assert.Single(manifest.Entries);
+        Assert.Equal(EndpointSecurityDispositionKind.HostCredential, entry.SecurityDisposition?.Kind);
+        Assert.Equal(EndpointOwnerKind.Host, entry.OwnerKind);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

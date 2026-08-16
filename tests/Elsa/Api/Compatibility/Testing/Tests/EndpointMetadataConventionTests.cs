@@ -41,8 +41,11 @@ public sealed class EndpointMetadataConventionTests
             (hostMetadata.Kind, hostMetadata.Value, hostMetadata.Owner));
         Assert.Equal((EndpointSecurityDispositionKind.NamedPolicy, "workflow.read", "Elsa.Workflows"),
             (policyMetadata.Kind, policyMetadata.Value, policyMetadata.Owner));
-        Assert.Equal("Bearer", Assert.Single(host.BuildMetadata().OfType<IAuthorizeData>()).AuthenticationSchemes);
-        Assert.Equal("workflow.read", Assert.Single(policy.BuildMetadata().OfType<IAuthorizeData>()).Policy);
+        var hostMetadataItems = host.BuildMetadata();
+        var policyMetadataItems = policy.BuildMetadata();
+        Assert.Equal("Bearer", Assert.Single(hostMetadataItems.OfType<IAuthorizeData>()).AuthenticationSchemes);
+        Assert.Equal("Foundation.Host", Assert.Single(hostMetadataItems.OfType<EndpointHostCredentialEnforcementMetadata>()).Owner);
+        Assert.Equal("workflow.read", Assert.Single(policyMetadataItems.OfType<IAuthorizeData>()).Policy);
     }
 
     [Fact]

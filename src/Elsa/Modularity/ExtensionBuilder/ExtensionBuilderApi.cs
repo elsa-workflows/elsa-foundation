@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,12 @@ public static class ElsaExtensionBuilderApi
     public static IEndpointRouteBuilder MapElsaExtensionBuilderApi(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/_elsa/extension-builder");
+        group.WithHostOwner("Elsa.Workbench")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+                ManagementApiKeyAuthentication.HeaderName,
+                "Elsa.Workbench"))
+            .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench");
         group.AddEndpointFilter(RequireManagementApiKeyAsync);
 
         group.MapGet("/capabilities", GetCapabilities);

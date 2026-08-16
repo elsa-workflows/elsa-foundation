@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Api.AspNetCore;
 
 namespace Elsa.Foundation.Host.Health;
 
@@ -24,7 +25,10 @@ internal static class HealthEndpoints
 
     public static IEndpointRouteBuilder MapHostHealth(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
+        endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }))
+            .WithHostOwner("Elsa.Foundation.Host")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .AllowPublic("health", "Reports whether the Foundation Host process is live.");
 
         endpoints.MapGet("/health/ready", (IShellRegistry registry, IConfiguration configuration) =>
         {
@@ -49,7 +53,10 @@ internal static class HealthEndpoints
             return Results.Json(
                 new { status = ready ? "ready" : "not-ready", shells },
                 statusCode: ready ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
-        });
+        })
+            .WithHostOwner("Elsa.Foundation.Host")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .AllowPublic("health", "Reports whether all configured Foundation Host shells are ready.");
 
         return endpoints;
     }
