@@ -15,6 +15,12 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave1-openapi-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-openapi-identities-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

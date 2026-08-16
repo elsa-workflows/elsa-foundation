@@ -1,5 +1,4 @@
 ﻿using CShells.Features;
-using Elsa.Api.FastEndpoints;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Extensions;
 using Elsa.Primitives.Exceptions;
@@ -9,6 +8,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa3.Activities.Design.Import.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using CShells.AspNetCore.Features;
+using Elsa3.Activities.Design.Import.Endpoints;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa3.Activities.Design.Import;
 
@@ -22,7 +25,7 @@ namespace Elsa3.Activities.Design.Import;
     Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
     DependsOn = new object[] { "Elsa3Mapping" }
 )]
-public class Elsa3ImportActivitiesFeature : FastEndpointsFeatureBase
+public class Elsa3ImportActivitiesFeature : IWebShellFeature
 {
     /// <summary>
     /// Workflow definition collection sources; from which the activities are extracted
@@ -31,9 +34,8 @@ public class Elsa3ImportActivitiesFeature : FastEndpointsFeatureBase
 
     public ReusableActivityImportOptions ImportOptions { get; set; } = new();
 
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         foreach(var source in WorkflowCollectionSourceTypes)
         {
             var type = Type.GetType(source)
@@ -58,4 +60,7 @@ public class Elsa3ImportActivitiesFeature : FastEndpointsFeatureBase
         services.AddEventHandlersFrom(GetType().Assembly);
         services.AddPermissionContributor<Elsa3ImportPermissionContributor>();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        ReusableActivityImportApi.MapReusableActivityImportApi(endpoints);
 }

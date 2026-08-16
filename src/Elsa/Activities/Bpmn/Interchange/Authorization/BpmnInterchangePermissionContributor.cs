@@ -1,4 +1,4 @@
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Activities.Bpmn.Interchange.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Activities.Bpmn.Interchange.Authorization;
@@ -9,7 +9,7 @@ public sealed class BpmnInterchangePermissionContributor : IPermissionContributo
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(PermissionNames.BpmnInterchangeRead, "Read BPMN interchange", "BPMN interchange", "Analyze and export BPMN interchange documents."),
-        new(PermissionNames.BpmnInterchangeManage, "Manage BPMN interchange", "BPMN interchange", "Import BPMN interchange documents.")
+        new(BpmnInterchangePermissions.Read, "Read BPMN interchange", "BPMN interchange", "Analyze and export BPMN interchange documents."),
+        new(BpmnInterchangePermissions.Manage, "Manage BPMN interchange", "BPMN interchange", "Import BPMN interchange documents.")
     ];
 }

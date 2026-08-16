@@ -2,39 +2,6 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "POST /interchange/bpmn/analyze"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Activities.Bpmn.Interchange",
-    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "b414200fe12325cee44b1d1b23e0256ce2d5e8d01a0357b057a383efb233f825"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "POST /interchange/bpmn/export"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Activities.Bpmn.Interchange",
-    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "b414200fe12325cee44b1d1b23e0256ce2d5e8d01a0357b057a383efb233f825"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "POST /interchange/bpmn/import"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Activities.Bpmn.Interchange",
-    "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "b414200fe12325cee44b1d1b23e0256ce2d5e8d01a0357b057a383efb233f825"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
       "GET /design/activities/authoring-capabilities"
     ],
     "followUp": "#1373",
@@ -786,28 +753,6 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "POST /modularity/features/apply"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Modularity.Api",
-    "registrationIdentity": "Elsa.Modularity.Api.Endpoints.Apply",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "8152b024ca36433f709e87213a29c4a46b284319ca04266c3b802221ae6c8cda"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /modularity/features"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Modularity.Api",
-    "registrationIdentity": "Elsa.Modularity.Api.Endpoints.List",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "8152b024ca36433f709e87213a29c4a46b284319ca04266c3b802221ae6c8cda"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
       "POST /design/workflows/scoped-variables/analyze"
     ],
     "followUp": "#1372",
@@ -1101,39 +1046,6 @@
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Versions.List",
     "removalOwner": "First-party REST API Consolidation",
     "sourceHash": "c8d93e1900915c8d0847a2e0c3a2d61a10a7fe9d438908d883a33c9374d6e4dd"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "DELETE /_elsa/execution-evidence"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Workflows.ExecutionEvidence",
-    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.DeleteEvidence",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "ff004835d68d5d24339cfb5abd3e711292bdfcce94fefaff0c752208f465a20d"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /_elsa/execution-evidence"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Workflows.ExecutionEvidence",
-    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetCorrelatedEvidence",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "ff004835d68d5d24339cfb5abd3e711292bdfcce94fefaff0c752208f465a20d"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /_elsa/execution-evidence/workflows/{param}"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa.Workflows.ExecutionEvidence",
-    "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetWorkflowEvidence",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "ff004835d68d5d24339cfb5abd3e711292bdfcce94fefaff0c752208f465a20d"
   },
   {
     "dynamicallyUnloadable": false,
@@ -1651,60 +1563,5 @@
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.RuntimeDiagnostics.SaveSettings",
     "removalOwner": "First-party REST API Consolidation",
     "sourceHash": "0684749a6f42a169ccc6b44ba8f3cf6fdadfba408101408301e984fdd475b2dd"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /migration/elsa3/reusable-activities/collections/{param}/analysis"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa3.Activities.Design.Import",
-    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.AnalyzeReusableActivityCollectionEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "42b479a1c1ae23520d36ec03a821988acee83048dd32e7190aaec3c1de0cdd1e"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "POST /migration/elsa3/reusable-activities/collections/{param}/apply"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa3.Activities.Design.Import",
-    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ApplyReusableActivityImportEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "42b479a1c1ae23520d36ec03a821988acee83048dd32e7190aaec3c1de0cdd1e"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "POST /migration/elsa3/reusable-activities/collections/{param}/selection"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa3.Activities.Design.Import",
-    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ExpandReusableActivityImportSelectionEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "42b479a1c1ae23520d36ec03a821988acee83048dd32e7190aaec3c1de0cdd1e"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /migration/elsa3/reusable-activities/imports/{param}"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa3.Activities.Design.Import",
-    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.GetReusableActivityImportStatusEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "42b479a1c1ae23520d36ec03a821988acee83048dd32e7190aaec3c1de0cdd1e"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "POST /migration/elsa3/reusable-activities/collections"
-    ],
-    "followUp": "#1368",
-    "owner": "Elsa3.Activities.Design.Import",
-    "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.UploadReusableActivityCollectionEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "42b479a1c1ae23520d36ec03a821988acee83048dd32e7190aaec3c1de0cdd1e"
   }
 ]
