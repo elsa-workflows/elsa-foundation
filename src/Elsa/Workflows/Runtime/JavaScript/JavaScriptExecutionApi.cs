@@ -39,6 +39,7 @@ public static class JavaScriptExecutionApi
                 new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
                 new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
     }
+
     private static async Task HandleExecuteAsync(HttpContext context)
     {
         var request = (RequestModel?)null;
