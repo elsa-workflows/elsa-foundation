@@ -1,11 +1,9 @@
-using System.Net;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
-using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
+using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -15,7 +13,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using FastEndpoints;
+using System.Net;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 

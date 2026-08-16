@@ -1,6 +1,6 @@
-using System.Text;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Microsoft.AspNetCore.Http;
+using System.Text;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 

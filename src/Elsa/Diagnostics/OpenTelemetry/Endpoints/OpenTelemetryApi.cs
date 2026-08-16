@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -13,6 +11,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 

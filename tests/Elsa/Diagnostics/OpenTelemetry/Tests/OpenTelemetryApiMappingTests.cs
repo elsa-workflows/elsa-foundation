@@ -1,16 +1,16 @@
-using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Api.AspNetCore;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Microsoft.AspNetCore.Builder;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

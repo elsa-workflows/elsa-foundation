@@ -1,5 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Authorization;
 

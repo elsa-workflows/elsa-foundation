@@ -1,7 +1,7 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
-using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

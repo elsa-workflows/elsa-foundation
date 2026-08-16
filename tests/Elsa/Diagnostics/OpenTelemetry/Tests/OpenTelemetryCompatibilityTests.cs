@@ -1,9 +1,5 @@
-using System.Net;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -15,6 +11,10 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 

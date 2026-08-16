@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Text;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -7,6 +5,8 @@ using Elsa.Diagnostics.OpenTelemetry.Ingestion;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
+using System.Text;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests.Ingestion;
 

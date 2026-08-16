@@ -1,5 +1,5 @@
-using System.Text;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using System.Text;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 

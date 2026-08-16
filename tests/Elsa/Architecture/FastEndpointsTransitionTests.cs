@@ -53,7 +53,7 @@ public sealed class FastEndpointsTransitionTests
             return;
         }
 
-        Assert.Equal(123, result.Issues.Count);
+        Assert.Equal(112, result.Issues.Count);
         Assert.All(result.Issues, issue => Assert.Equal("FirstPartyFastEndpointsRegistration", issue.Code));
     }
 

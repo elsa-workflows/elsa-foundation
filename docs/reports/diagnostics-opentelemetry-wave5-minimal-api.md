@@ -18,4 +18,4 @@ The catalog-owned endpoint action is `Diagnostics:OpenTelemetry.Read`; wildcard 
 
 ## Gate status
 
-The implementation and evidence gates are complete except for the final integration bookkeeping in Spec Kit task T010. The branch is based on the current Wave 3 integration point; the parent integration pass must rebase after Wave 4 and ratchet the shared transition count from `123 → 112` across four remaining owners. No production migration beyond the eleven OpenTelemetry registrations is included.
+The implementation and evidence gates are complete. The branch is integrated on the merged Wave 4 main line, and the shared transition ratchet is `123 → 112` across four remaining owners. No production migration beyond the eleven OpenTelemetry registrations is included.

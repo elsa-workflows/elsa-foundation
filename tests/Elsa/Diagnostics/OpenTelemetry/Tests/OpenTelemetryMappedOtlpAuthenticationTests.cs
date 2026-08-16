@@ -1,4 +1,3 @@
-using System.Net;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -10,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
