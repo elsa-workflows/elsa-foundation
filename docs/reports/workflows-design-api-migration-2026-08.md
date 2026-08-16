@@ -19,22 +19,26 @@ implied/manage and wildcard behavior is evaluator-owned.
 
 ## Immutable before evidence
 
-The baseline-first history (the post-migration correction commits are being replayed before the final
-integration commit) is:
+The baseline-first history is:
 
 ```text
-9d10c2392  freeze FastEndpoints before evidence
-1ab6ec3a7  add historical FastEndpoints capture runner
-2779f1e07  record expanded FastEndpoints evidence
-eee4007a5  consume OpenAPI identity metadata
-e2ddf3560  bind capture to rebased FE source
-ba498773b  capture against W5 main baseline
-e53de6de8  Minimal API migration
-f862437e4  generated maps
+28f9c0624  freeze FastEndpoints before evidence
+07cdcd7a5  add historical FastEndpoints capture runner
+e28d43e9c  record expanded FastEndpoints evidence
+91f1eb61f  consume OpenAPI identity metadata
+18dcb7a40  bind capture to rebased FE source
+f8caa847f  capture against W5 main baseline
+a571cae1f  expand pre-migration workflows design capture
+c53580849  keep capture cases uniquely keyed
+6060aa63b  record activity route binding
+394184635  capture lifecycle command bodies in FE errors
+b9c8f776b  record complete historical FE oracle
+9c3e00c1c  pin historical capture receipt
+3145babee  Minimal API migration
 ```
 
-The corrected runner was executed detached from commit `9e66682b666ef1e348a2e654970f1f3b77bfcc71`
-against the pre-migration FastEndpoints source `ee6b9cf23f01e169fd6ce056f3c402db479d4e50`. It captured all
+The corrected runner was executed detached from commit `3941846350023b8832090855d064825c67c98748`
+against the pre-migration FastEndpoints source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. It captured all
 27 OpenAPI operations and 65 uniquely keyed HTTP observations: anonymous 401s for every route, one
 authenticated route case for every route, exact binding/content-type failures, ProblemDetails/domain errors,
 paging/filtering, headers, concurrency, preflight nonmutation, and permanent-delete status outcomes. The
@@ -44,7 +48,7 @@ handler trace is canonically sorted and two independent captures produce the sam
 | --- | --- |
 | `workflows-design-http-fastendpoints.json` | `f515dde81efe0492d8468608038d1d26c4317af3aeee0c390771de4b607a1230` |
 | `workflows-design-openapi-fastendpoints.json` | `cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5` |
-| `workflows-design-handler-trace-fastendpoints.json` | `e504eec0d38d66703718731bbe27924ac098765636fa516a7777b7922ac58a18` |
+| `workflows-design-handler-trace-fastendpoints.json` | `3b7a93d37f92a7fab23805a1a5e893ad8724bae7da8d74b7eda84eac2be61909` |
 
 The receipt records the full runner commit, source commit, counts, categories, and both hashes.
 The after comparison consumes all 65 HTTP cases and 27 OpenAPI operations with no content-length
@@ -84,7 +88,7 @@ immutable version reads, list/get/version/draft/validation reads, and 404 handli
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 121/121; the immutable baseline suite passed 8/8.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 123/123; the immutable baseline suite passed 8/8.
 - Architecture: the focused EndpointSecurity/collectibility suite passed 8/8 (three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 441/441.
 - Full solution build: `dotnet restore Elsa.Server.slnx --ignore-failed-sources` followed by `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
