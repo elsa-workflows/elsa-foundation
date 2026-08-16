@@ -17,9 +17,7 @@ internal static class WorkflowDesignCompatibilityEvidence
     private static readonly string HandlerTraceBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", HandlerTraceFileName);
 
     public static IReadOnlyList<HttpCompatibilityObservation> LoadLegacyHttp() =>
-        BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath)
-            .Select(NormalizeVolatileHeaders)
-            .ToArray();
+        BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath);
 
     public static OpenApiEvidenceDocument LoadLegacyOpenApi() =>
         BaselineFile.Load<OpenApiEvidenceDocument>(OpenApiBaselinePath);
@@ -30,11 +28,4 @@ internal static class WorkflowDesignCompatibilityEvidence
 
     public static ApprovedDifference[] LoadApprovals() => [];
 
-    private static HttpCompatibilityObservation NormalizeVolatileHeaders(HttpCompatibilityObservation observation)
-    {
-        var headers = observation.Headers
-            .Where(pair => pair.Key is not ("date" or "server" or "content-length"))
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        return observation with { Headers = headers };
-    }
 }

@@ -193,7 +193,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaWorkflowsDesignApiEndpointsDefinitionsList"
     },

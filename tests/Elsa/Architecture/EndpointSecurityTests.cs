@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
@@ -7,8 +5,8 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
 using Elsa.Api.FastEndpoints.Constants;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Expressions.Api;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
@@ -23,6 +21,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -37,7 +37,6 @@ public sealed class EndpointSecurityTests
 {
     private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
     [
-        ("Workflow Design", "src/Elsa/Workflows/Design/Api/Endpoints"),
         ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints"),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
         ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints"),

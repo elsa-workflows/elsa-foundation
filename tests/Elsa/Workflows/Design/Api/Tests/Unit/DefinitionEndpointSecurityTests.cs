@@ -25,7 +25,7 @@ public sealed class DefinitionEndpointSecurityTests
         var security = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
         var policy = Assert.IsType<PermissionPolicyParseResult>(new PermissionPolicyCodec().Parse(security.Value!));
         Assert.Contains(PermissionKey.Normalize(permission), policy.Descriptor!.Permissions);
-        Assert.Contains(PermissionKey.Normalize(PermissionKey.Wildcard), policy.Descriptor.Permissions);
+        Assert.DoesNotContain(PermissionKey.Normalize(PermissionKey.Wildcard), policy.Descriptor.Permissions);
         Assert.NotNull(endpoint.Metadata.GetMetadata<AuthorizeAttribute>());
     }
 }

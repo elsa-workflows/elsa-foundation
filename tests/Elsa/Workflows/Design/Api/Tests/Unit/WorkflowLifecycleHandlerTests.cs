@@ -1,14 +1,17 @@
+using Elsa.Events.Core.Contracts;
+using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
-using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
@@ -75,6 +78,33 @@ public sealed class WorkflowLifecycleHandlerTests
             CancellationToken.None);
         Assert.Equal(definition.Id, permanent.DefinitionId);
         Assert.Equal(new DesignOperationKey("permanent-delete-1"), permanent.OperationKey);
+    }
+
+    [Fact]
+    public async Task Promotion_preflight_reports_validation_and_identity_conflicts_without_mutating_the_draft_or_store()
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-1",
+            WorkflowDefinitionId = "definition-1",
+            State = WorkflowDefinitionState.Empty,
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        var drafts = new MutableDraftStore(draft, []);
+        var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "2.0.0"), identityExists: true);
+        var publisher = new RecordingInlineEventPublisher(new ValidationError("$workflow", "Draft/Invalid", "draft is invalid"));
+        var result = await new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+            new PreflightDraftPromotion("draft-1", "2.0.0+build.7"),
+            CancellationToken.None);
+
+        Assert.False(result.IsReady);
+        Assert.Contains(result.Issues, issue => issue.Code == "version-conflict");
+        Assert.Contains(result.Issues, issue => issue.Code == "draft-validation" && issue.Path == "$workflow");
+        Assert.Equal(1, publisher.PublishCalls);
+        Assert.Equal(1, versions.LatestCalls);
+        Assert.Equal(1, versions.IdentityCalls);
+        Assert.Equal(WorkflowDefinitionState.Empty, draft.State);
+        Assert.False(versions.WasMutated);
     }
 
     private sealed class MutableDraftStore(WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout)
@@ -146,5 +176,42 @@ public sealed class WorkflowLifecycleHandlerTests
     private sealed class FixedTimeProvider : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch;
+    }
+
+    private sealed class PreflightVersionStore(WorkflowDefinitionVersion latest, bool identityExists) : IWorkflowDefinitionVersionStore
+    {
+        public int LatestCalls { get; private set; }
+        public int IdentityCalls { get; private set; }
+        public bool WasMutated { get; private set; }
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
+        {
+            LatestCalls++;
+            return Task.FromResult<WorkflowDefinitionVersion?>(latest);
+        }
+
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
+        {
+            IdentityCalls++;
+            return Task.FromResult(identityExists);
+        }
+
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingInlineEventPublisher(ValidationError? error) : IInlineEventPublisher
+    {
+        public int PublishCalls { get; private set; }
+
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+        {
+            PublishCalls++;
+            if (error is not null && @event is DraftValidating validating)
+                validating.Errors.Add(error);
+            return Task.CompletedTask;
+        }
     }
 }

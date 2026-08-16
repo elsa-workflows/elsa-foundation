@@ -1,10 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -44,6 +44,7 @@ namespace Elsa.Workflows.Design.Api;
 [JsonSerializable(typeof(ExpressionToolingOperationResponse<ExpressionHover>))]
 [JsonSerializable(typeof(ExpressionToolingOperationResponse<ExpressionDiagnosticSet>))]
 [JsonSerializable(typeof(IEnumerable<WorkflowDefinitionVersionSummary>))]
+[JsonSerializable(typeof(PreflightDraftPromotion))]
 [JsonSerializable(typeof(WorkflowDesignError))]
 internal partial class WorkflowsDesignJsonContext : JsonSerializerContext
 {

@@ -1,7 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Serialization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Api.Compatibility.Testing.OpenApi;
 
@@ -16,12 +16,30 @@ public sealed record OpenApiOperationEvidence
     public required string Responses { get; init; }
     public required string MediaTypes { get; init; }
     public required string Schemas { get; init; }
-    public string Canonical => CompatibilityJson.Serialize(new Dictionary<string, object?>
+    public string Canonical
     {
-        ["endpoint"] = Endpoint.ToString(), ["operationId"] = OperationId, ["tags"] = Tags, ["security"] = Security,
-        ["parameters"] = Parameters, ["requestBody"] = RequestBody,
-        ["responses"] = Responses, ["mediaTypes"] = MediaTypes, ["schemas"] = Schemas
-    });
+        get
+        {
+            var projection = new Dictionary<string, object?>
+            {
+                ["endpoint"] = Endpoint.ToString(),
+                ["mediaTypes"] = MediaTypes,
+                ["parameters"] = Parameters,
+                ["requestBody"] = RequestBody,
+                ["responses"] = Responses,
+                ["schemas"] = Schemas
+            };
+
+            if (!string.IsNullOrEmpty(OperationId) || Tags != "[]" || Security != "[]")
+            {
+                projection["operationId"] = OperationId;
+                projection["tags"] = Tags;
+                projection["security"] = Security;
+            }
+
+            return CompatibilityJson.Serialize(projection);
+        }
+    }
 }
 
 public sealed record OpenApiEvidenceDocument(IReadOnlyList<OpenApiOperationEvidence> Operations)
@@ -34,25 +52,26 @@ public static class OpenApiEvidenceCapture
 {
     private static readonly string[] Methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
 
-    public static OpenApiEvidenceDocument Capture(string suppliedDocument)
+    public static OpenApiEvidenceDocument Capture(string suppliedDocument, bool includeIdentityMetadata = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(suppliedDocument);
         var root = JsonNode.Parse(suppliedDocument) as JsonObject
             ?? throw new InvalidDataException("The supplied OpenAPI document must be a JSON object.");
-        return Project(root);
+        return Project(root, includeIdentityMetadata);
     }
 
-    public static OpenApiEvidenceDocument Capture(JsonDocument suppliedDocument) => Capture(suppliedDocument.RootElement.GetRawText());
-    public static OpenApiEvidenceDocument Capture(Stream suppliedDocument)
+    public static OpenApiEvidenceDocument Capture(JsonDocument suppliedDocument, bool includeIdentityMetadata = false) => Capture(suppliedDocument.RootElement.GetRawText(), includeIdentityMetadata);
+    public static OpenApiEvidenceDocument Capture(Stream suppliedDocument, bool includeIdentityMetadata = false)
     {
         using var reader = new StreamReader(suppliedDocument, leaveOpen: true);
-        return Capture(reader.ReadToEnd());
+        return Capture(reader.ReadToEnd(), includeIdentityMetadata);
     }
 
-    public static OpenApiEvidenceDocument Project(JsonObject document)
+    public static OpenApiEvidenceDocument Project(JsonObject document, bool includeIdentityMetadata = false)
     {
         var operations = new List<OpenApiOperationEvidence>();
-        if (document["paths"] is not JsonObject paths) return new(operations);
+        if (document["paths"] is not JsonObject paths)
+            return new(operations);
         foreach (var path in paths.OrderBy(x => x.Key, StringComparer.Ordinal)
                      .Where(x => x.Value is JsonObject)
                      .Select(x => (x.Key, Item: (JsonObject)x.Value!)))
@@ -60,14 +79,14 @@ public static class OpenApiEvidenceCapture
             foreach (var method in Methods.Where(method => path.Item[method] is JsonObject))
             {
                 var operation = (JsonObject)path.Item[method]!;
-                operations.Add(ProjectOperation(path.Key, method, path.Item, operation, document));
+                operations.Add(ProjectOperation(path.Key, method, path.Item, operation, document, includeIdentityMetadata));
             }
         }
         return new(operations);
     }
 
     private static OpenApiOperationEvidence ProjectOperation(string path, string method, JsonObject pathItem,
-        JsonObject operation, JsonObject document)
+        JsonObject operation, JsonObject document, bool includeIdentityMetadata)
     {
         var endpoint = new EndpointIdentity(path, method);
         var parameters = MergeParameters(pathItem["parameters"], operation["parameters"]);
@@ -78,9 +97,9 @@ public static class OpenApiEvidenceCapture
         return new OpenApiOperationEvidence
         {
             Endpoint = endpoint,
-            OperationId = operation["operationId"]?.GetValue<string>() ?? "",
-            Tags = CompatibilityJson.Canonicalize(operation["tags"] ?? new JsonArray()),
-            Security = CompatibilityJson.Canonicalize(operation["security"] ?? new JsonArray()),
+            OperationId = includeIdentityMetadata ? operation["operationId"]?.GetValue<string>() ?? "" : "",
+            Tags = includeIdentityMetadata ? CompatibilityJson.Canonicalize(operation["tags"] ?? new JsonArray()) : "[]",
+            Security = includeIdentityMetadata ? CompatibilityJson.Canonicalize(operation["security"] ?? new JsonArray()) : "[]",
             Parameters = CompatibilityJson.Canonicalize(parameters),
             RequestBody = CompatibilityJson.Canonicalize(requestBody),
             Responses = CompatibilityJson.Canonicalize(responses),
@@ -93,7 +112,8 @@ public static class OpenApiEvidenceCapture
     {
         var all = new List<JsonNode>();
         // OpenAPI operation parameters override path-item parameters with the same name/location.
-        Add(operationParameters); Add(pathParameters);
+        Add(operationParameters);
+        Add(pathParameters);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         return new JsonArray(all.Where(p => p is JsonObject && seen.Add($"{p!["in"]}:{p["name"]}"))
             .OrderBy(p => p!["in"]?.GetValue<string>(), StringComparer.Ordinal)
@@ -102,17 +122,22 @@ public static class OpenApiEvidenceCapture
 
         void Add(JsonNode? node)
         {
-            if (node is JsonArray array) all.AddRange(array.Where(x => x is not null).Select(x => x!));
+            if (node is JsonArray array)
+                all.AddRange(array.Where(x => x is not null).Select(x => x!));
         }
     }
 
     private static JsonObject ProjectParameter(JsonNode parameter)
     {
-        if (parameter is not JsonObject obj) return new();
+        if (parameter is not JsonObject obj)
+            return new();
         var result = new JsonObject { ["name"] = obj["name"]?.GetValue<string>(), ["in"] = obj["in"]?.GetValue<string>() };
-        if (obj["required"] is not null) result["required"] = obj["required"]!.DeepClone();
-        if (obj["schema"] is not null) result["schema"] = ProjectSchema(obj["schema"]!);
-        if (obj["content"] is not null) result["content"] = ProjectContent(obj["content"]!);
+        if (obj["required"] is not null)
+            result["required"] = obj["required"]!.DeepClone();
+        if (obj["schema"] is not null)
+            result["schema"] = ProjectSchema(obj["schema"]!);
+        if (obj["content"] is not null)
+            result["content"] = ProjectContent(obj["content"]!);
         return result;
     }
 
@@ -124,7 +149,8 @@ public static class OpenApiEvidenceCapture
 
     private static JsonNode ProjectResponses(JsonNode? value)
     {
-        if (value is not JsonObject responses) return new JsonObject();
+        if (value is not JsonObject responses)
+            return new JsonObject();
         var result = new JsonObject();
         foreach (var response in responses.OrderBy(x => x.Key, StringComparer.Ordinal).Where(x => x.Value is JsonObject))
         {
@@ -136,7 +162,8 @@ public static class OpenApiEvidenceCapture
 
     private static JsonNode ProjectContent(JsonNode? value)
     {
-        if (value is not JsonObject content) return new JsonObject();
+        if (value is not JsonObject content)
+            return new JsonObject();
         var result = new JsonObject();
         foreach (var media in content.OrderBy(x => x.Key, StringComparer.Ordinal).Where(x => x.Value is JsonObject))
         {
@@ -154,15 +181,18 @@ public static class OpenApiEvidenceCapture
         var values = new HashSet<string>(StringComparer.Ordinal);
         AddContent(requestBody["content"]);
         if (parameters is JsonArray parametersArray)
-            foreach (var parameter in parametersArray) AddContent(parameter?["content"]);
+            foreach (var parameter in parametersArray)
+                AddContent(parameter?["content"]);
         if (responses is JsonObject responseObject)
-            foreach (var response in responseObject) AddContent(response.Value?["content"]);
+            foreach (var response in responseObject)
+                AddContent(response.Value?["content"]);
         return new JsonArray(values.Order(StringComparer.Ordinal).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray());
 
         void AddContent(JsonNode? content)
         {
             if (content is JsonObject obj)
-                foreach (var media in obj) values.Add(media.Key.ToLowerInvariant());
+                foreach (var media in obj)
+                    values.Add(media.Key.ToLowerInvariant());
         }
     }
 
@@ -175,7 +205,8 @@ public static class OpenApiEvidenceCapture
 
         void Visit(JsonNode? node)
         {
-            if (node is not JsonObject obj) { if (node is JsonArray a) foreach (var item in a) Visit(item); return; }
+            if (node is not JsonObject obj)
+            { if (node is JsonArray a) foreach (var item in a) Visit(item); return; }
             if (obj["$ref"]?.GetValue<string>() is { } reference && reference.StartsWith("#/components/schemas/", StringComparison.Ordinal))
             {
                 var name = reference["#/components/schemas/".Length..];
@@ -185,13 +216,15 @@ public static class OpenApiEvidenceCapture
                     Visit(schema);
                 }
             }
-            foreach (var property in obj) Visit(property.Value);
+            foreach (var property in obj)
+                Visit(property.Value);
         }
     }
 
     private static JsonNode ProjectSchema(JsonNode node)
     {
-        if (node is not JsonObject obj) return node.DeepClone();
+        if (node is not JsonObject obj)
+            return node.DeepClone();
         var result = new JsonObject();
         foreach (var property in new[] { "type", "format", "nullable", "required", "enum", "items", "properties", "additionalProperties", "$ref", "oneOf", "anyOf", "allOf" }
                      .Select(key => (Key: key, Value: obj[key]))
