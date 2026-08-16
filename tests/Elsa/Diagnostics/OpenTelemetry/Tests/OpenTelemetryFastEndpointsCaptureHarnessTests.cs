@@ -47,7 +47,12 @@ public sealed class OpenTelemetryFastEndpointsCaptureHarnessTests
     public async Task Capture_deleted_fastendpoints_http_supplements()
     {
         var outputDirectory = Environment.GetEnvironmentVariable("OTEL_CAPTURE_OUTPUT");
-        Assert.False(string.IsNullOrWhiteSpace(outputDirectory), "Set OTEL_CAPTURE_OUTPUT to a writable capture directory.");
+        // The harness is included in the owner test project so the capture implementation remains
+        // reviewable, but ordinary owner-suite runs must not write fixtures. The receipt command sets
+        // this variable explicitly and therefore exercises the real capture path.
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+            return;
+
         Directory.CreateDirectory(outputDirectory!);
 
         using var host = await StartHostAsync(cookieChallenge: false);
