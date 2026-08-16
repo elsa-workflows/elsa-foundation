@@ -201,6 +201,86 @@ public sealed class PermissionAuthorizationSemanticsTests
         }
     }
 
+    [Fact]
+    public async Task DirectAuthorizationServicePropagatesExplicitCallerCancellationToResourceSources()
+    {
+        var probe = new CancellationProbe();
+        using var provider = BuildProvider(new(), services =>
+        {
+            services.AddSingleton(probe);
+            services.AddScoped<IPermissionResourceHandler, DelayedResourceHandler>();
+        });
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        using var cancellation = new CancellationTokenSource();
+        var operation = authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(TrustedPrincipal(), "read"),
+            cancellation.Token).AsTask();
+
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+    }
+
+    [Fact]
+    public async Task Permission_context_cancellation_is_forwarded_when_it_is_the_only_token()
+    {
+        var probe = new CancellationEvaluatorProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "trusted" });
+        services.ReplacePermissionEvaluator<ObservingPermissionEvaluator>();
+        using var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        using var contextCancellation = new CancellationTokenSource();
+
+        var result = await authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(TrustedPrincipal(), "read")
+            {
+                CancellationToken = contextCancellation.Token
+            });
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(contextCancellation.Token, probe.ObservedToken);
+    }
+
+    [Fact]
+    public async Task Permission_authorization_links_distinct_caller_context_and_request_tokens()
+    {
+        var probe = new CancellationEvaluatorProbe();
+        var services = new ServiceCollection();
+        services.AddSingleton(probe);
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "trusted" });
+        services.ReplacePermissionEvaluator<BlockingPermissionEvaluator>();
+        using var provider = services.BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        using var callerCancellation = new CancellationTokenSource();
+        using var contextCancellation = new CancellationTokenSource();
+        using var requestCancellation = new CancellationTokenSource();
+        accessor.HttpContext = new DefaultHttpContext { RequestAborted = requestCancellation.Token };
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+
+        var operation = authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(TrustedPrincipal(), "read")
+            {
+                CancellationToken = contextCancellation.Token
+            },
+            callerCancellation.Token).AsTask();
+
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var linkedToken = Assert.NotNull(probe.ObservedToken);
+        Assert.NotEqual(callerCancellation.Token, linkedToken);
+        Assert.NotEqual(contextCancellation.Token, linkedToken);
+        Assert.NotEqual(requestCancellation.Token, linkedToken);
+
+        contextCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.True(linkedToken.IsCancellationRequested);
+        accessor.HttpContext = null;
+    }
+
     private static ServiceProvider BuildProvider(EvaluationState state, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
@@ -319,6 +399,53 @@ public sealed class PermissionAuthorizationSemanticsTests
                 cancellationToken.ThrowIfCancellationRequested();
 
             return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class CancellationProbe
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class CancellationEvaluatorProbe
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken? ObservedToken { get; set; }
+    }
+
+    private sealed class ObservingPermissionEvaluator(CancellationEvaluatorProbe probe) : IPermissionEvaluator
+    {
+        public ValueTask<PermissionEvaluationResult> EvaluateAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            probe.ObservedToken = cancellationToken;
+            return ValueTask.FromResult(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class BlockingPermissionEvaluator(CancellationEvaluatorProbe probe) : IPermissionEvaluator
+    {
+        public async ValueTask<PermissionEvaluationResult> EvaluateAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            probe.ObservedToken = cancellationToken;
+            probe.Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return PermissionEvaluationResult.Success;
+        }
+    }
+
+    private sealed class DelayedResourceHandler(CancellationProbe probe) : IPermissionResourceHandler
+    {
+        public async ValueTask<PermissionEvaluationResult?> EvaluateAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            probe.Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return null;
         }
     }
 }

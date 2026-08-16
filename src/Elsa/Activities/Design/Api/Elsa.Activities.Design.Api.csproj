@@ -8,6 +8,7 @@
     <ProjectReference Include="..\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />

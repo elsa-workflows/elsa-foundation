@@ -11,7 +11,7 @@ public sealed class ActivityExecutionLayoutReader(
     IActivityExecutionHierarchyStore hierarchy,
     IWorkflowExecutableStore executables,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityInspectionContextAsync authorization)
 {
     public async ValueTask<ActivityExecutionLayoutView?> ReadAsync(
         string workflowExecutionId,
@@ -19,7 +19,7 @@ public sealed class ActivityExecutionLayoutReader(
         CancellationToken cancellationToken)
     {
         var workflow = await workflowExecutions.FindAsync(workflowExecutionId, cancellationToken);
-        if (workflow is null || !authorization.CanInspectStructure(workflow))
+        if (workflow is null || !await authorization.CanInspectStructureAsync(workflow, cancellationToken))
             return null;
         var boundary = await hierarchy.FindBoundaryAsync(workflowExecutionId, activityExecutionId, cancellationToken);
         if (boundary is null)
@@ -103,7 +103,7 @@ public sealed class ActivityExecutionLayoutReader(
                 cursor,
                 ActivityExecutionHierarchyPager.MaximumLimit,
                 new HashSet<ActivityExecutionHierarchyInclude>(),
-                authorization.AuthorizationProfile,
+                await authorization.GetAuthorizationProfileAsync(cancellationToken),
                 authorization.TenantScope), cancellationToken);
             if (page is null)
                 break;

@@ -22,6 +22,8 @@ using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
 
+#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
+
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Design")]
@@ -52,7 +54,23 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
+            services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
+        {
+            services.AddScoped<IActivityAuthoringContextAsync>(sp =>
+                sp.GetRequiredService<IActivityAuthoringContext>() is IActivityAuthoringContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityAuthoringContextAdapter(sp.GetRequiredService<IActivityAuthoringContext>()));
+        }
+        if (!hasAsyncDependencyHost)
+            services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
+        services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
@@ -129,3 +147,5 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             target.Sets = source.Sets;
     }
 }
+
+#pragma warning restore CS0618

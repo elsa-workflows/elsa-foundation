@@ -13,7 +13,7 @@ public sealed class ActivityDefinitionRecommendationService(
     IActivityDefinitionAuthoringStore authoringStore,
     IActivityDefinitionVersionPublicationStore publicationStore,
     ISetActivityDefinitionRecommendationCommand setRecommendation,
-    IActivityAuthoringContext context,
+    IActivityAuthoringContextAsync context,
     TimeProvider timeProvider)
 {
     public async Task<ActivityDefinitionRecommendationView> SetAsync(

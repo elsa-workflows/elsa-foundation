@@ -12,6 +12,7 @@
 | `IActivityAvailabilityDiagnosticsProjector` | `DefaultActivityAvailabilityDiagnosticsProjector` | Produces stable explanations for unavailable activities. |
 | `IActivityAvailabilitySettingsStore` | `InMemoryActivityAvailabilitySettingsStore` | Stores API-managed availability settings; durable providers may replace it. |
 | `IActivityFeatureAttributionResolver` | `ActivityFeatureAttributionResolver` | Best-effort resolution of the shell feature providing a CLR activity type key (the `featureId` in catalog/version `provenance`). The default resolves `activityTypeKey` → well-known type registry → assembly → runtime feature catalog, and returns `null` when either dependency is absent from the composition. |
+| `IActivityAuthoringContextAsync` / `IActivityDependencyContextAsync` | `HttpContextActivityDesignAuthorizationContext` | Async request authorization seams for authoring, provider payload, management, and tenant-scoped dependency decisions. They are replacement contracts backed by Foundation Identity; a host's legacy synchronous context is adapted only when no async replacement is supplied, and provider-specific rules receive a stable resource object. |
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 

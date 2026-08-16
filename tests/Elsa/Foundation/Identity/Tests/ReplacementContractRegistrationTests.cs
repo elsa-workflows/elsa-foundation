@@ -21,7 +21,7 @@ namespace Elsa.Foundation.Identity.Tests;
 public sealed class ReplacementContractRegistrationTests
 {
     [Fact]
-    public void Defaults_register_the_three_replacement_contracts()
+    public void Defaults_register_the_four_replacement_contracts()
     {
         var services = new ServiceCollection();
 
@@ -29,8 +29,38 @@ public sealed class ReplacementContractRegistrationTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<ClaimsPermissionEvaluator>(provider.GetRequiredService<IPermissionEvaluator>());
+        Assert.IsType<PermissionAuthorizationService>(provider.GetRequiredService<IPermissionAuthorizationService>());
         Assert.IsType<PermissionPolicyNameFormatter>(provider.GetRequiredService<IPermissionPolicyNameFormatter>());
         Assert.IsType<CompositePermissionCatalog>(provider.GetRequiredService<IPermissionCatalog>());
+    }
+
+    [Fact]
+    public void Authorization_service_replacement_is_symmetric_and_conflicts_are_rejected()
+    {
+        var before = new ServiceCollection();
+        before.ReplacePermissionAuthorizationService<ReplacementAuthorizationService>();
+        before.AddFoundationIdentityAbstractions();
+        using (var provider = before.BuildServiceProvider())
+            Assert.IsType<ReplacementAuthorizationService>(provider.GetRequiredService<IPermissionAuthorizationService>());
+
+        var after = new ServiceCollection();
+        after.AddFoundationIdentityAbstractions();
+        after.ReplacePermissionAuthorizationService<ReplacementAuthorizationService>();
+        using (var provider = after.BuildServiceProvider())
+            Assert.IsType<ReplacementAuthorizationService>(provider.GetRequiredService<IPermissionAuthorizationService>());
+
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            var services = new ServiceCollection();
+            services.AddScoped<IPermissionAuthorizationService, ReplacementAuthorizationService>();
+            services.AddFoundationIdentityAbstractions();
+        });
+
+        AssertStartupValidationFails(services =>
+        {
+            services.AddFoundationIdentityAbstractions();
+            services.AddScoped<IPermissionAuthorizationService, ReplacementAuthorizationService>();
+        }, typeof(PermissionAuthorizationService), typeof(ReplacementAuthorizationService));
     }
 
     [Fact]
@@ -666,6 +696,14 @@ public sealed class ReplacementContractRegistrationTests
     {
         public ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(PermissionEvaluationResult.Denied());
+    }
+
+    private sealed class ReplacementAuthorizationService : IPermissionAuthorizationService
+    {
+        public ValueTask<PermissionEvaluationResult> AuthorizeAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PermissionEvaluationResult.Success);
     }
 
     private sealed class SecondEvaluator : IPermissionEvaluator

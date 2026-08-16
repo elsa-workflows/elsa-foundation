@@ -6,9 +6,14 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Abstractions.Extensions;
 
-internal sealed record FoundationIdentityReplacementRegistration(Type ContractType, Type ImplementationType);
+internal sealed record FoundationIdentityReplacementRegistration(
+    Type ContractType,
+    Type ImplementationType,
+    ServiceDescriptor? Descriptor = null);
 
 internal sealed record FoundationIdentityResultHandlerRegistration;
+
+internal sealed record FoundationPermissionAuthorizationHandlerRegistration;
 
 internal sealed record FoundationIdentityPolicyProviderRegistration;
 
@@ -20,6 +25,7 @@ internal sealed class FoundationIdentityRegistrationValidator(FoundationIdentity
     private static readonly Type[] ReplacementContracts =
     [
         typeof(IPermissionEvaluator),
+        typeof(IPermissionAuthorizationService),
         typeof(IPermissionPolicyNameFormatter),
         typeof(IPermissionCatalog)
     ];
@@ -47,7 +53,22 @@ internal sealed class FoundationIdentityRegistrationValidator(FoundationIdentity
             var descriptors = state.Services.Where(descriptor => descriptor.ServiceType == contract).ToArray();
             var contractMarkers = markers.Where(marker => marker.ContractType == contract).ToArray();
             if (descriptors.Length != 1 || contractMarkers.Length != 1 ||
-                !DescriptorMatches(descriptors.SingleOrDefault(), contractMarkers.SingleOrDefault()?.ImplementationType))
+                !DescriptorMatches(descriptors.SingleOrDefault(), contractMarkers.SingleOrDefault()))
+            {
+                failures.Add($"Replacement contract '{contract.FullName}' must have exactly one tagged implementation. " +
+                             $"Descriptors: {Describe(descriptors)}. Markers: {Describe(contractMarkers.Select(x => x.ImplementationType))}.");
+            }
+        }
+
+        foreach (var contract in markers.Select(marker => marker.ContractType)
+                     .Where(contract => !ReplacementContracts.Contains(contract))
+                     .Distinct())
+        {
+            var descriptors = state.Services.Where(descriptor => descriptor.ServiceType == contract).ToArray();
+            var contractMarkers = markers.Where(marker => marker.ContractType == contract).ToArray();
+            if (contract.GetCustomAttributes(typeof(ReplacementContractAttribute), inherit: false).Length == 0 ||
+                descriptors.Length != 1 || contractMarkers.Length != 1 ||
+                !DescriptorMatches(descriptors.SingleOrDefault(), contractMarkers.SingleOrDefault()))
             {
                 failures.Add($"Replacement contract '{contract.FullName}' must have exactly one tagged implementation. " +
                              $"Descriptors: {Describe(descriptors)}. Markers: {Describe(contractMarkers.Select(x => x.ImplementationType))}.");
@@ -77,13 +98,17 @@ internal sealed class FoundationIdentityRegistrationValidator(FoundationIdentity
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    private static bool DescriptorMatches(ServiceDescriptor? descriptor, Type? implementationType)
+    private static bool DescriptorMatches(
+        ServiceDescriptor? descriptor,
+        FoundationIdentityReplacementRegistration? marker)
     {
-        if (descriptor is null || implementationType is null)
+        if (descriptor is null || marker is null)
             return false;
 
-        return descriptor.ImplementationType == implementationType ||
-               descriptor.ImplementationInstance?.GetType() == implementationType;
+        return marker.Descriptor is not null
+            ? ReferenceEquals(descriptor, marker.Descriptor)
+            : descriptor.ImplementationType == marker.ImplementationType ||
+              descriptor.ImplementationInstance?.GetType() == marker.ImplementationType;
     }
 
     internal static string Describe(IEnumerable<ServiceDescriptor> descriptors) =>

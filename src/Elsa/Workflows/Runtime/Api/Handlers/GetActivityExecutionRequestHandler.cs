@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed class GetActivityExecutionRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionInspectionStore inspectionStore,
-    IActivityExecutionInspectionAuthorizationContext authorization,
+    IActivityInspectionContextAsync authorization,
     IActivityExecutionHierarchyStore? hierarchyStore = null)
     : IRequestHandler<GetActivityExecution, GetActivityExecutionResponse>
 {
@@ -19,7 +19,7 @@ public sealed class GetActivityExecutionRequestHandler(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ActivityExecutionId);
 
         var workflowExecution = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (workflowExecution is null || !authorization.CanInspectStructure(workflowExecution))
+        if (workflowExecution is null || !await authorization.CanInspectStructureAsync(workflowExecution, cancellationToken))
             return new GetActivityExecutionResponse(null);
 
         var projection = await inspectionStore.FindAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken);
@@ -34,8 +34,8 @@ public sealed class GetActivityExecutionRequestHandler(
         return new GetActivityExecutionResponse(ActivityExecutionInspectionView.From(
             projection,
             boundary,
-            authorization.CanInspectSensitiveValues(workflowExecution),
+            await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken),
             attempt,
-            authorization.CanResolveSensitiveValuePayloads(workflowExecution)));
+            await authorization.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken)));
     }
 }

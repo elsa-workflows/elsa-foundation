@@ -12,13 +12,14 @@ namespace Elsa.Activities.Design.Api.Services;
 
 public sealed class ActivityDefinitionManagementProjectionService(
     IActivityDefinitionManagementProjectionStore store,
-    IActivityAuthoringContext context,
+    IActivityAuthoringContextAsync context,
     IActivityManagementCursorCodec cursorCodec)
 {
     public async Task<ActivityManagementPageView<ReusableActivityDefinitionManagementView>> ListDefinitionsAsync(
         ListReusableActivityDefinitions request,
         CancellationToken cancellationToken)
     {
+        var authorization = await AuthorizationSnapshotAsync(cancellationToken);
         var authority = ParseOptional<ActivityContentAuthorityKind>(request.Authority, "authority");
         var binding = await BindAsync(
             "definitions",
@@ -41,7 +42,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 Normalize(request.Search),
                 authority,
                 Normalize(request.ProviderKey)), cancellationToken);
-            return Page(page, binding.Scope, page.Items.Select(ToDefinitionView).ToArray());
+            return Page(page, binding.Scope, page.Items.Select(x => ToDefinitionView(x, authorization)).ToArray());
         }
         catch (ActivityManagementSnapshotExpiredException exception)
         {
@@ -53,16 +54,18 @@ public sealed class ActivityDefinitionManagementProjectionService(
         string definitionId,
         CancellationToken cancellationToken)
     {
+        var authorization = await AuthorizationSnapshotAsync(cancellationToken);
         var record = await store.FindDefinitionAsync(definitionId, context.TenantId, cancellationToken: cancellationToken);
         return record is null
             ? throw NotFound("activity.definition.not-found", "Activity definition not found", "The requested activity definition was not found.")
-            : ToDefinitionView(record);
+            : ToDefinitionView(record, authorization);
     }
 
     public async Task<ActivityManagementPageView<ReusableActivityDraftManagementView>> ListDraftsAsync(
         ListReusableActivityDrafts request,
         CancellationToken cancellationToken)
     {
+        var authorization = await AuthorizationSnapshotAsync(cancellationToken);
         var status = ParseOptional<ActivityDefinitionDraftStatus>(request.Status, "status");
         var binding = await BindAsync(
             "drafts",
@@ -87,7 +90,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 Normalize(request.Search),
                 ProviderKey: Normalize(request.ProviderKey),
                 DraftStatus: status), cancellationToken);
-            return Page(page, binding.Scope, page.Items.Select(ToDraftView).ToArray());
+            return Page(page, binding.Scope, page.Items.Select(x => ToDraftView(x, authorization)).ToArray());
         }
         catch (ActivityManagementSnapshotExpiredException exception)
         {
@@ -99,6 +102,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
         ListReusableActivityVersions request,
         CancellationToken cancellationToken)
     {
+        var authorization = await AuthorizationSnapshotAsync(cancellationToken);
         var lifecycle = ParseOptional<ActivityDefinitionVersionLifecycle>(request.Lifecycle, "lifecycle");
         var binding = await BindAsync(
             "versions",
@@ -127,7 +131,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 Normalize(request.Search),
                 ProviderKey: Normalize(request.ProviderKey),
                 VersionLifecycle: lifecycle), cancellationToken);
-            var items = page.Items.Select(version => ToVersionView(version, definition)).ToArray();
+            var items = page.Items.Select(version => ToVersionView(version, definition, authorization)).ToArray();
             return Page(page, binding.Scope, items);
         }
         catch (ActivityManagementSnapshotExpiredException exception)
@@ -136,13 +140,17 @@ public sealed class ActivityDefinitionManagementProjectionService(
         }
     }
 
-    private ReusableActivityDefinitionManagementView ToDefinitionView(ActivityDefinitionManagementProjectionRevision record) => new(
+    private ReusableActivityDefinitionManagementView ToDefinitionView(
+        ActivityDefinitionManagementProjectionRevision record,
+        AuthorizationSnapshot authorization) => new(
         ToIdentity(record),
         new(record.DraftCount, record.VersionCount, ToReference(record.Head), ToReference(record.Recommendation)),
-        DefinitionActions(record.ContentAuthority),
+        DefinitionActions(record.ContentAuthority, authorization.CanManage),
         record.UpdatedAt);
 
-    private ReusableActivityDraftManagementView ToDraftView(ActivityDefinitionDraftManagementProjectionRevision draft) => new(
+    private ReusableActivityDraftManagementView ToDraftView(
+        ActivityDefinitionDraftManagementProjectionRevision draft,
+        AuthorizationSnapshot authorization) => new(
         new(
             draft.DraftId,
             draft.DefinitionId,
@@ -153,20 +161,20 @@ public sealed class ActivityDefinitionManagementProjectionService(
             draft.ProviderSchemaVersion,
             draft.UpdatedAt,
             draft.PresentationLabel),
-        DraftActions(draft));
+        DraftActions(draft, authorization));
 
     private ReusableActivityVersionManagementView ToVersionView(
         ActivityDefinitionVersionManagementProjectionRevision version,
-        ActivityDefinitionManagementProjectionRevision definition) => new(
+        ActivityDefinitionManagementProjectionRevision definition,
+        AuthorizationSnapshot authorization) => new(
         new(version.DefinitionVersionId, version.DefinitionId, version.Version, version.Lifecycle, version.PublishedAt),
         version.ProviderKey,
         version.ProviderSchemaVersion,
         StringComparer.Ordinal.Equals(definition.RecommendedVersionId, version.DefinitionVersionId),
-        VersionActions(version, definition.ContentAuthority));
+        VersionActions(version, definition.ContentAuthority, authorization));
 
-    private IReadOnlyList<ActivityActionAvailabilityView> DefinitionActions(ActivityContentAuthority authority)
+    private IReadOnlyList<ActivityActionAvailabilityView> DefinitionActions(ActivityContentAuthority authority, bool canManage)
     {
-        var canManage = context.CanManageActivityDefinitions;
         var designOwned = authority.Kind == ActivityContentAuthorityKind.Design;
         return
         [
@@ -177,11 +185,13 @@ public sealed class ActivityDefinitionManagementProjectionService(
         ];
     }
 
-    private IReadOnlyList<ActivityActionAvailabilityView> DraftActions(ActivityDefinitionDraftManagementProjectionRevision draft)
+    private IReadOnlyList<ActivityActionAvailabilityView> DraftActions(
+        ActivityDefinitionDraftManagementProjectionRevision draft,
+        AuthorizationSnapshot authorization)
     {
-        var canManageActive = context.CanManageActivityDefinitions && draft.Status == ActivityDefinitionDraftStatus.Active;
-        var canAuthorProvider = context.CanAuthorProvider(draft.ProviderKey);
-        var stateUnavailable = !context.CanManageActivityDefinitions
+        var canManageActive = authorization.CanManage && draft.Status == ActivityDefinitionDraftStatus.Active;
+        var canAuthorProvider = authorization.CanAuthor;
+        var stateUnavailable = !authorization.CanManage
             ? ActivityErrorCodes.ActionForbidden
             : draft.Status != ActivityDefinitionDraftStatus.Active
                 ? "activity.draft.not-active"
@@ -203,11 +213,12 @@ public sealed class ActivityDefinitionManagementProjectionService(
 
     private IReadOnlyList<ActivityActionAvailabilityView> VersionActions(
         ActivityDefinitionVersionManagementProjectionRevision version,
-        ActivityContentAuthority authority)
+        ActivityContentAuthority authority,
+        AuthorizationSnapshot authorization)
     {
-        var canManage = context.CanManageActivityDefinitions;
+        var canManage = authorization.CanManage;
         var designOwned = authority.Kind == ActivityContentAuthorityKind.Design;
-        var canAuthorProvider = context.CanAuthorProvider(version.ProviderKey);
+        var canAuthorProvider = authorization.CanAuthor;
         return
         [
             Action("clone-draft", canManage && designOwned && canAuthorProvider,
@@ -276,7 +287,7 @@ public sealed class ActivityDefinitionManagementProjectionService(
             resource,
             definitionId,
             context.TenantId,
-            context.AuthorizationProfile,
+            await context.GetAuthorizationProfileAsync(cancellationToken),
             limit,
             Normalize(search),
             Normalize(authority),
@@ -306,6 +317,16 @@ public sealed class ActivityDefinitionManagementProjectionService(
                 innerException: exception);
         }
     }
+
+    private async Task<AuthorizationSnapshot> AuthorizationSnapshotAsync(CancellationToken cancellationToken)
+    {
+        var profile = await context.GetAuthorizationProfileAsync(cancellationToken);
+        var canManage = await context.CanManageActivityDefinitionsAsync(cancellationToken);
+        var canAuthor = await context.CanAuthorProviderAsync("profile", cancellationToken);
+        return new(profile, canManage, canAuthor);
+    }
+
+    private sealed record AuthorizationSnapshot(string Profile, bool CanManage, bool CanAuthor);
 
     private static T? ParseOptional<T>(string? value, string name) where T : struct, Enum
     {
