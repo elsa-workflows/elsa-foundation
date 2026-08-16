@@ -1,11 +1,11 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Workflows.Runtime.Api;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Elsa.Workflows.Runtime.Api.Authorization;
+using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Commands;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Models.Alterations;
+using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Api.Requests.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
@@ -13,65 +13,53 @@ internal static class RuntimeApiEndpointTestFactory
 {
     public static Type? FindType(string fullName) => typeof(WorkflowsRuntimeApiFeature).Assembly.GetType(fullName);
 
-    public static BaseEndpoint FindByRoute(string route)
-    {
-        var endpoint = typeof(WorkflowsRuntimeApiFeature).Assembly.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(BaseEndpoint).IsAssignableFrom(type))
-            .Select(type => Create(type))
-            .SingleOrDefault(candidate => candidate.Definition.Routes.Contains(route, StringComparer.Ordinal));
-        Xunit.Assert.NotNull(endpoint);
-        return endpoint;
-    }
-
-    public static (Type Request, Type Response) Contract(BaseEndpoint endpoint)
-    {
-        for (var current = endpoint.GetType().BaseType; current is not null; current = current.BaseType)
+    private static readonly IReadOnlyDictionary<(string Method, string Route), RuntimeEndpointDescriptor> Endpoints =
+        new Dictionary<(string Method, string Route), RuntimeEndpointDescriptor>
         {
-            if (current.IsGenericType && current.GenericTypeArguments.Length >= 2 &&
-                current.GetGenericTypeDefinition().Namespace == "Elsa.Api.FastEndpoints.Abstractions")
-                return (current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
-        }
-        throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no request/response contract.");
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}")] = Endpoint<GetWorkflowInstance, WorkflowInstanceDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances")] = Endpoint<ListWorkflowInstances, IReadOnlyCollection<WorkflowInstanceSummaryView>>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/page")] = Endpoint<ListWorkflowInstances, WorkflowInstanceListView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/executables")] = Endpoint<ListWorkflowExecutables, WorkflowExecutablesListView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/executables/{artifactId}")] = Endpoint<GetWorkflowExecutable, WorkflowExecutableDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources")] = Endpoint<GetWorkflowExecutableInputSources, WorkflowExecutableInputSourcesView>(WorkflowRuntimePermissions.WorkflowPublishingRead),
+            [("GET", "runtime/workflows/executables/{artifactId}/provenance")] = Endpoint<GetWorkflowExecutableProvenance, ExecutableProvenanceView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("POST", "runtime/workflows/executables/{artifactId}/execute")] = Endpoint<ExecuteWorkflow, WorkflowExecutionStartDispatchView>(WorkflowRuntimePermissions.WorkflowRuntimeExecute),
+            [("POST", "runtime/workflows/stimuli")] = Endpoint<DispatchStimulus, DispatchStimulusResponse>(WorkflowRuntimePermissions.WorkflowRuntimeExecute),
+            [("GET", "runtime/workflows/dispatches")] = Endpoint<ListWorkflowDispatches, IReadOnlyCollection<WorkflowDispatchView>>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/dispatches/{dispatchId}")] = Endpoint<GetWorkflowDispatch, WorkflowDispatchView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("POST", "runtime/workflows/dispatches/{dispatchId}/redrive")] = Endpoint<RedriveWorkflowDispatch, WorkflowDispatchRedriveView>(WorkflowRuntimePermissions.WorkflowRuntimeManage),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}")] = Endpoint<GetActivityExecution, ActivityExecutionInspectionView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants")] = Endpoint<GetActivityExecutionDescendants, ActivityExecutionHierarchyPageView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout")] = Endpoint<GetActivityExecutionLayout, ActivityExecutionLayoutView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload")] = Endpoint<GetActivityExecutionValuePayload, ActivityExecutionValuePayloadReadResult>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/instances/{workflowExecutionId}/incidents")] = Endpoint<ListIncidents, ListIncidentsResponse>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/diagnostics/settings")] = Endpoint<GetRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("PUT", "runtime/workflows/diagnostics/settings")] = Endpoint<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>(WorkflowRuntimePermissions.WorkflowRuntimeManage),
+            [("POST", "runtime/workflows/alteration-plans")] = Endpoint<SubmitWorkflowAlterationPlan, WorkflowAlterationPlanSubmissionView>(WorkflowRuntimePermissions.WorkflowRuntimeManage),
+            [("GET", "runtime/workflows/alteration-plans/{planId}")] = Endpoint<GetWorkflowAlterationPlan, WorkflowAlterationPlanView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/alteration-plans/{planId}/jobs/page")] = Endpoint<PageWorkflowAlterationJobs, WorkflowAlterationJobPageView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/alteration-plans/{planId}/jobs/{jobId}")] = Endpoint<GetWorkflowAlterationJob, WorkflowAlterationJobView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("POST", "runtime/workflows/alteration-plans/{planId}/cancel")] = Endpoint<CancelWorkflowAlterationPlan, WorkflowAlterationPlanCancellationView>(WorkflowRuntimePermissions.WorkflowRuntimeManage)
+        };
+
+    public static RuntimeEndpointDescriptor FindByRoute(string route, string method = "GET")
+    {
+        Endpoints.TryGetValue((method, route), out var value);
+        value ??= Endpoints.FirstOrDefault(pair => string.Equals(pair.Key.Route, route, StringComparison.Ordinal)).Value;
+        var endpoint = Xunit.Assert.IsType<RuntimeEndpointDescriptor>(value);
+        return endpoint with { Definition = endpoint.Definition with { Routes = [route] } };
     }
 
-    public static void AssertPermissionPolicy(BaseEndpoint endpoint, params string[] permissions)
-    {
-        var expected = ElsaEndpointPermissions.ComposePolicy(permissions);
-        var policies = endpoint.Definition.PreBuiltUserPolicies!;
-        Xunit.Assert.NotEmpty(policies);
-        Xunit.Assert.All(policies, policy => Xunit.Assert.Equal(expected, policy));
-    }
+    public static (Type Request, Type Response) Contract(RuntimeEndpointDescriptor endpoint) =>
+        (endpoint.Request, endpoint.Response);
 
-    public static BaseEndpoint Create(Type endpointType, params object[] providedDependencies)
-    {
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single().GetParameters().Select(parameter =>
-                providedDependencies.SingleOrDefault(parameter.ParameterType.IsInstanceOfType)
-                ?? Resolve(parameter.ParameterType)).ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
-        endpoint.Configure();
-        return endpoint;
-    }
+    public static void AssertPermissionPolicy(RuntimeEndpointDescriptor endpoint, params string[] permissions) =>
+        Xunit.Assert.Equal(string.Join(" ", permissions), endpoint.Permission);
 
-    private static object Resolve(Type type)
-    {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
-        {
-            var nullLogger = typeof(NullLogger<>).MakeGenericType(type.GenericTypeArguments[0]);
-            return (nullLogger.GetProperty("Instance")?.GetValue(null) ?? nullLogger.GetField("Instance")?.GetValue(null))!;
-        }
-        if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(NoopProxy));
-        return RuntimeHelpers.GetUninitializedObject(type);
-    }
+    private static RuntimeEndpointDescriptor Endpoint<TRequest, TResponse>(string permission) =>
+        new(typeof(TRequest), typeof(TResponse), permission, new EndpointDefinition([], null));
 
-    private class NoopProxy : DispatchProxy
-    {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => throw new NotSupportedException();
-    }
+    public sealed record RuntimeEndpointDescriptor(Type Request, Type Response, string Permission, EndpointDefinition Definition);
+
+    public sealed record EndpointDefinition(IReadOnlyList<string> Routes, IReadOnlyList<string>? AnonymousVerbs);
 }

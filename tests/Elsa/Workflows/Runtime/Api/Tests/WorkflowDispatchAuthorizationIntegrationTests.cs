@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -15,7 +15,6 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -24,6 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using PermissionNames = Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
@@ -198,15 +198,6 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
                 });
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
             builder.Services.AddScoped<IRequestSender, DispatchInspectionRequestSender>();
-            builder.Services.AddFastEndpoints(options =>
-            {
-                options.Assemblies = [typeof(WorkflowsRuntimeApiFeature).Assembly];
-                options.Filter = type => type.FullName is
-                    "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowDispatchesEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowDispatchEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.RedriveWorkflowDispatchEndpoint";
-            });
-
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -220,7 +211,7 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
             });
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseFastEndpoints(options => options.Security.PermissionsClaimType = PermissionClaimType);
+            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
             await app.StartAsync();
 
             return new DispatchApiHost(

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
@@ -108,8 +108,8 @@ public sealed class WorkflowAlterationPlanApiTests
         var job = RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/alteration-plans/{planId}/jobs/{jobId}");
         var cancel = RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/alteration-plans/{planId}/cancel");
 
-        Assert.All([submit, cancel], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeManage));
-        Assert.All([plan, page, job], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead));
+        Assert.All([submit, cancel], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeManage));
+        Assert.All([plan, page, job], endpoint => RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead));
     }
 
     [Fact]

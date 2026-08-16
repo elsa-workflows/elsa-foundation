@@ -29,6 +29,18 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-before-capture-receipt.json"
+          Link="Baselines\wave9-runtime-before-capture-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-fastendpoints.json"
+          Link="Baselines\wave9-runtime-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-approved-differences.json"
+          Link="Baselines\wave9-runtime-openapi-approved-differences.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-http-fastendpoints.json"
+          Link="Baselines\wave9-runtime-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
