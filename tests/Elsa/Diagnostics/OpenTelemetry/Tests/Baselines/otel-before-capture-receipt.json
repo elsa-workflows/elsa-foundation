@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "db6e363db",
+  "captureSourceCommit": "7c6e58784",
+  "sourceDescription": "deleted FastEndpoints OpenTelemetry implementation before the Minimal API migration; the frozen fixture is from db6e363db and the baseline-only capture harness is committed at 7c6e58784",
+  "captureCommand": "git worktree add --detach /tmp/elsa-wave5-replay-7c6 7c6e58784854b5a6a5c8e0f965e7ee2df3d4c6dc; mkdir -p /tmp/elsa-wave5-capture-replay-7c6; cd /tmp/elsa-wave5-replay-7c6; dotnet restore tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj --ignore-failed-sources; OTEL_CAPTURE_OUTPUT=/tmp/elsa-wave5-capture-replay-7c6 dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj --no-restore -p:IsTestProject=true --filter FullyQualifiedName~OpenTelemetryFastEndpointsCaptureHarnessTests",
+  "captureImplementation": "OpenTelemetryFastEndpointsCaptureHarnessTests from baseline-only commit 7c6e58784; the detached worktree contains the deleted FastEndpoints implementation and does not load migrated OpenTelemetryApi",
+  "fixtures": {
+    "otel-http-openapi-fastendpoints.json": "d3066a8c8c0eacbdd9409a340b2587c07394336088ae9449ddeb3d7e0be291cc",
+    "otel-http-authenticated-fastendpoints.json": "6c5fecfb6674f628ae4d22730cfe6682777ebd372d8b0b97f08a38904526e272",
+    "otel-http-binding-fastendpoints.json": "4fcdcdd94ef0d386b1ab561b16fee653d8971171953b2a1e7862190843a39977",
+    "otel-http-redirect-fastendpoints.json": "c2bb7a946582a463844b7a228bfa2eb631bfa043872f4bd071702fee43511534"
+  }
+}
