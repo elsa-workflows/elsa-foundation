@@ -4,10 +4,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Scoping;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Differential;
@@ -136,50 +134,29 @@ internal abstract class TenantMembershipDifferentialTarget : IAsyncDisposable
 
     private sealed class GroundworkTarget() : TenantMembershipDifferentialTarget("groundwork.sqlite")
     {
-        private SqliteGroundworkProviderDriver? _driver;
-        private GroundworkProviderClient? _client;
+        private IdentityV2TestPersistence? _persistence;
 
-        public override async Task<ITenantMembershipStore> OpenAsync()
+        public override Task<ITenantMembershipStore> OpenAsync()
         {
-            if (_driver is null)
-            {
-                _driver = new();
-                await _driver.InitializeAsync(CancellationToken.None);
-                await _driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-            }
-
-            _client = await _driver.OpenPhysicalClientAsync(
-                DocumentStoreAccess.Scoped(new StorageScope(TenantId)),
-                CancellationToken.None);
-
-            return new GroundworkTenantMembershipStore(_client.DocumentStore, Accessor);
+            _persistence ??= new IdentityV2TestPersistence();
+            return Task.FromResult<ITenantMembershipStore>(
+                new GroundworkTenantMembershipStore(_persistence.Rows(Accessor), Accessor));
         }
 
         public override async Task SeedUserAsync(string userId) =>
-            await new GroundworkUserStore(_client!.DocumentStore, Accessor, _client.BoundedDocumentStore)
+            await new GroundworkUserStore(_persistence!.Rows(Accessor), Accessor)
                 .SaveAsync(User(userId));
 
         private static IPersistenceAccessContextAccessor Accessor { get; } =
             new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(TenantId)));
 
-        public override async Task CloseAsync()
-        {
-            if (_client is not null)
-            {
-                await _client.DisposeAsync();
-                _client = null;
-            }
-        }
+        public override Task CloseAsync() => Task.CompletedTask;
 
         public override async ValueTask DisposeAsync()
         {
             await CloseAsync();
-
-            if (_driver is not null)
-            {
-                await _driver.DisposeAsync();
-                _driver = null;
-            }
+            _persistence?.Dispose();
+            _persistence = null;
         }
     }
 }

@@ -2,12 +2,9 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -25,19 +22,12 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
     [Trait("Category", "Sqlite")]
     public async Task Groundwork_store_contracts_produce_the_ratified_digest()
     {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        await driver.InitializeAsync(CancellationToken.None);
-        await driver.ResetPhysicalAsync([new Elsa.Foundation.Identity.Persistence.Groundwork.IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-        await using var client = await driver.OpenPhysicalClientAsync(
-            DocumentStoreAccess.Scoped(new StorageScope(IamNormalizedLookupWorkload.TenantId)),
-            CancellationToken.None);
-        var boundedStore = client.BoundedDocumentStore
-                           ?? throw new InvalidOperationException("The SQLite Groundwork provider did not expose bounded document storage.");
+        using var persistence = new IdentityV2TestPersistence();
         var access = new FixedAccessContextAccessor(
             PersistenceAccessContext.Scoped(new PersistenceScope(IamNormalizedLookupWorkload.TenantId)));
         var adapter = new GroundworkIdentityWorkloadAdapter(
-            new GroundworkIdentityUserStore(client.DocumentStore, access, boundedStore),
-            new GroundworkIdentityRoleStore(client.DocumentStore, access, boundedStore));
+            new GroundworkIdentityUserStore(persistence.Rows(access), access),
+            new GroundworkIdentityRoleStore(persistence.Rows(access), access));
 
         AssertRatified(await new IamNormalizedLookupWorkload().ExecuteAsync(adapter));
     }
