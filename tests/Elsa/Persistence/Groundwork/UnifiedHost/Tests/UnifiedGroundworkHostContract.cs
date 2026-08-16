@@ -7,7 +7,6 @@ using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Secrets.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -34,7 +33,6 @@ public static class UnifiedGroundworkHostContract
         Assert.Same(store1, store2);
         Assert.NotNull(provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore>());
         Assert.Null(provider.GetService<IUserStore>());
-        Assert.NotNull(provider.GetRequiredService<ISecretRepository>());
         Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
         using var scope = provider.CreateScope();

@@ -1,12 +1,10 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Diagnostics.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
-using Groundwork.DiagnosticRecords;
 
 namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
@@ -33,36 +31,6 @@ public sealed class GroundworkAllFeaturesWithIdentityDeploymentSchema : Groundwo
         GroundworkReferenceDeploymentSchemaSources.WithIdentity;
 }
 
-/// <summary>
-/// Public, parameterless deployment schema for hosts that select the combined diagnostics Groundwork
-/// feature. It is the single authority for the document catalog definitions and diagnostic-record streams.
-/// </summary>
-public sealed class GroundworkAllFeaturesWithDiagnosticsDeploymentSchema :
-    GroundworkDeploymentSchemaManifestSource,
-    IDiagnosticRecordDeploymentManifestSource
-{
-    protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-        GroundworkReferenceDeploymentSchemaSources.WithDiagnostics;
-
-    public DiagnosticRecordDeploymentManifest CreateDeploymentManifest() =>
-        GroundworkReferenceDeploymentSchemaSources.CreateDiagnosticsDeploymentManifest(this);
-}
-
-/// <summary>
-/// Public, parameterless deployment schema for hosts that select both Groundwork-backed ASP.NET Core
-/// Identity and the combined diagnostics Groundwork feature.
-/// </summary>
-public sealed class GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema :
-    GroundworkDeploymentSchemaManifestSource,
-    IDiagnosticRecordDeploymentManifestSource
-{
-    protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-        GroundworkReferenceDeploymentSchemaSources.WithIdentityAndDiagnostics;
-
-    public DiagnosticRecordDeploymentManifest CreateDeploymentManifest() =>
-        GroundworkReferenceDeploymentSchemaSources.CreateDiagnosticsDeploymentManifest(this);
-}
-
 internal static class GroundworkReferenceDeploymentSchemaSources
 {
     public static readonly IReadOnlyCollection<Type> WithoutIdentity = Array.AsReadOnly<Type>(
@@ -81,22 +49,4 @@ internal static class GroundworkReferenceDeploymentSchemaSources
         typeof(IdentityGroundworkStorageManifestSource)
     ]);
 
-    public static readonly IReadOnlyCollection<Type> WithDiagnostics = Array.AsReadOnly<Type>(
-    [
-        .. WithoutIdentity,
-        typeof(DiagnosticsGroundworkStorageManifestSource)
-    ]);
-
-    public static readonly IReadOnlyCollection<Type> WithIdentityAndDiagnostics = Array.AsReadOnly<Type>(
-    [
-        .. WithDiagnostics,
-        typeof(IdentityGroundworkStorageManifestSource)
-    ]);
-
-    public static DiagnosticRecordDeploymentManifest CreateDiagnosticsDeploymentManifest(
-        GroundworkDeploymentSchemaManifestSource source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        return new(source.CreateManifest(), DiagnosticsGroundworkStorageManifest.CreateDiagnosticRecordStreams());
-    }
 }

@@ -416,7 +416,7 @@
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/">
-    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj" />
+    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj" />

@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Persistence.Groundwork;
@@ -29,8 +28,7 @@ public class GroundworkManifestPhysicalStorageGoldenTests
             ["activities-design"] = ActivitiesDesignStorageManifest.Create,
             ["workflows-design"] = WorkflowsDesignStorageManifest.Create,
             ["distributed"] = DistributedGroundworkStorageManifest.Create,
-            ["identity"] = IdentityStorageManifest.Create,
-            ["opentelemetry"] = OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest
+            ["identity"] = IdentityStorageManifest.Create
         };
 
     public static TheoryData<string> ManifestNames => [.. Manifests.Keys];

@@ -137,6 +137,32 @@ public sealed class GroundworkStudioPreferenceStoreTests
     }
 
     [Fact]
+    public async Task ConnectionFactoryIsLazySharedAndOwnedByTheServiceProvider()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        IStorageProviderConnection? created = null;
+        var factoryCalls = 0;
+        var services = new ServiceCollection().AddGroundworkStorageProviderConnection(_ =>
+        {
+            factoryCalls++;
+            return created = new SqliteProviderFactory().Create(database.ConnectionString);
+        });
+
+        await using (var provider = services.BuildServiceProvider())
+        {
+            var unkeyed = provider.GetRequiredService<IStorageProviderConnection>();
+            var keyed = provider.GetRequiredKeyedService<IStorageProviderConnection>("default");
+
+            Assert.Same(unkeyed, keyed);
+            Assert.Same(created, unkeyed);
+            Assert.Equal(1, factoryCalls);
+        }
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            created!.OpenSession(StudioPreferencesGroundworkStorageSchema.CreateUnit(), StorageAccess.Global));
+    }
+
+    [Fact]
     public void ProductionAssemblyHasNoGroundworkV1DocumentDependency()
     {
         var references = typeof(GroundworkStudioPreferenceStore).Assembly.GetReferencedAssemblies();

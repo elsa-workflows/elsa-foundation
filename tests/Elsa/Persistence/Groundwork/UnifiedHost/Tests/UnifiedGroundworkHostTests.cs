@@ -17,8 +17,6 @@ using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
-using Elsa.Secrets.Core.Contracts;
-using Elsa.Secrets.Core.Models;
 using Elsa.Serialization.Core;
 using Microsoft.Data.Sqlite;
 using Elsa.Workflows.Design.Core.Models;
@@ -43,7 +41,7 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal: <b>one host-selected database backs every Elsa module</b>. The host
-/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which materializes the six
+/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which materializes the legacy
 /// provider-level feature manifests into <b>one</b> SQLite document database and points every family's neutral
 /// ports at it. Nothing here is SQLite- or Groundwork-specific except the one host registration call.
 /// </summary>
@@ -120,9 +118,8 @@ public class UnifiedGroundworkHostTests
         // One access-bound adapter instance backs everything within an operation scope.
         Assert.Same(store1, store2);
 
-        // Runtime, secrets and distributed-runtime ports resolve.
+        // Runtime and distributed-runtime ports resolve. Clean-break v2 adapters are composed separately.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
         Assert.Null(scope.ServiceProvider.GetService<IUserStore>());
 
@@ -188,23 +185,6 @@ public class UnifiedGroundworkHostTests
             new Dictionary<string, string>(),
             now,
             null);
-        var secret = new Secret
-        {
-            Id = "secret-1",
-            TenantId = "tenant-1",
-            Name = "payments.api",
-            DisplayName = "Payments API",
-            TypeName = SecretTypeNames.Text,
-            StoreName = SecretStoreNames.Encrypted,
-            Versions =
-            [
-                new SecretVersion
-                {
-                    Version = 1,
-                    Payload = SecretPayload.FromValue("v1")
-                }
-            ]
-        };
         var placement = new ExecutionPlacementClaim("placement-execution-1", "node-a", now, now.AddMinutes(1));
         var workflowDefinition = new WorkflowDefinition { Id = "workflow-1", Name = "Order Processing" };
         var workflowDraft = new WorkflowDefinitionDraft
@@ -248,8 +228,6 @@ public class UnifiedGroundworkHostTests
             await using var firstScope = firstHost.CreateAsyncScope();
             var firstServices = firstScope.ServiceProvider;
             await firstServices.GetRequiredService<IBookmarkStateStore>().SaveAsync(bookmark);
-            Assert.True(await firstServices.GetRequiredService<ISecretRepository>().TryAddAsync(secret));
-
             var claim = await firstServices.GetRequiredService<IExecutionPlacementStore>().TryClaimAsync(placement, now);
             Assert.Equal(ExecutionPlacementClaimOutcome.Granted, claim.Outcome);
 
@@ -281,10 +259,6 @@ public class UnifiedGroundworkHostTests
             (await reopenedServices.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId))?.StimulusHash);
         Assert.Null(reopenedServices.GetService<IUserStore>());
-        Assert.Equal(
-            "v1",
-            (await reopenedServices.GetRequiredService<ISecretRepository>().FindAsync("tenant-1", secret.Name))?
-            .LatestActiveVersion?.Payload.Value);
         Assert.Equal(
             placement.OwnerId,
             (await reopenedServices.GetRequiredService<IExecutionPlacementStore>()

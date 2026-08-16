@@ -1,9 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Groundwork.DiagnosticRecords;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
@@ -23,10 +21,6 @@ public static class GroundworkReferenceDeploymentSchemaSelector
 
         return Select(context) switch
         {
-            var type when type == typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema) =>
-                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema>(),
-            var type when type == typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema) =>
-                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(),
             var type when type == typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema) =>
                 services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithIdentityDeploymentSchema>(),
             _ => services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesDeploymentSchema>()
@@ -34,8 +28,7 @@ public static class GroundworkReferenceDeploymentSchemaSelector
     }
 
     /// <summary>
-    /// Registers an explicit reference deployment schema and exposes its diagnostic deployment contract
-    /// when the selected source owns diagnostic streams.
+    /// Registers an explicit reference deployment schema.
     /// </summary>
     public static IServiceCollection AddGroundworkReferenceDeploymentSchema<TDeploymentSource>(
         this IServiceCollection services)
@@ -43,12 +36,6 @@ public static class GroundworkReferenceDeploymentSchemaSelector
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddGroundworkStorageComposition<TDeploymentSource>();
-        if (typeof(IDiagnosticRecordDeploymentManifestSource).IsAssignableFrom(typeof(TDeploymentSource)))
-        {
-            services.TryAddSingleton<IDiagnosticRecordDeploymentManifestSource>(provider =>
-                (IDiagnosticRecordDeploymentManifestSource)provider.GetRequiredService<TDeploymentSource>());
-        }
-
         return services;
     }
 
@@ -90,22 +77,12 @@ public static class GroundworkReferenceDeploymentSchemaSelector
             feature.Marker,
             GroundworkSchemaFeatureMetadata.Identity,
             StringComparison.Ordinal));
-        var diagnosticsEnabled = schemaFeatures.Any(feature => string.Equals(
-            feature.Marker,
-            GroundworkSchemaFeatureMetadata.Diagnostics,
-            StringComparison.Ordinal));
-
-        return (identityEnabled, diagnosticsEnabled) switch
-        {
-            (true, true) => typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema),
-            (true, false) => typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema),
-            (false, true) => typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema),
-            _ => typeof(GroundworkAllFeaturesDeploymentSchema)
-        };
+        return identityEnabled
+            ? typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema)
+            : typeof(GroundworkAllFeaturesDeploymentSchema);
     }
 
     private static bool IsSupportedMarker(string? marker) =>
-        string.Equals(marker, GroundworkSchemaFeatureMetadata.Identity, StringComparison.Ordinal) ||
-        string.Equals(marker, GroundworkSchemaFeatureMetadata.Diagnostics, StringComparison.Ordinal);
+        string.Equals(marker, GroundworkSchemaFeatureMetadata.Identity, StringComparison.Ordinal);
 
 }

@@ -1,8 +1,6 @@
 using System.Reflection;
 using CShells;
 using CShells.Features;
-using CShells.Lifecycle;
-using Elsa.Diagnostics.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
@@ -20,7 +18,6 @@ using Groundwork.Core.Capabilities;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Scoping;
-using Groundwork.DiagnosticRecords;
 using Groundwork.Documents.Scoping;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
@@ -32,7 +29,6 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
 {
     private const string IdentityFeatureId = "FoundationIdentityAspNetCoreIdentityGroundwork";
-    private const string DiagnosticsFeatureId = "DiagnosticsGroundworkPersistence";
 
     [Theory]
     [InlineData(false)]
@@ -69,42 +65,10 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
             GroundworkReferenceDeploymentSchemaSelector.Select(context));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Diagnostics_selection_is_order_independent(bool diagnosticsDescriptorFirst)
-    {
-        var diagnostics = SchemaFeature(DiagnosticsFeatureId, GroundworkSchemaFeatureMetadata.Diagnostics);
-        var ordinary = new ShellFeatureDescriptor("OrdinaryFeature");
-        var descriptors = diagnosticsDescriptorFirst
-            ? new[] { diagnostics, ordinary }
-            : new[] { ordinary, diagnostics };
-        var enabled = diagnosticsDescriptorFirst
-            ? new[] { "OrdinaryFeature", DiagnosticsFeatureId }
-            : new[] { DiagnosticsFeatureId, "OrdinaryFeature" };
-
-        var selected = GroundworkReferenceDeploymentSchemaSelector.Select(Context(enabled, descriptors));
-
-        Assert.Equal(typeof(GroundworkAllFeaturesWithDiagnosticsDeploymentSchema), selected);
-    }
-
-    [Fact]
-    public void Identity_and_diagnostics_select_the_combined_schema()
-    {
-        var selected = GroundworkReferenceDeploymentSchemaSelector.Select(Context(
-            [DiagnosticsFeatureId, IdentityFeatureId],
-            [
-                SchemaFeature(IdentityFeatureId, GroundworkSchemaFeatureMetadata.Identity),
-                SchemaFeature(DiagnosticsFeatureId, GroundworkSchemaFeatureMetadata.Diagnostics)
-            ]));
-
-        Assert.Equal(typeof(GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema), selected);
-    }
-
     [Fact]
     public void Complete_reference_schema_passes_the_sql_server_physical_store_validator_without_io()
     {
-        var manifest = new GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema().CreateManifest();
+        var manifest = new GroundworkAllFeaturesWithIdentityDeploymentSchema().CreateManifest();
         var resolution = PhysicalStorageResolver.Resolve(
             manifest,
             PhysicalNamePolicy.Identity,
@@ -142,12 +106,6 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
     {
         AssertSchemaMarker<AspNetCoreIdentityGroundworkFeature>(GroundworkSchemaFeatureMetadata.Identity);
         AssertSchemaMarker<IdentityGroundworkPersistenceFeature>(GroundworkSchemaFeatureMetadata.Identity);
-    }
-
-    [Fact]
-    public void Diagnostics_shell_feature_publishes_the_well_known_schema_marker()
-    {
-        AssertSchemaMarker<DiagnosticsGroundworkPersistenceFeature>(GroundworkSchemaFeatureMetadata.Diagnostics);
     }
 
     [Fact]
@@ -220,88 +178,6 @@ public sealed class GroundworkReferenceDeploymentSchemaSelectorTests
             Assert.IsType<GroundworkAllFeaturesDeploymentSchema>(
                 provider.GetRequiredService<IPhysicalSchemaManifestSource>());
             Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
-        }
-    }
-
-    [Fact]
-    public async Task All_unified_provider_features_register_diagnostic_runtime_and_deployment_boundaries()
-    {
-        var context = Context(
-            [DiagnosticsFeatureId],
-            [SchemaFeature(DiagnosticsFeatureId, GroundworkSchemaFeatureMetadata.Diagnostics)]);
-        var providers = new (string Provider, Action<IServiceCollection> Register)[]
-        {
-            ("sqlite", services => new SqliteGroundworkUnifiedPersistenceShellFeature(context)
-            {
-                ConnectionString = "Data Source=:memory:"
-            }.ConfigureServices(services)),
-            ("postgresql", services => new PostgreSqlGroundworkUnifiedPersistenceShellFeature(context)
-            {
-                ConnectionString = "Host=localhost;Database=elsa;Username=elsa;Password=secret"
-            }.ConfigureServices(services)),
-            ("sqlserver", services => new SqlServerGroundworkUnifiedPersistenceShellFeature(context)
-            {
-                ConnectionString = "Server=localhost;Database=elsa;User Id=sa;Password=secret;TrustServerCertificate=True"
-            }.ConfigureServices(services)),
-            ("mongodb", services => new MongoDbGroundworkUnifiedPersistenceShellFeature(context)
-            {
-                ConnectionString = "mongodb://localhost:27017/?replicaSet=rs0",
-                DatabaseName = "elsa"
-            }.ConfigureServices(services))
-        };
-
-        foreach (var (expectedProvider, register) in providers)
-        {
-            var services = new ServiceCollection();
-            register(services);
-            await using var provider = services.BuildServiceProvider();
-
-            Assert.IsType<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
-                provider.GetRequiredService<IPhysicalSchemaManifestSource>());
-            Assert.NotNull(provider.GetRequiredService<IDiagnosticRecordStoreSessionFactory>());
-            Assert.Equal(
-                expectedProvider,
-                provider.GetRequiredService<IDiagnosticRecordDeploymentApplier>().Provider);
-            var initializer = provider.GetRequiredService<GroundworkDiagnosticRecordDeploymentInitializer>();
-            Assert.Same(
-                initializer,
-                Assert.Single(provider.GetServices<IShellInitializer>()
-                    .OfType<GroundworkDiagnosticRecordDeploymentInitializer>()));
-            var lifecycle = Assert.Single(
-                provider.GetServices<ShellInitializerRegistration>(),
-                registration =>
-                    registration.InitializerType == typeof(GroundworkDiagnosticRecordDeploymentInitializer));
-            Assert.Equal(LifecyclePhase.Prepare, lifecycle.Phase);
-            Assert.Equal(1, lifecycle.Order);
-        }
-    }
-
-    [Fact]
-    public void All_explicit_diagnostics_provider_overloads_register_the_deployment_manifest_source()
-    {
-        var providers = new Action<IServiceCollection>[]
-        {
-            services => services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
-                "Data Source=:memory:"),
-            services => services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
-                "Host=localhost;Database=elsa;Username=elsa;Password=secret"),
-            services => services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
-                "Server=localhost;Database=elsa;User Id=sa;Password=secret;TrustServerCertificate=True"),
-            services => services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>(
-                "mongodb://localhost:27017/?replicaSet=rs0",
-                "elsa")
-        };
-
-        foreach (var register in providers)
-        {
-            var services = new ServiceCollection();
-            register(services);
-            using var provider = services.BuildServiceProvider();
-
-            var selected = provider.GetRequiredService<GroundworkAllFeaturesWithDiagnosticsDeploymentSchema>();
-            Assert.Same(
-                selected,
-                provider.GetRequiredService<global::Groundwork.DiagnosticRecords.IDiagnosticRecordDeploymentManifestSource>());
         }
     }
 

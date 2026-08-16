@@ -27,7 +27,7 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 ### `IOpenTelemetryStore` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask WriteAsync(OpenTelemetryBatch batch, …)`, `ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(…)`, `ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(…)`, `ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, …)`, `ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(…)`, `ValueTask<OpenTelemetryLogResult> QueryLogsAsync(…)`, `ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(…)`.
 - **Default impl:** `InMemoryOpenTelemetryStore` — capacity-bounded ring buffers per signal (trace/span/metric-point/log-record/resource), bounds from `OpenTelemetryDiagnosticsOptions.*Capacity`. Stores normalized batches; oldest entries roll off and are counted as dropped. **It also populates the source registry** (`IOpenTelemetrySourceRegistry.MarkSeen`) for each resource it writes, and serves resource queries/storage diagnostics from that registry.
-- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. The first-party `DiagnosticsGroundworkPersistence` aggregate installs `GroundworkOpenTelemetryStore`, which persists resources/traces/spans/metric instruments/metric points/logs through Groundwork and still calls `IOpenTelemetrySourceRegistry.MarkSeen` on write. It is the reference-host durable composition and contributes its diagnostic-record streams and document schema to Groundwork deployment. Any other durable override MUST also call `MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty.
+- **Override:** register your own `IOpenTelemetryStore` to persist telemetry and serve queries from durable storage. Pure *replace-one-keep-rest* override. Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IOpenTelemetryStore>` wins regardless of feature order. The first-party `DiagnosticsGroundworkPersistence` aggregate installs `GroundworkOpenTelemetryStore`, which persists resources/traces/spans/metric instruments/metric points/logs through clean-break Groundwork v2 units and still calls `IOpenTelemetrySourceRegistry.MarkSeen` on write. The host supplies one v2 `IStorageProviderConnection`; the adapter declares and admits its own units without a legacy manifest, importer, or dual-write path. Any other durable override MUST also call `MarkSeen` (or otherwise surface resources) or the resources/storage views will be empty.
 
 ### `IOpenTelemetryLiveFeed` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*
 - **Signature:** `ValueTask PublishAsync(OpenTelemetryBatch batch, …)`, `IAsyncEnumerable<OpenTelemetryStreamItem> SubscribeAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken)`.
@@ -77,12 +77,12 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 
 - **gRPC ingestion** — kept behind `OpenTelemetryDiagnosticsOptions.EnableGrpc` (default `false`); no gRPC route is mapped. The binding is host-specific.
 
-## Temporary EF Core compatibility override
+## Frozen EF Core benchmark baseline
 
 `Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and the
-`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature remain as temporary comparison, oracle, and
-compatibility implementations. They have not been removed: #646 owns the retained performance measurement,
-and #647 owns the subsequent EF deletion. They are not the first-party/reference-host durable composition.
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature remain only long enough to provide the immutable
+before-side correctness/performance evidence. They are not a compatibility mode, migration surface, fallback,
+or supported companion to the Groundwork v2 host. The measured cutover deletes them.
 
 ---
 
