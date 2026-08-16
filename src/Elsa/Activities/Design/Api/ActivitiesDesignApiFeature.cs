@@ -52,7 +52,19 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        services.TryAddScoped<IActivityDependencyContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
+        {
+            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContext)))
+                services.AddScoped<IActivityDependencyAuthorizationContext>(sp =>
+                    sp.GetRequiredService<IActivityDependencyContext>());
+            else
+                services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        }
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContext)))
+            services.AddScoped<IActivityDependencyContext>(sp =>
+                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContext current
+                    ? current
+                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
         {
             services.AddScoped<IActivityAuthoringContextAsync>(sp =>
@@ -62,11 +74,20 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         }
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync)))
         {
-            services.AddScoped<IActivityDependencyContextAsync>(sp =>
-                sp.GetRequiredService<IActivityDependencyContext>() is IActivityDependencyContextAsync asyncContext
-                    ? asyncContext
+            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContextAsync)))
+                services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                    sp.GetRequiredService<IActivityDependencyAuthorizationContextAsync>() is IActivityDependencyContextAsync current
+                        ? current
+                        : new LegacyActivityDependencyAsyncAliasAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContextAsync>()));
+            else
+                services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                    sp.GetRequiredService<IActivityDependencyContext>() is IActivityDependencyContextAsync asyncContext
+                        ? asyncContext
                     : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyContext>()));
         }
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContextAsync)))
+            services.AddScoped<IActivityDependencyAuthorizationContextAsync>(sp =>
+                sp.GetRequiredService<IActivityDependencyContextAsync>());
         services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()

@@ -74,15 +74,35 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         var assembly = GetType().Assembly;
         services.AddRequestHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
+        {
+            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContext)))
+                services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp =>
+                    sp.GetRequiredService<IActivityInspectionContext>());
+            else
+                services.AddScoped<IActivityExecutionInspectionAuthorizationContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        }
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContext)))
-            services.AddScoped<IActivityInspectionContext, HttpContextActivityExecutionInspectionAuthorizationContext>();
+            services.AddScoped<IActivityInspectionContext>(sp =>
+                sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContext current
+                    ? current
+                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>()));
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync)))
         {
-            services.AddScoped<IActivityInspectionContextAsync>(sp =>
-                sp.GetRequiredService<IActivityInspectionContext>() is IActivityInspectionContextAsync asyncContext
-                    ? asyncContext
+            if (services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContextAsync)))
+                services.AddScoped<IActivityInspectionContextAsync>(sp =>
+                    sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContextAsync>() is IActivityInspectionContextAsync current
+                        ? current
+                        : new LegacyActivityInspectionAsyncAliasAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContextAsync>()));
+            else
+                services.AddScoped<IActivityInspectionContextAsync>(sp =>
+                    sp.GetRequiredService<IActivityInspectionContext>() is IActivityInspectionContextAsync asyncContext
+                        ? asyncContext
                     : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityInspectionContext>()));
         }
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContextAsync)))
+            services.AddScoped<IActivityExecutionInspectionAuthorizationContextAsync>(sp =>
+                sp.GetRequiredService<IActivityInspectionContextAsync>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.

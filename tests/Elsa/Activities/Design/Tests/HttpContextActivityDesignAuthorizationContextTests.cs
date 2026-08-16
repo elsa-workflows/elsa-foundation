@@ -12,6 +12,60 @@ namespace Elsa.Activities.Design.Tests;
 
 public sealed class HttpContextActivityDesignAuthorizationContextTests
 {
+    [Theory]
+    [InlineData("exact")]
+    [InlineData("implied")]
+    [InlineData("wildcard")]
+    [InlineData("normalized-external")]
+    public async Task Foundation_evaluator_paths_flow_through_the_design_context(string grantKind)
+    {
+        var services = CreateServices();
+        if (grantKind == "implied")
+            services.ReplacePermissionCatalog<DesignPermissionCatalog>();
+        using var provider = services.BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var grant = grantKind switch
+        {
+            "implied" => "activities.design.author.bundle",
+            "wildcard" => "*",
+            _ => HttpContextActivityDesignAuthorizationContext.AuthorPermission
+        };
+        var principal = grantKind == "normalized-external"
+            ? await NormalizeExternalPrincipalAsync(provider, HttpContextActivityDesignAuthorizationContext.AuthorPermission)
+            : Principal("tenant-a", grant);
+        accessor.HttpContext = new DefaultHttpContext { User = principal };
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            provider.GetRequiredService<IPermissionAuthorizationService>(),
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.True(await context.CanAuthorProviderAsync("provider"));
+    }
+
+    private static async Task<ClaimsPrincipal> NormalizeExternalPrincipalAsync(
+        ServiceProvider provider,
+        string permission)
+    {
+        var rawPrincipal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("groups", "admins")], "entra"));
+        var result = await provider.GetRequiredService<IClaimsNormalizer>().NormalizeAsync(new(
+            rawPrincipal,
+            "tenant-a",
+            "entra",
+            [new ClaimMappingRule(
+                "design-admins",
+                "tenant-a",
+                "entra",
+                "groups",
+                "admins",
+                new HashSet<string>(StringComparer.Ordinal),
+                new HashSet<string>([permission], StringComparer.OrdinalIgnoreCase),
+                1,
+                false)],
+            "test"));
+
+        return result.Principal;
+    }
+
     [Fact]
     public async Task Provider_resource_handlers_can_grant_payload_access_and_veto_claim_grants()
     {
@@ -104,6 +158,42 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         Assert.False(await context.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-untrusted")));
     }
 
+    [Fact]
+    public async Task Untrusted_or_absent_http_context_fails_closed_before_a_replacement_service()
+    {
+        var services = CreateServices();
+        services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
+        using var provider = services.BuildServiceProvider();
+        var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            provider.GetRequiredService<IHttpContextAccessor>(),
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.False(await context.CanAuthorProviderAsync("provider"));
+        Assert.False(await context.CanManageActivityDefinitionsAsync());
+        Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+        Assert.Equal(0, service.Calls);
+    }
+
+    [Fact]
+    public async Task Trusted_context_uses_a_host_replacement_authorization_service()
+    {
+        var services = CreateServices();
+        services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
+        using var provider = services.BuildServiceProvider();
+        var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.True(await context.CanAuthorProviderAsync("provider"));
+        Assert.True(service.Calls > 0);
+    }
+
     private static ServiceCollection CreateServices()
     {
         var services = new ServiceCollection();
@@ -171,5 +261,31 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             await Task.Delay(25, cancellationToken);
             return PermissionEvaluationResult.Denied();
         }
+    }
+
+    private sealed class GrantingAuthorizationService : IPermissionAuthorizationService
+    {
+        public int Calls;
+
+        public ValueTask<PermissionEvaluationResult> AuthorizeAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref Calls);
+            return ValueTask.FromResult(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class DesignPermissionCatalog : IPermissionCatalog
+    {
+        private static readonly Permission Bundle = new(
+            "activities.design.author.bundle",
+            "Design author bundle",
+            "test",
+            "Test implication",
+            new HashSet<string>([HttpContextActivityDesignAuthorizationContext.AuthorPermission], StringComparer.Ordinal));
+
+        public IReadOnlyCollection<Permission> List() => [Bundle];
+        public Permission? Find(string key) => string.Equals(key, Bundle.Key, StringComparison.Ordinal) ? Bundle : null;
     }
 }

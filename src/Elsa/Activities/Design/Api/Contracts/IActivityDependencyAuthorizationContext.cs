@@ -16,7 +16,7 @@ public sealed record ActivityProviderAuthorizationResource(string ProviderKey, s
 /// authorization contexts.
 /// </summary>
 [Obsolete("Use IActivityDependencyContextAsync. This interface will be removed in the next major version.")]
-public interface IActivityDependencyContext
+public interface IActivityDependencyAuthorizationContext
 {
     string? TenantId { get; }
 
@@ -25,13 +25,25 @@ public interface IActivityDependencyContext
     bool CanRead(ActivityDefinitionReference reference);
 }
 
-/// <summary>Asynchronous replacement seam for request-scoped dependency authorization.</summary>
-[ReplacementContract]
-public interface IActivityDependencyContextAsync
+/// <summary>Short compatibility alias for the synchronous dependency context.</summary>
+[Obsolete("Use IActivityDependencyContextAsync. This interface will be removed in the next major version.")]
+public interface IActivityDependencyContext : IActivityDependencyAuthorizationContext
+{
+}
+
+/// <summary>Original long-name asynchronous replacement seam retained for compatibility.</summary>
+[Obsolete("Use IActivityDependencyContextAsync. This interface will be removed in the next major version.")]
+public interface IActivityDependencyAuthorizationContextAsync
 {
     string? TenantId { get; }
 
     ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default);
 
     ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Canonical short asynchronous replacement seam for request-scoped dependency authorization.</summary>
+[ReplacementContract]
+public interface IActivityDependencyContextAsync : IActivityDependencyAuthorizationContextAsync
+{
 }

@@ -137,8 +137,10 @@ public sealed class ActivityDesignFeatureCompositionTests
         using var scope = provider.CreateScope();
         var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
         var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+        var legacyDependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContext>();
 
         Assert.Same(authoring, dependencies);
+        Assert.Same(dependencies, legacyDependencies);
         Assert.True(await authoring.CanAuthorProviderAsync("elsa.activity-graph"));
         Assert.True(await authoring.CanReadProviderPayloadAsync("elsa.activity-graph"));
         Assert.Equal("actor-a", authoring.ActorId);

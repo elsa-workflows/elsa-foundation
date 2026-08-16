@@ -12,6 +12,62 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTests
 {
+    [Theory]
+    [InlineData("exact")]
+    [InlineData("implied")]
+    [InlineData("wildcard")]
+    [InlineData("normalized-external")]
+    public async Task Foundation_evaluator_paths_flow_through_the_runtime_context(string grantKind)
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
+        if (grantKind == "implied")
+            services.ReplacePermissionCatalog<RuntimePermissionCatalog>();
+        using var provider = services.BuildServiceProvider();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        var grant = grantKind switch
+        {
+            "implied" => "workflows.activity-executions.inspect.bundle",
+            "wildcard" => "*",
+            _ => HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission
+        };
+        var principal = grantKind == "normalized-external"
+            ? await NormalizeExternalPrincipalAsync(provider, HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)
+            : Principal("tenant-a", grant);
+        accessor.HttpContext = new DefaultHttpContext { User = principal };
+        var context = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            accessor,
+            provider.GetRequiredService<IPermissionAuthorizationService>(),
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.True(await context.CanInspectStructureAsync(Execution("tenant-a")));
+    }
+
+    private static async Task<ClaimsPrincipal> NormalizeExternalPrincipalAsync(
+        ServiceProvider provider,
+        string permission)
+    {
+        var rawPrincipal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("groups", "admins")], "entra"));
+        var result = await provider.GetRequiredService<IClaimsNormalizer>().NormalizeAsync(new(
+            rawPrincipal,
+            "tenant-a",
+            "entra",
+            [new ClaimMappingRule(
+                "runtime-admins",
+                "tenant-a",
+                "entra",
+                "groups",
+                "admins",
+                new HashSet<string>(StringComparer.Ordinal),
+                new HashSet<string>([permission], StringComparer.OrdinalIgnoreCase),
+                1,
+                false)],
+            "test"));
+
+        return result.Principal;
+    }
+
     [Fact]
     public async Task Authorization_profile_snapshot_is_started_once_under_concurrent_callers()
     {
@@ -85,11 +141,51 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
         Assert.False(await context.CanInspectStructureAsync(Execution("tenant-trusted")));
     }
 
-    private static ClaimsPrincipal Principal(string tenantId) =>
+    [Fact]
+    public async Task Untrusted_or_absent_http_context_fails_closed_before_a_replacement_service()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
+        services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
+        using var provider = services.BuildServiceProvider();
+        var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var context = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            provider.GetRequiredService<IHttpContextAccessor>(),
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.False(await context.CanInspectStructureAsync(Execution("tenant")));
+        Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+        Assert.Equal(0, service.Calls);
+    }
+
+    [Fact]
+    public async Task Trusted_context_uses_a_host_replacement_authorization_service()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
+        services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
+        using var provider = services.BuildServiceProvider();
+        var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
+        var context = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            accessor,
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+
+        Assert.True(await context.CanInspectStructureAsync(Execution("tenant-a")));
+        Assert.True(service.Calls > 0);
+    }
+
+    private static ClaimsPrincipal Principal(string tenantId, params string[] permissions) =>
         new(new ClaimsIdentity(
         [
             new Claim(IdentityClaimTypes.Normalized, "v1"),
-            new Claim(IdentityClaimTypes.TenantId, tenantId)
+            new Claim(IdentityClaimTypes.TenantId, tenantId),
+            ..permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
         ], "test"));
 
     private static ClaimsPrincipal MixedPrincipal() =>
@@ -136,5 +232,31 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
             await Task.Delay(25, cancellationToken);
             return PermissionEvaluationResult.Denied();
         }
+    }
+
+    private sealed class GrantingAuthorizationService : IPermissionAuthorizationService
+    {
+        public int Calls;
+
+        public ValueTask<PermissionEvaluationResult> AuthorizeAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref Calls);
+            return ValueTask.FromResult(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class RuntimePermissionCatalog : IPermissionCatalog
+    {
+        private static readonly Permission Bundle = new(
+            "workflows.activity-executions.inspect.bundle",
+            "Inspection bundle",
+            "test",
+            "Test implication",
+            new HashSet<string>([HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission], StringComparer.Ordinal));
+
+        public IReadOnlyCollection<Permission> List() => [Bundle];
+        public Permission? Find(string key) => string.Equals(key, Bundle.Key, StringComparison.Ordinal) ? Bundle : null;
     }
 }

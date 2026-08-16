@@ -106,6 +106,12 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
 
     private async Task<AuthorizationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
+        if (!_trusted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return DeniedSnapshot;
+        }
+
         var existing = Volatile.Read(ref _snapshot);
         if (existing is null)
         {
@@ -170,18 +176,25 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
         bool CanInspectSensitiveValues,
         bool CanResolveValuePayloads,
         string Profile);
+
+    private static readonly AuthorizationSnapshot DeniedSnapshot =
+        new(false, false, false, "untrusted");
 }
 
-public sealed class LegacyActivityInspectionContextAdapter : IActivityInspectionContextAsync
+public sealed class LegacyActivityInspectionContextAdapter : IActivityInspectionContext, IActivityInspectionContextAsync
 {
-    private readonly IActivityInspectionContext _legacy;
+    private readonly IActivityExecutionInspectionAuthorizationContext _legacy;
 
-    public LegacyActivityInspectionContextAdapter(IActivityInspectionContext legacy) =>
+    public LegacyActivityInspectionContextAdapter(IActivityExecutionInspectionAuthorizationContext legacy) =>
         _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
 
     public string TenantScope => _legacy.TenantScope;
+    public string AuthorizationProfile => _legacy.AuthorizationProfile;
     public string AuditSubject => _legacy.AuditSubject;
     public string RequestCorrelationId => _legacy.RequestCorrelationId;
+    public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => _legacy.CanInspectStructure(workflowExecution);
+    public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => _legacy.CanInspectSensitiveValues(workflowExecution);
+    public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => _legacy.CanResolveSensitiveValuePayloads(workflowExecution);
     public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
     public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
@@ -190,4 +203,24 @@ public sealed class LegacyActivityInspectionContextAdapter : IActivityInspection
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanInspectSensitiveValues(workflowExecution));
     public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanResolveSensitiveValuePayloads(workflowExecution));
+}
+
+public sealed class LegacyActivityInspectionAsyncAliasAdapter : IActivityInspectionContextAsync
+{
+    private readonly IActivityExecutionInspectionAuthorizationContextAsync _legacy;
+
+    public LegacyActivityInspectionAsyncAliasAdapter(IActivityExecutionInspectionAuthorizationContextAsync legacy) =>
+        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
+
+    public string TenantScope => _legacy.TenantScope;
+    public string AuditSubject => _legacy.AuditSubject;
+    public string RequestCorrelationId => _legacy.RequestCorrelationId;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        _legacy.GetAuthorizationProfileAsync(cancellationToken);
+    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        _legacy.CanInspectStructureAsync(workflowExecution, cancellationToken);
+    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        _legacy.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
+    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        _legacy.CanResolveSensitiveValuePayloadsAsync(workflowExecution, cancellationToken);
 }

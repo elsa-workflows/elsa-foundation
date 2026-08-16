@@ -77,12 +77,12 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     }
 
     public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        string.IsNullOrWhiteSpace(providerKey)
+        !_trusted || string.IsNullOrWhiteSpace(providerKey)
             ? ValueTask.FromResult(false)
             : AuthorizeProviderAsync(AuthorPermission, providerKey, cancellationToken);
 
     public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        string.IsNullOrWhiteSpace(providerKey)
+        !_trusted || string.IsNullOrWhiteSpace(providerKey)
             ? ValueTask.FromResult(false)
             : AuthorizeProviderAsync(ProviderPayloadReadPermission, providerKey, cancellationToken);
 
@@ -104,6 +104,12 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
 
     private async Task<AuthorizationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
+        if (!_trusted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return DeniedSnapshot;
+        }
+
         var existing = Volatile.Read(ref _snapshot);
         if (existing is null)
         {
@@ -180,6 +186,9 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         bool CanReadProviderPayload,
         bool CanManage,
         string Profile);
+
+    private static readonly AuthorizationSnapshot DeniedSnapshot =
+        new(false, false, false, "untrusted");
 }
 
 public sealed class LegacyActivityAuthoringContextAdapter : IActivityAuthoringContextAsync
@@ -201,16 +210,32 @@ public sealed class LegacyActivityAuthoringContextAdapter : IActivityAuthoringCo
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanManageActivityDefinitions);
 }
 
-public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContextAsync
+public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContext, IActivityDependencyContextAsync
 {
-    private readonly IActivityDependencyContext _legacy;
+    private readonly IActivityDependencyAuthorizationContext _legacy;
 
-    public LegacyActivityDependencyContextAdapter(IActivityDependencyContext legacy) =>
+    public LegacyActivityDependencyContextAdapter(IActivityDependencyAuthorizationContext legacy) =>
         _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
 
     public string? TenantId => _legacy.TenantId;
+    public string AuthorizationProfile => _legacy.AuthorizationProfile;
+    public bool CanRead(ActivityDefinitionReference reference) => _legacy.CanRead(reference);
     public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
     public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
         cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanRead(reference));
+}
+
+public sealed class LegacyActivityDependencyAsyncAliasAdapter : IActivityDependencyContextAsync
+{
+    private readonly IActivityDependencyAuthorizationContextAsync _legacy;
+
+    public LegacyActivityDependencyAsyncAliasAdapter(IActivityDependencyAuthorizationContextAsync legacy) =>
+        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
+
+    public string? TenantId => _legacy.TenantId;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        _legacy.GetAuthorizationProfileAsync(cancellationToken);
+    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
+        _legacy.CanReadAsync(reference, cancellationToken);
 }

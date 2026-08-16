@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -85,6 +86,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     {
         var services = new ServiceCollection();
 
+        services.AddFoundationIdentityAbstractions();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         // TS-1 (constitution §2.23.1): assert registration presence + resolvability, not internal wiring.
@@ -155,6 +157,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = rootProvider.CreateScope();
         var provider = scope.ServiceProvider;
+        provider.GetRequiredService<IActivityInspectionContextAsync>();
+        provider.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>();
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();

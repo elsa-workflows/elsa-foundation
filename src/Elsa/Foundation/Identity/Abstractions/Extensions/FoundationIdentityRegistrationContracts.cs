@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Abstractions.Extensions;
 
-public sealed record FoundationIdentityReplacementRegistration(
+internal sealed record FoundationIdentityReplacementRegistration(
     Type ContractType,
     Type ImplementationType,
     ServiceDescriptor? Descriptor = null);
