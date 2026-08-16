@@ -55,7 +55,9 @@ current baseline at 164 concrete registrations across 18 owners. The registry is
 allowlist: `TransitionExceptionValidator.ValidateRetirement` requires zero first-party registrations,
 including entries still covered by this file. See
 [`first-party-rest-api-inventory-2026-08.md`](../../../docs/reports/first-party-rest-api-inventory-2026-08.md)
-for the owner breakdown, retained-surface dispositions, and migration-wave links.
+for the owner breakdown, per-owner security/catalog/unloadability dispositions, retained-surface
+dispositions, and migration-wave links. The architecture test also pins each owner's `followUp` to
+its executable wave issue (#1367–#1375), so the closed planning issue cannot silently return.
 
 `frozen-aspnetcore-identity-ef-oracle.json` is stricter than the repository-wide surface inventory:
 it fingerprints every source, project, and migration file in the temporary ASP.NET Core Identity EF

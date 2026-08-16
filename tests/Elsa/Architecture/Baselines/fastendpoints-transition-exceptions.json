@@ -4,7 +4,7 @@
     "endpoints": [
       "POST /interchange/bpmn/analyze"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Activities.Bpmn.Interchange",
     "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.AnalyzeBpmnDocumentEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -15,7 +15,7 @@
     "endpoints": [
       "POST /interchange/bpmn/export"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Activities.Bpmn.Interchange",
     "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ExportBpmnDocumentEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -26,7 +26,7 @@
     "endpoints": [
       "POST /interchange/bpmn/import"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Activities.Bpmn.Interchange",
     "registrationIdentity": "Elsa.Activities.Bpmn.Interchange.Endpoints.ImportBpmnDocumentEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -37,7 +37,7 @@
     "endpoints": [
       "GET /design/activities/authoring-capabilities"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -48,7 +48,7 @@
     "endpoints": [
       "GET /design/activities/availability/settings"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Availability.GetSettings",
     "removalOwner": "First-party REST API Consolidation",
@@ -59,7 +59,7 @@
     "endpoints": [
       "GET /design/activities/availability/diagnostics"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
     "removalOwner": "First-party REST API Consolidation",
@@ -70,7 +70,7 @@
     "endpoints": [
       "PUT /design/activities/availability/settings"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Availability.SaveSettings",
     "removalOwner": "First-party REST API Consolidation",
@@ -81,7 +81,7 @@
     "endpoints": [
       "GET /design/activities/catalog"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -92,7 +92,7 @@
     "endpoints": [
       "POST /design/activities/definitions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.Add",
     "removalOwner": "First-party REST API Consolidation",
@@ -103,7 +103,7 @@
     "endpoints": [
       "POST /design/activities/definitions/{param}/drafts"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.AddDraft",
     "removalOwner": "First-party REST API Consolidation",
@@ -114,7 +114,7 @@
     "endpoints": [
       "GET /design/activities/definitions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -125,7 +125,7 @@
     "endpoints": [
       "GET /design/activities/definitions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -136,7 +136,7 @@
     "endpoints": [
       "GET /design/activities/definitions/{param}/drafts"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.ListDrafts",
     "removalOwner": "First-party REST API Consolidation",
@@ -147,7 +147,7 @@
     "endpoints": [
       "GET /design/activities/definitions/{param}/versions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.ListVersions",
     "removalOwner": "First-party REST API Consolidation",
@@ -158,7 +158,7 @@
     "endpoints": [
       "GET /design/activities/definitions/picker"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.Picker",
     "removalOwner": "First-party REST API Consolidation",
@@ -169,7 +169,7 @@
     "endpoints": [
       "POST /design/activities/definitions/{param}/fork-previews"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.PreviewFork",
     "removalOwner": "First-party REST API Consolidation",
@@ -180,7 +180,7 @@
     "endpoints": [
       "PUT /design/activities/definitions/{param}/recommendation"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.Recommendation",
     "removalOwner": "First-party REST API Consolidation",
@@ -191,7 +191,7 @@
     "endpoints": [
       "PATCH /design/activities/definitions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Definitions.Update",
     "removalOwner": "First-party REST API Consolidation",
@@ -202,7 +202,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/contract-proposals/apply"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.ApplyContractProposal",
     "removalOwner": "First-party REST API Consolidation",
@@ -213,7 +213,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/conflict-copies"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.ConflictCopy",
     "removalOwner": "First-party REST API Consolidation",
@@ -224,7 +224,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/diff"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Diff",
     "removalOwner": "First-party REST API Consolidation",
@@ -235,7 +235,7 @@
     "endpoints": [
       "DELETE /design/activities/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Discard",
     "removalOwner": "First-party REST API Consolidation",
@@ -246,7 +246,7 @@
     "endpoints": [
       "GET /design/activities/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -257,7 +257,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/migrate-provider"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.MigrateProvider",
     "removalOwner": "First-party REST API Consolidation",
@@ -268,7 +268,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/contract-proposals"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.ProposeContract",
     "removalOwner": "First-party REST API Consolidation",
@@ -279,7 +279,7 @@
     "endpoints": [
       "PUT /design/activities/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Replace",
     "removalOwner": "First-party REST API Consolidation",
@@ -290,7 +290,7 @@
     "endpoints": [
       "PATCH /design/activities/drafts/{param}/presentation"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.UpdatePresentation",
     "removalOwner": "First-party REST API Consolidation",
@@ -301,7 +301,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/validate"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Drafts.Validate",
     "removalOwner": "First-party REST API Consolidation",
@@ -312,7 +312,7 @@
     "endpoints": [
       "POST /design/activities/fork-candidates/{param}/apply"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Forks.Apply",
     "removalOwner": "First-party REST API Consolidation",
@@ -323,7 +323,7 @@
     "endpoints": [
       "GET /design/activities/forks/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Forks.GetStatus",
     "removalOwner": "First-party REST API Consolidation",
@@ -334,7 +334,7 @@
     "endpoints": [
       "POST /design/activities/upgrade-plans/{param}/apply"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Apply",
     "removalOwner": "First-party REST API Consolidation",
@@ -345,7 +345,7 @@
     "endpoints": [
       "POST /design/activities/upgrade-plans"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Create",
     "removalOwner": "First-party REST API Consolidation",
@@ -356,7 +356,7 @@
     "endpoints": [
       "GET /design/activities/upgrade-plans/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -367,7 +367,7 @@
     "endpoints": [
       "GET /design/activities/upgrade-plans/{param}/receipts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.UpgradePlans.GetReceipt",
     "removalOwner": "First-party REST API Consolidation",
@@ -378,7 +378,7 @@
     "endpoints": [
       "POST /design/activities/upgrade-plans/{param}/refresh"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Refresh",
     "removalOwner": "First-party REST API Consolidation",
@@ -389,7 +389,7 @@
     "endpoints": [
       "GET /design/activities/versions/{param}/dependencies"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Dependencies",
     "removalOwner": "First-party REST API Consolidation",
@@ -400,7 +400,7 @@
     "endpoints": [
       "GET /design/activities/versions/{param}/diff/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Diff",
     "removalOwner": "First-party REST API Consolidation",
@@ -411,7 +411,7 @@
     "endpoints": [
       "GET /design/activities/versions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -422,7 +422,7 @@
     "endpoints": [
       "POST /design/activities/versions/{param}/restore"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Restore",
     "removalOwner": "First-party REST API Consolidation",
@@ -433,7 +433,7 @@
     "endpoints": [
       "POST /design/activities/versions/{param}/retire"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Retire",
     "removalOwner": "First-party REST API Consolidation",
@@ -444,7 +444,7 @@
     "endpoints": [
       "POST /design/activities/versions/{param}/revoke"
     ],
-    "followUp": "#1350",
+    "followUp": "#1373",
     "owner": "Elsa.Activities.Design.Api",
     "registrationIdentity": "Elsa.Activities.Design.Api.Endpoints.Versions.Revoke",
     "removalOwner": "First-party REST API Consolidation",
@@ -455,7 +455,7 @@
     "endpoints": [
       "POST /_elsa/agent/proposals/{param}/approve"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.ApproveProposal",
     "removalOwner": "First-party REST API Consolidation",
@@ -466,7 +466,7 @@
     "endpoints": [
       "GET /_elsa/agent/audit"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.Audit",
     "removalOwner": "First-party REST API Consolidation",
@@ -477,7 +477,7 @@
     "endpoints": [
       "GET /_elsa/agent/bootstrap"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.Bootstrap",
     "removalOwner": "First-party REST API Consolidation",
@@ -488,7 +488,7 @@
     "endpoints": [
       "POST /_elsa/agent/sessions/{param}/turns/{param}/cancel"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.CancelTurn",
     "removalOwner": "First-party REST API Consolidation",
@@ -499,7 +499,7 @@
     "endpoints": [
       "POST /_elsa/agent/sessions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.CreateSession",
     "removalOwner": "First-party REST API Consolidation",
@@ -510,7 +510,7 @@
     "endpoints": [
       "POST /_elsa/agent/proposals/{param}/deny"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.DenyProposal",
     "removalOwner": "First-party REST API Consolidation",
@@ -521,7 +521,7 @@
     "endpoints": [
       "POST /_elsa/agent/proposals/{param}/execute"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.ExecuteProposal",
     "removalOwner": "First-party REST API Consolidation",
@@ -532,7 +532,7 @@
     "endpoints": [
       "POST /_elsa/agent/feedback"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.Feedback",
     "removalOwner": "First-party REST API Consolidation",
@@ -543,7 +543,7 @@
     "endpoints": [
       "GET /_elsa/agent/sessions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.GetSession",
     "removalOwner": "First-party REST API Consolidation",
@@ -554,7 +554,7 @@
     "endpoints": [
       "POST /_elsa/agent/sessions/{param}/messages"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.PostMessage",
     "removalOwner": "First-party REST API Consolidation",
@@ -565,7 +565,7 @@
     "endpoints": [
       "GET /_elsa/agent/sessions/{param}/stream"
     ],
-    "followUp": "#1350",
+    "followUp": "#1370",
     "owner": "Elsa.Agent.Api",
     "registrationIdentity": "Elsa.Agent.Api.Endpoints.StreamSession",
     "removalOwner": "First-party REST API Consolidation",
@@ -576,7 +576,7 @@
     "endpoints": [
       "GET /capabilities"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Api.Capabilities",
     "registrationIdentity": "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
     "removalOwner": "First-party REST API Consolidation",
@@ -587,7 +587,7 @@
     "endpoints": [
       "GET /_elsa/attention/items"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Attention.Api",
     "registrationIdentity": "Elsa.Attention.Api.Endpoints.GetAttentionItems",
     "removalOwner": "First-party REST API Consolidation",
@@ -596,7 +596,7 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion.LogsIngestionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -605,7 +605,7 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion.MetricsIngestionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -614,7 +614,7 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.Ingestion.TracesIngestionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -625,7 +625,7 @@
     "endpoints": [
       "GET /diagnostics/opentelemetry/collector-configuration"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.CollectorConfiguration.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -636,7 +636,7 @@
     "endpoints": [
       "POST /diagnostics/opentelemetry/logs/search"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Logs.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -647,7 +647,7 @@
     "endpoints": [
       "POST /diagnostics/opentelemetry/metrics/search"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Metrics.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -658,7 +658,7 @@
     "endpoints": [
       "POST /diagnostics/opentelemetry/resources/search"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Resources.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -669,7 +669,7 @@
     "endpoints": [
       "GET /diagnostics/opentelemetry/storage"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Storage.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -680,7 +680,7 @@
     "endpoints": [
       "GET /diagnostics/opentelemetry/traces/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Trace.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -691,7 +691,7 @@
     "endpoints": [
       "POST /diagnostics/opentelemetry/traces/search"
     ],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetry.Traces.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -700,7 +700,7 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [],
-    "followUp": "#1350",
+    "followUp": "#1371",
     "owner": "Elsa.Diagnostics.OpenTelemetry",
     "registrationIdentity": "Elsa.Diagnostics.OpenTelemetry.Endpoints.StreamEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -711,7 +711,7 @@
     "endpoints": [
       "GET /expressions/descriptors"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Expressions.Api",
     "registrationIdentity": "Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors",
     "removalOwner": "First-party REST API Consolidation",
@@ -722,7 +722,7 @@
     "endpoints": [
       "GET /expressions/variable-types"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Expressions.Api",
     "registrationIdentity": "Elsa.Expressions.Api.Endpoints.ListVariableTypeDescriptors",
     "removalOwner": "First-party REST API Consolidation",
@@ -733,7 +733,7 @@
     "endpoints": [
       "GET /javascript/documents/render"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Expressions.JavaScript.Rendering",
     "registrationIdentity": "Elsa.Expressions.JavaScript.Rendering.Endpoints.RenderEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -744,7 +744,7 @@
     "endpoints": [
       "GET /_elsa/identity/bootstrap"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Bootstrap",
     "removalOwner": "First-party REST API Consolidation",
@@ -755,7 +755,7 @@
     "endpoints": [
       "GET /_elsa/identity/capabilities"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Capabilities",
     "removalOwner": "First-party REST API Consolidation",
@@ -766,7 +766,7 @@
     "endpoints": [
       "GET /_elsa/identity/challenge/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Challenge",
     "removalOwner": "First-party REST API Consolidation",
@@ -777,7 +777,7 @@
     "endpoints": [
       "POST /_elsa/identity/logout/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Logout",
     "removalOwner": "First-party REST API Consolidation",
@@ -788,7 +788,7 @@
     "endpoints": [
       "POST /_elsa/identity/refresh"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Refresh",
     "removalOwner": "First-party REST API Consolidation",
@@ -799,7 +799,7 @@
     "endpoints": [
       "GET /_elsa/identity/session"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Session",
     "removalOwner": "First-party REST API Consolidation",
@@ -810,7 +810,7 @@
     "endpoints": [
       "GET /_elsa/identity/token"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.Api",
     "registrationIdentity": "Elsa.Foundation.Identity.Api.Endpoints.Token",
     "removalOwner": "First-party REST API Consolidation",
@@ -821,7 +821,7 @@
     "endpoints": [
       "POST /_elsa/identity/login"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.AspNetCoreIdentity",
     "registrationIdentity": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.Login",
     "removalOwner": "First-party REST API Consolidation",
@@ -832,7 +832,7 @@
     "endpoints": [
       "GET /_elsa/identity/login"
     ],
-    "followUp": "#1350",
+    "followUp": "#1369",
     "owner": "Elsa.Foundation.Identity.AspNetCoreIdentity",
     "registrationIdentity": "Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints.LoginPage",
     "removalOwner": "First-party REST API Consolidation",
@@ -843,7 +843,7 @@
     "endpoints": [
       "POST /modularity/features/apply"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Modularity.Api",
     "registrationIdentity": "Elsa.Modularity.Api.Endpoints.Apply",
     "removalOwner": "First-party REST API Consolidation",
@@ -854,7 +854,7 @@
     "endpoints": [
       "GET /modularity/features"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Modularity.Api",
     "registrationIdentity": "Elsa.Modularity.Api.Endpoints.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -865,7 +865,7 @@
     "endpoints": [
       "GET /_elsa/workflows/dashboard/definitions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Workflows.Dashboard",
     "registrationIdentity": "Elsa.Workflows.Dashboard.GetWorkflowPortfolio",
     "removalOwner": "First-party REST API Consolidation",
@@ -876,7 +876,7 @@
     "endpoints": [
       "GET /_elsa/workflows/dashboard/runs"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Workflows.Dashboard",
     "registrationIdentity": "Elsa.Workflows.Dashboard.GetWorkflowRunHealth",
     "removalOwner": "First-party REST API Consolidation",
@@ -887,7 +887,7 @@
     "endpoints": [
       "POST /design/workflows/scoped-variables/analyze"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.AnalyzeScopedVariables",
     "removalOwner": "First-party REST API Consolidation",
@@ -898,7 +898,7 @@
     "endpoints": [
       "POST /design/workflows/expression-tooling/completions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.CompleteExpressionTooling",
     "removalOwner": "First-party REST API Consolidation",
@@ -909,7 +909,7 @@
     "endpoints": [
       "GET /design/workflows/expression-tooling/descriptors"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.DescribeExpressionTooling",
     "removalOwner": "First-party REST API Consolidation",
@@ -920,7 +920,7 @@
     "endpoints": [
       "POST /design/workflows/expression-tooling/hover"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.HoverExpressionTooling",
     "removalOwner": "First-party REST API Consolidation",
@@ -931,7 +931,7 @@
     "endpoints": [
       "POST /design/workflows/activities/{param}/inputs/{param}/options"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ResolveActivityInputOptions",
     "removalOwner": "First-party REST API Consolidation",
@@ -942,7 +942,7 @@
     "endpoints": [
       "POST /design/workflows/expression-tooling/context"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ResolveExpressionToolingContext",
     "removalOwner": "First-party REST API Consolidation",
@@ -953,7 +953,7 @@
     "endpoints": [
       "POST /design/workflows/expression-tooling/symbols"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.SearchExpressionToolingSymbols",
     "removalOwner": "First-party REST API Consolidation",
@@ -964,7 +964,7 @@
     "endpoints": [
       "POST /design/workflows/expression-tooling/validate"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Authoring.ValidateExpressionTooling",
     "removalOwner": "First-party REST API Consolidation",
@@ -975,7 +975,7 @@
     "endpoints": [
       "POST /design/workflows/definitions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Add",
     "removalOwner": "First-party REST API Consolidation",
@@ -986,7 +986,7 @@
     "endpoints": [
       "DELETE /design/workflows/definitions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Delete",
     "removalOwner": "First-party REST API Consolidation",
@@ -997,7 +997,7 @@
     "endpoints": [
       "DELETE /design/workflows/definitions/{param}/permanent"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently",
     "removalOwner": "First-party REST API Consolidation",
@@ -1008,7 +1008,7 @@
     "endpoints": [
       "GET /design/workflows/definitions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -1019,7 +1019,7 @@
     "endpoints": [
       "GET /design/workflows/definitions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -1030,7 +1030,7 @@
     "endpoints": [
       "POST /design/workflows/definitions/{param}/restore"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore",
     "removalOwner": "First-party REST API Consolidation",
@@ -1041,7 +1041,7 @@
     "endpoints": [
       "POST /design/workflows/definitions/submit"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit",
     "removalOwner": "First-party REST API Consolidation",
@@ -1052,7 +1052,7 @@
     "endpoints": [
       "GET /design/workflows/definitions/submit/schema"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.SubmitSchema",
     "removalOwner": "First-party REST API Consolidation",
@@ -1063,7 +1063,7 @@
     "endpoints": [
       "PATCH /design/workflows/definitions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Definitions.Update",
     "removalOwner": "First-party REST API Consolidation",
@@ -1074,7 +1074,7 @@
     "endpoints": [
       "DELETE /design/workflows/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Discard",
     "removalOwner": "First-party REST API Consolidation",
@@ -1085,7 +1085,7 @@
     "endpoints": [
       "GET /design/workflows/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -1096,7 +1096,7 @@
     "endpoints": [
       "POST /design/workflows/drafts/{param}/promote"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote",
     "removalOwner": "First-party REST API Consolidation",
@@ -1107,7 +1107,7 @@
     "endpoints": [
       "POST /design/workflows/drafts/{param}/promotion-preflight"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight",
     "removalOwner": "First-party REST API Consolidation",
@@ -1118,7 +1118,7 @@
     "endpoints": [
       "PUT /design/workflows/drafts/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace",
     "removalOwner": "First-party REST API Consolidation",
@@ -1129,7 +1129,7 @@
     "endpoints": [
       "GET /design/workflows/drafts/{param}/validations"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations",
     "removalOwner": "First-party REST API Consolidation",
@@ -1140,7 +1140,7 @@
     "endpoints": [
       "GET /design/workflows/structures"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Structures.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -1151,7 +1151,7 @@
     "endpoints": [
       "POST /design/workflows/versions/ingest"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Versions.Add",
     "removalOwner": "First-party REST API Consolidation",
@@ -1162,7 +1162,7 @@
     "endpoints": [
       "GET /design/workflows/versions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Versions.Get",
     "removalOwner": "First-party REST API Consolidation",
@@ -1173,7 +1173,7 @@
     "endpoints": [
       "GET /design/workflows/definitions/{param}/versions"
     ],
-    "followUp": "#1350",
+    "followUp": "#1372",
     "owner": "Elsa.Workflows.Design.Api",
     "registrationIdentity": "Elsa.Workflows.Design.Api.Endpoints.Versions.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -1184,7 +1184,7 @@
     "endpoints": [
       "DELETE /_elsa/execution-evidence"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Workflows.ExecutionEvidence",
     "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.DeleteEvidence",
     "removalOwner": "First-party REST API Consolidation",
@@ -1195,7 +1195,7 @@
     "endpoints": [
       "GET /_elsa/execution-evidence"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Workflows.ExecutionEvidence",
     "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetCorrelatedEvidence",
     "removalOwner": "First-party REST API Consolidation",
@@ -1206,7 +1206,7 @@
     "endpoints": [
       "GET /_elsa/execution-evidence/workflows/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa.Workflows.ExecutionEvidence",
     "registrationIdentity": "Elsa.Workflows.ExecutionEvidence.Endpoints.GetWorkflowEvidence",
     "removalOwner": "First-party REST API Consolidation",
@@ -1217,7 +1217,7 @@
     "endpoints": [
       "POST /publishing/activity-drafts/{param}/test-runs"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ActivityDraftTestRunEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1228,7 +1228,7 @@
     "endpoints": [
       "POST /publishing/activity-test-runs/{param}/cancel"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.CancelActivityDraftTestRunEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1239,7 +1239,7 @@
     "endpoints": [
       "GET /publishing/activities/{param}/construct"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.Construct",
     "removalOwner": "First-party REST API Consolidation",
@@ -1250,7 +1250,7 @@
     "endpoints": [
       "GET /publishing/activity-drafts/{param}/test-runs/idempotency/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunByIdempotencyKeyEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1261,7 +1261,7 @@
     "endpoints": [
       "GET /publishing/activity-test-runs/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityDraftTestRunEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1272,7 +1272,7 @@
     "endpoints": [
       "GET /design/activities/publications/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetActivityPublicationReceiptEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1283,7 +1283,7 @@
     "endpoints": [
       "GET /publishing/workflows/{param}/slots/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetPublicationSlotEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1294,7 +1294,7 @@
     "endpoints": [
       "GET /publishing/workflows/{param}/policy"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetWorkflowPublicationPolicyEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1305,7 +1305,7 @@
     "endpoints": [
       "GET /publishing/activities"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.List",
     "removalOwner": "First-party REST API Consolidation",
@@ -1316,7 +1316,7 @@
     "endpoints": [
       "GET /publishing/incident-strategies"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListIncidentStrategies",
     "removalOwner": "First-party REST API Consolidation",
@@ -1327,7 +1327,7 @@
     "endpoints": [
       "GET /publishing/workflows/{param}/slots"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListPublicationSlotsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1338,7 +1338,7 @@
     "endpoints": [
       "GET /publishing/value-conversion/profiles"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListValueConversionProfiles",
     "removalOwner": "First-party REST API Consolidation",
@@ -1349,7 +1349,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/publication-preflight"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightActivityDraftPublicationEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1358,9 +1358,9 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}}/preflight"
+      "POST /publishing/workflows/{param:regex(^(?!drafts$).+$)}}/preflight"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightWorkflowPublicationEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1371,7 +1371,7 @@
     "endpoints": [
       "POST /publishing/workflows/preflight"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PreflightWorkflowPublicationSnapshotEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1382,7 +1382,7 @@
     "endpoints": [
       "POST /design/activities/drafts/{param}/publish"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PublishActivityDraftEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1391,9 +1391,9 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}}/publish"
+      "POST /publishing/workflows/{param:regex(^(?!drafts$).+$)}}/publish"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1404,7 +1404,7 @@
     "endpoints": [
       "POST /publishing/workflows/{param}/slots/{param}/restore"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.RestorePublicationSlotEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1415,7 +1415,7 @@
     "endpoints": [
       "POST /publishing/preflight"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.RuntimeRequirementPreflightEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1426,7 +1426,7 @@
     "endpoints": [
       "PUT /publishing/workflows/{param}/policy"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.SetWorkflowPublicationPolicyEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1435,9 +1435,9 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}}/test-runs"
+      "POST /publishing/workflows/{param:regex(^(?!drafts$).+$)}}/test-runs"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.Start",
     "removalOwner": "First-party REST API Consolidation",
@@ -1448,7 +1448,7 @@
     "endpoints": [
       "POST /publishing/workflows/drafts/test-runs"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.TestRuns.StartDraft",
     "removalOwner": "First-party REST API Consolidation",
@@ -1459,7 +1459,7 @@
     "endpoints": [
       "DELETE /publishing/workflows/{param}/slots/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.UnpublishPublicationSlotEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1470,7 +1470,7 @@
     "endpoints": [
       "POST /runtime/workflows/alteration-plans/{param}/cancel"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.CancelWorkflowAlterationPlanEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1481,7 +1481,7 @@
     "endpoints": [
       "GET /runtime/workflows/alteration-plans/{param}/jobs/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.GetWorkflowAlterationJobEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1492,7 +1492,7 @@
     "endpoints": [
       "GET /runtime/workflows/alteration-plans/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.GetWorkflowAlterationPlanEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1503,7 +1503,7 @@
     "endpoints": [
       "GET /runtime/workflows/alteration-plans/{param}/jobs/page"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.PageWorkflowAlterationJobsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1514,7 +1514,7 @@
     "endpoints": [
       "POST /runtime/workflows/alteration-plans"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.SubmitWorkflowAlterationPlanEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1525,7 +1525,7 @@
     "endpoints": [
       "POST /runtime/workflows/stimuli"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.DispatchStimulusEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1536,7 +1536,7 @@
     "endpoints": [
       "POST /runtime/workflows/executables/{param}/execute"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.Execute",
     "removalOwner": "First-party REST API Consolidation",
@@ -1547,7 +1547,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}/activity-executions/{param}/descendants"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionDescendantsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1558,7 +1558,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}/activity-executions/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1569,7 +1569,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}/activity-executions/{param}/layout"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionLayoutEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1580,7 +1580,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}/activity-executions/{param}/value-evidence/{param}/payload"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetActivityExecutionValuePayloadEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1591,7 +1591,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetInstance",
     "removalOwner": "First-party REST API Consolidation",
@@ -1602,7 +1602,7 @@
     "endpoints": [
       "GET /runtime/workflows/dispatches/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowDispatchEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1613,7 +1613,7 @@
     "endpoints": [
       "GET /runtime/workflows/executables/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowExecutableEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1624,7 +1624,7 @@
     "endpoints": [
       "GET /runtime/workflows/executables/{param}/source-references/{param}/input-sources"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowExecutableInputSourcesEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1635,7 +1635,7 @@
     "endpoints": [
       "GET /runtime/workflows/executables/{param}/provenance"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowExecutableProvenanceEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1646,7 +1646,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/{param}/incidents"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListIncidentsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1657,7 +1657,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListInstances",
     "removalOwner": "First-party REST API Consolidation",
@@ -1668,7 +1668,7 @@
     "endpoints": [
       "GET /runtime/workflows/instances/page"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListInstancesPage",
     "removalOwner": "First-party REST API Consolidation",
@@ -1679,7 +1679,7 @@
     "endpoints": [
       "GET /runtime/workflows/dispatches"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowDispatchesEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1690,7 +1690,7 @@
     "endpoints": [
       "GET /runtime/workflows/executables"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowExecutablesEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1701,7 +1701,7 @@
     "endpoints": [
       "POST /runtime/workflows/dispatches/{param}/redrive"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.RedriveWorkflowDispatchEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1712,7 +1712,7 @@
     "endpoints": [
       "GET /runtime/workflows/diagnostics/settings"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.RuntimeDiagnostics.GetSettings",
     "removalOwner": "First-party REST API Consolidation",
@@ -1723,7 +1723,7 @@
     "endpoints": [
       "PUT /runtime/workflows/diagnostics/settings"
     ],
-    "followUp": "#1350",
+    "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.RuntimeDiagnostics.SaveSettings",
     "removalOwner": "First-party REST API Consolidation",
@@ -1734,7 +1734,7 @@
     "endpoints": [
       "POST /javascript/execute"
     ],
-    "followUp": "#1350",
+    "followUp": "#1367",
     "owner": "Elsa.Workflows.Runtime.JavaScript",
     "registrationIdentity": "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Endpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1745,7 +1745,7 @@
     "endpoints": [
       "GET /migration/elsa3/reusable-activities/collections/{param}/analysis"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa3.Activities.Design.Import",
     "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.AnalyzeReusableActivityCollectionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1756,7 +1756,7 @@
     "endpoints": [
       "POST /migration/elsa3/reusable-activities/collections/{param}/apply"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa3.Activities.Design.Import",
     "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ApplyReusableActivityImportEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1767,7 +1767,7 @@
     "endpoints": [
       "POST /migration/elsa3/reusable-activities/collections/{param}/selection"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa3.Activities.Design.Import",
     "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.ExpandReusableActivityImportSelectionEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1778,7 +1778,7 @@
     "endpoints": [
       "GET /migration/elsa3/reusable-activities/imports/{param}"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa3.Activities.Design.Import",
     "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.GetReusableActivityImportStatusEndpoint",
     "removalOwner": "First-party REST API Consolidation",
@@ -1789,7 +1789,7 @@
     "endpoints": [
       "POST /migration/elsa3/reusable-activities/collections"
     ],
-    "followUp": "#1350",
+    "followUp": "#1368",
     "owner": "Elsa3.Activities.Design.Import",
     "registrationIdentity": "Elsa3.Activities.Design.Import.Endpoints.UploadReusableActivityCollectionEndpoint",
     "removalOwner": "First-party REST API Consolidation",

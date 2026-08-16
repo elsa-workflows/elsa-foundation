@@ -245,18 +245,38 @@ public sealed class FastEndpointsRegistrationScanner
         {
             var owner = type.Owner;
             var identity = baseType.Identity.TrimStart('.');
-            if (_byIdentity.TryGetValue((owner, identity, baseType.GenericArity), out var exact))
-                return exact;
+            foreach (var candidateIdentity in GetIdentityCandidates(type, identity))
+            {
+                if (_byIdentity.TryGetValue((owner, candidateIdentity, baseType.GenericArity), out var exact))
+                    return exact;
+
+                if (_byGlobalIdentity.TryGetValue((candidateIdentity, baseType.GenericArity), out var globalExact))
+                    return globalExact;
+            }
 
             var candidates = _bySimpleName.GetValueOrDefault((owner, SimpleTypeName(identity), baseType.GenericArity)) ?? [];
             if (candidates.Length == 1)
                 return candidates[0];
 
-            if (_byGlobalIdentity.TryGetValue((identity, baseType.GenericArity), out var globalExact))
-                return globalExact;
-
             var globalCandidates = _byGlobalSimpleName.GetValueOrDefault((SimpleTypeName(identity), baseType.GenericArity)) ?? [];
             return globalCandidates.Length == 1 ? globalCandidates[0] : null;
+        }
+
+        private static IEnumerable<string> GetIdentityCandidates(FastEndpointsType type, string identity)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var scope = type.Identity.LastIndexOf('.');
+            while (scope > 0)
+            {
+                var containingScope = type.Identity[..scope];
+                var candidate = $"{containingScope}.{identity}";
+                if (seen.Add(candidate))
+                    yield return candidate;
+                scope = containingScope.LastIndexOf('.');
+            }
+
+            if (seen.Add(identity))
+                yield return identity;
         }
 
         private static bool IsKnownEndpointBase(FastEndpointsTypeReference baseType)

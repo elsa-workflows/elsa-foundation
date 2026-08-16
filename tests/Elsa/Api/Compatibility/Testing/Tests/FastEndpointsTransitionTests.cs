@@ -189,6 +189,42 @@ public sealed class FastEndpointsTransitionTests
     }
 
     [Fact]
+    public void Resolves_a_same_namespace_base_before_simple_name_fallback_and_fails_closed_when_ambiguous()
+    {
+        const string source = """
+            namespace First
+            {
+                internal abstract class SharedEndpoint<TRequest> : ElsaEndpoint<TRequest>
+                {
+                    public override void Configure() => Get("/api/first");
+                }
+
+                internal sealed class FirstConcreteEndpoint : SharedEndpoint<string> { }
+            }
+
+            namespace Second
+            {
+                internal abstract class SharedEndpoint<TRequest> : ElsaEndpoint<TRequest>
+                {
+                    public override void Configure() => Get("/api/second");
+                }
+            }
+
+            namespace Third
+            {
+                internal sealed class AmbiguousConcreteEndpoint : SharedEndpoint<string> { }
+            }
+            """;
+
+        var registrations = new FastEndpointsRegistrationScanner().Scan(source, "features");
+
+        var first = Assert.Single(registrations);
+        Assert.Equal("First.FirstConcreteEndpoint", first.Identity);
+        Assert.Equal(["GET /api/first"], first.Endpoints.Select(endpoint => endpoint.ToString()));
+        Assert.DoesNotContain(registrations, registration => registration.Identity.Contains("Ambiguous", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scans_multiple_methods_and_ignored_logs_sources_but_excludes_bin_and_obj_documents()
     {
         const string source = """

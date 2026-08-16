@@ -41,6 +41,13 @@ public sealed class FastEndpointsTransitionTests
 
         var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "fastendpoints-transition-exceptions.json");
         var reviewed = BaselineFile.Load<FastEndpointsTransitionException[]>(baselinePath);
+        Assert.All(reviewed, exception =>
+        {
+            Assert.True(ExpectedRemovalWaves.TryGetValue(exception.Owner, out var expectedWave),
+                $"No executable removal wave is assigned to owner '{exception.Owner}'.");
+            Assert.Equal(expectedWave, exception.FollowUp);
+            Assert.NotEqual("#1350", exception.FollowUp);
+        });
 
         var result = TransitionExceptionValidator.Reconcile(registrations, reviewed);
 
@@ -104,6 +111,29 @@ public sealed class FastEndpointsTransitionTests
 
         throw new InvalidOperationException($"No owning project was found for '{sourcePath}'.");
     }
+
+    private static IReadOnlyDictionary<string, string> ExpectedRemovalWaves { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Elsa.Activities.Bpmn.Interchange"] = "#1368",
+            ["Elsa.Activities.Design.Api"] = "#1373",
+            ["Elsa.Agent.Api"] = "#1370",
+            ["Elsa.Api.Capabilities"] = "#1367",
+            ["Elsa.Attention.Api"] = "#1367",
+            ["Elsa.Diagnostics.OpenTelemetry"] = "#1371",
+            ["Elsa.Expressions.Api"] = "#1367",
+            ["Elsa.Expressions.JavaScript.Rendering"] = "#1367",
+            ["Elsa.Foundation.Identity.Api"] = "#1369",
+            ["Elsa.Foundation.Identity.AspNetCoreIdentity"] = "#1369",
+            ["Elsa.Modularity.Api"] = "#1368",
+            ["Elsa.Workflows.Dashboard"] = "#1367",
+            ["Elsa.Workflows.Design.Api"] = "#1372",
+            ["Elsa.Workflows.ExecutionEvidence"] = "#1368",
+            ["Elsa.Workflows.Publishing.Api"] = "#1374",
+            ["Elsa.Workflows.Runtime.Api"] = "#1375",
+            ["Elsa.Workflows.Runtime.JavaScript"] = "#1367",
+            ["Elsa3.Activities.Design.Import"] = "#1368"
+        };
 
     private static string RepoRoot { get; } = FindRepoRoot();
 

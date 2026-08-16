@@ -1,7 +1,8 @@
 # First-party REST API inventory evidence
 
 Status: reviewed implementation evidence for [issue #1364](https://github.com/elsa-workflows/elsa-foundation/issues/1364)
-and planning parent [#1350](https://github.com/elsa-workflows/elsa-foundation/issues/1350).
+and the canonical [first-party REST API migration-wave report](first-party-rest-api-migration-waves-2026-08.md)
+from merged planning PR #1377.
 
 The architecture transition guard now discovers FastEndpoints registrations from the source graph,
 not from direct base-name matches. It follows local and cross-project endpoint bases transitively,
@@ -43,8 +44,8 @@ The reviewed machine-readable registry is
 [`fastendpoints-transition-exceptions.json`](../../tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json).
 Each entry records the concrete registration identity, owner, normalized route/method identities when
 statically resolvable, owner-source fingerprint for computed routes, removal owner, and the linked
-transition follow-up (#1350). The owner table records the preferred removal wave for each assembly.
-The architecture test pins both the total and every owner count, then reconciles the registry with
+executable removal wave (#1367–#1375). The architecture test pins both the total and every owner
+count, and rejects generic or closed planning follow-ups before reconciling the registry with
 deterministic diagnostics.
 
 The previous registry contained 91 entries. The scanner therefore closes the **73-registration gap**
@@ -60,18 +61,54 @@ caused by indirect inheritance and the abstract/concrete OTLP distinction:
 | All other owners | 41 | 41 | 0 |
 | **Total** | **164** | **91** | **73** |
 
-## Security, authoring, and retained surfaces
+## Per-owner security, catalog, and unloadability disposition
 
 FastEndpoints registrations are transitional module-owned authoring surfaces. Their route/method and
-owner evidence is reconciled by the compatibility scanner; permission ownership and security
-disposition remain validated by the existing endpoint manifest and security architecture tests:
+owner evidence is reconciled by the compatibility scanner. The table below preserves the current
+source-level security form and the catalog or explicit-wave gap for every owner. `Catalog-owned` means
+the endpoint uses a permission key with an active feature/identity contributor; `catalog gap` means the
+current explicit key, policy, or wildcard needs a migration-wave disposition. `Required / FE exception`
+records the current registry's `dynamicallyUnloadable: false` transition exception; every executable
+owner wave must replace it with collectible-context evidence. Runtime endpoint metadata is not inferred
+from this static table.
+
+| Owner assembly | Executable wave | Registrations | Unloadability | Current security form | Catalog / explicit-wave disposition |
+|---|---:|---:|---|---|---|
+| `Elsa.Activities.Bpmn.Interchange` | #1368 | 3 | Required / FE exception | `PermissionNames.BpmnInterchangeRead/Manage` | Catalog-owned |
+| `Elsa.Activities.Design.Api` | #1373 | 38 | Required / FE exception | `PermissionNames.ActivityDesignRead/Manage` | Catalog-owned |
+| `Elsa.Agent.Api` | #1370 | 11 | Required / FE exception | Explicit `AgentPermissionKeys.Use/Proposals/Audit` | Catalog gap; wave must add contributor/catalog ownership |
+| `Elsa.Api.Capabilities` | #1367 | 1 | Required / FE exception | `PermissionNames.ApiCapabilitiesRead` | Catalog-owned |
+| `Elsa.Attention.Api` | #1367 | 1 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add an owned action permission |
+| `Elsa.Diagnostics.OpenTelemetry` | #1371 | 11 | Required / FE exception | `Diagnostics:OpenTelemetry` policy; OTLP ingestion uses API-key/loopback transport auth with anonymous framework metadata | Policy/transport exception; wave must add catalog ownership and retain OTLP auth |
+| `Elsa.Expressions.Api` | #1367 | 2 | Required / FE exception | `PermissionNames.ExpressionsRead` | Catalog-owned |
+| `Elsa.Expressions.JavaScript.Rendering` | #1367 | 1 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add an owned action permission |
+| `Elsa.Foundation.Identity.Api` | #1369 | 7 | Required / FE exception | Public auth protocol routes plus `IdentityProvidersRead` | Mixed: public protocol by design; protected capability is identity-catalog-owned |
+| `Elsa.Foundation.Identity.AspNetCoreIdentity` | #1369 | 2 | Required / FE exception | Public login page/form protocol routes | Explicit public protocol; no catalog permission by design |
+| `Elsa.Modularity.Api` | #1368 | 2 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Module-management contributor exists; wave must bind explicit owned read/manage permissions |
+| `Elsa.Workflows.Dashboard` | #1367 | 2 | Required / FE exception | `WorkflowsDashboardPermissions.Read` | Feature-contributor catalog-owned |
+| `Elsa.Workflows.Design.Api` | #1372 | 27 | Required / FE exception | `PermissionNames.WorkflowDesignRead/Manage` | Catalog-owned |
+| `Elsa.Workflows.ExecutionEvidence` | #1368 | 3 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add catalog-owned read/delete/manage permissions |
+| `Elsa.Workflows.Publishing.Api` | #1374 | 23 | Required / FE exception | `PermissionNames.WorkflowPublishingRead/Manage` | Catalog-owned |
+| `Elsa.Workflows.Runtime.Api` | #1375 | 24 | Required / FE exception | `PermissionNames.WorkflowRuntimeRead/Manage/Execute` plus publishing read | Catalog-owned |
+| `Elsa.Workflows.Runtime.JavaScript` | #1367 | 1 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add an owned action permission |
+| `Elsa3.Activities.Design.Import` | #1368 | 5 | Required / FE exception | `PermissionNames.Elsa3ImportRead/Manage` | Catalog-owned |
+| **Total** |  | **164** |  |  | **18 owners; no generic follow-up** |
+
+The reusable gates remain explicit and bounded; they do not claim complete runtime metadata coverage
+for all 164 registrations:
 
 - [`EndpointManifestBuilder`](../../tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointManifestBuilder.cs)
   requires one owner, one authoring model, and one security disposition per published endpoint.
 - [`EndpointSecurityTests`](../../tests/Elsa/Architecture/EndpointSecurityTests.cs) verifies canonical
   permission declarations and catalog ownership for current first-party management endpoint roots.
 - The checked-in [`endpoint-manifest.json`](../../tests/Elsa/Architecture/Baselines/endpoint-manifest.json)
-  provides reviewed runtime evidence for representative permission-protected routes.
+  is an eight-route runtime canary. Each migration wave must add its own before/after manifest and
+  security/catalog evidence; this canary is not evidence that all 164 registrations share one active
+  host composition.
+
+The canonical planning report records the owner-specific unloadability gates and the retained public,
+host-credential, named-policy, CShells, and dynamic-route dispositions. Those retained surfaces are
+separate from the 164 FastEndpoints registrations and are listed below for inventory completeness:
 
 The following surfaces are intentionally not FastEndpoints registrations and must not be counted in
 the 164-entry migration total:
