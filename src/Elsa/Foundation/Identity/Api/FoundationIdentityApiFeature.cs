@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.Api;
     DisplayName = "Foundation Identity API",
     Description = "Exposes provider-agnostic identity bootstrap, capability, session, challenge, logout, and token refresh endpoints."
 )]
-public sealed class FoundationIdentityApiFeature : IWebShellFeature
+public class FoundationIdentityApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {

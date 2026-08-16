@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity;
     DisplayName = "Foundation Identity ASP.NET Core Identity",
     Description = "Registers the ASP.NET Core Identity-backed IAM substrate, cookie sign-in surface, and principal factory."
 )]
-public sealed class AspNetCoreIdentityFeature : IWebShellFeature
+public class AspNetCoreIdentityFeature : IWebShellFeature
 {
     [ManifestSetting(DisplayName = "Is default provider", Description = "Advertises this password/login-page provider as the default in bootstrap, so Studio challenges it (redirecting to the login page) when a session is required.", Category = "Identity", DefaultValue = "false")]
     public bool IsDefault { get; set; }

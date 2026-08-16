@@ -66,3 +66,28 @@ interactive-scheme options or the ASP.NET Core Identity provider module and its 
 descriptor. The route data sources and provider are then cleared/disposed before weak-reference
 verification of the load context, owner assembly, and mapper type. Both owners collect in every
 cycle; neither request binding nor response serialization uses reflection-based metadata.
+
+## Final validation
+
+Validated on 2026-08-16 after rebasing onto the merged Wave 2 commit
+`d8fd76c6b973f142a0d74e099ed33d3a19428d9f`:
+
+- Foundation Identity suite: 256 passed, 0 failed.
+- Focused transition/security gate: 18 passed, 0 failed.
+- Full architecture suite: 423 passed, 0 failed.
+- Full `Elsa.Server.slnx` build: 0 errors; 213 pre-existing package/compiler/analyzer warnings.
+- Live rebuilt Workbench with a freshly deployed SQLite schema: identity GET suite 4/4 and
+  identity write suite 4/4, including login, 401 invalid credentials, missing refresh-token 401,
+  and logout 204.
+- Generated maps: refreshed after Wave 2 and this work-unit specification; freshness check green.
+- Transition registry: exactly the seven `Elsa.Foundation.Identity.Api` and two
+  `Elsa.Foundation.Identity.AspNetCoreIdentity` entries were removed; no entry was added; the
+  combined registry is 134 registrations across six remaining owners.
+
+The live E2E run used a disposable local Groundwork SQLite database. The server was shut down
+cleanly and the database, WAL/SHM files, and schema lock were removed after the run.
+
+Independent five-axis review completed with 0 Critical and 0 Required findings. Correctness and
+security, contract evidence, architecture/API compatibility, code quality/style, and operational
+unloadability all passed. The only advisory was final Spec Kit bookkeeping, which was completed in
+the same final commit.

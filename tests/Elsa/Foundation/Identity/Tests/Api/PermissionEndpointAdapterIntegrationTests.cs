@@ -1,6 +1,3 @@
-using System.Net;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -17,6 +14,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
