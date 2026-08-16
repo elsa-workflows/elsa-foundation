@@ -1,11 +1,11 @@
-using System.Buffers;
-using System.IO.Compression;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Ingestion.HttpProtobuf;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System.Buffers;
+using System.IO.Compression;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Ingestion;
 

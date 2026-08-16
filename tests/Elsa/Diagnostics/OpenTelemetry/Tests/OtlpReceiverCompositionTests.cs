@@ -1,5 +1,3 @@
-using System.IO.Compression;
-using System.Net;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -13,6 +11,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.IO.Compression;
+using System.Net;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests.Ingestion;
 
