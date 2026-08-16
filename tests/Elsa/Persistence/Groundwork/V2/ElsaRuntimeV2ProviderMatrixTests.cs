@@ -55,7 +55,7 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
                         [ElsaRuntimeV2StorageManifest.ContentField] = "{}"
                     }),
                     WriteOptions.Unconditional);
-                Assert.True(outcome.Succeeded, $"Upsert failed for '{unit.Id.Value}' on {providerName}.");
+                Assert.True(outcome.Succeeded, $"Upsert failed for '{unit.Id.Value}' on {providerName}: {outcome.Status}.");
             });
         }
         finally
@@ -69,11 +69,26 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
         }
     }
 
+    [Fact]
+    public void Fresh_physical_units_have_unique_subject_identity()
+    {
+        var units = FreshPhysicalUnits();
+
+        Assert.Equal(27, units.Count);
+        Assert.Equal(units.Count, units.Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(units, unit => Assert.Equal(unit.Id.Value, unit.Name));
+    }
+
     private static IReadOnlyList<StorageUnit> FreshPhysicalUnits()
     {
-        var runId = Guid.NewGuid().ToString("N");
+        var runId = Guid.NewGuid().ToString("N")[..8];
         return ElsaRuntimeV2StorageManifest.CreateUnits()
-            .Select((unit, index) => unit with { Name = $"gwv2_{runId}_{index}" })
+            .Select((unit, index) =>
+            {
+                var subject = $"gwv2_{runId}_{index:D2}";
+                return unit with { Id = new StorageUnitId(subject), Name = subject };
+            })
             .ToArray();
     }
 
