@@ -1092,6 +1092,16 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             WriteOptions? options = null)
         {
             var unit = Unit(unitId);
+            var undeclared = values.Values.Keys
+                .Where(field => !unit.Columns.Any(column => StringComparer.Ordinal.Equals(column.Name, field)))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (undeclared.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Runtime projection for unit '{unit.Id.Value}' contains undeclared field(s): {string.Join(", ", undeclared)}.");
+            }
+
             var write = operation switch
             {
                 RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, options ?? WriteOptions.CreateOnly),

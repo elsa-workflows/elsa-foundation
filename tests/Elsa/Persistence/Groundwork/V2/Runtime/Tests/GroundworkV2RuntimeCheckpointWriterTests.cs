@@ -216,6 +216,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             alterationJobTerminalChange: terminal);
 
         await NewWriter(source).CommitAsync(NewCommit("alteration-terminal") with { StateChanges = changes }, Immediate());
+        AssertProjectionFieldsDeclared(source.AllStaged);
 
         var stored = source.Find(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind, job.JobId, "tenant-a");
         Assert.NotNull(stored);
@@ -779,6 +780,217 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         }
     }
 
+    [SkippableFact]
+    [Trait("Category", "Sqlite")]
+    public async Task Sqlite_native_activity_execution_write_accepts_all_declared_projections()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-activity-checkpoint-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            Skip.If(
+                !connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)),
+                "The installed SQLite Groundwork package does not evidence AtomicCommit; run with the preview.2 candidate/local package for this vertical gate.");
+            foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+                connection.Schema.Apply(unit);
+
+            var source = new NativeSessionSource(connection);
+            var writer = new GroundworkV2RuntimeCheckpointWriter(
+                source,
+                new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+            var activity = NewActivity("activity-native");
+            var changes = new RuntimeCheckpointStateChangeSet(
+                null,
+                null,
+                [new RuntimeStateChange<ActivityExecutionState>(
+                    activity.Execution.ActivityExecutionId,
+                    RuntimeStateChangeOperation.Upsert,
+                    activity,
+                    new Dictionary<string, string>())],
+                [], [], [], []);
+
+            await writer.CommitAsync(NewCommit("sqlite-activity") with { StateChanges = changes }, Immediate());
+
+            var row = source.Open(
+                    ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind,
+                    StorageAccess.Scoped(new StorageScope("tenant-a")))
+                .Read(GroundworkRuntimeRowStore.Key(activity.Execution.ActivityExecutionId));
+            Assert.NotNull(row);
+            Assert.Equal(
+                activity.Execution.ActivityExecutionId,
+                row!.Values.Values[ElsaRuntimeV2StorageManifest.ActivityExecutionIdField]);
+            Assert.Equal(
+                activity.Execution.WorkflowExecutionId,
+                row.Values.Values[ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField]);
+            Assert.Equal(
+                activity.Status.ToString(),
+                row.Values.Values[ElsaRuntimeV2StorageManifest.StatusField]);
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Every_checkpoint_projection_key_is_declared_by_its_target_unit()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var activity = NewActivity("activity-projection-audit");
+        var inspection = NewInspection(activity.Execution.ActivityExecutionId);
+        var bookmark = new BookmarkState(
+            "bookmark-projection-audit",
+            "workflow-1",
+            activity.Execution.ActivityExecutionId,
+            "node",
+            "resume",
+            "stimulus-type",
+            "stimulus-hash",
+            null,
+            new Dictionary<string, string>(),
+            now,
+            null);
+        var durableValue = new DurableValueState(
+            "durable-projection-audit",
+            "workflow-1",
+            "value",
+            new RuntimeValueTypeDescriptor("reference", "test.value", null),
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.Inline,
+            JsonSerializer.SerializeToElement(new { value = "test" }),
+            null,
+            activity.Execution.ActivityExecutionId,
+            now,
+            new Dictionary<string, string>());
+        var incident = new IncidentState(
+            "incident-projection-audit",
+            "workflow-1",
+            activity.Execution.ActivityExecutionId,
+            "node",
+            IncidentSeverity.Error,
+            IncidentStatus.Blocking,
+            null,
+            "TestFailure",
+            "projection audit",
+            now,
+            null,
+            new Dictionary<string, string>());
+        var operational = new ExecutionLivenessState(
+            "operational-projection-audit",
+            "workflow-1",
+            new RuntimeExecutionLease(
+                "lease-projection-audit",
+                "workflow-1",
+                "owner-projection-audit",
+                now.AddMinutes(-1),
+                now.AddMinutes(5),
+                1),
+            null,
+            null,
+            null);
+        var dispatch = NewDispatch("workflow-1", WorkflowDispatchStatus.Pending);
+        var intent = new RuntimePostCommitIntent(
+            "intent-projection-audit",
+            "workflow-1",
+            "test.intent",
+            now,
+            null,
+            "idempotency-projection-audit",
+            null);
+        var outbox = new RuntimePostCommitOutboxItem(
+            "outbox-projection-audit",
+            intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            now,
+            null);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(
+                "workflow-1",
+                RuntimeStateChangeOperation.Upsert,
+                NewExecution("workflow-1"),
+                new Dictionary<string, string>()),
+            new RuntimeStateChange<SchedulerState>(
+                "workflow-1",
+                RuntimeStateChangeOperation.Upsert,
+                new SchedulerState("workflow-1", 1, pendingWork: []),
+                new Dictionary<string, string>()),
+            [new RuntimeStateChange<ActivityExecutionState>(
+                activity.Execution.ActivityExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                activity,
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<BookmarkState>(
+                bookmark.BookmarkId,
+                RuntimeStateChangeOperation.Upsert,
+                bookmark,
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<DurableValueState>(
+                durableValue.DurableValueId,
+                RuntimeStateChangeOperation.Upsert,
+                durableValue,
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<IncidentState>(
+                incident.IncidentId,
+                RuntimeStateChangeOperation.Append,
+                incident,
+                new Dictionary<string, string>())],
+            [new RuntimeStateChange<ExecutionLivenessState>(
+                operational.OperationalStateId,
+                RuntimeStateChangeOperation.Upsert,
+                operational,
+                new Dictionary<string, string>())],
+            workflowDispatches: [new RuntimeStateChange<WorkflowDispatchRecord>(
+                dispatch.DispatchId,
+                RuntimeStateChangeOperation.Upsert,
+                dispatch,
+                new Dictionary<string, string>())],
+            activityExecutionInspections: [new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                inspection.ActivityExecutionId,
+                RuntimeStateChangeOperation.Upsert,
+                inspection,
+                new Dictionary<string, string>())],
+            postCommitOutbox: [new RuntimeStateChange<RuntimePostCommitOutboxItem>(
+                outbox.OutboxItemId,
+                RuntimeStateChangeOperation.Upsert,
+                outbox,
+                new Dictionary<string, string>())]);
+
+        await NewWriter(source).CommitAsync(NewCommit("projection-audit") with { StateChanges = changes }, Immediate());
+
+        var expectedUnits = new[]
+        {
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
+            ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
+            ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind,
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
+        };
+        var stagedUnitIds = source.AllStaged.Select(write => write.Unit.Id.Value).ToHashSet(StringComparer.Ordinal);
+        Assert.All(expectedUnits, unitId => Assert.Contains(unitId, stagedUnitIds));
+        AssertProjectionFieldsDeclared(source.AllStaged);
+    }
+
+    private static void AssertProjectionFieldsDeclared(IEnumerable<RowWrite> writes)
+    {
+        Assert.All(
+            writes.Where(write => write.Values is not null),
+            write => Assert.All(
+                write.Values!.Values.Keys,
+                field => Assert.Contains(
+                    write.Unit.Columns,
+                    column => StringComparer.Ordinal.Equals(column.Name, field))));
+    }
+
     [Fact]
     [Trait("Category", "Sqlite")]
     public void Sqlite_native_exact_uow_enforces_admission_and_if_version_outcomes()
@@ -864,6 +1076,31 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             null,
             null,
             "tenant-a",
+            new Dictionary<string, string>());
+
+    private static ActivityExecutionState NewActivity(string activityExecutionId) =>
+        new(
+            new ActivityExecution(
+                activityExecutionId,
+                "workflow-1",
+                "node",
+                "authored",
+                "Activity",
+                "1"),
+            ActivityExecutionStatus.Completed,
+            null,
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            DateTimeOffset.UtcNow,
+            null,
+            null,
+            null,
+            null,
+            1,
+            [],
+            [],
+            0,
+            0,
             new Dictionary<string, string>());
 
     private static ActivityExecutionInspectionProjection NewInspection(string activityId, string? executionScopeId = null) =>
@@ -982,6 +1219,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         public Action<MemoryUnitOfWork>? BeforeCommit { get; set; }
         public int UnitOfWorkCount { get; private set; }
         public MemoryUnitOfWork? LastUnitOfWork { get; private set; }
+        public List<RowWrite> AllStaged { get; } = [];
 
         public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
             AdvertiseAtomicCommit ? WellKnownCapabilities.All : [];
@@ -1103,6 +1341,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 if (!AdmittedUnitIds.Contains(write.Unit.Id.Value, StringComparer.Ordinal))
                     throw new InvalidOperationException($"Unit '{write.Unit.Id.Value}' was not admitted to the exact UOW.");
                 Staged.Add(write);
+                owner.AllStaged.Add(write);
             }
 
             public BatchWriteSummary Commit() => CommitWithOutcomes().Summary;

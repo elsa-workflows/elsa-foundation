@@ -202,7 +202,9 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             [
                 ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
                 ElsaRuntimeV2StorageManifest.ParentActivityExecutionIdField,
-                ElsaRuntimeV2StorageManifest.ActivityExecutionIdField
+                ElsaRuntimeV2StorageManifest.ActivityExecutionIdField,
+                ElsaRuntimeV2StorageManifest.ExecutionScopeIdField,
+                ElsaRuntimeV2StorageManifest.StatusField
             ],
             [ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind] =
             [
