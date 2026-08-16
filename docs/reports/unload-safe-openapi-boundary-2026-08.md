@@ -11,7 +11,16 @@
 
 ## Status
 
-Implementation, repository gates, independent review, upstream filing, and blocked-wave handoffs are complete. [PR #1394](https://github.com/elsa-workflows/elsa-foundation/pull/1394) is in review. The selected model is that first-party API-visible contracts use a stable `*.Api.Core` lifetime while replaceable mappers and handlers remain collectible. A final endpoint-build convention rejects API Explorer-facing artifacts from a collectible context before publication.
+Delivered. [PR #1394](https://github.com/elsa-workflows/elsa-foundation/pull/1394) merged as `efe280446cafc998cbeb305bf235527eafd30b19`. The selected model is that first-party API-visible contracts use a stable `*.Api.Core` lifetime while replaceable mappers and handlers remain collectible. A final endpoint-build convention rejects API Explorer-facing artifacts from a collectible context before publication.
+
+The pull-request CI and the required post-merge `main` gates are green:
+
+- [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/31976838502)
+- [post-merge CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/31977619684)
+- [post-merge HTTP workflow performance](https://github.com/elsa-workflows/elsa-foundation/actions/runs/31977619644)
+- [post-merge Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/31977619266)
+
+Issue #1392 and Project 45 are Done. Waves #1372 and #1375 are reopened, unblocked, and In Progress against the merged boundary.
 
 ## Confirmed cause
 
@@ -58,7 +67,7 @@ A serialized, host-owned OpenAPI snapshot remains the more general option for in
 | Backend REST E2E | Rebuilt/fresh SQLite Workbench; `e2e-tests/diagnostics/Test-OpenTelemetryApiMigration.ps1`; live login + Structured Logs sources query | PASS: diagnostics smoke; Structured Logs login 200 and sources 200 JSON array |
 | Generated maps | `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`; `-- check` | PASS; changed generated snapshots committed explicitly |
 | Formatting and diff check | Changed-file `dotnet format ... --verify-no-changes --include <15 affected C# files>`; full-solution formatter; `git diff --check` | PASS for every changed C# file and diff check. The full-solution formatter reached the repository's pre-existing analyzer/style baseline and exited 2 with violations only in unrelated files. |
-| Independent five-axis review | Two read-only rounds over correctness/security, tests/evidence, architecture/API compatibility, code quality, and operational unloadability | PASS: 0 Critical, 0 implementation-Required, 2 Advisory. Review findings drove fail-closed enumerable/private-state/signature/serializer inspection, one-provider lifecycle evidence, full-document replacement comparison, and production API Explorer invalidation. The remaining publication-sequencing tasks are tracked as T031-T033 and T038-T039. |
+| Independent five-axis review | Two read-only rounds over correctness/security, tests/evidence, architecture/API compatibility, code quality, and operational unloadability, followed by an independent CI-correction review | PASS: 0 Critical, 0 Required. Review findings drove fail-closed enumerable/private-state/signature/serializer inspection, one-provider lifecycle evidence, full-document replacement comparison, production API Explorer invalidation, and a root-anchored evidence-project exclusion with near-match ratchet coverage. |
 
 The repository had an existing open `main is red: Integration (nightly)` issue (#1323). Its recorded failures concern Groundwork provider evidence/lane provisioning and are unrelated to this work; the affected full build, Architecture suite, live diagnostics smoke, and Structured Logs route all passed in this worktree.
 
@@ -82,7 +91,7 @@ The framework retention is filed as [dotnet/aspnetcore#68564](https://github.com
 
 - W6 Workflows Design received the stable `Elsa.Workflows.Design.Api.Core`, type-forwarding, final-convention, host invalidation, resolver-completeness, and combined lifecycle obligations in [#1372](https://github.com/elsa-workflows/elsa-foundation/issues/1372#issuecomment-5309897405).
 - W9 Workflows Runtime received the corresponding stable `Elsa.Workflows.Runtime.Api.Core`, activity-inspection/SSE, accepts/produces, resolver-chain, and combined lifecycle obligations in [#1375](https://github.com/elsa-workflows/elsa-foundation/issues/1375#issuecomment-5309898868).
-- The green gate and decision were recorded on [#1392](https://github.com/elsa-workflows/elsa-foundation/issues/1392#issuecomment-5309901671) and the [parent program](https://github.com/elsa-workflows/elsa-foundation/issues/1342#issuecomment-5309902480). Project 45 and the issue label are synchronized to Review; W6/W9 remain blocked until PR #1394 merges.
+- The green gate and decision were recorded on [#1392](https://github.com/elsa-workflows/elsa-foundation/issues/1392#issuecomment-5309901671) and the [parent program](https://github.com/elsa-workflows/elsa-foundation/issues/1342#issuecomment-5309902480). The delivered state and post-merge evidence are recorded on [#1392](https://github.com/elsa-workflows/elsa-foundation/issues/1392#issuecomment-5310162546). Project 45 and the issue label are synchronized to Done; W6/W9 are resumed.
 
 ## Independent review disposition
 
@@ -91,7 +100,7 @@ The final review found no remaining correctness, security, compatibility, code-q
 - the Structured Logs canary's direct public API-description inspection is intentionally shallower than the focused validator graph suite; combined three-cycle collection and the exhaustive validator tests cover the deeper escape shapes;
 - ADR 0069 is proposed because framework constitution section 2.24 is explicitly draft/unratified; the first-party boundary is implemented as a scoped program prerequisite, not presented as ratified general plugin doctrine.
 
-The reviewer classified upstream filing, issue handoffs, PR publication, merge, and post-merge verification as required delivery sequencing rather than implementation defects. Those steps remain explicit in T031-T033 and T038-T039 and are not marked complete early.
+The reviewer classified upstream filing, issue handoffs, PR publication, merge, and post-merge verification as required delivery sequencing rather than implementation defects. T031-T033 and T038-T039 are complete now that the merge and required `main` gates are verified.
 
 ## Remaining risks
 
