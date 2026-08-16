@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                 {
                     services.AddLogging();
                     services.AddRouting();
+                    services.AddOpenApi();
                     services.AddAuthorization();
 
                     // Workstream A: identity substrate + cookie sign-in + login endpoint (in dev/demo mode with
@@ -99,6 +101,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         });
                         ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
                         ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
+                        endpoints.MapOpenApi();
                         endpoints
                             .MapGet("/protected", context =>
                                 context.Response.WriteAsync(context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? string.Empty))

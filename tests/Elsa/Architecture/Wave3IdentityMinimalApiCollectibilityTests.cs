@@ -9,7 +9,9 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
@@ -69,7 +71,7 @@ public sealed class Wave3IdentityMinimalApiCollectibilityTests
         Assert.True(routeCount > 0, $"{owner.Owner} published no routes.");
 
         var contextType = assembly.GetType(owner.ContextType, throwOnError: true)!;
-        var context = (System.Text.Json.JsonSerializerContext)contextType.GetProperty("Default", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var context = (JsonSerializerContext)contextType.GetProperty("Default", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
         var typeInfo = (JsonTypeInfo)contextType.GetProperty(owner.TypeInfo, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(context)!;
         _ = JsonSerializer.Serialize((object?)null, typeInfo);
         var result = Results.Json(null, typeInfo);
@@ -95,4 +97,18 @@ public sealed class Wave3IdentityMinimalApiCollectibilityTests
     }
 
     private sealed record Evidence(Guid CycleId, WeakReference LoadContext, WeakReference Assembly, WeakReference MapperType);
+
+    private sealed class CollectibleRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
+    {
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
+    }
+
+    private sealed class ProductionApiLoadContext(string name) : AssemblyLoadContext(name, isCollectible: true)
+    {
+        protected override Assembly? Load(AssemblyName assemblyName) =>
+            Default.Assemblies.FirstOrDefault(assembly =>
+                string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
+    }
 }
