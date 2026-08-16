@@ -6,6 +6,7 @@ using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Testing;
 using Elsa.Http;
 using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -38,6 +39,7 @@ public sealed class ActivitiesHttpFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.BasePath);
+        Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpRoutePublicationOptions>>().Value.BasePath);
     }
 
     [Fact]

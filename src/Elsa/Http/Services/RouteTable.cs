@@ -1,7 +1,7 @@
 using System.Collections;
-using System.Collections.Concurrent;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Elsa.Http.Core.Options;
 using Elsa.Http.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -12,46 +12,48 @@ namespace Elsa.Http.Services;
 /// <inheritdoc />
 /// <remarks>
 /// Route refreshes are candidate-first operations. The candidate is cloned, compiled, enriched with dynamic owner
-/// and security metadata, validated, and then published as one cache value. A snapshot lease gives a request a stable
-/// generation while a later refresh retires the old snapshot.
+/// and security metadata, validated, and then published as one shell-owned state value. A snapshot lease gives a
+/// request a stable generation while a later refresh retires the old snapshot.
 /// </remarks>
 public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
 {
-    private static readonly ConcurrentDictionary<string, object> Gates = new(StringComparer.Ordinal);
-
-    private readonly string _key;
     private readonly string _shellId;
     private readonly string _ownerId;
-    private readonly IMemoryCache _cache;
+    private readonly string _publicationBasePath;
     private readonly ILogger<RouteTable> _logger;
     private readonly IHttpRouteManifestProvider _staticManifestProvider;
+    private readonly RouteTableState _state;
 
     public RouteTable(
         IMemoryCache cache,
         ILogger<RouteTable> logger,
         IOptions<RouteTableOptions>? options = null,
-        IHttpRouteManifestProvider? staticManifestProvider = null)
+        IHttpRouteManifestProvider? staticManifestProvider = null,
+        IOptions<HttpRoutePublicationOptions>? publicationOptions = null)
+        : this(new RouteTableState(), logger, options, staticManifestProvider, publicationOptions)
     {
-        _cache = cache;
+        ArgumentNullException.ThrowIfNull(cache);
+    }
+
+    internal RouteTable(
+        RouteTableState state,
+        ILogger<RouteTable> logger,
+        IOptions<RouteTableOptions>? options,
+        IHttpRouteManifestProvider? staticManifestProvider,
+        IOptions<HttpRoutePublicationOptions>? publicationOptions)
+    {
+        _state = state;
         _logger = logger;
         _staticManifestProvider = staticManifestProvider ?? new EmptyRouteManifestProvider();
         _shellId = NormalizeShellId(options?.Value.ShellDiscriminator);
         _ownerId = string.IsNullOrWhiteSpace(options?.Value.OwnerId) ? "Elsa.Http" : options.Value.OwnerId.Trim();
-        _key = $"Elsa.Http.RouteTable:{_shellId}";
+        _publicationBasePath = publicationOptions?.Value.BasePath ?? new HttpRoutePublicationOptions().BasePath;
     }
 
-    private object Gate => Gates.GetOrAdd(_key, static _ => new object());
+    private object Gate => _state.Gate;
 
     /// <summary>Returns the current immutable route snapshot, never a mutable cache list.</summary>
-    private SnapshotState CurrentStateUnsafe()
-    {
-        if (_cache.TryGetValue(_key, out SnapshotState? state) && state is not null)
-            return state;
-
-        state = new SnapshotState(new HttpRouteTableSnapshot(0, Array.Empty<HttpRouteData>()));
-        _cache.Set(_key, state);
-        return state;
-    }
+    private RouteGenerationState CurrentStateUnsafe() => _state.Current;
 
     public ValueTask Add(string route) => Add(new HttpRouteData(route));
 
@@ -153,9 +155,9 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
             return CurrentStateUnsafe().AcquireLease();
     }
 
-    private void PublishUnsafe(SnapshotState current, IEnumerable<HttpRouteData> routes, bool rejectExactDuplicates)
+    private void PublishUnsafe(RouteGenerationState current, IEnumerable<HttpRouteData> routes, bool rejectExactDuplicates)
     {
-        // All work through enrichment and validation happens before cache.Set. An exception therefore preserves the
+        // All work through enrichment and validation happens before the state swap. An exception therefore preserves the
         // previous state exactly, including its generation and metadata.
         var compiled = new List<HttpRouteData>();
         foreach (var routeData in routes)
@@ -184,15 +186,43 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
             .Select(Compile)
             .ToArray();
 
-        // Validate the complete composition manifest before touching the cache. The static routes are only a
-        // validation input; the dynamic table publishes the enriched workflow routes below.
-        HttpRouteManifestValidator.Validate(staticRoutes.Concat(enriched));
-        var next = new SnapshotState(new HttpRouteTableSnapshot(nextGeneration, BuildOrdered(enriched)));
+        // Workflow routes stay endpoint-relative in the route table, but collision coordinates are the real
+        // external paths under the activity middleware's configured base path.
+        if (HttpRoutePublicationAddress.IsEnabled(_publicationBasePath))
+        {
+            var publishedDynamicRoutes = enriched.Select(ToPublicationManifestRoute).ToArray();
+            HttpRouteManifestValidator.Validate(staticRoutes.Concat(publishedDynamicRoutes));
+        }
+        else
+        {
+            // An empty/root base path disables workflow HTTP publication. Retain dynamic/static internal
+            // validation without inventing an external address that could collide with a live host endpoint.
+            HttpRouteManifestValidator.Validate(staticRoutes);
+            HttpRouteManifestValidator.Validate(enriched);
+        }
 
-        // The cache value is the one publication boundary. Readers obtain either current or next; no clear/add
-        // intermediate is observable. Retire after the swap so an already-held lease can drain naturally.
-        _cache.Set(_key, next);
+        var next = new RouteGenerationState(new HttpRouteTableSnapshot(nextGeneration, BuildOrdered(enriched)));
+
+        // The shell-owned state reference is the one publication boundary. Readers obtain either current or next;
+        // no clear/add intermediate is observable. Retire after the swap so held leases drain naturally.
+        _state.Current = next;
         current.Retire();
+    }
+
+    private HttpRouteData ToPublicationManifestRoute(HttpRouteData route)
+    {
+        if (!HttpRoutePublicationAddress.TryResolve(_publicationBasePath, route.Route, out var address))
+            throw new InvalidOperationException("Workflow route publication is disabled and has no external address.");
+
+        return new HttpRouteData(
+            address,
+            new Microsoft.AspNetCore.Routing.RouteValueDictionary(route.DataTokens),
+            new Microsoft.AspNetCore.Routing.RouteValueDictionary(route.RouteValues))
+        {
+            Methods = route.Methods,
+            Metadata = route.Metadata,
+            CompiledMatcher = route.CompiledMatcher
+        };
     }
 
     private HttpRouteData Enrich(HttpRouteData routeData, long generation)
@@ -254,13 +284,13 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
             new Microsoft.AspNetCore.Routing.RouteValueDictionary(routeData.DataTokens),
             new Microsoft.AspNetCore.Routing.RouteValueDictionary(routeData.RouteValues))
         {
-            Methods = routeData.Methods
+            Methods = Array.AsReadOnly(routeData.Methods
                 .Where(method => !string.IsNullOrWhiteSpace(method))
                 .Select(method => method.Trim().ToUpperInvariant())
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(method => method, StringComparer.Ordinal)
-                .ToArray(),
-            Metadata = metadata.ToArray(),
+                .ToArray()),
+            Metadata = Array.AsReadOnly(metadata.ToArray()),
             CompiledMatcher = compiledMatcher
         };
     }
@@ -271,49 +301,6 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
     private static string NormalizeRoute(string path) => $"/{path.Trim('/')}";
     private static string RouteKey(HttpRouteData routeData) => NormalizeRoute(routeData.Route);
     private static string NormalizeShellId(string? value) => string.IsNullOrWhiteSpace(value) ? "default" : value.Trim();
-
-    private sealed class SnapshotState(HttpRouteTableSnapshot snapshot)
-    {
-        private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _leaseCount;
-        private bool _retired;
-
-        public HttpRouteTableSnapshot Snapshot { get; } = snapshot;
-
-        public HttpRouteTableSnapshotLease AcquireLease()
-        {
-            lock (this)
-            {
-                _leaseCount++;
-                return new HttpRouteTableSnapshotLease(Snapshot, _drained.Task, ReleaseLease);
-            }
-        }
-
-        public void Retire()
-        {
-            lock (this)
-            {
-                _retired = true;
-                CompleteIfDrained();
-            }
-        }
-
-        private void ReleaseLease()
-        {
-            lock (this)
-            {
-                if (_leaseCount > 0)
-                    _leaseCount--;
-                CompleteIfDrained();
-            }
-        }
-
-        private void CompleteIfDrained()
-        {
-            if (_retired && _leaseCount == 0)
-                _drained.TrySetResult();
-        }
-    }
 
     private sealed class EmptyRouteManifestProvider : IHttpRouteManifestProvider
     {

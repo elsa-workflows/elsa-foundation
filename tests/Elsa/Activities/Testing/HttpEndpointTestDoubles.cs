@@ -71,6 +71,8 @@ public sealed class FakeRouteTable : IRouteTable, IRouteTableSnapshotProvider
 
     public FakeRouteTable(params string[] templates) => _inner.Refresh(templates).AsTask().GetAwaiter().GetResult();
 
+    public FakeRouteTable(params HttpRouteData[] routes) => _inner.Refresh(routes).AsTask().GetAwaiter().GetResult();
+
     public ValueTask Add(string route) => _inner.Add(route);
     public ValueTask Add(HttpRouteData httpRouteData) => _inner.Add(httpRouteData);
     public ValueTask Remove(string route) => _inner.Remove(route);

@@ -62,10 +62,18 @@ provider snapshot with the enriched candidate, reject same-method collisions bef
 previous generation untouched on failure. Shells that do not expose endpoint sources retain the empty-provider
 compatibility path.
 
-Refresh constructs, compiles, validates, and enriches a complete candidate before one cache publication. A rejected
-candidate leaves the previous snapshot intact. `IRouteTableSnapshotProvider` is an additive seam: requests lease one
-immutable generation through matching and dispatch, and the retired generation reports drained only after the lease
-is released. Existing `IRouteTable` implementations remain valid and use the enumerable fallback.
+Workflow routes stay endpoint-relative for middleware matching. Before manifest validation, `RouteTable` resolves each
+candidate beneath `HttpRoutePublicationOptions.BasePath`, configured from the Activities HTTP feature's request base
+path, so absolute host/module endpoints and authored routes share one collision coordinate system. A disabled base path
+has no published dynamic address and therefore cannot conflict with a live host endpoint.
+
+Refresh constructs, compiles, validates, and enriches a complete candidate before one shell-state publication. A
+rejected candidate leaves the previous snapshot intact. One child-provider singleton owns the current generation and
+synchronization gate; the public `IMemoryCache` constructor parameter remains source-compatible but is not authoritative,
+so cache eviction cannot reset routes and no process-global shell-key dictionary retains shells.
+`IRouteTableSnapshotProvider` is an additive seam: requests lease one immutable generation through matching and dispatch,
+and the retired generation reports drained only after the lease is released. Existing `IRouteTable` implementations
+remain valid and use the enumerable fallback.
 
 ## HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)*
 

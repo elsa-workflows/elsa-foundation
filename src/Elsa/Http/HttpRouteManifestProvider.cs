@@ -2,6 +2,7 @@ using CShells;
 using Elsa.Api.AspNetCore;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using System.Reflection;
@@ -54,8 +55,6 @@ internal sealed class AspNetCoreHttpRouteManifestProvider(
             throw new InvalidOperationException($"Static endpoint '{route}' has {securityMetadata.Length} security-disposition metadata records; exactly zero or one is allowed.");
 
         var ownership = ownershipMetadata.SingleOrDefault() ?? EndpointOwnershipMetadata.Host("host.legacy");
-        var security = securityMetadata.SingleOrDefault() ??
-                       EndpointSecurityDispositionMetadata.Public("compatibility", "Static endpoint without explicit security disposition.");
         var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods
             .Where(method => !string.IsNullOrWhiteSpace(method))
             .ToArray() ?? [];
@@ -63,7 +62,7 @@ internal sealed class AspNetCoreHttpRouteManifestProvider(
         return new HttpRouteData(route)
         {
             Methods = methods,
-            Metadata = [ProjectOwnership(ownership), ProjectSecurity(security)]
+            Metadata = [ProjectOwnership(ownership), ProjectSecurity(endpoint, ownership, securityMetadata.SingleOrDefault())]
         };
     }
 
@@ -77,13 +76,39 @@ internal sealed class AspNetCoreHttpRouteManifestProvider(
             _ => throw new InvalidOperationException($"Endpoint owner '{ownership.OwnerId}' has incomplete dynamic-shell identity.")
         };
 
-    private static HttpRouteSecurityDispositionMetadata ProjectSecurity(EndpointSecurityDispositionMetadata security) =>
-        security.Kind switch
+    private static HttpRouteSecurityDispositionMetadata ProjectSecurity(
+        RouteEndpoint endpoint,
+        EndpointOwnershipMetadata ownership,
+        EndpointSecurityDispositionMetadata? security)
+    {
+        if (security is not null)
+            return security.Kind switch
+            {
+                EndpointSecurityDispositionKind.Permission => HttpRouteSecurityDispositionMetadata.Permission(security.Value!),
+                EndpointSecurityDispositionKind.Public => HttpRouteSecurityDispositionMetadata.Public(security.Category!, security.Reason!),
+                EndpointSecurityDispositionKind.HostCredential => HttpRouteSecurityDispositionMetadata.HostCredential(security.Value!, security.Owner!),
+                EndpointSecurityDispositionKind.NamedPolicy => HttpRouteSecurityDispositionMetadata.NamedPolicy(security.Value!, security.Owner!),
+                _ => throw new InvalidOperationException($"Unsupported endpoint security disposition '{security.Kind}'.")
+            };
+
+        if (endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+            return HttpRouteSecurityDispositionMetadata.Public("compatibility", "Static endpoint explicitly allows anonymous access.");
+
+        var authorizeData = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        if (authorizeData.Count > 0)
         {
-            EndpointSecurityDispositionKind.Permission => HttpRouteSecurityDispositionMetadata.Permission(security.Value!),
-            EndpointSecurityDispositionKind.Public => HttpRouteSecurityDispositionMetadata.Public(security.Category!, security.Reason!),
-            EndpointSecurityDispositionKind.HostCredential => HttpRouteSecurityDispositionMetadata.HostCredential(security.Value!, security.Owner!),
-            EndpointSecurityDispositionKind.NamedPolicy => HttpRouteSecurityDispositionMetadata.NamedPolicy(security.Value!, security.Owner!),
-            _ => throw new InvalidOperationException($"Unsupported endpoint security disposition '{security.Kind}'.")
-        };
+            var policies = authorizeData
+                .Select(data => data.Policy)
+                .Where(policy => !string.IsNullOrWhiteSpace(policy))
+                .Select(policy => policy!.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(policy => policy, StringComparer.Ordinal)
+                .ToArray();
+            return policies.Length == 0
+                ? HttpRouteSecurityDispositionMetadata.AuthenticatedPrincipal(ownership.OwnerId)
+                : HttpRouteSecurityDispositionMetadata.NamedPolicies(policies, ownership.OwnerId);
+        }
+
+        return HttpRouteSecurityDispositionMetadata.Public("compatibility", "Static endpoint without authorization metadata.");
+    }
 }

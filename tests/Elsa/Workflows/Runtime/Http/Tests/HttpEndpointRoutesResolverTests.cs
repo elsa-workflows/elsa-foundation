@@ -32,17 +32,16 @@ public sealed class HttpEndpointRoutesResolverTests
     }
 
     [Fact]
-    public async Task DedupesTemplate_SharedByMultipleMethodBindings()
+    public async Task ProjectsMethodSpecificEntries_SharedByMultipleMethodBindings()
     {
-        // One endpoint, two methods → two bindings, same template. The route table wants one route.
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "DELETE"));
 
         var routes = await Resolver().ResolveRoutesAsync();
 
-        var route = Assert.Single(routes);
-        Assert.Equal("orders/{id}", route.Route);
-        Assert.Equal(new[] { "DELETE", "GET" }, route.Methods);
+        Assert.Equal(2, routes.Count);
+        Assert.Equal(["DELETE", "GET"], routes.Select(route => Assert.Single(route.Methods)).OrderBy(method => method, StringComparer.Ordinal));
+        Assert.All(routes, route => Assert.Equal("orders/{id}", route.Route));
     }
 
     [Fact]
@@ -71,7 +70,7 @@ public sealed class HttpEndpointRoutesResolverTests
 
         var route = Assert.Single(await Resolver().ResolveRoutesAsync());
         var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
-        Assert.Equal(HttpRouteSecurityDispositionKind.NamedPolicy, disposition.Kind);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, disposition.Kind);
         Assert.Equal(["orders.read"], disposition.Values);
         Assert.Equal("Elsa.Http", disposition.OwnerId);
     }
@@ -89,7 +88,7 @@ public sealed class HttpEndpointRoutesResolverTests
 
         var route = Assert.Single(await Resolver().ResolveRoutesAsync());
         var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
-        Assert.Equal(HttpRouteSecurityDispositionKind.AuthenticatedPrincipal, disposition.Kind);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, disposition.Kind);
         Assert.Empty(disposition.Values);
         Assert.Equal("Elsa.Http", disposition.OwnerId);
     }
@@ -115,9 +114,76 @@ public sealed class HttpEndpointRoutesResolverTests
 
         var route = Assert.Single(await Resolver().ResolveRoutesAsync());
         var disposition = Assert.IsType<HttpRouteSecurityDispositionMetadata>(route.Metadata.Single(value => value is HttpRouteSecurityDispositionMetadata));
-        Assert.Equal(HttpRouteSecurityDispositionKind.NamedPolicy, disposition.Kind);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, disposition.Kind);
         Assert.Equal(["orders.read"], disposition.Values);
         Assert.DoesNotContain("default", disposition.Values, StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task SameMethodPublicAndProtectedClaimantsRemainFailClosed()
+    {
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.Build(
+            "a1",
+            "n2",
+            Elsa.Http.Core.HttpEndpointRouting.StimulusType,
+            "sha256:protected",
+            EndpointMetadata("orders", "GET", authorize: true, policy: "orders.read"),
+            "def-a"));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, Security(route).Kind);
+        Assert.Equal(["orders.read"], Security(route).Values);
+    }
+
+    [Fact]
+    public async Task SameTemplatePublicGetAndProtectedPostRemainMethodAccurate()
+    {
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders", "GET"));
+        await _store.SaveAsync(Bindings.Build(
+            "a1",
+            "n2",
+            Elsa.Http.Core.HttpEndpointRouting.StimulusType,
+            "sha256:post-protected",
+            EndpointMetadata("orders", "POST", authorize: true, policy: "orders.manage")));
+
+        var routes = await Resolver().ResolveRoutesAsync();
+        var get = routes.Single(route => route.Methods.SequenceEqual(["GET"]));
+        var post = routes.Single(route => route.Methods.SequenceEqual(["POST"]));
+
+        Assert.Equal(HttpRouteSecurityDispositionKind.Public, Security(get).Kind);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, Security(post).Kind);
+        Assert.Equal(["orders.manage"], Security(post).Values);
+    }
+
+    [Fact]
+    public async Task SameTemplateDistinctMethodPoliciesRemainDistinct()
+    {
+        await _store.SaveAsync(Bindings.Build(
+            "a1", "n1", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:get-policy",
+            EndpointMetadata("orders", "GET", authorize: true, policy: "orders.read")));
+        await _store.SaveAsync(Bindings.Build(
+            "a1", "n2", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:post-policy",
+            EndpointMetadata("orders", "POST", authorize: true, policy: "orders.manage")));
+
+        var routes = await Resolver().ResolveRoutesAsync();
+
+        Assert.Equal(["orders.read"], Security(routes.Single(route => route.Methods.SequenceEqual(["GET"]))).Values);
+        Assert.Equal(["orders.manage"], Security(routes.Single(route => route.Methods.SequenceEqual(["POST"]))).Values);
+    }
+
+    [Fact]
+    public async Task MissingMethodMetadataRetainsWildcardCompatibilityEntry()
+    {
+        await _store.SaveAsync(Bindings.Build(
+            "a1", "n1", Elsa.Http.Core.HttpEndpointRouting.StimulusType, "sha256:wildcard",
+            EndpointMetadata("legacy", method: null, authorize: false, policy: null)));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+
+        Assert.Empty(route.Methods);
+        Assert.Equal(HttpRouteSecurityDispositionKind.Public, Security(route).Kind);
     }
 
     [Fact]
@@ -132,6 +198,28 @@ public sealed class HttpEndpointRoutesResolverTests
         var route = Assert.Single(routes);
         Assert.Equal("orders", route.Route);
     }
+
+    private static IReadOnlyDictionary<string, string> EndpointMetadata(
+        string template,
+        string? method,
+        bool authorize,
+        string? policy)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = template
+        };
+        if (method is not null)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = method;
+        if (authorize)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true";
+        if (policy is not null)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey] = policy;
+        return metadata;
+    }
+
+    private static HttpRouteSecurityDispositionMetadata Security(HttpRouteData route) =>
+        route.Metadata.OfType<HttpRouteSecurityDispositionMetadata>().Single();
 
     [Fact]
     public async Task IgnoresHttpBindings_MissingTemplateKey()
@@ -238,14 +326,16 @@ public sealed class HttpEndpointRoutesResolverTests
     }
 
     [Fact]
-    public async Task DedupesTemplate_SharedByMultipleMethodBookmarks()
+    public async Task ProjectsMethodSpecificEntries_SharedByMultipleMethodBookmarks()
     {
-        // One suspended instance holds one bookmark per method (D-D2), all sharing a template → one route.
+        // One suspended instance holds one bookmark per method (D-D2); security stays method-accurate.
         await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "callbacks/{id}", "GET"));
         await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "callbacks/{id}", "POST"));
 
-        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
-        Assert.Equal("callbacks/{id}", route.Route);
+        var routes = await Resolver().ResolveRoutesAsync();
+        Assert.Equal(2, routes.Count);
+        Assert.Equal(["GET", "POST"], routes.Select(route => Assert.Single(route.Methods)).OrderBy(method => method, StringComparer.Ordinal));
+        Assert.All(routes, route => Assert.Equal("callbacks/{id}", route.Route));
     }
 
     [Fact]

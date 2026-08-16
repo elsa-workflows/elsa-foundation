@@ -1,14 +1,20 @@
 namespace Elsa.Http.Core.Models;
 
 /// <summary>An immutable, ordered set of workflow HTTP routes published as one generation.</summary>
-public sealed record HttpRouteTableSnapshot(long Generation, IReadOnlyList<HttpRouteData> Routes)
+public sealed class HttpRouteTableSnapshot
 {
     public HttpRouteTableSnapshot(long generation, IEnumerable<HttpRouteData> routes)
-        : this(generation, routes.ToArray())
     {
         if (generation < 0)
             throw new ArgumentOutOfRangeException(nameof(generation));
+        ArgumentNullException.ThrowIfNull(routes);
+
+        Generation = generation;
+        Routes = Array.AsReadOnly(routes.ToArray());
     }
+
+    public long Generation { get; }
+    public IReadOnlyList<HttpRouteData> Routes { get; }
 }
 
 /// <summary>

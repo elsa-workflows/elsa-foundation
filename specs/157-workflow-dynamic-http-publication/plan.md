@@ -18,7 +18,7 @@ Extend the existing workflow HTTP route projection with immutable ownership/secu
 
 - **Layering**: Dynamic metadata and snapshot contracts remain in the HTTP contract layer; resolver and publication behavior remain in their existing feature projects.
 - **Security**: Publication records a disposition but does not authenticate callers or duplicate Foundation Identity evaluation.
-- **Atomicity**: Candidate construction and validation happen before one snapshot publication; rejected candidates do not mutate the live cache.
+- **Atomicity**: Candidate construction and validation happen before one snapshot publication; rejected candidates do not mutate the shell-owned live state.
 - **Compatibility**: New snapshot behavior is discovered through an optional interface so existing route-table doubles continue to compile.
 - **Subtractive scope**: This slice hardens the existing dynamic route model; it does not migrate static endpoint owners or rebuild FastEndpoints conventions.
 - **Provisional material**: Framework constitution §2.24 remains draft/provisional; ADR 0068 and issue #1366 are the approved direction.

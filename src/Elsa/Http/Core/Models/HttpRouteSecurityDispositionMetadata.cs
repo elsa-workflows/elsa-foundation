@@ -5,15 +5,17 @@ public enum HttpRouteSecurityDispositionKind
 {
     Permission,
     Public,
-    /// <summary>Requires an authenticated principal; the runtime passes no named policy.</summary>
-    AuthenticatedPrincipal,
     HostCredential,
-    NamedPolicy
+    /// <summary>
+    /// Uses the owning host/integration authorization model. Values name policies when present; an empty value set
+    /// means the established authenticated-principal/default-policy behavior without inventing a policy name.
+    /// </summary>
+    HostPolicy
 }
 
 /// <summary>
 /// Immutable, inspectable security disposition for a dynamic route. A single record is the primary disposition;
-/// named-policy values may contain more than one distinct policy when several waiting workflow bookmarks share the
+/// host-policy values may contain more than one distinct named policy when several waiting workflow bookmarks share the
 /// same route and the request path must remain fail-closed.
 /// </summary>
 public sealed record HttpRouteSecurityDispositionMetadata
@@ -28,8 +30,8 @@ public sealed record HttpRouteSecurityDispositionMetadata
         if (!Enum.IsDefined(kind))
             throw new ArgumentOutOfRangeException(nameof(kind), kind, "A route security disposition kind must be defined.");
 
-        Values = NormalizeValues(values, kind is HttpRouteSecurityDispositionKind.Permission or HttpRouteSecurityDispositionKind.NamedPolicy or HttpRouteSecurityDispositionKind.HostCredential);
-        OwnerId = Normalize(ownerId, kind is HttpRouteSecurityDispositionKind.NamedPolicy or HttpRouteSecurityDispositionKind.HostCredential);
+        Values = NormalizeValues(values, kind is HttpRouteSecurityDispositionKind.Permission or HttpRouteSecurityDispositionKind.HostCredential);
+        OwnerId = Normalize(ownerId, kind is HttpRouteSecurityDispositionKind.HostPolicy or HttpRouteSecurityDispositionKind.HostCredential);
         Category = Normalize(category, kind == HttpRouteSecurityDispositionKind.Public);
         Reason = Normalize(reason, kind == HttpRouteSecurityDispositionKind.Public);
 
@@ -55,16 +57,16 @@ public sealed record HttpRouteSecurityDispositionMetadata
         new(HttpRouteSecurityDispositionKind.Public, category: category, reason: reason);
 
     public static HttpRouteSecurityDispositionMetadata AuthenticatedPrincipal(string? ownerId = null) =>
-        new(HttpRouteSecurityDispositionKind.AuthenticatedPrincipal, ownerId: ownerId);
+        new(HttpRouteSecurityDispositionKind.HostPolicy, ownerId: ownerId ?? "Elsa.Http");
 
     public static HttpRouteSecurityDispositionMetadata HostCredential(string credential, string ownerId) =>
         new(HttpRouteSecurityDispositionKind.HostCredential, [credential], ownerId);
 
     public static HttpRouteSecurityDispositionMetadata NamedPolicy(string policy, string ownerId) =>
-        new(HttpRouteSecurityDispositionKind.NamedPolicy, [policy], ownerId);
+        new(HttpRouteSecurityDispositionKind.HostPolicy, [policy], ownerId);
 
     public static HttpRouteSecurityDispositionMetadata NamedPolicies(IEnumerable<string> policies, string ownerId) =>
-        new(HttpRouteSecurityDispositionKind.NamedPolicy, policies, ownerId);
+        new(HttpRouteSecurityDispositionKind.HostPolicy, policies, ownerId);
 
     private static IReadOnlyList<string> NormalizeValues(IEnumerable<string>? values, bool required)
     {
@@ -76,7 +78,7 @@ public sealed record HttpRouteSecurityDispositionMetadata
             .ToArray();
         if (required && normalized.Length == 0)
             throw new ArgumentException("A route security disposition requires a non-empty value.", nameof(values));
-        return normalized;
+        return Array.AsReadOnly(normalized);
     }
 
     private static string? Normalize(string? value, bool required)

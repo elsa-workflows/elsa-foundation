@@ -17,9 +17,10 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// suspended on).</item>
 /// </list>
 /// Both sources carry the route template on the same <see cref="HttpEndpointRouting.TemplateMetadataKey"/>
-/// metadata key. Templates are deduped ordinally, so a template published as a start trigger and also awaited by a
-/// suspended instance produces a single route. Bindings/bookmarks of another stimulus type, or HTTP entries
-/// without a template metadata value, are ignored.
+/// metadata key. Entries are deduped by ordinal template plus normalized method, so a template published as a start
+/// trigger and also awaited by a suspended instance produces one route for that method while distinct methods retain
+/// their own authorization disposition. Bindings/bookmarks of another stimulus type, or HTTP entries without a
+/// template metadata value, are ignored. Missing method metadata deliberately remains a compatibility wildcard.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -56,12 +57,12 @@ public sealed class HttpEndpointRoutesResolver(
 {
     public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
     {
-        // Distinct route templates only: one endpoint publishes one binding per method (all sharing a template),
+        // Distinct route-method entries: one endpoint publishes one binding per method (all sharing a template),
         // a suspended instance holds one bookmark per method (all sharing a template), two workflows may
         // legitimately register the same template, and a start trigger and a mid-flow bookmark may share one
-        // template. Ordinal dedup keeps the route table one entry per concrete path; the ambiguity guard runs at
-        // request time, not here.
-        var candidates = new Dictionary<string, RouteCandidate>(StringComparer.Ordinal);
+        // template. Ordinal template+method dedup keeps each method's security disposition accurate; the ambiguity
+        // guard runs at request time, not here.
+        var candidates = new Dictionary<RouteCandidateKey, RouteCandidate>();
 
         // (1) Trigger bindings. Two bindings that share a (template, method) hash are legitimate when they belong
         // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
@@ -97,34 +98,31 @@ public sealed class HttpEndpointRoutesResolver(
         return candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray();
     }
 
-    private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, IDictionary<string, RouteCandidate> candidates)
+    private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, IDictionary<RouteCandidateKey, RouteCandidate> candidates)
     {
         if (!metadata.TryGetValue(HttpEndpointRouting.TemplateMetadataKey, out var template) || string.IsNullOrWhiteSpace(template))
             return;
 
-        if (!candidates.TryGetValue(template, out var candidate))
+        var method = metadata.TryGetValue(HttpEndpointRouting.MethodMetadataKey, out var methodValue) && !string.IsNullOrWhiteSpace(methodValue)
+            ? methodValue.Trim().ToUpperInvariant()
+            : null;
+        var key = new RouteCandidateKey(template, method);
+        if (!candidates.TryGetValue(key, out var candidate))
         {
-            candidate = new RouteCandidate(template);
-            candidates.Add(template, candidate);
+            candidate = new RouteCandidate(template, method);
+            candidates.Add(key, candidate);
         }
 
         candidate.Add(metadata);
     }
 
-    private sealed class RouteCandidate(string template)
+    private sealed class RouteCandidate(string template, string? method)
     {
-        private readonly HashSet<string> _methods = new(StringComparer.Ordinal);
         private readonly HashSet<string> _policies = new(StringComparer.Ordinal);
-        private bool _wildcardMethod;
         private bool _authorize;
 
         public void Add(IReadOnlyDictionary<string, string> metadata)
         {
-            if (metadata.TryGetValue(HttpEndpointRouting.MethodMetadataKey, out var method) && !string.IsNullOrWhiteSpace(method))
-                _methods.Add(method.Trim().ToUpperInvariant());
-            else
-                _wildcardMethod = true;
-
             var authorize = metadata.TryGetValue(HttpEndpointRouting.AuthorizeMetadataKey, out var authorizeValue) &&
                             bool.TryParse(authorizeValue, out var parsedAuthorize) && parsedAuthorize;
             _authorize |= authorize;
@@ -144,9 +142,11 @@ public sealed class HttpEndpointRoutesResolver(
 
             return new HttpRouteData(template)
             {
-                Methods = _wildcardMethod ? [] : _methods.OrderBy(method => method, StringComparer.Ordinal).ToArray(),
+                Methods = method is null ? [] : [method],
                 Metadata = [disposition]
             };
         }
     }
+
+    private readonly record struct RouteCandidateKey(string Template, string? Method);
 }

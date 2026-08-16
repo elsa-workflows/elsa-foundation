@@ -7,8 +7,10 @@ using Elsa.Http;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
+using Elsa.Http.Core.Options;
 using Elsa.Http.Options;
 using Elsa.Http.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
@@ -62,7 +64,7 @@ public sealed class DynamicHttpRoutePublicationTests
     [Fact]
     public async Task Refresh_RejectsConflictAgainstStaticManifestAndPreservesLiveGeneration()
     {
-        var staticRoute = new HttpRouteData("orders/{name}")
+        var staticRoute = new HttpRouteData("/workflows/http/orders/{name}")
         {
             Methods = ["POST"],
             Metadata =
@@ -81,6 +83,42 @@ public sealed class DynamicHttpRoutePublicationTests
         Assert.Contains("Elsa.Http", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, Assert.Single(table).Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
         Assert.Equal("orders/{id}", Assert.Single(table).Route);
+    }
+
+    [Fact]
+    public async Task Refresh_DoesNotConflictWithUnrelatedAbsoluteStaticRoute()
+    {
+        var staticRoute = StaticRoute("/orders/{name}", "POST", "Elsa.Orders");
+        var table = CreateTable("orders-shell", new StaticManifestProvider(staticRoute));
+
+        await table.Refresh([new HttpRouteData("orders/{id}") { Methods = ["POST"] }]);
+
+        Assert.Equal("orders/{id}", Assert.Single(table).Route);
+    }
+
+    [Fact]
+    public async Task Refresh_ConflictsWithStaticRouteAtWorkflowPublicationAddress()
+    {
+        var staticRoute = StaticRoute("/workflows/http/orders/{name}", "POST", "Elsa.Orders");
+        var table = CreateTable("orders-shell", new StaticManifestProvider(staticRoute));
+
+        var exception = await Assert.ThrowsAsync<HttpRouteConflictException>(() =>
+            table.Refresh([new HttpRouteData("orders/{id}") { Methods = ["POST"] }]).AsTask());
+
+        Assert.Equal("/workflows/http/orders/{id}", exception.SecondRoute);
+        Assert.Equal("POST", exception.OverlappingMethod);
+    }
+
+    [Fact]
+    public async Task Refresh_UsesConfiguredWorkflowPublicationBasePathForCollisionValidation()
+    {
+        var staticRoute = StaticRoute("/hooks/orders/{name}", "POST", "Elsa.Orders");
+        var table = CreateTable("orders-shell", new StaticManifestProvider(staticRoute), "/hooks");
+
+        var exception = await Assert.ThrowsAsync<HttpRouteConflictException>(() =>
+            table.Refresh([new HttpRouteData("orders/{id}") { Methods = ["POST"] }]).AsTask());
+
+        Assert.Equal("/hooks/orders/{id}", exception.SecondRoute);
     }
 
     [Fact]
@@ -106,7 +144,7 @@ public sealed class DynamicHttpRoutePublicationTests
     [Fact]
     public async Task AddRange_ValidatesAndPublishesOneCandidateWithoutPartialState()
     {
-        var staticRoute = new HttpRouteData("orders/{name}")
+        var staticRoute = new HttpRouteData("/workflows/http/orders/{name}")
         {
             Methods = ["POST"],
             Metadata = [HttpRouteOwnershipMetadata.Module("Elsa.Orders")]
@@ -144,7 +182,7 @@ public sealed class DynamicHttpRoutePublicationTests
     [Fact]
     public async Task Refresh_AllowsStaticRouteWhenMethodsDoNotOverlap()
     {
-        var staticRoute = new HttpRouteData("orders/{name}")
+        var staticRoute = new HttpRouteData("/workflows/http/orders/{name}")
         {
             Methods = ["POST"],
             Metadata = [HttpRouteOwnershipMetadata.Host("Foundation.Host")]
@@ -161,7 +199,7 @@ public sealed class DynamicHttpRoutePublicationTests
     {
         var endpointBuilder = new RouteEndpointBuilder(
             _ => Task.CompletedTask,
-            RoutePatternFactory.Parse("orders/{name}"),
+            RoutePatternFactory.Parse("/workflows/http/orders/{name}"),
             order: 0);
         endpointBuilder.Metadata.Add(EndpointOwnershipMetadata.Module("Elsa.Orders"));
         endpointBuilder.Metadata.Add(EndpointSecurityDispositionMetadata.NamedPolicy("orders.read", "Elsa.Orders"));
@@ -265,6 +303,23 @@ public sealed class DynamicHttpRoutePublicationTests
     }
 
     [Fact]
+    public void HttpManifestProvider_ProjectsStandardAuthorizationMetadataWithoutCallingItPublic()
+    {
+        var anonymous = Endpoint("/anonymous", EndpointOwnershipMetadata.Module("Elsa.Module"), new AllowAnonymousAttribute());
+        var authenticated = Endpoint("/authenticated", EndpointOwnershipMetadata.Module("Elsa.Module"), new AuthorizeAttribute());
+        var namedPolicy = Endpoint("/policy", EndpointOwnershipMetadata.Module("Elsa.Module"), new AuthorizeAttribute("orders.read"));
+        var provider = ManifestProvider(anonymous, authenticated, namedPolicy);
+
+        var routes = provider.GetRoutes().ToDictionary(route => route.Route, StringComparer.Ordinal);
+
+        Assert.Equal(HttpRouteSecurityDispositionKind.Public, Security(routes["/anonymous"]).Kind);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, Security(routes["/authenticated"]).Kind);
+        Assert.Empty(Security(routes["/authenticated"]).Values);
+        Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, Security(routes["/policy"]).Kind);
+        Assert.Equal(["orders.read"], Security(routes["/policy"]).Values);
+    }
+
+    [Fact]
     public void ManifestValidator_ReportsBothOwnersForHostModuleAndDynamicConflict()
     {
         var host = new HttpRouteData("health/{id}")
@@ -313,6 +368,63 @@ public sealed class DynamicHttpRoutePublicationTests
         Assert.Equal("orders/{id}", Assert.Single(oldLease.Snapshot.Routes).Route);
         oldLease.Dispose();
         await oldLease.Drained.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task CacheEvictionCannotResetTheAuthoritativeSnapshotOrGeneration()
+    {
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var table = new RouteTable(cache, NullLogger<RouteTable>.Instance);
+        await table.Refresh([new HttpRouteData("orders") { Methods = ["GET"] }]);
+
+        cache.Compact(1.0);
+
+        using var beforeReplacement = ((IRouteTableSnapshotProvider)table).AcquireSnapshot();
+        Assert.Equal(1, beforeReplacement.Snapshot.Generation);
+        Assert.Equal("orders", Assert.Single(beforeReplacement.Snapshot.Routes).Route);
+        await table.Refresh([new HttpRouteData("payments") { Methods = ["GET"] }]);
+        using var afterReplacement = ((IRouteTableSnapshotProvider)table).AcquireSnapshot();
+        Assert.Equal(2, afterReplacement.Snapshot.Generation);
+    }
+
+    [Fact]
+    public async Task HttpFeatureSharesStateWithinOneShellProviderAndIsolatesAnotherProvider()
+    {
+        await using var firstProvider = BuildHttpFeatureProvider("same-shell");
+        await using var secondProvider = BuildHttpFeatureProvider("same-shell");
+        await using var firstScope = firstProvider.CreateAsyncScope();
+        await using var siblingScope = firstProvider.CreateAsyncScope();
+        await using var isolatedScope = secondProvider.CreateAsyncScope();
+
+        await firstScope.ServiceProvider.GetRequiredService<IRouteTable>().Refresh([new HttpRouteData("orders")]);
+
+        Assert.Equal("orders", Assert.Single(siblingScope.ServiceProvider.GetRequiredService<IRouteTable>()).Route);
+        Assert.Empty(isolatedScope.ServiceProvider.GetRequiredService<IRouteTable>());
+    }
+
+    [Fact]
+    public async Task PublishedSnapshotCollectionsAreDefensiveAndReadOnly()
+    {
+        var sourceRoutes = new List<HttpRouteData> { new("source") };
+        var snapshot = new HttpRouteTableSnapshot(1, sourceRoutes);
+        sourceRoutes.Clear();
+        Assert.Single(snapshot.Routes);
+        Assert.Throws<NotSupportedException>(() => ((IList<HttpRouteData>)snapshot.Routes).Add(new HttpRouteData("mutated")));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HttpRouteTableSnapshot(-1, []));
+
+        var methods = new[] { "GET" };
+        var metadata = new object[] { HttpRouteSecurityDispositionMetadata.Public("test", "Mutation regression.") };
+        var table = CreateTable("immutable-shell");
+        await table.Refresh([new HttpRouteData("orders") { Methods = methods, Metadata = metadata }]);
+        methods[0] = "POST";
+        metadata[0] = new object();
+
+        using var lease = ((IRouteTableSnapshotProvider)table).AcquireSnapshot();
+        var route = Assert.Single(lease.Snapshot.Routes);
+        Assert.Equal(["GET"], route.Methods);
+        Assert.IsType<HttpRouteSecurityDispositionMetadata>(Assert.Single(route.Metadata, value => value is HttpRouteSecurityDispositionMetadata));
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)route.Methods).Add("DELETE"));
+        Assert.Throws<NotSupportedException>(() => ((IList<object>)route.Metadata).Add(new object()));
     }
 
     [Fact]
@@ -400,12 +512,54 @@ public sealed class DynamicHttpRoutePublicationTests
             NullLogger<RouteTable>.Instance,
             Microsoft.Extensions.Options.Options.Create(new RouteTableOptions { ShellDiscriminator = shellId }));
 
-    private static RouteTable CreateTable(string shellId, IHttpRouteManifestProvider staticManifestProvider) =>
+    private static RouteTable CreateTable(string shellId, IHttpRouteManifestProvider staticManifestProvider, string publicationBasePath = "/workflows/http") =>
         new(
             new MemoryCache(new MemoryCacheOptions()),
             NullLogger<RouteTable>.Instance,
             Microsoft.Extensions.Options.Options.Create(new RouteTableOptions { ShellDiscriminator = shellId }),
-            staticManifestProvider);
+            staticManifestProvider,
+            Microsoft.Extensions.Options.Options.Create(new HttpRoutePublicationOptions { BasePath = publicationBasePath }));
+
+    private static HttpRouteData StaticRoute(string route, string method, string ownerId) => new(route)
+    {
+        Methods = [method],
+        Metadata = [HttpRouteOwnershipMetadata.Module(ownerId)]
+    };
+
+    private static RouteEndpoint Endpoint(string route, params object[] metadata)
+    {
+        var builder = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse(route), 0);
+        foreach (var value in metadata)
+            builder.Metadata.Add(value);
+        builder.Metadata.Add(new HttpMethodMetadata(["GET"]));
+        return (RouteEndpoint)builder.Build();
+    }
+
+    private static IHttpRouteManifestProvider ManifestProvider(params Endpoint[] endpoints)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        var settings = new ShellSettings { Id = new ShellId("orders-shell") };
+        services.AddSingleton(settings);
+        services.AddSingleton<EndpointDataSource>(new StaticEndpointDataSource(endpoints));
+        new HttpFeature(new ShellFeatureContext(settings, [])).ConfigureServices(services);
+        return services.BuildServiceProvider().GetRequiredService<IHttpRouteManifestProvider>();
+    }
+
+    private static HttpRouteSecurityDispositionMetadata Security(HttpRouteData route) =>
+        route.Metadata.OfType<HttpRouteSecurityDispositionMetadata>().Single();
+
+    private static ServiceProvider BuildHttpFeatureProvider(string shellId)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        var settings = new ShellSettings { Id = new ShellId(shellId) };
+        services.AddSingleton(settings);
+        new HttpFeature(new ShellFeatureContext(settings, [])).ConfigureServices(services);
+        return services.BuildServiceProvider();
+    }
 
     private sealed class StaticManifestProvider(params HttpRouteData[] routes) : IHttpRouteManifestProvider
     {

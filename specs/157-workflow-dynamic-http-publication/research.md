@@ -15,3 +15,19 @@ Changing `IRouteTable` would break test doubles and external implementations. `I
 ## Decision: Existing authorization remains authoritative
 
 The resolver can describe the effective public/policy disposition for inventory, but provider authentication, normalized claims, and policy evaluation continue through `IHttpEndpointAuthorizationHandler`.
+
+The closed fourth disposition is `HostPolicy`: it carries actual named policies when selected and an empty value set
+for the existing authenticated-principal/default-policy case. This describes runtime enforcement without inventing a
+`default` named policy that the handler never evaluates.
+
+## Decision: Validate external addresses while retaining relative matching
+
+Workflow route data remains endpoint-relative because the middleware strips its configured dedicated base path.
+Collision validation combines that relative route with a Core-owned publication-base-path option configured by the
+Activities HTTP feature, so the dynamic and ASP.NET endpoint manifests use the same external coordinate system.
+
+## Decision: Shell-owned route-table authority
+
+The child shell service provider owns one singleton generation state and synchronization gate shared by its scoped
+route-table facades. `IMemoryCache` remains accepted by the public constructor for source compatibility but is not an
+authority: eviction cannot reset live routes, and no process-global shell-key dictionary can retain unloaded shells.

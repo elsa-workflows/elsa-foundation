@@ -9,6 +9,7 @@ using Elsa.Http;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
+using Elsa.Http.Core.Options;
 using Elsa.Http.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -40,7 +41,7 @@ public sealed class DynamicHttpRouteCompositionTests
         var provider = scope.ServiceProvider.GetRequiredService<IHttpRouteManifestProvider>();
 
         var staticManifestRoute = Assert.Single(provider.GetRoutes());
-        Assert.Equal("/module/orders/{name}", staticManifestRoute.Route);
+        Assert.Equal("/workflows/http/module/orders/{name}", staticManifestRoute.Route);
         Assert.Equal(["POST"], staticManifestRoute.Methods);
         Assert.Equal("Elsa.Orders", staticManifestRoute.Metadata.OfType<HttpRouteOwnershipMetadata>().Single().OwnerId);
 
@@ -55,6 +56,37 @@ public sealed class DynamicHttpRouteCompositionTests
         Assert.Equal("POST", exception.OverlappingMethod);
         Assert.Equal("safe/{id}", Assert.Single(routeTable).Route);
         Assert.Equal(previousGeneration, Assert.Single(routeTable).Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
+    }
+
+    [Fact]
+    public async Task Root_route_outside_workflow_base_does_not_conflict_with_endpoint_relative_workflow_route()
+    {
+        await using var app = await StartHttpShellHostAsync("/module/orders/{name}");
+        var shell = app.Services.GetRequiredService<IShellRegistry>().GetActive("default")
+            ?? throw new InvalidOperationException("The test shell was not activated.");
+        await using var scope = shell.ServiceProvider.CreateAsyncScope();
+        var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
+
+        await routeTable.Refresh([new HttpRouteData("module/orders/{id}") { Methods = ["POST"] }]);
+
+        Assert.Equal("module/orders/{id}", Assert.Single(routeTable).Route);
+    }
+
+    [Fact]
+    public async Task Custom_workflow_base_path_is_composed_into_real_shell_collision_validation()
+    {
+        await using var app = await StartHttpShellHostAsync("/hooks/module/orders/{name}", "/hooks");
+        var shell = app.Services.GetRequiredService<IShellRegistry>().GetActive("default")
+            ?? throw new InvalidOperationException("The test shell was not activated.");
+        await using var scope = shell.ServiceProvider.CreateAsyncScope();
+        var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
+
+        var exception = await Assert.ThrowsAsync<HttpRouteConflictException>(() =>
+            routeTable.Refresh([new HttpRouteData("module/orders/{id}") { Methods = ["POST"] }]).AsTask());
+
+        Assert.Equal("/hooks/module/orders/{id}", exception.SecondRoute);
+        Assert.Contains("Elsa.Orders", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Elsa.Http", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -106,7 +138,9 @@ public sealed class DynamicHttpRouteCompositionTests
         }
     }
 
-    private static async Task<WebApplication> StartHttpShellHostAsync()
+    private static async Task<WebApplication> StartHttpShellHostAsync(
+        string moduleRoute = "/workflows/http/module/orders/{name}",
+        string workflowBasePath = "/workflows/http")
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -114,6 +148,7 @@ public sealed class DynamicHttpRouteCompositionTests
         });
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
+        builder.Services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = workflowBasePath);
 
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(typeof(HttpFeature).Assembly)
@@ -121,7 +156,7 @@ public sealed class DynamicHttpRouteCompositionTests
             .WithWebRouting(options => options.EnablePathRouting = true));
 
         var app = builder.Build();
-        app.MapPost("/module/orders/{name}", () => Results.Ok())
+        app.MapPost(moduleRoute, () => Results.Ok())
             .WithOwner("Elsa.Orders")
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("orders.read", "Elsa.Orders"));
         app.MapShells();
@@ -141,6 +176,8 @@ public sealed class DynamicHttpRouteCompositionTests
         using var scope = shell.ServiceProvider.CreateScope();
         var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
         var provider = scope.ServiceProvider.GetRequiredService<IHttpRouteManifestProvider>();
+        var stateType = typeof(HttpFeature).Assembly.GetType("Elsa.Http.Services.RouteTableState", throwOnError: true)!;
+        var stateOwner = scope.ServiceProvider.GetRequiredService(stateType);
         var serializerType = Type.GetType("Elsa.Serialization.Core.IPayloadSerializer, Elsa.Serialization.Core");
 
         // Route publication stores immutable route metadata and does not serialize or retain workflow payloads.
@@ -170,6 +207,7 @@ public sealed class DynamicHttpRouteCompositionTests
             new WeakReference(routeMetadata),
             new WeakReference(routeDelegate),
             new WeakReference(providerRoot),
+            new WeakReference(stateOwner),
             routeTableReference,
             scopeServicesReference
         };

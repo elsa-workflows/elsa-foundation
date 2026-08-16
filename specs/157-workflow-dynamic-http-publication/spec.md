@@ -27,7 +27,7 @@ As a workflow request, I remain bound to the route generation that matched me ev
 
 ### User Story 4 - Preserve authorization and unloadability evidence (Priority: P2)
 
-As a security and modularity maintainer, I can distinguish public, permission, host-credential, and named-policy routes and repeatedly verify that route metadata does not retain a collectible generation.
+As a security and modularity maintainer, I can distinguish public, permission, host-credential, and host-policy routes and repeatedly verify that route metadata does not retain a collectible generation. Host-policy routes distinguish selected named policies from authenticated-principal/default-policy compatibility without inventing a policy name.
 
 **Independent Test**: Resolve representative authorization options into exactly one typed disposition, preserve existing request authorization behavior, and run repeated metadata-only collectible-generation probes with weak-reference evidence.
 
@@ -50,7 +50,7 @@ As a security and modularity maintainer, I can distinguish public, permission, h
 - **Route manifest**: A complete owner-aware set of candidate routes used for collision validation.
 - **Route generation**: An immutable ordered route snapshot with a monotonically increasing generation number.
 - **Generation lease**: A request-owned reference that keeps a matched generation alive until request completion.
-- **Security disposition**: One public, permission, host-credential, or named-policy classification attached to a route.
+- **Security disposition**: One public, permission, host-credential, or host-policy classification attached to a route. Host-policy values name selected policies when present; an empty set means authenticated-principal/default-policy compatibility.
 
 ## Success Criteria
 
