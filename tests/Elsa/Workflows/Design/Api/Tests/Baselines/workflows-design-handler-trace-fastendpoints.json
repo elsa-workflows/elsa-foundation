@@ -1,0 +1,267 @@
+[
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-permanent"
+    },
+    "scenario": "trusted-delete-404",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-permanent"
+    },
+    "scenario": "trusted-delete-500",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-permanent"
+    },
+    "scenario": "trusted-delete-501",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": "capture-promote",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-promote-404",
+    "type": "PromoteDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": "capture-promote",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-promote-409",
+    "type": "PromoteDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": "capture-promote",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-promote-500",
+    "type": "PromoteDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "activityPresentation": "",
+      "description": "capture",
+      "initialState": "",
+      "layout": "",
+      "name": "Capture definition",
+      "operationKey": "capture-add"
+    },
+    "scenario": "trusted-success",
+    "type": "AddDefinition"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "body-definition",
+      "operationKey": "capture-version",
+      "state": "WorkflowDefinitionStateView { Variables = , RootActivity = , Inputs = , Outputs = , StrategyOptions =  }"
+    },
+    "scenario": "trusted-success",
+    "type": "AddVersion"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-permanent"
+    },
+    "scenario": "trusted-success",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": "capture-discard"
+    },
+    "scenario": "trusted-success",
+    "type": "DiscardDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": "capture-promote",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-success",
+    "type": "PromoteDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "activityPresentation": "",
+      "draftId": "sample",
+      "layout": "",
+      "operationKey": "capture-replace",
+      "state": "WorkflowDefinitionStateView { Variables = , RootActivity = , Inputs = , Outputs = , StrategyOptions =  }"
+    },
+    "scenario": "trusted-success",
+    "type": "ReplaceDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-restore"
+    },
+    "scenario": "trusted-success",
+    "type": "RestoreDefinition"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-delete",
+      "reason": "capture"
+    },
+    "scenario": "trusted-success",
+    "type": "SoftDeleteDefinition"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "description": "capture",
+      "name": "Capture definition",
+      "operationKey": "capture-submit",
+      "state": "WorkflowDefinitionStateView { Variables = , RootActivity = , Inputs = , Outputs = , StrategyOptions =  }"
+    },
+    "scenario": "trusted-success",
+    "type": "SubmitDefinition"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "description": "capture",
+      "name": "Capture definition",
+      "operationKey": "capture-update"
+    },
+    "scenario": "trusted-success",
+    "type": "UpdateDefinitionMetadata"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "definitionId": "sample"
+    },
+    "scenario": "trusted-not-found",
+    "type": "GetDefinition"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "description": "",
+      "id": "",
+      "name": "",
+      "searchTerm": "sample",
+      "state": "published",
+      "tenantAgnostic": "False"
+    },
+    "scenario": "trusted-paging",
+    "type": "ListDefinitions"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "draftId": "sample",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-preflight",
+    "type": "PreflightDraftPromotion"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "definitionId": "sample"
+    },
+    "scenario": "trusted-success",
+    "type": "GetDefinition"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "draftId": "sample"
+    },
+    "scenario": "trusted-success",
+    "type": "GetDraft"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "draftId": "sample"
+    },
+    "scenario": "trusted-success",
+    "type": "GetDraftValidations"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "versionId": "sample"
+    },
+    "scenario": "trusted-success",
+    "type": "GetVersion"
+  },
+  {
+    "kind": "request",
+    "properties": {},
+    "scenario": "trusted-success",
+    "type": "GetWorkflowDefinitionSubmitSchema"
+  },
+  {
+    "kind": "request",
+    "properties": {},
+    "scenario": "trusted-success",
+    "type": "ListActivityStructures"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "definitionId": "sample"
+    },
+    "scenario": "trusted-success",
+    "type": "ListDefinitionVersions"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "description": "",
+      "id": "",
+      "name": "",
+      "searchTerm": "",
+      "state": "",
+      "tenantAgnostic": ""
+    },
+    "scenario": "trusted-success",
+    "type": "ListDefinitions"
+  },
+  {
+    "kind": "request",
+    "properties": {
+      "draftId": "sample",
+      "requestedVersion": "1.0.0"
+    },
+    "scenario": "trusted-success",
+    "type": "PreflightDraftPromotion"
+  }
+]

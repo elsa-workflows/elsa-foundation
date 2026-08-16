@@ -9,10 +9,12 @@ internal static class WorkflowDesignCompatibilityEvidence
 {
     public const string HttpFileName = "workflows-design-http-fastendpoints.json";
     public const string OpenApiFileName = "workflows-design-openapi-fastendpoints.json";
+    public const string HandlerTraceFileName = "workflows-design-handler-trace-fastendpoints.json";
     public const string ProvenanceFileName = "workflows-design-before-provenance.json";
 
     private static readonly string HttpBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", HttpFileName);
     private static readonly string OpenApiBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", OpenApiFileName);
+    private static readonly string HandlerTraceBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", HandlerTraceFileName);
 
     public static IReadOnlyList<HttpCompatibilityObservation> LoadLegacyHttp() =>
         BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath)
@@ -24,6 +26,7 @@ internal static class WorkflowDesignCompatibilityEvidence
 
     public static string ReadHttpBaseline() => BaselineFile.Read(HttpBaselinePath);
     public static string ReadOpenApiBaseline() => BaselineFile.Read(OpenApiBaselinePath);
+    public static string ReadHandlerTraceBaseline() => BaselineFile.Read(HandlerTraceBaselinePath);
 
     public static ApprovedDifference[] LoadApprovals() => [];
 
