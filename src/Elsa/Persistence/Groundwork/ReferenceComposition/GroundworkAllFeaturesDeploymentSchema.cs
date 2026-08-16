@@ -1,7 +1,6 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 
@@ -24,12 +23,13 @@ public sealed class GroundworkAllFeaturesDeploymentSchema : GroundworkDeployment
 
 /// <summary>
 /// Public, parameterless deployment schema for hosts that explicitly select the Groundwork-backed
-/// ASP.NET Core Identity feature in addition to the shipped unified provider leaves.
+/// ASP.NET Core Identity feature in addition to the shipped unified provider leaves. Identity owns
+/// and admits its public-v2 units directly, so it is deliberately absent from this legacy manifest.
 /// </summary>
 public sealed class GroundworkAllFeaturesWithIdentityDeploymentSchema : GroundworkDeploymentSchemaManifestSource
 {
     protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-        GroundworkReferenceDeploymentSchemaSources.WithIdentity;
+        GroundworkReferenceDeploymentSchemaSources.WithoutIdentity;
 }
 
 internal static class GroundworkReferenceDeploymentSchemaSources
@@ -41,12 +41,6 @@ internal static class GroundworkReferenceDeploymentSchemaSources
         typeof(ActivitiesDesignGroundworkStorageManifestSource),
         typeof(GroundworkDesignAtomicWriteStorageManifestSource),
         typeof(PublishingGroundworkStorageManifestSource)
-    ]);
-
-    public static readonly IReadOnlyCollection<Type> WithIdentity = Array.AsReadOnly<Type>(
-    [
-        .. WithoutIdentity,
-        typeof(IdentityGroundworkStorageManifestSource)
     ]);
 
 }

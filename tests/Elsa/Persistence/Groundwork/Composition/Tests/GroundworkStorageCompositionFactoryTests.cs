@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Events.Core.Contracts;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
+using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
@@ -90,7 +91,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public void Reference_deployment_schema_selects_identity_only_through_the_identity_variant()
+    public void Reference_deployment_schemas_leave_identity_to_its_public_v2_registration()
     {
         var defaultManifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
         var identityManifest = new GroundworkAllFeaturesWithIdentityDeploymentSchema().CreateManifest();
@@ -98,13 +99,13 @@ public sealed class GroundworkStorageCompositionFactoryTests
         Assert.DoesNotContain(
             defaultManifest.StorageUnits,
             unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
-        Assert.Contains(
+        Assert.DoesNotContain(
             identityManifest.StorageUnits,
             unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
         Assert.Contains(
             identityManifest.StorageUnits,
             unit => unit.Identity.Value == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
-        Assert.True(identityManifest.StorageUnits.Count > defaultManifest.StorageUnits.Count);
+        Assert.Equal(defaultManifest.StorageUnits.Count, identityManifest.StorageUnits.Count);
     }
 
     [Fact]
@@ -164,19 +165,26 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public void Identity_reference_deployment_schema_registers_as_the_exact_runtime_authority()
+    public void Identity_reference_selection_registers_identity_as_direct_public_v2_units()
     {
         var services = new ServiceCollection();
         services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>();
+        services.AddGroundworkIdentityStores();
 
         using var provider = services.BuildServiceProvider();
         var source = provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>();
         var manifest = source.CreateManifest();
+        var registry = provider.GetRequiredService<GroundworkStorageUnitRegistry>();
+        var identityUnitIds = IdentityV2StorageManifest.CreateUnits()
+            .Select(unit => unit.Id)
+            .ToHashSet();
 
         Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(source);
-        Assert.Contains(
+        Assert.DoesNotContain(
             manifest.StorageUnits,
             unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
+        Assert.Equal(identityUnitIds.Count, registry.Registrations.Count(registration =>
+            identityUnitIds.Contains(registration.Unit.Id)));
     }
 
     [Fact]
@@ -289,7 +297,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
     public sealed class AlternativeDeploymentSchema : GroundworkDeploymentSchemaManifestSource
     {
         protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-            [typeof(IdentityGroundworkStorageManifestSource)];
+            [typeof(WorkflowsDesignGroundworkStorageManifestSource)];
     }
 
     public sealed class PrefixedDesignDeploymentSchema : GroundworkDeploymentSchemaManifestSource

@@ -8,7 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
-    <ProjectReference Include="..\..\..\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
