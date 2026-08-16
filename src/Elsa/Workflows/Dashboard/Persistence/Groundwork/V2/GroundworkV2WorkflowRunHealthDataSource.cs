@@ -102,7 +102,10 @@ public sealed class GroundworkV2WorkflowRunHealthDataSource(
             var bucketStart = ReadDateTimeOffset(row, ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketField);
             var bucketIndex = FindBucketIndex(bucketStart, buckets, bucketStarts);
             if (bucketIndex is null)
-                continue;
+            {
+                throw new InvalidDataException(
+                    $"Groundwork workflow run-health aggregation returned unexpected bucket '{bucketStart:O}'.");
+            }
             counts[bucketIndex.Value].Add(
                 ReadInt32(row, ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField),
                 ReadInt64(row, "count"),
