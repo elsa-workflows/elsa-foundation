@@ -1,17 +1,17 @@
-using Elsa.Events.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Events.Core.Contracts;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Targets;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Manifests;
@@ -180,7 +180,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public async Task Deployment_schema_rejects_runtime_declarations_added_outside_its_authority()
+    public async Task Public_v2_units_do_not_mutate_the_legacy_composition_authority()
     {
         var services = new ServiceCollection();
         services.AddGroundworkStorageComposition<RuntimeDeploymentSchema>();
@@ -188,15 +188,17 @@ public sealed class GroundworkStorageCompositionFactoryTests
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
 
-        var exception = await Assert.ThrowsAsync<GroundworkStorageCompositionException>(() =>
-            scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>()
-                .CreateSourceAsync(
-                    ProviderCapabilities(),
-                    ProviderPhysicalNameNormalizer.Identity)
-                .AsTask());
+        var source = await scope.ServiceProvider.GetRequiredService<GroundworkStorageCompositionFactory>()
+            .CreateSourceAsync(
+                ProviderCapabilities(),
+                ProviderPhysicalNameNormalizer.Identity);
 
-        Assert.Contains(nameof(RuntimeDeploymentSchema), exception.Message, StringComparison.Ordinal);
-        Assert.Contains("elsa-workflows-runtime-distributed", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            source.CreateManifest().StorageUnits,
+            unit => unit.Identity.Value.StartsWith("elsa-distributed-", StringComparison.Ordinal));
+        var registry = scope.ServiceProvider.GetRequiredService<GroundworkStorageUnitRegistry>();
+        Assert.Equal(3, registry.Registrations.Count(registration =>
+            registration.Unit.Id.Value.StartsWith("elsa-distributed-", StringComparison.Ordinal)));
     }
 
     [Fact]
