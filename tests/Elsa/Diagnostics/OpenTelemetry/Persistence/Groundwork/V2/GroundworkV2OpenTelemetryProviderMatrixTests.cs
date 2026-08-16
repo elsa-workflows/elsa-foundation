@@ -29,10 +29,11 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
         await using var runtime = await ProviderRuntime.CreateAsync(providerName, configured);
         var path = runtime.ConnectionString;
         var connection = CreateConnection(providerName, path);
+        var testScope = Guid.NewGuid().ToString("N");
         await using var store = new GroundworkOpenTelemetryStore(
             connection,
             Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 }),
-            new V2OpenTelemetryBinding($"matrix-{providerName}", "scope", "otel"));
+            new V2OpenTelemetryBinding($"matrix-{providerName}", testScope, "otel"));
         await using var lease = await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync();
         store.Start();
         var resource = new TelemetryResource("resource-1", "matrix-service", null, "dotnet", new Dictionary<string, string?>(), DateTimeOffset.UtcNow, TelemetryResourceStatus.Active);
