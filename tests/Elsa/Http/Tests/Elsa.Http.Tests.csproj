@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
@@ -16,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
   </ItemGroup>
 
 </Project>

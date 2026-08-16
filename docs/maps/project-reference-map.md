@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 155
 - Test projects: 102
-- Direct project references: 1275
+- Direct project references: 1278
 
 ## Projects
 
@@ -88,7 +88,7 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.Persistence.Groundwork](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Composition |
 | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | source | Elsa.Git | - | default | - |
 | [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Elsa.Http | - | default | - |
-| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Elsa.Http | - | default | Elsa.Caching.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core |
+| [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Elsa.Http | - | default | Elsa.Api.AspNetCore<br>Elsa.Caching.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Elsa.Http | - | default | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Http.Core |
 | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | source | Elsa.Locking | - | default | - |
 | [Elsa.Locking.FileSystem](../../src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | Elsa.Locking | - | default | Elsa.Locking.Core |
@@ -193,7 +193,7 @@ Records direct project references only.
 | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | test | Elsa.Api | - | false | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Api.Compatibility.Testing.Tests](../../tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj) | test | Elsa.Api | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Api.FastEndpoints.Tests](../../tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj) | test | Elsa.Api | - | default | Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Oidc |
-| [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | - | default | Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Graph.Design<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Groundwork.ProviderEvidenceImporter<br>Elsa.Mediator<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Mapping<br>Elsa3.Models |
+| [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | - | default | Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Graph.Design<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Groundwork.ProviderEvidenceImporter<br>Elsa.Http<br>Elsa.Mediator<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Api |
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | - | default | Elsa.Caching.Core<br>Elsa.Caching.Memory |
@@ -215,7 +215,7 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.StorePerformance.AdapterHost<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.StorePerformance.Benchmarks |
-| [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Http |
+| [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Api.AspNetCore<br>Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Modularity.Attention |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |

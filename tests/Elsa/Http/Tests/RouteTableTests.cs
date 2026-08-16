@@ -12,11 +12,13 @@ namespace Elsa.Http.Tests;
 /// <summary>
 /// Unit coverage for the internal <see cref="RouteTable"/>. Covers the B6 atomic-swap regression (a reader must
 /// never observe an empty/partial table during a publish) plus the issue #592 follow-ups: specificity-ordered
-/// enumeration (item 1), precompiled matchers at refresh (item 6), and a shell-namespaced cache key (item 5).
+/// enumeration (item 1), precompiled matchers at refresh (item 6), and per-table isolation (item 5).
 /// </summary>
-public sealed class RouteTableTests
+public sealed class RouteTableTests : IDisposable
 {
-    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+
+    public void Dispose() => _cache.Dispose();
 
     private RouteTable CreateTable() => new(_cache, NullLogger<RouteTable>.Instance);
 
@@ -110,7 +112,7 @@ public sealed class RouteTableTests
         var forward = CreateTable();
         await forward.Refresh(new[] { moreSpecific, lessSpecific });
 
-        var reverse = new RouteTable(new MemoryCache(new MemoryCacheOptions()), NullLogger<RouteTable>.Instance);
+        var reverse = new RouteTable(_cache, NullLogger<RouteTable>.Instance);
         await reverse.Refresh(new[] { lessSpecific, moreSpecific });
 
         Assert.Equal(moreSpecific, forward.First().Route.Trim('/'));
@@ -141,13 +143,13 @@ public sealed class RouteTableTests
         Assert.IsType<TemplateMatcher>(route.CompiledMatcher);
     }
 
-    // ---- Issue #592 item 5: shell-namespaced cache key ----
+    // ---- Issue #592 item 5: route-state isolation ----
 
     [Fact]
-    public async Task DifferentShellDiscriminators_DoNotAlias_OnASharedCache()
+    public async Task DirectRouteTables_DoNotShareAuthority_EvenWithASharedCompatibilityCache()
     {
-        // Both tables share ONE cache (the future root-promoted scenario). A distinct discriminator per shell must
-        // keep their route sets separate rather than clobbering one entry.
+        // The public compatibility constructor still accepts one shared cache, but each directly constructed table
+        // owns private state. Production shell scopes share their child-provider RouteTableState singleton instead.
         var shellA = CreateTable("shell-a");
         var shellB = CreateTable("shell-b");
 

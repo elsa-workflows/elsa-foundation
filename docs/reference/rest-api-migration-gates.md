@@ -8,7 +8,7 @@ Every enabled first-party endpoint must publish standard ASP.NET Core metadata f
 
 - one stable host, module, or dynamic-shell owner (including shell and exact generation for dynamic routes);
 - one authoring model;
-- exactly one primary security disposition: Foundation permission, intentional public access with category/reason and anonymous metadata, host credential, or an owned named policy with authorization metadata.
+- exactly one primary security disposition: Foundation permission, intentional public access with category/reason and anonymous metadata, host credential, or an owned host-policy disposition with authorization metadata. A host-policy disposition names selected policies when present; an empty policy set is reserved for authenticated-principal/default-policy compatibility.
 
 Use the conventions in `Elsa.Api.AspNetCore`. Permission endpoints continue to use Foundation Identity's canonical policy codec and catalog; do not introduce path middleware or an endpoint-specific permission evaluator.
 
