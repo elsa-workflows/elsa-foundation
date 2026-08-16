@@ -1233,7 +1233,7 @@ public sealed class ReusableActivityDraftCommandTests
         bool canReadProviderPayload,
         bool canAuthorProvider,
         string actorId,
-        string? authorizationProfile) : IActivityAuthoringContext
+        string? authorizationProfile) : IActivityAuthoringContext, IActivityAuthoringContextAsync
     {
         public string? TenantId => tenantId;
         public string ActorId => actorId;
@@ -1241,6 +1241,10 @@ public sealed class ReusableActivityDraftCommandTests
         public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
         public bool CanReadProviderPayload(string providerKey) => canReadProviderPayload;
         public bool CanManageActivityDefinitions => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(canAuthorProvider);
+        public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(canReadProviderPayload);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class EmptyCapabilityCatalog : IActivityContractCapabilityCatalog

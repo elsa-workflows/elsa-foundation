@@ -23,7 +23,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStore = new();
     private readonly InMemoryDurableValueStateStore _durableValueStore = new();
-    private static readonly IActivityExecutionInspectionAuthorizationContext AllowAll = new AllowAllActivityExecutionInspectionAuthorizationContext();
+    private static readonly IActivityExecutionInspectionAuthorizationContextAsync AllowAll = new AllowAllActivityExecutionInspectionAuthorizationContext();
 
     private ListWorkflowInstancesRequestHandler NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
         new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);

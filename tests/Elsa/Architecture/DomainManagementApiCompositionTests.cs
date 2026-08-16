@@ -26,6 +26,7 @@ using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
+using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -157,6 +158,7 @@ public sealed class DomainManagementApiCompositionTests
             "ApiCapabilities",
             "Expressions",
             "FastEndpoints",
+            "FoundationIdentityAbstractions",
             "Mediator",
             "WorkflowsPublishingApi"
         };
@@ -177,10 +179,13 @@ public sealed class DomainManagementApiCompositionTests
         builder.Configuration
             .AddJsonFile(StockServerConfigurationPath)
             .AddInMemoryCollection(overrides);
+        builder.Services.Configure<FoundationIdentityOptions>(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
                 typeof(FastEndpointsFeature).Assembly,
                 typeof(ApiSecurityFeature).Assembly,
+                typeof(FoundationIdentityAbstractionsFeature).Assembly,
                 typeof(ActivitiesDesignApiFeature).Assembly,
                 typeof(GraphActivitiesDesignFeature).Assembly,
                 // spec 145: the publish engine split moved the workflow-publish feature out of
@@ -200,7 +205,11 @@ public sealed class DomainManagementApiCompositionTests
         app.Use(async (context, next) =>
         {
             context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission)],
+                [
+                    new Claim(IdentityClaimTypes.Normalized, "v1"),
+                    new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
+                    new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission)
+                ],
                 "test"));
             await next(context);
         });

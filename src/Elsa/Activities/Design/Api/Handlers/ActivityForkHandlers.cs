@@ -36,7 +36,7 @@ public sealed class ActivityForkService(
     IActivityForkCandidateIdCodec candidateIdCodec,
     IOptions<ActivityForkReservationOptions> options,
     TimeProvider timeProvider,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
 {
     private readonly ActivityForkReservationOptions _options = ValidateOptions(options.Value);
 
@@ -44,7 +44,7 @@ public sealed class ActivityForkService(
         PreviewReusableActivityFork command,
         CancellationToken cancellationToken)
     {
-        EnsureCanFork(command.TargetProviderKey);
+        await EnsureCanForkAsync(command.TargetProviderKey, cancellationToken);
         EnsureBoundedIdentity(command.IdempotencyKey, "idempotencyKey");
         var presentation = NormalizePresentation(command.Category, command.DisplayName, command.Description);
         var sourceAuthoring = await RequiredAuthoringAsync(command.DefinitionId, cancellationToken);
@@ -123,7 +123,7 @@ public sealed class ActivityForkService(
         var targetProviderFingerprint = ActivityProviderManifestFingerprint.Compute(targetManifest);
         var sourceContractFingerprint = ActivityForkMaterialFingerprint.Compute(source.Contract);
         var targetContractFingerprint = ActivityForkMaterialFingerprint.Compute(draft.State.Contract);
-        var accessBindingFingerprint = AccessBindingFingerprint();
+        var accessBindingFingerprint = await AccessBindingFingerprintAsync(cancellationToken);
         var expiresAt = now.Add(_options.Lifetime);
         var requestFingerprint = Fingerprint(
             command.IdempotencyKey,
@@ -155,7 +155,7 @@ public sealed class ActivityForkService(
             RequestFingerprint = requestFingerprint,
             AccessBindingFingerprint = accessBindingFingerprint,
             ActorId = context.ActorId,
-            AuthorizationProfile = context.AuthorizationProfile,
+            AuthorizationProfile = await context.GetAuthorizationProfileAsync(cancellationToken),
             SourceDefinitionId = source.DefinitionId,
             SourceVersionId = source.DefinitionVersionId,
             SourceVersion = source.Version,
@@ -228,13 +228,13 @@ public sealed class ActivityForkService(
         var existingReceipt = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
         if (existingReceipt is not null)
         {
-            EnsureReceiptMatchesCommand(existingReceipt, command);
+            await EnsureReceiptMatchesCommandAsync(existingReceipt, command, cancellationToken);
             return ToReceipt(existingReceipt, ActivityForkOutcomeView.AlreadyApplied);
         }
 
         var candidate = await forkStore.FindCandidateAsync(candidateId.ReservationId, cancellationToken)
             ?? throw NotFound("activity.fork.candidate-not-found", "Activity fork candidate not found", "The reviewed fork candidate was not found.");
-        EnsureCandidateBinding(candidate);
+        await EnsureCandidateBindingAsync(candidate, cancellationToken);
         if (!StringComparer.Ordinal.Equals(candidate.CandidateId, command.CandidateId) ||
             !StringComparer.Ordinal.Equals(candidate.RequestFingerprint, command.RequestFingerprint) ||
             candidate.ExpiresAt != candidateId.ExpiresAt)
@@ -247,7 +247,7 @@ public sealed class ActivityForkService(
             if (!StringComparer.Ordinal.Equals(candidate.AppliedIdempotencyKey, command.IdempotencyKey))
                 throw Stale("The fork candidate was already consumed by another operation identity.");
             var existing = await RequiredReceiptAsync(command.IdempotencyKey, cancellationToken);
-            EnsureReceiptMatchesCommand(existing, command);
+            await EnsureReceiptMatchesCommandAsync(existing, command, cancellationToken);
             return ToReceipt(existing, ActivityForkOutcomeView.AlreadyApplied);
         }
 
@@ -288,7 +288,7 @@ public sealed class ActivityForkService(
             var reconciled = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);
             if (reconciled is not null)
             {
-                EnsureReceiptMatchesCommand(reconciled, command);
+                await EnsureReceiptMatchesCommandAsync(reconciled, command, cancellationToken);
                 return ToReceipt(reconciled, ActivityForkOutcomeView.AlreadyApplied);
             }
             throw OutcomeUnknown("The server cannot prove whether the fork apply committed. Query the fork status before retrying.", exception);
@@ -301,13 +301,13 @@ public sealed class ActivityForkService(
     {
         EnsureBoundedIdentity(request.IdempotencyKey, "idempotencyKey");
         var receipt = await RequiredReceiptAsync(request.IdempotencyKey, cancellationToken);
-        EnsureReceiptBinding(receipt);
+        await EnsureReceiptBindingAsync(receipt, cancellationToken);
         return ToReceipt(receipt, ActivityForkOutcomeView.Applied);
     }
 
     private async Task RevalidateAsync(ActivityForkCandidate candidate, CancellationToken cancellationToken)
     {
-        EnsureCanFork(candidate.ReservedDraft.State.Provider.ProviderKey);
+        await EnsureCanForkAsync(candidate.ReservedDraft.State.Provider.ProviderKey, cancellationToken);
         var sourceAuthoring = await RequiredAuthoringAsync(candidate.SourceDefinitionId, cancellationToken);
         EnsureVisible(sourceAuthoring.TenantId);
         if (sourceAuthoring.ContentAuthority.Kind != ActivityContentAuthorityKind.ProviderSource)
@@ -488,37 +488,39 @@ public sealed class ActivityForkService(
         await forkStore.FindReceiptAsync(ReceiptId(idempotencyKey), cancellationToken)
         ?? throw NotFound("activity.fork.receipt-not-found", "Activity fork receipt not found", "No durable fork outcome exists for this operation identity.");
 
-    private void EnsureCanFork(string targetProviderKey)
+    private async ValueTask EnsureCanForkAsync(string targetProviderKey, CancellationToken cancellationToken)
     {
-        if (!context.CanManageActivityDefinitions || !context.CanAuthorProvider(targetProviderKey))
+        if (!await context.CanManageActivityDefinitionsAsync(cancellationToken) ||
+            !await context.CanAuthorProviderAsync(targetProviderKey, cancellationToken))
             throw Forbidden("The caller is not authorized to fork activity definitions.");
         if (string.IsNullOrWhiteSpace(context.ActorId))
             throw Forbidden("A stable authenticated actor identity is required to reserve an activity fork.");
     }
 
-    private void EnsureCandidateBinding(ActivityForkCandidate candidate)
+    private async ValueTask EnsureCandidateBindingAsync(ActivityForkCandidate candidate, CancellationToken cancellationToken)
     {
         EnsureVisible(candidate.TenantId);
         if (!StringComparer.Ordinal.Equals(candidate.ActorId, context.ActorId) ||
-            !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, context.AuthorizationProfile) ||
-            !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, AccessBindingFingerprint()))
+            !StringComparer.Ordinal.Equals(candidate.AuthorizationProfile, await context.GetAuthorizationProfileAsync(cancellationToken)) ||
+            !StringComparer.Ordinal.Equals(candidate.AccessBindingFingerprint, await AccessBindingFingerprintAsync(cancellationToken)))
             throw Forbidden("The reviewed fork candidate belongs to a different caller or access profile.");
     }
 
-    private void EnsureReceiptBinding(ActivityForkReceipt receipt)
+    private async ValueTask EnsureReceiptBindingAsync(ActivityForkReceipt receipt, CancellationToken cancellationToken)
     {
         EnsureVisible(receipt.TenantId);
         if (!StringComparer.Ordinal.Equals(receipt.ActorId, context.ActorId) ||
-            !StringComparer.Ordinal.Equals(receipt.AuthorizationProfile, context.AuthorizationProfile) ||
-            !StringComparer.Ordinal.Equals(receipt.AccessBindingFingerprint, AccessBindingFingerprint()))
+            !StringComparer.Ordinal.Equals(receipt.AuthorizationProfile, await context.GetAuthorizationProfileAsync(cancellationToken)) ||
+            !StringComparer.Ordinal.Equals(receipt.AccessBindingFingerprint, await AccessBindingFingerprintAsync(cancellationToken)))
             throw Forbidden("The durable fork receipt belongs to a different caller or access profile.");
     }
 
-    private void EnsureReceiptMatchesCommand(
+    private async ValueTask EnsureReceiptMatchesCommandAsync(
         ActivityForkReceipt receipt,
-        ApplyReusableActivityFork command)
+        ApplyReusableActivityFork command,
+        CancellationToken cancellationToken)
     {
-        EnsureReceiptBinding(receipt);
+        await EnsureReceiptBindingAsync(receipt, cancellationToken);
         if (!StringComparer.Ordinal.Equals(receipt.PublicCandidateId, command.CandidateId) ||
             !StringComparer.Ordinal.Equals(receipt.RequestFingerprint, command.RequestFingerprint))
             throw Conflict(
@@ -533,10 +535,10 @@ public sealed class ActivityForkService(
             throw Forbidden("The requested activity identity is outside the caller tenant scope.", "activity.tenant.reference-denied");
     }
 
-    private string AccessBindingFingerprint() => Fingerprint(
+    private async ValueTask<string> AccessBindingFingerprintAsync(CancellationToken cancellationToken) => Fingerprint(
         context.TenantId ?? "<global>",
         context.ActorId,
-        context.AuthorizationProfile);
+        await context.GetAuthorizationProfileAsync(cancellationToken));
 
     private string NewId(string prefix) => $"{prefix}-{identityGenerator.Generate()}";
 

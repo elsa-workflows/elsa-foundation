@@ -135,7 +135,7 @@ public sealed class ListIncidentsRequestHandlerTests
             metadata: metadata);
 
     private sealed class TestAuthorization(bool canInspectStructure, bool canInspectSensitiveValues)
-        : IActivityExecutionInspectionAuthorizationContext
+        : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
     {
         public string TenantScope => "test";
         public string AuthorizationProfile => "test";
@@ -144,5 +144,9 @@ public sealed class ListIncidentsRequestHandlerTests
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => canInspectStructure;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => canInspectSensitiveValues;
         public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(canInspectStructure);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(canInspectSensitiveValues);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 }

@@ -18,8 +18,30 @@ public interface IActivityExecutionInspectionAuthorizationContext
     bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution);
 }
 
+/// <summary>
+/// Asynchronous replacement seam for <see cref="IActivityExecutionInspectionAuthorizationContext"/>.
+/// Runtime readers use this contract for all permission decisions, while the synchronous interface
+/// remains source-compatible during the advisory replacement window.
+/// </summary>
+public interface IActivityExecutionInspectionAuthorizationContextAsync
+{
+    string TenantScope { get; }
+    string AuditSubject { get; }
+    string RequestCorrelationId { get; }
+
+    ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Explicit test/development adapter. Production API composition uses a fail-closed request adapter.</summary>
-public sealed class AllowAllActivityExecutionInspectionAuthorizationContext : IActivityExecutionInspectionAuthorizationContext
+public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
+    IActivityExecutionInspectionAuthorizationContext,
+    IActivityExecutionInspectionAuthorizationContextAsync
 {
     public string TenantScope => "all-tenants";
     public string AuthorizationProfile => "structure+values";
@@ -28,4 +50,16 @@ public sealed class AllowAllActivityExecutionInspectionAuthorizationContext : IA
     public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
     public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
     public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => true;
+
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(AuthorizationProfile);
+
+    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(true);
+
+    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(true);
+
+    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(true);
 }

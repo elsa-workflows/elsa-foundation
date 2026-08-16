@@ -42,6 +42,19 @@ public interface IPermissionEvaluator
     ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Executes one canonical permission decision for request-internal callers that do not enter
+/// ASP.NET Core's endpoint authorization middleware. Implementations apply the same normalized
+/// principal validation, resource-handler precedence, catalog-backed evaluator, and cancellation
+/// semantics as the endpoint policy handlers.
+/// </summary>
+public interface IPermissionAuthorizationService
+{
+    ValueTask<PermissionEvaluationResult> AuthorizeAsync(
+        PermissionEvaluationContext context,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IPermissionResourceHandler
 {
     ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default);
@@ -541,53 +554,44 @@ public sealed class RequirePermissionPolicyProvider(
         fallback?.Provider.GetFallbackPolicyAsync() ?? _defaultProvider.GetFallbackPolicyAsync();
 }
 
-public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAuthorizationRequirement>
+public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionAuthorizationRequirement>
 {
-    private readonly IPermissionEvaluator _evaluator;
-    private readonly IEnumerable<IPermissionResourceHandler> _resourceHandlers;
-    private readonly NormalizedPrincipalValidator? _validator;
-    private readonly IHttpContextAccessor? _httpContextAccessor;
+    private readonly IPermissionAuthorizationService _authorization;
 
     public PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
     {
-        _evaluator = evaluator;
-        _resourceHandlers = resourceHandlers;
+        _authorization = new PermissionAuthorizationService(evaluator, resourceHandlers, validator: null, httpContextAccessor: null);
     }
 
     public PermissionAuthorizationHandler(
-        IPermissionEvaluator evaluator,
-        IEnumerable<IPermissionResourceHandler> resourceHandlers,
-        NormalizedPrincipalValidator validator,
-        IHttpContextAccessor httpContextAccessor)
+        IPermissionAuthorizationService authorization)
     {
-        _evaluator = evaluator;
-        _resourceHandlers = resourceHandlers;
-        _validator = validator;
-        _httpContextAccessor = httpContextAccessor;
+        _authorization = authorization;
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionAuthorizationRequirement requirement)
     {
-        var outcome = await PermissionAuthorizationEvaluation.EvaluateAsync(
-            context,
-            PermissionKey.Normalize(requirement.Permission),
-            _evaluator,
-            _resourceHandlers,
-            _validator,
-            _httpContextAccessor);
+        var result = await _authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(
+                context.User,
+                PermissionKey.Normalize(requirement.Permission),
+                TenantId: null,
+                context.Resource));
 
-        if (outcome == PermissionMemberOutcome.Granted)
+        if (result.Succeeded)
             context.Succeed(requirement);
-        else if (outcome == PermissionMemberOutcome.Denied)
+        else
             context.Fail();
     }
 }
 
+// Keep the source-compatible public handler constructor while giving the built-in DI registration
+// one unambiguous constructor that always reaches the canonical authorization service.
+internal sealed class RegisteredPermissionAuthorizationHandler(IPermissionAuthorizationService authorization)
+    : PermissionAuthorizationHandler(authorization);
+
 internal sealed class PermissionSetAuthorizationHandler(
-    IPermissionEvaluator evaluator,
-    IEnumerable<IPermissionResourceHandler> resourceHandlers,
-    NormalizedPrincipalValidator validator,
-    IHttpContextAccessor httpContextAccessor)
+    IPermissionAuthorizationService authorization)
     : AuthorizationHandler<PermissionSetAuthorizationRequirement>
 {
     protected override async Task HandleRequirementAsync(
@@ -602,21 +606,16 @@ internal sealed class PermissionSetAuthorizationHandler(
 
         foreach (var permission in requirement.Permissions)
         {
-            var outcome = await PermissionAuthorizationEvaluation.EvaluateAsync(
-                context,
-                permission,
-                evaluator,
-                resourceHandlers,
-                validator,
-                httpContextAccessor);
+            var outcome = await authorization.AuthorizeAsync(
+                new PermissionEvaluationContext(context.User, permission, TenantId: null, context.Resource));
 
-            if (requirement.Mode == PermissionRequirementMode.Any && outcome == PermissionMemberOutcome.Granted)
+            if (requirement.Mode == PermissionRequirementMode.Any && outcome.Succeeded)
             {
                 context.Succeed(requirement);
                 return;
             }
 
-            if (requirement.Mode == PermissionRequirementMode.All && outcome != PermissionMemberOutcome.Granted)
+            if (requirement.Mode == PermissionRequirementMode.All && !outcome.Succeeded)
             {
                 context.Fail();
                 return;
@@ -630,44 +629,45 @@ internal sealed class PermissionSetAuthorizationHandler(
     }
 }
 
-internal enum PermissionMemberOutcome
+public sealed class PermissionAuthorizationService(
+    IPermissionEvaluator evaluator,
+    IEnumerable<IPermissionResourceHandler> resourceHandlers,
+    NormalizedPrincipalValidator? validator,
+    IHttpContextAccessor? httpContextAccessor) : IPermissionAuthorizationService
 {
-    Untrusted,
-    Granted,
-    Denied
-}
-
-internal static class PermissionAuthorizationEvaluation
-{
-    public static async ValueTask<PermissionMemberOutcome> EvaluateAsync(
-        AuthorizationHandlerContext authorizationContext,
-        string permission,
-        IPermissionEvaluator evaluator,
-        IEnumerable<IPermissionResourceHandler> resourceHandlers,
-        NormalizedPrincipalValidator? validator,
-        IHttpContextAccessor? httpContextAccessor)
+    public async ValueTask<PermissionEvaluationResult> AuthorizeAsync(
+        PermissionEvaluationContext context,
+        CancellationToken cancellationToken = default)
     {
-        ClaimsPrincipal principal;
-        if (validator is null)
-            return PermissionMemberOutcome.Untrusted;
-        else if (!validator.TryGetNormalizedPrincipal(authorizationContext.User, out principal))
-            return PermissionMemberOutcome.Untrusted;
+        if (validator is null || !validator.TryGetNormalizedPrincipal(context.Principal, out var principal))
+            return PermissionEvaluationResult.Denied("The principal is not a trusted normalized Elsa principal.");
 
-        var tenantId = ResolveTenantId(authorizationContext.Resource, principal);
-        var httpContext = authorizationContext.Resource as HttpContext ?? httpContextAccessor?.HttpContext;
-        var cancellationToken = httpContext?.RequestAborted ?? CancellationToken.None;
-        var evaluationContext = new PermissionEvaluationContext(principal, permission, tenantId, authorizationContext.Resource)
+        var httpContext = context.Resource as HttpContext ?? httpContextAccessor?.HttpContext;
+        var tokens = new List<CancellationToken>(3);
+        AddToken(tokens, cancellationToken);
+        AddToken(tokens, context.CancellationToken);
+        AddToken(tokens, httpContext?.RequestAborted ?? CancellationToken.None);
+        using var linkedCancellation = tokens.Count > 1
+            ? CancellationTokenSource.CreateLinkedTokenSource(tokens.ToArray())
+            : null;
+        var requestCancellation = linkedCancellation?.Token ?? (tokens.Count == 1 ? tokens[0] : CancellationToken.None);
+        requestCancellation.ThrowIfCancellationRequested();
+
+        var tenantId = context.TenantId ?? ResolveTenantId(context.Resource, principal);
+        var evaluationContext = context with
         {
-            CancellationToken = cancellationToken
+            Principal = principal,
+            TenantId = tenantId,
+            CancellationToken = requestCancellation
         };
         var resourceDenied = false;
         var resourceGranted = false;
 
         foreach (var resourceHandler in resourceHandlers)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var resourceResult = await resourceHandler.EvaluateAsync(evaluationContext, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
+            requestCancellation.ThrowIfCancellationRequested();
+            var resourceResult = await resourceHandler.EvaluateAsync(evaluationContext, requestCancellation);
+            requestCancellation.ThrowIfCancellationRequested();
             if (resourceResult is null)
                 continue;
 
@@ -678,14 +678,20 @@ internal static class PermissionAuthorizationEvaluation
         }
 
         if (resourceDenied)
-            return PermissionMemberOutcome.Denied;
+            return PermissionEvaluationResult.Denied("A permission resource denied the request.");
         if (resourceGranted)
-            return PermissionMemberOutcome.Granted;
+            return PermissionEvaluationResult.Success;
 
-        cancellationToken.ThrowIfCancellationRequested();
-        var result = await evaluator.EvaluateAsync(evaluationContext, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        return result.Succeeded ? PermissionMemberOutcome.Granted : PermissionMemberOutcome.Denied;
+        requestCancellation.ThrowIfCancellationRequested();
+        var result = await evaluator.EvaluateAsync(evaluationContext, requestCancellation);
+        requestCancellation.ThrowIfCancellationRequested();
+        return result;
+    }
+
+    private static void AddToken(ICollection<CancellationToken> tokens, CancellationToken token)
+    {
+        if (token != CancellationToken.None && !tokens.Contains(token))
+            tokens.Add(token);
     }
 
     private static string? ResolveTenantId(object? resource, ClaimsPrincipal principal)

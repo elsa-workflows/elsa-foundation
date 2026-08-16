@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -8,6 +11,7 @@ using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -147,35 +151,33 @@ public class ActivityExecutionInspectionProjectionTests
     }
 
     [Fact]
-    public void Http_Inspection_Authorization_Is_Tenant_Scoped_And_Separates_Structure_From_Values()
+    public async Task Http_Inspection_Authorization_Is_Tenant_Scoped_And_Separates_Structure_From_Values()
     {
         var context = new DefaultHttpContext
         {
-            User = new ClaimsPrincipal(new ClaimsIdentity(
-            [
-                new Claim("elsa.identity.tenant_id", "tenant-a"),
-                new Claim("elsa.identity.permission", HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)
-            ], "test"))
+            User = Principal("tenant-a", HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission)
         };
-        var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context });
+        using var provider = IdentityProvider();
+        var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
         var sameTenant = new WorkflowExecutionState(
             "wf", new("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Running, null,
             DateTimeOffset.UnixEpoch, null, null, null, null, null, "tenant-a", new Dictionary<string, string>());
         var otherTenant = sameTenant with { TenantId = "tenant-b" };
 
-        Assert.True(authorization.CanInspectStructure(sameTenant));
-        Assert.False(authorization.CanInspectSensitiveValues(sameTenant));
-        Assert.False(authorization.CanInspectStructure(otherTenant));
+        Assert.True(await authorization.CanInspectStructureAsync(sameTenant));
+        Assert.False(await authorization.CanInspectSensitiveValuesAsync(sameTenant));
+        Assert.False(await authorization.CanInspectStructureAsync(otherTenant));
 
-        var structureOnlyProfile = authorization.AuthorizationProfile;
-        context.User = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim("elsa.identity.tenant_id", "tenant-a"),
-            new Claim("elsa.identity.permission", HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission),
-            new Claim("elsa.identity.permission", HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission)
-        ], "test"));
-        Assert.True(authorization.CanInspectSensitiveValues(sameTenant));
-        Assert.NotEqual(structureOnlyProfile, authorization.AuthorizationProfile);
+        var structureOnlyProfile = await authorization.GetAuthorizationProfileAsync();
+        context.User = Principal("tenant-a",
+            HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission,
+            HttpContextActivityExecutionInspectionAuthorizationContext.SensitiveValuesPermission);
+        Assert.False(await authorization.CanInspectSensitiveValuesAsync(sameTenant));
+        Assert.Equal(structureOnlyProfile, await authorization.GetAuthorizationProfileAsync());
+
+        var replacement = new HttpContextActivityExecutionInspectionAuthorizationContext(new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
+        Assert.True(await replacement.CanInspectSensitiveValuesAsync(sameTenant));
+        Assert.NotEqual(structureOnlyProfile, await replacement.GetAuthorizationProfileAsync());
     }
 
     [Fact]
@@ -188,8 +190,9 @@ public class ActivityExecutionInspectionProjectionTests
                 new Claim(ClaimTypes.Name, "mutable-display-name")
             ], "test"))
         };
+        using var provider = IdentityProvider();
         var authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
-            new HttpContextAccessor { HttpContext = context });
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
 
         Assert.Empty(authorization.AuditSubject);
 
@@ -198,6 +201,8 @@ public class ActivityExecutionInspectionProjectionTests
             new Claim(ClaimTypes.NameIdentifier, "stable-subject-1"),
             new Claim(ClaimTypes.Name, "mutable-display-name")
         ], "test"));
+        authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
         Assert.Equal("stable-subject-1", authorization.AuditSubject);
 
         context.User = new ClaimsPrincipal(new ClaimsIdentity(
@@ -206,7 +211,25 @@ public class ActivityExecutionInspectionProjectionTests
             new Claim("sub", "oidc-subject-1"),
             new Claim(ClaimTypes.Name, "mutable-display-name")
         ], "test"));
+        authorization = new HttpContextActivityExecutionInspectionAuthorizationContext(
+            new HttpContextAccessor { HttpContext = context }, provider.GetRequiredService<IPermissionAuthorizationService>());
         Assert.Equal("oidc-subject-1", authorization.AuditSubject);
+    }
+
+    private static ClaimsPrincipal Principal(string tenantId, params string[] permissions) =>
+        new(new ClaimsIdentity(
+        [
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.TenantId, tenantId),
+            ..permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
+        ], "test"));
+
+    private static ServiceProvider IdentityProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
+        return services.BuildServiceProvider();
     }
 
     internal static ActivityExecutionInspectionProjection Projection(
@@ -258,14 +281,14 @@ public class ActivityExecutionInspectionProjectionTests
             null);
     }
 
-    private sealed class DenyStructureAuthorization : IActivityExecutionInspectionAuthorizationContext
+    private sealed class DenyStructureAuthorization : IActivityExecutionInspectionAuthorizationContextAsync
     {
         public string TenantScope => "tenant:b";
-        public string AuthorizationProfile => "denied";
         public string AuditSubject => "test";
         public string RequestCorrelationId => "test-request";
-        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => false;
-        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
-        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("denied");
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 }

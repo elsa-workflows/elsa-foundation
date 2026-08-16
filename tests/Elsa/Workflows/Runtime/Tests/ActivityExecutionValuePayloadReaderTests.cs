@@ -154,7 +154,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
             RuntimePayloadCaptureMode captureMode = RuntimePayloadCaptureMode.Payload,
             bool includePayload = true,
             Exception? auditFailure = null,
-            IActivityExecutionInspectionAuthorizationContext? authorization = null)
+            IActivityExecutionInspectionAuthorizationContextAsync? authorization = null)
         {
             var workflows = new InMemoryWorkflowExecutionStateStore();
             var inspections = new InMemoryActivityExecutionInspectionStore();
@@ -213,7 +213,7 @@ public sealed class ActivityExecutionValuePayloadReaderTests
     private sealed class Authorization(
         bool canResolve,
         string auditSubject,
-        bool canInspect) : IActivityExecutionInspectionAuthorizationContext
+        bool canInspect) : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
     {
         public string TenantScope => "tenant:tenant-a";
         public string AuthorizationProfile => $"resolve:{canResolve}";
@@ -222,10 +222,14 @@ public sealed class ActivityExecutionValuePayloadReaderTests
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => canInspect;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
         public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => canResolve;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(canInspect);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(canResolve);
     }
 
     private sealed class ChangingSubjectAuthorization(params string[] auditSubjects)
-        : IActivityExecutionInspectionAuthorizationContext
+        : IActivityExecutionInspectionAuthorizationContext, IActivityExecutionInspectionAuthorizationContextAsync
     {
         public int AuditSubjectReads { get; private set; }
         public string TenantScope => "tenant:tenant-a";
@@ -242,6 +246,10 @@ public sealed class ActivityExecutionValuePayloadReaderTests
         public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
         public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
         public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class RecordingAuditSink(Exception? failure) : IActivityExecutionValuePayloadAuditSink

@@ -20,7 +20,7 @@ public sealed class ActivityVersionDiffService(
     IActivityDirectDependencyStore dependencyStore,
     IActivityVersionDiffer differ,
     IActivityDraftDiffCandidateCompiler candidateCompiler,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
 {
     public async Task<ActivityVersionDiffView> CompareVersionsAsync(
         string fromVersionId,
@@ -39,6 +39,10 @@ public sealed class ActivityVersionDiffService(
         var fromLayoutTask = layoutStore.FindVersionLayoutAsync(from.DefinitionVersionId, cancellationToken);
         var toLayoutTask = layoutStore.FindVersionLayoutAsync(to.DefinitionVersionId, cancellationToken);
         await Task.WhenAll(fromDependenciesTask, toDependenciesTask, fromLayoutTask, toLayoutTask);
+        var fromDependencies = await fromDependenciesTask;
+        var toDependencies = await toDependenciesTask;
+        var fromLayout = await fromLayoutTask;
+        var toLayout = await toLayoutTask;
 
         var result = await differ.DiffAsync(new(
             VersionIdentity(from),
@@ -47,10 +51,10 @@ public sealed class ActivityVersionDiffService(
             to.Contract,
             from.Provider,
             to.Provider,
-            fromDependenciesTask.Result,
-            toDependenciesTask.Result,
-            FromImplementation: Implementation(from, fromLayoutTask.Result),
-            ToImplementation: Implementation(to, toLayoutTask.Result)), cancellationToken);
+            fromDependencies,
+            toDependencies,
+            FromImplementation: Implementation(from, fromLayout),
+            ToImplementation: Implementation(to, toLayout)), cancellationToken);
         return result.ToView();
     }
 

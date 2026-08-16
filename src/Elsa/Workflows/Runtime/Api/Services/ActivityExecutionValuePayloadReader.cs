@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityExecutionValuePayloadReader(
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionInspectionStore inspections,
-    IActivityExecutionInspectionAuthorizationContext authorization,
+    IActivityExecutionInspectionAuthorizationContextAsync authorization,
     IActivityExecutionValuePayloadAuditSink auditSink,
     TimeProvider timeProvider) : IActivityExecutionValuePayloadReader
 {
@@ -22,7 +22,7 @@ public sealed class ActivityExecutionValuePayloadReader(
         ArgumentException.ThrowIfNullOrWhiteSpace(evidenceId);
 
         var workflow = await workflowExecutions.FindAsync(workflowExecutionId, cancellationToken);
-        if (workflow is null || !authorization.CanInspectStructure(workflow))
+        if (workflow is null || !await authorization.CanInspectStructureAsync(workflow, cancellationToken))
             return ActivityExecutionValuePayloadReadResult.NotFound();
         var projection = await inspections.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
         if (projection is null)
@@ -42,7 +42,7 @@ public sealed class ActivityExecutionValuePayloadReader(
 
         var authorizationSnapshot = new PayloadResolutionAuthorizationSnapshot(
             authorization.TenantScope,
-            authorization.AuthorizationProfile,
+            await authorization.GetAuthorizationProfileAsync(cancellationToken),
             authorization.AuditSubject,
             authorization.RequestCorrelationId,
             CanResolve: false);
@@ -51,7 +51,7 @@ public sealed class ActivityExecutionValuePayloadReader(
 
         authorizationSnapshot = authorizationSnapshot with
         {
-            CanResolve = authorization.CanResolveSensitiveValuePayloads(workflow)
+            CanResolve = await authorization.CanResolveSensitiveValuePayloadsAsync(workflow, cancellationToken)
         };
         if (!authorizationSnapshot.CanResolve)
         {

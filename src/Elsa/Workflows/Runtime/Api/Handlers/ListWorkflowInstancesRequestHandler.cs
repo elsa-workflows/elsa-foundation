@@ -12,7 +12,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityExecutionInspectionAuthorizationContextAsync authorization)
     : IRequestHandler<ListWorkflowInstances, WorkflowInstanceListView>
 {
     private const int PagedDefaultTake = 25;
@@ -63,9 +63,9 @@ public sealed class ListWorkflowInstancesRequestHandler(
             await Task.WhenAll(activityCountTask, incidentCountTask);
             return WorkflowInstanceSummaryView.From(
                 state,
-                activityCountTask.Result,
-                incidentCountTask.Result,
-                authorization.CanInspectSensitiveValues(state));
+                await activityCountTask,
+                await incidentCountTask,
+                await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken));
         });
         var items = await Task.WhenAll(summaryTasks);
 
@@ -91,8 +91,8 @@ public sealed class ListWorkflowInstancesRequestHandler(
         var requiresSensitiveValues = query.CorrelationId is not null;
         foreach (var state in await workflowExecutionStateStore.ListAsync(cancellationToken))
         {
-            if (!authorization.CanInspectStructure(state) ||
-                (requiresSensitiveValues && !authorization.CanInspectSensitiveValues(state)))
+            if (!await authorization.CanInspectStructureAsync(state, cancellationToken) ||
+                (requiresSensitiveValues && !await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken)))
                 continue;
 
             await authorizedStore.SaveAsync(state, cancellationToken);

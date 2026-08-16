@@ -53,6 +53,12 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        services.TryAddScoped<IActivityAuthoringContextAsync>(sp =>
+            sp.GetRequiredService<IActivityAuthoringContext>() as IActivityAuthoringContextAsync
+            ?? throw new InvalidOperationException("The registered authoring authorization context must implement the asynchronous context seam."));
+        services.TryAddScoped<IActivityDependencyAuthorizationContextAsync>(sp =>
+            sp.GetRequiredService<IActivityDependencyAuthorizationContext>() as IActivityDependencyAuthorizationContextAsync
+            ?? throw new InvalidOperationException("The registered dependency authorization context must implement the asynchronous context seam."));
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>

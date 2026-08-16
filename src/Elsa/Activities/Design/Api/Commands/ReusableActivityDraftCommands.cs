@@ -25,6 +25,27 @@ public interface IActivityAuthoringContext
     bool CanManageActivityDefinitions => false;
 }
 
+/// <summary>
+/// Asynchronous replacement seam for <see cref="IActivityAuthoringContext"/>. First-party request
+/// handlers use this interface so permission decisions always go through Foundation Identity's
+/// canonical evaluator. The synchronous interface remains for one compatibility window and is not
+/// used by production handlers.
+/// </summary>
+public interface IActivityAuthoringContextAsync
+{
+    string? TenantId { get; }
+
+    string ActorId { get; }
+
+    ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default);
+
+    ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default);
+}
+
 public sealed record CreateReusableActivityDefinition(
     string Category,
     string DisplayName,

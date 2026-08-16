@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityExecutionHierarchyReader(
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionHierarchyStore hierarchy,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityExecutionInspectionAuthorizationContextAsync authorization)
 {
     public async ValueTask<ActivityExecutionHierarchyPageView?> ReadAsync(
         string workflowExecutionId,
@@ -27,7 +27,7 @@ public sealed class ActivityExecutionHierarchyReader(
             cursor,
             limit,
             ParseInclude(include),
-            authorization.AuthorizationProfile,
+            await authorization.GetAuthorizationProfileAsync(cancellationToken),
             authorization.TenantScope);
         var page = await hierarchy.ReadPageAsync(query, cancellationToken);
         return page is null ? null : ActivityExecutionHierarchyPageView.From(page);
@@ -37,7 +37,7 @@ public sealed class ActivityExecutionHierarchyReader(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         var workflow = await workflowExecutions.FindAsync(workflowExecutionId, cancellationToken);
-        return workflow is not null && authorization.CanInspectStructure(workflow) ? workflow : null;
+        return workflow is not null && await authorization.CanInspectStructureAsync(workflow, cancellationToken) ? workflow : null;
     }
 
     private static IReadOnlySet<ActivityExecutionHierarchyInclude> ParseInclude(string? value)

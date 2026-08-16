@@ -19,6 +19,9 @@ using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
@@ -111,9 +114,11 @@ public sealed class ActivityDesignFeatureCompositionTests
     }
 
     [Fact]
-    public void ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
+    public async Task ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
     {
         var services = MinimalServices();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
         new ActivitiesDesignApiFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
@@ -121,24 +126,25 @@ public sealed class ActivityDesignFeatureCompositionTests
         {
             User = new ClaimsPrincipal(new ClaimsIdentity(
             [
-                new Claim("elsa.identity.tenant_id", "tenant-a"),
+                new Claim(IdentityClaimTypes.Normalized, "v1"),
+                new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
                 new Claim(ClaimTypes.NameIdentifier, "actor-a"),
-                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission),
-                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
+                new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission),
+                new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
             ], "test"))
         };
 
         using var scope = provider.CreateScope();
-        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContext>();
-        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContext>();
+        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContextAsync>();
 
         Assert.Same(authoring, dependencies);
-        Assert.True(authoring.CanAuthorProvider("elsa.activity-graph"));
-        Assert.True(authoring.CanReadProviderPayload("elsa.activity-graph"));
+        Assert.True(await authoring.CanAuthorProviderAsync("elsa.activity-graph"));
+        Assert.True(await authoring.CanReadProviderPayloadAsync("elsa.activity-graph"));
         Assert.Equal("actor-a", authoring.ActorId);
-        Assert.True(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-a")));
-        Assert.False(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-b")));
-        Assert.NotEmpty(dependencies.AuthorizationProfile);
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-a")));
+        Assert.False(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-b")));
+        Assert.NotEmpty(await dependencies.GetAuthorizationProfileAsync());
     }
 
     [Fact]

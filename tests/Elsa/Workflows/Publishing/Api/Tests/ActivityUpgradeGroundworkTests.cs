@@ -878,11 +878,13 @@ public sealed class ActivityUpgradeGroundworkTests
                         [])
                     : null);
     }
-    private sealed class AllowAllAuthorization : IActivityDependencyAuthorizationContext
+    private sealed class AllowAllAuthorization : IActivityDependencyAuthorizationContext, IActivityDependencyAuthorizationContextAsync
     {
         public string? TenantId => null;
         public string AuthorizationProfile => "access";
         public bool CanRead(ActivityDefinitionReference reference) => reference.TenantId is null;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(CanRead(reference));
     }
     private sealed class Clock(DateTimeOffset now) : ISystemClock
     {

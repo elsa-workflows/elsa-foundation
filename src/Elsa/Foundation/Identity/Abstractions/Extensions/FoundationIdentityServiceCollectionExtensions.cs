@@ -30,7 +30,8 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         EnsureReplacement<IPermissionEvaluator, ClaimsPermissionEvaluator>(services, ServiceLifetime.Scoped);
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionAuthorizationHandler>());
+        services.TryAddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, RegisteredPermissionAuthorizationHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, PermissionSetAuthorizationHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthorizationHandler, NormalizedPermissionPrincipalHandler>());
         services.TryAddSingleton<NormalizedPrincipalValidator>();

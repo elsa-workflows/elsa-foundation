@@ -201,6 +201,27 @@ public sealed class PermissionAuthorizationSemanticsTests
         }
     }
 
+    [Fact]
+    public async Task DirectAuthorizationServicePropagatesExplicitCallerCancellationToResourceSources()
+    {
+        var probe = new CancellationProbe();
+        using var provider = BuildProvider(new(), services =>
+        {
+            services.AddSingleton(probe);
+            services.AddScoped<IPermissionResourceHandler, DelayedResourceHandler>();
+        });
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        using var cancellation = new CancellationTokenSource();
+        var operation = authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(TrustedPrincipal(), "read"),
+            cancellation.Token).AsTask();
+
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+    }
+
     private static ServiceProvider BuildProvider(EvaluationState state, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
@@ -319,6 +340,23 @@ public sealed class PermissionAuthorizationSemanticsTests
                 cancellationToken.ThrowIfCancellationRequested();
 
             return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class CancellationProbe
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class DelayedResourceHandler(CancellationProbe probe) : IPermissionResourceHandler
+    {
+        public async ValueTask<PermissionEvaluationResult?> EvaluateAsync(
+            PermissionEvaluationContext context,
+            CancellationToken cancellationToken = default)
+        {
+            probe.Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return null;
         }
     }
 }

@@ -43,7 +43,7 @@ public sealed class PermissionAuthorizationBoundaryTests
     }
 
     [Fact]
-    public void Reviewed_identity_and_deferred_transport_paths_are_explicitly_allowlisted()
+    public void Transport_authorization_contexts_are_not_allowed_to_read_permission_claims_directly()
     {
         using var fixture = new TemporaryDirectory();
         fixture.Write(
@@ -56,7 +56,12 @@ public sealed class PermissionAuthorizationBoundaryTests
             "src/Elsa/Workflows/Runtime/Api/Services/HttpContextActivityExecutionInspectionAuthorizationContext.cs",
             PermissionClaimProjectionFixture);
 
-        Assert.Empty(PermissionAuthorizationBoundaryScanner.Scan(fixture.Path));
+        var diagnostics = PermissionAuthorizationBoundaryScanner.Scan(fixture.Path);
+
+        Assert.Equal(2, diagnostics.Count);
+        Assert.All(diagnostics, diagnostic => Assert.Equal("AUTHZ-DIRECT-PERMISSION-CLAIM", diagnostic.Code));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Path.EndsWith("HttpContextActivityDesignAuthorizationContext.cs", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Path.EndsWith("HttpContextActivityExecutionInspectionAuthorizationContext.cs", StringComparison.Ordinal));
     }
 
     public static TheoryData<string, string, string> MutationCases => new()
@@ -346,7 +351,11 @@ internal static class PermissionAuthorizationBoundaryScanner
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/IdentityClaimsProjector.cs",
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Authentication/GroundworkIdentityCookieEvents.cs",
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Authentication/GroundworkIdentitySessionInvalidator.cs",
-            "src/Elsa/Foundation/Identity/OpenIddict/Behavior/OpenIddictTokenService.cs",
+            "src/Elsa/Foundation/Identity/OpenIddict/Behavior/OpenIddictTokenService.cs");
+
+    private static readonly ImmutableHashSet<string> AuthorizationContextPaths =
+        ImmutableHashSet.Create(
+            StringComparer.Ordinal,
             "src/Elsa/Activities/Design/Api/Services/HttpContextActivityDesignAuthorizationContext.cs",
             "src/Elsa/Workflows/Runtime/Api/Services/HttpContextActivityExecutionInspectionAuthorizationContext.cs");
 
@@ -391,7 +400,8 @@ internal static class PermissionAuthorizationBoundaryScanner
     private static bool IsBoundaryPath(string relativePath) =>
         relativePath.StartsWith("src/Elsa/Api/FastEndpoints/Abstractions/", StringComparison.Ordinal) ||
         relativePath.Contains("/Endpoints/", StringComparison.Ordinal) ||
-        ReviewedAllowlist.Contains(relativePath);
+        ReviewedAllowlist.Contains(relativePath) ||
+        AuthorizationContextPaths.Contains(relativePath);
 
     private static void ScanFile(
         string relativePath,

@@ -17,7 +17,7 @@ public sealed class ActivityUpgradePlanner(
     IActivityUpgradeApplyReceiptStore receiptStore,
     IActivityUpgradePublishedDraftResolver publishedDraftResolver,
     IActivityUpgradeDiffBuilder diffBuilder,
-    IActivityDependencyAuthorizationContext authorization,
+    IActivityDependencyAuthorizationContextAsync authorization,
     IIdentityGenerator identityGenerator,
     ISystemClock clock) : IActivityUpgradePlanner, IActivityUpgradePlanRefresher
 {
@@ -29,19 +29,12 @@ public sealed class ActivityUpgradePlanner(
         ValidateRequest(request);
 
         var discovery = await discoverySource.DiscoverAsync(request, cancellationToken);
-        var authorizedOwners = discovery.Owners
-            .Where(owner => Authorized(owner.Owner, request))
-            .Select(owner => owner with
-            {
-                DependencyPaths = owner.DependencyPaths
-                    .Where(path => path.All(reference => Authorized(reference, request)))
-                    .ToArray()
-            })
-            .Where(owner => owner.DependencyPaths.Count != 0)
+        var authorizedOwners = await AuthorizeOwnersAsync(discovery.Owners, request, cancellationToken);
+        var groupedOwners = authorizedOwners
             .GroupBy(owner => ReferenceKey(owner.Owner), StringComparer.Ordinal)
             .Select(MergeOwnerPaths)
             .ToArray();
-        var authorizedIds = authorizedOwners
+        var authorizedIds = groupedOwners
             .SelectMany(owner => owner.DependencyPaths.SelectMany(path => path.Append(owner.Owner)))
             .Select(ReferenceIdentity)
             .Where(id => id is not null)
@@ -52,12 +45,12 @@ public sealed class ActivityUpgradePlanner(
         var diagnostics = discovery.Diagnostics
             .Where(diagnostic => authorizedIds.Contains(diagnostic.Subject.Id) || callerSuppliedIds.Contains(diagnostic.Subject.Id))
             .ToList();
-        foreach (var root in request.Roots.Where(root => authorizedOwners.All(owner => !MatchesRoot(owner, root))))
+        foreach (var root in request.Roots.Where(root => groupedOwners.All(owner => !MatchesRoot(owner, root))))
         {
             if (diagnostics.All(x => x.Code != "activity.upgrade.root-not-affected" || !StringComparer.Ordinal.Equals(x.Subject.Id, root.Id)))
                 diagnostics.Add(RootNotAffected(root));
         }
-        var owners = authorizedOwners
+        var owners = groupedOwners
             .OrderBy(x => x.DependencyPaths.Min(path => path.Count))
             .ThenBy(x => KindOrder(x.Owner.Kind))
             .ThenBy(x => x.Owner.DefinitionId, StringComparer.Ordinal)
@@ -310,10 +303,48 @@ public sealed class ActivityUpgradePlanner(
     private static string ReferenceKey(ActivityDefinitionReference reference) =>
         $"{reference.Kind}\u001f{reference.DraftId ?? reference.VersionId}";
 
-    private bool Authorized(ActivityDefinitionReference reference, ActivityUpgradePlanRequest request) =>
+    private async Task<IReadOnlyList<ActivityUpgradeOwnerSnapshot>> AuthorizeOwnersAsync(
+        IReadOnlyList<ActivityUpgradeOwnerSnapshot> owners,
+        ActivityUpgradePlanRequest request,
+        CancellationToken cancellationToken)
+    {
+        var authorized = new List<ActivityUpgradeOwnerSnapshot>(owners.Count);
+        foreach (var owner in owners)
+        {
+            if (!await AuthorizedAsync(owner.Owner, request, cancellationToken))
+                continue;
+
+            var paths = new List<IReadOnlyList<ActivityDefinitionReference>>();
+            foreach (var path in owner.DependencyPaths)
+            {
+                var pathAuthorized = true;
+                foreach (var reference in path)
+                {
+                    if (!await AuthorizedAsync(reference, request, cancellationToken))
+                    {
+                        pathAuthorized = false;
+                        break;
+                    }
+                }
+
+                if (pathAuthorized)
+                    paths.Add(path);
+            }
+
+            if (paths.Count != 0)
+                authorized.Add(owner with { DependencyPaths = paths.ToArray() });
+        }
+
+        return authorized;
+    }
+
+    private async ValueTask<bool> AuthorizedAsync(
+        ActivityDefinitionReference reference,
+        ActivityUpgradePlanRequest request,
+        CancellationToken cancellationToken) =>
         StringComparer.Ordinal.Equals(authorization.TenantId, request.TenantId) &&
         (reference.TenantId is null || StringComparer.Ordinal.Equals(reference.TenantId, request.TenantId)) &&
-        authorization.CanRead(reference);
+        await authorization.CanReadAsync(reference, cancellationToken);
 
     private static bool MatchesRoot(ActivityUpgradeOwnerSnapshot owner, ActivityUpgradeRoot root) =>
         owner.DependencyPaths.SelectMany(path => path.Append(owner.Owner)).Any(reference =>

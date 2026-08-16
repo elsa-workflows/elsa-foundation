@@ -206,12 +206,17 @@ public sealed class ActivityDefinitionRecommendationTests
     private static ActivityProviderManifest Provider() => new("test.provider", "1", JsonSerializer.SerializeToElement(new { }));
     private static readonly DateTimeOffset Now = new(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
 
-    private sealed class Context : IActivityAuthoringContext
+    private sealed class Context : IActivityAuthoringContext, IActivityAuthoringContextAsync
     {
         public string? TenantId => "tenant-a";
+        public string ActorId => "actor-a";
         public string AuthorizationProfile => "tenant-a/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class Clock : TimeProvider
