@@ -9,4 +9,4 @@
 - [x] T007 Add real-host HTTP/OpenAPI differential comparison with an exact approved-differences registry.
 - [x] T008 Add authorization, malformed-input, protobuf/auth-before-body-read, SSE cancellation, and mixed-host coverage.
 - [x] T009 Add repeated collectible route/DI/provider/serializer/disposal evidence and update the transition ratchet.
-- [x] T010 Refresh owner docs/maps and record the final owner, architecture, build, formatter, and maps verification after integration.
+- [x] T010 Run the affected diagnostics E2E smoke against a rebuilt Workbench/fresh SQLite schema, then refresh owner docs/maps and record the final owner, architecture, build, formatter, maps, and E2E verification after integration.

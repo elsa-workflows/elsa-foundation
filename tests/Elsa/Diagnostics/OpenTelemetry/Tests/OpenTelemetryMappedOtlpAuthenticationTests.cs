@@ -47,7 +47,7 @@ public sealed class OpenTelemetryMappedOtlpAuthenticationTests
             Content = new ByteArrayContent([])
         };
         validRequest.Headers.Add("x-otlp-api-key", "secret");
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(validRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(validRequest)).StatusCode);
 
         using var invalidRequest = new HttpRequestMessage(HttpMethod.Post, "/elsa/otlp/v1/logs")
         {
@@ -87,7 +87,7 @@ public sealed class OpenTelemetryMappedOtlpAuthenticationTests
             IPAddress.Loopback,
             new MemoryStream(),
             null);
-        Assert.Equal(StatusCodes.Status200OK, acceptedLoopback.StatusCode);
+        Assert.Equal(StatusCodes.Status204NoContent, acceptedLoopback.StatusCode);
 
         var rejectedBody = new ThrowOnReadStream();
         var rejected = await ExecuteMappedAsync(

@@ -2,33 +2,6 @@
   "owner": "Elsa.Diagnostics.OpenTelemetry",
   "differences": [
     {
-      "method": "POST",
-      "path": "/elsa/otlp/v1/traces",
-      "beforeResponseStatuses": ["204"],
-      "afterResponseStatuses": ["200"],
-      "beforeStatus": 204,
-      "afterStatus": 200,
-      "reason": "Retained root Minimal API receiver replaces the deleted FastEndpoints adapter."
-    },
-    {
-      "method": "POST",
-      "path": "/elsa/otlp/v1/metrics",
-      "beforeResponseStatuses": ["204"],
-      "afterResponseStatuses": ["200"],
-      "beforeStatus": 204,
-      "afterStatus": 200,
-      "reason": "Retained root Minimal API receiver replaces the deleted FastEndpoints adapter."
-    },
-    {
-      "method": "POST",
-      "path": "/elsa/otlp/v1/logs",
-      "beforeResponseStatuses": ["204"],
-      "afterResponseStatuses": ["200"],
-      "beforeStatus": 204,
-      "afterStatus": 200,
-      "reason": "Retained root Minimal API receiver replaces the deleted FastEndpoints adapter."
-    },
-    {
       "method": "GET",
       "path": "/_elsa/studio/diagnostics/opentelemetry/stream",
       "beforeResponseStatuses": ["204", "401", "403"],

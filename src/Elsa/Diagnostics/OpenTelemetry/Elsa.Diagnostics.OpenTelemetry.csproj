@@ -7,7 +7,6 @@
   <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 

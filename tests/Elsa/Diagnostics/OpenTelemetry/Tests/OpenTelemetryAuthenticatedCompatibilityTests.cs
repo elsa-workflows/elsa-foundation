@@ -84,7 +84,7 @@ public sealed class OpenTelemetryAuthenticatedCompatibilityTests
         var request = new HttpRequestMessage(new HttpMethod(expected.Method), expected.Path);
         if (expected.Body is not null)
         {
-            request.Content = new StringContent(expected.Body, Encoding.UTF8);
+            request.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(expected.Body));
             if (expected.ContentType is not null)
                 request.Content.Headers.ContentType = new(expected.ContentType);
         }

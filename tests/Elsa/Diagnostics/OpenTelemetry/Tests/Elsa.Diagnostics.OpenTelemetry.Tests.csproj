@@ -5,6 +5,8 @@
     <None Include="Baselines\otel-approved-differences.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\otel-http-authenticated-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\otel-http-binding-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\otel-http-redirect-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\otel-before-capture-receipt.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="CShells" />

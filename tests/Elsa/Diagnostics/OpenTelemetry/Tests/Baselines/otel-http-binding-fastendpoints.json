@@ -1,5 +1,5 @@
 {
-  "capturedAt": "c04d8dbbe",
+  "capturedAt": "db6e363db",
   "cases": [
     {
       "name": "resources-null",
@@ -10,17 +10,20 @@
       "identity": "exact",
       "status": 200,
       "responseContentType": "application/json; charset=utf-8",
-      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+      "responseBody": "{\u0022items\u0022:[],\u0022droppedCount\u0022:0}",
+      "headers": null
     },
     {
       "name": "resources-absent",
       "method": "POST",
       "path": "/diagnostics/opentelemetry/resources/search",
       "body": "{}",
+      "contentType": null,
       "identity": "exact",
       "status": 415,
       "responseContentType": "",
-      "responseBody": ""
+      "responseBody": "",
+      "headers": null
     },
     {
       "name": "resources-text",
@@ -31,7 +34,8 @@
       "identity": "exact",
       "status": 415,
       "responseContentType": "",
-      "responseBody": ""
+      "responseBody": "",
+      "headers": null
     },
     {
       "name": "resources-empty",
@@ -41,8 +45,9 @@
       "contentType": "application/json",
       "identity": "exact",
       "status": 400,
-      "responseContentType": "application/problem+json; charset=utf-8",
-      "responseBody": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\"]}}"
+      "responseContentType": "application/problem\u002Bjson; charset=utf-8",
+      "responseBody": "{\u0022statusCode\u0022:400,\u0022message\u0022:\u0022One or more errors occurred!\u0022,\u0022errors\u0022:{\u0022serializerErrors\u0022:[\u0022The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\u0022]}}",
+      "headers": null
     },
     {
       "name": "resources-malformed",
@@ -52,8 +57,9 @@
       "contentType": "application/json",
       "identity": "exact",
       "status": 400,
-      "responseContentType": "application/problem+json; charset=utf-8",
-      "responseBody": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\"]}}"
+      "responseContentType": "application/problem\u002Bjson; charset=utf-8",
+      "responseBody": "{\u0022statusCode\u0022:400,\u0022message\u0022:\u0022One or more errors occurred!\u0022,\u0022errors\u0022:{\u0022serializerErrors\u0022:[\u0022Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\u0022]}}",
+      "headers": null
     }
   ]
 }

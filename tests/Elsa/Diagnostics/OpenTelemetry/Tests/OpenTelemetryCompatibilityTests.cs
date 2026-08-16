@@ -36,7 +36,6 @@ public sealed class OpenTelemetryCompatibilityTests
             .Concat(baseline.RootElement.GetProperty("openApi").GetProperty("paths").EnumerateObject().SelectMany(path => path.Value.EnumerateObject().Select(method => $"{method.Name.ToUpperInvariant()} {path.Name}")))
             .ToHashSet(StringComparer.Ordinal);
         Assert.All(approvedEntries, item => Assert.Contains($"{item.GetProperty("method").GetString()} {item.GetProperty("path").GetString()}", consumedKeys));
-        Assert.Equal(3, approvedEntries.Count(item => item.TryGetProperty("beforeStatus", out _)));
         Assert.Equal(11, approvedEntries.Count(item => item.TryGetProperty("beforeOperationId", out _)));
         var observedStatusKeys = new HashSet<string>(StringComparer.Ordinal);
 
@@ -143,13 +142,11 @@ public sealed class OpenTelemetryCompatibilityTests
                     {
                         Assert.True(JsonElement.DeepEquals(beforeStatuses, JsonDocument.Parse($"[{string.Join(',', before.GetProperty("responses").EnumerateObject().Select(item => JsonSerializer.Serialize(item.Name)))}]").RootElement));
                         Assert.True(JsonElement.DeepEquals(approval.GetProperty("afterResponseStatuses"), JsonDocument.Parse($"[{string.Join(',', after.GetProperty("responses").EnumerateObject().Select(item => JsonSerializer.Serialize(item.Name)))}]").RootElement));
-                        var beforeResponses = beforeNode["responses"]!.AsObject();
-                        var afterResponses = afterNode["responses"]!.AsObject();
-                        foreach (var status in beforeStatuses.EnumerateArray().Select(item => item.GetString()!).Concat(approval.GetProperty("afterResponseStatuses").EnumerateArray().Select(item => item.GetString()!)))
-                        {
-                            beforeResponses.Remove(status);
-                            afterResponses.Remove(status);
-                        }
+                        CompareResponseObjects(
+                            beforeNode["responses"]!.AsObject(),
+                            afterNode["responses"]!.AsObject(),
+                            beforeStatuses,
+                            approval.GetProperty("afterResponseStatuses"));
                     }
 
                     consumedApprovals.Add(approvalKey);
@@ -204,6 +201,50 @@ public sealed class OpenTelemetryCompatibilityTests
 
         var expectedApprovalCount = routeApprovals.Length + componentApprovals.Length + documentApprovals.Length;
         Assert.Equal(expectedApprovalCount, consumedApprovals.Count);
+    }
+
+    [Fact]
+    public async Task Anonymous_redirects_match_the_separate_deleted_fastendpoints_fixture()
+    {
+        using var host = await StartHostAsync();
+        using var fixture = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Baselines", "otel-http-redirect-fastendpoints.json")));
+        var client = host.GetTestClient();
+
+        foreach (var expected in fixture.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(expected.GetProperty("method").GetString()!), expected.GetProperty("path").GetString()!);
+            using var response = await client.SendAsync(request);
+
+            Assert.Equal(expected.GetProperty("status").GetInt32(), (int)response.StatusCode);
+            Assert.Equal(expected.GetProperty("location").GetString(), response.Headers.Location?.ToString());
+        }
+    }
+
+    [Fact]
+    public void OpenApi_comparer_rejects_mutation_in_an_unchanged_common_response()
+    {
+        var before = JsonNode.Parse("{\"200\":{\"description\":\"before\"},\"401\":{\"description\":\"unauthorized\"}}")!.AsObject();
+        var after = JsonNode.Parse("{\"200\":{\"description\":\"mutated\"},\"401\":{\"description\":\"unauthorized\"}}")!.AsObject();
+        using var statuses = JsonDocument.Parse("[\"200\",\"401\"]");
+
+        Assert.Throws<Xunit.Sdk.TrueException>(() => CompareResponseObjects(before, after, statuses.RootElement, statuses.RootElement));
+    }
+
+    private static void CompareResponseObjects(
+        JsonObject beforeResponses,
+        JsonObject afterResponses,
+        JsonElement beforeStatuses,
+        JsonElement afterStatuses)
+    {
+        var beforeKeys = beforeStatuses.EnumerateArray().Select(item => item.GetString()!).ToHashSet(StringComparer.Ordinal);
+        var afterKeys = afterStatuses.EnumerateArray().Select(item => item.GetString()!).ToHashSet(StringComparer.Ordinal);
+        foreach (var status in beforeKeys.Except(afterKeys).Concat(afterKeys.Except(beforeKeys)))
+        {
+            beforeResponses.Remove(status);
+            afterResponses.Remove(status);
+        }
+
+        Assert.True(JsonNode.DeepEquals(beforeResponses, afterResponses), $"Unapproved OpenAPI response change. Before={beforeResponses}; After={afterResponses}");
     }
 
     private static async Task<IHost> StartHostAsync()

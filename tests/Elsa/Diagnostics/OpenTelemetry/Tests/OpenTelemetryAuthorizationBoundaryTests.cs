@@ -26,6 +26,7 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
     [InlineData("legacy", 200)]
     [InlineData("wildcard", 200)]
     [InlineData("resource-allow", 200)]
+    [InlineData("tenant-allow", 200)]
     [InlineData("implied", 403)]
     [InlineData("untrusted", 401)]
     [InlineData("invalid-marker", 401)]
@@ -46,7 +47,11 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
     {
         var request = new HttpRequestMessage(HttpMethod.Get, path);
         if (identity is not null)
+        {
             request.Headers.Add("X-Test-Identity", identity);
+            if (identity is "tenant-allow" or "tenant-mismatch")
+                request.Headers.Add("X-Target-Tenant", identity == "tenant-allow" ? "tenant-a" : "tenant-b");
+        }
         return host.GetTestClient().SendAsync(request);
     }
 
@@ -106,10 +111,10 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
 
             var permission = identity switch
             {
-                "exact" or "resource-deny" or "tenant-mismatch" => OpenTelemetryPermissions.Read,
+                "exact" or "resource-deny" or "tenant-mismatch" or "tenant-allow" => OpenTelemetryPermissions.Read,
                 "legacy" => OpenTelemetryPermissions.LegacyPolicy,
                 "wildcard" => PermissionKey.Wildcard,
-                "resource-allow" => string.Empty,
+                "resource-allow" or "tenant-allow" => string.Empty,
                 "implied" => "Diagnostics",
                 _ => "Diagnostics:Other"
             };
@@ -118,12 +123,12 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
             var claims = new List<Claim>
             {
                 new(IdentityClaimTypes.Normalized, normalized),
-                new(IdentityClaimTypes.TenantId, identity == "tenant-mismatch" ? "tenant-a" : "tenant-a"),
+                new(IdentityClaimTypes.TenantId, "tenant-a"),
                 new("resource", identity switch
                 {
                     "resource-allow" => "allow",
                     "resource-deny" => "deny",
-                    "tenant-mismatch" => "tenant-b",
+                    "tenant-mismatch" => string.Empty,
                     _ => string.Empty
                 })
             };
@@ -158,6 +163,10 @@ public sealed class OpenTelemetryAuthorizationBoundaryTests
     {
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
         {
+            var targetTenant = (context.Resource as HttpContext)?.Request.Headers["X-Target-Tenant"].ToString();
+            if (!string.IsNullOrWhiteSpace(targetTenant) && !string.Equals(context.TenantId, targetTenant, StringComparison.Ordinal))
+                return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Denied("tenant denied"));
+
             var marker = context.Principal.FindFirst("resource")?.Value;
             return ValueTask.FromResult<PermissionEvaluationResult?>(marker switch
             {

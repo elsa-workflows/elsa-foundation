@@ -1,5 +1,5 @@
 {
-  "capturedAt": "c04d8dbbe",
+  "capturedAt": "db6e363db",
   "cases": [
     {
       "name": "resources-exact",
@@ -10,71 +10,91 @@
       "identity": "exact",
       "status": 200,
       "responseContentType": "application/json; charset=utf-8",
-      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+      "responseBody": "{\u0022items\u0022:[],\u0022droppedCount\u0022:0}",
+      "headers": null
     },
     {
       "name": "traces-filter",
       "method": "POST",
       "path": "/diagnostics/opentelemetry/traces/search",
-      "body": "{\"traceId\":\"trace-1\"}",
+      "body": "{\u0022traceId\u0022:\u0022trace-1\u0022}",
       "contentType": "application/json",
       "identity": "exact",
       "status": 200,
       "responseContentType": "application/json; charset=utf-8",
-      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+      "responseBody": "{\u0022items\u0022:[],\u0022droppedCount\u0022:0}",
+      "headers": null
     },
     {
       "name": "trace-missing",
       "method": "GET",
       "path": "/diagnostics/opentelemetry/traces/missing",
+      "body": null,
+      "contentType": null,
       "identity": "exact",
       "status": 404,
       "responseContentType": "",
-      "responseBody": ""
+      "responseBody": "",
+      "headers": null
     },
     {
       "name": "storage",
       "method": "GET",
       "path": "/diagnostics/opentelemetry/storage",
+      "body": null,
+      "contentType": null,
       "identity": "exact",
       "status": 200,
       "responseContentType": "application/json; charset=utf-8",
-      "responseBody": "{\"traceCapacity\":5000,\"spanCapacity\":25000,\"metricPointCapacity\":25000,\"logRecordCapacity\":10000,\"resourceCount\":0,\"traceCount\":0,\"spanCount\":0,\"metricInstrumentCount\":0,\"metricPointCount\":0,\"logRecordCount\":0,\"droppedTraceCount\":0,\"droppedSpanCount\":0,\"droppedMetricPointCount\":0,\"droppedLogRecordCount\":0}"
+      "responseBody": "{\u0022traceCapacity\u0022:5000,\u0022spanCapacity\u0022:25000,\u0022metricPointCapacity\u0022:25000,\u0022logRecordCapacity\u0022:10000,\u0022resourceCount\u0022:0,\u0022traceCount\u0022:0,\u0022spanCount\u0022:0,\u0022metricInstrumentCount\u0022:0,\u0022metricPointCount\u0022:0,\u0022logRecordCount\u0022:0,\u0022droppedTraceCount\u0022:0,\u0022droppedSpanCount\u0022:0,\u0022droppedMetricPointCount\u0022:0,\u0022droppedLogRecordCount\u0022:0}",
+      "headers": null
     },
     {
       "name": "anonymous-storage",
       "method": "GET",
       "path": "/diagnostics/opentelemetry/storage",
+      "body": null,
+      "contentType": null,
+      "identity": null,
       "status": 401,
       "responseContentType": "",
-      "responseBody": ""
+      "responseBody": "",
+      "headers": null
     },
     {
       "name": "lacking-storage",
       "method": "GET",
       "path": "/diagnostics/opentelemetry/storage",
+      "body": null,
+      "contentType": null,
       "identity": "lacking",
       "status": 403,
       "responseContentType": "",
-      "responseBody": ""
+      "responseBody": "",
+      "headers": null
     },
     {
       "name": "stream-invalid",
       "method": "GET",
       "path": "/_elsa/studio/diagnostics/opentelemetry/stream?status=bad",
+      "body": null,
+      "contentType": null,
       "identity": "exact",
       "status": 400,
       "responseContentType": "text/plain; charset=utf-8",
-      "responseBody": "Invalid span status 'bad'."
+      "responseBody": "Invalid span status \u0027bad\u0027.",
+      "headers": null
     },
     {
       "name": "stream-success",
       "method": "GET",
       "path": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "body": null,
+      "contentType": null,
       "identity": "exact",
       "status": 200,
       "responseContentType": "text/event-stream",
-      "responseBody": "event: resource\ndata: {\"id\":\"resource-1\",\"serviceName\":\"service-1\",\"telemetrySdkLanguage\":\"dotnet\",\"attributes\":{},\"lastSeen\":\"2026-08-16T12:00:00+00:00\",\"status\":\"Active\"}\n\n",
+      "responseBody": "event: resource\ndata: {\u0022id\u0022:\u0022resource-1\u0022,\u0022serviceName\u0022:\u0022service-1\u0022,\u0022telemetrySdkLanguage\u0022:\u0022dotnet\u0022,\u0022attributes\u0022:{},\u0022lastSeen\u0022:\u00222026-08-16T12:00:00\u002B00:00\u0022,\u0022status\u0022:\u0022Active\u0022}\n\n",
       "headers": {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no"

@@ -61,7 +61,7 @@ public sealed class OtlpHttpIngestionHandler(
         }
 
         await ingestor.IngestAsync(batch, authentication.Context, cancellationToken);
-        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
     }
 
     private static OpenTelemetryBatch Parse(OtlpSignal signal, ReadOnlySpan<byte> payload) => signal switch

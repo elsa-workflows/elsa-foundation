@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.OpenApi;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Extensions;
 
@@ -66,14 +65,11 @@ public static class OpenTelemetryEndpointRouteBuilderExtensions
         builder
             .WithOwner(OpenTelemetryPermissions.OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .WithMetadata(new EndpointNameMetadata($"OpenTelemetryOtlp{signal}"), new TagsAttribute("OpenTelemetry"))
+            .WithMetadata(
+                new EndpointNameMetadata($"OpenTelemetryOtlp{signal}"),
+                new TagsAttribute("OpenTelemetry"),
+                new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []))
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(TransportCredential, OpenTelemetryPermissions.OwnerId))
-            .WithOpenApi(operation =>
-            {
-                operation.OperationId = $"OpenTelemetryOtlp{signal}";
-                operation.Tags = new HashSet<OpenApiTagReference> { new("OpenTelemetry", null, null) };
-                return operation;
-            })
             .AllowAnonymous();
     }
 

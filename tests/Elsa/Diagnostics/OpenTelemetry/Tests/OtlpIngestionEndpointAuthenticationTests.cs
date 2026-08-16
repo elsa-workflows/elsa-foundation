@@ -21,7 +21,7 @@ public sealed class OtlpIngestionEndpointAuthenticationTests
         var context = CreateContext(LogsPayloadWithSecret(), "source-token");
         await new OtlpHttpIngestionHandler(ingestor, new PerSourceTokenAuthenticator("source-token", authenticated), Options.Create(new OpenTelemetryDiagnosticsOptions())).HandleAsync(context, OtlpSignal.Logs);
 
-        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status204NoContent, context.Response.StatusCode);
         Assert.Equal("workspace-1", Assert.Single(contributor.Contexts).Claims["workspace"]);
         Assert.Equal("[Redacted]", Assert.Single(Assert.Single(contributor.Batches).Logs).Attributes["password"]);
     }

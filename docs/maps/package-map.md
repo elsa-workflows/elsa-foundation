@@ -43,7 +43,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Http (2.3.10)<br>Elsa.Workflows.Runtime.Http.Tests (2.3.10) |
 | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Activities.Http (2.3.10)<br>Elsa.Activities.Testing (2.3.10)<br>Elsa.Http.Core (2.3.10)<br>Elsa.Workflows.Runtime.Http (2.3.10) |
 | Microsoft.AspNetCore.Identity.EntityFrameworkCore | 10.0.10 | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore (10.0.10) |
-| Microsoft.AspNetCore.OpenApi | 10.0.10 | Elsa.Agent.Api (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Secrets.Api (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Api (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workbench (10.0.10) |
+| Microsoft.AspNetCore.OpenApi | 10.0.10 | Elsa.Agent.Api (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Secrets.Api (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Api (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workbench (10.0.10) |
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Activities.Testing (2.3.10)<br>Elsa.Http (2.3.10) |
 | Microsoft.AspNetCore.Routing.Abstractions | 2.3.10 | Elsa.Http.Core (2.3.10) |
 | Microsoft.AspNetCore.StaticFiles | 2.3.10 | Elsa.Http (2.3.10) |
@@ -352,7 +352,6 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | CShells.AspNetCore | 0.0.29-preview.147 |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
-| [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.10 |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Microsoft.Extensions.Options | 10.0.10 |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj) | source | Microsoft.Extensions.Logging.Abstractions | 10.0.10 |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
