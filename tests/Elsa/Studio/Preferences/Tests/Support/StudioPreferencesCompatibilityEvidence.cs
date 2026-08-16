@@ -1,10 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Api.Compatibility.Testing.Serialization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Studio.Preferences.Tests.Support;
 
@@ -42,8 +42,10 @@ internal static class StudioPreferencesCompatibilityEvidence
             .ToArray());
     }
 
-    public static ApprovedDifference[] LoadApprovals() =>
-        BaselineFile.Load<ApprovedDifference[]>(ApprovalsPath);
+    public static ApprovedDifference[] LoadApprovals(string method) =>
+        BaselineFile.Load<ApprovedDifference[]>(ApprovalsPath)
+            .Where(approval => approval.Endpoint == "/_elsa/studio/preferences/{param}" && approval.Method == method)
+            .ToArray();
 
     private static string NormalizeTraceIdentifier(string value)
     {
