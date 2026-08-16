@@ -105,9 +105,9 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     cases.Add(Create(HttpMethod.Post, "add-definition|trusted-unsupported-content-type", "/design/workflows/definitions", "trusted-unsupported-content-type", "{}", "text/plain"));
     cases.Add(Create(HttpMethod.Get, "list-definitions|paging-filtering", "/design/workflows/definitions?searchTerm=sample&tenantAgnostic=false&state=published", "trusted-paging"));
     cases.Add(Create(HttpMethod.Get, "get-definition|trusted-not-found", "/design/workflows/definitions/sample", "trusted-not-found"));
-    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-404", "/design/workflows/drafts/sample/promote", "trusted-promote-404", "{}"));
-    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-409-concurrency", "/design/workflows/drafts/sample/promote", "trusted-promote-409", "{}"));
-    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-500", "/design/workflows/drafts/sample/promote", "trusted-promote-500", "{}"));
+    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-404", "/design/workflows/drafts/sample/promote", "trusted-promote-404", BodyFor("promote-draft")));
+    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-409-concurrency", "/design/workflows/drafts/sample/promote", "trusted-promote-409", BodyFor("promote-draft")));
+    cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-500", "/design/workflows/drafts/sample/promote", "trusted-promote-500", BodyFor("promote-draft")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-501", "/design/workflows/definitions/sample/permanent", "trusted-delete-501", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-404", "/design/workflows/definitions/sample/permanent", "trusted-delete-404", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-500", "/design/workflows/definitions/sample/permanent", "trusted-delete-500", BodyFor("delete-definition-permanently")));
