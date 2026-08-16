@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <PackageReference Include="Groundwork.Kernel" Version="1.0.0" />
+    <PackageReference Include="Groundwork.Query.Model" Version="1.0.0" />
+    <PackageReference Include="Groundwork.Store" Version="1.0.0" />
+    <PackageReference Include="Groundwork.Sqlite" Version="1.0.0" />
+  </ItemGroup>
+</Project>
