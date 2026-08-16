@@ -11,7 +11,7 @@ Issue #1368 Wave 2 replaces exactly 13 first-party FastEndpoints registrations w
 
 ## Immutable compatibility evidence
 
-The before capture was run against the real FastEndpoints host before endpoint deletion and frozen in commit `2a4daa0aa`. It contains 22 deterministic HTTP observations and all 13 OpenAPI operations, including representative authenticated success, anonymous 401, malformed/validation/conflict errors, real BPMN XML, Elsa3 multipart upload, JSON bodies, diagnostics, pagination, polling, delete, status, location, content types, headers, and schema references.
+The before capture was run against the real FastEndpoints host before endpoint deletion and frozen in commit `b1604579f`. It contains 22 deterministic HTTP observations and all 13 OpenAPI operations, including representative authenticated success, anonymous 401, malformed/validation/conflict errors, real BPMN XML, Elsa3 multipart upload, JSON bodies, diagnostics, pagination, polling, delete, status, location, content types, headers, and schema references.
 
 `Wave2MinimalApiCompatibilityTests` now starts only the migrated Minimal API host. It loads the committed HTTP and full-schema OpenAPI fixtures and compares after evidence through `Elsa.Api.Compatibility.Testing`. The comparer has no approval file or blanket waiver. The affected compatibility gate is green with zero deltas.
 
@@ -25,27 +25,24 @@ The before capture was run against the real FastEndpoints host before endpoint d
 
 ## Unloadability
 
-`Wave2MinimalApiUnloadabilityTests` loads each owner assembly in a collectible context five times. Every cycle configures DI, maps the real production feature, materializes and serializes route metadata, disposes the service provider, clears route data sources, unloads the context, and verifies weak references for the load context, assembly, feature type, and representative endpoint. All four owners pass.
+`Wave2MinimalApiUnloadabilityTests` loads each owner assembly in a collectible context five times. Every cycle configures DI, maps the real production feature, executes representative production request/response serialization through the mapped route, disposes the service provider, clears route data sources, unloads the context, and verifies weak references for the load context, assembly, feature type, and representative endpoint. The production mappers use owner-local source-generated JSON metadata so framework serializer caches do not retain collectible owner types.
 
 ## Transition registry
 
-The exact 13 owner entries were removed from `fastendpoints-transition-exceptions.json`; no unrelated owner entries were changed. On this pre-Wave-1 branch the scanner ratchets from 164 to 151 and the architecture test is green. After the Wave 1 rebase, the integration target is the requested 156 to 143 ratchet.
+The exact 13 owner entries were removed from `fastendpoints-transition-exceptions.json`; no unrelated owner entries were changed. With merged Wave 1 as the branch base, the executable scanner ratchets from 156 to 143 registrations across eight remaining owners.
 
 ## Verification status
 
 Green locally:
 
-- Wave 2 compatibility and authorization tests (5 tests)
-- Wave 2 collectible owner test (5 cycles × 4 owners)
-- FastEndpoints transition architecture tests
-- Endpoint security architecture tests
+- Wave 2 compatibility, authorization, mixed-host, transition, security, and collectibility gate: 21/21
+- Wave 2 collectible owner evidence: 5 cycles × 4 owners through production route serialization
+- Full architecture suite: 422/422
 - BPMN Interchange tests (107), Execution Evidence endpoint/unit tests (75), and Elsa3 import contract/apply tests (9)
 - Studio Preferences coexistence/write/OpenAPI contract tests (16)
-- Owner project restores/builds and `git diff --check`
+- `Elsa.Server.slnx` restore and full build: 0 errors (existing repository warnings remain)
+- Generated maps check, changed-file formatter verification, and `git diff --check`
 
-Integration handoff notes:
+No existing backend E2E suite composes the migrated BPMN interchange, module-management, execution-evidence, or Elsa 3 import HTTP owners. The exact real HTTP contract is therefore exercised through the production TestServer mappings and immutable FastEndpoints-before fixtures; adjacent BPMN runtime and reusable-activity authoring scripts do not call these 13 routes and are not claimed as migration evidence.
 
-- This pre-Wave-1 branch reports the temporary 164→151 transition count; reconcile to 156→143 after rebasing Wave 1.
-- The generated maps check currently reports nine stale snapshots (including the manifest); no refresh was performed without the required narrow authorization.
-- A no-restore full-solution build cannot start 208 unrelated projects whose assets files are absent in this worktree; the affected projects build and test successfully after narrow restores.
-- Backend E2E still requires the rebuilt Workbench/fresh database runner. Nightly Integration issue #1323 is an open main-health report and is not a Wave 2 owner regression.
+Nightly Integration issue #1323 remains an independent open main-health report and is not a Wave 2 owner regression.

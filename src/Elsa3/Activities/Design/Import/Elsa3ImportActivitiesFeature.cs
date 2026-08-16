@@ -1,16 +1,16 @@
-﻿using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Events.Core.Extensions;
-using Elsa.Primitives.Exceptions;
-using Elsa3.Activities.Design.Import.Contracts;
-using Elsa3.Activities.Design.Import.Authorization;
-using Microsoft.Extensions.DependencyInjection;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa3.Activities.Design.Import.Services;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using CShells.AspNetCore.Features;
+using CShells.Features;
+using Elsa.Events.Core.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Primitives.Exceptions;
+using Elsa3.Activities.Design.Import.Authorization;
+using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Endpoints;
+using Elsa3.Activities.Design.Import.Services;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa3.Activities.Design.Import;
@@ -36,7 +36,7 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        foreach(var source in WorkflowCollectionSourceTypes)
+        foreach (var source in WorkflowCollectionSourceTypes)
         {
             var type = Type.GetType(source)
                 ?? throw new FeatureConfigurationException($"JSON source type '{source}' could not be loaded");

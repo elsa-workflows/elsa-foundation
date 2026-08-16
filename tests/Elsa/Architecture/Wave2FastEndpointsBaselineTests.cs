@@ -116,7 +116,7 @@ public sealed class Wave2MinimalApiCompatibilityTests : IAsyncLifetime
     }
 
     [Fact]
-    public void Captures_exactly_thirteen_wave_two_fastendpoints_routes()
+    public void Captures_exactly_thirteen_migrated_wave_two_routes()
     {
         var endpoints = _host.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)

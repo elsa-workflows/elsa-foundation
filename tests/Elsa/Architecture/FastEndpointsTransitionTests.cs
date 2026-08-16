@@ -1,6 +1,6 @@
-using System.Xml.Linq;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Transitions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

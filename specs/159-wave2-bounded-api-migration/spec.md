@@ -100,7 +100,7 @@ Hosts can load all four migrated owners alongside an unrelated FastEndpoints rou
 ## Assumptions
 
 - Existing CShells `IWebShellFeature`, ASP.NET Core endpoint routing, Foundation Identity policy/catalog, and compatibility/collectibility test infrastructure are reused.
-- Wave 0 inventory hardening and Wave 1 migrations land before this wave's final ratchet; this branch validates the pre-Wave-1 151-entry registry, and the integration rebase ratchets the combined registry from 156 to 143.
+- Wave 0 inventory hardening and Wave 1 are present in the branch base; the executable combined registry ratchets from 156 to 143 registrations.
 - Existing module services and domain tests remain the behavior source of truth; this work changes HTTP authoring and composition only.
 - The existing administrative wildcard grant remains an evaluator-level compatibility grant and is not itself a module permission contributor or endpoint policy operand.
 - Backend E2E execution uses a rebuilt Workbench and fresh database as required by the repository runner.

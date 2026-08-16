@@ -197,3 +197,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [156-retained-host-route-metadata](../../specs/156-retained-host-route-metadata/spec.md) | Retained Host Route Ownership and Security Metadata | Implemented | - | 14 | 0 | retained |
 | [157-workflow-dynamic-http-publication](../../specs/157-workflow-dynamic-http-publication/spec.md) | Workflow-authored Dynamic HTTP Publication | Draft | - | 10 | 0 | out of scope |
 | [158-wave1-small-read-api-migration](../../specs/158-wave1-small-read-api-migration/spec.md) | Wave 1 Small and Read-Oriented REST API Migration | Implemented | - | 16 | 0 | retained, out of scope |
+| [159-wave2-bounded-api-migration](../../specs/159-wave2-bounded-api-migration/spec.md) | Wave 2 Bounded API Migration | Draft | - | 22 | 0 | - |

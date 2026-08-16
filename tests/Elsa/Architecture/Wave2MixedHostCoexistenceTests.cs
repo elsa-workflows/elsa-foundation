@@ -27,6 +27,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Proves the four Wave 2 Minimal API owners coexist with one unrelated FastEndpoints route.</summary>
+[Collection(Wave1HostCollection.Name)]
 public sealed class Wave2MixedHostCoexistenceTests : IAsyncLifetime
 {
     private const string IdentityHeader = "X-Wave2-Mixed-Identity";

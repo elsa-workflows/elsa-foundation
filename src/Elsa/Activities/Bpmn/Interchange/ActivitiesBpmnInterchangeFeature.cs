@@ -1,14 +1,14 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Activities.Bpmn.Interchange.Contracts;
-using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Activities.Bpmn.Interchange.Authorization;
+using Elsa.Activities.Bpmn.Interchange.Contracts;
+using Elsa.Activities.Bpmn.Interchange.Endpoints;
+using Elsa.Activities.Bpmn.Interchange.Services;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Elsa.Activities.Bpmn.Interchange.Endpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange;
 

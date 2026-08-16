@@ -1,11 +1,11 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Modularity.Api.Endpoints;
 using Elsa.Modularity.Api.Extensions;
 using Elsa.Modularity.Api.Options;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Microsoft.Extensions.DependencyInjection;
-using Elsa.Modularity.Api.Endpoints;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Modularity.Api;
