@@ -2,6 +2,8 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
@@ -24,6 +26,12 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     static GroundworkV2RuntimeCheckpointWriterTests()
     {
         Json.Converters.Add(new JsonStringEnumConverter());
+    }
+
+    [SkippableFact]
+    public void Scheduler_claim_renewal_requires_groundwork_291_compare_and_delete()
+    {
+        Skip.If(true, "Groundwork #291 is required for renewal-stable owner+token compare-and-delete; v2 remains fail-closed until then.");
     }
 
     [Fact]
@@ -104,7 +112,206 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     }
 
     [Fact]
-    public async Task Unsupported_activity_scope_cleanup_is_refused_before_provider_io()
+    public async Task Workflow_execution_write_requires_the_root_write_lease_before_opening_a_unit_of_work()
+    {
+        var source = new MemorySource();
+        var writer = new GroundworkV2RuntimeCheckpointWriter(
+            source,
+            new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var execution = NewExecution("workflow-1");
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(execution.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, execution, new Dictionary<string, string>()),
+            null,
+            [], [], [], [], []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.CommitAsync(NewCommit("lease-required") with { StateChanges = changes }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+    }
+
+    [Fact]
+    public async Task Lost_root_write_lease_aborts_before_the_checkpoint_unit_of_work()
+    {
+        var source = new MemorySource();
+        var writer = new GroundworkV2RuntimeCheckpointWriter(
+            source,
+            new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))),
+            rootWriteLeaseManager: new TestRootWriteLeaseManager(throwLost: true));
+        var execution = NewExecution("workflow-1");
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(execution.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, execution, new Dictionary<string, string>()),
+            null,
+            [], [], [], [], []);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseLostException>(() =>
+            writer.CommitAsync(NewCommit("lease-lost") with { StateChanges = changes }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+    }
+
+    [Fact]
+    public async Task Unavailable_root_write_lease_aborts_before_the_checkpoint_unit_of_work()
+    {
+        var source = new MemorySource();
+        var writer = new GroundworkV2RuntimeCheckpointWriter(
+            source,
+            new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))),
+            rootWriteLeaseManager: new TestRootWriteLeaseManager(throwUnavailable: true));
+        var execution = NewExecution("workflow-1");
+        var changes = new RuntimeCheckpointStateChangeSet(
+            new RuntimeStateChange<WorkflowExecutionState>(execution.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, execution, new Dictionary<string, string>()),
+            null,
+            [], [], [], [], []);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            writer.CommitAsync(NewCommit("lease-unavailable") with { StateChanges = changes }, Immediate()).AsTask());
+        Assert.Equal(0, source.UnitOfWorkCount);
+    }
+
+    [Fact]
+    public async Task Alteration_terminal_write_preserves_the_full_job_and_uses_revision_cas()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var job = new WorkflowAlterationJobState(
+            "job-1",
+            "plan-1",
+            "workflow-1",
+            "tenant-a",
+            3,
+            WorkflowAlterationJobStatus.Running,
+            new WorkflowAlterationJobClaim("worker", "claim", now.AddMinutes(5)),
+            2,
+            [],
+            null,
+            null,
+            now.AddMinutes(-1),
+            now.AddSeconds(-30),
+            null,
+            7,
+            null);
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind,
+            job.JobId,
+            job,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobIdField] = job.JobId,
+                [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobPlanIdField] = job.PlanId,
+                [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobCaptureOrdinalField] = job.CaptureOrdinal,
+                [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobStatusField] = job.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.WorkflowAlterationJobCheckpointCommitIdField] = null
+            });
+        var completedAt = now;
+        var outcome = new WorkflowAlterationOutcome(0, "CancelWorkflow", 1, WorkflowAlterationOutcomeStatus.Succeeded, "cancelled", null, now);
+        var terminal = new WorkflowAlterationJobTerminalChange("job-1", "claim", WorkflowAlterationJobStatus.Succeeded, [outcome], "alteration-terminal", completedAt);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: null,
+            alterationJobTerminalChange: terminal);
+
+        await NewWriter(source).CommitAsync(NewCommit("alteration-terminal") with { StateChanges = changes }, Immediate());
+
+        var stored = source.Find(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind, job.JobId, "tenant-a");
+        Assert.NotNull(stored);
+        var projected = JsonSerializer.Deserialize<WorkflowAlterationJobState>(
+            (string)stored!.Values.Values[ElsaRuntimeV2StorageManifest.ContentField]!, Json);
+        Assert.Equal(job.PlanId, projected!.PlanId);
+        Assert.Equal(job.CaptureOrdinal, projected.CaptureOrdinal);
+        Assert.Equal(job.Claim, projected.Claim);
+        Assert.Equal(terminal.Status, projected.Status);
+        Assert.Equal(8, projected.Revision);
+    }
+
+    [Fact]
+    public async Task Dispatch_transition_uses_revision_cas_and_rolls_back_on_successor_race()
+    {
+        var source = new MemorySource();
+        var pending = NewDispatch("workflow-1", WorkflowDispatchStatus.Pending);
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+            pending.DispatchId,
+            pending,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+                [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.StatusField] = pending.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = pending.CreatedAt,
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = pending.DispatchId
+            });
+        var started = WorkflowDispatchLifecycle.Transition(pending, WorkflowDispatchStatus.Started, pending.UpdatedAt.AddSeconds(1));
+        source.BeforeCommit = _ => source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+            pending.DispatchId,
+            started,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+                [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.StatusField] = started.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = started.CreatedAt,
+                [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = started.DispatchId
+            },
+            version: 2);
+        var completed = WorkflowDispatchLifecycle.Transition(pending, WorkflowDispatchStatus.Completed, pending.UpdatedAt.AddSeconds(2));
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null,
+            null,
+            [], [], [], [], [],
+            workflowDispatches: [new RuntimeStateChange<WorkflowDispatchRecord>(completed.DispatchId, RuntimeStateChangeOperation.Upsert, completed, new Dictionary<string, string>())]);
+        var commit = NewCommit("dispatch-race") with
+        {
+            Checkpoint = NewCommit("dispatch-race").Checkpoint with { WorkflowExecutionId = completed.ChildWorkflowExecutionId },
+            StateChanges = changes
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NewWriter(source).CommitAsync(commit, Immediate()).AsTask());
+        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "dispatch-race", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Equivalent_pending_outbox_replay_does_not_overwrite_existing_delivery_row()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var intent = new RuntimePostCommitIntent("intent-1", "workflow-1", "test.intent", now, null, "idempotency-1", null);
+        var item = new RuntimePostCommitOutboxItem("outbox-1", intent, RuntimePostCommitOutboxStatus.Pending, now, null);
+        source.SeedRow(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+            item.OutboxItemId,
+            item,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = item.Intent.WorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField] = (int)item.Status,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField] = item.RecordedAt,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField] = item.OutboxItemId,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField] = item.Intent.Kind
+            });
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            postCommitOutbox: [new RuntimeStateChange<RuntimePostCommitOutboxItem>(item.OutboxItemId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())]);
+
+        await NewWriter(source).CommitAsync(NewCommit("outbox-equivalent") with { StateChanges = changes }, Immediate());
+        Assert.NotNull(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "outbox-equivalent", "tenant-a"));
+        Assert.Equal(1, source.Find(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, item.OutboxItemId, "tenant-a")!.Version);
+    }
+
+    [Fact]
+    public async Task Activity_scope_cleanup_is_staged_in_the_same_checkpoint_unit_of_work()
     {
         var source = new MemorySource();
         var changes = new RuntimeCheckpointStateChangeSet(
@@ -112,12 +319,11 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             workflowDispatches: null,
             activityExecutionInspections: null,
             postCommitOutbox: null,
-            activityScopeCleanups: [new ActivityScopeCleanupRequest("workflow-1", "scope-1", [], [], [], [])],
+            activityScopeCleanups: [new ActivityScopeCleanupRequest("workflow-1", "scope-1", ["scope-1"], [], [], [])],
             workflowDispatchCancellations: null);
 
-        await Assert.ThrowsAsync<NotSupportedException>(() =>
-            NewWriter(source).CommitAsync(NewCommit("cleanup-refused") with { StateChanges = changes }, Immediate()).AsTask());
-        Assert.Equal(0, source.UnitOfWorkCount);
+        await NewWriter(source).CommitAsync(NewCommit("cleanup") with { StateChanges = changes }, Immediate());
+        Assert.NotNull(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "cleanup", "tenant-a"));
     }
 
     [Fact]
@@ -623,7 +829,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     }
 
     private static GroundworkV2RuntimeCheckpointWriter NewWriter(MemorySource source, string scope = "tenant-a") =>
-        new(source, new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope(scope))));
+        new(
+            source,
+            new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope(scope))),
+            rootWriteLeaseManager: new TestRootWriteLeaseManager());
 
     private static RuntimeCheckpointPersistenceDecision Immediate() =>
         new(RuntimeCheckpointPersistenceMode.Immediate);
@@ -722,6 +931,23 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class TestRootWriteLeaseManager(bool throwLost = false, bool throwUnavailable = false) : IWorkflowExecutableRootWriteLeaseManager
+    {
+        private readonly bool throwLost = throwLost;
+        private readonly bool throwUnavailable = throwUnavailable;
+
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) =>
+            throwLost
+                ? ValueTask.FromException(new WorkflowExecutableRootWriteLeaseLostException(artifactId, leaseId))
+                : throwUnavailable
+                    ? ValueTask.FromException(new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId))
+                    : write(cancellationToken);
     }
 
     private sealed class NativeSessionSource(IStorageProviderConnection connection) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
