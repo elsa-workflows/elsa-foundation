@@ -15,9 +15,9 @@ namespace Elsa.Agent.Api;
     DisplayName = "Foundation Agent API",
     Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints."
 )]
-public sealed class FoundationAgentApiFeature : IWebShellFeature
+public class FoundationAgentApiFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddFoundationAgentApi();
     }

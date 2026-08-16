@@ -232,7 +232,10 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
 
     public HttpClient Client => host.GetTestClient();
 
-    public static async Task<Wave4AgentMinimalApiHost> StartAsync(IAgentStreamingService? streaming = null)
+    public static async Task<Wave4AgentMinimalApiHost> StartAsync(
+        IAgentStreamingService? streaming = null,
+        IAgentContextCollector? contextCollector = null,
+        IAgentTurnRegistry? turnRegistry = null)
     {
         var builder = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -261,7 +264,7 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
                     });
                     services.Replace(ServiceDescriptor.Singleton<IAgentSessionService, Wave4FixedSessionService>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentPolicyEvaluator, Wave4FixedPolicyEvaluator>());
-                    services.Replace(ServiceDescriptor.Singleton<IAgentContextCollector, Wave4FixedContextCollector>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentContextCollector>(contextCollector ?? new Wave4FixedContextCollector()));
                     services.Replace(ServiceDescriptor.Singleton<IAgentContextSanitizer, Wave4FixedContextSanitizer>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentCapabilityCatalog, Wave4FixedCapabilityCatalog>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentProviderRegistry, Wave4FixedProviderRegistry>());
@@ -270,7 +273,7 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
                     services.Replace(ServiceDescriptor.Singleton<IAgentProposalService, Wave4FixedProposalService>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentAuditReader, Wave4FixedAuditReader>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink, Wave4FixedAuditSink>());
-                    services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry, Wave4FixedTurnRegistry>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry>(turnRegistry ?? new Wave4FixedTurnRegistry()));
                 });
                 webHost.Configure(app =>
                 {

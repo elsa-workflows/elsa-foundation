@@ -23,6 +23,10 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave4-agent-http-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-binding-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-sse-error-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

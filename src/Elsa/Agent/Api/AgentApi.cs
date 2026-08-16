@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Elsa.Agent.Api.Constants;
+using Elsa.Agent.Api.Endpoints;
 using Elsa.Agent.Api.Models;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Api.AspNetCore;
-using Elsa.Agent.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -286,8 +286,9 @@ public static class AgentApi
             await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse, error.StatusCode);
             return;
         }
-        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(request.TurnId);
-        await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Success(new(request.TurnId, cancelled)), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse);
+        var turnId = string.IsNullOrWhiteSpace(request.TurnId) ? RouteValue(context, "turnId") : request.TurnId;
+        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(turnId);
+        await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Success(new(turnId, cancelled)), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse);
     }
 
     private static async Task HandleStreamSessionAsync(HttpContext context)
@@ -300,7 +301,7 @@ public static class AgentApi
         var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
-            await WriteEventAsync(context, new AgentStreamEvent("error-1", AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UnixEpoch));
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow));
             return;
         }
         await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
@@ -406,14 +407,21 @@ public static class AgentApi
     private static async Task HandleAuditAsync(HttpContext context)
     {
         var sessionId = context.Request.Query["sessionId"].FirstOrDefault();
-        int? take = int.TryParse(context.Request.Query["take"].FirstOrDefault(), out var parsed) ? parsed : null;
+        var rawTake = context.Request.Query["take"].FirstOrDefault();
+        var take = ParseTake(rawTake, out var bindingError);
+        if (bindingError is not null)
+        {
+            await WriteBindingErrorAsync(context, "take", bindingError);
+            return;
+        }
         var events = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListAsync(sessionId, take, context.RequestAborted);
         await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
     }
 
     private static async Task<IReadOnlyCollection<AgentContextAttachment>> CollectInitialContextAsync(HttpContext context, AgentSession session, AgentCreateSessionRequest request)
     {
-        var workflowId = request.ActiveSurface?.ResourceId;
+        var activeSurface = request.ActiveSurface;
+        var workflowId = activeSurface?.ResourceId ?? TryGetWorkflowId(activeSurface?.Route);
         if (workflowId is null)
             return [];
         var result = await context.RequestServices.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy, new(session.Id, "workflow", new Dictionary<string, string> { ["workflowDefinitionId"] = workflowId, ["workflowVersionId"] = "draft" }), context.RequestAborted);
@@ -426,14 +434,63 @@ public static class AgentApi
         await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 403);
     }
 
-    private static async Task<T?> ReadAsync<T>(HttpContext context, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) =>
-        await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted);
+    private static async Task<T?> ReadAsync<T>(HttpContext context, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
+    {
+        try
+        {
+            return await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted);
+        }
+        catch (JsonException exception)
+        {
+            await WriteBindingErrorAsync(context, "serializerErrors", exception.Message.Replace(" Path: $ |", string.Empty, StringComparison.Ordinal));
+            return default;
+        }
+    }
 
     private static Task WriteAsync<T>(HttpContext context, T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo, int statusCode = StatusCodes.Status200OK) =>
         Results.Json(value, typeInfo, contentType: "application/json", statusCode: statusCode).ExecuteAsync(context);
 
-    private static Task WriteEventAsync(HttpContext context, AgentStreamEvent item) =>
-        context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, AgentSseJsonContext.Default.AgentStreamEvent)}\n\n", context.RequestAborted);
+    private static async Task WriteEventAsync(HttpContext context, AgentStreamEvent item)
+    {
+        await context.Response.WriteAsync($"data: {JsonSerializer.Serialize(item, AgentSseJsonContext.Default.AgentStreamEvent)}\n\n", context.RequestAborted);
+        await context.Response.Body.FlushAsync(context.RequestAborted);
+    }
+
+    private static Task WriteBindingErrorAsync(HttpContext context, string field, string message) =>
+        Results.Json(
+            new AgentBindingErrorResponse(400, "One or more errors occurred!", new Dictionary<string, string[]> { [field] = [message] }),
+            AgentJsonContext.Default.AgentBindingErrorResponse,
+            contentType: "application/problem+json; charset=utf-8",
+            statusCode: StatusCodes.Status400BadRequest)
+            .ExecuteAsync(context);
+
+    private static int? ParseTake(string? value, out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            error = null;
+            return null;
+        }
+
+        if (int.TryParse(value, out var parsed))
+        {
+            error = null;
+            return parsed;
+        }
+
+        error = $"Value [{value}] is not valid for a [Int32] property!";
+        return null;
+    }
+
+    private static string? TryGetWorkflowId(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+            return null;
+
+        var segments = route.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var workflowsIndex = Array.FindIndex(segments, x => string.Equals(x, "workflows", StringComparison.OrdinalIgnoreCase));
+        return workflowsIndex >= 0 && workflowsIndex + 1 < segments.Length ? segments[workflowsIndex + 1] : null;
+    }
 
     private static string RouteValue(HttpContext context, string name) => context.Request.RouteValues.TryGetValue(name, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
 

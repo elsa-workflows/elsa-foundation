@@ -1,7 +1,11 @@
 using System.Net;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
+using Elsa.Agent.Api;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -9,6 +13,29 @@ namespace Elsa.Architecture.Tests;
 [Collection(Wave4AgentFastEndpointsCollection.Name)]
 public sealed class Wave4AgentSseLifecycleTests
 {
+    [Fact]
+    public async Task Every_sse_event_flushes_the_response_body_before_the_next_event()
+    {
+        var body = new FlushTrackingStream();
+        var context = new DefaultHttpContext
+        {
+            RequestAborted = CancellationToken.None
+        };
+        context.Response.Body = body;
+        var writer = typeof(AgentApi).GetMethod("WriteEventAsync", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("The Agent SSE event writer is missing.");
+
+        var task = (Task?)writer.Invoke(null,
+        [context, new AgentStreamEvent("event-1", AgentStreamEventKind.MessageDelta, "hello", null, null, Wave4AgentFixtures.Now)])
+            ?? throw new InvalidOperationException("The Agent SSE event writer did not return a task.");
+        await task;
+
+        // Response.WriteAsync uses two pipeline flushes; the third call is the explicit per-event
+        // body flush that preserves FastEndpoints' backpressure boundary.
+        Assert.Equal(3, body.FlushCount);
+        Assert.Contains("data: ", Encoding.UTF8.GetString(body.ToArray()), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Stream_preserves_sse_headers_framing_and_awaited_backpressure()
     {
@@ -70,6 +97,29 @@ public sealed class Wave4AgentSseLifecycleTests
             {
                 Disposed.TrySetResult();
             }
+        }
+    }
+
+    private sealed class FlushTrackingStream : MemoryStream
+    {
+        public int FlushCount { get; private set; }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            Write(buffer, offset, count);
+            return Task.CompletedTask;
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Write(buffer.Span);
+            return ValueTask.CompletedTask;
+        }
+
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            FlushCount++;
+            return Task.CompletedTask;
         }
     }
 }

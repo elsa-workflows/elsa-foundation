@@ -1,7 +1,7 @@
 # Wave 4 Agent REST and SSE API migration
 
-Status: implementation evidence complete for the bounded Agent slice; review and integration are
-still required.
+Status: implementation evidence complete for the bounded Agent slice; control-room integration
+gates are still required.
 
 This report records issue [#1370](https://github.com/elsa-workflows/elsa-foundation/issues/1370).
 The scope is exactly the eleven concrete `Elsa.Agent.Api` FastEndpoints registrations. It does not
@@ -22,12 +22,12 @@ It contains eleven HTTP observations and the consumed OpenAPI document for:
 
 | Operation | Route family | Permission metadata |
 | --- | --- | --- |
-| Bootstrap | `POST /_elsa/agent/bootstrap` | `agent.use` |
+| Bootstrap | `GET /_elsa/agent/bootstrap` | `agent.use` |
 | Create/Get session | `POST/GET /_elsa/agent/sessions...` | `agent.use` |
 | Post/cancel turn | `POST /_elsa/agent/sessions/{sessionId}/...` | `agent.use` |
 | Stream session | `GET /_elsa/agent/sessions/{sessionId}/stream` | `agent.use` |
-| Feedback | `POST /_elsa/agent/sessions/{sessionId}/feedback` | `agent.use` |
-| Approve/deny/execute proposal | `POST /_elsa/agent/sessions/{sessionId}/proposals/...` | `agent.proposals` |
+| Feedback | `POST /_elsa/agent/feedback` | `agent.use` |
+| Approve/deny/execute proposal | `POST /_elsa/agent/proposals/...` | `agent.proposals` |
 | Audit | `GET /_elsa/agent/audit` | `agent.audit` |
 
 The implementation adds `AgentApi.MapAgentApi`, an `IWebShellFeature` adapter, an Agent-owned
@@ -43,8 +43,12 @@ names, routes, response metadata, and tags are explicit rather than discovered.
 | OpenAPI parity | Same test, 11 Agent operations projected from a host that also maps an FE canary | Pass; no unapproved differences |
 | Authorization | `Wave4AgentAuthorizationTests` | Pass: 401/403, exact, implied, wildcard, resource, tenant, and mixed FE/Minimal cases |
 | SSE wire contract | `Wave4AgentSseLifecycleTests` | Pass: `text/event-stream`, no-cache, anti-buffering, two newline-terminated data frames |
+| SSE write pacing | `Wave4AgentSseLifecycleTests.Every_sse_event_flushes_the_response_body_before_the_next_event` | Pass: each event awaits a response-body flush |
+| SSE authorization error | `Wave4AgentSseErrorCompatibilityTests` and `wave4-agent-sse-error-fastendpoints.json` | Pass: exact error payload plus generated ID and `UtcNow` timestamp semantics |
+| Binding parity | `Wave4AgentBindingCompatibilityTests` and `wave4-agent-binding-fastendpoints.json` | Pass: empty/malformed JSON and invalid `take` preserve FastEndpoints 400 ProblemDetails status, media type, and body |
+| Authentication/provider execution | `Wave4AgentCollectibilityTests` | Pass: the configured authentication scheme establishes the principal, then bootstrap/session/provider delegates execute through the published routes |
 | SSE cancellation/disposal | Tracking async enumerator test | Pass: cancellation reaches the enumerator finally path |
-| Collectibility | `Wave4AgentCollectibilityTests`, 3 real route-publication cycles | Pass: Agent load context, assembly, mapper, feature, DI provider, route endpoints, and generated JSON context collect |
+| Collectibility | `Wave4AgentCollectibilityTests`, 3 real route-publication cycles | Pass: mapped binder, typed serializer, provider/auth delegates, completed and cancelled SSE, DI provider, route endpoints, and generated JSON context execute and collect |
 | Mixed coexistence | FE canary mapped with Agent Minimal API in one TestServer | Pass |
 | Transition ratchet | `FastEndpointsTransitionTests` and baseline JSON | Pass: 156 → 145 registrations; 11 Agent entries removed |
 
@@ -73,9 +77,10 @@ and fail closed.
   advisory warning and should be tracked separately from the migration gate.
 - Repository builds retain existing analyzer/nullable/obsolete warnings and the SSH.NET advisory;
   no new failing warning gate was introduced by this slice.
-- The collectible test proves real mapper publication, DI setup, generated serializer metadata, and
-  route release. It intentionally does not claim dynamic OpenAPI document-cache unloadability; that
-  remains a broader publication concern.
+- The collectible test proves real mapper publication, mapped binding, typed serialization, provider
+  and authorization service execution, completed/cancelled SSE, DI setup, generated serializer
+  metadata, and route release. It intentionally does not claim dynamic OpenAPI document-cache
+  unloadability; that remains a broader publication concern.
 
 ## Follow-up boundary
 
