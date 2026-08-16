@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -58,6 +58,19 @@ public static class EndpointConventionBuilderExtensions
     public static TBuilder WithAuthoringModel<TBuilder>(this TBuilder builder, string model)
         where TBuilder : IEndpointConventionBuilder =>
         AddMetadata(builder, new EndpointAuthoringMetadata(model));
+
+    /// <summary>
+    /// Validates the completed endpoint metadata as the final standard ASP.NET Core convention.
+    /// The returned builder is the original builder and no request, routing, authorization, binding,
+    /// serialization, or result behavior is changed.
+    /// </summary>
+    public static TBuilder RequireStableOpenApi<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Finally(OpenApiLifetimeValidator.ValidateAndMark);
+        return builder;
+    }
 
     /// <summary>
     /// Preserves the host application's OpenAPI tag without introducing a module-specific endpoint

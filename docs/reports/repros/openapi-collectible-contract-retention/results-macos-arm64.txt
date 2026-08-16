@@ -1,0 +1,14 @@
+Captured: 2026-08-16
+Platform: macOS 26.5, Darwin 25.5.0, arm64
+.NET SDK: 10.0.300 (caa81fa497)
+.NET host/runtime: 10.0.8 (94ea82652c)
+Microsoft.AspNetCore.OpenApi: 10.0.10
+Microsoft.OpenApi: 2.7.5
+
+Command:
+dotnet build Contract/Contract.csproj
+dotnet run --project Repro.csproj -- "$PWD/Contract/bin/Debug/net10.0/OpenApiRetention.Contract.dll"
+
+Result (exit 0):
+Stable metadata:      CollectionResult { Collected = True, LoadContextAlive = False, AssemblyAlive = False, ContractTypeAlive = False, DelegateAlive = False, ProviderAlive = False }
+Collectible metadata: CollectionResult { Collected = False, LoadContextAlive = True, AssemblyAlive = True, ContractTypeAlive = True, DelegateAlive = False, ProviderAlive = False }
