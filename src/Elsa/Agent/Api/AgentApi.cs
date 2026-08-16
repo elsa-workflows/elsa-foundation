@@ -232,7 +232,7 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentMessageRequest);
         if (request is null)
             return;
-        var sessionId = string.IsNullOrWhiteSpace(request.SessionId) ? RouteValue(context, "sessionId") : request.SessionId;
+        var sessionId = RouteValueOrFallback(context, "sessionId", request.SessionId);
         var requestedCapabilitiesInput = request.RequestedCapabilities ?? [];
         var contextAttachmentIds = request.ContextAttachmentIds ?? [];
         var contextAttachments = request.ContextAttachments ?? [];
@@ -279,14 +279,14 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentTurnCancelRequest);
         if (request is null)
             return;
-        var sessionId = string.IsNullOrWhiteSpace(request.SessionId) ? RouteValue(context, "sessionId") : request.SessionId;
+        var sessionId = RouteValueOrFallback(context, "sessionId", request.SessionId);
         var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
             await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse, error.StatusCode);
             return;
         }
-        var turnId = string.IsNullOrWhiteSpace(request.TurnId) ? RouteValue(context, "turnId") : request.TurnId;
+        var turnId = RouteValueOrFallback(context, "turnId", request.TurnId);
         var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(turnId);
         await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Success(new(turnId, cancelled)), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse);
     }
@@ -339,7 +339,7 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentProposalDecisionRequest);
         if (request is null)
             return;
-        var proposalId = string.IsNullOrWhiteSpace(request.ProposalId) ? RouteValue(context, "proposalId") : request.ProposalId;
+        var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
         var proposals = context.RequestServices.GetRequiredService<IAgentProposalService>();
         var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         var error = await AgentProposalAuthorization.AuthorizeAsync(proposals, sessions, context.User, proposalId, context.RequestAborted);
@@ -363,7 +363,7 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentProposalDecisionRequest);
         if (request is null)
             return;
-        var proposalId = string.IsNullOrWhiteSpace(request.ProposalId) ? RouteValue(context, "proposalId") : request.ProposalId;
+        var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
         var proposals = context.RequestServices.GetRequiredService<IAgentProposalService>();
         var error = await AgentProposalAuthorization.AuthorizeAsync(proposals, context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, proposalId, context.RequestAborted);
         if (error is not null)
@@ -386,7 +386,7 @@ public static class AgentApi
         var request = await ReadAsync(context, AgentJsonContext.Default.AgentProposalDecisionRequest);
         if (request is null)
             return;
-        var proposalId = string.IsNullOrWhiteSpace(request.ProposalId) ? RouteValue(context, "proposalId") : request.ProposalId;
+        var proposalId = RouteValueOrFallback(context, "proposalId", request.ProposalId);
         var proposals = context.RequestServices.GetRequiredService<IAgentProposalService>();
         var error = await AgentProposalAuthorization.AuthorizeAsync(proposals, context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, proposalId, context.RequestAborted);
         if (error is not null)
@@ -430,15 +430,35 @@ public static class AgentApi
 
     private static async Task WriteDeniedAsync(HttpContext context, string sessionId, AgentPolicyDecision decision)
     {
-        await context.RequestServices.GetRequiredService<IAgentAuditSink>().EmitAsync(new(AgentProviderPrimitives.NewId(), AgentAuditEventKind.ContextDenied, sessionId, null, "Agent request denied by policy.", DateTimeOffset.UtcNow, new Dictionary<string, string>()), context.RequestAborted);
+        await context.RequestServices.GetRequiredService<IAgentAuditSink>().EmitAsync(new(
+            AgentProviderPrimitives.NewId(),
+            AgentAuditEventKind.ContextDenied,
+            sessionId,
+            null,
+            "Agent request denied by policy.",
+            DateTimeOffset.UtcNow,
+            decision.Violations.Select((violation, index) => new { Key = $"{index}:{violation.Code}", violation.Message }).ToDictionary(x => x.Key, x => x.Message)),
+            context.RequestAborted);
         await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.policyDenied", string.Join(" ", decision.Violations.Select(x => x.Message)), 403)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 403);
     }
 
     private static async Task<T?> ReadAsync<T>(HttpContext context, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
     {
+        if (string.IsNullOrWhiteSpace(context.Request.ContentType))
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return default;
+        }
+
         try
         {
-            return await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted);
+            var value = await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted);
+            return value ?? JsonSerializer.Deserialize("{}", typeInfo);
+        }
+        catch (NotSupportedException)
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return default;
         }
         catch (JsonException exception)
         {
@@ -493,6 +513,12 @@ public static class AgentApi
     }
 
     private static string RouteValue(HttpContext context, string name) => context.Request.RouteValues.TryGetValue(name, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+
+    private static string RouteValueOrFallback(HttpContext context, string name, string fallback)
+    {
+        var routeValue = RouteValue(context, name);
+        return string.IsNullOrWhiteSpace(routeValue) ? fallback : routeValue;
+    }
 
     private static IReadOnlyCollection<string> BuildModes(IReadOnlyCollection<AgentCapability> capabilities)
     {

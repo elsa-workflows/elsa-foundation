@@ -44,6 +44,9 @@ public sealed class Wave4AgentAuthorizationTests
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(host, "/_elsa/agent/sessions/session-1", "use|actor-2|tenant-1")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await GetAsync(host, "/_elsa/agent/sessions/session-1", "use|actor-1|tenant-2")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync(host, "/_elsa/agent/proposals/proposal-1/approve", "proposals|actor-2|tenant-1")).StatusCode);
+        using var missing = await GetAsync(host, "/_elsa/agent/sessions/session-missing", "use|actor-1|tenant-1");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Contains("\"code\":\"agent.session.not_found\"", await missing.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     [Fact]

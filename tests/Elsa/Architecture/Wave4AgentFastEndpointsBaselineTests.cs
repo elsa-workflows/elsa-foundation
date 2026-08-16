@@ -235,7 +235,9 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
     public static async Task<Wave4AgentMinimalApiHost> StartAsync(
         IAgentStreamingService? streaming = null,
         IAgentContextCollector? contextCollector = null,
-        IAgentTurnRegistry? turnRegistry = null)
+        IAgentTurnRegistry? turnRegistry = null,
+        IAgentPolicyEvaluator? policyEvaluator = null,
+        IAgentAuditSink? auditSink = null)
     {
         var builder = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -263,7 +265,7 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
                         options.Filter = type => type == typeof(Wave4FastEndpointsCanary);
                     });
                     services.Replace(ServiceDescriptor.Singleton<IAgentSessionService, Wave4FixedSessionService>());
-                    services.Replace(ServiceDescriptor.Singleton<IAgentPolicyEvaluator, Wave4FixedPolicyEvaluator>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentPolicyEvaluator>(policyEvaluator ?? new Wave4FixedPolicyEvaluator()));
                     services.Replace(ServiceDescriptor.Singleton<IAgentContextCollector>(contextCollector ?? new Wave4FixedContextCollector()));
                     services.Replace(ServiceDescriptor.Singleton<IAgentContextSanitizer, Wave4FixedContextSanitizer>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentCapabilityCatalog, Wave4FixedCapabilityCatalog>());
@@ -272,7 +274,7 @@ internal sealed class Wave4AgentMinimalApiHost : IAsyncDisposable
                     services.Replace(ServiceDescriptor.Singleton<IAgentFeedbackService, Wave4FixedFeedbackService>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentProposalService, Wave4FixedProposalService>());
                     services.Replace(ServiceDescriptor.Singleton<IAgentAuditReader, Wave4FixedAuditReader>());
-                    services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink, Wave4FixedAuditSink>());
+                    services.Replace(ServiceDescriptor.Singleton<IAgentAuditSink>(auditSink ?? new Wave4FixedAuditSink()));
                     services.Replace(ServiceDescriptor.Singleton<IAgentTurnRegistry>(turnRegistry ?? new Wave4FixedTurnRegistry()));
                 });
                 webHost.Configure(app =>

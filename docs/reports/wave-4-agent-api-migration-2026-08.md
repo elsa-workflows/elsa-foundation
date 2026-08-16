@@ -35,6 +35,11 @@ permission contributor, and owner-local source-generated response/SSE contexts. 
 endpoint classes and the production `Elsa.Api.FastEndpoints` reference are removed. Operation
 names, routes, response metadata, and tags are explicit rather than discovered.
 
+The binding and SSE authorization-error fixtures are supplemental correction evidence. They were
+captured from the deleted FastEndpoints implementation during correction commit `b5f129f2e`
+(`fix: close Wave 4 Agent migration review gaps`), after the baseline-first 11-route capture; they
+must not be described as baseline-first evidence.
+
 ## Evidence matrix
 
 | Gate | Evidence | Result |
@@ -44,14 +49,14 @@ names, routes, response metadata, and tags are explicit rather than discovered.
 | Authorization | `Wave4AgentAuthorizationTests` | Pass: 401/403, exact, implied, wildcard, resource, tenant, and mixed FE/Minimal cases |
 | SSE wire contract | `Wave4AgentSseLifecycleTests` | Pass: `text/event-stream`, no-cache, anti-buffering, two newline-terminated data frames |
 | SSE write pacing | `Wave4AgentSseLifecycleTests.Every_sse_event_flushes_the_response_body_before_the_next_event` | Pass: each event awaits a response-body flush |
-| SSE authorization error | `Wave4AgentSseErrorCompatibilityTests` and `wave4-agent-sse-error-fastendpoints.json` | Pass: exact error payload plus generated ID and `UtcNow` timestamp semantics |
-| Binding parity | `Wave4AgentBindingCompatibilityTests` and `wave4-agent-binding-fastendpoints.json` | Pass: empty/malformed JSON and invalid `take` preserve FastEndpoints 400 ProblemDetails status, media type, and body |
+| SSE authorization error (supplemental) | `Wave4AgentSseErrorCompatibilityTests` and `wave4-agent-sse-error-fastendpoints.json`, captured in `b5f129f2e` | Pass: exact error payload plus generated ID and `UtcNow` timestamp semantics |
+| Binding parity (supplemental) | `Wave4AgentBindingCompatibilityTests` and `wave4-agent-binding-fastendpoints.json`, captured in `b5f129f2e` | Pass: empty/malformed JSON and invalid `take` preserve FastEndpoints 400 ProblemDetails status, media type, and body; route/body/null/content-type cases match the actual deleted Agent endpoints |
 | Authentication/provider execution | `Wave4AgentCollectibilityTests` | Pass: the configured authentication scheme establishes the principal, then bootstrap/session/provider delegates execute through the published routes |
 | SSE cancellation/disposal | Tracking async enumerator test | Pass: cancellation reaches the enumerator finally path |
 | Collectibility | `Wave4AgentCollectibilityTests`, 3 real route-publication cycles | Pass: mapped binder, typed serializer, provider/auth delegates, completed and cancelled SSE, DI provider, route endpoints, and generated JSON context execute and collect |
 | Mixed coexistence | FE canary mapped with Agent Minimal API in one TestServer | Pass |
 | Transition ratchet | `FastEndpointsTransitionTests` and baseline JSON | Pass: 134 → 123 registrations; 11 Agent entries removed; five owners remain |
-| Control-room integration | Agent, Architecture, maps, and full solution build | Pass: 138 Agent tests, 437 Architecture tests, fresh maps, and a zero-error solution build after restore |
+| Control-room integration | Agent, Architecture, maps, and full solution build | Pass: 138 Agent tests, 440 Architecture tests, fresh maps, and a zero-error solution build after restore |
 
 The SSE baseline contains no heartbeat, resume token, or separate backpressure protocol. The test
 therefore preserves existing framing and awaited streaming/cancellation cleanup and explicitly does
