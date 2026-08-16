@@ -199,3 +199,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [158-wave1-small-read-api-migration](../../specs/158-wave1-small-read-api-migration/spec.md) | Wave 1 Small and Read-Oriented REST API Migration | Implemented | - | 16 | 0 | retained, out of scope |
 | [159-wave2-bounded-api-migration](../../specs/159-wave2-bounded-api-migration/spec.md) | Wave 2 Bounded API Migration | Draft | - | 22 | 0 | - |
 | [160-foundation-identity-minimal-api](../../specs/160-foundation-identity-minimal-api/spec.md) | Foundation Identity Minimal API Migration | Implemented | - | 18 | 0 | retained |
+| [161-agent-api-minimal-migration](../../specs/161-agent-api-minimal-migration/spec.md) | Wave 4 Agent REST and SSE API Migration | Implemented | - | 15 | 0 | - |
