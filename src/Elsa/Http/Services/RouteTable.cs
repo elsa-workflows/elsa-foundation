@@ -1,4 +1,3 @@
-using System.Collections;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Http.Core.Options;
@@ -6,6 +5,7 @@ using Elsa.Http.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections;
 
 namespace Elsa.Http.Services;
 
@@ -46,7 +46,8 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         _logger = logger;
         _staticManifestProvider = staticManifestProvider ?? new EmptyRouteManifestProvider();
         _shellId = NormalizeShellId(options?.Value.ShellDiscriminator);
-        _ownerId = string.IsNullOrWhiteSpace(options?.Value.OwnerId) ? "Elsa.Http" : options.Value.OwnerId.Trim();
+        var ownerId = options?.Value.OwnerId;
+        _ownerId = string.IsNullOrWhiteSpace(ownerId) ? "Elsa.Http" : ownerId.Trim();
         _publicationBasePath = publicationOptions?.Value.BasePath ?? new HttpRoutePublicationOptions().BasePath;
     }
 
@@ -229,11 +230,9 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         if (suppliedOwner is not null && suppliedOwner.OwnerKind != HttpRouteOwnerKind.DynamicShell)
             throw new InvalidOperationException($"Workflow route '{routeData.Route}' cannot claim static owner '{suppliedOwner}'.");
 
-        if (suppliedOwner?.OwnerKind == HttpRouteOwnerKind.DynamicShell)
-        {
-            if (!StringComparer.Ordinal.Equals(suppliedOwner.ShellId, _shellId))
-                throw new InvalidOperationException($"Route '{routeData.Route}' belongs to shell '{suppliedOwner.ShellId}', but candidate shell '{_shellId}' is being published.");
-        }
+        if (suppliedOwner?.OwnerKind == HttpRouteOwnerKind.DynamicShell &&
+            !StringComparer.Ordinal.Equals(suppliedOwner.ShellId, _shellId))
+            throw new InvalidOperationException($"Route '{routeData.Route}' belongs to shell '{suppliedOwner.ShellId}', but candidate shell '{_shellId}' is being published.");
 
         // The route table is the trust boundary for workflow-authored ownership. Even a dynamic ownership record
         // supplied by a caller is rewritten to this table's configured owner/shell/generation, preventing a

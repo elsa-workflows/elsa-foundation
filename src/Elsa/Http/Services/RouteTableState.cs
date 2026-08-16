@@ -16,6 +16,7 @@ internal sealed class RouteTableState
 
 internal sealed class RouteGenerationState
 {
+    private readonly object _gate = new();
     private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IReadOnlyList<HttpRouteData> _routes;
     private int _leaseCount;
@@ -32,7 +33,7 @@ internal sealed class RouteGenerationState
 
     internal HttpRouteTableSnapshotLease AcquireLease()
     {
-        lock (this)
+        lock (_gate)
         {
             _leaseCount++;
             return new HttpRouteTableSnapshotLease(Snapshot, _drained.Task, ReleaseLease, ResolveRoute);
@@ -44,7 +45,7 @@ internal sealed class RouteGenerationState
 
     internal void Retire()
     {
-        lock (this)
+        lock (_gate)
         {
             _retired = true;
             CompleteIfDrained();
@@ -53,7 +54,7 @@ internal sealed class RouteGenerationState
 
     private void ReleaseLease()
     {
-        lock (this)
+        lock (_gate)
         {
             if (_leaseCount > 0)
                 _leaseCount--;

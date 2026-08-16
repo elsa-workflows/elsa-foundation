@@ -14,9 +14,11 @@ namespace Elsa.Http.Tests;
 /// never observe an empty/partial table during a publish) plus the issue #592 follow-ups: specificity-ordered
 /// enumeration (item 1), precompiled matchers at refresh (item 6), and per-table isolation (item 5).
 /// </summary>
-public sealed class RouteTableTests
+public sealed class RouteTableTests : IDisposable
 {
-    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+
+    public void Dispose() => _cache.Dispose();
 
     private RouteTable CreateTable() => new(_cache, NullLogger<RouteTable>.Instance);
 
@@ -110,7 +112,7 @@ public sealed class RouteTableTests
         var forward = CreateTable();
         await forward.Refresh(new[] { moreSpecific, lessSpecific });
 
-        var reverse = new RouteTable(new MemoryCache(new MemoryCacheOptions()), NullLogger<RouteTable>.Instance);
+        var reverse = new RouteTable(_cache, NullLogger<RouteTable>.Instance);
         await reverse.Refresh(new[] { lessSpecific, moreSpecific });
 
         Assert.Equal(moreSpecific, forward.First().Route.Trim('/'));

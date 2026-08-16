@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.Loader;
 using CShells;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
@@ -20,12 +18,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using Xunit;
 
 namespace Elsa.Http.Tests;
 
-public sealed class DynamicHttpRoutePublicationTests
+public sealed class DynamicHttpRoutePublicationTests : IDisposable
 {
+    private readonly MemoryCache _compatibilityCache = new(new MemoryCacheOptions());
+
     [Fact]
     public async Task Refresh_EnrichesLegacyRouteWithDynamicOwnerAndPublicDisposition()
     {
@@ -366,7 +368,8 @@ public sealed class DynamicHttpRoutePublicationTests
         var anonymous = Endpoint("/anonymous", EndpointOwnershipMetadata.Module("Elsa.Module"), new AllowAnonymousAttribute());
         var authenticated = Endpoint("/authenticated", EndpointOwnershipMetadata.Module("Elsa.Module"), new AuthorizeAttribute());
         var namedPolicy = Endpoint("/policy", EndpointOwnershipMetadata.Module("Elsa.Module"), new AuthorizeAttribute("orders.read"));
-        var provider = ManifestProvider(anonymous, authenticated, namedPolicy);
+        using var fixture = ManifestProvider(anonymous, authenticated, namedPolicy);
+        var provider = fixture.Provider;
 
         var routes = provider.GetRoutes().ToDictionary(route => route.Route, StringComparer.Ordinal);
 
@@ -375,6 +378,23 @@ public sealed class DynamicHttpRoutePublicationTests
         Assert.Empty(Security(routes["/authenticated"]).Values);
         Assert.Equal(HttpRouteSecurityDispositionKind.HostPolicy, Security(routes["/policy"]).Kind);
         Assert.Equal(["orders.read"], Security(routes["/policy"]).Values);
+    }
+
+    [Theory]
+    [InlineData("/catalog/v{version:int}/{page=1}/{slug?}/{*file}")]
+    [InlineData("/catalog/v{version:int}/{page=1}/{slug?}/{**path}")]
+    public void HttpManifestProvider_ReconstructsRawTextNullRoutePatternsWithoutLosingParameterSemantics(string template)
+    {
+        var parsed = RoutePatternFactory.Parse(template);
+        var rawTextNullPattern = RoutePatternFactory.Pattern(parsed.PathSegments);
+        var endpoint = Endpoint(rawTextNullPattern, EndpointOwnershipMetadata.Module("Elsa.Catalog"));
+        using var fixture = ManifestProvider(endpoint);
+        var provider = fixture.Provider;
+
+        var route = Assert.Single(provider.GetRoutes());
+
+        Assert.Null(rawTextNullPattern.RawText);
+        Assert.Equal(template, route.Route);
     }
 
     [Fact]
@@ -431,7 +451,7 @@ public sealed class DynamicHttpRoutePublicationTests
     [Fact]
     public async Task CacheEvictionCannotResetTheAuthoritativeSnapshotOrGeneration()
     {
-        var cache = new MemoryCache(new MemoryCacheOptions());
+        using var cache = new MemoryCache(new MemoryCacheOptions());
         var table = new RouteTable(cache, NullLogger<RouteTable>.Instance);
         await table.Refresh([new HttpRouteData("orders") { Methods = ["GET"] }]);
 
@@ -604,15 +624,17 @@ public sealed class DynamicHttpRoutePublicationTests
         GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
-    private static RouteTable CreateTable(string shellId) =>
+    public void Dispose() => _compatibilityCache.Dispose();
+
+    private RouteTable CreateTable(string shellId) =>
         new(
-            new MemoryCache(new MemoryCacheOptions()),
+            _compatibilityCache,
             NullLogger<RouteTable>.Instance,
             Microsoft.Extensions.Options.Options.Create(new RouteTableOptions { ShellDiscriminator = shellId }));
 
-    private static RouteTable CreateTable(string shellId, IHttpRouteManifestProvider staticManifestProvider, string publicationBasePath = "/workflows/http") =>
+    private RouteTable CreateTable(string shellId, IHttpRouteManifestProvider staticManifestProvider, string publicationBasePath = "/workflows/http") =>
         new(
-            new MemoryCache(new MemoryCacheOptions()),
+            _compatibilityCache,
             NullLogger<RouteTable>.Instance,
             Microsoft.Extensions.Options.Options.Create(new RouteTableOptions { ShellDiscriminator = shellId }),
             staticManifestProvider,
@@ -624,16 +646,19 @@ public sealed class DynamicHttpRoutePublicationTests
         Metadata = [HttpRouteOwnershipMetadata.Module(ownerId)]
     };
 
-    private static RouteEndpoint Endpoint(string route, params object[] metadata)
+    private static RouteEndpoint Endpoint(string route, params object[] metadata) =>
+        Endpoint(RoutePatternFactory.Parse(route), metadata);
+
+    private static RouteEndpoint Endpoint(RoutePattern routePattern, params object[] metadata)
     {
-        var builder = new RouteEndpointBuilder(_ => Task.CompletedTask, RoutePatternFactory.Parse(route), 0);
+        var builder = new RouteEndpointBuilder(_ => Task.CompletedTask, routePattern, 0);
         foreach (var value in metadata)
             builder.Metadata.Add(value);
         builder.Metadata.Add(new HttpMethodMetadata(["GET"]));
         return (RouteEndpoint)builder.Build();
     }
 
-    private static IHttpRouteManifestProvider ManifestProvider(params Endpoint[] endpoints)
+    private static ManifestProviderFixture ManifestProvider(params Endpoint[] endpoints)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -642,7 +667,7 @@ public sealed class DynamicHttpRoutePublicationTests
         services.AddSingleton(settings);
         services.AddSingleton<EndpointDataSource>(new StaticEndpointDataSource(endpoints));
         new HttpFeature(new ShellFeatureContext(settings, [])).ConfigureServices(services);
-        return services.BuildServiceProvider().GetRequiredService<IHttpRouteManifestProvider>();
+        return new ManifestProviderFixture(services.BuildServiceProvider());
     }
 
     private static HttpRouteSecurityDispositionMetadata Security(HttpRouteData route) =>
@@ -662,6 +687,13 @@ public sealed class DynamicHttpRoutePublicationTests
     private sealed class StaticManifestProvider(params HttpRouteData[] routes) : IHttpRouteManifestProvider
     {
         public IEnumerable<HttpRouteData> GetRoutes() => routes;
+    }
+
+    private sealed class ManifestProviderFixture(ServiceProvider serviceProvider) : IDisposable
+    {
+        public IHttpRouteManifestProvider Provider { get; } = serviceProvider.GetRequiredService<IHttpRouteManifestProvider>();
+
+        public void Dispose() => serviceProvider.Dispose();
     }
 
     private sealed class StaticEndpointDataSource(params Endpoint[] endpoints) : EndpointDataSource

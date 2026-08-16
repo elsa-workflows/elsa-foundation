@@ -5,7 +5,10 @@ using Elsa.Http.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
+using System.Globalization;
 using System.Reflection;
+using System.Text;
 
 namespace Elsa.Http;
 
@@ -44,7 +47,7 @@ internal sealed class AspNetCoreHttpRouteManifestProvider(
     {
         var route = endpoint.RoutePattern.RawText;
         if (string.IsNullOrWhiteSpace(route))
-            route = "/" + string.Join("/", endpoint.RoutePattern.PathSegments.Select(segment => segment.ToString()));
+            route = ReconstructRoute(endpoint.RoutePattern);
 
         var ownershipMetadata = endpoint.Metadata.OfType<EndpointOwnershipMetadata>().ToArray();
         if (ownershipMetadata.Length > 1)
@@ -65,6 +68,46 @@ internal sealed class AspNetCoreHttpRouteManifestProvider(
             Metadata = [ProjectOwnership(ownership), ProjectSecurity(endpoint, ownership, securityMetadata.SingleOrDefault())]
         };
     }
+
+    private static string ReconstructRoute(RoutePattern pattern) =>
+        "/" + string.Join("/", pattern.PathSegments.Select(ReconstructSegment));
+
+    private static string ReconstructSegment(RoutePatternPathSegment segment) =>
+        string.Concat(segment.Parts.Select(ReconstructPart));
+
+    private static string ReconstructPart(RoutePatternPart part) =>
+        part switch
+        {
+            RoutePatternLiteralPart literal => EscapeLiteral(literal.Content),
+            RoutePatternSeparatorPart separator => EscapeLiteral(separator.Content),
+            RoutePatternParameterPart parameter => ReconstructParameter(parameter),
+            _ => throw new InvalidOperationException($"Unsupported route-pattern part '{part.GetType().FullName}'.")
+        };
+
+    private static string ReconstructParameter(RoutePatternParameterPart parameter)
+    {
+        var builder = new StringBuilder();
+        builder.Append('{');
+        if (parameter.IsCatchAll)
+            builder.Append(parameter.EncodeSlashes ? '*' : "**");
+        builder.Append(parameter.Name);
+
+        foreach (var policy in parameter.ParameterPolicies)
+        {
+            if (string.IsNullOrWhiteSpace(policy.Content))
+                throw new InvalidOperationException($"Route parameter '{parameter.Name}' uses an object policy that has no reconstructable inline text.");
+
+            builder.Append(':').Append(policy.Content);
+        }
+
+        if (parameter.Default is not null)
+            builder.Append('=').Append(Convert.ToString(parameter.Default, CultureInfo.InvariantCulture));
+        if (parameter.IsOptional)
+            builder.Append('?');
+        return builder.Append('}').ToString();
+    }
+
+    private static string EscapeLiteral(string value) => value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal);
 
     private static HttpRouteOwnershipMetadata ProjectOwnership(EndpointOwnershipMetadata ownership) =>
         ownership.Kind switch
