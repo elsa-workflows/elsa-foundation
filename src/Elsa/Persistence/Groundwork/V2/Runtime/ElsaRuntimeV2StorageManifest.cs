@@ -113,6 +113,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string WorkflowRunHealthDefinitionIdField = "definitionId";
     public const string WorkflowRunHealthRunKindField = "runKind";
     public const string WorkflowRunHealthStartedAtField = "startedAt";
+    public const string WorkflowRunHealthBucketField = "bucket";
     public const string WorkflowRunHealthStatusField = StatusField;
     public const string WorkflowRunHealthIncidentCountField = "incidentCount";
     public const string WorkflowRunHealthIncidentBearingCountField = "incidentBearingCount";
@@ -194,9 +195,12 @@ public static class ElsaRuntimeV2StorageManifest
     public const string ByRetiredIndex = "by_retired";
     public const string WorkflowTriggerBindingByActive = "by_active";
     public const string WorkflowRunHealthStatusProfile = "workflow_run_health_status";
+    public const string WorkflowRunHealthHourlyProfile = "workflow_run_health_hourly";
+    public const string WorkflowRunHealthDailyProfile = "workflow_run_health_daily";
     public const string WorkflowRunHealthRunningProfile = "workflow_run_health_running";
     public const string WorkflowRunHealthTopFailuresProfile = "workflow_run_health_top_failures";
     public const int WorkflowRunHealthAggregationMaxInputRows = 100_000;
+    public const int WorkflowRunHealthBucketMaxGroups = 744 * 6;
     public const int WorkflowRunHealthStatusMaxGroups = 8;
     public const int WorkflowRunHealthRunningMaxGroups = 1;
     public const int WorkflowRunHealthTopFailuresMaxGroups = 1_000;
@@ -285,6 +289,11 @@ public static class ElsaRuntimeV2StorageManifest
                         MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
                         MaxGroups = WorkflowRunHealthStatusMaxGroups
                     },
+                    WorkflowRunHealthHourlyProfile or WorkflowRunHealthDailyProfile => profile with
+                    {
+                        MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
+                        MaxGroups = WorkflowRunHealthBucketMaxGroups
+                    },
                     WorkflowRunHealthRunningProfile => profile with
                     {
                         MaxInputRows = WorkflowRunHealthAggregationMaxInputRows,
@@ -314,6 +323,18 @@ public static class ElsaRuntimeV2StorageManifest
     {
         declaration.Aggregate(WorkflowRunHealthStatusProfile, aggregate => aggregate
             .GroupBy(WorkflowRunHealthStatusField)
+            .Count("count")
+            .Sum("incidentTotal", WorkflowRunHealthIncidentCountField)
+            .Sum("incidentBearingTotal", WorkflowRunHealthIncidentBearingCountField));
+        declaration.Aggregate(WorkflowRunHealthHourlyProfile, aggregate => aggregate
+            .FixedUtcBucket(WorkflowRunHealthBucketField, WorkflowRunHealthStartedAtField, TimeSpan.FromHours(1))
+            .GroupBy(new AggregationGroup.Column(WorkflowRunHealthStatusField))
+            .Count("count")
+            .Sum("incidentTotal", WorkflowRunHealthIncidentCountField)
+            .Sum("incidentBearingTotal", WorkflowRunHealthIncidentBearingCountField));
+        declaration.Aggregate(WorkflowRunHealthDailyProfile, aggregate => aggregate
+            .LocalCalendarDayBucket(WorkflowRunHealthBucketField, WorkflowRunHealthStartedAtField)
+            .GroupBy(new AggregationGroup.Column(WorkflowRunHealthStatusField))
             .Count("count")
             .Sum("incidentTotal", WorkflowRunHealthIncidentCountField)
             .Sum("incidentBearingTotal", WorkflowRunHealthIncidentBearingCountField));

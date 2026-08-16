@@ -110,12 +110,36 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentCountField, PortableType.Int64, null, nullable: false);
         AssertColumn(runHealth, ElsaRuntimeV2StorageManifest.WorkflowRunHealthIncidentBearingCountField, PortableType.Int64, null, nullable: false);
         Assert.Equal(
-            [ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile, ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningProfile, ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresProfile],
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile,
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile,
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthDailyProfile,
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningProfile,
+                ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresProfile
+            ],
             runHealth.AggregationProfiles.Select(profile => profile.Name));
         Assert.All(runHealth.AggregationProfiles, profile => Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthAggregationMaxInputRows, profile.MaxInputRows));
         Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusProfile).MaxGroups);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile).MaxGroups);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthDailyProfile).MaxGroups);
         Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthRunningProfile).MaxGroups);
         Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresMaxGroups, runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthTopFailuresProfile).MaxGroups);
+
+        var hourly = runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile);
+        var hourlyBucket = Assert.IsType<AggregationGroup.TimeBucket>(hourly.GroupByExpressions[0]);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketField, hourlyBucket.Alias);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStartedAtField, hourlyBucket.SourceColumn);
+        Assert.Equal(AggregationTimeBucketKind.FixedUtc, hourlyBucket.Kind);
+        Assert.Equal(TimeSpan.FromHours(1), hourlyBucket.Width);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField, hourly.GroupByExpressions[1].Alias);
+
+        var daily = runHealth.AggregationProfiles.Single(profile => profile.Name == ElsaRuntimeV2StorageManifest.WorkflowRunHealthDailyProfile);
+        var dailyBucket = Assert.IsType<AggregationGroup.TimeBucket>(daily.GroupByExpressions[0]);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthBucketField, dailyBucket.Alias);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStartedAtField, dailyBucket.SourceColumn);
+        Assert.Equal(AggregationTimeBucketKind.LocalCalendarDay, dailyBucket.Kind);
+        Assert.Equal(TimeSpan.Zero, dailyBucket.Width);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStatusField, daily.GroupByExpressions[1].Alias);
 
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),

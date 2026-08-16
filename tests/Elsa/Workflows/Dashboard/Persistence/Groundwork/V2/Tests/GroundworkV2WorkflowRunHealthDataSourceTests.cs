@@ -8,6 +8,7 @@ using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests;
@@ -29,6 +30,26 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
     }
 
     [Fact]
+    public void Explicit_v2_registration_replaces_the_dashboard_run_health_source()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowRunHealthDataSource, UnavailableWorkflowRunHealthDataSource>();
+        services.AddSingleton<IGroundworkStorageSessionSource, StubSessionSource>();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(
+            new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+
+        services.AddGroundworkV2WorkflowRunHealth("runtime");
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<GroundworkV2WorkflowRunHealthDataSource>(
+            provider.GetRequiredService<IWorkflowRunHealthDataSource>());
+        var registry = provider.GetRequiredService<GroundworkStorageUnitRegistry>();
+        Assert.Contains(
+            registry.Registrations,
+            registration => registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind && registration.TargetName == "runtime");
+    }
+
+    [Fact]
     public async Task Native_aggregation_returns_zero_filled_buckets_and_all_statuses()
     {
         var tenant = new FixedAccessContextAccessor(
@@ -39,7 +60,8 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
         {
             new(0, from, from.AddHours(1)),
             new(1, from.AddHours(1), from.AddHours(2)),
-            new(2, from.AddHours(2), from.AddHours(3))
+            new(2, from.AddHours(2), from.AddHours(3)),
+            new(3, from.AddHours(3), from.AddHours(4))
         };
 
         Put("run-completed", "definition-b", WorkflowExecutionStatus.Completed, from.AddMinutes(10), 0, 0);
@@ -49,7 +71,7 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
         Put("run-running", "definition-a", WorkflowExecutionStatus.Running, from.AddDays(4), 0, 0);
 
         var aggregate = await dataSource.QueryAsync(new(
-            new WorkflowRunHealthQuery(from, from.AddHours(3), "Etc/UTC", WorkflowRunHealthBucketSize.Hour, "tenant-a"),
+            new WorkflowRunHealthQuery(from, from.AddHours(4), "Etc/UTC", WorkflowRunHealthBucketSize.Hour, "tenant-a"),
             buckets));
 
         Assert.Equal(4, aggregate.StartedCount);
@@ -60,10 +82,13 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
         Assert.Equal(2, aggregate.IncidentCount);
         Assert.Equal(1, aggregate.RunningCount);
         Assert.Equal(
-            [1, 2, 1],
+            [1, 2, 1, 0],
             aggregate.Buckets.Select(bucket => bucket.StartedCount));
         Assert.Equal(1, aggregate.Buckets.ElementAt(1).IncidentBearingRunCount);
         Assert.Equal(0, aggregate.Buckets.ElementAt(2).IncidentCount);
+        Assert.Equal(
+            new WorkflowRunHealthBucket(from.AddHours(3), from.AddHours(4), 0, 0, 0, 0, 0, 0, 0),
+            aggregate.Buckets.ElementAt(3));
     }
 
     [Fact]
@@ -228,6 +253,25 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
     }
 
     [Fact]
+    public async Task Disjoint_bucket_ranges_are_rejected_before_provider_io()
+    {
+        var accessor = new FixedAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var recording = new RecordingSessionSource(source);
+        var dataSource = new GroundworkV2WorkflowRunHealthDataSource(recording, accessor);
+        var from = DateTimeOffset.UnixEpoch;
+
+        await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(() =>
+            dataSource.QueryAsync(new(
+                new WorkflowRunHealthQuery(from, from.AddHours(3), "Etc/UTC", WorkflowRunHealthBucketSize.Hour, "tenant-a"),
+                [
+                    new(0, from, from.AddHours(1)),
+                    new(1, from.AddHours(2), from.AddHours(3))
+                ])).AsTask());
+        Assert.Equal(0, recording.OpenCount);
+    }
+
+    [Fact]
     public async Task Unknown_status_is_rejected_instead_of_being_reported_as_incomplete()
     {
         var accessor = new FixedAccessContextAccessor(
@@ -243,30 +287,96 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
     }
 
     [Fact]
-    public async Task Native_source_uses_aggregate_only_and_keeps_one_call_per_status_bucket()
+    public async Task Native_source_uses_one_bucket_aggregate_for_a_31_day_hourly_request()
     {
         var accessor = new FixedAccessContextAccessor(
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var recording = new AggregateOnlySessionSource(source);
         var dataSource = new GroundworkV2WorkflowRunHealthDataSource(recording, accessor);
         var from = DateTimeOffset.UnixEpoch;
+        var buckets = Enumerable.Range(0, 744)
+            .Select(index => new WorkflowRunHealthBucketRange(
+                index,
+                from.AddHours(index),
+                from.AddHours(index + 1)))
+            .ToArray();
+        var query = new WorkflowRunHealthQuery(
+            from,
+            from.AddHours(buckets.Length),
+            "Etc/UTC",
+            WorkflowRunHealthBucketSize.Hour,
+            "tenant-a");
+
+        var result = await dataSource.QueryAsync(new(query, buckets));
+
+        Assert.Equal(744, result.Buckets.Count);
+        Assert.All(result.Buckets, bucket => Assert.Equal(0, bucket.StartedCount));
+        Assert.Equal(3, recording.AggregateCount);
+        Assert.Equal(0, recording.QueryCount);
+        Assert.Single(
+            recording.AggregationQueries,
+            aggregation => aggregation.Profile == ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile);
+        Assert.Contains(
+            recording.AggregationQueries,
+            query => query.Take == 5 && query.OrderByTerms.Count == 2);
+    }
+
+    [Fact]
+    public async Task Hourly_aggregation_uses_the_arbitrary_query_origin()
+    {
+        var accessor = new FixedAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var recording = new AggregateOnlySessionSource(source);
+        var dataSource = new GroundworkV2WorkflowRunHealthDataSource(recording, accessor);
+        var from = new DateTimeOffset(2024, 1, 2, 13, 17, 0, TimeSpan.Zero);
         var query = new WorkflowRunHealthQuery(
             from,
             from.AddHours(2),
             "Etc/UTC",
             WorkflowRunHealthBucketSize.Hour,
             "tenant-a");
+        Put("arbitrary-origin", "definition-a", WorkflowExecutionStatus.Completed, from.AddMinutes(59), 0, 0);
 
-        await dataSource.QueryAsync(new(query, [
+        var aggregate = await dataSource.QueryAsync(new(query, [
             new(0, from, from.AddHours(1)),
-            new(1, from.AddHours(1), from.AddHours(2))
+            new(1, from.AddHours(1), query.To)
         ]));
 
-        Assert.Equal(4, recording.AggregateCount);
-        Assert.Equal(0, recording.QueryCount);
-        Assert.Contains(
-            recording.AggregationQueries,
-            query => query.Take == 5 && query.OrderByTerms.Count == 2);
+        Assert.Equal([1, 0], aggregate.Buckets.Select(bucket => bucket.StartedCount));
+        var bucketQuery = recording.AggregationQueries.Single(query => query.Profile == ElsaRuntimeV2StorageManifest.WorkflowRunHealthHourlyProfile);
+        Assert.Equal(new AggregationTimeRange(query.From, query.To), bucketQuery.TimeRange);
+        Assert.Equal(query.From, bucketQuery.TimeBucketOrigin);
+    }
+
+    [Fact]
+    public async Task Daily_aggregation_maps_partial_calendar_days_across_dst()
+    {
+        var accessor = new FixedAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var recording = new AggregateOnlySessionSource(source);
+        var dataSource = new GroundworkV2WorkflowRunHealthDataSource(recording, accessor);
+        var from = new DateTimeOffset(2024, 10, 26, 22, 30, 0, TimeSpan.Zero);
+        var firstBoundary = new DateTimeOffset(2024, 10, 27, 23, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2024, 10, 28, 22, 30, 0, TimeSpan.Zero);
+        var query = new WorkflowRunHealthQuery(
+            from,
+            to,
+            "Europe/Amsterdam",
+            WorkflowRunHealthBucketSize.Day,
+            "tenant-a");
+        Put("dst-day-one", "definition-a", WorkflowExecutionStatus.Completed, from.AddHours(12), 0, 0);
+        Put("dst-day-two", "definition-a", WorkflowExecutionStatus.Completed, firstBoundary.AddHours(12), 0, 0);
+
+        var aggregate = await dataSource.QueryAsync(new(query, [
+            new(0, from, firstBoundary),
+            new(1, firstBoundary, to)
+        ]));
+
+        Assert.Equal([1, 1], aggregate.Buckets.Select(bucket => bucket.StartedCount));
+        var bucketQuery = recording.AggregationQueries.Single(query => query.Profile == ElsaRuntimeV2StorageManifest.WorkflowRunHealthDailyProfile);
+        Assert.Equal(new AggregationTimeRange(query.From, query.To), bucketQuery.TimeRange);
+        Assert.Equal(query.TimeZone, bucketQuery.TimeZoneId);
+        Assert.Null(bucketQuery.TimeBucketOrigin);
     }
 
     private void Put(
@@ -346,6 +456,18 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext context) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = context;
+    }
+
+    private sealed class StubSessionSource : IGroundworkStorageSessionSource
+    {
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            throw new NotSupportedException();
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
+            throw new NotSupportedException();
+
+        public StorageUnit Unit(string unitId, string? targetName = null) =>
+            ElsaRuntimeV2StorageManifest.Require(unitId);
     }
 
     private sealed class NativeSessionSource(IStorageProviderConnection connection) : IGroundworkStorageSessionSource
