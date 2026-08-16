@@ -159,6 +159,28 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
     }
 
     [Fact]
+    public async Task CanReadAsync_honors_an_already_cancelled_caller_without_invoking_authorization()
+    {
+        var services = CreateServices();
+        services.ReplacePermissionAuthorizationService<GrantingAuthorizationService>();
+        using var provider = services.BuildServiceProvider();
+        var service = (GrantingAuthorizationService)provider.GetRequiredService<IPermissionAuthorizationService>();
+        var accessor = provider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = new DefaultHttpContext { User = Principal("tenant-a") };
+        var context = new HttpContextActivityDesignAuthorizationContext(
+            accessor,
+            service,
+            provider.GetRequiredService<NormalizedPrincipalValidator>());
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            context.CanReadAsync(new("ActivityVersion", "definition"), cancellation.Token).AsTask());
+
+        Assert.Equal(0, service.Calls);
+    }
+
+    [Fact]
     public async Task Untrusted_or_absent_http_context_fails_closed_before_a_replacement_service()
     {
         var services = CreateServices();
