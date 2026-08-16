@@ -22,6 +22,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Exercises every Wave 2 owner through real route, DI, serializer, and disposal cycles.</summary>
+[Collection(Wave2MinimalApiUnloadabilityCollection.Name)]
 public sealed class Wave2MinimalApiUnloadabilityTests
 {
     private static readonly (Type FeatureType, string Owner, int Routes)[] Owners =
@@ -174,11 +175,11 @@ public sealed class Wave2MinimalApiUnloadabilityTests
 
     private static void ForceCollection()
     {
-        for (var attempt = 0; attempt < 16; attempt++)
+        for (var attempt = 0; attempt < 32; attempt++)
         {
-            GC.Collect();
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
             GC.WaitForPendingFinalizers();
-            GC.Collect();
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
         }
     }
 
@@ -203,4 +204,10 @@ public sealed class Wave2MinimalApiUnloadabilityTests
         public ICollection<EndpointDataSource> DataSources { get; } = new List<EndpointDataSource>();
         public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class Wave2MinimalApiUnloadabilityCollection
+{
+    public const string Name = "Wave 2 Minimal API unloadability";
 }
