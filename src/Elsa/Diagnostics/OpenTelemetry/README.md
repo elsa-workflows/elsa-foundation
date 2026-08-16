@@ -11,7 +11,7 @@ The current first-party durable/reference-host composition feature is **`Diagnos
   - **`OpenTelemetryIngestor`** → `IOpenTelemetryIngestor` — the write path: redacts the batch, awaits every additive ingestion contributor, writes it to the store, then publishes it to the live feed.
   - **`IOpenTelemetryIngestionContributor`** — additive post-redaction processing for independently composed features. Contributors receive both the redacted batch and an immutable `OpenTelemetryIngestionContext`; register one with `AddOpenTelemetryIngestionContributor<TContributor>()`.
   - **`IOtlpRequestAuthenticator`** — scoped request authentication and trusted source-context construction. A host can replace the default API-key/loopback implementation with per-source credential validation and authoritative workspace/application/environment claims.
-  - **`OtlpHttpIngestionHandler`** — the single public OTLP/HTTP request handler shared by the explicit ASP.NET Core route mapper and the FastEndpoints receiver.
+  - **`OtlpHttpIngestionHandler`** — the single public OTLP/HTTP request handler shared by the explicit ASP.NET Core route mapper and the retained collector composition.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
   - **`GroundworkOpenTelemetryStore`** → `IOpenTelemetryStore` (via the aggregate `DiagnosticsGroundworkPersistence` feature) — the active first-party durable history adapter for resources, traces, spans, metric instruments, metric points, and logs. The aggregate installs the concrete Groundwork OpenTelemetry feature, replaces the default store, and contributes its diagnostic-record streams and document schema to the combined Groundwork deployment manifest.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
@@ -19,8 +19,8 @@ The current first-party durable/reference-host composition feature is **`Diagnos
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
   - **`DefaultOpenTelemetryProvider`** → `IOpenTelemetryProvider` — the read facade the query endpoints call.
   - **`CollectorConfigurationProvider`** → `ICollectorConfigurationProvider` — surfaces the endpoint paths/auth shape a collector needs to push to this host.
-- **OTLP/HTTP protobuf collector**: `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). Shell hosts receive these through FastEndpoints and `app.MapShells()`. Plain or root ASP.NET Core hosts can map the same receiver explicitly with `app.MapOpenTelemetryOtlpReceiver()` after `AddOpenTelemetryDiagnosticsServices(...)`. Both transports call the same `OtlpHttpIngestionHandler`; a host must choose one mapping path rather than map duplicate routes. The dependency-free parser requires no protobuf package. `Content-Encoding: gzip` / `deflate` / `br` bodies are decompressed and the size cap applies to decompressed bytes.
-- **Query endpoints** (FastEndpoints):
+- **OTLP/HTTP protobuf collector**: `POST {base}/traces`, `POST {base}/metrics`, `POST {base}/logs` (base default `/elsa/otlp/v1`). The root `app.MapOpenTelemetryOtlpReceiver()` mapper is the sole collector route surface; shell composition calls the same mapper and must not add a second collector set. The dependency-free parser requires no protobuf package. `Content-Encoding: gzip` / `deflate` / `br` bodies are decompressed and the size cap applies to decompressed bytes.
+- **Query endpoints** (owner Minimal APIs):
   - `POST /diagnostics/opentelemetry/resources/search`
   - `POST /diagnostics/opentelemetry/traces/search`
   - `GET  /diagnostics/opentelemetry/traces/{traceId}`
@@ -39,7 +39,7 @@ Exposed manifest settings: **Trace / Span / Metric point / Log record / Resource
 
 Two distinct auth surfaces:
 
-- **Query + SSE endpoints** call `ConfigurePermissions("Diagnostics:OpenTelemetry")` (the FastEndpoints permission model used across the foundation). They are **default-permissive (anonymous)** while host endpoint security is disabled; once the host enables security (`EndpointSecurityOptions`), it assigns this permission to authorized principals.
+- **Query + SSE endpoints** use the catalog-owned `Diagnostics:OpenTelemetry.Read` action. They are **default-permissive (anonymous)** while host endpoint security is disabled; once the host enables security (`EndpointSecurityOptions`), it assigns this action to authorized principals.
 - **OTLP collector endpoints** are outside the studio permission model and instead gated by `IOtlpRequestAuthenticator` before any body read or parse. The default implementation preserves the configured API-key/loopback policy: a valid global API key authenticates the collector but deliberately carries no tenant claims; accepted loopback requests are explicitly untrusted. A host can replace it with a scoped authenticator that validates per-source credentials and returns immutable, server-authoritative source claims. Telemetry resource attributes remain evidence and never become authority merely because a sender emitted them.
 
 ## Query parameters (SSE stream)
@@ -110,7 +110,7 @@ reference `Elsa.Workbench` composition.
 This domain was ported from `Elsa.Diagnostics.OpenTelemetry` in elsa-core. Its notable transport choices are:
 
 1. **SSE over SignalR.** The source streamed live telemetry via a SignalR hub (`OpenTelemetryHub` + `OpenTelemetrySubscriptionManager` + `IOpenTelemetryClient`). This port drops SignalR entirely and replaces it with an SSE `stream` endpoint mirroring the Structured Logs slice — for consistency, native `EventSource` reconnect, and no `@microsoft/signalr` dependency in studio.
-2. **One receiver, two composition surfaces.** `OtlpHttpIngestionHandler` owns authentication-before-body-read, decompression, size limits, parsing, and context-aware ingestion. FastEndpoints delegates to it for shell-hosted composition, while `MapOpenTelemetryOtlpReceiver()` exposes the same receiver to a plain/root ASP.NET Core host without duplicating behavior.
+2. **One receiver, one route surface.** `OtlpHttpIngestionHandler` owns authentication-before-body-read, decompression, size limits, parsing, and context-aware ingestion. `MapOpenTelemetryOtlpReceiver()` exposes the receiver to the host without duplicating routes.
 
 ## Replacing the defaults
 

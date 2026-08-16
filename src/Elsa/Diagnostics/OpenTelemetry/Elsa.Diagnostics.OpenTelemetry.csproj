@@ -5,8 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="CShells.FastEndpoints.Abstractions" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>
 
@@ -16,7 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
-    <ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 

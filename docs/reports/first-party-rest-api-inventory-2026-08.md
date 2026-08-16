@@ -79,7 +79,7 @@ from this static table.
 | `Elsa.Agent.Api` | #1370 | 11 | Required / FE exception | Explicit `AgentPermissionKeys.Use/Proposals/Audit` | Catalog gap; wave must add contributor/catalog ownership |
 | `Elsa.Api.Capabilities` | #1367 | 1 | Required / FE exception | `PermissionNames.ApiCapabilitiesRead` | Catalog-owned |
 | `Elsa.Attention.Api` | #1367 | 1 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add an owned action permission |
-| `Elsa.Diagnostics.OpenTelemetry` | #1371 | 11 | Required / FE exception | `Diagnostics:OpenTelemetry` policy; OTLP ingestion uses API-key/loopback transport auth with anonymous framework metadata | Policy/transport exception; wave must add catalog ownership and retain OTLP auth |
+| `Elsa.Diagnostics.OpenTelemetry` | #1371 | 11 | Required / FE exception | `Diagnostics:OpenTelemetry.Read` catalog action; OTLP ingestion uses API-key/loopback transport auth with anonymous framework metadata | Policy/transport exception resolved by owner contributor; retain OTLP auth |
 | `Elsa.Expressions.Api` | #1367 | 2 | Required / FE exception | `PermissionNames.ExpressionsRead` | Catalog-owned |
 | `Elsa.Expressions.JavaScript.Rendering` | #1367 | 1 | Required / FE exception | FastEndpoints wildcard via `ConfigurePermissions()` | Wildcard-only; wave must add an owned action permission |
 | `Elsa.Foundation.Identity.Api` | #1369 | 7 | Required / FE exception | Public auth protocol routes plus `IdentityProvidersRead` | Mixed: public protocol by design; protected capability is identity-catalog-owned |

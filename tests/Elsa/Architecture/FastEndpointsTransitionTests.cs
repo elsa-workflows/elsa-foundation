@@ -12,13 +12,12 @@ public sealed class FastEndpointsTransitionTests
     {
         var registrations = DiscoverRegistrations();
         Assert.NotEmpty(registrations);
-        Assert.Equal(123, registrations.Count);
-        Assert.Equal(5, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(112, registrations.Count);
+        Assert.Equal(4, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["Elsa.Activities.Design.Api"] = 38,
-                ["Elsa.Diagnostics.OpenTelemetry"] = 11,
                 ["Elsa.Workflows.Design.Api"] = 27,
                 ["Elsa.Workflows.Publishing.Api"] = 23,
                 ["Elsa.Workflows.Runtime.Api"] = 24
