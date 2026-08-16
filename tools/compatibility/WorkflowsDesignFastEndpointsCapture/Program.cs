@@ -1,6 +1,9 @@
 using System.Security.Claims;
+using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
@@ -38,10 +41,13 @@ Directory.CreateDirectory(outputDirectory);
 await using var host = await StartHostAsync();
 var cases = Cases();
 var observations = (await Task.WhenAll(cases.Select(testCase => HttpEvidenceCapture.CaptureAsync(host.Client, testCase)))).ToArray();
-var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
+var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
+var trace = CaptureTrace.Snapshot();
+CaptureTrace.AssertMinimum(trace);
 
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-http-fastendpoints.json"), CompatibilityJson.Serialize(observations));
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json"), CompatibilityJson.Serialize(openApi));
+File.WriteAllText(Path.Join(outputDirectory, "workflows-design-handler-trace-fastendpoints.json"), CompatibilityJson.Serialize(trace));
 var receipt = new
 {
     capture = "real-fastendpoints-historical-worktree",
@@ -50,9 +56,11 @@ var receipt = new
     registrationCount = 27,
     caseCount = observations.Length,
     operationCount = openApi.Operations.Count,
-    categories = new[] { "anonymous-401", "authenticated-success", "binding-failure", "content-type", "problem-details", "paging-filtering", "headers", "concurrency", "preflight-nonmutation", "all-routes" },
+    categories = observations.SelectMany(observation => observation.Case.Split('|', StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+    traceAssertions = new[] { "request-and-command-types-recorded", "lifecycle-body-properties-recorded", "list-query-properties-recorded", "promotion-error-paths-recorded" },
     httpSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-http-fastendpoints.json")))).ToLowerInvariant(),
-    openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json")))).ToLowerInvariant()
+    openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json")))).ToLowerInvariant(),
+    traceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-handler-trace-fastendpoints.json")))).ToLowerInvariant()
 };
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
 
@@ -90,19 +98,43 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     };
 
     var cases = routes.Select(route => Create(route.Method, route.Name, route.Path, null)).ToList();
+    cases.AddRange(routes.Select(route => Create(route.Method, $"{route.Name}|trusted-success", route.Path,
+        "trusted-success", BodyFor(route.Name))));
     cases.Add(Create(HttpMethod.Get, "describe-expression-tooling|trusted-success", "/design/workflows/expression-tooling/descriptors", "trusted-success"));
     cases.Add(Create(HttpMethod.Post, "analyze-scoped-variables|trusted-malformed-json", "/design/workflows/scoped-variables/analyze", "trusted-malformed-json", "{ malformed"));
     cases.Add(Create(HttpMethod.Post, "add-definition|trusted-unsupported-content-type", "/design/workflows/definitions", "trusted-unsupported-content-type", "{}", "text/plain"));
-    cases.Add(Create(HttpMethod.Get, "list-definitions|paging-filtering", "/design/workflows/definitions?page=2&pageSize=10&search=sample", "trusted-paging"));
+    cases.Add(Create(HttpMethod.Get, "list-definitions|paging-filtering", "/design/workflows/definitions?searchTerm=sample&tenantAgnostic=false&state=published", "trusted-paging"));
     cases.Add(Create(HttpMethod.Get, "get-definition|trusted-not-found", "/design/workflows/definitions/sample", "trusted-not-found"));
     cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-404", "/design/workflows/drafts/sample/promote", "trusted-promote-404", "{}"));
     cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-409-concurrency", "/design/workflows/drafts/sample/promote", "trusted-promote-409", "{}"));
     cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-500", "/design/workflows/drafts/sample/promote", "trusted-promote-500", "{}"));
-    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-501", "/design/workflows/definitions/sample/permanent", "trusted-delete-501"));
-    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-404", "/design/workflows/definitions/sample/permanent", "trusted-delete-404"));
-    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-500", "/design/workflows/definitions/sample/permanent", "trusted-delete-500"));
+    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-501", "/design/workflows/definitions/sample/permanent", "trusted-delete-501", BodyFor("delete-definition-permanently")));
+    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-404", "/design/workflows/definitions/sample/permanent", "trusted-delete-404", BodyFor("delete-definition-permanently")));
+    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-500", "/design/workflows/definitions/sample/permanent", "trusted-delete-500", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Post, "promotion-preflight|trusted-nonmutation", "/design/workflows/drafts/sample/promotion-preflight", "trusted-preflight", "{\"requestedVersion\":\"1.0.0\"}"));
     return cases;
+
+    static string? BodyFor(string name) => name switch
+    {
+        "complete-expression-tooling" => "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"cursor\":{\"line\":0,\"character\":14}}",
+        "hover-expression-tooling" => "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"position\":{\"line\":0,\"character\":14}}",
+        "resolve-expression-tooling-context" or "search-expression-tooling-symbols" => "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"contextRevision\":null,\"search\":\"symbol\",\"skip\":0,\"take\":20}",
+        "validate-expression-tooling" => "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\"}",
+        "analyze-scoped-variables" => "{\"state\":{\"activities\":[],\"connections\":[]},\"nodeId\":null}",
+        "resolve-activity-input-options" => "{\"activityVersionId\":\"activity\",\"inputName\":\"name\",\"nodeId\":null,\"workflowState\":null}",
+        "add-definition" => "{\"operationKey\":\"capture-add\",\"name\":\"Capture definition\",\"description\":\"capture\"}",
+        "submit-definition" => "{\"operationKey\":\"capture-submit\",\"name\":\"Capture definition\",\"description\":\"capture\",\"state\":{\"activities\":[],\"connections\":[]}}",
+        "update-definition" => "{\"operationKey\":\"capture-update\",\"name\":\"Capture definition\",\"description\":\"capture\"}",
+        "delete-definition" => "{\"operationKey\":\"capture-delete\",\"definitionId\":\"body-definition\",\"reason\":\"capture\"}",
+        "delete-definition-permanently" => "{\"operationKey\":\"capture-permanent\",\"definitionId\":\"body-definition\"}",
+        "restore-definition" => "{\"operationKey\":\"capture-restore\",\"definitionId\":\"body-definition\"}",
+        "discard-draft" => "{\"operationKey\":\"capture-discard\",\"draftId\":\"body-draft\"}",
+        "promote-draft" => "{\"operationKey\":\"capture-promote\",\"draftId\":\"body-draft\",\"requestedVersion\":\"1.0.0\"}",
+        "promotion-preflight" => "{\"draftId\":\"body-draft\",\"requestedVersion\":\"1.0.0\"}",
+        "replace-draft" => "{\"operationKey\":\"capture-replace\",\"draftId\":\"body-draft\",\"state\":{\"activities\":[],\"connections\":[]}}",
+        "add-version" => "{\"operationKey\":\"capture-version\",\"definitionId\":\"body-definition\",\"state\":{\"activities\":[],\"connections\":[]}}",
+        _ => null
+    };
 
     static HttpCompatibilityCase Create(HttpMethod method, string name, string route, string? identity, string? body = null, string contentType = "application/json")
     {
@@ -114,14 +146,47 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
             var request = new HttpRequestMessage(method, route);
             if (identity is not null)
                 request.Headers.TryAddWithoutValidation(CaptureAuthenticationHandler.IdentityHeader, identity);
-            if (method != HttpMethod.Get && method != HttpMethod.Delete)
+            if (method != HttpMethod.Get && body is not null)
                 request.Content = new StringContent(body ?? "{}", Encoding.UTF8, contentType);
             return request;
         })
         {
-            Binding = "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
-            PagingFiltering = route.Contains('?', StringComparison.Ordinal) ? "query=?page=2&pageSize=10&search=sample;link=" : ""
+            Binding = DescribeBinding(route, body),
+            PagingFiltering = DescribeQuery(route)
         };
+    }
+
+    static string DescribeBinding(string route, string? body)
+    {
+        var path = route.Split('?', 2)[0];
+        var routeParts = new[]
+        {
+            path.Contains("activity", StringComparison.Ordinal) ? "activityVersionId" : null,
+            path.Contains("inputs/name", StringComparison.Ordinal) ? "inputName" : null,
+            path.Contains("definitions/sample", StringComparison.Ordinal) ? "definitionId" : null,
+            path.Contains("drafts/sample", StringComparison.Ordinal) ? "draftId" : null,
+            path.Contains("versions/sample", StringComparison.Ordinal) ? "versionId" : null
+        }.Where(value => value is not null).ToArray();
+        var bodyFields = "none";
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                bodyFields = string.Join(',', document.RootElement.EnumerateObject().Select(property => property.Name));
+            }
+            catch (JsonException)
+            {
+                bodyFields = "malformed";
+            }
+        }
+        return $"route={string.Join(',', routeParts)};query={DescribeQuery(route)};body={bodyFields}";
+    }
+
+    static string DescribeQuery(string route)
+    {
+        var query = route.Split('?', 2).ElementAtOrDefault(1);
+        return string.IsNullOrWhiteSpace(query) ? "" : $"query=?{query};link=";
     }
 }
 
@@ -223,31 +288,39 @@ sealed class CaptureCommandSender(IHttpContextAccessor contextAccessor) : IComma
 {
     private string? Scenario => contextAccessor.HttpContext?.Request.Headers[CaptureAuthenticationHandler.IdentityHeader].ToString();
 
-    public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-        Scenario switch
+    public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
+    {
+        CaptureTrace.Record("command", command, Scenario);
+        return Scenario switch
         {
             "trusted-promote-404" => throw new EntityNotFoundException("draft sample was not found"),
             "trusted-promote-409" => throw new WorkflowDefinitionVersionConflictException("definition sample", "1.0.0"),
             "trusted-promote-500" => throw new InvalidOperationException("deterministic command failure"),
             _ => Task.FromResult(default(T)!)
         };
+    }
 
-    public Task Send(MediatorCommand command, CancellationToken cancellationToken = default) =>
-        Scenario switch
+    public Task Send(MediatorCommand command, CancellationToken cancellationToken = default)
+    {
+        CaptureTrace.Record("command", command, Scenario);
+        return Scenario switch
         {
             "trusted-delete-404" => throw new EntityNotFoundException("definition sample was not found"),
             "trusted-delete-501" => throw new PermanentDeletionUnavailableException("sample"),
             "trusted-delete-500" => throw new InvalidOperationException("deterministic command failure"),
             _ => Task.CompletedTask
         };
+    }
 }
 
 sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
 {
     private string? Scenario => contextAccessor.HttpContext?.Request.Headers[CaptureAuthenticationHandler.IdentityHeader].ToString();
 
-    public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-        Scenario switch
+    public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+    {
+        CaptureTrace.Record("request", request, Scenario);
+        return Scenario switch
         {
             "trusted-not-found" => throw new EntityNotFoundException("definition sample was not found"),
             "trusted-paging" when request is ListDefinitions => Task.FromResult((T)(object)new WorkflowDefinitionListView([])),
@@ -255,6 +328,33 @@ sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor) : IReque
             "trusted-success" => Task.FromResult(default(T)!),
             _ => Task.FromResult(default(T)!)
         };
+    }
+}
+
+static class CaptureTrace
+{
+    private static readonly ConcurrentBag<object> Entries = [];
+
+    public static void Record(string kind, object value, string? scenario) =>
+        Entries.Add(new
+        {
+            kind,
+            scenario,
+            type = value.GetType().Name,
+            properties = value.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(property => property.GetIndexParameters().Length == 0)
+                .ToDictionary(property => property.Name, property => Convert.ToString(property.GetValue(value), System.Globalization.CultureInfo.InvariantCulture) ?? "", StringComparer.Ordinal)
+        });
+
+    public static object[] Snapshot() => Entries.OrderBy(entry => entry.ToString(), StringComparer.Ordinal).ToArray();
+
+    public static void AssertMinimum(IEnumerable<object> entries)
+    {
+        var text = string.Join('\n', entries.Select(entry => entry.ToString()));
+        foreach (var required in new[] { "ListDefinitions", "PreflightDraftPromotion", "PromoteDraft", "DeleteDefinitionPermanently", "SoftDeleteDefinition", "RestoreDefinition", "DiscardDraft" })
+            if (!text.Contains(required, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Historical capture did not execute required FE handler input '{required}'.");
+    }
 }
 
 static class CaptureScenario
