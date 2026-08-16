@@ -246,5 +246,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/156-retained-host-route-metadata/plan.md`.
+`specs/158-wave1-small-read-api-migration/plan.md`.
 <!-- SPECKIT END -->

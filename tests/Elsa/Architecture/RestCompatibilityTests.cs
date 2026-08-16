@@ -1,4 +1,3 @@
-using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
@@ -10,15 +9,12 @@ namespace Elsa.Architecture.Tests;
 public sealed class RestCompatibilityTests
 {
     [Fact]
-    public void Equivalent_before_and_after_authoring_uses_the_shared_gate_and_empty_registry()
+    public void Equivalent_before_and_after_authoring_uses_the_shared_gate_without_unrelated_registry_entries()
     {
         var endpoint = new EndpointIdentity("/api/canary/{id}", "GET");
         var before = new CompatibilityEvidenceSet { Http = [Observation(endpoint)] };
         var after = new CompatibilityEvidenceSet { Http = [Observation(endpoint)] };
-        var approvalsPath = Path.Join(AppContext.BaseDirectory, "Baselines", "rest-compatibility-approved-differences.json");
-        var approvals = BaselineFile.Load<ApprovedDifference[]>(approvalsPath);
-
-        var result = CompatibilityComparer.Compare(before, after, approvals);
+        var result = CompatibilityComparer.Compare(before, after);
 
         Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
     }

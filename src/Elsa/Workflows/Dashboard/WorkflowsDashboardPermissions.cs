@@ -9,6 +9,8 @@ public static class WorkflowsDashboardPermissions
 
 public sealed class WorkflowsDashboardPermissionContributor : IPermissionContributor
 {
+    public string OwnerId => "Elsa.Workflows.Dashboard";
+
     public IEnumerable<Permission> Contribute() =>
     [
         new(WorkflowsDashboardPermissions.Read, "Read workflow dashboard", "Workflows", "Read tenant-scoped workflow dashboard statistics.")

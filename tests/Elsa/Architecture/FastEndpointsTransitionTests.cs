@@ -12,28 +12,22 @@ public sealed class FastEndpointsTransitionTests
     {
         var registrations = DiscoverRegistrations();
         Assert.NotEmpty(registrations);
-        Assert.Equal(164, registrations.Count);
-        Assert.Equal(18, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(156, registrations.Count);
+        Assert.Equal(12, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["Elsa.Activities.Bpmn.Interchange"] = 3,
                 ["Elsa.Activities.Design.Api"] = 38,
                 ["Elsa.Agent.Api"] = 11,
-                ["Elsa.Api.Capabilities"] = 1,
-                ["Elsa.Attention.Api"] = 1,
                 ["Elsa.Diagnostics.OpenTelemetry"] = 11,
-                ["Elsa.Expressions.Api"] = 2,
-                ["Elsa.Expressions.JavaScript.Rendering"] = 1,
                 ["Elsa.Foundation.Identity.Api"] = 7,
                 ["Elsa.Foundation.Identity.AspNetCoreIdentity"] = 2,
                 ["Elsa.Modularity.Api"] = 2,
-                ["Elsa.Workflows.Dashboard"] = 2,
                 ["Elsa.Workflows.Design.Api"] = 27,
                 ["Elsa.Workflows.ExecutionEvidence"] = 3,
                 ["Elsa.Workflows.Publishing.Api"] = 23,
                 ["Elsa.Workflows.Runtime.Api"] = 24,
-                ["Elsa.Workflows.Runtime.JavaScript"] = 1,
                 ["Elsa3.Activities.Design.Import"] = 5
             },
             registrations.GroupBy(registration => registration.Owner, StringComparer.Ordinal)
@@ -67,7 +61,7 @@ public sealed class FastEndpointsTransitionTests
             return;
         }
 
-        Assert.Equal(164, result.Issues.Count);
+        Assert.Equal(156, result.Issues.Count);
         Assert.All(result.Issues, issue => Assert.Equal("FirstPartyFastEndpointsRegistration", issue.Code));
     }
 
