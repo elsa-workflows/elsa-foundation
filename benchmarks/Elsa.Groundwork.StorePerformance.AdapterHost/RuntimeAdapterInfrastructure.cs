@@ -21,12 +21,15 @@ internal sealed class RuntimeAdapterInfrastructure : IAsyncDisposable
     private readonly AdapterContext _context;
     private readonly List<IAsyncDisposable> _leases = [];
     private GroundworkProviderDriver? _driver;
+    private GroundworkProviderRoundTripObserver? _roundTripObserver;
 
     private RuntimeAdapterInfrastructure(AdapterContext context) => _context = context;
 
     public RunRequest Request => _context.Request;
     public GroundworkProviderDriver Driver => _driver
         ?? throw new PerformanceContractException("The runtime adapter was used before its provider driver was opened.");
+    public IProviderRoundTripObserver? RoundTripObserver =>
+        _roundTripObserver is null ? null : new GroundworkRoundTripObserverAdapter(_roundTripObserver);
     public IReadOnlyDictionary<string, string> ObservedConfiguration { get; private set; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -44,6 +47,8 @@ internal sealed class RuntimeAdapterInfrastructure : IAsyncDisposable
         try
         {
             infrastructure._driver = GroundworkProviderDriverFactory.Create(provider);
+            infrastructure._roundTripObserver = GroundworkProviderRoundTripObserver.TryCreate(provider);
+            infrastructure._driver.RoundTripObserver = infrastructure._roundTripObserver;
             await infrastructure.Driver.InitializeAsync(cancellationToken);
             infrastructure.RequireRequestedProvider();
             return infrastructure;
@@ -134,6 +139,7 @@ internal sealed class RuntimeAdapterInfrastructure : IAsyncDisposable
         if (_driver is not null)
             await _driver.DisposeAsync();
         _driver = null;
+        _roundTripObserver = null;
     }
 
     private void RequireRequestedProvider()
@@ -145,6 +151,14 @@ internal sealed class RuntimeAdapterInfrastructure : IAsyncDisposable
             throw new PerformanceContractException(
                 $"The '{Request.Provider}' driver reports provider version '{Driver.Descriptor.ProviderVersion}', not the requested '{Request.ProviderVersion}'.");
     }
+}
+
+internal sealed class GroundworkRoundTripObserverAdapter(GroundworkProviderRoundTripObserver observer) : IProviderRoundTripObserver
+{
+    public string Provider => observer.Provider;
+    public string Instrumentation => observer.Instrumentation;
+    public bool IsExact => observer.IsExact;
+    public long Snapshot() => observer.Snapshot();
 }
 
 internal sealed record RuntimeStoreLease<TClient>(

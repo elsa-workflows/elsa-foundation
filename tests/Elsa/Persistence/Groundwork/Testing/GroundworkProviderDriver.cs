@@ -328,6 +328,12 @@ public abstract class GroundworkProviderDriver : IAsyncDisposable
     }
 
     private readonly ConcurrentDictionary<Guid, GroundworkProviderClient> _clients = new();
+
+    /// <summary>
+    /// Optional provider-native observer installed by a benchmark or evidence host. Drivers that cannot
+    /// expose exact command events leave it unused; measured artifacts then fail closed.
+    /// </summary>
+    public GroundworkProviderRoundTripObserver? RoundTripObserver { get; set; }
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private bool _initialized;
     private bool _disposed;

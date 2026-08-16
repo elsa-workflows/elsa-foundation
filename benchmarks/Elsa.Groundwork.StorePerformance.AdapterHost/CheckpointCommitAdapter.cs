@@ -93,6 +93,7 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
     private readonly System.Diagnostics.Stopwatch _started = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<ClientLease> _leases = [];
     private GroundworkProviderDriver? _driver;
+    private GroundworkProviderRoundTripObserver? _roundTripObserver;
     private ClientLease? _measured;
     private MeasuredFixtures? _fixtures;
     private IReadOnlyDictionary<string, string> _observedConfiguration = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -122,6 +123,8 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
     }
 
     public IReadOnlyList<IBenchmarkOperation> Operations { get; private set; } = [];
+    public IProviderRoundTripObserver? RoundTripObserver =>
+        _roundTripObserver is null ? null : new GroundworkRoundTripObserverAdapter(_roundTripObserver);
 
     /// <summary>
     /// Everything here is untimed: every workload input carries <c>"timedSetup": "excluded"</c>, and
@@ -187,12 +190,15 @@ internal sealed class CheckpointCommitAdapter : IBenchmarkAdapter, IRuntimeCheck
         if (_driver is not null)
             await _driver.DisposeAsync();
         _driver = null;
+        _roundTripObserver = null;
     }
 
     private async Task OpenDriverAsync(CancellationToken cancellationToken)
     {
         var driver = GroundworkProviderDriverFactory.Create(_request.Provider);
         _driver = driver;
+        _roundTripObserver = GroundworkProviderRoundTripObserver.TryCreate(_request.Provider);
+        driver.RoundTripObserver = _roundTripObserver;
         await driver.InitializeAsync(cancellationToken);
 
         // Fail closed here rather than after a full correctness run: ValidateCorrectness would otherwise

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate real #646 plan evidence and run the four E3 medium workload matrices."""
+"""Validate real #646 plan evidence and run the four E3 medium workload matrices.
+
+Measured children record provider-native round trips per invocation. Timed execution
+fails closed if an unrelated build/test runtime is present on the host.
+"""
 
 from __future__ import annotations
 
@@ -186,6 +190,37 @@ def matrix_command(
     return command
 
 
+def require_idle_host() -> None:
+    """Fail closed when unrelated build/test runtimes would contaminate timed samples."""
+    if os.name == "nt":
+        result = subprocess.run(
+            ["tasklist", "/fo", "csv", "/nh"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        processes = result.stdout.splitlines()
+    else:
+        result = subprocess.run(
+            ["ps", "-Ao", "pid=,command="],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        processes = result.stdout.splitlines()
+
+    blocked_tokens = ("dotnet", "msbuild", "vstest", "testhost", "xunit")
+    blocked = [line.strip() for line in processes if any(token in line.lower() for token in blocked_tokens)]
+    if blocked:
+        sample = "; ".join(blocked[:5])
+        suffix = "" if len(blocked) <= 5 else f"; and {len(blocked) - 5} more"
+        raise ValueError(
+            "timed E3 execution requires an idle host; unrelated build/test processes are active: "
+            + sample
+            + suffix
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", required=True, choices=PROVIDERS)
@@ -260,7 +295,10 @@ def main() -> int:
         print(shlex.join(command), flush=True)
         if args.execute:
             try:
+                require_idle_host()
                 subprocess.run(command, cwd=root, env=environment, check=True)
+            except ValueError as error:
+                return fail(str(error))
             except subprocess.CalledProcessError as error:
                 return fail(f"matrix for {command[command.index('--workload') + 1]} exited {error.returncode}")
     if not args.execute:

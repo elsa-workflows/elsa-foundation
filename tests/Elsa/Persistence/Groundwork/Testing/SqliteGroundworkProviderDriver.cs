@@ -158,19 +158,69 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
             queries);
     }
 
-    protected override ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
+    protected override async ValueTask<GroundworkProviderClient> OpenPhysicalClientCoreAsync(
         Guid clientId,
         DocumentStoreAccess access,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = _physicalSource ?? throw new InvalidOperationException("The SQLite physical target has not been applied.");
-        var store = new SqlitePhysicalDocumentStore(
-            RequireConnectionString().ConnectionString,
-            source.CreateManifest(),
-            source.PhysicalTarget.Routes,
-            access);
-        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
+        if (RoundTripObserver is null)
+        {
+            var store = new SqlitePhysicalDocumentStore(
+                RequireConnectionString().ConnectionString,
+                source.CreateManifest(),
+                source.PhysicalTarget.Routes,
+                access);
+            var boundedStore = CreatePhysicalBoundedStore(store, source);
+            var logicalServices = CreatePhysicalServices(store, boundedStore);
+            return new GroundworkProviderClient(
+                clientId,
+                logicalServices,
+                store,
+                logicalServices.DisposeAsync,
+                boundedStore);
+        }
+
+        var connection = new SqliteConnection(RequireConnectionString().ConnectionString);
+        ServiceProvider? services = null;
+        try
+        {
+            await connection.OpenAsync(cancellationToken);
+            RoundTripObserver.Attach(connection);
+            var store = new SqlitePhysicalDocumentStore(
+                connection,
+                source.CreateManifest(),
+                source.PhysicalTarget.Routes,
+                access);
+            var boundedStore = CreatePhysicalBoundedStore(store, source);
+            var physicalServices = CreatePhysicalServices(store, boundedStore);
+            services = physicalServices;
+            return new GroundworkProviderClient(
+                clientId,
+                physicalServices,
+                store,
+                async () =>
+                {
+                    await physicalServices.DisposeAsync();
+                    await connection.DisposeAsync();
+                },
+                boundedStore);
+        }
+        catch
+        {
+            if (services is not null)
+                await services.DisposeAsync();
+            await connection.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static GroundworkBoundedDocumentStoreRouter CreatePhysicalBoundedStore(
+        SqlitePhysicalDocumentStore store,
+        GroundworkPhysicalSchemaManifestSource source)
+    {
+        return new GroundworkBoundedDocumentStoreRouter(
             source.PhysicalTarget.Routes.Select(route =>
                 KeyValuePair.Create<string, IBoundedDocumentStore>(
                     route.StorageUnit.Value,
@@ -179,17 +229,17 @@ public sealed class SqliteGroundworkProviderDriver : GroundworkProviderDriver
                         source.CreateManifest(),
                         route,
                         source.PhysicalTarget.Provider))));
-        var services = new ServiceCollection()
+    }
+
+    private static ServiceProvider CreatePhysicalServices(
+        SqlitePhysicalDocumentStore store,
+        GroundworkBoundedDocumentStoreRouter boundedStore)
+    {
+        return new ServiceCollection()
             .AddSingleton<IDocumentStore>(store)
             .AddSingleton(boundedStore)
             .AddSingleton<IBoundedDocumentStore>(boundedStore)
             .BuildServiceProvider();
-        return ValueTask.FromResult(new GroundworkProviderClient(
-            clientId,
-            services,
-            store,
-            services.DisposeAsync,
-            boundedStore));
     }
 
     private static ValueTask<GroundworkPhysicalSchemaManifestSource> CreatePhysicalSchemaSourceAsync(

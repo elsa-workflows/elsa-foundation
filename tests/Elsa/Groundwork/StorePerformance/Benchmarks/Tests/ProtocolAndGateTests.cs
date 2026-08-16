@@ -58,6 +58,27 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Authoritative_metrics_require_an_exact_round_trip_for_every_latency_sample()
+    {
+        var latencies = new[] { 1d, 2d, 3d };
+        var missing = new OperationSample("read", 3, 30, .1, 2, 2.9, 2.98, latencies);
+        var mismatched = missing with
+        {
+            RoundTrips = 4,
+            RawRoundTrips = [1, 1, 1]
+        };
+        var complete = missing with
+        {
+            RoundTrips = 4,
+            RawRoundTrips = [1, 2, 1]
+        };
+
+        Assert.False(Statistics.HasAuthoritativeRawMetrics(missing));
+        Assert.False(Statistics.HasAuthoritativeRawMetrics(mismatched));
+        Assert.True(Statistics.HasAuthoritativeRawMetrics(complete));
+    }
+
+    [Fact]
     public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
     {
         Assert.Matches("^[0-9a-f]{64}$", HostFingerprint.CaptureSha256());
@@ -595,6 +616,10 @@ public sealed class ProtocolAndGateTests
                     Statistics.Percentile(raw, 95),
                     Statistics.Percentile(raw, 99),
                     raw)
+                {
+                    RoundTrips = raw.Length,
+                    RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
+                }
             ];
         return new ProcessArtifact(
             2,
@@ -612,7 +637,10 @@ public sealed class ProtocolAndGateTests
                     request.NativePlanContentSha256,
                     NativeRoutes(request.MeasurementSetId))),
             operations,
-            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, request.HostFingerprintSha256, "2026-07-24T00:00:00Z"));
+            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, request.HostFingerprintSha256, "2026-07-24T00:00:00Z"))
+        {
+            RoundTripInstrumentation = request.ProcessKind == ProcessKind.Measured ? "test-observer" : null
+        };
     }
 
     private static void WriteArtifact(string outputDirectory, RunRequest request)

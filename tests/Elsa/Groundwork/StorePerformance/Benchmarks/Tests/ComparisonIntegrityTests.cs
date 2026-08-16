@@ -558,7 +558,12 @@ internal sealed class ArtifactFixture : IDisposable
         var evidencePath = Path.Combine(Directory, evidenceReference);
         if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, payload);
         var rawLatencies = Enumerable.Repeat(1d, 100).ToArray();
-        var samples = operations.Select(operation => new OperationSample(operation, rawLatencies.Length, 30, rawLatencies.Length / 30d, Statistics.Percentile(rawLatencies, 50), Statistics.Percentile(rawLatencies, 95), Statistics.Percentile(rawLatencies, 99), rawLatencies)).Select(operation => transform?.Invoke(operation) ?? operation).ToArray();
+        var rawRoundTrips = Enumerable.Repeat(1L, rawLatencies.Length).ToArray();
+        var samples = operations.Select(operation => new OperationSample(operation, rawLatencies.Length, 30, rawLatencies.Length / 30d, Statistics.Percentile(rawLatencies, 50), Statistics.Percentile(rawLatencies, 95), Statistics.Percentile(rawLatencies, 99), rawLatencies)
+        {
+            RoundTrips = rawRoundTrips.Sum(),
+            RawRoundTrips = rawRoundTrips
+        }).Select(operation => transform?.Invoke(operation) ?? operation).ToArray();
         var routes = NativeRoutes(planOwner)
             .Where(route => route.RouteIdentity != omitNativeRoute)
             .Select(route => routeTransform?.Invoke(route) ?? route)
@@ -574,7 +579,10 @@ internal sealed class ArtifactFixture : IDisposable
             request.ProviderTopology,
             request.ProviderConfiguration,
             new NativePlanEvidence("list-by-stimulus-and-type", evidenceReference, evidencePlanContentSha ?? request.NativePlanContentSha256, routes));
-        ArtifactStore.Write(Directory, new ProcessArtifact(2, request, BenchmarkProtocol.Acceptance, true, evidence, samples, new MachineMetadata("test-os", "test-runtime", "X64", "X64", processorCount, request.HostFingerprintSha256, timestampUtc)));
+        ArtifactStore.Write(Directory, new ProcessArtifact(2, request, BenchmarkProtocol.Acceptance, true, evidence, samples, new MachineMetadata("test-os", "test-runtime", "X64", "X64", processorCount, request.HostFingerprintSha256, timestampUtc))
+        {
+            RoundTripInstrumentation = kind == ProcessKind.Measured ? "test-observer" : null
+        });
     }
 
     private static NativeRouteEvidence[] NativeRoutes(string measurementSet) =>

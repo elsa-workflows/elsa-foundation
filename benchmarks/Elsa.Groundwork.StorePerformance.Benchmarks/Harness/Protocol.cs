@@ -79,9 +79,40 @@ public sealed record CorrectnessEvidence(
     string ObservedProviderTopology,
     IReadOnlyDictionary<string, string> ObservedProviderConfiguration,
     NativePlanEvidence NativePlan);
-public sealed record OperationSample(string Operation, int Count, double SteadyStateSeconds, double ThroughputPerSecond, double P50Milliseconds, double P95Milliseconds, double P99Milliseconds, IReadOnlyList<double> RawLatenciesMilliseconds);
-public sealed record ProcessArtifact(int SchemaVersion, RunRequest Request, BenchmarkProtocol Protocol, bool CorrectnessPassed, CorrectnessEvidence Correctness, IReadOnlyList<OperationSample> Operations, MachineMetadata Machine);
+public sealed record OperationSample(
+    string Operation,
+    int Count,
+    double SteadyStateSeconds,
+    double ThroughputPerSecond,
+    double P50Milliseconds,
+    double P95Milliseconds,
+    double P99Milliseconds,
+    IReadOnlyList<double> RawLatenciesMilliseconds)
+{
+    /// <summary>Total provider-native commands observed for this operation's timed invocations.</summary>
+    public long RoundTrips { get; init; }
+
+    /// <summary>One exact provider-command count for every raw latency sample.</summary>
+    public IReadOnlyList<long> RawRoundTrips { get; init; } = [];
+}
+public sealed record ProcessArtifact(int SchemaVersion, RunRequest Request, BenchmarkProtocol Protocol, bool CorrectnessPassed, CorrectnessEvidence Correctness, IReadOnlyList<OperationSample> Operations, MachineMetadata Machine)
+{
+    /// <summary>Identity of the provider-native observer that produced measured command counts.</summary>
+    public string? RoundTripInstrumentation { get; init; }
+}
 public sealed record MachineMetadata(string OperatingSystem, string Runtime, string ProcessArchitecture, string OperatingSystemArchitecture, int ProcessorCount, string HostFingerprintSha256, string TimestampUtc);
+
+/// <summary>
+/// Counts commands issued by the provider connection(s) used by the public adapter.
+/// Implementations must count provider-native commands, not adapter method calls or synthetic estimates.
+/// </summary>
+public interface IProviderRoundTripObserver
+{
+    string Provider { get; }
+    string Instrumentation { get; }
+    bool IsExact { get; }
+    long Snapshot();
+}
 
 public static class HostFingerprint
 {
@@ -142,6 +173,9 @@ public interface IBenchmarkAdapter : IAsyncDisposable
     Task PrepareAsync(CancellationToken cancellationToken);
     Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken);
     IReadOnlyList<IBenchmarkOperation> Operations { get; }
+
+    /// <summary>Exact provider-native command observer used by measured artifacts.</summary>
+    IProviderRoundTripObserver? RoundTripObserver => null;
 }
 public interface IBenchmarkOperation
 {
@@ -168,6 +202,18 @@ public static class ProcessMeasurement
             throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
         SourceProvenance.RequireCleanHead(SourceProvenance.FindRepositoryRoot(), request.CommitSha);
         SourceProvenance.RequireHarnessAssembly(request.HarnessAssemblySha256);
+        IProviderRoundTripObserver? observer = null;
+        if (request.ProcessKind == ProcessKind.Measured)
+        {
+            observer = adapter.RoundTripObserver;
+            if (observer is null || !observer.IsExact)
+                throw new PerformanceContractException(
+                    $"Measured workload '{request.WorkloadId}' requires an exact provider-native round-trip observer; " +
+                    "adapter command counts or synthetic estimates are not admissible.");
+            if (!string.Equals(observer.Provider, request.Provider, StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    $"The round-trip observer targets provider '{observer.Provider}', not requested provider '{request.Provider}'.");
+        }
         await adapter.PrepareAsync(cancellationToken);
         var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
@@ -177,9 +223,12 @@ public static class ProcessMeasurement
             if (request.ProcessKind == ProcessKind.Warmup)
                 await WarmAsync(operation, protocol.WarmupOperations, cancellationToken);
             else
-                operations.Add(await MeasureAsync(operation, protocol, cancellationToken));
+                operations.Add(await MeasureAsync(operation, protocol, observer!, cancellationToken));
         }
-        return new ProcessArtifact(2, request, protocol, true, correctness, operations, new MachineMetadata(System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(), Environment.ProcessorCount, hostFingerprint, DateTimeOffset.UtcNow.ToString("O")));
+        return new ProcessArtifact(2, request, protocol, true, correctness, operations, new MachineMetadata(System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(), Environment.ProcessorCount, hostFingerprint, DateTimeOffset.UtcNow.ToString("O")))
+        {
+            RoundTripInstrumentation = observer?.Instrumentation
+        };
     }
 
     private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token)
@@ -188,20 +237,42 @@ public static class ProcessMeasurement
             await InvokePreparedAsync(operation, -1L - i, static () => { }, token);
     }
 
-    private static async Task<OperationSample> MeasureAsync(IBenchmarkOperation operation, BenchmarkProtocol protocol, CancellationToken token)
+    private static async Task<OperationSample> MeasureAsync(
+        IBenchmarkOperation operation,
+        BenchmarkProtocol protocol,
+        IProviderRoundTripObserver observer,
+        CancellationToken token)
     {
         var samples = new List<double>();
+        var roundTrips = new List<long>();
         var measuredElapsed = TimeSpan.Zero;
         for (var invocation = 0L; ShouldContinue(samples.Count, measuredElapsed, protocol); invocation++)
         {
+            var before = 0L;
             var start = 0L;
-            await InvokePreparedAsync(operation, invocation, () => start = Stopwatch.GetTimestamp(), token);
+            // The callback runs after per-invocation fixture setup, so setup commands stay outside both
+            // the stopwatch and the provider-command sample for the named public operation.
+            await InvokePreparedAsync(operation, invocation, () =>
+            {
+                before = observer.Snapshot();
+                start = Stopwatch.GetTimestamp();
+            }, token);
             var elapsed = Stopwatch.GetElapsedTime(start);
+            var after = observer.Snapshot();
+            var invocationRoundTrips = after - before;
+            if (invocationRoundTrips <= 0)
+                throw new PerformanceContractException(
+                    $"Provider-native round-trip observation recorded no commands for operation '{operation.Id}' invocation {invocation}.");
             measuredElapsed += elapsed;
             samples.Add(Math.Round(elapsed.TotalMilliseconds, 4));
+            roundTrips.Add(invocationRoundTrips);
         }
         var measuredSeconds = measuredElapsed.TotalSeconds;
-        return new OperationSample(operation.Id, samples.Count, measuredSeconds, measuredSeconds > 0 ? samples.Count / measuredSeconds : 0, Statistics.Percentile(samples, 50), Statistics.Percentile(samples, 95), Statistics.Percentile(samples, 99), samples);
+        return new OperationSample(operation.Id, samples.Count, measuredSeconds, measuredSeconds > 0 ? samples.Count / measuredSeconds : 0, Statistics.Percentile(samples, 50), Statistics.Percentile(samples, 95), Statistics.Percentile(samples, 99), samples)
+        {
+            RoundTrips = roundTrips.Sum(),
+            RawRoundTrips = roundTrips
+        };
     }
 
     internal static bool ShouldContinueForTest(
@@ -256,11 +327,12 @@ public static class ArtifactAdmission
         }
         else if (artifact.Request.ProcessIndex is < 1 or > 3 ||
                  artifact.Operations.Count == 0 ||
+                 string.IsNullOrWhiteSpace(artifact.RoundTripInstrumentation) ||
                  artifact.Operations.Any(operation =>
                      operation.Count < BenchmarkProtocol.Acceptance.MinimumOperations ||
                      operation.SteadyStateSeconds < BenchmarkProtocol.Acceptance.MinimumSteadyState.TotalSeconds ||
                      !Statistics.HasAuthoritativeRawMetrics(operation)))
-            throw new PerformanceContractException("Measured artifacts require accepted process indices and authoritative finite positive raw samples with summaries reproduced from them.");
+            throw new PerformanceContractException("Measured artifacts require an identified exact provider-native round-trip observer and authoritative finite positive raw samples with summaries reproduced from them.");
         ArtifactSafety.Validate(artifact);
     }
 

@@ -38,7 +38,15 @@ python3 tools/groundwork/run-e3-medium-baseline.py \
 
 The selected provider driver owns a fresh isolated connection/catalog for each child. The runner never
 accepts or retains a connection string. It refuses missing, stale, mismatched, or invented route evidence
-before launching a matrix.
+before launching a matrix. Measured artifacts also retain an exact provider-native command count for every
+latency sample and the observer identity that produced it; adapter calls or estimates are not admissible.
+The current exact observer is SQLite's `sqlite3_trace` on the actual measured provider connection; PostgreSQL,
+SQL Server, and MongoDB measured children fail closed before preparation until equivalent native command hooks are
+added.
+The runner performs a fail-closed process audit immediately before each timed matrix and refuses to start while
+unrelated `dotnet`, MSBuild, VSTest, testhost, or xUnit processes are active. Run timed cohorts on an idle or
+isolated checkout/runner; correctness and native-plan capture remain useful when a timed cohort is interrupted,
+but contaminated latency must not be published.
 
 ## Operating it
 

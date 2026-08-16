@@ -7,7 +7,8 @@ public static class Statistics
     public static bool HasAuthoritativeRawMetrics(OperationSample operation)
     {
         var samples = operation.RawLatenciesMilliseconds;
-        if (operation.Count <= 0 || !double.IsFinite(operation.SteadyStateSeconds) || operation.SteadyStateSeconds <= 0 || samples is null || samples.Count != operation.Count || samples.Any(sample => !double.IsFinite(sample) || sample <= 0))
+        var roundTrips = operation.RawRoundTrips;
+        if (operation.Count <= 0 || !double.IsFinite(operation.SteadyStateSeconds) || operation.SteadyStateSeconds <= 0 || samples is null || samples.Count != operation.Count || samples.Any(sample => !double.IsFinite(sample) || sample <= 0) || roundTrips is null || roundTrips.Count != operation.Count || roundTrips.Any(value => value <= 0) || operation.RoundTrips != roundTrips.Sum())
             return false;
 
         var summaries = new[] { operation.P50Milliseconds, operation.P95Milliseconds, operation.P99Milliseconds, operation.ThroughputPerSecond };

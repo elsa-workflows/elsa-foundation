@@ -31,6 +31,7 @@ internal sealed class QueueDrainAdapter : IBenchmarkAdapter, IRuntimeQueueDrainW
     private QueueDrainAdapter(RuntimeAdapterInfrastructure runtime) => _runtime = runtime;
 
     public IReadOnlyList<IBenchmarkOperation> Operations { get; private set; } = [];
+    public IProviderRoundTripObserver? RoundTripObserver => _runtime.RoundTripObserver;
 
     public static async ValueTask<IBenchmarkAdapter> CreateAsync(
         AdapterContext context,

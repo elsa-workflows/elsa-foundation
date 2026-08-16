@@ -32,6 +32,7 @@ internal sealed class BookmarkLookupAdapter : IBenchmarkAdapter, IRuntimeBookmar
     private BookmarkLookupAdapter(RuntimeAdapterInfrastructure runtime) => _runtime = runtime;
 
     public IReadOnlyList<IBenchmarkOperation> Operations { get; private set; } = [];
+    public IProviderRoundTripObserver? RoundTripObserver => _runtime.RoundTripObserver;
 
     public static async ValueTask<IBenchmarkAdapter> CreateAsync(
         AdapterContext context,
