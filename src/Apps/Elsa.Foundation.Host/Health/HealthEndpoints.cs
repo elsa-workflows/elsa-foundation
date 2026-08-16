@@ -19,7 +19,7 @@ namespace Elsa.Foundation.Host.Health;
 /// broker). That lives inside the shell where those dependencies are registered; see the notes in README.
 /// </para>
 /// </summary>
-internal static class HealthEndpoints
+public static class HealthEndpoints
 {
     private const string ConfiguredShellsSection = "CShells:Shells";
 

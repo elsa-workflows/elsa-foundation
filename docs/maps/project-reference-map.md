@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 155
 - Test projects: 102
-- Direct project references: 1274
+- Direct project references: 1275
 
 ## Projects
 
@@ -218,7 +218,7 @@ Records direct project references only.
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Modularity.Attention |
-| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
 | [Elsa.Persistence.Core.Tests](../../tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.Core |
 | [Elsa.Persistence.EFCore.Tests](../../tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.Core<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite |
 | [Elsa.Persistence.Groundwork.Composition.Tests](../../tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Secrets.Persistence.Groundwork<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |

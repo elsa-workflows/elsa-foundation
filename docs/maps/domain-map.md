@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 155
 - Test projects: 102
 - Domains: 27
-- Direct cross-domain references: 734
+- Direct cross-domain references: 735
 
 ## Domains
 
@@ -251,7 +251,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | Attention.Tests | test | Elsa.Modularity.Attention |
-| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
 | [Elsa.Persistence.Core.Tests](../../tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj) | test | Elsa.Persistence | Core.Tests | test | Elsa.Persistence.Core |
 | [Elsa.Persistence.EFCore.Tests](../../tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj) | test | Elsa.Persistence | EFCore.Tests | test | Elsa.Persistence.Core<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite |
 | [Elsa.Persistence.Groundwork.Composition.Tests](../../tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj) | test | Elsa.Persistence | Groundwork.Composition.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Persistence.Groundwork.ReferenceComposition<br>Elsa.Persistence.Groundwork.Unified<br>Elsa.Secrets.Persistence.Groundwork<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
@@ -585,6 +585,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.ExtensionBuilder](../../src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj) | Elsa.Modularity | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
 | [Elsa.Modularity.ExtensionBuilder](../../src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj) | Elsa.Modularity | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | Elsa.Git |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | Elsa.Git |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench |
 | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | Elsa.Persistence | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |

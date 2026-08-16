@@ -36,7 +36,7 @@ shared manifest tests reject missing/ambiguous metadata.
 existing console/health fixtures remain green.
 
 - [X] T010 [US2] Reuse the management-key filter for Workbench CShells management without adding a Foundation permission in `src/Elsa/Modularity/ExtensionBuilder/ManagementApiKeyAuthentication.cs` and `src/Apps/Elsa.Workbench/Program.cs`.
-- [X] T011 [US2] Add positive/negative host-control and metadata contract tests in `tests/Elsa/Modularity/Tests/RetainedHostEndpointMetadataTests.cs`.
+- [X] T011 [US2] Add positive/negative host-control and metadata contract tests in `tests/Elsa/Modularity/Tests/RetainedHostEndpointMetadataTests.cs` and `tests/Elsa/Modularity/Tests/FoundationHostEndpointTests.cs`.
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 

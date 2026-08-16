@@ -113,6 +113,77 @@ public sealed class EndpointManifestBuilderTests
         Assert.Equal(EndpointOwnerKind.Host, entry.OwnerKind);
     }
 
+    [Fact]
+    public void Rejects_duplicate_host_credential_enforcement_markers_with_route_context()
+    {
+        var metadata = BaseMetadata("Elsa.Workbench", ["POST"]);
+        metadata.Add(EndpointSecurityDispositionMetadata.HostCredential("X-Key", "Elsa.Workbench"));
+        metadata.Add(new EndpointHostCredentialEnforcementMetadata("X-Key", "Elsa.Workbench"));
+        metadata.Add(new EndpointHostCredentialEnforcementMetadata("X-Key", "Elsa.Workbench"));
+
+        var exception = Assert.Throws<EndpointManifestValidationException>(() =>
+            new EndpointManifestBuilder([new TestEndpointDataSource([
+                BuildEndpoint(RoutePatternFactory.Parse("/_admin/duplicate"), "Elsa.Workbench", ["POST"], metadata)])]).Build());
+
+        Assert.Contains("ambiguous host credential enforcement metadata", exception.Problems);
+        Assert.Contains("POST /_admin/duplicate", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rejects_host_credential_marker_with_non_host_credential_disposition()
+    {
+        var metadata = BaseMetadata("Elsa.Workbench", ["GET"]);
+        metadata.Add(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
+        metadata.Add(new EndpointHostCredentialEnforcementMetadata("X-Key", "Elsa.Workbench"));
+        metadata.Add(new AuthorizeAttribute("Default"));
+
+        var exception = Assert.Throws<EndpointManifestValidationException>(() =>
+            new EndpointManifestBuilder([new TestEndpointDataSource([
+                BuildEndpoint(RoutePatternFactory.Parse("/_admin/non-host"), "Elsa.Workbench", ["GET"], metadata)])]).Build());
+
+        Assert.Contains("host credential enforcement metadata conflicts with security disposition", exception.Problems);
+        Assert.Contains("GET /_admin/non-host", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rejects_host_credential_marker_with_mismatched_credential_or_owner()
+    {
+        var metadata = BaseMetadata("Elsa.Workbench", ["POST"]);
+        metadata.Add(EndpointSecurityDispositionMetadata.HostCredential("X-Expected", "Elsa.Workbench"));
+        metadata.Add(new EndpointHostCredentialEnforcementMetadata("X-Actual", "Other.Host"));
+
+        var exception = Assert.Throws<EndpointManifestValidationException>(() =>
+            new EndpointManifestBuilder([new TestEndpointDataSource([
+                BuildEndpoint(RoutePatternFactory.Parse("/_admin/mismatch"), "Elsa.Workbench", ["POST"], metadata)])]).Build());
+
+        Assert.Contains("host credential enforcement metadata conflicts with host credential disposition", exception.Problems);
+        Assert.Contains("POST /_admin/mismatch", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(EndpointSecurityDispositionKind.HostCredential, "X-Key")]
+    [InlineData(EndpointSecurityDispositionKind.NamedPolicy, "Default")]
+    public void Rejects_owner_bearing_security_disposition_that_conflicts_with_endpoint_owner(
+        EndpointSecurityDispositionKind kind,
+        string value)
+    {
+        var metadata = BaseMetadata("Elsa.Workbench", ["GET"]);
+        metadata.Add(kind == EndpointSecurityDispositionKind.HostCredential
+            ? EndpointSecurityDispositionMetadata.HostCredential(value, "Other.Host")
+            : EndpointSecurityDispositionMetadata.NamedPolicy(value, "Other.Host"));
+        if (kind == EndpointSecurityDispositionKind.HostCredential)
+            metadata.Add(new EndpointHostCredentialEnforcementMetadata(value, "Other.Host"));
+        else
+            metadata.Add(new AuthorizeAttribute(value));
+
+        var exception = Assert.Throws<EndpointManifestValidationException>(() =>
+            new EndpointManifestBuilder([new TestEndpointDataSource([
+                BuildEndpoint(RoutePatternFactory.Parse("/_admin/owner-conflict"), "Elsa.Workbench", ["GET"], metadata)])]).Build());
+
+        Assert.Contains("security disposition owner conflicts with endpoint owner", exception.Problems);
+        Assert.Contains("GET /_admin/owner-conflict", exception.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -18,7 +18,7 @@ namespace Elsa.Foundation.Host.ModuleManagement;
 /// </list>
 /// This is mapped only when <see cref="ModuleManagementOptions.Enabled"/> is true at startup.
 /// </summary>
-internal static class ModuleManagementEndpoints
+public static class ModuleManagementEndpoints
 {
     public static IEndpointRouteBuilder MapModuleManagementApi(this IEndpointRouteBuilder endpoints, ModuleManagementOptions options)
     {

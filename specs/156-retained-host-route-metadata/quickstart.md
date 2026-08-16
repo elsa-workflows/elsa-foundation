@@ -9,14 +9,15 @@
 
 ```bash
 dotnet test tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj --filter FullyQualifiedName~EndpointManifestBuilderTests
-dotnet test tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj --filter FullyQualifiedName~RetainedHostEndpointMetadataTests
+dotnet test tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj --filter 'FullyQualifiedName~RetainedHostEndpointMetadataTests|FullyQualifiedName~FoundationHostEndpointTests'
 dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --filter FullyQualifiedName~HostEndpointMetadataTests
 ```
 
 The focused mapping test builds the Workbench retained route subset and produces 64 valid physical entries when
 console streaming is enabled: 60 non-console entries plus two HTTP routes and the SignalR hub plus negotiate
 endpoint. The issue inventory counts the hub conceptually as one surface, so this is 63 semantic Workbench surfaces.
-Source/architecture tests cover the Foundation Host and optional console-log mapping declarations.
+The Foundation Host runtime fixture independently proves its exact four routes, security dispositions, and
+missing/invalid/valid management-key behavior. Source/architecture tests cover the optional mapping declarations.
 
 ## Full gates
 

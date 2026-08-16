@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Issue #1365, Foundation H: Complete ownership and security metadata for retained host routes.
 

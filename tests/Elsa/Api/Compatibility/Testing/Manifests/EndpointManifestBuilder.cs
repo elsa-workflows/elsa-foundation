@@ -83,6 +83,10 @@ public sealed class EndpointManifestBuilder
             problems.Add("ambiguous host credential enforcement metadata");
         if (dispositions.Length == 1)
         {
+            if (ownerMetadata.Length == 1 &&
+                (dispositions[0].Kind is EndpointSecurityDispositionKind.HostCredential or EndpointSecurityDispositionKind.NamedPolicy) &&
+                !string.Equals(dispositions[0].Owner, ownerMetadata[0].Owner, StringComparison.Ordinal))
+                problems.Add("security disposition owner conflicts with endpoint owner");
             if (hostCredentialEnforcement.Length == 1 && dispositions[0].Kind != EndpointSecurityDispositionKind.HostCredential)
                 problems.Add("host credential enforcement metadata conflicts with security disposition");
             if (hostCredentialEnforcement.Length == 1 &&
