@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark/BenchmarkFingerprint.cs" Link="BenchmarkFingerprint.cs" />
     <!-- Match the frozen v1 adapter's central package graph; this is intentionally not the v2 preview feed. -->
     <PackageReference Include="Groundwork.Sqlite" Version="0.0.1-preview.114" />
   </ItemGroup>

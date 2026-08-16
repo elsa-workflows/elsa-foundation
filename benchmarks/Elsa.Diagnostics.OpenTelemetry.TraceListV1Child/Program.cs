@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -38,9 +36,9 @@ try
     await store.CompleteDrainingAsync();
 
     var initial = await provider.GetTracesAsync(corpus.Filter);
-    Validate(initial, corpus.ExpectedMatches, "initial");
+    var expectedResultDigest = Validate(initial, corpus.ExpectedMatches, "initial");
     for (var index = 0; index < options.Warmups; index++)
-        Validate(await provider.GetTracesAsync(corpus.Filter), corpus.ExpectedMatches, $"warmup-{index}");
+        Validate(await provider.GetTracesAsync(corpus.Filter), corpus.ExpectedMatches, $"warmup-{index}", expectedResultDigest);
 
     var samples = new double[options.Samples];
     for (var index = 0; index < samples.Length; index++)
@@ -48,12 +46,12 @@ try
         var stopwatch = Stopwatch.StartNew();
         var result = await provider.GetTracesAsync(corpus.Filter);
         stopwatch.Stop();
-        Validate(result, corpus.ExpectedMatches, $"sample-{index}");
+        Validate(result, corpus.ExpectedMatches, $"sample-{index}", expectedResultDigest);
         samples[index] = stopwatch.Elapsed.TotalMilliseconds;
     }
 
     Console.WriteLine(JsonSerializer.Serialize(
-        new Measurement("groundwork-v1-shipping", Statistics.Create(samples), corpus.ExpectedMatches, corpus.Fingerprint)));
+        new Measurement("groundwork-v1-shipping", Statistics.Create(samples), corpus.ExpectedMatches, corpus.Fingerprint, expectedResultDigest, samples)));
 }
 finally
 {
@@ -99,10 +97,15 @@ static OpenTelemetryDiagnosticsOptions OptionsFor(TraceCorpus corpus) => new()
     ShutdownDrainTimeout = TimeSpan.FromMinutes(1)
 };
 
-static void Validate(OpenTelemetryTraceResult result, int expected, string phase)
+static string Validate(OpenTelemetryTraceResult result, int expected, string phase, string? expectedResultDigest = null)
 {
     if (result.Items.Count != expected)
         throw new InvalidOperationException($"Groundwork v1 {phase} returned {result.Items.Count} traces; expected {expected}.");
+
+    var resultDigest = BenchmarkFingerprint.OrderedTraceIds(result);
+    if (expectedResultDigest is not null && !string.Equals(resultDigest, expectedResultDigest, StringComparison.Ordinal))
+        throw new InvalidOperationException($"Groundwork v1 {phase} returned a different ordered trace-ID set ({resultDigest}); expected {expectedResultDigest}.");
+    return resultDigest;
 }
 
 static void DeleteDatabase(string path)
@@ -202,19 +205,19 @@ internal sealed class TraceCorpus
             })
             .ToArray();
         var expected = Enumerable.Range(3, traceCount - 3).Count(index => index % ServiceCount == 3);
-        var fingerprintInput = string.Join('\n', traces.Select(trace => $"{trace.TraceId}|{trace.Name}|{trace.StartTime:O}|{trace.ResourceIds.Single()}"));
+        var filter = new OpenTelemetryTraceFilter
+        {
+            ServiceName = "benchmark-service-03",
+            Search = "checkout-trace",
+            From = baseTime,
+            To = baseTime.AddMilliseconds(traceCount),
+            Take = expected
+        };
         return new()
         {
             Batches = batches,
-            Filter = new OpenTelemetryTraceFilter
-            {
-                ServiceName = "benchmark-service-03",
-                Search = "checkout-trace",
-                From = baseTime,
-                To = baseTime.AddMilliseconds(traceCount),
-                Take = expected
-            },
-            Fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))),
+            Filter = filter,
+            Fingerprint = BenchmarkFingerprint.Input(seed, traceCount, batches, filter),
             TraceCount = traceCount,
             ExpectedMatches = expected
         };
@@ -237,4 +240,10 @@ internal sealed record Statistics(int Count, double MeanMilliseconds, double P50
     }
 }
 
-internal sealed record Measurement(string Name, Statistics Statistics, int ExpectedMatches, string? CorpusSha256 = null);
+internal sealed record Measurement(
+    string Name,
+    Statistics Statistics,
+    int ExpectedMatches,
+    string? InputSha256 = null,
+    string? ResultTraceIdsSha256 = null,
+    double[]? Samples = null);

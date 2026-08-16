@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -33,7 +31,7 @@ var corpus = TraceCorpus.Create(options.Seed, options.TraceCount);
 Console.WriteLine("Trace-list latency benchmark");
 Console.WriteLine($"scope=provider-route (the Elsa trace provider call; HTTP transport/JSON are excluded)");
 Console.WriteLine($"seed={options.Seed} traces={corpus.TraceCount} services={TraceCorpus.ServiceCount} expected={corpus.ExpectedMatches} warmups={options.Warmups} samples={options.Samples}");
-Console.WriteLine($"corpus-sha256={corpus.Fingerprint}");
+Console.WriteLine($"input-sha256={corpus.Fingerprint}");
 Console.WriteLine("oracle=EF Core OpenTelemetry store on file-backed SQLite; target=Groundwork v2 ordinary units on file-backed SQLite");
 
 var oracle = await RunAsync("ef-core-v1-oracle", CreateEfStoreAsync, corpus, options);
@@ -61,9 +59,9 @@ static async Task<Measurement> RunAsync(
     var filter = corpus.Filter;
 
     var initial = await provider.GetTracesAsync(filter);
-    Validate(initial, corpus.ExpectedMatches, name, "initial");
+    var expectedResultDigest = Validate(initial, corpus.ExpectedMatches, name, "initial");
     for (var i = 0; i < options.Warmups; i++)
-        Validate(await provider.GetTracesAsync(filter), corpus.ExpectedMatches, name, $"warmup-{i}");
+        Validate(await provider.GetTracesAsync(filter), corpus.ExpectedMatches, name, $"warmup-{i}", expectedResultDigest);
 
     var samples = new double[options.Samples];
     for (var i = 0; i < samples.Length; i++)
@@ -71,13 +69,13 @@ static async Task<Measurement> RunAsync(
         var stopwatch = Stopwatch.StartNew();
         var result = await provider.GetTracesAsync(filter);
         stopwatch.Stop();
-        Validate(result, corpus.ExpectedMatches, name, $"sample-{i}");
+        Validate(result, corpus.ExpectedMatches, name, $"sample-{i}", expectedResultDigest);
         samples[i] = stopwatch.Elapsed.TotalMilliseconds;
     }
 
     var statistics = Statistics.Create(samples);
     Console.WriteLine($"{name}: n={statistics.Count} mean={statistics.MeanMilliseconds:F3}ms p50={statistics.P50Milliseconds:F3}ms p95={statistics.P95Milliseconds:F3}ms p99={statistics.P99Milliseconds:F3}ms");
-    return new(name, statistics, corpus.ExpectedMatches, corpus.Fingerprint);
+    return new(name, statistics, corpus.ExpectedMatches, corpus.Fingerprint, expectedResultDigest, samples);
 }
 
 static async Task CompareGroundworkVersionsAsync(string[] args)
@@ -117,9 +115,11 @@ static async Task CompareGroundworkVersionsAsync(string[] args)
     var before = JsonSerializer.Deserialize<Measurement>(stdout.Trim()) ??
                  throw new InvalidDataException("The Groundwork v1 child did not emit a measurement JSON object.");
     var corpus = TraceCorpus.Create(options.Seed, options.TraceCount);
-    if (!string.Equals(before.CorpusSha256, corpus.Fingerprint, StringComparison.Ordinal))
-        throw new InvalidDataException($"The Groundwork v1 child used a different corpus (reported '{before.CorpusSha256}', expected '{corpus.Fingerprint}').");
+    if (!string.Equals(before.InputSha256, corpus.Fingerprint, StringComparison.Ordinal))
+        throw new InvalidDataException($"The Groundwork v1 child used a different input (reported '{before.InputSha256}', expected '{corpus.Fingerprint}').");
     var after = await RunAsync("groundwork-v2-target", CreateGroundworkStoreAsync, corpus, options);
+    if (!string.Equals(before.ResultTraceIdsSha256, after.ResultTraceIdsSha256, StringComparison.Ordinal))
+        throw new InvalidDataException($"Groundwork v1 and v2 returned different ordered trace IDs ('{before.ResultTraceIdsSha256}' versus '{after.ResultTraceIdsSha256}').");
     var ratio = after.Statistics.P95Milliseconds / before.Statistics.P95Milliseconds;
 
     Console.WriteLine(JsonSerializer.Serialize(
@@ -130,7 +130,8 @@ static async Task CompareGroundworkVersionsAsync(string[] args)
             corpus.Fingerprint,
             before,
             after,
-            ratio),
+            ratio,
+            BenchmarkProvenance.Current),
         new JsonSerializerOptions { WriteIndented = true }));
 }
 
@@ -142,10 +143,20 @@ static string? Option(string[] args, string name)
     return null;
 }
 
-static void Validate(OpenTelemetryTraceResult result, int expected, string store, string phase)
+static string Validate(
+    OpenTelemetryTraceResult result,
+    int expected,
+    string store,
+    string phase,
+    string? expectedResultDigest = null)
 {
     if (result.Items.Count != expected)
         throw new InvalidOperationException($"{store} {phase} returned {result.Items.Count} traces; expected {expected}.");
+
+    var resultDigest = BenchmarkFingerprint.OrderedTraceIds(result);
+    if (expectedResultDigest is not null && !string.Equals(resultDigest, expectedResultDigest, StringComparison.Ordinal))
+        throw new InvalidOperationException($"{store} {phase} returned a different ordered trace-ID set ({resultDigest}); expected {expectedResultDigest}.");
+    return resultDigest;
 }
 
 static async Task<StoreHandle> CreateEfStoreAsync(TraceCorpus corpus)
@@ -359,12 +370,11 @@ internal sealed class TraceCorpus
             To = baseTime.AddMilliseconds(traceCount),
             Take = expected
         };
-        var fingerprintInput = string.Join('\n', traces.Select(trace => $"{trace.TraceId}|{trace.Name}|{trace.StartTime:O}|{trace.ResourceIds.Single()}"));
         return new()
         {
             Batches = batches,
             Filter = filter,
-            Fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput))),
+            Fingerprint = BenchmarkFingerprint.Input(seed, traceCount, batches, filter),
             TraceCount = traceCount,
             ExpectedMatches = expected
         };
@@ -392,13 +402,19 @@ internal sealed record Statistics(int Count, double MeanMilliseconds, double P50
     }
 }
 
-internal sealed record Measurement(string Name, Statistics Statistics, int ExpectedMatches, string? CorpusSha256 = null);
+internal sealed record Measurement(
+    string Name,
+    Statistics Statistics,
+    int ExpectedMatches,
+    string? InputSha256 = null,
+    string? ResultTraceIdsSha256 = null,
+    double[]? Samples = null);
 
 internal sealed record BenchmarkReport(
     string Benchmark,
     DateTimeOffset GeneratedAtUtc,
     BenchmarkOptions Options,
-    string CorpusSha256,
+    string InputSha256,
     Measurement Oracle,
     Measurement Target,
     double TargetToOracleP95Ratio);
@@ -407,7 +423,29 @@ internal sealed record GroundworkVersionComparison(
     string Benchmark,
     DateTimeOffset GeneratedAtUtc,
     BenchmarkOptions Options,
-    string CorpusSha256,
+    string InputSha256,
     Measurement Before,
     Measurement After,
-    double AfterToBeforeP95Ratio);
+    double AfterToBeforeP95Ratio,
+    BenchmarkProvenance Provenance);
+
+internal sealed record BenchmarkProvenance(
+    string V1SourceCommit,
+    string V1GroundworkPackage,
+    string V2SourceCommit,
+    string V2GroundworkPackage,
+    string Os,
+    string Runtime,
+    string Architecture,
+    int ProcessorCount)
+{
+    public static BenchmarkProvenance Current { get; } = new(
+        "e30c2d291a34d3c5e986a9339af9722748572cac",
+        "0.0.1-preview.114",
+        "fc29bd5065cdeaced2b16dbd9ce5ffc1ff874806",
+        "0.1.0-preview.1",
+        System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+        System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+        System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+        Environment.ProcessorCount);
+}
