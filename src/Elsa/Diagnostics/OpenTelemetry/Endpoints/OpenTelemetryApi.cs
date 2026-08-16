@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -99,22 +100,9 @@ public static class OpenTelemetryApi
     {
         endpoints.MapPost(route, async context =>
             {
-                TFilter? filter;
-                try
-                {
-                    filter = await context.Request.ReadFromJsonAsync(filterInfo, context.RequestAborted);
-                }
-                catch (JsonException)
-                {
-                    await Results.BadRequest().ExecuteAsync(context);
-                    return;
-                }
-
+                var filter = await ReadJsonAsync(context, filterInfo);
                 if (filter is null)
-                {
-                    await Results.BadRequest().ExecuteAsync(context);
                     return;
-                }
 
                 var result = await execute(context, filter, context.RequestAborted);
                 await Results.Json(result, resultInfo).ExecuteAsync(context);
@@ -127,6 +115,43 @@ public static class OpenTelemetryApi
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(OpenTelemetryPermissions.Read);
     }
+
+    private static async Task<T?> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> typeInfo)
+        where T : class
+    {
+        if (string.IsNullOrWhiteSpace(context.Request.ContentType))
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return default;
+        }
+
+        try
+        {
+            var value = await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted);
+            return value ?? JsonSerializer.Deserialize("{}", typeInfo);
+        }
+        catch (NotSupportedException)
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return default;
+        }
+        catch (JsonException exception)
+        {
+            var problem = new OpenTelemetryBindingProblemDetails(
+                StatusCodes.Status400BadRequest,
+                "One or more errors occurred!",
+                new Dictionary<string, string[]> { ["serializerErrors"] = [NormalizeJsonError(exception.Message)] });
+            await Results.Json(
+                    problem,
+                    OpenTelemetryJsonContext.Default.OpenTelemetryBindingProblemDetails,
+                    "application/problem+json; charset=utf-8",
+                    StatusCodes.Status400BadRequest)
+                .ExecuteAsync(context);
+            return default;
+        }
+    }
+
+    private static string NormalizeJsonError(string message) => message.Replace("Path: $ | ", string.Empty, StringComparison.Ordinal);
 
     private static void MapGet(
         IEndpointRouteBuilder endpoints,
@@ -185,3 +210,8 @@ public static class OpenTelemetryApi
     private static ProducesResponseTypeMetadata Forbidden() =>
         new(StatusCodes.Status403Forbidden, typeof(void), []);
 }
+
+internal sealed record OpenTelemetryBindingProblemDetails(
+    int StatusCode,
+    string Message,
+    IReadOnlyDictionary<string, string[]> Errors);

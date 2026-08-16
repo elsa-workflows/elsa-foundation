@@ -1,0 +1,84 @@
+{
+  "capturedAt": "c04d8dbbe",
+  "cases": [
+    {
+      "name": "resources-exact",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "{}",
+      "contentType": "application/json",
+      "identity": "exact",
+      "status": 200,
+      "responseContentType": "application/json; charset=utf-8",
+      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+    },
+    {
+      "name": "traces-filter",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/traces/search",
+      "body": "{\"traceId\":\"trace-1\"}",
+      "contentType": "application/json",
+      "identity": "exact",
+      "status": 200,
+      "responseContentType": "application/json; charset=utf-8",
+      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+    },
+    {
+      "name": "trace-missing",
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/traces/missing",
+      "identity": "exact",
+      "status": 404,
+      "responseContentType": "",
+      "responseBody": ""
+    },
+    {
+      "name": "storage",
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/storage",
+      "identity": "exact",
+      "status": 200,
+      "responseContentType": "application/json; charset=utf-8",
+      "responseBody": "{\"traceCapacity\":5000,\"spanCapacity\":25000,\"metricPointCapacity\":25000,\"logRecordCapacity\":10000,\"resourceCount\":0,\"traceCount\":0,\"spanCount\":0,\"metricInstrumentCount\":0,\"metricPointCount\":0,\"logRecordCount\":0,\"droppedTraceCount\":0,\"droppedSpanCount\":0,\"droppedMetricPointCount\":0,\"droppedLogRecordCount\":0}"
+    },
+    {
+      "name": "anonymous-storage",
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/storage",
+      "status": 401,
+      "responseContentType": "",
+      "responseBody": ""
+    },
+    {
+      "name": "lacking-storage",
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/storage",
+      "identity": "lacking",
+      "status": 403,
+      "responseContentType": "",
+      "responseBody": ""
+    },
+    {
+      "name": "stream-invalid",
+      "method": "GET",
+      "path": "/_elsa/studio/diagnostics/opentelemetry/stream?status=bad",
+      "identity": "exact",
+      "status": 400,
+      "responseContentType": "text/plain; charset=utf-8",
+      "responseBody": "Invalid span status 'bad'."
+    },
+    {
+      "name": "stream-success",
+      "method": "GET",
+      "path": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "identity": "exact",
+      "status": 200,
+      "responseContentType": "text/event-stream",
+      "responseBody": "event: resource\ndata: {\"id\":\"resource-1\",\"serviceName\":\"service-1\",\"telemetrySdkLanguage\":\"dotnet\",\"attributes\":{},\"lastSeen\":\"2026-08-16T12:00:00+00:00\",\"status\":\"Active\"}\n\n",
+      "headers": {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no"
+      }
+    }
+  ]
+}

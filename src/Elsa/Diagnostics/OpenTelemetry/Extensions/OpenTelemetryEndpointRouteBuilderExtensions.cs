@@ -16,6 +16,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Extensions;
 /// <summary>ASP.NET Core route composition for the OTLP/HTTP protobuf receiver.</summary>
 public static class OpenTelemetryEndpointRouteBuilderExtensions
 {
+    private const string TransportCredential = "OTLP API key or loopback";
+
     /// <summary>
     /// Maps exactly the traces, metrics, and logs OTLP/HTTP POST routes using the configured
     /// <see cref="OpenTelemetryDiagnosticsOptions.HttpEndpointPath"/>.
@@ -65,8 +67,7 @@ public static class OpenTelemetryEndpointRouteBuilderExtensions
             .WithOwner(OpenTelemetryPermissions.OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithMetadata(new EndpointNameMetadata($"OpenTelemetryOtlp{signal}"), new TagsAttribute("OpenTelemetry"))
-            .WithMetadata(new AcceptsMetadata(["application/x-protobuf"], typeof(byte[]), false),
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(byte[]), ["application/x-protobuf"]))
+            .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(TransportCredential, OpenTelemetryPermissions.OwnerId))
             .WithOpenApi(operation =>
             {
                 operation.OperationId = $"OpenTelemetryOtlp{signal}";

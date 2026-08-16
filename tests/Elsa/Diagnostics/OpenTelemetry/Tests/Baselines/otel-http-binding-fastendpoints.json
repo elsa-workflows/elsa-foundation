@@ -1,0 +1,59 @@
+{
+  "capturedAt": "c04d8dbbe",
+  "cases": [
+    {
+      "name": "resources-null",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "null",
+      "contentType": "application/json",
+      "identity": "exact",
+      "status": 200,
+      "responseContentType": "application/json; charset=utf-8",
+      "responseBody": "{\"items\":[],\"droppedCount\":0}"
+    },
+    {
+      "name": "resources-absent",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "{}",
+      "identity": "exact",
+      "status": 415,
+      "responseContentType": "",
+      "responseBody": ""
+    },
+    {
+      "name": "resources-text",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "{}",
+      "contentType": "text/plain",
+      "identity": "exact",
+      "status": 415,
+      "responseContentType": "",
+      "responseBody": ""
+    },
+    {
+      "name": "resources-empty",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "",
+      "contentType": "application/json",
+      "identity": "exact",
+      "status": 400,
+      "responseContentType": "application/problem+json; charset=utf-8",
+      "responseBody": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\"]}}"
+    },
+    {
+      "name": "resources-malformed",
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "body": "{",
+      "contentType": "application/json",
+      "identity": "exact",
+      "status": 400,
+      "responseContentType": "application/problem+json; charset=utf-8",
+      "responseBody": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\"]}}"
+    }
+  ]
+}

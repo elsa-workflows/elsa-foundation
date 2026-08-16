@@ -1,5 +1,6 @@
 using Elsa.Api.Compatibility.Testing.Collectibility;
 using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -47,12 +48,10 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
         services.AddAuthorization();
         services.AddFoundationIdentityAbstractions();
         featureType.GetMethod(nameof(OpenTelemetryFeature.ConfigureServices))!.Invoke(feature, [services]);
+        services.AddSingleton<IOpenTelemetryLiveFeed, CollectibilityLiveFeed>();
         var serviceProvider = services.BuildServiceProvider();
         var routes = new CollectibleRouteBuilder(serviceProvider);
         featureType.GetMethod(nameof(OpenTelemetryFeature.MapEndpoints))!.Invoke(feature, [routes, null]);
-        var extensionType = assembly.GetType("Elsa.Diagnostics.OpenTelemetry.Extensions.OpenTelemetryEndpointRouteBuilderExtensions", true)!;
-        extensionType.GetMethod("MapOpenTelemetryOtlpReceiver", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, [routes]);
-
         var allRoutes = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
         Assert.Equal(11, allRoutes.Length);
         Assert.Equal(8, allRoutes.Count(route => route.RoutePattern.RawText?.StartsWith("/diagnostics/opentelemetry", StringComparison.Ordinal) == true || route.RoutePattern.RawText?.StartsWith("/_elsa/studio/diagnostics/opentelemetry", StringComparison.Ordinal) == true));
@@ -70,7 +69,10 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
             Assert.NotNull(serviceProvider.GetService(type));
 
         ExecuteRoute(allRoutes, "/diagnostics/opentelemetry/resources/search", HttpMethods.Post, "{}", serviceProvider);
-        ExecuteRoute(allRoutes, "/elsa/otlp/v1/traces", HttpMethods.Post, string.Empty, serviceProvider, IPAddress.Loopback);
+        foreach (var signal in new[] { "traces", "metrics", "logs" })
+            ExecuteRoute(allRoutes, $"/elsa/otlp/v1/{signal}", HttpMethods.Post, string.Empty, serviceProvider, IPAddress.Loopback);
+        ExecuteTypedSerialization(serviceProvider, assembly);
+        ExecuteCompletedStream(allRoutes, serviceProvider);
         ExecuteCancelledStream(allRoutes, serviceProvider);
 
         var mapperType = featureType;
@@ -81,7 +83,6 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
         serviceProvider.Dispose();
         feature = null;
         featureType = null!;
-        extensionType = null!;
         serviceTypes = null!;
         allRoutes = null!;
         routes = null!;
@@ -121,6 +122,36 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
+    private static void ExecuteCompletedStream(IEnumerable<RouteEndpoint> routes, IServiceProvider services)
+    {
+        var endpoint = routes.Single(route => route.RoutePattern.RawText?.StartsWith("/_elsa/studio/diagnostics/opentelemetry/stream", StringComparison.Ordinal) == true);
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Request.Method = HttpMethods.Get;
+        context.Request.Path = "/_elsa/studio/diagnostics/opentelemetry/stream";
+        context.Response.Body = new MemoryStream();
+        endpoint.RequestDelegate!(context).GetAwaiter().GetResult();
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Contains("event: resource", Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray()), StringComparison.Ordinal);
+    }
+
+    private static void ExecuteTypedSerialization(IServiceProvider services, Assembly assembly)
+    {
+        var serializerType = assembly.GetType("Elsa.Diagnostics.OpenTelemetry.Endpoints.OpenTelemetryStreamItemSerializer", true)!;
+        var serializer = services.GetRequiredService(serializerType);
+        var method = serializerType.GetMethod("Serialize", [typeof(Elsa.Diagnostics.OpenTelemetry.Core.Models.TelemetryResource)])
+                     ?? throw new InvalidOperationException("The owner serializer did not expose the typed resource contract.");
+        var value = new Elsa.Diagnostics.OpenTelemetry.Core.Models.TelemetryResource(
+            "resource-cycle",
+            "service-cycle",
+            null,
+            "dotnet",
+            new Dictionary<string, string?>(),
+            DateTimeOffset.UtcNow,
+            Elsa.Diagnostics.OpenTelemetry.Core.Models.TelemetryResourceStatus.Active);
+        var serialized = method.Invoke(serializer, [value]) as string;
+        Assert.Contains("resource-cycle", serialized, StringComparison.Ordinal);
+    }
+
     private sealed record Evidence(Guid CycleId, WeakReference LoadContext, WeakReference Assembly, WeakReference MapperType);
 
     private sealed class CollectibleRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
@@ -134,5 +165,34 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
     {
         protected override Assembly? Load(AssemblyName assemblyName) =>
             Default.Assemblies.FirstOrDefault(assembly => string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed class CollectibilityLiveFeed : Elsa.Diagnostics.OpenTelemetry.Core.Contracts.IOpenTelemetryLiveFeed
+    {
+        private int _subscriptionCount;
+
+        public ValueTask PublishAsync(
+            Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryBatch batch,
+            CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public async IAsyncEnumerable<Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryStreamItem> SubscribeAsync(
+            Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryTraceFilter filter,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var subscription = Interlocked.Increment(ref _subscriptionCount);
+            yield return new Elsa.Diagnostics.OpenTelemetry.Core.Models.OpenTelemetryStreamItem
+            {
+                Resource = new Elsa.Diagnostics.OpenTelemetry.Core.Models.TelemetryResource(
+                    "resource-cycle",
+                    "service-cycle",
+                    null,
+                    "dotnet",
+                    new Dictionary<string, string?>(),
+                    DateTimeOffset.UtcNow,
+                    Elsa.Diagnostics.OpenTelemetry.Core.Models.TelemetryResourceStatus.Active)
+            };
+            if (subscription > 1)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
     }
 }

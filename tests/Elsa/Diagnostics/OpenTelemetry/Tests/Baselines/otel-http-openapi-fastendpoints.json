@@ -7,7 +7,8 @@
       "item3": "/diagnostics/opentelemetry/resources/search",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fresources%2Fsearch"}
     },
     {
       "item1": "traces",
@@ -15,7 +16,8 @@
       "item3": "/diagnostics/opentelemetry/traces/search",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Ftraces%2Fsearch"}
     },
     {
       "item1": "metrics",
@@ -23,7 +25,8 @@
       "item3": "/diagnostics/opentelemetry/metrics/search",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fmetrics%2Fsearch"}
     },
     {
       "item1": "logs",
@@ -31,7 +34,8 @@
       "item3": "/diagnostics/opentelemetry/logs/search",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Flogs%2Fsearch"}
     },
     {
       "item1": "trace-detail",
@@ -39,7 +43,8 @@
       "item3": "/diagnostics/opentelemetry/traces/missing",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Ftraces%2Fmissing"}
     },
     {
       "item1": "storage",
@@ -47,7 +52,8 @@
       "item3": "/diagnostics/opentelemetry/storage",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fstorage"}
     },
     {
       "item1": "collector-configuration",
@@ -55,7 +61,8 @@
       "item3": "/diagnostics/opentelemetry/collector-configuration",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fcollector-configuration"}
     },
     {
       "item1": "otlp-traces",
@@ -87,7 +94,8 @@
       "item3": "/_elsa/studio/diagnostics/opentelemetry/stream",
       "status": 302,
       "contentType": "",
-      "body": ""
+      "body": "",
+      "headers": {"Location": "http://localhost/Account/Login?ReturnUrl=%2F_elsa%2Fstudio%2Fdiagnostics%2Fopentelemetry%2Fstream"}
     }
   ],
   "routes": [

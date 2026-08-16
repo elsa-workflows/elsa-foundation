@@ -82,7 +82,7 @@ Hosts can compose the OpenTelemetry feature once without duplicate OTLP routes, 
 
 ### Measurable Outcomes
 
-- **SC-001**: All fourteen OpenTelemetry routes (eleven shell routes plus three OTLP signal routes) have one-to-one route/method parity with the immutable before evidence, with only explicitly reviewed metadata differences.
+- **SC-001**: All eleven published OpenTelemetry routes (eight query/SSE routes plus three OTLP signal routes) have one-to-one route/method parity with the immutable before evidence, with only explicitly reviewed metadata differences.
 - **SC-002**: The complete HTTP/OpenAPI/SSE/protobuf compatibility suite passes, including invalid input and pre-body-read authentication cases.
 - **SC-003**: Three consecutive collectible-context cycles pass for the OpenTelemetry owner with no retained route, delegate, provider, serializer, or DI state.
 - **SC-004**: Generated maps, architecture checks, the full OpenTelemetry test suite, affected diagnostics E2E, and the full solution build pass.

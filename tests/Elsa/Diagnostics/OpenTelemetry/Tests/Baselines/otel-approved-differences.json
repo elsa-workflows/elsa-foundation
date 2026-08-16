@@ -131,5 +131,53 @@
       "afterTags": ["OpenTelemetry"],
       "reason": "Retained root mapper now publishes an explicit stable OpenAPI identity."
     }
+  ],
+  "componentDifferences": [
+    {
+      "kind": "schema",
+      "name": "OpenTelemetryDroppedItemSummary",
+      "before": null,
+      "after": {
+        "required": ["signalType", "count", "reason"],
+        "type": "object",
+        "properties": {
+          "signalType": {"$ref": "#/components/schemas/OpenTelemetrySignalType"},
+          "count": {"pattern": "^-?(?:0|[1-9]\\d*)$", "type": ["integer", "string"], "format": "int64"},
+          "reason": {"type": "string"}
+        }
+      },
+      "reason": "The owner-local source-generated SSE contract is published as an explicit stream schema."
+    },
+    {
+      "kind": "schema",
+      "name": "OpenTelemetrySignalType",
+      "before": null,
+      "after": {"type": "integer"},
+      "reason": "The source-generated dropped-item contract references the signal discriminator."
+    },
+    {
+      "kind": "schema",
+      "name": "OpenTelemetryStreamItem",
+      "before": null,
+      "after": {
+        "type": "object",
+        "properties": {
+          "resource": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/TelemetryResource"}]},
+          "trace": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/TelemetryTrace"}]},
+          "metricPoint": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/MetricPoint"}]},
+          "log": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/OtlpLogRecord"}]},
+          "droppedItems": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/OpenTelemetryDroppedItemSummary"}]}
+        }
+      },
+      "reason": "The live stream route now declares its owner-local source-generated payload contract."
+    }
+  ],
+  "documentDifferences": [
+    {
+      "property": "tags",
+      "before": [{"name": "Elsa.Diagnostics.OpenTelemetry.Tests"}],
+      "after": [{"name": "OpenTelemetry"}],
+      "reason": "The owner publishes one stable OpenAPI tag for all eleven operations."
+    }
   ]
 }

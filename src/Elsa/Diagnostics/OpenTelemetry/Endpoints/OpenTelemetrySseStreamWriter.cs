@@ -1,3 +1,4 @@
+using System.Text;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Microsoft.AspNetCore.Http;
 
@@ -26,7 +27,7 @@ public sealed class OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter forma
                 if (completed != moveNext)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    await response.WriteAsync(formatter.Heartbeat(), cancellationToken);
+                    await WriteAsync(response, formatter.Heartbeat(), cancellationToken);
                     await response.Body.FlushAsync(cancellationToken);
                     continue;
                 }
@@ -35,7 +36,7 @@ public sealed class OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter forma
                 if (!await moveNext)
                     break;
 
-                await response.WriteAsync(formatter.Format(enumerator.Current), cancellationToken);
+                await WriteAsync(response, formatter.Format(enumerator.Current), cancellationToken);
                 await response.Body.FlushAsync(cancellationToken);
                 moveNext = enumerator.MoveNextAsync().AsTask();
             }
@@ -69,4 +70,7 @@ public sealed class OpenTelemetrySseStreamWriter(OpenTelemetrySseFormatter forma
         { await enumerator.DisposeAsync(); }
         catch (NotSupportedException) when (pending) { }
     }
+
+    private static ValueTask WriteAsync(HttpResponse response, string value, CancellationToken cancellationToken) =>
+        response.Body.WriteAsync(Encoding.UTF8.GetBytes(value), cancellationToken);
 }

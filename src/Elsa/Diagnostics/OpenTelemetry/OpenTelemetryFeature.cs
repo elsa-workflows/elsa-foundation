@@ -77,8 +77,11 @@ public class OpenTelemetryFeature : IWebShellFeature
         services.AddSingleton<OpenTelemetryTraceFilterBinder>();
     }
 
-    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    {
         Endpoints.OpenTelemetryApi.MapOpenTelemetryApi(endpoints);
+        endpoints.MapOpenTelemetryOtlpReceiver();
+    }
 
     private void ConfigureOptions(OpenTelemetryDiagnosticsOptions options)
     {
