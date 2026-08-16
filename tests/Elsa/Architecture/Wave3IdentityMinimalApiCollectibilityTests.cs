@@ -19,6 +19,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>Repeatedly proves both Wave 3 identity owners release route, DI, auth, and source-generated JSON state.</summary>
+[Collection(Wave3IdentityMinimalApiCollectibilityCollection.Name)]
 public sealed class Wave3IdentityMinimalApiCollectibilityTests
 {
     private static readonly (
@@ -199,4 +200,10 @@ public sealed class Wave3IdentityMinimalApiCollectibilityTests
             Default.Assemblies.FirstOrDefault(assembly =>
                 string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class Wave3IdentityMinimalApiCollectibilityCollection
+{
+    public const string Name = "Wave 3 Identity Minimal API collectibility";
 }
