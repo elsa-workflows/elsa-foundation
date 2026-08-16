@@ -88,6 +88,13 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
         ArgumentException.ThrowIfNullOrWhiteSpace(binding.ExecutableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(binding.StimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(binding.StimulusHash);
+        if (!Enum.IsDefined(binding.Cardinality))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(binding.Cardinality),
+                binding.Cardinality,
+                "The trigger-binding cardinality is not defined.");
+        }
         ArgumentNullException.ThrowIfNull(binding.Metadata);
         if (binding.PublicationId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.PublicationId);
@@ -157,4 +164,6 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
 internal sealed record GroundworkV2WorkflowTriggerBindingProjectionState(
     string ProjectionKind,
     string PublicationId,
-    bool IsActive);
+    bool IsActive,
+    int BindingCount,
+    string ProjectionFingerprint);

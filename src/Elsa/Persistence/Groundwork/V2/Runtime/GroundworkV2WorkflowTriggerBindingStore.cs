@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -95,7 +97,9 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
 
         if (existingState is not null)
         {
-            if (!existingState.Value.State.IsActive && ProjectionsEqual(existingRows, prepared))
+            if (!existingState.Value.State.IsActive &&
+                ProjectionMatches(existingState.Value.State, existingRows) &&
+                ProjectionsEqual(existingRows, prepared))
                 return;
 
             throw new InvalidOperationException(
@@ -114,9 +118,10 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
 
         foreach (var binding in prepared.Where(binding => !existingById.ContainsKey(binding.TriggerBindingId)))
             StageInsert(unitOfWork, binding);
+        var projectionState = ProjectionState(publicationId, prepared, isActive: false);
         StageProjectionState(
             unitOfWork,
-            new GroundworkV2WorkflowTriggerBindingProjectionState(ProjectionKind, publicationId, IsActive: false),
+            projectionState,
             expectedVersion: null,
             createOnly: true);
         try
@@ -132,7 +137,9 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             {
                 var stateAfter = ReadProjectionState(OpenProjectionStateSession(), publicationId);
                 var rowsAfter = ListAllByPublication(OpenBindingSession(), publicationId, cancellationToken);
-                if (stateAfter is { State.IsActive: false } && ProjectionsEqual(rowsAfter, prepared))
+                if (stateAfter is { State.IsActive: false } &&
+                    ProjectionMatches(stateAfter.Value.State, rowsAfter) &&
+                    ProjectionsEqual(rowsAfter, prepared))
                     return;
             }
             catch
@@ -178,6 +185,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             ? ReadProjectionState(stateSession, replacedPublicationId!)
             : null;
         var candidateRows = ListAllByPublication(bindingSession, publicationId, cancellationToken);
+        EnsureProjectionMatches(candidate.State, candidateRows);
 
         if (candidate.State.IsActive)
         {
@@ -204,6 +212,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         var replacedRows = hasDistinctReplacement
             ? ListAllByPublication(bindingSession, replacedPublicationId!, cancellationToken)
             : [];
+        if (replaced is not null)
+            EnsureProjectionMatches(replaced.Value.State, replacedRows);
         foreach (var row in candidateRows)
             StageUpsert(unitOfWork, row.Binding with { IsActive = true }, row.Version);
         foreach (var row in replacedRows)
@@ -259,15 +269,43 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         cancellationToken.ThrowIfCancellationRequested();
         RequireAtomicCommit();
 
-        using var unitOfWork = sessions.BeginUnitOfWork(
-            Access,
-            BatchWriteOptions.Exact,
-            [ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind],
-            targetName);
+        using var unitOfWork = BeginUnitOfWork();
         var bindingSession = unitOfWork.OpenSession(bindingUnit);
+        var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var rows = ListAll(bindingSession, Equal(ElsaRuntimeV2StorageManifest.ArtifactIdField, artifactId), cancellationToken);
+        var publicationRows = rows
+            .Where(row => row.Binding.PublicationId is not null)
+            .GroupBy(row => row.Binding.PublicationId!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => ListAllByPublication(bindingSession, group.Key, cancellationToken),
+                StringComparer.Ordinal);
+        var statesToDelete = new List<(string PublicationId, long Version)>();
+        foreach (var (publicationId, allRows) in publicationRows)
+        {
+            if (allRows.Any(row => !StringComparer.Ordinal.Equals(row.Binding.ArtifactId, artifactId)))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot delete artifact '{artifactId}' because publication '{publicationId}' also contains another artifact.");
+            }
+
+            var state = ReadProjectionState(stateSession, publicationId);
+            if (state is not null)
+            {
+                EnsureProjectionMatches(state.Value.State, allRows);
+                statesToDelete.Add((publicationId, state.Value.Version));
+            }
+        }
+
         foreach (var row in rows)
             StageDelete(unitOfWork, bindingUnit, row.Binding.TriggerBindingId, row.Version);
+        foreach (var (publicationId, version) in statesToDelete)
+        {
+            unitOfWork.Stage(RowWrite.Delete(
+                projectionStateUnit,
+                GroundworkRuntimeRowStore.Key(ProjectionStateId(publicationId)),
+                WriteOptions.IfVersion(version)));
+        }
         await CommitAsync(unitOfWork, cancellationToken);
         return rows.Count;
     }
@@ -406,6 +444,48 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         return true;
     }
 
+    private static void EnsureProjectionMatches(
+        GroundworkV2WorkflowTriggerBindingProjectionState state,
+        IReadOnlyCollection<StoredBinding> rows)
+    {
+        if (!ProjectionMatches(state, rows))
+        {
+            throw new InvalidDataException(
+                $"Groundwork trigger-binding publication projection '{state.PublicationId}' does not match its projection state.");
+        }
+    }
+
+    private static bool ProjectionMatches(
+        GroundworkV2WorkflowTriggerBindingProjectionState state,
+        IReadOnlyCollection<StoredBinding> rows) =>
+        state.ProjectionKind == ProjectionKind &&
+        rows.All(row => StringComparer.Ordinal.Equals(row.Binding.PublicationId, state.PublicationId)) &&
+        state.BindingCount == rows.Count &&
+        StringComparer.Ordinal.Equals(
+            state.ProjectionFingerprint,
+            ProjectionFingerprint(rows.Select(row => row.Binding)));
+
+    private static GroundworkV2WorkflowTriggerBindingProjectionState ProjectionState(
+        string publicationId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings,
+        bool isActive) =>
+        new(
+            ProjectionKind,
+            publicationId,
+            isActive,
+            bindings.Count,
+            ProjectionFingerprint(bindings));
+
+    private static string ProjectionFingerprint(IEnumerable<WorkflowTriggerBinding> bindings)
+    {
+        var canonical = GroundworkV2RuntimeJson.Serialize(
+            bindings
+                .Select(binding => binding with { IsActive = false })
+                .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
+                .ToArray());
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+    }
+
     private void StageUpsert(
         IUnitOfWork unitOfWork,
         WorkflowTriggerBinding binding,
@@ -481,7 +561,9 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         var state = GroundworkV2RuntimeJson.Deserialize<GroundworkV2WorkflowTriggerBindingProjectionState>(content)
             ?? throw new InvalidDataException("Groundwork publication projection state content was empty.");
         if (!StringComparer.Ordinal.Equals(state.ProjectionKind, ProjectionKind) ||
-            string.IsNullOrWhiteSpace(state.PublicationId))
+            string.IsNullOrWhiteSpace(state.PublicationId) ||
+            state.BindingCount < 0 ||
+            string.IsNullOrWhiteSpace(state.ProjectionFingerprint))
             throw new InvalidDataException("Groundwork publication projection state has an invalid trigger-binding identity.");
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.IdField, ProjectionStateId(state.PublicationId));
         return state;
