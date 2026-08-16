@@ -11,7 +11,7 @@
 
 ## Status
 
-Implementation, repository gates, and independent review are complete; publication and program handoff remain. The selected model is that first-party API-visible contracts use a stable `*.Api.Core` lifetime while replaceable mappers and handlers remain collectible. A final endpoint-build convention rejects API Explorer-facing artifacts from a collectible context before publication.
+Implementation, repository gates, independent review, upstream filing, and blocked-wave handoffs are complete. [PR #1394](https://github.com/elsa-workflows/elsa-foundation/pull/1394) is in review. The selected model is that first-party API-visible contracts use a stable `*.Api.Core` lifetime while replaceable mappers and handlers remain collectible. A final endpoint-build convention rejects API Explorer-facing artifacts from a collectible context before publication.
 
 ## Confirmed cause
 
@@ -76,7 +76,13 @@ Stable metadata:      CollectionResult { Collected = True, LoadContextAlive = Fa
 Collectible metadata: CollectionResult { Collected = False, LoadContextAlive = True, AssemblyAlive = True, ContractTypeAlive = True, DelegateAlive = False, ProviderAlive = False }
 ```
 
-The upstream issue link is pending branch publication so its reproduction link is durable. Elsa's production boundary does not wait on the upstream outcome.
+The framework retention is filed as [dotnet/aspnetcore#68564](https://github.com/dotnet/aspnetcore/issues/68564), with the durable branch reproduction and both platform receipts linked from the issue. Elsa's production boundary does not wait on the upstream outcome.
+
+## Program handoff
+
+- W6 Workflows Design received the stable `Elsa.Workflows.Design.Api.Core`, type-forwarding, final-convention, host invalidation, resolver-completeness, and combined lifecycle obligations in [#1372](https://github.com/elsa-workflows/elsa-foundation/issues/1372#issuecomment-5309897405).
+- W9 Workflows Runtime received the corresponding stable `Elsa.Workflows.Runtime.Api.Core`, activity-inspection/SSE, accepts/produces, resolver-chain, and combined lifecycle obligations in [#1375](https://github.com/elsa-workflows/elsa-foundation/issues/1375#issuecomment-5309898868).
+- The green gate and decision were recorded on [#1392](https://github.com/elsa-workflows/elsa-foundation/issues/1392#issuecomment-5309901671) and the [parent program](https://github.com/elsa-workflows/elsa-foundation/issues/1342#issuecomment-5309902480). Project 45 and the issue label are synchronized to Review; W6/W9 remain blocked until PR #1394 merges.
 
 ## Independent review disposition
 

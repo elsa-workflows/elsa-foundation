@@ -114,9 +114,9 @@
 
 - [x] T029 [P] Publish the accepted decision, rejected snapshot alternative, framework evidence, test matrix, and remaining risks in `docs/reports/unload-safe-openapi-boundary-2026-08.md`
 - [x] T030 [P] Record the stable API Core boundary and third-party snapshot deferral in `docs/adr/0069-openapi-contract-types-use-stable-api-core.md`
-- [ ] T031 Package the Elsa-independent one-endpoint reproduction from `tests/Elsa/Architecture/Support/OpenApiLifetimeFixture.cs`, file/link the upstream ASP.NET Core issue if retention reproduces, and record it in `docs/reports/unload-safe-openapi-boundary-2026-08.md`
-- [ ] T032 Update #1372 and #1375 handoff comments with their exact API Core/type-forwarding/convention obligations derived from `specs/165-unload-safe-openapi/contracts/openapi-lifetime-boundary.md`
-- [ ] T033 Update #1392 and parent #1342 with the review evidence from `docs/reports/unload-safe-openapi-boundary-2026-08.md` and synchronize Project 45 status/blocked reasons
+- [x] T031 Package the Elsa-independent one-endpoint reproduction from `tests/Elsa/Architecture/Support/OpenApiLifetimeFixture.cs`, file/link the upstream ASP.NET Core issue if retention reproduces, and record it in `docs/reports/unload-safe-openapi-boundary-2026-08.md`
+- [x] T032 Update #1372 and #1375 handoff comments with their exact API Core/type-forwarding/convention obligations derived from `specs/165-unload-safe-openapi/contracts/openapi-lifetime-boundary.md`
+- [x] T033 Update #1392 and parent #1342 with the review evidence from `docs/reports/unload-safe-openapi-boundary-2026-08.md` and synchronize Project 45 status/blocked reasons
 
 ---
 

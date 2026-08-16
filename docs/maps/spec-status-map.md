@@ -201,4 +201,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [160-foundation-identity-minimal-api](../../specs/160-foundation-identity-minimal-api/spec.md) | Foundation Identity Minimal API Migration | Implemented | - | 18 | 0 | retained |
 | [161-agent-api-minimal-migration](../../specs/161-agent-api-minimal-migration/spec.md) | Wave 4 Agent REST and SSE API Migration | Implementation and control-room integration gates complete; independent final review pending | - | 15 | 0 | - |
 | [162-opentelemetry-api-migration](../../specs/162-opentelemetry-api-migration/spec.md) | OpenTelemetry API Minimal API Migration | Draft | - | 10 | 0 | retained |
-| [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | In progress — implementation for #1392 | - | 34 | 5 | retained, out of scope |
+| [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | In progress — implementation for #1392 | - | 37 | 2 | retained, out of scope |
