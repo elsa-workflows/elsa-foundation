@@ -88,14 +88,14 @@ adapter-host probe-provider --provider sqlite
 #    the current capture leaf is SQLite-only and executes the public runtime query leaves before staging.
 adapter-host capture-plan --workload checkpoint-commit --provider sqlite \
   --cohort tierb-001 --measurement-set groundwork-shared-linked \
-  --adapter groundwork --form shared-documents-with-linked-index-tables --scale 100k \
+  --adapter groundwork --form shared-documents-with-linked-index-tables --scale medium \
   --commit "$(git rev-parse HEAD)" --composition <64-hex> --provider-version <version> \
   --provider-setting <name=value from probe-provider> \
   --identity checkpoint-commit-sqlite-routeless --out "$STAGING"
 
 # 2. Run the matrix. --child-command must be the built apphost binary, never `dotnet run`.
 export ELSA_BENCH_NATIVE_PLAN_STAGING="$STAGING"
-dotnet run -c Release --project ../Elsa.Groundwork.StorePerformance.Benchmarks -- matrix 100k ... \
+dotnet run -c Release --project ../Elsa.Groundwork.StorePerformance.Benchmarks -- matrix medium ... \
   --child-command .../Elsa.Groundwork.StorePerformance.AdapterHost --out "$ARTIFACTS"
 ```
 

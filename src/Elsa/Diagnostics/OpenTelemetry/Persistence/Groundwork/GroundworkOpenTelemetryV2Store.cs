@@ -70,32 +70,6 @@ public sealed class GroundworkOpenTelemetryStore :
         drain = CreateDrain(options.Value, observer);
     }
 
-    public GroundworkOpenTelemetryStore(
-        IStorageSession traceSession,
-        IStorageSession spanSession,
-        IStorageSession metricPointSession,
-        IStorageSession logSession,
-        IStorageSession resourceSession,
-        IStorageSession instrumentSession,
-        IStorageSession ledgerSession,
-        IOptions<OpenTelemetryDiagnosticsOptions> options,
-        V2OpenTelemetryBinding binding,
-        TimeProvider? timeProvider = null,
-        IOpenTelemetrySourceRegistry? sourceRegistry = null,
-        IDiagnosticsPersistenceObserver? observer = null)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-        this.binding = binding ?? throw new ArgumentNullException(nameof(binding));
-        binding.Validate();
-        this.sourceRegistry = sourceRegistry;
-        this.timeProvider = timeProvider ?? TimeProvider.System;
-        schema = new();
-        sessions = new(traceSession, spanSession, metricPointSession, logSession, resourceSession, instrumentSession, ledgerSession);
-        (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
-            ReadOptions(options.Value);
-        drain = CreateDrain(options.Value, observer);
-    }
-
     public void Start() => drain.Start();
 
     public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
@@ -677,20 +651,6 @@ public sealed class GroundworkOpenTelemetryStore :
         internal IStorageSession Ledger { get; private set; } = null!;
 
         internal V2Sessions() { }
-
-        internal V2Sessions(params IStorageSession[] values)
-        {
-            if (values.Length != 7)
-                throw new ArgumentException("OpenTelemetry v2 requires seven admitted storage sessions.", nameof(values));
-            Traces = values[0];
-            Spans = values[1];
-            MetricPoints = values[2];
-            Logs = values[3];
-            Resources = values[4];
-            Instruments = values[5];
-            Ledger = values[6];
-            Validate();
-        }
 
         internal void Publish(IStorageProviderConnection connection, V2OpenTelemetryBinding binding)
         {
