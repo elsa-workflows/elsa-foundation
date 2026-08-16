@@ -98,7 +98,7 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     };
 
     var cases = routes.Select(route => Create(route.Method, route.Name, route.Path, null)).ToList();
-    cases.AddRange(routes.Select(route => Create(route.Method, $"{route.Name}|trusted-success", route.Path,
+    cases.AddRange(routes.Where(route => route.Name != "describe-expression-tooling").Select(route => Create(route.Method, $"{route.Name}|trusted-success", route.Path,
         "trusted-success", BodyFor(route.Name))));
     cases.Add(Create(HttpMethod.Get, "describe-expression-tooling|trusted-success", "/design/workflows/expression-tooling/descriptors", "trusted-success"));
     cases.Add(Create(HttpMethod.Post, "analyze-scoped-variables|trusted-malformed-json", "/design/workflows/scoped-variables/analyze", "trusted-malformed-json", "{ malformed"));
