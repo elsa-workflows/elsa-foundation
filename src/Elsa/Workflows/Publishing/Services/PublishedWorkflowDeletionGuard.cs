@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Refuses permanent deletion of a workflow definition while it is still live in the publishing vertical:
-/// a publication slot that holds an active publication, or a live Published-scope executable source reference.
+/// an activation slot that holds a live activation, or a live Published-scope executable source reference.
 /// Hard-deleting the design rows in that state strands the runtime executable and its Published reference
 /// against a definition that no longer exists, so the definition must be unpublished first. Both checks run
 /// because the slot authority and the source reference can desync — either one alone keeps the runtime live.
@@ -16,15 +16,15 @@ namespace Elsa.Workflows.Publishing.Services;
 /// question and refuses.
 /// </summary>
 public sealed class PublishedWorkflowDeletionGuard(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IWorkflowExecutableSourceReferenceReader sourceReferenceReader,
     TimeProvider timeProvider) : IWorkflowDefinitionPublicationDeletionGuard
 {
     public async Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default)
     {
-        var slots = await slotStore.ListByDefinitionAsync(definitionId, cancellationToken);
+        var slots = await activationAuthority.ListByDefinitionAsync(definitionId, cancellationToken);
         var activeSlotNames = slots
-            .Where(slot => slot.ActivePublicationId is not null)
+            .Where(slot => slot.ActiveActivationId is not null)
             .Select(slot => slot.SlotName)
             .ToArray();
         if (activeSlotNames.Length > 0)

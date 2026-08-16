@@ -48,6 +48,43 @@ public enum WorkflowActivationOutcome
     Failed
 }
 
+/// <summary>Which step of the activation sequence a <see cref="WorkflowActivationOutcome.Failed"/> outcome broke on.</summary>
+/// <remarks>
+/// <para>
+/// The coordinator runs a fixed, ordered sequence, and a caller has to be able to tell its own audience <i>what</i>
+/// did not happen — "the serving projections could not be prepared" and "the slot flipped but its route tables did
+/// not follow" are different operational incidents with different remediations. Collapsing every failure into one
+/// free-text diagnostic destroys that distinction and forces callers to parse prose.
+/// </para>
+/// <para>
+/// This is a <b>discriminator, not a diagnostic</b>: it names the step, never the cause. The cause stays in
+/// <see cref="WorkflowActivationResult.Diagnostic"/>.
+/// </para>
+/// </remarks>
+public enum WorkflowActivationStep
+{
+    /// <summary>No step failed — the request succeeded, was a no-op, or was refused before the sequence began.</summary>
+    None,
+
+    /// <summary>Minting and saving the candidate's live source reference.</summary>
+    SourceReferenceMint,
+
+    /// <summary>Preparing both serving projections in non-serving state.</summary>
+    ProjectionPreparation,
+
+    /// <summary>The slot compare-and-swap on the authority threw. A <i>refusal</i> is a <see cref="WorkflowActivationOutcome.Conflict"/>, not this.</summary>
+    SlotTransition,
+
+    /// <summary>Making both prepared projections serve.</summary>
+    ProjectionActivation,
+
+    /// <summary>Notifying <c>IWorkflowTriggerIndexObserver</c>s of the new serving surface.</summary>
+    TriggerObserverNotification,
+
+    /// <summary>Retiring the predecessor activation's source reference.</summary>
+    PredecessorReferenceRetirement
+}
+
 /// <summary>One request to make an artifact the live activation of a definition's slot.</summary>
 /// <remarks>
 /// The single entry point for every activating path (publish pipeline, artifact reconciler). Callers supply the
@@ -90,6 +127,17 @@ public sealed record WorkflowActivationCommand(
 /// The rejection reason, or the failure plus any compensation that did not converge. Never null when
 /// <paramref name="Succeeded"/> is false.
 /// </param>
+/// <param name="FailedStep">
+/// Which step broke, for <see cref="WorkflowActivationOutcome.Failed"/> only. Callers map it onto their own
+/// failure vocabulary; without it every failure looks alike and step-specific incident codes degrade to a
+/// single generic one.
+/// </param>
+/// <param name="CompensationDiagnostic">
+/// Set when compensation itself did not converge, i.e. the engine may be left in a state neither the candidate
+/// nor its predecessor fully owns. Distinct from <paramref name="Diagnostic"/> on purpose: "the activation
+/// failed and was cleanly undone" and "the activation failed and the undo did not finish" are different
+/// severities, and only the second warrants an operator page.
+/// </param>
 public sealed record WorkflowActivationResult(
     bool Succeeded,
     WorkflowActivationOutcome Outcome,
@@ -97,4 +145,6 @@ public sealed record WorkflowActivationResult(
     WorkflowExecutableSourceReference? Reference = null,
     string? ReplacedActivationId = null,
     WorkflowActivationConflict Conflict = WorkflowActivationConflict.None,
-    string? Diagnostic = null);
+    string? Diagnostic = null,
+    WorkflowActivationStep FailedStep = WorkflowActivationStep.None,
+    string? CompensationDiagnostic = null);

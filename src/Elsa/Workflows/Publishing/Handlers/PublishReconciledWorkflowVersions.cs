@@ -5,6 +5,8 @@ using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 
@@ -33,8 +35,8 @@ public sealed class PublishReconciledWorkflowVersions(
     IWorkflowDefinitionVersionStore versionStore,
     IPublicationPolicyStore policyStore,
     IPublicationPolicyResolver policyResolver,
-    IPublicationSlotStore slotStore,
-    IPublicationRecordStore recordStore,
+    IWorkflowActivationAuthority activationAuthority,
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IRequestSender requestSender,
     TimeProvider timeProvider) : IEventHandler<WorkflowVersionsReconciled>
 {
@@ -112,22 +114,32 @@ public sealed class PublishReconciledWorkflowVersions(
 
     /// <summary>
     /// True when the slot that this handler's slot-less <see cref="PublishWorkflow"/> request would update
-    /// already holds an active publication of <paramref name="versionId"/>. Scoped to that one slot on
-    /// purpose (reviewed on #1161): a version active only in some other slot — a side-by-side <c>canary</c>,
-    /// say — says nothing about the target slot, which may still point at an older version or hold no
-    /// publication at all, and skipping on it would leave the deployment unpublished where it matters.
+    /// already serves <paramref name="versionId"/>. Scoped to that one slot on purpose (reviewed on #1161): a
+    /// version active only in some other slot — a side-by-side <c>canary</c>, say — says nothing about the
+    /// target slot, which may still point at an older version or hold no publication at all, and skipping on
+    /// it would leave the deployment unpublished where it matters.
     /// </summary>
+    /// <remarks>
+    /// Answered entirely from the <b>activation slot and the live source reference it serves</b>. FR-B-006
+    /// makes the slot the sole authority on what is serving and forbids consulting
+    /// <c>PublicationRecord.Status</c> to decide it — a journal write can fail after the slot has already
+    /// flipped, so a <c>Status</c>-based check would re-publish a definition that is live, on every reconcile
+    /// pass. The reference the slot points at carries the version id, which is the fact this pre-check needs.
+    /// </remarks>
     private async Task<bool> HasActivePublicationOf(string definitionId, string versionId, CancellationToken cancellationToken)
     {
         if (await ResolveTargetSlotName(definitionId, versionId, cancellationToken) is not { } slotName)
             return false;
 
-        var slot = await slotStore.FindAsync(definitionId, slotName, cancellationToken);
-        if (slot?.ActivePublicationId is not { } publicationId)
+        var slot = await activationAuthority.FindAsync(definitionId, slotName, cancellationToken);
+        if (slot?.ActiveActivationId is not { } activationId)
             return false;
 
-        var record = await recordStore.FindAsync(publicationId, cancellationToken);
-        return record is { Status: PublicationStatus.Active } && record.WorkflowDefinitionVersionId == versionId;
+        var reference = await sourceReferenceStore.FindAsync(
+            WorkflowActivationReferenceIdentity.Create(activationId),
+            cancellationToken);
+        return reference is { DeletedAt: null } &&
+               StringComparer.Ordinal.Equals(reference.DefinitionVersionId, versionId);
     }
 
     /// <summary>

@@ -48,7 +48,7 @@ public sealed class WorkflowsPublishingApiFeatureTests
             descriptor.ServiceType == typeof(Elsa.Events.Core.Contracts.IEventHandler<ExecutableNodeMetadataCollecting>) &&
             descriptor.ImplementationType == typeof(CollectExecutableNodeMetadata));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestRunStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationSlotStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationAuthority));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationPolicyStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowPublicationPreflightReader));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(PublicationSnapshotReviewService));

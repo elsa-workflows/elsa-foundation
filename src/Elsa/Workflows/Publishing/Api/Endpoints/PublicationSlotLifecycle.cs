@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Handlers;
 using Microsoft.Extensions.Logging;
 
@@ -67,7 +68,7 @@ internal static class PublicationSlotLifecycleEndpointHandler
         Func<PublicationSlotView, CancellationToken, Task> send,
         Action<(string Message, int StatusCode)> throwError,
         CancellationToken cancellationToken)
-        where TRequest : IRequest<PublicationSlot>
+        where TRequest : IRequest<WorkflowActivationSlot>
     {
         try
         {

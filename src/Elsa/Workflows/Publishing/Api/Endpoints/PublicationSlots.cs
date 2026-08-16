@@ -5,11 +5,13 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
 internal sealed class ListPublicationSlotsEndpoint(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore publicationStore)
     : ElsaEndpoint<ListPublicationSlots, PublicationSlotListResponse>
 {
@@ -21,7 +23,7 @@ internal sealed class ListPublicationSlotsEndpoint(
 
     public override async Task HandleAsync(ListPublicationSlots request, CancellationToken cancellationToken)
     {
-        var slots = await slotStore.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
+        var slots = await activationAuthority.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
         var views = new List<PublicationSlotView>(slots.Count);
         foreach (var slot in slots)
             views.Add(PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken)));
@@ -29,11 +31,11 @@ internal sealed class ListPublicationSlotsEndpoint(
     }
 
     internal static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
-        PublicationSlot slot,
+        WorkflowActivationSlot slot,
         IPublicationRecordStore publicationStore,
         CancellationToken cancellationToken)
     {
-        if (slot.ActivePublicationId is { } activePublicationId)
+        if (slot.ActiveActivationId is { } activePublicationId)
             return await publicationStore.FindAsync(activePublicationId, cancellationToken);
 
         return (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
@@ -44,7 +46,7 @@ internal sealed class ListPublicationSlotsEndpoint(
 }
 
 internal sealed class GetPublicationSlotEndpoint(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore publicationStore)
     : ElsaEndpoint<GetPublicationSlot, PublicationSlotView>
 {
@@ -56,7 +58,7 @@ internal sealed class GetPublicationSlotEndpoint(
 
     public override async Task HandleAsync(GetPublicationSlot request, CancellationToken cancellationToken)
     {
-        var slot = await slotStore.FindAsync(request.DefinitionId, request.SlotName, cancellationToken);
+        var slot = await activationAuthority.FindAsync(request.DefinitionId, request.SlotName, cancellationToken);
         if (slot is null)
         {
             ThrowError($"Publication slot '{request.SlotName}' was not found for workflow '{request.DefinitionId}'.", 404);

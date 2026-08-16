@@ -1,69 +1,93 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Services;
 
-/// <summary>Prepares serving projections before selecting one revisioned slot authority.</summary>
+/// <summary>
+/// Publishing's <see cref="PublicationRecord"/> bookkeeping wrapped around one call to the shared
+/// <see cref="IWorkflowActivationCoordinator"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// It holds <b>no</b> copy of the activation sequence (FR-B-006): leases, source references, serving projections,
+/// the slot CAS, observer notification and compensation all belong to the coordinator. What stays here is the
+/// publication journal — save the candidate, record the outcome, retire the record the transition displaced.
+/// </para>
+/// <para>
+/// The journal is a record of requests publishing made to the authority, never serving truth. A journal write that
+/// fails <i>after</i> the coordinator reported success therefore does not un-activate anything <b>and does not make
+/// the publish a failure</b>: the slot is the authority, the workflow is live, and any Status/slot divergence
+/// resolves in favour of the slot (FR-B-006). Such a write failure is logged as an operational incident.
+/// </para>
+/// </remarks>
 public sealed class PublicationActivator(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationCoordinator activationCoordinator,
     IPublicationRecordStore publicationStore,
-    IPublicationProjectionPreparer projectionPreparer,
-    TimeProvider timeProvider) : IPublicationActivator
+    TimeProvider timeProvider,
+    ILogger<PublicationActivator>? logger = null) : IPublicationActivator
 {
+    /// <summary>The activation source every publish-pipeline request is owned by.</summary>
+    public static WorkflowActivationSource Source => WorkflowActivationSource.Publishing;
+
     public async ValueTask<PublicationActivationResult> ActivateAsync(
         PublicationActivationRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Candidate);
+        ArgumentNullException.ThrowIfNull(request.Executable);
+        ArgumentNullException.ThrowIfNull(request.Reference);
         var candidate = request.Candidate;
         ValidateCandidate(candidate);
 
         await publicationStore.SaveAsync(candidate, cancellationToken);
 
+        WorkflowActivationResult activation;
         try
         {
-            await projectionPreparer.PrepareAsync(candidate, cancellationToken);
+            activation = await activationCoordinator.ActivateAsync(
+                new WorkflowActivationCommand(
+                    request.Executable,
+                    request.Reference,
+                    candidate.SlotName,
+                    candidate.PublicationId,
+                    Source,
+                    candidate.ExpectedSlotRevision),
+                cancellationToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            var failure = new PublicationFailure("projection_preparation_failed", exception.Message);
-            var failed = candidate with { Status = PublicationStatus.Failed, Failure = failure };
-            await TransitionOrThrowAsync(failed, PublicationStatus.Candidate, cancellationToken);
-            var unchanged = await CurrentSlotAsync(candidate, cancellationToken);
-            return new PublicationActivationResult(false, failed, unchanged, failure);
+            throw;
+        }
+        catch (WorkflowActivationException exception)
+        {
+            // The coordinator refused to attempt the sequence at all (uncomposed trigger spine, unavailable
+            // lease). Nothing was written on its side, so the journal converges and the domain exception — which
+            // carries the original infrastructure fault as its inner exception — keeps travelling.
+            await FailCandidateAsync(
+                candidate,
+                new PublicationFailure("publication_activation_refused", SafeMessage(exception.Message)),
+                CancellationToken.None);
+            throw;
+        }
+
+        if (!activation.Succeeded)
+        {
+            var failure = MapFailure(activation);
+            var failed = await FailCandidateAsync(candidate, failure, cancellationToken);
+            return new PublicationActivationResult(
+                false,
+                failed,
+                activation.Slot,
+                failure,
+                activation.ReplacedActivationId);
         }
 
         var now = timeProvider.GetUtcNow();
-        var slotResult = await slotStore.TryActivateAsync(
-            candidate.WorkflowDefinitionId,
-            candidate.SlotName,
-            candidate.PublicationId,
-            candidate.ExpectedSlotRevision,
-            now,
-            cancellationToken);
-
-        if (!slotResult.Succeeded)
-        {
-            var failure = slotResult.Failure ?? new PublicationFailure("slot_revision_conflict", "The publication slot revision changed.");
-            var failed = candidate with { Status = PublicationStatus.Failed, Failure = failure };
-            await TransitionOrThrowAsync(failed, PublicationStatus.Candidate, cancellationToken);
-            return new PublicationActivationResult(false, failed, slotResult.Slot, failure, slotResult.ReplacedPublicationId);
-        }
-
-        try
-        {
-            await projectionPreparer.ActivateAsync(candidate, slotResult.ReplacedPublicationId, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            return await CompensateActivationFailureAsync(
-                candidate,
-                slotResult,
-                exception,
-                "projection_activation_failed");
-        }
-
         var active = candidate with
         {
             Status = PublicationStatus.Active,
@@ -74,203 +98,102 @@ public sealed class PublicationActivator(
         try
         {
             await TransitionOrThrowAsync(active, PublicationStatus.Candidate, cancellationToken);
-
-            if (slotResult.ReplacedPublicationId is { } replacedId &&
-                !StringComparer.Ordinal.Equals(replacedId, candidate.PublicationId))
-            {
-                var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
-                    ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
-                var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
-                await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
-            }
+            await RetireReplacedRecordAsync(candidate, activation.ReplacedActivationId, now, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            return await CompensateActivationFailureAsync(
-                candidate,
-                slotResult,
+            // FR-B-006, approved 2026-08-16. The slot has already flipped, so the candidate IS serving. Only the
+            // JOURNAL write failed — the record of the activation, never the activation itself. Rolling back here
+            // (or reporting failure, which invites the caller to roll back) would make journal availability a
+            // dependency of serving, which FR-B-006 forbids: "Status ... MUST NOT be consulted to decide serving;
+            // divergence resolves in favour of the slot." So the outcome is reported truthfully as success and the
+            // divergence is raised as an operational incident instead.
+            logger?.LogError(
                 exception,
-                "publication_state_transition_failed");
+                "Publication {PublicationId} of workflow definition {DefinitionId} slot {SlotName} IS ACTIVE — the activation slot flipped and its serving projections are live — but the publication journal could not be updated to match. "
+                + "Serving is unaffected and MUST NOT be rolled back; the journal now diverges from the slot and needs operator reconciliation.",
+                candidate.PublicationId,
+                candidate.WorkflowDefinitionId,
+                candidate.SlotName);
         }
 
         return new PublicationActivationResult(
             true,
             active,
-            slotResult.Slot,
-            ReplacedPublicationId: slotResult.ReplacedPublicationId);
+            activation.Slot,
+            ReplacedPublicationId: activation.ReplacedActivationId);
     }
 
-    private async ValueTask<PublicationActivationResult> CompensateActivationFailureAsync(
+    /// <summary>
+    /// Maps a coordinator refusal onto publishing's failure vocabulary. Every code below is the one publishing
+    /// reported for the same condition before the activation sequence moved into the coordinator — a caller of
+    /// the publish API must not be able to tell that the sequence changed owners.
+    /// </summary>
+    /// <remarks>
+    /// Order matters. A slot refusal is reported as the conflict it is even if the rollback afterwards did not
+    /// converge, matching publishing's original behavior: compensation ran only for post-flip failures, so
+    /// <c>activation_compensation_failed</c> could never mask a revision conflict.
+    /// </remarks>
+    private static PublicationFailure MapFailure(WorkflowActivationResult activation) => activation.Conflict switch
+    {
+        WorkflowActivationConflict.RevisionMismatch =>
+            new("slot_revision_conflict", activation.Diagnostic ?? "The publication slot revision changed."),
+        WorkflowActivationConflict.ForeignSource =>
+            new("slot_owner_conflict", activation.Diagnostic ?? "The activation slot is owned by another activation source."),
+        _ when activation.CompensationDiagnostic is not null =>
+            new("activation_compensation_failed", activation.Diagnostic ?? "Publication activation failed and its compensation did not converge."),
+        _ => new(MapFailedStep(activation.FailedStep), activation.Diagnostic ?? "Publication activation failed.")
+    };
+
+    /// <summary>
+    /// Publishing's incident code per activation step. The coordinator reports <i>which</i> step broke; publishing
+    /// owns what that means to its own callers, so the mapping lives here rather than in the runtime.
+    /// </summary>
+    private static string MapFailedStep(WorkflowActivationStep step) => step switch
+    {
+        WorkflowActivationStep.ProjectionPreparation => "projection_preparation_failed",
+        // Observer notification is part of making the projections serve — it was inside the projection preparer's
+        // Activate before the extraction, and shares its code so the incident vocabulary is unchanged.
+        WorkflowActivationStep.ProjectionActivation or WorkflowActivationStep.TriggerObserverNotification =>
+            "projection_activation_failed",
+        _ => "publication_activation_failed"
+    };
+
+    private async ValueTask<PublicationRecord> FailCandidateAsync(
         PublicationRecord candidate,
-        PublicationSlotTransitionResult activatedSlot,
-        Exception activationFailure,
-        string failureCode)
-    {
-        var failure = new PublicationFailure(failureCode, SafeMessage(activationFailure));
-        var authorityCompensationFailure = await CaptureFailureAsync(() =>
-            CompensateAuthorityAsync(candidate, activatedSlot, CancellationToken.None));
-        var projectionCompensationFailure = await CaptureFailureAsync(() =>
-            projectionPreparer.CompensateAsync(candidate, activatedSlot.ReplacedPublicationId, CancellationToken.None));
-        var publicationCompensationFailure = await CaptureFailureAsync(() =>
-            CompensatePublicationRecordsAsync(candidate, activatedSlot.ReplacedPublicationId, failure));
-
-        if (authorityCompensationFailure is not null ||
-            projectionCompensationFailure is not null ||
-            publicationCompensationFailure is not null)
-        {
-            failure = new PublicationFailure(
-                "activation_compensation_failed",
-                BuildCompensationFailureMessage(
-                    activationFailure,
-                    authorityCompensationFailure,
-                    projectionCompensationFailure,
-                    publicationCompensationFailure));
-        }
-
-        var failed = await publicationStore.FindAsync(candidate.PublicationId, CancellationToken.None)
-            ?? candidate with { Status = PublicationStatus.Failed, Failure = failure };
-        var restoredSlot = await CurrentSlotAsync(candidate, CancellationToken.None);
-        return new PublicationActivationResult(
-            false,
-            failed,
-            restoredSlot,
-            failure,
-            activatedSlot.ReplacedPublicationId);
-    }
-
-    private async ValueTask CompensatePublicationRecordsAsync(
-        PublicationRecord candidate,
-        string? replacedPublicationId,
-        PublicationFailure failure)
-    {
-        Exception? replacedFailure = null;
-        try
-        {
-            if (replacedPublicationId is not null &&
-                !StringComparer.Ordinal.Equals(replacedPublicationId, candidate.PublicationId))
-            {
-                var replaced = await publicationStore.FindAsync(replacedPublicationId, CancellationToken.None)
-                    ?? throw new InvalidOperationException($"The replaced publication '{replacedPublicationId}' does not exist.");
-                if (replaced.Status == PublicationStatus.Retired)
-                {
-                    var restored = replaced with { Status = PublicationStatus.Active, RetiredAt = null, Failure = null };
-                    await TransitionOrThrowAsync(restored, PublicationStatus.Retired, CancellationToken.None);
-                }
-                else if (replaced.Status != PublicationStatus.Active)
-                    throw new InvalidOperationException(
-                        $"The replaced publication '{replacedPublicationId}' cannot be restored from status '{replaced.Status}'.");
-            }
-        }
-        catch (Exception exception)
-        {
-            replacedFailure = exception;
-        }
-
-        Exception? candidateFailure = null;
-        try
-        {
-            var currentCandidate = await publicationStore.FindAsync(candidate.PublicationId, CancellationToken.None)
-                ?? throw new InvalidOperationException($"The candidate publication '{candidate.PublicationId}' does not exist.");
-            if (currentCandidate.Status is PublicationStatus.Candidate or PublicationStatus.Active)
-            {
-                var failed = currentCandidate with
-                {
-                    Status = PublicationStatus.Failed,
-                    ActivatedAt = null,
-                    RetiredAt = null,
-                    Failure = failure
-                };
-                await TransitionOrThrowAsync(failed, currentCandidate.Status, CancellationToken.None);
-            }
-            else if (currentCandidate.Status != PublicationStatus.Failed)
-                throw new InvalidOperationException(
-                    $"The candidate publication '{candidate.PublicationId}' cannot fail from status '{currentCandidate.Status}'.");
-        }
-        catch (Exception exception)
-        {
-            candidateFailure = exception;
-        }
-
-        if (replacedFailure is not null || candidateFailure is not null)
-            throw new AggregateException(
-                "Publication record compensation did not converge.",
-                new[] { replacedFailure, candidateFailure }.OfType<Exception>());
-    }
-
-    private static async ValueTask<Exception?> CaptureFailureAsync(Func<ValueTask> action)
-    {
-        try
-        {
-            await action();
-            return null;
-        }
-        catch (Exception exception)
-        {
-            return exception;
-        }
-    }
-
-    private static string BuildCompensationFailureMessage(
-        Exception activationFailure,
-        Exception? authorityFailure,
-        Exception? projectionFailure,
-        Exception? publicationFailure)
-    {
-        var parts = new List<string> { activationFailure.Message };
-        if (authorityFailure is not null)
-            parts.Add($"Authority compensation failed: {authorityFailure.Message}");
-        if (projectionFailure is not null)
-            parts.Add($"Projection compensation failed: {projectionFailure.Message}");
-        if (publicationFailure is not null)
-            parts.Add($"Publication record compensation failed: {publicationFailure.Message}");
-        var message = string.Join(" ", parts);
-        return message.Length <= 512 ? message : message[..512];
-    }
-
-    private static string SafeMessage(Exception exception)
-    {
-        var message = string.IsNullOrWhiteSpace(exception.Message) ? exception.GetType().Name : exception.Message;
-        return message.Length <= 512 ? message : message[..512];
-    }
-
-    private async ValueTask CompensateAuthorityAsync(
-        PublicationRecord candidate,
-        PublicationSlotTransitionResult activatedSlot,
+        PublicationFailure failure,
         CancellationToken cancellationToken)
     {
-        PublicationSlotTransitionResult compensation;
-        if (activatedSlot.ReplacedPublicationId is { } replacedPublicationId)
-            compensation = await slotStore.TryActivateAsync(
-                candidate.WorkflowDefinitionId,
-                candidate.SlotName,
-                replacedPublicationId,
-                activatedSlot.Slot.Revision,
-                timeProvider.GetUtcNow(),
-                cancellationToken);
-        else
-            compensation = await slotStore.TryUnpublishAsync(
-                candidate.WorkflowDefinitionId,
-                candidate.SlotName,
-                activatedSlot.Slot.Revision,
-                timeProvider.GetUtcNow(),
-                cancellationToken);
+        var current = await publicationStore.FindAsync(candidate.PublicationId, cancellationToken) ?? candidate;
+        if (current.Status is not (PublicationStatus.Candidate or PublicationStatus.Active))
+            return current;
 
-        if (!compensation.Succeeded)
-            throw new InvalidOperationException(
-                $"Publication '{candidate.PublicationId}' projection activation failed and prior slot authority could not be restored.");
+        var failed = current with
+        {
+            Status = PublicationStatus.Failed,
+            ActivatedAt = null,
+            RetiredAt = null,
+            Failure = failure
+        };
+        await TransitionOrThrowAsync(failed, current.Status, cancellationToken);
+        return failed;
     }
 
-    private async ValueTask<PublicationSlot> CurrentSlotAsync(
+    private async ValueTask RetireReplacedRecordAsync(
         PublicationRecord candidate,
-        CancellationToken cancellationToken) =>
-        await slotStore.FindAsync(candidate.WorkflowDefinitionId, candidate.SlotName, cancellationToken)
-        ?? new PublicationSlot(
-            candidate.SlotId,
-            candidate.WorkflowDefinitionId,
-            candidate.SlotName,
-            ActivePublicationId: null,
-            Revision: 0,
-            timeProvider.GetUtcNow());
+        string? replacedPublicationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (replacedPublicationId is not { } replacedId ||
+            StringComparer.Ordinal.Equals(replacedId, candidate.PublicationId))
+            return;
+
+        var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
+            ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
+        var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
+        await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
+    }
 
     private async ValueTask TransitionOrThrowAsync(
         PublicationRecord publication,
@@ -282,13 +205,16 @@ public sealed class PublicationActivator(
                 $"Publication '{publication.PublicationId}' did not transition from '{expectedStatus}' to '{publication.Status}'.");
     }
 
+    private static string SafeMessage(string message) =>
+        message.Length <= 512 ? message : message[..512];
+
     private static void ValidateCandidate(PublicationRecord candidate)
     {
         if (candidate.Status != PublicationStatus.Candidate)
             throw new ArgumentException("Publication activation requires a Candidate record.", nameof(candidate));
         if (!StringComparer.Ordinal.Equals(
                 candidate.SlotId,
-                PublicationSlotIdentity.Create(candidate.WorkflowDefinitionId, candidate.SlotName)))
+                WorkflowActivationSlotIdentity.Create(candidate.WorkflowDefinitionId, candidate.SlotName)))
             throw new ArgumentException("The publication slot identity does not match its definition and slot name.", nameof(candidate));
     }
 }

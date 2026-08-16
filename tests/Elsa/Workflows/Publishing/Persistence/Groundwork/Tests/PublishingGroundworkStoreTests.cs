@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Scoping;
 using Groundwork.Core.Scoping;
@@ -37,29 +38,14 @@ public sealed class PublishingGroundworkStoreTests
         var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
         var queries = new RecordingBoundedDocumentStore();
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var slots = new GroundworkPublicationSlotStore(documents, serializer, queries);
         var publications = new GroundworkPublicationRecordStore(documents, serializer, queries);
         var intents = new GroundworkPublicationProjectionIntentStore(documents, serializer, queries);
 
-        await slots.ListByDefinitionAsync("definition-1");
-        await slots.TryActivateAsync("definition-1", "default", "publication-1", 0, Now);
         await publications.ListBySlotAsync("definition-1:default");
         await intents.ListByPublicationAsync("publication-1");
 
         Assert.Collection(
             queries.Observed,
-            query => AssertQuery(
-                query,
-                "publishingPublicationSlot",
-                "list-by-definition",
-                "workflowDefinitionId",
-                "definition-1"),
-            query => AssertQuery(
-                query,
-                "publishingPublicationSlot",
-                "find-by-active-publication",
-                "slot.activePublicationId",
-                "publication-1"),
             query => AssertQuery(
                 query,
                 "publishingPublicationRecord",
@@ -99,17 +85,6 @@ public sealed class PublishingGroundworkStoreTests
         var serializer = new PublishingGroundworkDocumentSerializer();
         var stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
 
-        var initial = await stores.Slots.TryActivateAsync("definition-1", "default", "publication-current", 0, Now);
-        Assert.True(initial.Succeeded);
-        var duplicateAuthority = await stores.Slots.TryActivateAsync("definition-1", "blue", "publication-current", 0, Now);
-        Assert.False(duplicateAuthority.Succeeded);
-        Assert.Equal("publication_already_active", duplicateAuthority.Failure?.Code);
-        var concurrent = await Task.WhenAll(
-            stores.Slots.TryActivateAsync("definition-1", "default", "publication-a", 1, Now.AddMinutes(1)).AsTask(),
-            stores.Slots.TryActivateAsync("definition-1", "default", "publication-b", 1, Now.AddMinutes(1)).AsTask());
-        Assert.Single(concurrent, x => x.Succeeded);
-        Assert.Single(concurrent, x => !x.Succeeded && x.Failure?.Code == "slot_revision_conflict");
-
         var candidate = Publication("publication-record", PublicationStatus.Candidate);
         await stores.Publications.SaveAsync(candidate);
         var transitions = await Task.WhenAll(
@@ -135,10 +110,6 @@ public sealed class PublishingGroundworkStoreTests
         await fixture.RestartAsync();
         stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
 
-        var slot = await stores.Slots.FindAsync("definition-1", "default");
-        Assert.Equal(2, slot!.Revision);
-        Assert.Contains(slot.ActivePublicationId, new[] { "publication-a", "publication-b" });
-        Assert.Single(await stores.Slots.ListByDefinitionAsync("definition-1"));
         Assert.Single(await stores.Publications.ListBySlotAsync(candidate.SlotId));
         Assert.NotEqual(PublicationStatus.Candidate, (await stores.Publications.FindAsync(candidate.PublicationId))!.Status);
         Assert.Equal(1, (await stores.Policies.FindAsync("definition-1"))!.Revision);
@@ -193,7 +164,7 @@ public sealed class PublishingGroundworkStoreTests
 
     private static PublicationRecord Publication(string id, PublicationStatus status) => new(
         id,
-        PublicationSlotIdentity.Create("definition-1", "default"),
+        WorkflowActivationSlotIdentity.Create("definition-1", "default"),
         "definition-1",
         "version-1",
         "artifact-1",
@@ -235,7 +206,6 @@ public sealed class PublishingGroundworkStoreTests
     }
 
     private sealed record Stores(
-        GroundworkPublicationSlotStore Slots,
         GroundworkPublicationRecordStore Publications,
         GroundworkPublicationPolicyStore Policies,
         GroundworkPublicationProjectionIntentStore Intents)
@@ -246,7 +216,6 @@ public sealed class PublishingGroundworkStoreTests
             PublishingGroundworkDocumentSerializer serializer)
         {
             return new Stores(
-                new GroundworkPublicationSlotStore(store, serializer, queries),
                 new GroundworkPublicationRecordStore(store, serializer, queries),
                 new GroundworkPublicationPolicyStore(store, serializer),
                 new GroundworkPublicationProjectionIntentStore(store, serializer, queries));

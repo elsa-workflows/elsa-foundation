@@ -107,6 +107,15 @@ public sealed class WorkflowActivationCoordinator(
         {
             throw;
         }
+        catch (Exception exception) when (exception is WorkflowExecutableRootWriteLeaseUnavailableException
+                                             or WorkflowExecutableRootWriteLeaseLostException)
+        {
+            // §2.23.5 wraps INFRASTRUCTURE faults (JsonException, IOException, storage) so nothing raw crosses a
+            // feature boundary. These two are already DOMAIN exceptions of this very layer: they carry their own
+            // identifiers and callers — publishing's deletion-guard contract among them — catch them by type.
+            // Wrapping them would add no information and destroy that type-based catch.
+            throw;
+        }
         catch (Exception exception)
         {
             // §2.23.5: the lease manager surfaces store faults directly. Nothing raw crosses this boundary.
@@ -130,9 +139,19 @@ public sealed class WorkflowActivationCoordinator(
     /// succeeds, whichever source asks.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This check lives here rather than on the authority on purpose — the slot carries no <c>ArtifactId</c>, so
     /// only the coordinator (which owns activation↔reference identity) can answer "same artifact?". Pushing it
     /// down would force the ledger to duplicate artifact state it has no other use for.
+    /// </para>
+    /// <para>
+    /// "Same artifact" has to mean "same activation outcome", so the candidate's <b>tenant</b> is part of the
+    /// comparison. Two tenants legitimately share one content-addressed artifact while each expecting its own
+    /// live source reference; matching on the artifact id alone would swallow the second tenant's activation and
+    /// leave it serving the first tenant's provenance. This is not a tenant axis on the slot — the slot stays
+    /// keyed <c>(DefinitionId, SlotName)</c> — it is the candidate reference's own tenant, which rides along on
+    /// the command, being compared against the reference the slot currently serves.
+    /// </para>
     /// </remarks>
     private async ValueTask<WorkflowActivationResult?> TryResolveSameArtifactNoOpAsync(
         WorkflowActivationCommand command,
@@ -151,9 +170,11 @@ public sealed class WorkflowActivationCoordinator(
             cancellationToken);
 
         // A retired reference means the active activation is no longer backed by live serving provenance, so it
-        // cannot stand in for the candidate — fall through and activate properly.
+        // cannot stand in for the candidate — fall through and activate properly. Same for a different tenant:
+        // the artifact matches but the activation the caller asked for does not exist yet.
         if (activeReference is not { DeletedAt: null } ||
-            !StringComparer.Ordinal.Equals(activeReference.ArtifactId, candidateArtifactId))
+            !StringComparer.Ordinal.Equals(activeReference.ArtifactId, candidateArtifactId) ||
+            !StringComparer.Ordinal.Equals(activeReference.TenantId, command.Reference.TenantId))
             return null;
 
         logger?.LogDebug(
@@ -187,7 +208,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, activatedSlot: null, exception);
+            return await FailAsync(command, reference, activatedSlot: null, WorkflowActivationStep.SourceReferenceMint, exception);
         }
 
         // Step 2 — prepare BOTH projections in non-serving state.
@@ -197,7 +218,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, activatedSlot: null, exception);
+            return await FailAsync(command, reference, activatedSlot: null, WorkflowActivationStep.ProjectionPreparation, exception);
         }
 
         // Step 3 — the slot CAS. The authority is the sole decider; everything before this point is invisible to
@@ -217,7 +238,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, activatedSlot: null, exception);
+            return await FailAsync(command, reference, activatedSlot: null, WorkflowActivationStep.SlotTransition, exception);
         }
 
         if (!transition.Succeeded)
@@ -232,7 +253,8 @@ public sealed class WorkflowActivationCoordinator(
                 null,
                 null,
                 transition.Conflict,
-                Truncate(Join(transition.Diagnostic ?? "The activation slot transition was refused.", conflictCompensation)));
+                Truncate(Join(transition.Diagnostic ?? "The activation slot transition was refused.", conflictCompensation)),
+                CompensationDiagnostic: conflictCompensation);
         }
 
         // Step 4 — make both projections serve, and retire the replaced activation's projections with them.
@@ -242,7 +264,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, transition, exception);
+            return await FailAsync(command, reference, transition, WorkflowActivationStep.ProjectionActivation, exception);
         }
 
         // Step 5 — notify derived projections (route tables and the like). An observer throw fails the
@@ -253,7 +275,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, transition, exception);
+            return await FailAsync(command, reference, transition, WorkflowActivationStep.TriggerObserverNotification, exception);
         }
 
         // Step 6 — retire the predecessor's reference so the GC can eventually reclaim its artifact.
@@ -263,7 +285,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, transition, exception);
+            return await FailAsync(command, reference, transition, WorkflowActivationStep.PredecessorReferenceRetirement, exception);
         }
 
         return new WorkflowActivationResult(
@@ -353,14 +375,16 @@ public sealed class WorkflowActivationCoordinator(
         WorkflowActivationCommand command,
         WorkflowExecutableSourceReference reference,
         WorkflowActivationTransition? activatedSlot,
+        WorkflowActivationStep failedStep,
         Exception failure)
     {
         logger?.LogWarning(
             failure,
-            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed; compensating",
+            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}; compensating",
             command.ActivationId,
             command.Executable.Identity.DefinitionId,
-            command.SlotName);
+            command.SlotName,
+            failedStep);
 
         var compensationFailure = await CompensateAsync(command, reference, activatedSlot);
         var slot = await CurrentSlotAsync(command);
@@ -371,7 +395,9 @@ public sealed class WorkflowActivationCoordinator(
             null,
             activatedSlot?.ReplacedActivationId,
             WorkflowActivationConflict.None,
-            Truncate(Join(SafeMessage(failure), compensationFailure)));
+            Truncate(Join(SafeMessage(failure), compensationFailure)),
+            failedStep,
+            compensationFailure);
     }
 
     /// <summary>

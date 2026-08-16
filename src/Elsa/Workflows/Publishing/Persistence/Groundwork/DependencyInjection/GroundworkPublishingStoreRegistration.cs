@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 /// Registers the Publishing stores against one named Groundwork target.
 /// <para>
 /// Publishing straddles the design and runtime lanes: it reads design material and writes runtime
-/// executables. Its own documents (publication slots, records, policies, receipts) live in the target named
+/// executables. Its own documents (publication records, policies, receipts) live in the target named
 /// here. Reusable-activity publication commits design, runtime, and publishing kinds together, so those
 /// lanes' targets have to agree for that path; plain workflow publish is already a compensating sequence and
 /// works across targets.
@@ -34,7 +34,8 @@ public static class GroundworkPublishingStoreRegistration
         lane.Manifest<PublishingGroundworkStorageManifestSource>();
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
 
-        lane.Replace<IPublicationSlotStore, GroundworkPublicationSlotStore>();
+        // No publishing slot store: the activation ledger is the runtime family's IWorkflowActivationAuthority,
+        // registered by AddGroundworkRuntimeStores (FR-B-006 — one physical ledger per engine).
         lane.Replace<IPublicationRecordStore, GroundworkPublicationRecordStore>();
         lane.Replace<IPublicationPolicyStore, GroundworkPublicationPolicyStore>();
         lane.Replace<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>();

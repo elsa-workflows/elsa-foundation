@@ -14,19 +14,15 @@ public sealed class PublishingGroundworkFixtureTests
     [Fact]
     public async Task FrozenV1FixturesDeserializeThroughEveryStore()
     {
-        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
-        await SeedAsync(PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, slotId, "publicationSlot.json");
         await SeedAsync(PublishingGroundworkStorageManifest.PublicationRecordDocumentKind, "publication-1", "publicationRecord.json");
         await SeedAsync(PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind, "workflow:12:definition-1", "publicationPolicy.json");
         await SeedAsync(PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind, "intent-1", "projectionIntent.json");
 
         var queries = new PublishingTestBoundedDocumentStore(_documents);
-        var slot = await new GroundworkPublicationSlotStore(_documents, _serializer, queries).FindAsync("definition-1", "default");
         var publication = await new GroundworkPublicationRecordStore(_documents, _serializer, queries).FindAsync("publication-1");
         var policy = await new GroundworkPublicationPolicyStore(_documents, _serializer).FindAsync("definition-1");
         var intent = await new GroundworkPublicationProjectionIntentStore(_documents, _serializer, queries).FindAsync("intent-1");
 
-        Assert.Equal("publication-1", slot!.ActivePublicationId);
         Assert.Equal(PublicationStatus.Active, publication!.Status);
         Assert.Equal(1, policy!.Revision);
         Assert.Equal(PublicationProjectionIntentStatus.Pending, intent!.Status);

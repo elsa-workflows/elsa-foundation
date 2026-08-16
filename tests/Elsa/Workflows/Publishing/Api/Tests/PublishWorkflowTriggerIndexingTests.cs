@@ -23,6 +23,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -45,7 +46,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
     private readonly InMemoryRecurringTriggerScheduleStore _scheduleStore = new();
-    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
     private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
@@ -333,14 +334,16 @@ public sealed class PublishWorkflowTriggerIndexingTests
         IWorkflowTriggerIndexer indexer,
         Type? clrType = null)
     {
-        var reconciler = new PublicationProjectionReconciler(
-            _intentStore,
-            _executableStore,
+        // Publishing requests activation through the shared coordinator; it no longer owns the sequence.
+        var coordinator = new WorkflowActivationCoordinator(
+            _activationAuthority,
+            _referenceStore,
+            TestRootWriteLeases.Create(_executableStore),
+            TimeProvider.System,
             indexer,
             _bindingStore,
-            TimeProvider.System,
             _scheduleStore);
-        var activator = new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System);
+        var activator = new PublicationActivator(coordinator, _publicationStore, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,
@@ -348,10 +351,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
             extractor,
             _bindingStore,
             new NullLayoutStore(),
-            TestRootWriteLeases.Create(_executableStore),
+            _activationAuthority,
             _policyStore,
             new PublicationPolicyResolver(),
-            _slotStore,
             _publicationStore,
             new PublicationPreflightService(),
             activator,

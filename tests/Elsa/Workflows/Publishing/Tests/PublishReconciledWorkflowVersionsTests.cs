@@ -9,6 +9,8 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -107,8 +109,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
-            records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)]);
+            slots: [new WorkflowActivationSlot("slot-1", "wf-a", "default", "pub-1", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)],
+            references: [Reference("pub-1", "ver-1")]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
 
@@ -123,8 +125,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
-            records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)]);
+            slots: [new WorkflowActivationSlot("slot-1", "wf-a", "default", "pub-1", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)],
+            references: [Reference("pub-1", "ver-1")]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
 
@@ -143,8 +145,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)],
-            records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)]);
+            slots: [new WorkflowActivationSlot("slot-canary", "wf-a", "canary", "pub-canary", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)],
+            references: [Reference("pub-canary", "ver-1")]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
 
@@ -164,13 +166,13 @@ public sealed class PublishReconciledWorkflowVersionsTests
             versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
             slots:
             [
-                new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow),
-                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+                new WorkflowActivationSlot("slot-1", "wf-a", "default", "pub-1", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow),
+                new WorkflowActivationSlot("slot-canary", "wf-a", "canary", "pub-canary", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)
             ],
-            records:
+            references:
             [
-                Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active),
-                Record("pub-canary", "wf-a", "ver-2", PublicationStatus.Active)
+                Reference("pub-1", "ver-1"),
+                Reference("pub-canary", "ver-2")
             ]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
@@ -191,10 +193,10 @@ public sealed class PublishReconciledWorkflowVersionsTests
             versions: [Version("wf-a", "1.0.0", "ver-1")],
             slots:
             [
-                new PublicationSlot("slot-1", "wf-a", "default", null, 1, DateTimeOffset.UtcNow),
-                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+                new WorkflowActivationSlot("slot-1", "wf-a", "default", null, null, 1, DateTimeOffset.UtcNow),
+                new WorkflowActivationSlot("slot-canary", "wf-a", "canary", "pub-canary", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)
             ],
-            records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)],
+            references: [Reference("pub-canary", "ver-1")],
             policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.ReplaceDefaultSlot, "canary", 1, DateTimeOffset.UtcNow)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
@@ -213,8 +215,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
-            records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)],
+            slots: [new WorkflowActivationSlot("slot-1", "wf-a", "default", "pub-1", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)],
+            references: [Reference("pub-1", "ver-1")],
             policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.RequireExplicitSlot, "default", 1, DateTimeOffset.UtcNow)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
@@ -230,8 +232,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
-            records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Retired)]);
+            slots: [new WorkflowActivationSlot("slot-1", "wf-a", "default", "pub-1", WorkflowActivationSource.Publishing, 1, DateTimeOffset.UtcNow)],
+            references: [Reference("pub-1", "ver-1", retired: true)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
 
@@ -304,8 +306,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
         SpySender sender,
         IReadOnlyList<WorkflowDefinition> definitions,
         IReadOnlyList<WorkflowDefinitionVersion> versions,
-        IReadOnlyList<PublicationSlot>? slots = null,
-        IReadOnlyList<PublicationRecord>? records = null,
+        IReadOnlyList<WorkflowActivationSlot>? slots = null,
+        IReadOnlyList<WorkflowExecutableSourceReference>? references = null,
         IReadOnlyList<PublicationPolicy>? policies = null,
         CapturingLogger<PublishReconciledWorkflowVersions>? logger = null) =>
         new(
@@ -314,8 +316,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             new StubVersionStore(versions),
             new StubPolicyStore(policies ?? []),
             new PublicationPolicyResolver(),
-            new StubSlotStore(slots ?? []),
-            new StubRecordStore(records ?? []),
+            new StubActivationAuthority(slots ?? []),
+            new StubSourceReferenceStore(references ?? []),
             sender,
             TimeProvider.System);
 
@@ -329,8 +331,28 @@ public sealed class PublishReconciledWorkflowVersionsTests
     private static WorkflowDefinitionVersion Version(string definitionId, string version, string versionId) =>
         new(definitionId, version) { Id = versionId };
 
-    private static PublicationRecord Record(string publicationId, string definitionId, string versionId, PublicationStatus status) =>
-        new(publicationId, "slot-1", definitionId, versionId, "artifact-x", null, 1, status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
+    /// <summary>
+    /// The live source reference the coordinator mints for <paramref name="activationId"/>. FR-B-006 makes the
+    /// slot plus this reference — not the publication journal — the answer to "what is this slot serving?", so
+    /// that is what the pre-check is seeded with.
+    /// </summary>
+    private static WorkflowExecutableSourceReference Reference(string activationId, string versionId, bool retired = false) =>
+        new(
+            SourceReferenceId: WorkflowActivationReferenceIdentity.Create(activationId),
+            ArtifactId: "artifact-x",
+            SourceKind: WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
+            SourceId: versionId,
+            SourceVersion: null,
+            DefinitionId: "wf-a",
+            DefinitionVersionId: versionId,
+            ArtifactVersion: "1.0.0",
+            CreatedAt: DateTimeOffset.UtcNow,
+            PublishedAt: DateTimeOffset.UtcNow,
+            Scope: WorkflowExecutableReferenceScope.Published,
+            DeletedAt: retired ? DateTimeOffset.UtcNow : null,
+            DeletedReason: retired ? "activation-replaced" : null,
+            PublicationId: activationId,
+            SlotId: "slot-1");
 
     private sealed class SpySender : IRequestSender
     {
@@ -402,28 +424,33 @@ public sealed class PublishReconciledWorkflowVersionsTests
             => throw new InvalidOperationException("Not exercised by publish-on-reconcile tests.");
     }
 
-    private sealed class StubSlotStore(IReadOnlyList<PublicationSlot> items) : IPublicationSlotStore
+    private sealed class StubActivationAuthority(IReadOnlyList<WorkflowActivationSlot> items) : IWorkflowActivationAuthority
     {
-        public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(items.FirstOrDefault(x => x.WorkflowDefinitionId == workflowDefinitionId && x.SlotName == slotName));
 
         // The pre-check is slot-targeted: enumerating every slot of the definition would be the
         // slot-agnostic behaviour this handler must not have.
         private const string Unused = "Not exercised by publish-on-reconcile tests.";
-        public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<PublicationSlotTransitionResult> TryActivateAsync(string workflowDefinitionId, string slotName, string publicationId, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(string workflowDefinitionId, string slotName, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
-    private sealed class StubRecordStore(IReadOnlyList<PublicationRecord> items) : IPublicationRecordStore
+    private sealed class StubSourceReferenceStore(IReadOnlyList<WorkflowExecutableSourceReference> items) : IWorkflowExecutableSourceReferenceStore
     {
-        public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(items.FirstOrDefault(x => x.PublicationId == publicationId));
+        public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(items.FirstOrDefault(x => x.SourceReferenceId == sourceReferenceId));
 
+        // The pre-check resolves the slot's reference by its deterministic id and reads nothing else. Every other
+        // member throwing is the assertion that it stays that way.
         private const string Unused = "Not exercised by publish-on-reconcile tests.";
-        public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
     private sealed class CapturingLogger<T> : ILogger<T>

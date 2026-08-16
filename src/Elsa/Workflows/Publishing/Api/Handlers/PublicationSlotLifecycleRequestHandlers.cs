@@ -4,36 +4,39 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class UnpublishPublicationSlotRequestHandler(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore publicationStore,
     IPublicationProjectionPreparer projectionPreparer,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     TimeProvider timeProvider,
-    ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IRequestHandler<UnpublishPublicationSlot, PublicationSlot>
+    ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IRequestHandler<UnpublishPublicationSlot, WorkflowActivationSlot>
 {
-    public async Task<PublicationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
+    public async Task<WorkflowActivationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
     {
-        var slot = await slotStore.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
+        var slot = await activationAuthority.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
             ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' does not exist.");
-        if (slot.ActivePublicationId is not { } publicationId)
+        if (slot.ActiveActivationId is not { } publicationId)
             return slot;
         var publication = await publicationStore.FindAsync(publicationId, cancellationToken)
             ?? throw new InvalidOperationException($"Active publication '{publicationId}' does not exist.");
         var now = timeProvider.GetUtcNow();
-        var transition = await slotStore.TryUnpublishAsync(
+        var transition = await activationAuthority.TryDeactivateAsync(
             request.WorkflowDefinitionId,
             request.SlotName,
+            PublicationActivator.Source,
             slot.Revision,
             now,
             cancellationToken);
         if (!transition.Succeeded)
-            throw new PublicationActivationException(transition.Failure);
+            throw new PublicationActivationException(ToFailure(transition));
 
         try
         {
@@ -44,12 +47,14 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             Exception? compensationException = null;
             try
             {
-                var compensation = await slotStore.TryActivateAsync(
-                    request.WorkflowDefinitionId,
-                    request.SlotName,
-                    publication.PublicationId,
-                    transition.Slot.Revision,
-                    timeProvider.GetUtcNow(),
+                var compensation = await activationAuthority.TryActivateAsync(
+                    new WorkflowActivationSlotRequest(
+                        request.WorkflowDefinitionId,
+                        request.SlotName,
+                        publication.PublicationId,
+                        PublicationActivator.Source,
+                        transition.Slot.Revision,
+                        timeProvider.GetUtcNow()),
                     CancellationToken.None);
                 if (!compensation.Succeeded)
                     throw new InvalidOperationException(
@@ -85,23 +90,29 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         }
         return transition.Slot;
     }
+
+    internal static PublicationFailure ToFailure(WorkflowActivationTransition transition) => transition.Conflict switch
+    {
+        WorkflowActivationConflict.ForeignSource =>
+            new("slot_owner_conflict", transition.Diagnostic ?? "The activation slot is owned by another activation source."),
+        _ => new("slot_revision_conflict", transition.Diagnostic ?? "The publication slot revision changed.")
+    };
 }
 
 public sealed class RestorePublicationSlotRequestHandler(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore publicationStore,
     IPublicationActivator activator,
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-    IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
     TimeProvider timeProvider,
-    ILogger<RestorePublicationSlotRequestHandler>? logger = null) : IRequestHandler<RestorePublicationSlot, PublicationSlot>
+    ILogger<RestorePublicationSlotRequestHandler>? logger = null) : IRequestHandler<RestorePublicationSlot, WorkflowActivationSlot>
 {
-    public async Task<PublicationSlot> Handle(RestorePublicationSlot request, CancellationToken cancellationToken)
+    public async Task<WorkflowActivationSlot> Handle(RestorePublicationSlot request, CancellationToken cancellationToken)
     {
-        var slot = await slotStore.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
+        var slot = await activationAuthority.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
             ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' does not exist.");
-        if (slot.ActivePublicationId is not null)
+        if (slot.ActiveActivationId is not null)
             return slot;
 
         var prior = (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
@@ -118,10 +129,13 @@ public sealed class RestorePublicationSlotRequestHandler(
             : null;
         var now = timeProvider.GetUtcNow();
         var publicationId = $"publication-{ShortIdentityGenerator.Generate(now)}";
-        var sourceReferenceId = ShortIdentityGenerator.Generate(now);
+        // The coordinator owns activation↔reference identity; mint the same id here so the publication record
+        // points at the reference that will actually be stored.
+        var sourceReferenceId = WorkflowActivationReferenceIdentity.Create(publicationId);
         var candidate = prior with
         {
             PublicationId = publicationId,
+            SlotId = slot.SlotId,
             SourceReferenceId = sourceReferenceId,
             ExpectedSlotRevision = slot.Revision,
             Status = PublicationStatus.Candidate,
@@ -143,35 +157,21 @@ public sealed class RestorePublicationSlotRequestHandler(
                 SlotId = slot.SlotId
             };
 
-        PublicationActivationResult? activation = null;
-        await rootWriteLeaseManager.ExecuteAsync(
-            executable.Identity,
-            $"restore:{publicationId}",
-            async ct =>
-            {
-                await sourceReferenceStore.SaveAsync(reference, ct);
-                try
-                {
-                    activation = await activator.ActivateAsync(new PublicationActivationRequest(candidate), ct);
-                    if (!activation.Succeeded)
-                        throw new PublicationActivationException(activation.Failure);
-                }
-                catch
-                {
-                    logger?.LogWarning(
-                        "Restore: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because activation of publication {PublicationId} failed",
-                        reference.SourceReferenceId,
-                        candidate.WorkflowDefinitionId,
-                        publicationId);
-                    await sourceReferenceStore.RetireAsync(
-                        reference.SourceReferenceId,
-                        timeProvider.GetUtcNow(),
-                        "publication-restore-failed",
-                        CancellationToken.None);
-                    throw;
-                }
-            },
+        // Lease, reference save, projections and compensation all belong to IWorkflowActivationCoordinator, which
+        // the activator calls. Restore requests activation; it does not implement it.
+        var activation = await activator.ActivateAsync(
+            new PublicationActivationRequest(candidate, executable, reference),
             cancellationToken);
-        return activation!.Slot;
+        if (!activation.Succeeded)
+        {
+            logger?.LogWarning(
+                "Restore: activation of publication {PublicationId} for workflow definition {DefinitionId} failed with '{FailureCode}'",
+                publicationId,
+                candidate.WorkflowDefinitionId,
+                activation.Failure?.Code);
+            throw new PublicationActivationException(activation.Failure);
+        }
+
+        return activation.Slot;
     }
 }

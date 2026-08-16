@@ -126,8 +126,8 @@ public class UnifiedGroundworkHostTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
         Assert.Null(scope.ServiceProvider.GetService<IUserStore>());
 
-        // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
+        // Activation authority uses the same durable store; the API's in-memory fallbacks must not win.
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationRecordStore>());
 
         // Design lane ports resolve (scoped).
@@ -231,7 +231,7 @@ public class UnifiedGroundworkHostTests
         };
         var publication = new PublicationRecord(
             "publication-1",
-            PublicationSlotIdentity.Create("workflow-1", "default"),
+            WorkflowActivationSlotIdentity.Create("workflow-1", "default"),
             "workflow-1",
             "workflow-version-1",
             "artifact-1",
@@ -347,7 +347,7 @@ public class UnifiedGroundworkHostTests
     {
         await using var database = new TemporarySqliteDatabase();
         var now = DateTimeOffset.Parse("2026-07-13T10:00:00Z");
-        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
+        var slotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
         var record = new PublicationRecord(
             "publication-1", slotId, "definition-1", "version-1", "artifact-1", "reference-1", 0,
             PublicationStatus.Active, now, now, null, null);
@@ -356,19 +356,20 @@ public class UnifiedGroundworkHostTests
         {
             await using var firstScope = firstHost.CreateAsyncScope();
             await firstScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
-            var activation = await firstScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
-                .TryActivateAsync("definition-1", "default", record.PublicationId, 0, now);
+            var activation = await firstScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
+                .TryActivateAsync(new WorkflowActivationSlotRequest(
+                    "definition-1", "default", record.PublicationId, WorkflowActivationSource.Publishing, 0, now));
             Assert.True(activation.Succeeded);
         }
 
         await using var restartedHost = await BuildHostAsync(database.ConnectionString);
         await using var restartedScope = restartedHost.CreateAsyncScope();
-        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
+        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync("definition-1", "default");
         var restoredRecord = await restartedScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>()
             .FindAsync(record.PublicationId);
 
-        Assert.Equal(record.PublicationId, restoredSlot?.ActivePublicationId);
+        Assert.Equal(record.PublicationId, restoredSlot?.ActiveActivationId);
         Assert.Equal(PublicationStatus.Active, restoredRecord?.Status);
     }
 

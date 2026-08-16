@@ -31,6 +31,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
@@ -60,7 +61,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         StructureFacet(FlowchartActivity.StructureKind, FlowchartActivity.StructureSchemaVersion));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
-    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
     private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
@@ -916,7 +917,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         services.AddSingleton<IWorkflowExecutableStore>(_store);
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(_referenceStore);
         services.AddSingleton<IWorkflowTriggerBindingStore>(_bindingStore);
-        services.AddSingleton<IPublicationSlotStore>(_slotStore);
+        services.AddSingleton<IWorkflowActivationAuthority>(_activationAuthority);
         services.AddSingleton<IPublicationRecordStore>(_publicationStore);
         services.AddSingleton<IPublicationPolicyStore>(_policyStore);
         services.AddSingleton<IPublicationProjectionIntentStore>(_intentStore);
@@ -924,6 +925,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var extractor = new WorkflowTriggerBindingExtractor([]);
         services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);
         services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(extractor, _bindingStore));
+        services.AddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         // spec 145: the publish engine (compiler, stores, the PublishWorkflow handler) moved to the
         // WorkflowsPublishing engine feature; compose it explicitly alongside the transport feature.
         new WorkflowsPublishingFeature().ConfigureServices(services);
@@ -980,12 +982,14 @@ public sealed class PublishWorkflowRequestHandlerTests
     {
         var extractor = new WorkflowTriggerBindingExtractor([]);
         IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
-        var reconciler = new PublicationProjectionReconciler(
-            _intentStore,
-            _store,
+        // Publishing requests activation through the shared coordinator; it no longer owns the sequence.
+        var coordinator = new WorkflowActivationCoordinator(
+            _activationAuthority,
+            _referenceStore,
+            TestRootWriteLeases.Create(_store),
+            TimeProvider.System,
             indexer,
-            _bindingStore,
-            TimeProvider.System);
+            _bindingStore);
         return new(
             compiler,
             _store,
@@ -993,13 +997,12 @@ public sealed class PublishWorkflowRequestHandlerTests
             extractor,
             _bindingStore,
             new FakeLayoutStore(layout),
-            TestRootWriteLeases.Create(_store),
+            _activationAuthority,
             _policyStore,
             new PublicationPolicyResolver(),
-            _slotStore,
             _publicationStore,
             new PublicationPreflightService(),
-            new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
+            new PublicationActivator(coordinator, _publicationStore, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,

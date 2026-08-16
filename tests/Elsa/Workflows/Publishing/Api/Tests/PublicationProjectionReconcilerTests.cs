@@ -161,7 +161,7 @@ public sealed class PublicationProjectionReconcilerTests
                 [observer]);
             var publication = new PublicationRecord(
                 PublicationId: "publication-1",
-                SlotId: PublicationSlotIdentity.Create("definition-1", "default"),
+                SlotId: WorkflowActivationSlotIdentity.Create("definition-1", "default"),
                 WorkflowDefinitionId: "definition-1",
                 WorkflowDefinitionVersionId: "version-1",
                 ArtifactId: executable.Identity.ArtifactId,

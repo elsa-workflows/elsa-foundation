@@ -21,10 +21,10 @@ public sealed class PublishWorkflowRequestHandler(
     IWorkflowTriggerBindingExtractor triggerExtractor,
     IWorkflowTriggerBindingStore triggerBindingStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore,
-    IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
+    // The root-write lease is taken by IWorkflowActivationCoordinator, not here.
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationPolicyStore policyStore,
     IPublicationPolicyResolver policyResolver,
-    IPublicationSlotStore slotStore,
     IPublicationRecordStore publicationStore,
     IPublicationPreflightService preflightService,
     IPublicationActivator activator,
@@ -42,7 +42,7 @@ public sealed class PublishWorkflowRequestHandler(
     private readonly WorkflowPublicationPreflightReader _publicationPreflightReader = publicationPreflightReader ?? new(
         policyStore,
         policyResolver,
-        slotStore,
+        activationAuthority,
         publicationStore,
         preflightService,
         triggerExtractor,
@@ -109,7 +109,11 @@ public sealed class PublishWorkflowRequestHandler(
 
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
-        if (slot?.ActivePublicationId is { } activePublicationId)
+        // Publishing keeps its own four-condition same-artifact guard and calls the coordinator only once it has
+        // decided to activate. The coordinator's own no-op sees only the two runtime-resolvable conditions (same
+        // artifact + live reference); trigger-change retention and tenancy are publication-plan concepts it cannot
+        // see, and delegating wholesale would silently no-op a publish for a second tenant reusing one artifact.
+        if (slot?.ActiveActivationId is { } activePublicationId)
         {
             var current = await publicationStore.FindAsync(activePublicationId, cancellationToken)
                 ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
@@ -129,7 +133,7 @@ public sealed class PublishWorkflowRequestHandler(
         var reference = await BuildSourceReferenceAsync(executable, publicationId, resolved.SlotName, request.TenantId, now, cancellationToken);
         var candidate = new PublicationRecord(
             publicationId,
-            PublicationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
+            WorkflowActivationSlotIdentity.Create(identity.DefinitionId, resolved.SlotName),
             identity.DefinitionId,
             identity.DefinitionVersionId,
             identity.ArtifactId,
@@ -142,39 +146,21 @@ public sealed class PublishWorkflowRequestHandler(
             Failure: null,
             resolved.SlotName);
 
-        PublicationActivationResult? activation = null;
-        await rootWriteLeaseManager.ExecuteAsync(
-            identity,
-            $"publish:{publicationId}",
-            async ct =>
-            {
-                await sourceReferenceStore.SaveAsync(reference, ct);
-                try
-                {
-                    activation = await activator.ActivateAsync(new PublicationActivationRequest(candidate), ct);
-                    if (!activation.Succeeded)
-                        throw new PublicationActivationException(activation.Failure);
-                }
-                catch
-                {
-                    logger?.LogWarning(
-                        "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because activation of publication {PublicationId} failed",
-                        reference.SourceReferenceId,
-                        identity.DefinitionId,
-                        publicationId);
-                    await sourceReferenceStore.RetireAsync(
-                        reference.SourceReferenceId,
-                        timeProvider.GetUtcNow(),
-                        "publication-activation-failed",
-                        CancellationToken.None);
-                    throw;
-                }
-            },
+        // The root-write lease, the reference mint/save, the failure retire and the predecessor retire all moved
+        // into IWorkflowActivationCoordinator, which the activator now calls. Publishing requests activation; it
+        // does not implement it (FR-B-006).
+        var activation = await activator.ActivateAsync(
+            new PublicationActivationRequest(candidate, executable, reference),
             cancellationToken);
-
-        if (activation!.ReplacedPublicationId is { } replacedPublicationId &&
-            !StringComparer.Ordinal.Equals(replacedPublicationId, publicationId))
-            await RetireReferenceAsync(replacedPublicationId, now, cancellationToken);
+        if (!activation.Succeeded)
+        {
+            logger?.LogWarning(
+                "Publish: activation of publication {PublicationId} for workflow definition {DefinitionId} failed with '{FailureCode}'",
+                publicationId,
+                identity.DefinitionId,
+                activation.Failure?.Code);
+            throw new PublicationActivationException(activation.Failure);
+        }
 
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
     }
@@ -216,8 +202,10 @@ public sealed class PublishWorkflowRequestHandler(
         var authoredInputs = workflowVersionStore is not null && authoredInputsSidecar is not null
             ? authoredInputsSidecar.CopyFrom((await workflowVersionStore.GetWithDefinitionAsync(identity.DefinitionVersionId, cancellationToken)).State)
             : [];
+        // The coordinator owns activation↔reference identity, so the id it will stamp is minted here too: the
+        // publication record has to carry the id the reference is actually stored under.
         return new WorkflowExecutableSourceReference(
-            SourceReferenceId: ShortIdentityGenerator.Generate(now),
+            SourceReferenceId: WorkflowActivationReferenceIdentity.Create(publicationId),
             ArtifactId: identity.ArtifactId,
             SourceKind: WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
             SourceId: identity.DefinitionVersionId,
@@ -230,7 +218,7 @@ public sealed class PublishWorkflowRequestHandler(
             Scope: WorkflowExecutableReferenceScope.Published,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             PublicationId: publicationId,
-            SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
+            SlotId: WorkflowActivationSlotIdentity.Create(identity.DefinitionId, slotName),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs,
             TenantId: tenantId,
@@ -238,19 +226,6 @@ public sealed class PublishWorkflowRequestHandler(
                 WorkflowExecutableActivityPresentationSidecar.CopyFrom(
                     layout?.ActivityPresentation,
                     executable));
-    }
-
-    private async ValueTask RetireReferenceAsync(string publicationId, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var publication = await publicationStore.FindAsync(publicationId, cancellationToken);
-        if (publication?.SourceReferenceId is not { } sourceReferenceId)
-            return;
-        logger?.LogInformation(
-            "Publish: retiring source reference {SourceReferenceId} of workflow definition {DefinitionId} because publication {PublicationId} was replaced",
-            sourceReferenceId,
-            publication.WorkflowDefinitionId,
-            publicationId);
-        await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-replaced", cancellationToken);
     }
 
 }

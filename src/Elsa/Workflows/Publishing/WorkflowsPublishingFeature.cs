@@ -15,6 +15,7 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -54,7 +55,12 @@ public class WorkflowsPublishingFeature : IShellFeature
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
-        services.TryAddSingleton<IPublicationSlotStore, InMemoryPublicationSlotStore>();
+        // No publishing-family slot store: the activation ledger is the runtime's IWorkflowActivationAuthority
+        // (FR-B-006). Registered here as a TryAdd fallback for the same reason the executable stores above are —
+        // AddWorkflowRuntime() registers the same defaults, and the runtime Groundwork lane replaces the authority
+        // outright when durable persistence is composed.
+        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
         services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();

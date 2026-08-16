@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Publishing.Services;
 
 public sealed record WorkflowPublicationPreflightPlan(
     ResolvedPublicationAction ResolvedAction,
-    PublicationSlot? Slot,
+    WorkflowActivationSlot? Slot,
     PublicationPreflightResult Result,
     IReadOnlyCollection<PublicationTriggerClaim> CandidateClaims);
 
@@ -15,7 +15,7 @@ public sealed record WorkflowPublicationPreflightPlan(
 public sealed class WorkflowPublicationPreflightReader(
     IPublicationPolicyStore policyStore,
     IPublicationPolicyResolver policyResolver,
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore publicationStore,
     IPublicationPreflightService preflightService,
     IWorkflowTriggerBindingExtractor triggerExtractor,
@@ -41,16 +41,16 @@ public sealed class WorkflowPublicationPreflightReader(
             requestIntent,
             workflowPolicy,
             hostPolicy);
-        var slot = await slotStore.FindAsync(identity.DefinitionId, resolved.SlotName, cancellationToken);
+        var slot = await activationAuthority.FindAsync(identity.DefinitionId, resolved.SlotName, cancellationToken);
         ValidateExpectedPublication(expectedPublicationId, slot);
 
         var candidateClaims = triggerExtractor.Evaluate(executable).Bindings
             .Select(binding => Claim(candidatePublicationId, binding))
             .ToArray();
         var authoritativeSets = new List<PublicationAuthoritativeClaimSet>();
-        foreach (var authoritativeSlot in await slotStore.ListByDefinitionAsync(identity.DefinitionId, cancellationToken))
+        foreach (var authoritativeSlot in await activationAuthority.ListByDefinitionAsync(identity.DefinitionId, cancellationToken))
         {
-            if (authoritativeSlot.ActivePublicationId is not { } activePublicationId)
+            if (authoritativeSlot.ActiveActivationId is not { } activePublicationId)
                 continue;
             var active = await publicationStore.FindAsync(activePublicationId, cancellationToken)
                 ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
@@ -58,7 +58,7 @@ public sealed class WorkflowPublicationPreflightReader(
             authoritativeSets.Add(new PublicationAuthoritativeClaimSet(
                 activePublicationId,
                 active.SlotName,
-                StringComparer.Ordinal.Equals(activePublicationId, slot?.ActivePublicationId),
+                StringComparer.Ordinal.Equals(activePublicationId, slot?.ActiveActivationId),
                 activeBindings.Select(binding => Claim(activePublicationId, binding)).ToArray()));
         }
 
@@ -82,10 +82,10 @@ public sealed class WorkflowPublicationPreflightReader(
                 : PublicationTriggerCardinality.FanOut,
             binding.Metadata);
 
-    private static void ValidateExpectedPublication(string? expectedPublicationId, PublicationSlot? slot)
+    private static void ValidateExpectedPublication(string? expectedPublicationId, WorkflowActivationSlot? slot)
     {
         if (expectedPublicationId is not null &&
-            !StringComparer.Ordinal.Equals(expectedPublicationId, slot?.ActivePublicationId))
+            !StringComparer.Ordinal.Equals(expectedPublicationId, slot?.ActiveActivationId))
             throw new PublicationPolicyResolutionException("expected_publication_mismatch", "The publication slot authority changed.");
     }
 }

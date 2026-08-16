@@ -34,6 +34,10 @@ public sealed class PublishingGroundworkLifetimeTests
         services.AddScoped<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddScoped<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.AddScoped<IWorkflowTriggerIndexer, NoopWorkflowTriggerIndexer>();
+        // The activation coordinator behind IPublicationActivator takes the executable's root-write lease, so the
+        // hand-composed probe supplies the same runtime collaborator AddWorkflowRuntime() would.
+        services.AddOptions<Elsa.Workflows.Runtime.Configuration.WorkflowExecutableGarbageCollectionOptions>();
+        services.AddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
 
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IPublicationProjectionPreparer)).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IPublicationActivator)).Lifetime);
@@ -48,7 +52,6 @@ public sealed class PublishingGroundworkLifetimeTests
         AssertScopedAcrossRequests<IPublicationProjectionPreparer>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationActivator>(firstScope, secondScope);
         AssertScopedAcrossRequests<PublicationSnapshotReviewService>(firstScope, secondScope);
-        AssertScopedAcrossRequests<IPublicationSlotStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationRecordStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationPolicyStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationProjectionIntentStore>(firstScope, secondScope);

@@ -18,7 +18,6 @@ public sealed class PublishingGroundworkStorageManifestSource : IGroundworkStora
             FeatureIdentity,
             manifest,
             [
-                typeof(IPublicationSlotStore),
                 typeof(IPublicationRecordStore),
                 typeof(IPublicationPolicyStore),
                 typeof(IPublicationProjectionIntentStore),

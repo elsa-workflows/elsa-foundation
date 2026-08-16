@@ -1015,7 +1015,6 @@ public class GroundworkStorageCompositionTests
         "publishing" =>
         [
             typeof(IActivityDraftTestRunStore),
-            typeof(IPublicationSlotStore),
             typeof(IPublicationRecordStore),
             typeof(IPublicationPolicyStore),
             typeof(IPublicationProjectionIntentStore),

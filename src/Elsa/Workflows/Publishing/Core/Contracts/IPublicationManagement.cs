@@ -2,24 +2,9 @@ using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Core.Contracts;
 
-public interface IPublicationSlotStore
-{
-    ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default);
-    ValueTask<PublicationSlotTransitionResult> TryActivateAsync(
-        string workflowDefinitionId,
-        string slotName,
-        string publicationId,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default);
-    ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(
-        string workflowDefinitionId,
-        string slotName,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default);
-}
+// The publication slot store is deliberately absent: publishing no longer owns an activation ledger.
+// `IWorkflowActivationAuthority` (Elsa.Workflows.Runtime.Core) is the one ledger per engine, and publishing
+// reads and writes it through `IWorkflowActivationCoordinator` (FR-B-006, 2026-08-15 architect review).
 
 public interface IPublicationRecordStore
 {
