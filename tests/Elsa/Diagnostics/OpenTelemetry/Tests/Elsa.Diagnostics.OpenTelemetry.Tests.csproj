@@ -4,6 +4,8 @@
     <None Include="Baselines\otel-http-openapi-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="CShells" />
+    <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
