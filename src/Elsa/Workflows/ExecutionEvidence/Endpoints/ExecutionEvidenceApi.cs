@@ -76,7 +76,10 @@ public static class ExecutionEvidenceApi
             () => store.ListByCorrelation(correlationId, QueryLong(context, "after")),
             EvidencePolling.ClampWait(QueryInt(context, "waitMs")),
             context.RequestAborted);
-        await Results.Json(page).ExecuteAsync(context);
+        await Results.Json(
+            page,
+            ExecutionEvidenceJsonContext.Default.ExecutionEvidencePage,
+            contentType: "application/json; charset=utf-8").ExecuteAsync(context);
     }
 
     private static async Task HandleWorkflowAsync(HttpContext context)
@@ -96,7 +99,10 @@ public static class ExecutionEvidenceApi
             () => store.List(workflowExecutionId, QueryLong(context, "after")),
             EvidencePolling.ClampWait(QueryInt(context, "waitMs")),
             context.RequestAborted);
-        await Results.Json(page).ExecuteAsync(context);
+        await Results.Json(
+            page,
+            ExecutionEvidenceJsonContext.Default.ExecutionEvidencePage,
+            contentType: "application/json; charset=utf-8").ExecuteAsync(context);
     }
 
     private static async Task HandleDeleteAsync(HttpContext context)

@@ -10,9 +10,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Modularity.Api.Endpoints;
 
@@ -50,7 +51,10 @@ public static class ModularityApi
     private static async Task HandleListAsync(HttpContext context)
     {
         var service = context.RequestServices.GetRequiredService<IFeatureManagementService>();
-        await Results.Json(await service.GetCatalogAsync(context.RequestAborted)).ExecuteAsync(context);
+        await Results.Json(
+            await service.GetCatalogAsync(context.RequestAborted),
+            ModularityJsonContext.Default.FeatureCatalogResponse,
+            contentType: "application/json; charset=utf-8").ExecuteAsync(context);
     }
 
     private static async Task HandleApplyAsync(HttpContext context)
@@ -58,7 +62,9 @@ public static class ModularityApi
         FeatureApplyRequest? request;
         try
         {
-            request = await context.Request.ReadFromJsonAsync<FeatureApplyRequest>(context.RequestAborted);
+            request = await context.Request.ReadFromJsonAsync(
+                ModularityJsonContext.Default.FeatureApplyRequest,
+                context.RequestAborted);
         }
         catch (JsonException exception)
         {
@@ -75,7 +81,10 @@ public static class ModularityApi
         try
         {
             var service = context.RequestServices.GetRequiredService<IFeatureManagementService>();
-            await Results.Json(await service.ApplyAsync(request, context.RequestAborted)).ExecuteAsync(context);
+            await Results.Json(
+                await service.ApplyAsync(request, context.RequestAborted),
+                ModularityJsonContext.Default.FeatureApplyResult,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (FeatureCatalogRevisionConflictException exception)
         {
@@ -106,12 +115,13 @@ public static class ModularityApi
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json; charset=utf-8";
-        return context.Response.WriteAsync(JsonSerializer.Serialize(new
-        {
-            errors = new Dictionary<string, string[]> { ["generalErrors"] = [message] },
-            message = "One or more errors occurred!",
-            statusCode
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)), context.RequestAborted);
+        var error = new ModularityError(
+            new Dictionary<string, string[]> { ["generalErrors"] = [message] },
+            "One or more errors occurred!",
+            statusCode);
+        return context.Response.WriteAsync(
+            JsonSerializer.Serialize(error, ModularityJsonContext.Default.ModularityError),
+            context.RequestAborted);
     }
 
     private static AcceptsMetadata Accepts(Type type) => new(["application/json"], type, false);
@@ -125,3 +135,8 @@ public static class ModularityApi
     private static ProducesResponseTypeMetadata Forbidden() =>
         new(StatusCodes.Status403Forbidden, typeof(void), []);
 }
+
+internal sealed record ModularityError(
+    Dictionary<string, string[]> Errors,
+    string Message,
+    int StatusCode);

@@ -1,5 +1,3 @@
-using System.Security.Claims;
-using System.Text.Json;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;
@@ -10,8 +8,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa3.Activities.Design.Import.Endpoints;
 
@@ -87,7 +88,11 @@ public static class ReusableActivityImportApi
                 ReusableActivityImportHttp.Scope(context.User),
                 context.RequestAborted);
             context.Response.Headers.Location = $"/migration/elsa3/reusable-activities/collections/{Uri.EscapeDataString(result.CollectionHandle)}/analysis";
-            await Results.Json(result, statusCode: StatusCodes.Status201Created).ExecuteAsync(context);
+            await Results.Json(
+                result,
+                ReusableActivityImportJsonContext.Default.ReusableActivityImportUploadResult,
+                contentType: "application/json; charset=utf-8",
+                statusCode: StatusCodes.Status201Created).ExecuteAsync(context);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -107,7 +112,10 @@ public static class ReusableActivityImportApi
                 QueryInt(context, "limit") ?? options.Value.DefaultPageSize,
                 ReusableActivityImportHttp.Scope(context.User),
                 context.RequestAborted);
-            await Results.Json(result).ExecuteAsync(context);
+            await Results.Json(
+                result,
+                ReusableActivityImportJsonContext.Default.ReusableActivityImportAnalysisPage,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -117,7 +125,7 @@ public static class ReusableActivityImportApi
 
     private static async Task HandleSelectionAsync(HttpContext context)
     {
-        var request = await ReadJsonAsync<ReusableActivityImportSelectionRequest>(context);
+        var request = await ReadJsonAsync(context, ReusableActivityImportJsonContext.Default.ReusableActivityImportSelectionRequest);
         if (request is null)
             return;
 
@@ -127,7 +135,10 @@ public static class ReusableActivityImportApi
             var result = await service.ExpandSelectionAsync(
                 Route(context, "collectionHandle"), request.PlanId, request.SelectedSourceVersionIds,
                 ReusableActivityImportHttp.Scope(context.User), context.RequestAborted);
-            await Results.Json(result).ExecuteAsync(context);
+            await Results.Json(
+                result,
+                ReusableActivityImportJsonContext.Default.ReusableActivityImportSelectionReadiness,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -137,7 +148,7 @@ public static class ReusableActivityImportApi
 
     private static async Task HandleApplyAsync(HttpContext context)
     {
-        var request = await ReadJsonAsync<ReusableActivityImportApplyHttpRequest>(context);
+        var request = await ReadJsonAsync(context, ReusableActivityImportJsonContext.Default.ReusableActivityImportApplyHttpRequest);
         if (request is null)
             return;
 
@@ -151,7 +162,11 @@ public static class ReusableActivityImportApi
             var status = result.Status == ReusableActivityImportReceiptStatus.Applied
                 ? StatusCodes.Status201Created
                 : StatusCodes.Status200OK;
-            await Results.Json(result, statusCode: status).ExecuteAsync(context);
+            await Results.Json(
+                result,
+                ReusableActivityImportJsonContext.Default.ReusableActivityImportReceipt,
+                contentType: "application/json; charset=utf-8",
+                statusCode: status).ExecuteAsync(context);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -166,7 +181,10 @@ public static class ReusableActivityImportApi
             var service = context.RequestServices.GetRequiredService<IReusableActivityImportOperationService>();
             var result = await service.GetStatusAsync(
                 Route(context, "idempotencyKey"), ReusableActivityImportHttp.Scope(context.User), context.RequestAborted);
-            await Results.Json(result).ExecuteAsync(context);
+            await Results.Json(
+                result,
+                ReusableActivityImportJsonContext.Default.ReusableActivityImportReceipt,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -174,12 +192,12 @@ public static class ReusableActivityImportApi
         }
     }
 
-    private static async Task<T?> ReadJsonAsync<T>(HttpContext context)
+    private static async Task<T?> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> jsonTypeInfo)
         where T : class
     {
         try
         {
-            var value = await context.Request.ReadFromJsonAsync<T>(context.RequestAborted);
+            var value = await context.Request.ReadFromJsonAsync(jsonTypeInfo, context.RequestAborted);
             if (value is not null)
                 return value;
         }
@@ -245,19 +263,18 @@ public static class ReusableActivityImportHttp
             ArgumentException => (400, "elsa3.import.request-invalid", "Elsa 3 import request invalid"),
             _ => (500, "elsa3.import.unexpected", "Elsa 3 import failed")
         };
-        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
-        {
-            Status = status,
-            Type = $"https://elsa.dev/problems/{code}",
-            Title = title,
-            Detail = status == 500 ? "The Elsa 3 import could not be completed." : exception.Message,
-            Instance = context.Request.Path
-        };
-        problem.Extensions["errorCode"] = code;
-        if (exception is ReusableActivityImportValidationException validation)
-            problem.Extensions["diagnostics"] = validation.Diagnostics;
+        var problem = new ReusableActivityImportProblem(
+            status,
+            $"https://elsa.dev/problems/{code}",
+            title,
+            status == 500 ? "The Elsa 3 import could not be completed." : exception.Message,
+            context.Request.Path,
+            code,
+            exception is ReusableActivityImportValidationException validation ? validation.Diagnostics : null);
         context.Response.StatusCode = status;
-        context.Response.ContentType = "application/problem+json";
-        return context.Response.WriteAsJsonAsync(problem, cancellationToken);
+        context.Response.ContentType = "application/json; charset=utf-8";
+        return context.Response.WriteAsync(
+            JsonSerializer.Serialize(problem, ReusableActivityImportJsonContext.Default.ReusableActivityImportProblem),
+            cancellationToken);
     }
 }

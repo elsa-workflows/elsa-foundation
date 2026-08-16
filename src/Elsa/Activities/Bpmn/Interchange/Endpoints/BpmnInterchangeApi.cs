@@ -4,13 +4,14 @@ using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Core.Models;
-using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints;
 
@@ -55,14 +56,17 @@ public static class BpmnInterchangeApi
 
     private static async Task HandleAnalyzeAsync(HttpContext context)
     {
-        var request = await ReadJsonAsync<AnalyzeBpmnDocumentRequest>(context);
+        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.AnalyzeBpmnDocumentRequest);
         if (request is null)
             return;
 
         try
         {
             var importer = context.RequestServices.GetRequiredService<IBpmnDocumentImporter>();
-            await Results.Json(importer.Analyze(request.Xml, new BpmnImportOptions { ProcessId = request.ProcessId })).ExecuteAsync(context);
+            await Results.Json(
+                importer.Analyze(request.Xml, new BpmnImportOptions { ProcessId = request.ProcessId }),
+                BpmnInterchangeJsonContext.Default.BpmnImportAnalysis,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (BpmnInterchangeException exception)
         {
@@ -72,18 +76,21 @@ public static class BpmnInterchangeApi
 
     private static async Task HandleImportAsync(HttpContext context)
     {
-        var request = await ReadJsonAsync<ImportBpmnDocumentRequest>(context);
+        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.ImportBpmnDocumentRequest);
         if (request is null)
             return;
 
         try
         {
             var importer = context.RequestServices.GetRequiredService<IBpmnDocumentImporter>();
-            await Results.Json(importer.Import(request.Xml, new BpmnImportOptions
-            {
-                ProcessId = request.ProcessId,
-                NodeIdPrefix = request.NodeIdPrefix
-            })).ExecuteAsync(context);
+            await Results.Json(
+                importer.Import(request.Xml, new BpmnImportOptions
+                {
+                    ProcessId = request.ProcessId,
+                    NodeIdPrefix = request.NodeIdPrefix
+                }),
+                BpmnInterchangeJsonContext.Default.BpmnImportResult,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (BpmnInterchangeException exception)
         {
@@ -93,17 +100,20 @@ public static class BpmnInterchangeApi
 
     private static async Task HandleExportAsync(HttpContext context)
     {
-        var request = await ReadJsonAsync<ExportBpmnDocumentRequest>(context);
+        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.ExportBpmnDocumentRequest);
         if (request is null)
             return;
 
         try
         {
             var exporter = context.RequestServices.GetRequiredService<IBpmnDocumentExporter>();
-            await Results.Json(new ExportBpmnDocumentResult(exporter.Export(request.ProcessNode, new BpmnExportOptions
-            {
-                ProcessId = request.ProcessId
-            }))).ExecuteAsync(context);
+            await Results.Json(
+                new ExportBpmnDocumentResult(exporter.Export(request.ProcessNode, new BpmnExportOptions
+                {
+                    ProcessId = request.ProcessId
+                })),
+                BpmnInterchangeJsonContext.Default.ExportBpmnDocumentResult,
+                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
         }
         catch (BpmnInterchangeException exception)
         {
@@ -111,12 +121,12 @@ public static class BpmnInterchangeApi
         }
     }
 
-    private static async Task<T?> ReadJsonAsync<T>(HttpContext context)
+    private static async Task<T?> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> jsonTypeInfo)
         where T : class
     {
         try
         {
-            var request = await context.Request.ReadFromJsonAsync<T>(context.RequestAborted);
+            var request = await context.Request.ReadFromJsonAsync(jsonTypeInfo, context.RequestAborted);
             if (request is not null)
                 return request;
         }
@@ -134,12 +144,13 @@ public static class BpmnInterchangeApi
     {
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json; charset=utf-8";
-        return context.Response.WriteAsync(JsonSerializer.Serialize(new
-        {
-            errors = new Dictionary<string, string[]> { ["generalErrors"] = [message] },
-            message = "One or more errors occurred!",
-            statusCode
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)), context.RequestAborted);
+        var error = new BpmnInterchangeError(
+            new Dictionary<string, string[]> { ["generalErrors"] = [message] },
+            "One or more errors occurred!",
+            statusCode);
+        return context.Response.WriteAsync(
+            JsonSerializer.Serialize(error, BpmnInterchangeJsonContext.Default.BpmnInterchangeError),
+            context.RequestAborted);
     }
 
     private static ProducesResponseTypeMetadata Response(int statusCode, Type type) =>
@@ -162,6 +173,11 @@ public sealed record ImportBpmnDocumentRequest(string Xml, string? ProcessId = n
 public sealed record ExportBpmnDocumentRequest(ActivityNode ProcessNode, string? ProcessId = null);
 
 public sealed record ExportBpmnDocumentResult(string Xml);
+
+internal sealed record BpmnInterchangeError(
+    Dictionary<string, string[]> Errors,
+    string Message,
+    int StatusCode);
 
 internal static class BpmnInterchangePermissions
 {
