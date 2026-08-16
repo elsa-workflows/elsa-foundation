@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Encodings.Web;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
@@ -55,12 +56,35 @@ File.WriteAllText(Path.Join(outputDirectory, "runtime-before-capture-receipt.jso
 static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
 {
     var observation = await HttpEvidenceCapture.CaptureAsync(client, testCase);
+    observation = observation with
+    {
+        Body = NormalizeTraceId(observation.Body),
+        Json = NormalizeTraceId(observation.Json),
+        ProblemDetails = NormalizeTraceId(observation.ProblemDetails)
+    };
+
     if (!observation.Headers.TryGetValue("x-runtime-capture-binding", out var binding))
         return observation;
 
     var headers = new SortedDictionary<string, string>(observation.Headers.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal), StringComparer.Ordinal);
     headers.Remove("x-runtime-capture-binding");
     return observation with { Binding = binding, Headers = headers };
+}
+
+static string NormalizeTraceId(string json)
+{
+    if (string.IsNullOrWhiteSpace(json))
+        return json;
+
+    var node = JsonNode.Parse(json);
+    if (node is not JsonObject document || !document.TryGetPropertyValue("traceId", out var traceId))
+        return json;
+
+    if (traceId is null || traceId.GetValueKind() != JsonValueKind.String || string.IsNullOrWhiteSpace(traceId.GetValue<string>()))
+        throw new InvalidDataException("ProblemDetails traceId must be a non-empty JSON string.");
+
+    document["traceId"] = "capture-trace-id";
+    return CompatibilityJson.Canonicalize(document);
 }
 
 static IReadOnlyList<HttpCompatibilityCase> Cases()
