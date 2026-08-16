@@ -66,11 +66,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         lock (Gate)
         {
             var current = CurrentStateUnsafe();
-            var normalizedRoute = NormalizeRoute(httpRouteData.Route);
-            if (current.Snapshot.Routes.Any(existing => RouteKey(existing) == normalizedRoute))
-                throw new InvalidOperationException($"Route '{httpRouteData.Route}' is already added");
-
-            PublishUnsafe(current, current.Snapshot.Routes.Append(httpRouteData), rejectExactDuplicates: true);
+            PublishUnsafe(current, current.Routes.Append(httpRouteData), preserveLegacyWildcardDuplicateError: true);
         }
 
         return ValueTask.CompletedTask;
@@ -82,7 +78,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         lock (Gate)
         {
             var current = CurrentStateUnsafe();
-            PublishUnsafe(current, current.Snapshot.Routes.Where(existing => RouteKey(existing) != normalizedRoute), rejectExactDuplicates: false);
+            PublishUnsafe(current, current.Routes.Where(existing => RouteKey(existing) != normalizedRoute), preserveLegacyWildcardDuplicateError: false);
         }
 
         return ValueTask.CompletedTask;
@@ -101,7 +97,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         lock (Gate)
         {
             var current = CurrentStateUnsafe();
-            PublishUnsafe(current, current.Snapshot.Routes.Concat(additions), rejectExactDuplicates: true);
+            PublishUnsafe(current, current.Routes.Concat(additions), preserveLegacyWildcardDuplicateError: true);
         }
 
         return ValueTask.CompletedTask;
@@ -117,7 +113,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         lock (Gate)
         {
             var current = CurrentStateUnsafe();
-            PublishUnsafe(current, current.Snapshot.Routes.Where(route => !removals.Contains(RouteKey(route))), rejectExactDuplicates: false);
+            PublishUnsafe(current, current.Routes.Where(route => !removals.Contains(RouteKey(route))), preserveLegacyWildcardDuplicateError: false);
         }
 
         return ValueTask.CompletedTask;
@@ -143,7 +139,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
         lock (Gate)
         {
             var current = CurrentStateUnsafe();
-            PublishUnsafe(current, routes, rejectExactDuplicates: false);
+            PublishUnsafe(current, routes, preserveLegacyWildcardDuplicateError: true);
         }
 
         return ValueTask.CompletedTask;
@@ -155,7 +151,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
             return CurrentStateUnsafe().AcquireLease();
     }
 
-    private void PublishUnsafe(RouteGenerationState current, IEnumerable<HttpRouteData> routes, bool rejectExactDuplicates)
+    private void PublishUnsafe(RouteGenerationState current, IEnumerable<HttpRouteData> routes, bool preserveLegacyWildcardDuplicateError)
     {
         // All work through enrichment and validation happens before the state swap. An exception therefore preserves the
         // previous state exactly, including its generation and metadata.
@@ -166,13 +162,10 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
                 continue;
 
             var exactDuplicate = compiled.Any(existing => StringComparer.Ordinal.Equals(NormalizeRoute(existing.Route), NormalizeRoute(routeData.Route)));
-            if (rejectExactDuplicates && exactDuplicate)
-                throw new InvalidOperationException($"Route '{routeData.Route}' is already added");
-
-            // Preserve the pre-1366 Refresh exception contract for the legacy shape while allowing explicit
-            // method-disjoint entries to coexist and letting owner-aware validation handle all metadata-bearing
+            // Preserve the pre-1366 Add/Refresh exception contract for the legacy methodless shape while allowing
+            // explicit method-disjoint entries coexist and letting owner-aware validation handle explicit-method
             // collisions. This keeps old callers stable without bypassing the complete manifest rule.
-            if (!rejectExactDuplicates && exactDuplicate && routeData.Methods.Count == 0 &&
+            if (preserveLegacyWildcardDuplicateError && exactDuplicate && routeData.Methods.Count == 0 &&
                 compiled.Last(existing => StringComparer.Ordinal.Equals(NormalizeRoute(existing.Route), NormalizeRoute(routeData.Route))).Methods.Count == 0)
                 throw new InvalidOperationException($"Route '{routeData.Route}' is already added");
 
@@ -201,7 +194,7 @@ public sealed class RouteTable : IRouteTable, IRouteTableSnapshotProvider
             HttpRouteManifestValidator.Validate(enriched);
         }
 
-        var next = new RouteGenerationState(new HttpRouteTableSnapshot(nextGeneration, BuildOrdered(enriched)));
+        var next = new RouteGenerationState(nextGeneration, BuildOrdered(enriched));
 
         // The shell-owned state reference is the one publication boundary. Readers obtain either current or next;
         // no clear/add intermediate is observable. Retire after the swap so held leases drain naturally.

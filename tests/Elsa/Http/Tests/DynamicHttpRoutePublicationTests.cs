@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -177,6 +178,63 @@ public sealed class DynamicHttpRoutePublicationTests
         Assert.Equal(2, routes.Single(route => route.Route == "orders/{id}").Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
         Assert.Equal(2, routes.Single(route => route.Route == "payments/{id}").Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
         Assert.Equal(3, routes.Length);
+    }
+
+    [Fact]
+    public async Task Add_AllowsMethodDisjointEntriesForTheSameTemplate()
+    {
+        var table = CreateTable("orders-shell");
+
+        await table.Add(new HttpRouteData("orders/{id}") { Methods = ["GET"] });
+        await table.Add(new HttpRouteData("orders/{id}") { Methods = ["POST"] });
+
+        var routes = table.ToArray();
+        Assert.Equal(2, routes.Length);
+        Assert.Equal(["GET", "POST"], routes.Select(route => Assert.Single(route.Methods)).OrderBy(method => method, StringComparer.Ordinal));
+        Assert.All(routes, route => Assert.Equal(2, route.Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation));
+    }
+
+    [Fact]
+    public async Task Add_RejectsOverlappingMethodThroughOwnerAwareValidationAndPreservesGeneration()
+    {
+        var table = CreateTable("orders-shell");
+        await table.Add(new HttpRouteData("orders/{id}") { Methods = ["GET"] });
+
+        var exception = await Assert.ThrowsAsync<HttpRouteConflictException>(() =>
+            table.Add(new HttpRouteData("orders/{name}") { Methods = ["GET"] }).AsTask());
+
+        Assert.Equal("GET", exception.OverlappingMethod);
+        Assert.Contains("Elsa.Http", exception.Message, StringComparison.Ordinal);
+        var route = Assert.Single(table);
+        Assert.Equal("orders/{id}", route.Route);
+        Assert.Equal(1, route.Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
+    }
+
+    [Fact]
+    public async Task Add_PreservesLegacyMethodlessDuplicateExceptionAndGeneration()
+    {
+        var table = CreateTable("orders-shell");
+        await table.Add("orders/{id}");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => table.Add("orders/{id}").AsTask());
+
+        Assert.Equal("Route 'orders/{id}' is already added", exception.Message);
+        var route = Assert.Single(table);
+        Assert.Equal(1, route.Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
+    }
+
+    [Fact]
+    public async Task AddRange_PreservesLegacyMethodlessDuplicateExceptionWithoutPartialPublication()
+    {
+        var table = CreateTable("orders-shell");
+        await table.Add("safe");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            table.AddRange(["new", "orders/{id}", "orders/{id}"]).AsTask());
+
+        Assert.Equal("Route 'orders/{id}' is already added", exception.Message);
+        Assert.Equal("safe", Assert.Single(table).Route);
+        Assert.Equal(1, Assert.Single(table).Metadata.OfType<HttpRouteOwnershipMetadata>().Single().Generation);
     }
 
     [Fact]
@@ -425,6 +483,46 @@ public sealed class DynamicHttpRoutePublicationTests
         Assert.IsType<HttpRouteSecurityDispositionMetadata>(Assert.Single(route.Metadata, value => value is HttpRouteSecurityDispositionMetadata));
         Assert.Throws<NotSupportedException>(() => ((IList<string>)route.Methods).Add("DELETE"));
         Assert.Throws<NotSupportedException>(() => ((IList<object>)route.Metadata).Add(new object()));
+    }
+
+    [Fact]
+    public async Task SnapshotElementMutationCannotChangePublishedInspectionOrRoutingState()
+    {
+        await using var provider = BuildHttpFeatureProvider("immutable-shell");
+        await using var scope = provider.CreateAsyncScope();
+        var table = scope.ServiceProvider.GetRequiredService<IRouteTable>();
+        await table.Refresh([
+            new HttpRouteData(
+                "orders/{id}",
+                new RouteValueDictionary { ["token"] = "original" },
+                new RouteValueDictionary { ["default"] = "original" })
+            {
+                Methods = ["GET"],
+                Metadata = [HttpRouteSecurityDispositionMetadata.Public("test", "Mutation isolation.")]
+            }
+        ]);
+
+        using var lease = ((IRouteTableSnapshotProvider)table).AcquireSnapshot();
+        var exposed = Assert.Single(lease.Snapshot.Routes);
+        exposed.Route = "tampered/{value}";
+        exposed.DataTokens["token"] = "tampered";
+        exposed.RouteValues["default"] = "tampered";
+        exposed.Methods = ["POST"];
+        exposed.Metadata = [new object()];
+        exposed.CompiledMatcher = new object();
+
+        var inspectedAgain = Assert.Single(lease.Snapshot.Routes);
+        Assert.Equal("orders/{id}", inspectedAgain.Route);
+        Assert.Equal("original", inspectedAgain.DataTokens["token"]);
+        Assert.Equal("original", inspectedAgain.RouteValues["default"]);
+        Assert.Equal(["GET"], inspectedAgain.Methods);
+        Assert.IsType<TemplateMatcher>(inspectedAgain.CompiledMatcher);
+
+        var match = lease.ResolveRoute("orders/42", "GET", scope.ServiceProvider.GetRequiredService<IRouteMatcher>());
+        Assert.NotNull(match);
+        Assert.Equal("orders/{id}", match.Template);
+        Assert.Equal("42", match.RouteValues["id"]);
+        Assert.Null(lease.ResolveRoute("tampered/42", "POST", scope.ServiceProvider.GetRequiredService<IRouteMatcher>()));
     }
 
     [Fact]

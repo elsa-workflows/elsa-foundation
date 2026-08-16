@@ -8,8 +8,10 @@
 
 ## Route generation
 
-- `HttpRouteTableSnapshot`: monotonically increasing generation and an immutable ordered route collection.
-- `HttpRouteTableSnapshotLease`: request-owned lease over one snapshot; exposes a drain task completed only after retirement and lease release.
+- `HttpRouteTableSnapshot`: monotonically increasing generation and defensive inspection copies of its ordered route
+  collection.
+- `HttpRouteTableSnapshotLease`: request-owned lease over one snapshot; resolves against the exact private authoritative
+  generation without per-request table cloning and exposes a drain task completed only after retirement and lease release.
 
 ## Manifest validation
 

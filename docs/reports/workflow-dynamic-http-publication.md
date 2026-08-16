@@ -22,7 +22,7 @@ adapter does not introduce an API-to-workflow-HTTP dependency in the host.
 | Dynamic metadata and legacy compatibility | `DynamicHttpRoutePublicationTests`; resolver tests | Legacy inputs receive explicit metadata; authored static-owner spoofing is rejected. |
 | Collision safety | Equivalent-template, method-overlap, publication-base-path, host/module, duplicate-metadata, and rollback tests | Dynamic candidates are validated at their external address; conflicts identify both owners and preserve the live generation. |
 | Static composition | `DynamicHttpRouteCompositionTests.Root_module_endpoint_manifest_is_promoted_into_http_shell_and_rejects_workflow_collision` | A real CShells root endpoint is visible through `HttpFeature` in the activated Elsa.Http shell. |
-| Atomic publication | AddRange/RemoveRange, replacement-race, cache-eviction, provider-isolation, and no-empty-snapshot tests | Candidates validate before one shell-owned state swap; readers see complete generations only and cache eviction cannot reset authority. |
+| Atomic publication | Add/AddRange/RemoveRange, snapshot-mutation, replacement-race, cache-eviction, provider-isolation, and no-empty-snapshot tests | Candidates validate before one shell-owned state swap; method-disjoint incremental entries coexist, inspection mutation cannot alter request routing, readers see complete generations only, and cache eviction cannot reset authority. |
 | Exact-generation drain | `Replacement_IsAtomicAndOldGenerationDrainsAfterLeaseRelease`; middleware suite | A held lease keeps the old snapshot available until request completion. |
 | Lifecycle retention | `Repeated_http_shell_reload_releases_collectible_route_generation_roots` | Four independent real host/shell cycles release shell, child DI, provider, route table, route, owner, delegate, and collectible metadata roots. |
 | Serializer disposition | Real lifecycle fixture | The route-publication-only `HttpFeature` shell has no `IPayloadSerializer`; absence is asserted rather than treated as untested. |
@@ -31,9 +31,10 @@ adapter does not introduce an API-to-workflow-HTTP dependency in the host.
 
 `IRouteTable` remains source-compatible. `IRouteTableSnapshotProvider` is additive, and middleware falls back to the
 existing enumerable route-table behavior for custom implementations. Missing method metadata retains wildcard
-collision semantics; legacy routes without security metadata receive an explicit public compatibility disposition.
+collision semantics and its historical duplicate exception; explicit method-disjoint entries can share a template.
+Legacy routes without security metadata receive an explicit public compatibility disposition.
 
-Refresh, AddRange, and RemoveRange construct and validate a candidate while the current snapshot remains untouched.
+Refresh, Add, AddRange, and RemoveRange construct and validate a candidate while the current snapshot remains untouched.
 Any invalid route, ownership violation, duplicate metadata record, or collision throws before publication. The prior
 generation therefore remains available for readers and in-flight leases. Production migration of other API frameworks
 and changes to public route contracts remain outside this slice.
@@ -43,6 +44,11 @@ configured dedicated workflow base path, including custom paths, before comparin
 manifests. One child-shell-provider singleton owns the synchronization gate and current generation; the retained public
 `IMemoryCache` constructor parameter is compatibility-only and no process-global shell-key state participates in
 correctness or unloadability.
+
+The shell state keeps its ordered route objects private. Snapshot inspection returns defensive route and dictionary
+copies, while a production lease resolves requests directly against its exact private generation. This prevents
+legacy mutable `HttpRouteData` setters from corrupting live routing without cloning the complete table per request;
+custom snapshot providers retain the enumerable compatibility path.
 
 ## Verification commands
 

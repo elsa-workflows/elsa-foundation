@@ -75,6 +75,12 @@ so cache eviction cannot reset routes and no process-global shell-key dictionary
 and the retired generation reports drained only after the lease is released. Existing `IRouteTable` implementations
 remain valid and use the enumerable fallback.
 
+The authoritative generation never exposes its mutable legacy `HttpRouteData` carriers. Snapshot inspection produces
+defensive route/dictionary copies, while the production lease uses the shared lower-layer route resolver directly over
+its private ordered generation. This keeps inspection mutation isolated without deep-cloning the table per request.
+Incremental publication accepts same-template entries with disjoint explicit methods; overlapping methods and wildcard
+claims still reject, and the historical methodless exact-duplicate exception remains compatible.
+
 ## HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)*
 
 The `IHttpEndpointAuthorizationHandler` and `IHttpEndpointFaultHandler` contracts (with `AuthorizeHttpEndpointContext`, `HttpEndpointFaultContext`, and `HttpBadRequestException`) live in `Elsa.Http.Core` (spec 089 sub-unit C) so the request middleware in `Elsa.Activities.Http` and the default handlers in `Elsa.Workflows.Runtime.Http` share them without a cross-module edge — same placement logic as the `HttpEndpointRouting` routing vocabulary. Default implementations and override points are catalogued in [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md).

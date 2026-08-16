@@ -1,3 +1,5 @@
+using Elsa.Http.Core;
+using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 
 namespace Elsa.Http.Services;
@@ -9,25 +11,36 @@ namespace Elsa.Http.Services;
 internal sealed class RouteTableState
 {
     internal object Gate { get; } = new();
-    internal RouteGenerationState Current { get; set; } = new(new HttpRouteTableSnapshot(0, []));
+    internal RouteGenerationState Current { get; set; } = new(0, []);
 }
 
-internal sealed class RouteGenerationState(HttpRouteTableSnapshot snapshot)
+internal sealed class RouteGenerationState
 {
     private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly IReadOnlyList<HttpRouteData> _routes;
     private int _leaseCount;
     private bool _retired;
 
-    internal HttpRouteTableSnapshot Snapshot { get; } = snapshot;
+    internal RouteGenerationState(long generation, IEnumerable<HttpRouteData> routes)
+    {
+        _routes = Array.AsReadOnly(routes.ToArray());
+        Snapshot = new HttpRouteTableSnapshot(generation, _routes);
+    }
+
+    internal HttpRouteTableSnapshot Snapshot { get; }
+    internal IReadOnlyList<HttpRouteData> Routes => _routes;
 
     internal HttpRouteTableSnapshotLease AcquireLease()
     {
         lock (this)
         {
             _leaseCount++;
-            return new HttpRouteTableSnapshotLease(Snapshot, _drained.Task, ReleaseLease);
+            return new HttpRouteTableSnapshotLease(Snapshot, _drained.Task, ReleaseLease, ResolveRoute);
         }
     }
+
+    private HttpRouteMatch? ResolveRoute(string endpointPath, string method, IRouteMatcher routeMatcher) =>
+        HttpRouteResolution.Resolve(_routes, endpointPath, method, routeMatcher);
 
     internal void Retire()
     {
