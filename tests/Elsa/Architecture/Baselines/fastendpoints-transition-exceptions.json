@@ -294,33 +294,6 @@
   },
   {
     "dynamicallyUnloadable": false,
-    "endpoints": [],
-    "followUp": "#1349",
-    "owner": "Elsa.Diagnostics.StructuredLogs",
-    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.RecentEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [],
-    "followUp": "#1349",
-    "owner": "Elsa.Diagnostics.StructuredLogs",
-    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.SourcesEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [],
-    "followUp": "#1349",
-    "owner": "Elsa.Diagnostics.StructuredLogs",
-    "registrationIdentity": "Elsa.Diagnostics.StructuredLogs.Endpoints.StreamEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "18e9fc85171db591e7f14f15ccddacb32e40180065148c9f495fab4055e25dc2"
-  },
-  {
-    "dynamicallyUnloadable": false,
     "endpoints": [
       "GET /expressions/descriptors"
     ],

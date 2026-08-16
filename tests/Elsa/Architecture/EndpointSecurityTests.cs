@@ -211,6 +211,38 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
+    public void Structured_logs_minimal_api_declares_three_owned_secure_routes_and_one_catalog_permission()
+    {
+        var apiRoot = Path.Join(RepoRoot, "src", "Elsa", "Diagnostics", "StructuredLogs");
+        var mapperPath = Path.Join(apiRoot, "Endpoints", "StructuredLogsApi.cs");
+        var contributorPath = Path.Join(apiRoot, "Authorization", "StructuredLogsPermissionContributor.cs");
+        var permissionsPath = Path.Join(apiRoot, "Authorization", "StructuredLogsPermissions.cs");
+        Assert.True(File.Exists(mapperPath), "Structured Logs must expose its module-owned mapper.");
+        Assert.True(File.Exists(contributorPath), "Structured Logs must expose its permission contributor.");
+        Assert.True(File.Exists(permissionsPath), "Structured Logs must expose its stable permission vocabulary.");
+
+        var mapper = File.ReadAllText(mapperPath);
+        var contributor = File.ReadAllText(contributorPath);
+        var permissions = File.ReadAllText(permissionsPath);
+        var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
+        var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+        var routeMappings = calls.Count(call =>
+            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax endpoint } &&
+            endpoint.Identifier.ValueText == "endpoints" &&
+            InvocationName(call) == "MapGet");
+
+        Assert.Equal(3, routeMappings);
+        Assert.Equal(3, calls.Count(call => InvocationName(call) == "RequireAnyPermission"));
+        Assert.Equal(3, calls.Count(call => InvocationName(call) == "WithOwner"));
+        Assert.Equal(3, calls.Count(call => InvocationName(call) == "WithAuthoringModel"));
+        Assert.Contains("EndpointAuthoringModels.MinimalApi", mapper, StringComparison.Ordinal);
+        Assert.Contains("PermissionKey.Wildcard", mapper, StringComparison.Ordinal);
+        Assert.Contains("Diagnostics:StructuredLogs", permissions, StringComparison.Ordinal);
+        Assert.Contains("StructuredLogsPermissions.Read", contributor, StringComparison.Ordinal);
+        Assert.DoesNotContain("PermissionKey.Wildcard", contributor, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
     {
         var endpointType = typeof(ApiCapabilitiesFeature).Assembly.GetType(

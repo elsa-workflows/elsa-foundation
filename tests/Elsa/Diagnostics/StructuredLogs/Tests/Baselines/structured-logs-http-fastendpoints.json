@@ -1,0 +1,310 @@
+[
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "[\n  {\n    \u0022category\u0022: \u0022Canary.Information\u0022,\n    \u0022eventId\u0022: 1,\n    \u0022eventName\u0022: \u0022Canary1\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Information\u0022,\n    \u0022message\u0022: \u0022information-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022information-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-1\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 1,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:01\\u002B00:00\u0022\n  },\n  {\n    \u0022category\u0022: \u0022Canary.Warning\u0022,\n    \u0022eventId\u0022: 2,\n    \u0022eventName\u0022: \u0022Canary2\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Warning\u0022,\n    \u0022message\u0022: \u0022warning-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022warning-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-2\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 2,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:02\\u002B00:00\u0022\n  },\n  {\n    \u0022category\u0022: \u0022Canary.Error\u0022,\n    \u0022eventId\u0022: 3,\n    \u0022eventName\u0022: \u0022Canary3\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Error\u0022,\n    \u0022message\u0022: \u0022error-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022error-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-3\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 3,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:03\\u002B00:00\u0022\n  }\n]",
+    "case": "recent-default",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[\n  {\n    \u0022category\u0022: \u0022Canary.Information\u0022,\n    \u0022eventId\u0022: 1,\n    \u0022eventName\u0022: \u0022Canary1\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Information\u0022,\n    \u0022message\u0022: \u0022information-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022information-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-1\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 1,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:01\\u002B00:00\u0022\n  },\n  {\n    \u0022category\u0022: \u0022Canary.Warning\u0022,\n    \u0022eventId\u0022: 2,\n    \u0022eventName\u0022: \u0022Canary2\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Warning\u0022,\n    \u0022message\u0022: \u0022warning-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022warning-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-2\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 2,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:02\\u002B00:00\u0022\n  },\n  {\n    \u0022category\u0022: \u0022Canary.Error\u0022,\n    \u0022eventId\u0022: 3,\n    \u0022eventName\u0022: \u0022Canary3\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Error\u0022,\n    \u0022message\u0022: \u0022error-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022error-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-3\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 3,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:03\\u002B00:00\u0022\n  }\n]",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "[\n  {\n    \u0022category\u0022: \u0022Canary.Warning\u0022,\n    \u0022eventId\u0022: 2,\n    \u0022eventName\u0022: \u0022Canary2\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Warning\u0022,\n    \u0022message\u0022: \u0022warning-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022warning-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-2\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 2,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:02\\u002B00:00\u0022\n  }\n]",
+    "case": "recent-filtered",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[\n  {\n    \u0022category\u0022: \u0022Canary.Warning\u0022,\n    \u0022eventId\u0022: 2,\n    \u0022eventName\u0022: \u0022Canary2\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Warning\u0022,\n    \u0022message\u0022: \u0022warning-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022warning-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-2\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 2,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:02\\u002B00:00\u0022\n  }\n]",
+    "pagingFiltering": "?minLevel=Warning\u0026category=Canary.Warning\u0026source=structured-logs-canary\u0026take=2",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "Invalid log level \u0027NotALevel\u0027.",
+    "case": "recent-invalid-level",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "?minLevel=NotALevel",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "Invalid \u0027take\u0027 value \u0027-1\u0027.",
+    "case": "recent-invalid-take",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "?take=-1",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "[]",
+    "case": "recent-take-zero",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[]",
+    "pagingFiltering": "?take=0",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "Invalid \u0027take\u0027 value \u00272,1\u0027.",
+    "case": "recent-repeated-values",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "?minLevel=Warning\u0026minLevel=Error\u0026take=2\u0026take=1",
+    "problemDetails": "",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source,take",
+    "body": "[\n  {\n    \u0022category\u0022: \u0022Canary.Error\u0022,\n    \u0022eventId\u0022: 3,\n    \u0022eventName\u0022: \u0022Canary3\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Error\u0022,\n    \u0022message\u0022: \u0022error-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022error-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-3\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 3,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:03\\u002B00:00\u0022\n  }\n]",
+    "case": "recent-custom-path",
+    "contentType": "application/json",
+    "endpoint": "GET /canary/structured-logs/recent",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[\n  {\n    \u0022category\u0022: \u0022Canary.Error\u0022,\n    \u0022eventId\u0022: 3,\n    \u0022eventName\u0022: \u0022Canary3\u0022,\n    \u0022exception\u0022: null,\n    \u0022level\u0022: \u0022Error\u0022,\n    \u0022message\u0022: \u0022error-entry\u0022,\n    \u0022messageTemplate\u0022: \u0022error-entry-template\u0022,\n    \u0022properties\u0022: [\n      {\n        \u0022name\u0022: \u0022marker\u0022,\n        \u0022value\u0022: \u0022marker-3\u0022\n      }\n    ],\n    \u0022scopes\u0022: [],\n    \u0022sequence\u0022: 3,\n    \u0022sourceId\u0022: \u0022structured-logs-canary\u0022,\n    \u0022timestamp\u0022: \u00222026-08-15T12:00:03\\u002B00:00\u0022\n  }\n]",
+    "pagingFiltering": "?take=1",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "[\n  {\n    \u0022displayName\u0022: \u0022Structured Logs Canary\u0022,\n    \u0022id\u0022: \u0022structured-logs-canary\u0022,\n    \u0022machineName\u0022: \u0022canary-machine\u0022,\n    \u0022processId\u0022: 4242,\n    \u0022serviceName\u0022: \u0022structured-logs-canary\u0022\n  }\n]",
+    "case": "sources-default",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/sources",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[\n  {\n    \u0022displayName\u0022: \u0022Structured Logs Canary\u0022,\n    \u0022id\u0022: \u0022structured-logs-canary\u0022,\n    \u0022machineName\u0022: \u0022canary-machine\u0022,\n    \u0022processId\u0022: 4242,\n    \u0022serviceName\u0022: \u0022structured-logs-canary\u0022\n  }\n]",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "[\n  {\n    \u0022displayName\u0022: \u0022Structured Logs Canary\u0022,\n    \u0022id\u0022: \u0022structured-logs-canary\u0022,\n    \u0022machineName\u0022: \u0022canary-machine\u0022,\n    \u0022processId\u0022: 4242,\n    \u0022serviceName\u0022: \u0022structured-logs-canary\u0022\n  }\n]",
+    "case": "sources-custom-path",
+    "contentType": "application/json",
+    "endpoint": "GET /canary/structured-logs/sources",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "[\n  {\n    \u0022displayName\u0022: \u0022Structured Logs Canary\u0022,\n    \u0022id\u0022: \u0022structured-logs-canary\u0022,\n    \u0022machineName\u0022: \u0022canary-machine\u0022,\n    \u0022processId\u0022: 4242,\n    \u0022serviceName\u0022: \u0022structured-logs-canary\u0022\n  }\n]",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:20,\u0022timestamp\u0022:\u00222026-08-15T12:00:20\u002B00:00\u0022,\u0022level\u0022:\u0022Information\u0022,\u0022category\u0022:\u0022Canary.Initial\u0022,\u0022eventId\u0022:20,\u0022eventName\u0022:\u0022Canary20\u0022,\u0022message\u0022:\u0022initial-entry\u0022,\u0022messageTemplate\u0022:\u0022initial-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-20\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "case": "stream-initial-entry",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:20,\u0022timestamp\u0022:\u00222026-08-15T12:00:20\u002B00:00\u0022,\u0022level\u0022:\u0022Information\u0022,\u0022category\u0022:\u0022Canary.Initial\u0022,\u0022eventId\u0022:20,\u0022eventName\u0022:\u0022Canary20\u0022,\u0022message\u0022:\u0022initial-entry\u0022,\u0022messageTemplate\u0022:\u0022initial-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-20\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "terminalState": "Bounded"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:2,\u0022timestamp\u0022:\u00222026-08-15T12:00:02\u002B00:00\u0022,\u0022level\u0022:\u0022Warning\u0022,\u0022category\u0022:\u0022Canary.Warning\u0022,\u0022eventId\u0022:2,\u0022eventName\u0022:\u0022Canary2\u0022,\u0022message\u0022:\u0022warning-entry\u0022,\u0022messageTemplate\u0022:\u0022warning-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-2\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "case": "stream-valid-resume",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:2,\u0022timestamp\u0022:\u00222026-08-15T12:00:02\u002B00:00\u0022,\u0022level\u0022:\u0022Warning\u0022,\u0022category\u0022:\u0022Canary.Warning\u0022,\u0022eventId\u0022:2,\u0022eventName\u0022:\u0022Canary2\u0022,\u0022message\u0022:\u0022warning-entry\u0022,\u0022messageTemplate\u0022:\u0022warning-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-2\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "terminalState": "Bounded"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:22,\u0022timestamp\u0022:\u00222026-08-15T12:00:22\u002B00:00\u0022,\u0022level\u0022:\u0022Warning\u0022,\u0022category\u0022:\u0022Canary.Warning\u0022,\u0022eventId\u0022:22,\u0022eventName\u0022:\u0022Canary22\u0022,\u0022message\u0022:\u0022filtered-in\u0022,\u0022messageTemplate\u0022:\u0022filtered-in-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-22\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "case": "stream-filtered-entry",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "?minLevel=Warning\u0026category=Canary.Warning",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:22,\u0022timestamp\u0022:\u00222026-08-15T12:00:22\u002B00:00\u0022,\u0022level\u0022:\u0022Warning\u0022,\u0022category\u0022:\u0022Canary.Warning\u0022,\u0022eventId\u0022:22,\u0022eventName\u0022:\u0022Canary22\u0022,\u0022message\u0022:\u0022filtered-in\u0022,\u0022messageTemplate\u0022:\u0022filtered-in-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-22\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "terminalState": "Bounded"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "The structured log replay cursor is unavailable.",
+    "case": "stream-malformed-cursor",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "409",
+    "statusCode": 409,
+    "streaming": "The structured log replay cursor is unavailable.",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "The structured log replay cursor is unavailable.",
+    "case": "stream-unavailable-cursor",
+    "contentType": "text/plain; charset=utf-8",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "409",
+    "statusCode": 409,
+    "streaming": "The structured log replay cursor is unavailable.",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": ": keep-alive",
+    "case": "stream-heartbeat",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": ": keep-alive",
+    "terminalState": "Bounded"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "",
+    "case": "stream-cancelled",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Cancelled"
+  },
+  {
+    "binding": "query=minLevel,category,source;header=Last-Event-ID",
+    "body": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:23,\u0022timestamp\u0022:\u00222026-08-15T12:00:23\u002B00:00\u0022,\u0022level\u0022:\u0022Information\u0022,\u0022category\u0022:\u0022Canary.Custom\u0022,\u0022eventId\u0022:23,\u0022eventName\u0022:\u0022Canary23\u0022,\u0022message\u0022:\u0022custom-entry\u0022,\u0022messageTemplate\u0022:\u0022custom-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-23\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "case": "stream-custom-path",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /canary/structured-logs/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "id: \u003Ccursor\u003E\nevent: entry\ndata: {\u0022sequence\u0022:23,\u0022timestamp\u0022:\u00222026-08-15T12:00:23\u002B00:00\u0022,\u0022level\u0022:\u0022Information\u0022,\u0022category\u0022:\u0022Canary.Custom\u0022,\u0022eventId\u0022:23,\u0022eventName\u0022:\u0022Canary23\u0022,\u0022message\u0022:\u0022custom-entry\u0022,\u0022messageTemplate\u0022:\u0022custom-entry-template\u0022,\u0022properties\u0022:[{\u0022name\u0022:\u0022marker\u0022,\u0022value\u0022:\u0022marker-23\u0022}],\u0022scopes\u0022:[],\u0022exception\u0022:null,\u0022sourceId\u0022:\u0022structured-logs-canary\u0022}",
+    "terminalState": "Bounded"
+  }
+]
+

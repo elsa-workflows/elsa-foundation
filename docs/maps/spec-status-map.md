@@ -193,3 +193,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [152-rest-api-migration-gates](../../specs/152-rest-api-migration-gates/spec.md) | REST API Migration Compatibility and Authoring Gates | Complete | - | 37 | 0 | retained |
 | [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Draft | - | 35 | 0 | retained |
 | [154-secrets-api-migration](../../specs/154-secrets-api-migration/spec.md) | Secrets API Minimal API Migration | Draft | - | 42 | 0 | retained, out of scope |
+| [155-structured-logs-api-migration](../../specs/155-structured-logs-api-migration/spec.md) | Structured Logs API Minimal API Migration | Draft | - | 46 | 0 | retained, out of scope |
