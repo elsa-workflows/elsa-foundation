@@ -689,7 +689,7 @@ public sealed class ActivityUpgradePlanTests
         IActivityUpgradeDiffBuilder? diffBuilder = null,
         IActivityUpgradeApplyReceiptStore? receipts = null,
         IActivityUpgradePublishedDraftResolver? resolver = null,
-        IActivityDependencyAuthorizationContext? authorization = null) =>
+        IActivityDependencyContextAsync? authorization = null) =>
         new(
             new Discovery(discovery),
             store,
@@ -1016,12 +1016,17 @@ public sealed class ActivityUpgradePlanTests
         }
     }
 
-    private sealed class AuthoringContext(string? tenantId, string? authorizationProfile = null) : IActivityAuthoringContext
+    private sealed class AuthoringContext(string? tenantId, string? authorizationProfile = null) : IActivityAuthoringContext, IActivityAuthoringContextAsync
     {
         public string? TenantId { get; } = tenantId;
+        public string ActorId => "actor-a";
         public string AuthorizationProfile => authorizationProfile ?? $"{TenantId ?? "global"}/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class Ids : IIdentityGenerator
@@ -1037,11 +1042,13 @@ public sealed class ActivityUpgradePlanTests
 
     private sealed class Authorization(
         string? tenantId = null,
-        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext
+        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext, IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => "global/manage";
         public bool CanRead(ActivityDefinitionReference reference) =>
             canRead?.Invoke(reference) ?? StringComparer.Ordinal.Equals(reference.TenantId, tenantId);
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(CanRead(reference));
     }
 }

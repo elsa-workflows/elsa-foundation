@@ -5,6 +5,7 @@ using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
+using Elsa.Http.Core.Options;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -49,6 +50,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     public void ConfigureServices(IServiceCollection services)
     {
         services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
+        services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = BasePath);
 
         services.AddHttpClient(HttpActivityConstants.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(sp =>

@@ -142,6 +142,10 @@ public sealed class OpenIddictTokenService(
         foreach (var scope in request.Scopes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
             identity.AddClaim(new Claim(IdentityClaimTypes.Permission, scope));
 
+        // The token is a trusted provider projection. Emit the normalized marker only after all projected
+        // tenant/provider/grant claims have been assembled; validation observes the registered bearer type.
+        identity.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
+
         return identity;
     }
 

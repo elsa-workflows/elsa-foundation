@@ -11,8 +11,9 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Capabilities;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -49,5 +50,6 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
+        services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
     }
 }

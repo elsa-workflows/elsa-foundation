@@ -88,15 +88,19 @@ Every first-party endpoint has one explicit primary
    endpoint inventory.
 3. **Host credential protected.** Attach typed host-credential disposition metadata and use the
    host-control authentication mechanism. A host-management key is not a user permission.
-4. **Named host policy protected.** For workflow-authored or integration routes whose established
-   access model is an ASP.NET Core policy rather than a Foundation permission, attach standard
-   authorization metadata plus typed policy-disposition metadata naming its owner. Ordinary Elsa
-   module permissions must not use this classification to bypass Foundation Identity.
+4. **Host policy protected.** For workflow-authored or integration routes whose established access
+   model is ASP.NET Core authorization rather than a Foundation permission, attach standard
+   authorization metadata plus typed host-policy disposition metadata naming its owner. The
+   disposition carries policy names when the endpoint selects named policies. An empty policy set
+   faithfully records the compatibility case where the endpoint requires an authenticated principal
+   through the host's default policy; implementations must not invent a policy name for that case.
+   Ordinary Elsa module permissions must not use this classification to bypass Foundation Identity.
 
 The stable disposition metadata exposes `Kind`, `OwnerId`, and the policy, permission, or credential
-reference used for enforcement. Public dispositions instead require `Category` and a non-empty
-`Reason`. Typed specializations may represent the four cases, but they must remain inspectable as one
-closed conceptual contract.
+reference used for enforcement. A host-policy reference is optional only for the authenticated-
+principal/default-policy compatibility case. Public dispositions instead require `Category` and a
+non-empty `Reason`. Typed specializations may represent the four cases, but they must remain
+inspectable as one closed conceptual contract.
 
 The minimum metadata by surface is:
 
@@ -106,7 +110,7 @@ The minimum metadata by surface is:
 | Intentionally public | Owner, public category/reason, and standard anonymous-access metadata |
 | Host control | Host owner and credential-kind disposition |
 | Streaming | Owner and security disposition plus standard response content-type/OpenAPI metadata; framing and lifecycle remain contract-test obligations |
-| Workflow-authored dynamic HTTP | Dynamic-shell owner with shell/generation and an explicit public, permission, host-credential, or named-policy disposition |
+| Workflow-authored dynamic HTTP | Dynamic-shell owner with shell/generation and an explicit public, permission, host-credential, or host-policy disposition |
 
 Authentication establishes a normalized principal before authorization. Provider-specific claim
 mapping stays outside endpoint mappings. Endpoint mappings declare policy requirements; they do not

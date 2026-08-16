@@ -1,0 +1,156 @@
+{
+  "owner": "Elsa.Diagnostics.OpenTelemetry",
+  "differences": [
+    {
+      "method": "GET",
+      "path": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "beforeResponseStatuses": ["204", "401", "403"],
+      "afterResponseStatuses": ["200", "401", "403"],
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsStreamEndpoint",
+      "afterOperationId": "OpenTelemetryStream",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryResourcesEndpoint",
+      "afterOperationId": "OpenTelemetryResourcesSearch",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/traces/search",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTracesEndpoint",
+      "afterOperationId": "OpenTelemetryTracesSearch",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/metrics/search",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryMetricsEndpoint",
+      "afterOperationId": "OpenTelemetryMetricsSearch",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/logs/search",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryLogsEndpoint",
+      "afterOperationId": "OpenTelemetryLogsSearch",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/traces/{traceId}",
+      "beforeResponseStatuses": ["200", "401", "403"],
+      "afterResponseStatuses": ["200", "404", "401", "403"],
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTraceEndpoint",
+      "afterOperationId": "OpenTelemetryTraceDetail",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/storage",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryStorageEndpoint",
+      "afterOperationId": "OpenTelemetryStorage",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/collector-configuration",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryCollectorConfigurationEndpoint",
+      "afterOperationId": "OpenTelemetryCollectorConfiguration",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Stable owner operation identity replaces the generated FastEndpoints identity."
+    },
+    {
+      "method": "POST",
+      "path": "/elsa/otlp/v1/traces",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionTracesIngestionEndpoint",
+      "afterOperationId": "OpenTelemetryOtlpTraces",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Retained root mapper now publishes an explicit stable OpenAPI identity."
+    },
+    {
+      "method": "POST",
+      "path": "/elsa/otlp/v1/metrics",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionMetricsIngestionEndpoint",
+      "afterOperationId": "OpenTelemetryOtlpMetrics",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Retained root mapper now publishes an explicit stable OpenAPI identity."
+    },
+    {
+      "method": "POST",
+      "path": "/elsa/otlp/v1/logs",
+      "beforeOperationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionLogsIngestionEndpoint",
+      "afterOperationId": "OpenTelemetryOtlpLogs",
+      "beforeTags": ["Elsa.Diagnostics.OpenTelemetry.Tests"],
+      "afterTags": ["OpenTelemetry"],
+      "reason": "Retained root mapper now publishes an explicit stable OpenAPI identity."
+    }
+  ],
+  "componentDifferences": [
+    {
+      "kind": "schema",
+      "name": "OpenTelemetryDroppedItemSummary",
+      "before": null,
+      "after": {
+        "required": ["signalType", "count", "reason"],
+        "type": "object",
+        "properties": {
+          "signalType": {"$ref": "#/components/schemas/OpenTelemetrySignalType"},
+          "count": {"pattern": "^-?(?:0|[1-9]\\d*)$", "type": ["integer", "string"], "format": "int64"},
+          "reason": {"type": "string"}
+        }
+      },
+      "reason": "The owner-local source-generated SSE contract is published as an explicit stream schema."
+    },
+    {
+      "kind": "schema",
+      "name": "OpenTelemetrySignalType",
+      "before": null,
+      "after": {"type": "integer"},
+      "reason": "The source-generated dropped-item contract references the signal discriminator."
+    },
+    {
+      "kind": "schema",
+      "name": "OpenTelemetryStreamItem",
+      "before": null,
+      "after": {
+        "type": "object",
+        "properties": {
+          "resource": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/TelemetryResource"}]},
+          "trace": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/TelemetryTrace"}]},
+          "metricPoint": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/MetricPoint"}]},
+          "log": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/OtlpLogRecord"}]},
+          "droppedItems": {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/OpenTelemetryDroppedItemSummary"}]}
+        }
+      },
+      "reason": "The live stream route now declares its owner-local source-generated payload contract."
+    }
+  ],
+  "documentDifferences": [
+    {
+      "property": "tags",
+      "before": [{"name": "Elsa.Diagnostics.OpenTelemetry.Tests"}],
+      "after": [{"name": "OpenTelemetry"}],
+      "reason": "The owner publishes one stable OpenAPI tag for all eleven operations."
+    }
+  ]
+}

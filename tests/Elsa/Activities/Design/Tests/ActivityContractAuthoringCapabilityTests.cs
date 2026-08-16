@@ -228,12 +228,17 @@ public sealed class ActivityContractAuthoringCapabilityTests
         public IReadOnlyCollection<string> DriverKeys => driverKeys;
     }
 
-    private sealed class Context : IActivityAuthoringContext
+    private sealed class Context : IActivityAuthoringContext, IActivityAuthoringContextAsync
     {
         public string? TenantId => "tenant-a";
+        public string ActorId => "actor-a";
         public string AuthorizationProfile => "tenant-a/allowed-provider";
         public bool CanAuthorProvider(string providerKey) => StringComparer.Ordinal.Equals(providerKey, "allowed.provider");
         public bool CanReadProviderPayload(string providerKey) => false;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(StringComparer.Ordinal.Equals(providerKey, "allowed.provider"));
+        public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 
     private sealed class Provider(string key) : IActivityProvider

@@ -13,7 +13,14 @@
 
 ## Secure-by-construction endpoint base classes
 
-The endpoint base classes always apply `Permissions(...)` through `ConfigurePermissions()`, so an endpoint is secured the moment it derives from one of them. An individual endpoint can still opt into `AllowAnonymous()` for a genuinely public route; whether a shell honours security at all is decided by the `ApiSecurity` composition below.
+The endpoint base classes keep the existing `ConfigurePermissions()` authoring surface but now
+apply exactly one Foundation Identity ASP.NET Core policy through FastEndpoints `Policies(...)`.
+No action permissions produce the single wildcard policy; one or more actions produce one any-of
+policy containing the wildcard and those actions, preserving the established OR behavior. The
+adapter must not read permission claims or call FastEndpoints `Permissions(...)`/`PermissionsAll(...)`.
+It is transitional while first-party routes migrate to Minimal APIs. An individual endpoint can
+still opt into `AllowAnonymous()` for a genuinely public route; whether a shell honours security at
+all is decided by the `ApiSecurity` composition below.
 
 | Base class | Shape |
 |---|---|

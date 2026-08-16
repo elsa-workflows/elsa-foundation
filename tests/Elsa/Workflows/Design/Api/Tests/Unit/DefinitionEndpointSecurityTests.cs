@@ -1,3 +1,4 @@
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Commands;
@@ -56,8 +57,13 @@ public sealed class DefinitionEndpointSecurityTests
     {
         var definition = ConfiguredDefinition(endpointTypeName, sender);
 
-        Assert.NotNull(definition.AllowedPermissions);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        var policyName = Assert.Single(definition.PreBuiltUserPolicies!.Distinct(StringComparer.Ordinal));
+        Assert.Contains(policyName,
+        new[]
+        {
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignRead]),
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignManage])
+        });
         Assert.Null(definition.AnonymousVerbs);
     }
 

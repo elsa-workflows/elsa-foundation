@@ -17,8 +17,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Activities.Design.Api.Capabilities;
+using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
+
+#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
 
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
@@ -50,7 +54,23 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        services.TryAddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
+            services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
+        {
+            services.AddScoped<IActivityAuthoringContextAsync>(sp =>
+                sp.GetRequiredService<IActivityAuthoringContext>() is IActivityAuthoringContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityAuthoringContextAdapter(sp.GetRequiredService<IActivityAuthoringContext>()));
+        }
+        if (!hasAsyncDependencyHost)
+            services.AddScoped<IActivityDependencyContextAsync>(sp =>
+                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
+        services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
             .Configure(options => ApplyFeatureOptions(ActivityAvailability, options));
         services.TryAddSingleton<IActivityAvailabilityEvaluator>(sp =>
@@ -100,6 +120,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
+        services.AddPermissionContributor<ActivityDesignPermissionContributor>();
     }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)
@@ -126,3 +147,5 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
             target.Sets = source.Sets;
     }
 }
+
+#pragma warning restore CS0618

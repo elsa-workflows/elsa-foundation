@@ -1,6 +1,5 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using System.Text.Json;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 
@@ -10,24 +9,18 @@ namespace Elsa.Diagnostics.OpenTelemetry.Endpoints;
 /// </summary>
 public sealed class OpenTelemetryStreamItemSerializer
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     /// <summary>Serializes a telemetry resource to its JSON object form.</summary>
-    public string Serialize(TelemetryResource resource) => JsonSerializer.Serialize(resource, Options);
+    public string Serialize(TelemetryResource resource) => JsonSerializer.Serialize(resource, OpenTelemetryJsonContext.Default.TelemetryResource);
 
     /// <summary>Serializes a telemetry trace to its JSON object form.</summary>
-    public string Serialize(TelemetryTrace trace) => JsonSerializer.Serialize(trace, Options);
+    public string Serialize(TelemetryTrace trace) => JsonSerializer.Serialize(trace, OpenTelemetryJsonContext.Default.TelemetryTrace);
 
     /// <summary>Serializes a metric point to its JSON object form.</summary>
-    public string Serialize(MetricPoint point) => JsonSerializer.Serialize(point, Options);
+    public string Serialize(MetricPoint point) => JsonSerializer.Serialize(point, OpenTelemetryJsonContext.Default.MetricPoint);
 
     /// <summary>Serializes an OTLP log record to its JSON object form.</summary>
-    public string Serialize(OtlpLogRecord log) => JsonSerializer.Serialize(log, Options);
+    public string Serialize(OtlpLogRecord log) => JsonSerializer.Serialize(log, OpenTelemetryJsonContext.Default.OtlpLogRecord);
 
     /// <summary>Serializes a dropped-item summary to its JSON object form.</summary>
-    public string Serialize(OpenTelemetryDroppedItemSummary dropped) => JsonSerializer.Serialize(dropped, Options);
+    public string Serialize(OpenTelemetryDroppedItemSummary dropped) => JsonSerializer.Serialize(dropped, OpenTelemetryJsonContext.Default.OpenTelemetryDroppedItemSummary);
 }

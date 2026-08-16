@@ -1,0 +1,54 @@
+{
+  "sourceCommit": "db6e363db",
+  "capture": "anonymous cookie-challenge redirects from the deleted FastEndpoints host",
+  "cases": [
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/resources/search",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fresources%2Fsearch"
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/traces/search",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Ftraces%2Fsearch"
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/metrics/search",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fmetrics%2Fsearch"
+    },
+    {
+      "method": "POST",
+      "path": "/diagnostics/opentelemetry/logs/search",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Flogs%2Fsearch"
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/traces/missing",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Ftraces%2Fmissing"
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/storage",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fstorage"
+    },
+    {
+      "method": "GET",
+      "path": "/diagnostics/opentelemetry/collector-configuration",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2Fdiagnostics%2Fopentelemetry%2Fcollector-configuration"
+    },
+    {
+      "method": "GET",
+      "path": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "status": 302,
+      "location": "http://localhost/Account/Login?ReturnUrl=%2F_elsa%2Fstudio%2Fdiagnostics%2Fopentelemetry%2Fstream"
+    }
+  ]
+}

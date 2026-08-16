@@ -14,7 +14,7 @@ public sealed class ActivityVersionLifecycleService(
     IActivityDefinitionVersionPublicationStore publications,
     IActivityDefinitionAuthoringStore authoringStore,
     IChangeActivityVersionLifecycleCommand changeLifecycle,
-    IActivityAuthoringContext context,
+    IActivityAuthoringContextAsync context,
     TimeProvider timeProvider)
 {
     public Task<ReusableActivityVersionLifecycleView> RetireAsync(

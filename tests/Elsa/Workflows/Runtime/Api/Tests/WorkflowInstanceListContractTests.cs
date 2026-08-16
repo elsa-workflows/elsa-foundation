@@ -20,8 +20,7 @@ public sealed class WorkflowInstanceListContractTests
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
             "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
         Assert.Equal(typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>), response);
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
     }
 
     [Fact]
@@ -37,8 +36,7 @@ public sealed class WorkflowInstanceListContractTests
             "Items", "NextCursor", "HasNext", "Count", "TotalCount");
         var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
         AssertProperties(item, "RunKind");
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
 
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.ToDictionary(link => link.Rel, StringComparer.Ordinal);
         Assert.Equal("runtime/workflows/instances", links["workflow-instances"].Href);

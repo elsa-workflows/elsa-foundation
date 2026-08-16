@@ -105,7 +105,9 @@ public static partial class CoreMapsGenerator
         foreach (var relativePath in repo.ListFiles("src/*.cs"))
         {
             var text = File.ReadAllText(repo.Absolute(relativePath));
-            if (!text.Contains("FeatureBase", StringComparison.Ordinal) && !text.Contains("IShellFeature", StringComparison.Ordinal))
+            if (!text.Contains("FeatureBase", StringComparison.Ordinal) &&
+                !text.Contains("IShellFeature", StringComparison.Ordinal) &&
+                !text.Contains("IWebShellFeature", StringComparison.Ordinal))
                 continue;
 
             var owner = ProjectGraph.OwningProject(projects, relativePath, project => project.RelativePath);
@@ -134,8 +136,9 @@ public static partial class CoreMapsGenerator
     private static string? Classify(string bases)
     {
         string? kind = null;
-        if (Regex.IsMatch(bases, @"IShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase")) kind = "feature-base-derived";
+        if (Regex.IsMatch(bases, @"I(?:Web)?ShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase")) kind = "feature-base-derived";
         if (Regex.IsMatch(bases, @"\bIShellFeature\b")) kind = "direct IShellFeature";
+        if (Regex.IsMatch(bases, @"\bIWebShellFeature\b")) kind = "direct IWebShellFeature";
         if (Regex.IsMatch(bases, @"\bFastEndpointsFeatureBase\b")) kind = "FastEndpoints feature";
         if (Regex.IsMatch(bases, "EFCore.*FeatureBase")) kind = "EF Core feature base";
         return kind;

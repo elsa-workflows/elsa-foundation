@@ -1,0 +1,571 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Elsa.Foundation.Identity.Tests | v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/_elsa/identity/bootstrap": {
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsBootstrap",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityBootstrapResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_elsa/identity/capabilities": {
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsCapabilities",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/_elsa/identity/challenge/{provider}": {
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsChallenge",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderRouteRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderRouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/_elsa/identity/logout/{provider}": {
+      "post": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsLogout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderRouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/_elsa/identity/refresh": {
+      "post": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsRefresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRefreshResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_elsa/identity/session": {
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsSession",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/_elsa/identity/token": {
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityApiEndpointsToken",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessTokenResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/_elsa/identity/login": {
+      "post": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityAspNetCoreIdentityEndpointsLogin",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Elsa.Foundation.Identity.Tests"
+        ],
+        "operationId": "ElsaFoundationIdentityAspNetCoreIdentityEndpointsLoginPage",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessTokenResponse": {
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthenticationChallengeMetadata": {
+        "required": [
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "default": "GET"
+          },
+          "scheme": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "parameters": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AuthSession": {
+        "required": [
+          "status",
+          "subject",
+          "displayName",
+          "tenantId",
+          "roles",
+          "permissions",
+          "tokenFreshness",
+          "provider"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokenFreshness": {
+            "type": "string"
+          },
+          "provider": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "EffectiveProviderCapabilities": {
+        "required": [
+          "canManageUsers",
+          "canManageRoles",
+          "canManageApplications",
+          "canMapGroups",
+          "canIssueTokens",
+          "canRefreshTokens",
+          "canRevokeTokens",
+          "permissionPropagation"
+        ],
+        "type": "object",
+        "properties": {
+          "canManageUsers": {
+            "type": "boolean"
+          },
+          "canManageRoles": {
+            "type": "boolean"
+          },
+          "canManageApplications": {
+            "type": "boolean"
+          },
+          "canMapGroups": {
+            "type": "boolean"
+          },
+          "canIssueTokens": {
+            "type": "boolean"
+          },
+          "canRefreshTokens": {
+            "type": "boolean"
+          },
+          "canRevokeTokens": {
+            "type": "boolean"
+          },
+          "permissionPropagation": {
+            "$ref": "#/components/schemas/PermissionPropagationMode"
+          }
+        }
+      },
+      "IdentityBootstrapResponse": {
+        "required": [
+          "ownershipMode",
+          "providers"
+        ],
+        "type": "object",
+        "properties": {
+          "ownershipMode": {
+            "$ref": "#/components/schemas/OwnershipMode"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityProviderResponse"
+            }
+          }
+        }
+      },
+      "IdentityCapabilitiesResponse": {
+        "required": [
+          "ownershipMode",
+          "providers",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "ownershipMode": {
+            "$ref": "#/components/schemas/OwnershipMode"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityProviderCapabilitiesResponse"
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityPermissionResponse"
+            }
+          }
+        }
+      },
+      "IdentityPermissionResponse": {
+        "required": [
+          "key",
+          "displayName",
+          "category",
+          "description",
+          "implies"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "implies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "IdentityProviderCapabilitiesResponse": {
+        "required": [
+          "id",
+          "kind",
+          "displayName",
+          "isDefault",
+          "enabled",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/EffectiveProviderCapabilities"
+          }
+        }
+      },
+      "IdentityProviderResponse": {
+        "required": [
+          "id",
+          "kind",
+          "displayName",
+          "isDefault",
+          "enabled",
+          "challenge"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "challenge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthenticationChallengeMetadata"
+              }
+            ]
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "returnUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "OwnershipMode": {
+        "type": "integer"
+      },
+      "PermissionPropagationMode": {
+        "type": "integer"
+      },
+      "ProviderRouteRequest": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenRefreshResult": {
+        "required": [
+          "accessToken",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refreshToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

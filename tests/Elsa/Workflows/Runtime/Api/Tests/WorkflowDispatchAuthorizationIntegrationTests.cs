@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -188,6 +191,11 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
             builder.Services.AddAuthentication(TestAuthenticationHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestAuthenticationHandler.SchemeName, _ => { });
             builder.Services.AddAuthorization();
+            builder.Services.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    TestAuthenticationHandler.SchemeName
+                });
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
             builder.Services.AddScoped<IRequestSender, DispatchInspectionRequestSender>();
             builder.Services.AddFastEndpoints(options =>
@@ -337,7 +345,12 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
                 return Task.FromResult(AuthenticateResult.NoResult());
 
             var identity = new ClaimsIdentity(
-                [new Claim(ClaimTypes.NameIdentifier, "operator-1"), new Claim(PermissionClaimType, permission.ToString())],
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "operator-1"),
+                    new Claim(PermissionClaimType, permission.ToString()),
+                    new Claim(IdentityClaimTypes.Permission, permission.ToString()),
+                    new Claim(IdentityClaimTypes.Normalized, "v1")
+                ],
                 SchemeName);
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));

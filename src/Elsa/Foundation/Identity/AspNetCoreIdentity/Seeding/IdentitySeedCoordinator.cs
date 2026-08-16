@@ -1,11 +1,11 @@
-using System.Security.Cryptography;
-using System.Text;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 
@@ -24,8 +24,8 @@ public sealed class IdentitySeedCoordinator(
     private const int MaxSeedConvergenceAttempts = 8;
 
     /// <summary>
-    /// The all-access permission ("*") that Elsa endpoints secured with <c>ConfigurePermissions()</c> require.
-    /// Mirrors <c>Elsa.Api.FastEndpoints.Constants.PermissionNames.All</c> without taking an API dependency.
+    /// The all-access permission ("*") that Elsa endpoints secured with permission policies require.
+    /// Kept as a literal here without taking an API dependency.
     /// </summary>
     public const string AllAccessPermission = "*";
 

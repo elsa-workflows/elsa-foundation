@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -22,8 +23,9 @@ public sealed class ActivityAuthoringCatalogTests
     {
         var endpoint = FindCatalogEndpoint();
 
-        Assert.Contains(PermissionNames.ActivityDesignRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignRead]),
+            endpoint.Definition.PreBuiltUserPolicies!);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

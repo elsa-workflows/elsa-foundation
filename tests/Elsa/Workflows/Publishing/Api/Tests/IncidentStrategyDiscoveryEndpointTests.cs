@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Handlers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Publishing.Api;
@@ -23,8 +24,10 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
         var definition = ConfiguredDefinition("Elsa.Workflows.Publishing.Api.Endpoints.ListIncidentStrategies");
 
         Assert.Contains("publishing/incident-strategies", definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowPublishingRead, definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
+        Assert.All(
+            definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowPublishingRead]), policy));
         Assert.Null(definition.AnonymousVerbs);
     }
 

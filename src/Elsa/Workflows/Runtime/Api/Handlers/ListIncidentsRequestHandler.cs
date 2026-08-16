@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 public sealed class ListIncidentsRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityExecutionInspectionAuthorizationContext authorization)
+    IActivityInspectionContextAsync authorization)
     : IRequestHandler<ListIncidents, ListIncidentsResponse>
 {
     public async Task<ListIncidentsResponse> Handle(ListIncidents request, CancellationToken cancellationToken)
@@ -22,10 +22,10 @@ public sealed class ListIncidentsRequestHandler(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
 
         var workflowExecution = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (workflowExecution is null || !authorization.CanInspectStructure(workflowExecution))
+        if (workflowExecution is null || !await authorization.CanInspectStructureAsync(workflowExecution, cancellationToken))
             return new ListIncidentsResponse(false, [], 0);
 
-        var canInspectSensitiveValues = authorization.CanInspectSensitiveValues(workflowExecution);
+        var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken);
 
         var incidents = request.BlockingOnly
             ? await incidentStateStore.ListBlockingAsync(request.WorkflowExecutionId, cancellationToken)

@@ -7,6 +7,7 @@ using System.Text.Json;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Capabilities;
@@ -28,8 +29,10 @@ public sealed class ValueConversionProfilesEndpointTests
         var definition = ConfiguredDefinition("Elsa.Workflows.Publishing.Api.Endpoints.ListValueConversionProfiles");
 
         Assert.Contains("publishing/value-conversion/profiles", definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowPublishingRead, definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
+        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
+        Assert.All(
+            definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowPublishingRead]), policy));
         Assert.Null(definition.AnonymousVerbs);
     }
 

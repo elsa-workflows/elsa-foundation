@@ -1,11 +1,11 @@
-using System.Buffers;
-using System.IO.Compression;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Ingestion.HttpProtobuf;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System.Buffers;
+using System.IO.Compression;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Ingestion;
 
@@ -61,7 +61,7 @@ public sealed class OtlpHttpIngestionHandler(
         }
 
         await ingestor.IngestAsync(batch, authentication.Context, cancellationToken);
-        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.StatusCode = StatusCodes.Status204NoContent;
     }
 
     private static OpenTelemetryBatch Parse(OtlpSignal signal, ReadOnlySpan<byte> payload) => signal switch

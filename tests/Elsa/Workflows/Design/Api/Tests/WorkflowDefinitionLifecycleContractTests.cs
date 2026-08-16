@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
@@ -62,9 +63,10 @@ public sealed class WorkflowDefinitionLifecycleContractTests
         Assert.True(
             matches.Length == 1,
             $"Canonical operation '{endpointName}' requires exactly one {verb} {route} endpoint; found {matches.Length}.");
+        var permission = verb == "GET" ? PermissionNames.WorkflowDesignRead : PermissionNames.WorkflowDesignManage;
         Assert.Contains(
-            verb == "GET" ? PermissionNames.WorkflowDesignRead : PermissionNames.WorkflowDesignManage,
-            matches[0].AllowedPermissions!);
+            ElsaEndpointPermissions.ComposePolicy([permission]),
+            matches[0].PreBuiltUserPolicies!);
         Assert.Null(matches[0].AnonymousVerbs);
     }
 
@@ -79,7 +81,9 @@ public sealed class WorkflowDefinitionLifecycleContractTests
             .Single(endpoint => endpoint.Verbs.Contains("POST", StringComparer.OrdinalIgnoreCase));
 
         Assert.Contains("design/workflows/versions/ingest", definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowDesignManage, definition.AllowedPermissions!);
+        Assert.Contains(
+            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignManage]),
+            definition.PreBuiltUserPolicies!);
         Assert.Null(definition.AnonymousVerbs);
     }
 

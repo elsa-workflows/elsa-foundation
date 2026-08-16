@@ -1,8 +1,13 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Api.FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Secrets.Api;
+using Elsa.Secrets.Api.Authorization;
 using Elsa.Secrets.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Secrets.Api.Features;
 
@@ -15,11 +20,14 @@ namespace Elsa.Secrets.Api.Features;
     DisplayName = "Secrets API",
     Description = "Provides HTTP endpoints for managing and resolving secret metadata."
 )]
-public class SecretsApiFeature : FastEndpointsFeatureBase
+public class SecretsApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.AddSecrets();
+        services.AddPermissionContributor<SecretsPermissionContributor>();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        SecretsApi.MapSecretsApi(endpoints);
 }

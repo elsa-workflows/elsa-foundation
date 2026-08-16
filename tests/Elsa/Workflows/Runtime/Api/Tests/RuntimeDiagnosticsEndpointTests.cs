@@ -14,8 +14,7 @@ public sealed class RuntimeDiagnosticsEndpointTests
         var endpoint = RuntimeApiEndpointTestFactory.Create(type!);
 
         Assert.Contains("runtime/workflows/diagnostics/settings", endpoint.Definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -27,8 +26,7 @@ public sealed class RuntimeDiagnosticsEndpointTests
         var endpoint = RuntimeApiEndpointTestFactory.Create(type!);
 
         Assert.Contains("runtime/workflows/diagnostics/settings", endpoint.Definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowRuntimeManage, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeManage);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 

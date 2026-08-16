@@ -1,0 +1,23 @@
+[
+  {
+    "case": "audit-invalid-take",
+    "endpoint": "GET /_elsa/agent/audit?take=not-an-int",
+    "statusCode": 400,
+    "contentType": "application/problem+json; charset=utf-8",
+    "body": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"take\":[\"Value [not-an-int] is not valid for a [Int32] property!\"]}}"
+  },
+  {
+    "case": "create-empty-json",
+    "endpoint": "POST /_elsa/agent/sessions",
+    "statusCode": 400,
+    "contentType": "application/problem+json; charset=utf-8",
+    "body": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. LineNumber: 0 | BytePositionInLine: 0.\"]}}"
+  },
+  {
+    "case": "create-malformed-json",
+    "endpoint": "POST /_elsa/agent/sessions",
+    "statusCode": 400,
+    "contentType": "application/problem+json; charset=utf-8",
+    "body": "{\"statusCode\":400,\"message\":\"One or more errors occurred!\",\"errors\":{\"serializerErrors\":[\"Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\"]}}"
+  }
+]

@@ -18,6 +18,11 @@ internal static class IdentityClaimsProjector
         ITenantMembershipStore memberships,
         CancellationToken cancellationToken)
     {
+        // Provider-owned projection must never carry an incoming normalized marker forward. The marker is
+        // trusted only when this complete projection succeeds, so emit one fresh marker at the end below.
+        foreach (var marker in identity.FindAll(IdentityClaimTypes.Normalized).ToArray())
+            identity.RemoveClaim(marker);
+
         AddIfMissing(identity, ClaimTypes.NameIdentifier, user.Id);
         AddIfMissing(identity, "sub", user.Id);
         AddIfMissing(identity, IdentityClaimTypes.TenantId, user.TenantId);
@@ -63,6 +68,8 @@ internal static class IdentityClaimsProjector
             foreach (var permission in role.Permissions)
                 AddIfMissing(identity, IdentityClaimTypes.Permission, permission);
         }
+
+        identity.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
     }
 
     public static void AddIfMissing(ClaimsIdentity identity, string type, string value)

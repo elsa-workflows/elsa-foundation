@@ -36,10 +36,12 @@ public class AspNetCoreIdentityUserClaimsPrincipalFactory(
                          new HashSet<string>(),
                          new HashSet<string>());
 
-        await IdentityClaimsProjector.ApplyUserClaimsAsync(identity, record, roles, memberships, CancellationToken.None);
-
+        // Include the framework-facing display name before the shared projection emits its trusted marker,
+        // so the marker remains the final claim added by a successful cookie projection.
         if (!string.IsNullOrWhiteSpace(user.UserName))
             IdentityClaimsProjector.AddIfMissing(identity, ClaimTypes.Name, user.DisplayName ?? user.UserName);
+
+        await IdentityClaimsProjector.ApplyUserClaimsAsync(identity, record, roles, memberships, CancellationToken.None);
 
         return new ClaimsPrincipal(identity);
     }

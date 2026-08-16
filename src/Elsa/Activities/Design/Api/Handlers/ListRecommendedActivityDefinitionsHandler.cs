@@ -14,7 +14,7 @@ public sealed class ListRecommendedActivityDefinitionsHandler(
     IRecommendedActivityDefinitionPickerStore picker,
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : IRequestHandler<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>
 {
     public async Task<RecommendedActivityDefinitionPageView> Handle(

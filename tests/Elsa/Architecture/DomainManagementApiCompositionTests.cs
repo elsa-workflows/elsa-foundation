@@ -18,13 +18,19 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Graph.Design;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Compatibility.Testing.Baselines;
+using Elsa.Api.Compatibility.Testing.Manifests;
+using Elsa.Api.Compatibility.Testing.Security;
 using Elsa.Api.FastEndpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
@@ -33,14 +39,19 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
+using System.Text.Encodings.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -90,6 +101,26 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     [Fact]
+    public async Task Representative_host_manifest_is_stable_reviewed_and_permission_owned()
+    {
+        await using var host = await CustomManagementHost.StartAsync(includeExpressions: true, allowAnonymous: false);
+
+        var captures = Enumerable.Range(0, 10)
+            .Select(_ => new EndpointManifestBuilder(host.EndpointDataSources).BuildJson())
+            .ToArray();
+        Assert.Single(captures.Distinct(StringComparer.Ordinal));
+
+        var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "endpoint-manifest.json");
+        Assert.Equal(BaselineFile.Read(baselinePath), captures[0]);
+
+        var manifest = new EndpointManifestBuilder(host.EndpointDataSources).Build();
+        var permissions = new PermissionOwnershipValidator(host.Services.GetServices<IPermissionContributor>())
+            .Validate(manifest.Entries);
+        Assert.True(permissions.IsValid, string.Join(Environment.NewLine, permissions.Issues.Select(issue =>
+            $"{issue.Code}: {issue.Endpoint}: {issue.Message}")));
+    }
+
+    [Fact]
     public async Task Omitted_domain_has_neither_routes_nor_capability_while_installed_domains_remain_available()
     {
         await using var host = await CustomManagementHost.StartAsync(includeExpressions: false);
@@ -132,6 +163,7 @@ public sealed class DomainManagementApiCompositionTests
             "ApiCapabilities",
             "Expressions",
             "FastEndpoints",
+            "FoundationIdentityAbstractions",
             "Mediator",
             "WorkflowsPublishingApi"
         };
@@ -152,10 +184,13 @@ public sealed class DomainManagementApiCompositionTests
         builder.Configuration
             .AddJsonFile(StockServerConfigurationPath)
             .AddInMemoryCollection(overrides);
+        builder.Services.Configure<FoundationIdentityOptions>(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
                 typeof(FastEndpointsFeature).Assembly,
                 typeof(ApiSecurityFeature).Assembly,
+                typeof(FoundationIdentityAbstractionsFeature).Assembly,
                 typeof(ActivitiesDesignApiFeature).Assembly,
                 typeof(GraphActivitiesDesignFeature).Assembly,
                 // spec 145: the publish engine split moved the workflow-publish feature out of
@@ -175,7 +210,11 @@ public sealed class DomainManagementApiCompositionTests
         app.Use(async (context, next) =>
         {
             context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission)],
+                [
+                    new Claim(IdentityClaimTypes.Normalized, "v1"),
+                    new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
+                    new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission)
+                ],
                 "test"));
             await next(context);
         });
@@ -265,7 +304,6 @@ public sealed class DomainManagementApiCompositionTests
     {
         private static readonly string[] CommonEndpointTypes =
         [
-            "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
             "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
             "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
             "Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities.Get",
@@ -275,8 +313,14 @@ public sealed class DomainManagementApiCompositionTests
         ];
 
         public HttpClient Client { get; } = client;
+        public IServiceProvider Services => app.Services;
+        public IReadOnlyList<EndpointDataSource> EndpointDataSources => app.Services.GetServices<EndpointDataSource>()
+            .Select(source => new RepresentativeEndpointDataSource(source.Endpoints
+                .Where(endpoint => endpoint is not RouteEndpoint route || route.RoutePattern.RawText != "_test_url_cache_")
+                .ToArray()))
+            .ToArray();
 
-        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions)
+        public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool allowAnonymous = true)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -287,6 +331,14 @@ public sealed class DomainManagementApiCompositionTests
             new WorkflowsDesignApiFeature().ConfigureServices(builder.Services);
             new WorkflowsPublishingApiFeature().ConfigureServices(builder.Services);
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
+            builder.Services.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    "DomainManagementTest"
+                });
+            builder.Services.AddAuthentication("DomainManagementTest")
+                .AddScheme<AuthenticationSchemeOptions, DomainManagementAuthenticationHandler>("DomainManagementTest", _ => { });
+            builder.Services.AddAuthorization();
 
             var endpointTypes = CommonEndpointTypes.ToHashSet(StringComparer.Ordinal);
             var assemblies = new List<System.Reflection.Assembly>
@@ -303,7 +355,6 @@ public sealed class DomainManagementApiCompositionTests
                 new ExpressionsFeature().ConfigureServices(builder.Services);
                 new ExpressionsApiFeature().ConfigureServices(builder.Services);
                 assemblies.Add(typeof(ExpressionsApiFeature).Assembly);
-                endpointTypes.Add("Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors");
             }
 
             builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
@@ -314,14 +365,27 @@ public sealed class DomainManagementApiCompositionTests
             });
 
             var app = builder.Build();
+            // Wave 1 APIs are explicit Minimal API mappers. They share the same endpoint route
+            // builder with the representative FastEndpoints registrations below.
+            ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
+            if (includeExpressions)
+                ExpressionsApi.MapExpressionsApi(app);
             app.Use(async (context, next) =>
             {
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                    [new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission)],
-                    "test"));
+                    [
+                        new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard),
+                        new Claim(IdentityClaimTypes.Normalized, "v1")
+                    ],
+                    "DomainManagementTest"));
                 await next(context);
             });
-            app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
+            app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.UseFastEndpoints(options => options.Endpoints.Configurator = allowAnonymous
+                ? endpoint => endpoint.AllowAnonymous()
+                : null);
             await app.StartAsync();
             return new CustomManagementHost(app, app.GetTestClient());
         }
@@ -343,6 +407,22 @@ public sealed class DomainManagementApiCompositionTests
             Client.Dispose();
             await app.DisposeAsync();
         }
+    }
+
+    private sealed class RepresentativeEndpointDataSource(IReadOnlyList<Microsoft.AspNetCore.Http.Endpoint> endpoints) : EndpointDataSource
+    {
+        public override IReadOnlyList<Microsoft.AspNetCore.Http.Endpoint> Endpoints => endpoints;
+        public override IChangeToken GetChangeToken() => new CancellationChangeToken(CancellationToken.None);
+    }
+
+    private sealed class DomainManagementAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
+            Task.FromResult(AuthenticateResult.NoResult());
     }
 
     private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender

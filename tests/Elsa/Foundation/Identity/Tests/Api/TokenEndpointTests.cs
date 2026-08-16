@@ -1,11 +1,11 @@
+using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Elsa.Foundation.Identity.Abstractions.Authentication;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
@@ -84,6 +84,43 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FirstParty_Bearer_Cannot_Be_Exchanged_For_A_Second_Token()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, TokenRoute);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unnormalized_External_Principal_Cannot_Exchange_Forged_Internal_Permissions()
+    {
+        using var exchangeRequest = new HttpRequestMessage(HttpMethod.Get, TokenRoute);
+        exchangeRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", ForgedExternalAuthenticationHandler.Token);
+
+        var exchangeResponse = await _fixture.Client.SendAsync(exchangeRequest);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, exchangeResponse.StatusCode);
+
+        using var protectedRequest = new HttpRequestMessage(HttpMethod.Get, "/permission-protected");
+        protectedRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", ForgedExternalAuthenticationHandler.Token);
+
+        var protectedResponse = await _fixture.Client.SendAsync(protectedRequest);
+
+        // Untrusted identities are intentionally challenged rather than treated as normalized callers that
+        // merely lack a grant, so this is 401 (trusted-but-underprivileged callers receive 403).
+        Assert.Equal(HttpStatusCode.Unauthorized, protectedResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Form_Login_Without_A_Csrf_Token_Is_Rejected_And_Issues_No_Session()
     {
         var client = _fixture.Client;
@@ -132,6 +169,17 @@ public sealed class TokenEndpointTests : IAsyncLifetime
 
         // And the exchange still 401s — no session was established by the rejected login.
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_Page_Drops_Remote_Return_Urls()
+    {
+        var response = await _fixture.Client.GetAsync($"{LoginRoute}?returnUrl=https%3A%2F%2Fevil.example%2Flanding");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains("name=\"returnUrl\" value=\"/\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("evil.example", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -192,18 +240,30 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Refresh_With_Unsupported_Content_Type_Returns_415()
+    {
+        using var content = new StringContent("refresh-token", Encoding.UTF8, "text/plain");
+
+        var response = await _fixture.Client.PostAsync(RefreshRoute, content);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
     [Theory]
+    [InlineData("{")]
     [InlineData("{}")]
     [InlineData("{\"refreshToken\":null}")]
     [InlineData("{\"refreshToken\":\"\"}")]
     [InlineData("{\"refreshToken\":\"   \"}")]
-    public async Task Refresh_Without_A_Usable_Token_Returns_401_Not_500(string payload)
+    public async Task Refresh_Invalid_Or_Empty_Input_Uses_Stable_4xx_Contracts(string payload)
     {
         using var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
         var response = await _fixture.Client.PostAsync(RefreshRoute, content);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Malformed JSON is a binding failure (400); a well-formed but unusable credential is anonymous (401).
+        Assert.Equal(payload == "{" ? HttpStatusCode.BadRequest : HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     private static async Task<string> FetchAccessTokenAsync(HttpClient client)

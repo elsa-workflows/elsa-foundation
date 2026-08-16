@@ -20,7 +20,7 @@ public static partial class FeatureScanner
     [GeneratedRegex(@"^public (abstract )?((sealed|partial) )*class (?<name>[A-Za-z0-9_]+)\s*:\s*", RegexOptions.Compiled)]
     private static partial Regex FeatureClassPattern { get; }
 
-    [GeneratedRegex(@"IShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase", RegexOptions.Compiled)]
+    [GeneratedRegex(@"I(?:Web)?ShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase", RegexOptions.Compiled)]
     private static partial Regex FeatureBasePattern { get; }
 
     [GeneratedRegex("name:\\s*\"(?<id>[^\"]+)\"", RegexOptions.Compiled)]

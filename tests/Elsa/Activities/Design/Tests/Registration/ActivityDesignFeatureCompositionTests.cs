@@ -19,12 +19,17 @@ using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Http;
@@ -111,9 +116,11 @@ public sealed class ActivityDesignFeatureCompositionTests
     }
 
     [Fact]
-    public void ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
+    public async Task ActivitiesDesignApiFeature_Registers_Request_Scoped_Tenant_And_Permission_Authorization()
     {
         var services = MinimalServices();
+        services.AddFoundationIdentityAbstractions(options =>
+            options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
         new ActivitiesDesignApiFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
@@ -121,24 +128,131 @@ public sealed class ActivityDesignFeatureCompositionTests
         {
             User = new ClaimsPrincipal(new ClaimsIdentity(
             [
-                new Claim("elsa.identity.tenant_id", "tenant-a"),
+                new Claim(IdentityClaimTypes.Normalized, "v1"),
+                new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
                 new Claim(ClaimTypes.NameIdentifier, "actor-a"),
-                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.AuthorPermission),
-                new Claim("elsa.identity.permission", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
+                new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.AuthorPermission),
+                new Claim(IdentityClaimTypes.Permission, HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission)
             ], "test"))
         };
 
         using var scope = provider.CreateScope();
-        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContext>();
-        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContext>();
+        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+        var legacyDependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyAuthorizationContext>();
 
         Assert.Same(authoring, dependencies);
-        Assert.True(authoring.CanAuthorProvider("elsa.activity-graph"));
-        Assert.True(authoring.CanReadProviderPayload("elsa.activity-graph"));
+        Assert.Same(dependencies, legacyDependencies);
+        Assert.True(await authoring.CanAuthorProviderAsync("elsa.activity-graph"));
+        Assert.True(await authoring.CanReadProviderPayloadAsync("elsa.activity-graph"));
         Assert.Equal("actor-a", authoring.ActorId);
-        Assert.True(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-a")));
-        Assert.False(dependencies.CanRead(new("ActivityVersion", "definition", TenantId: "tenant-b")));
-        Assert.NotEmpty(dependencies.AuthorizationProfile);
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-a")));
+        Assert.False(await dependencies.CanReadAsync(new("ActivityVersion", "definition", TenantId: "tenant-b")));
+        Assert.NotEmpty(await dependencies.GetAuthorizationProfileAsync());
+    }
+
+    [Fact]
+    public async Task ActivitiesDesignApiFeature_adapts_legacy_host_contexts_when_async_replacements_are_omitted()
+    {
+        var services = MinimalServices();
+        services.AddScoped<IActivityAuthoringContext, LegacyAuthoringContext>();
+        services.AddScoped<IActivityDependencyAuthorizationContext, LegacyDependencyContext>();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var authoring = scope.ServiceProvider.GetRequiredService<IActivityAuthoringContextAsync>();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+
+        Assert.IsType<LegacyActivityAuthoringContextAdapter>(authoring);
+        Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
+        Assert.Equal("legacy-tenant", authoring.TenantId);
+        Assert.Equal("legacy-actor", authoring.ActorId);
+        Assert.Equal("legacy-profile", await authoring.GetAuthorizationProfileAsync());
+        Assert.True(await authoring.CanAuthorProviderAsync("legacy"));
+        Assert.True(await authoring.CanReadProviderPayloadAsync("legacy"));
+        Assert.True(await authoring.CanManageActivityDefinitionsAsync());
+        Assert.Equal("legacy-tenant", dependencies.TenantId);
+        Assert.Equal("legacy-profile", await dependencies.GetAuthorizationProfileAsync());
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
+
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanAuthorProviderAsync("legacy", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanReadProviderPayloadAsync("legacy", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanManageActivityDefinitionsAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.CanReadAsync(new("ActivityVersion", "definition"), canceled.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task ActivitiesDesignApiFeature_adapts_a_legacy_replacement_registered_after_feature_configuration()
+    {
+        var services = MinimalServices();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Scoped<IActivityDependencyAuthorizationContext, LegacyDependencyContext>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+
+        Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
+        Assert.Equal("legacy-tenant", dependencies.TenantId);
+        Assert.Equal("legacy-profile", await dependencies.GetAuthorizationProfileAsync());
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
+    }
+
+    [Fact]
+    public void Dependency_replacement_contract_requires_marker_and_rejects_duplicate_descriptors()
+    {
+        var unmarked = new ServiceCollection();
+        Assert.Throws<InvalidOperationException>(() =>
+            unmarked.EnsureReplacementContract<UnmarkedDependencyContract, UnmarkedDependencyContract>());
+
+        var duplicate = new ServiceCollection();
+        duplicate.AddScoped<IActivityDependencyContextAsync, CustomDependencyContext>();
+        duplicate.AddScoped<IActivityDependencyContextAsync, SecondDependencyContext>();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            duplicate.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>());
+        Assert.Contains(nameof(CustomDependencyContext), exception.Message);
+        Assert.Contains(nameof(SecondDependencyContext), exception.Message);
+    }
+
+    [Fact]
+    public void Dependency_replacement_contract_resolves_default_custom_and_idempotent_markers()
+    {
+        var defaults = new ServiceCollection();
+        defaults.AddFoundationIdentityAbstractions();
+        defaults.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        defaults.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
+        using (var provider = defaults.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
+        using (var defaultScope = provider.CreateScope())
+            Assert.IsType<HttpContextActivityDesignAuthorizationContext>(defaultScope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>());
+
+        var custom = new ServiceCollection();
+        custom.AddFoundationIdentityAbstractions();
+        custom.AddScoped<IActivityDependencyContextAsync, CustomDependencyContext>();
+        new ActivitiesDesignApiFeature().ConfigureServices(custom);
+        using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = customProvider.CreateScope();
+        Assert.IsType<CustomDependencyContext>(scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>());
+    }
+
+    [Fact]
+    public void Dependency_late_conflict_is_reported_by_startup_validation()
+    {
+        var services = MinimalServices();
+        services.AddFoundationIdentityAbstractions();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        services.AddScoped<IActivityDependencyContextAsync, SecondDependencyContext>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+        Assert.Contains("IActivityDependencyContextAsync", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecondDependencyContext), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exactly one tagged implementation", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -330,5 +444,37 @@ public sealed class ActivityDesignFeatureCompositionTests
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
+    }
+
+    private sealed class LegacyAuthoringContext : IActivityAuthoringContext
+    {
+        public string? TenantId => "legacy-tenant";
+        public string ActorId => "legacy-actor";
+        public string AuthorizationProfile => "legacy-profile";
+        public bool CanAuthorProvider(string providerKey) => providerKey == "legacy";
+        public bool CanReadProviderPayload(string providerKey) => providerKey == "legacy";
+        public bool CanManageActivityDefinitions => true;
+    }
+
+    private sealed class LegacyDependencyContext : IActivityDependencyAuthorizationContext
+    {
+        public string? TenantId => "legacy-tenant";
+        public string AuthorizationProfile => "legacy-profile";
+        public bool CanRead(ActivityDefinitionReference reference) => true;
+    }
+
+    private class UnmarkedDependencyContract : IActivityDependencyContextAsync
+    {
+        public string? TenantId => null;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => new("unmarked");
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => new(false);
+    }
+
+    private sealed class CustomDependencyContext : UnmarkedDependencyContract
+    {
+    }
+
+    private sealed class SecondDependencyContext : UnmarkedDependencyContract
+    {
     }
 }

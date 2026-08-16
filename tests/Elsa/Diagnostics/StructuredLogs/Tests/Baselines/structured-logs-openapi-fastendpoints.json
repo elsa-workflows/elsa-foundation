@@ -1,0 +1,32 @@
+{
+  "operations": [
+    {
+      "canonical": "{\n  \u0022endpoint\u0022: \u0022GET /_elsa/studio/diagnostics/structured-logs/recent\u0022,\n  \u0022mediaTypes\u0022: \u0022[]\u0022,\n  \u0022parameters\u0022: \u0022[]\u0022,\n  \u0022requestBody\u0022: \u0022{}\u0022,\n  \u0022responses\u0022: \u0022{\\n  \\u0022204\\u0022: {\\n    \\u0022content\\u0022: {}\\n  },\\n  \\u0022401\\u0022: {\\n    \\u0022content\\u0022: {}\\n  },\\n  \\u0022403\\u0022: {\\n    \\u0022content\\u0022: {}\\n  }\\n}\u0022,\n  \u0022schemas\u0022: \u0022{}\u0022\n}",
+      "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/recent",
+      "mediaTypes": "[]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \u0022204\u0022: {\n    \u0022content\u0022: {}\n  },\n  \u0022401\u0022: {\n    \u0022content\u0022: {}\n  },\n  \u0022403\u0022: {\n    \u0022content\u0022: {}\n  }\n}",
+      "schemas": "{}"
+    },
+    {
+      "canonical": "{\n  \u0022endpoint\u0022: \u0022GET /_elsa/studio/diagnostics/structured-logs/sources\u0022,\n  \u0022mediaTypes\u0022: \u0022[\\n  \\u0022application/json\\u0022\\n]\u0022,\n  \u0022parameters\u0022: \u0022[]\u0022,\n  \u0022requestBody\u0022: \u0022{}\u0022,\n  \u0022responses\u0022: \u0022{\\n  \\u0022200\\u0022: {\\n    \\u0022content\\u0022: {\\n      \\u0022application/json\\u0022: {\\n        \\u0022schema\\u0022: {\\n          \\u0022items\\u0022: {\\n            \\u0022$ref\\u0022: \\u0022#/components/schemas/LogSource\\u0022\\n          },\\n          \\u0022type\\u0022: \\u0022array\\u0022\\n        }\\n      }\\n    }\\n  },\\n  \\u0022401\\u0022: {\\n    \\u0022content\\u0022: {}\\n  },\\n  \\u0022403\\u0022: {\\n    \\u0022content\\u0022: {}\\n  }\\n}\u0022,\n  \u0022schemas\u0022: \u0022{\\n  \\u0022LogSource\\u0022: {\\n    \\u0022properties\\u0022: {\\n      \\u0022displayName\\u0022: {\\n        \\u0022type\\u0022: \\u0022string\\u0022\\n      },\\n      \\u0022id\\u0022: {\\n        \\u0022type\\u0022: \\u0022string\\u0022\\n      },\\n      \\u0022machineName\\u0022: {\\n        \\u0022type\\u0022: [\\n          \\u0022null\\u0022,\\n          \\u0022string\\u0022\\n        ]\\n      },\\n      \\u0022processId\\u0022: {\\n        \\u0022format\\u0022: \\u0022int32\\u0022,\\n        \\u0022type\\u0022: [\\n          \\u0022null\\u0022,\\n          \\u0022integer\\u0022,\\n          \\u0022string\\u0022\\n        ]\\n      },\\n      \\u0022serviceName\\u0022: {\\n        \\u0022type\\u0022: [\\n          \\u0022null\\u0022,\\n          \\u0022string\\u0022\\n        ]\\n      }\\n    },\\n    \\u0022type\\u0022: \\u0022object\\u0022\\n  }\\n}\u0022\n}",
+      "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/sources",
+      "mediaTypes": "[\n  \u0022application/json\u0022\n]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \u0022200\u0022: {\n    \u0022content\u0022: {\n      \u0022application/json\u0022: {\n        \u0022schema\u0022: {\n          \u0022items\u0022: {\n            \u0022$ref\u0022: \u0022#/components/schemas/LogSource\u0022\n          },\n          \u0022type\u0022: \u0022array\u0022\n        }\n      }\n    }\n  },\n  \u0022401\u0022: {\n    \u0022content\u0022: {}\n  },\n  \u0022403\u0022: {\n    \u0022content\u0022: {}\n  }\n}",
+      "schemas": "{\n  \u0022LogSource\u0022: {\n    \u0022properties\u0022: {\n      \u0022displayName\u0022: {\n        \u0022type\u0022: \u0022string\u0022\n      },\n      \u0022id\u0022: {\n        \u0022type\u0022: \u0022string\u0022\n      },\n      \u0022machineName\u0022: {\n        \u0022type\u0022: [\n          \u0022null\u0022,\n          \u0022string\u0022\n        ]\n      },\n      \u0022processId\u0022: {\n        \u0022format\u0022: \u0022int32\u0022,\n        \u0022type\u0022: [\n          \u0022null\u0022,\n          \u0022integer\u0022,\n          \u0022string\u0022\n        ]\n      },\n      \u0022serviceName\u0022: {\n        \u0022type\u0022: [\n          \u0022null\u0022,\n          \u0022string\u0022\n        ]\n      }\n    },\n    \u0022type\u0022: \u0022object\u0022\n  }\n}"
+    },
+    {
+      "canonical": "{\n  \u0022endpoint\u0022: \u0022GET /_elsa/studio/diagnostics/structured-logs/stream\u0022,\n  \u0022mediaTypes\u0022: \u0022[]\u0022,\n  \u0022parameters\u0022: \u0022[]\u0022,\n  \u0022requestBody\u0022: \u0022{}\u0022,\n  \u0022responses\u0022: \u0022{\\n  \\u0022204\\u0022: {\\n    \\u0022content\\u0022: {}\\n  },\\n  \\u0022401\\u0022: {\\n    \\u0022content\\u0022: {}\\n  },\\n  \\u0022403\\u0022: {\\n    \\u0022content\\u0022: {}\\n  }\\n}\u0022,\n  \u0022schemas\u0022: \u0022{}\u0022\n}",
+      "endpoint": "GET /_elsa/studio/diagnostics/structured-logs/stream",
+      "mediaTypes": "[]",
+      "parameters": "[]",
+      "requestBody": "{}",
+      "responses": "{\n  \u0022204\u0022: {\n    \u0022content\u0022: {}\n  },\n  \u0022401\u0022: {\n    \u0022content\u0022: {}\n  },\n  \u0022403\u0022: {\n    \u0022content\u0022: {}\n  }\n}",
+      "schemas": "{}"
+    }
+  ]
+}
+

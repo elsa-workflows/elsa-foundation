@@ -15,7 +15,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
     IIncidentStateStore incidentStateStore,
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
-    IActivityExecutionInspectionAuthorizationContext authorization,
+    IActivityInspectionContextAsync authorization,
     RuntimeCheckpointCadenceInspector checkpointCadenceInspector)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {
@@ -24,10 +24,10 @@ public sealed class GetWorkflowInstanceRequestHandler(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
 
         var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
-        if (state is null || !authorization.CanInspectStructure(state))
+        if (state is null || !await authorization.CanInspectStructureAsync(state, cancellationToken))
             return new GetWorkflowInstanceResponse(null);
 
-        var canInspectSensitiveValues = authorization.CanInspectSensitiveValues(state);
+        var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
 
         var activityPage = await activityExecutionInspectionStore.ListSummariesPageAsync(
             new ActivityExecutionInspectionSummaryPageQuery(

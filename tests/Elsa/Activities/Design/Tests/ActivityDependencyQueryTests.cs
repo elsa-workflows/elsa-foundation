@@ -291,11 +291,13 @@ public sealed class ActivityDependencyQueryTests
         return document.RootElement.Clone();
     }
 
-    private sealed class TestAuthorizationContext(string? tenantId, string profile) : IActivityDependencyAuthorizationContext
+    private sealed class TestAuthorizationContext(string? tenantId, string profile) : IActivityDependencyAuthorizationContext, IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => profile;
         public bool CanRead(ActivityDefinitionReference reference) => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(profile);
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class MixedProjectionStore(

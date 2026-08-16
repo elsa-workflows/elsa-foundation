@@ -36,7 +36,7 @@ public sealed class ReusableActivityAuthoringService(
     IActivityTypeKeyPolicy typeKeyPolicy,
     IIdentityGenerator identityGenerator,
     TimeProvider timeProvider,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
 {
     public async Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(
         CreateReusableActivityDefinition command,
@@ -48,7 +48,7 @@ public sealed class ReusableActivityAuthoringService(
         var definitionId = NewId("activity-def");
         var draftId = NewId("activity-draft");
         var contract = ToDomainContract(command.Contract);
-        EnsureAuthorableProvider(command.Provider);
+        await EnsureAuthorableProviderAsync(command.Provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", draftId, definitionId, Revision: 1));
         var activityTypeKey = ResolveActivityTypeKey(command.ActivityTypeKey, command.DisplayName, definitionId);
         var definition = NewDefinition(definitionId, activityTypeKey, command.Category, command.DisplayName, command.Description, now);
@@ -129,7 +129,7 @@ public sealed class ReusableActivityAuthoringService(
 
         var now = timeProvider.GetUtcNow();
         var draft = NewDraft(NewId("activity-draft"), command.DefinitionId, command.SourceVersionId, contract, provider, now, command.PresentationLabel);
-        EnsureAuthorableProvider(provider);
+        await EnsureAuthorableProviderAsync(provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", draft.Id, draft.DefinitionId, Revision: draft.Revision));
         var layout = NewDraftLayout(draft.Id, records, now);
         try
@@ -141,7 +141,7 @@ public sealed class ReusableActivityAuthoringService(
             throw Conflict("activity.definition.stale-head", "Activity definition head is stale", "The definition head changed while the draft was being created.", exception);
         }
 
-        return ToDraftView(draft, layout.Records.ToArray(), null);
+        return await ToDraftViewAsync(draft, layout.Records.ToArray(), null, cancellationToken);
     }
 
     public async Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(
@@ -161,7 +161,7 @@ public sealed class ReusableActivityAuthoringService(
             var updated = await updateDraftPresentation.ExecuteAsync(
                 new(current.Id, current.Revision, label, timeProvider.GetUtcNow()),
                 cancellationToken);
-            return ToDraftView(updated, layout.Records.ToArray(), null);
+            return await ToDraftViewAsync(updated, layout.Records.ToArray(), null, cancellationToken);
         }
         catch (InvalidOperationException exception)
         {
@@ -179,7 +179,7 @@ public sealed class ReusableActivityAuthoringService(
         EnsureDesignAuthority(authoring);
         EnsureActiveRevision(source, command.ExpectedSourceRevision);
         var contract = ToDomainContract(command.Contract);
-        EnsureAuthorableProvider(command.Provider);
+        await EnsureAuthorableProviderAsync(command.Provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", source.Id, source.DefinitionId, Revision: source.Revision));
         var now = timeProvider.GetUtcNow();
         var copy = NewDraft(
@@ -200,7 +200,7 @@ public sealed class ReusableActivityAuthoringService(
         {
             throw await LatestStaleRevisionAsync(source, command.ExpectedSourceRevision, exception, cancellationToken);
         }
-        return ToDraftView(copy, layout.Records.ToArray(), null);
+        return await ToDraftViewAsync(copy, layout.Records.ToArray(), null, cancellationToken);
     }
 
     public async Task<ReusableActivityDraftView> ReplaceDraftAsync(
@@ -213,7 +213,7 @@ public sealed class ReusableActivityAuthoringService(
         EnsureDesignAuthority(authoring);
         EnsureActiveRevision(current, command.ExpectedRevision);
         var contract = ToDomainContract(command.Contract);
-        EnsureAuthorableProvider(command.Provider);
+        await EnsureAuthorableProviderAsync(command.Provider, cancellationToken);
         EnsureAuthorableContract(contract, new("ActivityDraft", current.Id, current.DefinitionId, Revision: current.Revision));
 
         ActivityDefinitionDraft updated;
@@ -233,14 +233,14 @@ public sealed class ReusableActivityAuthoringService(
             throw await LatestStaleRevisionAsync(current, command.ExpectedRevision, exception, cancellationToken);
         }
 
-        return ToDraftView(updated, command.Layout, null);
+        return await ToDraftViewAsync(updated, command.Layout, null, cancellationToken);
     }
 
     public async Task<ReusableActivityDraftView> MigrateDraftAsync(
         MigrateReusableActivityDraft command,
         CancellationToken cancellationToken)
     {
-        EnsureProviderWrite(command.TargetProviderKey);
+        await EnsureProviderWriteAsync(command.TargetProviderKey, cancellationToken);
         var current = await GetDraftAsync(command.DraftId, cancellationToken);
         var authoring = await GetAuthoringAsync(current.DefinitionId, cancellationToken);
         EnsureVisible(current.TenantId);
@@ -285,7 +285,7 @@ public sealed class ReusableActivityAuthoringService(
                 migration.Diagnostics);
         }
 
-        EnsureAuthorableProvider(migration.Manifest);
+        await EnsureAuthorableProviderAsync(migration.Manifest, cancellationToken);
         EnsureAuthorableContract(current.State.Contract, new("ActivityDraft", current.Id, current.DefinitionId, Revision: current.Revision));
 
         var currentLayout = await layoutStore.FindDraftLayoutAsync(current.Id, cancellationToken)
@@ -321,7 +321,7 @@ public sealed class ReusableActivityAuthoringService(
                 exception);
         }
 
-        return ToDraftView(migrated, migratedLayout.Records.ToArray(), null);
+        return await ToDraftViewAsync(migrated, migratedLayout.Records.ToArray(), null, cancellationToken);
     }
 
     public async Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken)
@@ -389,8 +389,8 @@ public sealed class ReusableActivityAuthoringService(
         var layoutTask = layoutStore.FindDraftLayoutAsync(draftId, cancellationToken);
         var validationTask = validationStore.FindAsync(draftId, draft.Revision, cancellationToken);
         await Task.WhenAll(layoutTask, validationTask);
-        var layout = layoutTask.Result ?? throw OperationFailed("The draft layout is unavailable.");
-        return ToDraftView(draft, layout.Records.ToArray(), validationTask.Result);
+        var layout = await layoutTask ?? throw OperationFailed("The draft layout is unavailable.");
+        return await ToDraftViewAsync(draft, layout.Records.ToArray(), await validationTask, cancellationToken);
     }
 
     public async Task<ReusableActivityVersionView> GetVersionAsync(string versionId, CancellationToken cancellationToken)
@@ -419,7 +419,7 @@ public sealed class ReusableActivityAuthoringService(
             version.SourceDraftId,
             version.SourceVersionId,
             version.Contract.ToView(),
-            ToProviderView(version.Provider),
+            await ToProviderViewAsync(version.Provider, cancellationToken),
             new(
                 version.TemplateId,
                 version.TemplateHash,
@@ -524,15 +524,15 @@ public sealed class ReusableActivityAuthoringService(
         await publicationStore.FindAsync(versionId, cancellationToken)
         ?? throw NotFound("activity.version.not-found", "Activity version not found", "The requested activity version was not found.");
 
-    private void EnsureProviderWrite(string providerKey)
+    private async ValueTask EnsureProviderWriteAsync(string providerKey, CancellationToken cancellationToken)
     {
-        if (!context.CanAuthorProvider(providerKey))
+        if (!await context.CanAuthorProviderAsync(providerKey, cancellationToken))
             throw Forbidden("The caller is not authorized to author this activity provider.");
     }
 
-    private void EnsureAuthorableProvider(ActivityProviderManifest manifest)
+    private async ValueTask EnsureAuthorableProviderAsync(ActivityProviderManifest manifest, CancellationToken cancellationToken)
     {
-        EnsureProviderWrite(manifest.ProviderKey);
+        await EnsureProviderWriteAsync(manifest.ProviderKey, cancellationToken);
         IActivityProvider provider;
         try
         {
@@ -610,11 +610,13 @@ public sealed class ReusableActivityAuthoringService(
             throw StaleRevision(draft, expectedRevision);
     }
 
-    private ActivityProviderManifestView ToProviderView(ActivityProviderManifest provider) => new(
+    private async ValueTask<ActivityProviderManifestView> ToProviderViewAsync(
+        ActivityProviderManifest provider,
+        CancellationToken cancellationToken) => new(
         provider.ProviderKey,
         provider.SchemaVersion,
         ActivityProviderManifestFingerprint.Compute(provider),
-        context.CanReadProviderPayload(provider.ProviderKey) ? provider.Payload.Clone() : null);
+        await context.CanReadProviderPayloadAsync(provider.ProviderKey, cancellationToken) ? provider.Payload.Clone() : null);
 
     private ActivityDefinitionIdentityView ToIdentity(ActivityDefinition definition, ActivityDefinitionAuthoringState authoring) => new(
         definition.Id,
@@ -639,10 +641,11 @@ public sealed class ReusableActivityAuthoringService(
         draft.LastModifiedAt,
         draft.PresentationLabel);
 
-    private ReusableActivityDraftView ToDraftView(
+    private async ValueTask<ReusableActivityDraftView> ToDraftViewAsync(
         ActivityDefinitionDraft draft,
         IReadOnlyList<ActivityLayoutRecord> layout,
-        ActivityDraftValidationState? validation) => new(
+        ActivityDraftValidationState? validation,
+        CancellationToken cancellationToken) => new(
         draft.Id,
         draft.DefinitionId,
         draft.TenantId,
@@ -650,7 +653,7 @@ public sealed class ReusableActivityAuthoringService(
         draft.SourceVersionId,
         draft.Status,
         draft.State.Contract.ToView(),
-        ToProviderView(draft.State.Provider),
+        await ToProviderViewAsync(draft.State.Provider, cancellationToken),
         layout,
         validation is null ? null : ToValidationView(validation),
         draft.CreatedAt,
