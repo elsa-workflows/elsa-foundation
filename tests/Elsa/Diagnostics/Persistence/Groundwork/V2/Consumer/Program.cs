@@ -77,10 +77,18 @@ static void RunProviderSequenceBoundaryProof(IStorageProviderConnection connecti
 
     var session = connection.OpenSession(unit, StorageAccess.Global);
     var operation = new OperationId(DateTimeOffset.UtcNow, "provider-sequence-operation-1");
-    var outcome = session.Append(
+    var values = new StorageValues(new Dictionary<string, object?> { ["payload"] = "sequence payload" });
+    var outcome = session.AppendWithOutcomes(
         operation,
-        new StorageValues(new Dictionary<string, object?> { ["payload"] = "sequence payload" }));
-    Require(outcome.Status == WriteOutcomeStatus.Inserted, "The ProviderSequence append did not insert.");
+        values);
+    Require(outcome.Status == WriteOutcomeStatus.Inserted, "The ProviderSequence exact append did not insert.");
+    var returnedSequence = outcome.Outcomes.Single().GeneratedValue<long>("sequence");
+    Require(returnedSequence > 0, "The exact ProviderSequence append returned an invalid generated sequence.");
+
+    var replayed = session.AppendWithOutcomes(operation, values);
+    Require(replayed.Status == WriteOutcomeStatus.Replayed, "The repeated exact ProviderSequence append did not replay.");
+    Require(replayed.Outcomes.Single().GeneratedValue<long>("sequence") == returnedSequence,
+        "The exact ProviderSequence replay did not return the original generated sequence.");
 
     var row = session.Query(new QueryRequest(
         new TableId(unit.Name),
@@ -89,9 +97,8 @@ static void RunProviderSequenceBoundaryProof(IStorageProviderConnection connecti
         Projection.All,
         Paging.None)).Rows.Single();
     var generatedSequence = Convert.ToInt64(row["sequence"]);
-    Require(generatedSequence > 0, "SQLite did not persist a provider-assigned sequence for the append row.");
-    Require(outcome.GeneratedValues.Count == 0, "The ProviderSequence append unexpectedly returned generated values; update this proof when append cursors are public.");
-    Console.WriteLine($"[RED] Idempotent Append discarded the authoritative generated cursor: persisted sequence={generatedSequence}, returned values={outcome.GeneratedValues.Count}.");
+    Require(generatedSequence == returnedSequence, "The persisted sequence did not match the exact append outcome.");
+    Console.WriteLine($"[GREEN] ProviderSequence exact append/replay returned the authoritative cursor: sequence={returnedSequence}.");
 }
 
 static void RunRetentionBoundaryProof()

@@ -14,11 +14,12 @@ GROUNDWORK_E2_V2_PACKAGES=/tmp/groundwork-v2-feed-e2 \
 ```
 
 The green journey proves an ordinary SQLite manifest, schema application, idempotent append/replay,
-payload round-trip, and a typed query. The boundary proofs intentionally record current public
-contract limits:
+payload round-trip, a typed query, and an exact provider-sequence append/replay whose generated
+cursor is returned through the public `AppendWithOutcomes` API. The boundary proofs intentionally
+record current public contract limits:
 
-- `ProviderSequence` must be the sole key and `Append` currently returns no generated cursor values,
-  even though the row is persisted with an authoritative sequence.
+- `ProviderSequence` must be the sole non-nullable `Int64` key; the exact append path returns the
+  authoritative generated cursor and replays it without allocating a second sequence.
 - `KeepNewest(0)` is refused by portability validation, so an Elsa `TrimAsync(0)` equivalent is not
   expressible through the current declarative retention API.
 - Scoped access and per-scope idempotency are currently isolated correctly.
