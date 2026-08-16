@@ -14,6 +14,6 @@
     <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="../../src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" />
-    <PackageReference Include="Groundwork.Sqlite" Version="0.1.0-preview.3" />
+    <PackageReference Include="Groundwork.Sqlite" Version="0.1.0-preview.4" />
   </ItemGroup>
 </Project>
