@@ -24,6 +24,21 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public async Task Per_invocation_fixture_setup_runs_before_the_timing_window()
+    {
+        var events = new List<string>();
+        var operation = new PreparedOperation(events);
+
+        await ProcessMeasurement.InvokeOnceForTestAsync(
+            operation,
+            7,
+            () => events.Add("timer-start"),
+            CancellationToken.None);
+
+        Assert.Equal(["prepare:7", "timer-start", "invoke:7"], events);
+    }
+
+    [Fact]
     public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
     {
         Assert.Matches("^[0-9a-f]{64}$", HostFingerprint.CaptureSha256());
@@ -641,5 +656,20 @@ public sealed class ProtocolAndGateTests
         public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Correctness must not run for a mismatched host.");
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class PreparedOperation(List<string> events) : IBenchmarkOperation
+    {
+        public string Id => "prepared";
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken)
+        {
+            events.Add($"prepare:{invocation}");
+            return Task.CompletedTask;
+        }
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken)
+        {
+            events.Add($"invoke:{invocation}");
+            return Task.CompletedTask;
+        }
     }
 }

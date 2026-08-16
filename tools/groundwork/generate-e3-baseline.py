@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -178,11 +181,7 @@ def serialized(value: dict[str, Any]) -> str:
     return json.dumps(value, indent=2, sort_keys=False) + "\n"
 
 
-def check(root: Path, artifact: Path) -> int:
-    if not artifact.is_file():
-        print(f"E3 baseline artifact is missing: {artifact}", file=sys.stderr)
-        return 2
-    expected = json.loads(artifact.read_text(encoding="utf-8"))
+def compare_inventory(root: Path, artifact: Path, expected: dict[str, Any]) -> int:
     actual = build_inventory(root, baseline_commit=expected.get("baseline_commit"))
     expected_text = serialized(expected)
     actual_text = serialized(actual)
@@ -191,7 +190,7 @@ def check(root: Path, artifact: Path) -> int:
             expected_text.splitlines(),
             actual_text.splitlines(),
             fromfile=str(artifact),
-            tofile="current source inventory",
+            tofile="selected source inventory",
             lineterm="",
         )
         print("E3 baseline artifact is stale:", file=sys.stderr)
@@ -209,19 +208,61 @@ def check(root: Path, artifact: Path) -> int:
     return 0
 
 
+def check_current(root: Path, artifact: Path) -> int:
+    if not artifact.is_file():
+        print(f"E3 baseline artifact is missing: {artifact}", file=sys.stderr)
+        return 2
+    expected = json.loads(artifact.read_text(encoding="utf-8"))
+    return compare_inventory(root, artifact, expected)
+
+
+def check_frozen_ref(root: Path, artifact: Path) -> int:
+    if not artifact.is_file():
+        print(f"E3 baseline artifact is missing: {artifact}", file=sys.stderr)
+        return 2
+    expected = json.loads(artifact.read_text(encoding="utf-8"))
+    revision = expected.get("baseline_commit")
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        print("E3 baseline artifact has no full recorded baseline_commit.", file=sys.stderr)
+        return 2
+
+    try:
+        archive = subprocess.run(
+            ["git", "archive", "--format=tar", revision],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        print(
+            f"Cannot read recorded baseline commit {revision}: {error.stderr.decode('utf-8', errors='replace').strip()}",
+            file=sys.stderr,
+        )
+        return 2
+
+    with tempfile.TemporaryDirectory(prefix="elsa-e3-frozen-") as directory:
+        snapshot = Path(directory)
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as contents:
+            contents.extractall(snapshot, filter="data")
+        return compare_inventory(snapshot, artifact, expected)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", type=Path, required=True)
-    parser.add_argument("--check", action="store_true", help="fail if the artifact differs from source")
+    parser.add_argument("--check-current", action="store_true", help="fail if the artifact differs from the current source tree")
+    parser.add_argument("--check-frozen-ref", action="store_true", help="verify the artifact against its recorded Git commit")
     parser.add_argument("--write", action="store_true", help="write the generated artifact")
     args = parser.parse_args()
-    if args.check == args.write:
-        parser.error("choose exactly one of --check or --write")
+    if sum((args.check_current, args.check_frozen_ref, args.write)) != 1:
+        parser.error("choose exactly one of --check-current, --check-frozen-ref, or --write")
 
     root = repository_root()
     artifact = args.artifact if args.artifact.is_absolute() else root / args.artifact
-    if args.check:
-        return check(root, artifact)
+    if args.check_current:
+        return check_current(root, artifact)
+    if args.check_frozen_ref:
+        return check_frozen_ref(root, artifact)
 
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_text(serialized(build_inventory(root)), encoding="utf-8")

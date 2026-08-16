@@ -12,11 +12,32 @@ Groundwork provider drivers.
 | CLI, run-request wire contract, native-plan staging | **done**, covered offline by `tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests` |
 | `capture-plan` for routeless workloads | **done** (`checkpoint-commit` is the only one) |
 | `capture-plan` for workloads with native routes | **not started** — refuses rather than fakes |
-| adapter leaves | **`checkpoint-commit`** (#1175). Every other workload is still a blocked run |
+| adapter leaves | **done for the E3 baseline set**: `checkpoint-commit`, `bookmark-lookup`, `queue-drain`, and `outbox-drain` |
 
-`checkpoint-commit` can be measured on any of the four providers; SQLite and PostgreSQL have been run.
-The next unit is a leaf for a workload with native routes, which needs the route-capture side of
-`capture-plan` first.
+All four leaves compose the real Groundwork runtime stores and execute frozen correctness through public
+runtime contracts. Mutating measurements prepare their invocation-specific fixture before the stopwatch;
+the timed body contains only the named public operation. `checkpoint-commit` can be measured on any of the
+four providers; SQLite and PostgreSQL have been run historically. The three new leaves require routed
+native-plan evidence, so an accepted matrix still waits for the route-capture side of `capture-plan`.
+
+The repository-relative `tools/groundwork/run-e3-medium-baseline.py` validates one real evidence set per
+workload and prints the exact four `matrix medium` commands. Add `--execute` only after inspection:
+
+```bash
+python3 tools/groundwork/run-e3-medium-baseline.py \
+  --provider sqlite \
+  --evidence-dir "$STAGING" \
+  --out "$ARTIFACTS"
+python3 tools/groundwork/run-e3-medium-baseline.py \
+  --provider sqlite \
+  --evidence-dir "$STAGING" \
+  --out "$ARTIFACTS" \
+  --execute
+```
+
+The selected provider driver owns a fresh isolated connection/catalog for each child. The runner never
+accepts or retains a connection string. It refuses missing, stale, mismatched, or invented route evidence
+before launching a matrix.
 
 ## Operating it
 

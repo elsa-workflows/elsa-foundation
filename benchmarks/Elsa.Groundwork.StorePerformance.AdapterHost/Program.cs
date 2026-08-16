@@ -41,9 +41,11 @@ internal static class AdapterHostCli
         // Published before the adapter is created: ValidateCorrectness reads the evidence file off disk and
         // binds it to the request, so a child that measured first and staged afterwards would burn a full
         // measurement window before discovering a provenance mismatch.
-        NativePlanEvidenceStaging.PublishInto(output, request);
+        var nativePlan = NativePlanEvidenceStaging.PublishInto(output, request);
 
-        await using var adapter = await BenchmarkAdapterFactory.CreateAsync(new AdapterContext(request, workload), CancellationToken.None);
+        await using var adapter = await BenchmarkAdapterFactory.CreateAsync(
+            new AdapterContext(request, workload, nativePlan),
+            CancellationToken.None);
         var artifact = await ProcessMeasurement.ExecuteAsync(
             workload,
             request,

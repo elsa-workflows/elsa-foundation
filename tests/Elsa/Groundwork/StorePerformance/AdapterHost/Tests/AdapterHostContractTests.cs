@@ -177,14 +177,14 @@ public sealed class AdapterHostContractTests : IDisposable
     /// An unregistered workload must be a hard failure. The harness's contract — "a missing adapter is a
     /// blocked run, never a simulated result" — only holds if the host refuses to improvise.
     ///
-    /// Driven through <c>bookmark-lookup</c> rather than <c>checkpoint-commit</c>, which now has a leaf: the
+    /// Driven through <c>due-timer-selection</c> rather than a registered runtime leaf: the
     /// point of the fact is the empty-registry path, so it has to be asked of a workload that is genuinely
     /// unregistered.
     /// </summary>
     [Fact]
     public async Task An_unregistered_workload_is_a_blocked_run_not_a_fallback()
     {
-        var unregistered = _catalog.Workloads["bookmark-lookup"];
+        var unregistered = _catalog.Workloads["due-timer-selection"];
         Assert.DoesNotContain(unregistered.Id, BenchmarkAdapterFactory.RegisteredWorkloads);
         var context = new AdapterContext(CreateRequest(ProcessKind.Measured, 1), unregistered);
 
@@ -205,6 +205,20 @@ public sealed class AdapterHostContractTests : IDisposable
         Assert.Contains(WorkloadId, BenchmarkAdapterFactory.RegisteredWorkloads);
         Assert.Equal(RuntimeCheckpointCommitWorkload.WorkloadId, Workload.Id);
     }
+
+    [Fact]
+    public void The_bookmark_lookup_leaf_is_registered()
+    {
+        Assert.Contains(RuntimeBookmarkLookupWorkload.WorkloadId, BenchmarkAdapterFactory.RegisteredWorkloads);
+    }
+
+    [Fact]
+    public void The_queue_drain_leaf_is_registered() =>
+        Assert.Contains(RuntimeQueueDrainWorkload.WorkloadId, BenchmarkAdapterFactory.RegisteredWorkloads);
+
+    [Fact]
+    public void The_outbox_drain_leaf_is_registered() =>
+        Assert.Contains(RuntimeOutboxDrainWorkload.WorkloadId, BenchmarkAdapterFactory.RegisteredWorkloads);
 
     /// <summary>
     /// The leaf must reject a provider the frozen contract does not admit before it opens a driver. Deferring

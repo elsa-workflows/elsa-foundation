@@ -143,7 +143,19 @@ public interface IBenchmarkAdapter : IAsyncDisposable
     Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken);
     IReadOnlyList<IBenchmarkOperation> Operations { get; }
 }
-public interface IBenchmarkOperation { string Id { get; } Task InvokeAsync(long invocation, CancellationToken cancellationToken); }
+public interface IBenchmarkOperation
+{
+    string Id { get; }
+
+    /// <summary>
+    /// Creates any invocation-specific fixture outside the timing window. The default keeps existing
+    /// read-only/idempotent operations source-compatible; mutating leaves use this to avoid measuring reset
+    /// writes as part of the named public operation.
+    /// </summary>
+    Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    Task InvokeAsync(long invocation, CancellationToken cancellationToken);
+}
 
 public static class ProcessMeasurement
 {
@@ -170,19 +182,42 @@ public static class ProcessMeasurement
         return new ProcessArtifact(2, request, protocol, true, correctness, operations, new MachineMetadata(System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(), System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(), Environment.ProcessorCount, hostFingerprint, DateTimeOffset.UtcNow.ToString("O")));
     }
 
-    private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token) { for (var i = 0; i < count; i++) await operation.InvokeAsync(-1L - i, token); }
+    private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token)
+    {
+        for (var i = 0; i < count; i++)
+            await InvokePreparedAsync(operation, -1L - i, static () => { }, token);
+    }
+
     private static async Task<OperationSample> MeasureAsync(IBenchmarkOperation operation, BenchmarkProtocol protocol, CancellationToken token)
     {
         var samples = new List<double>();
         var stopwatch = Stopwatch.StartNew();
         for (var invocation = 0L; samples.Count < protocol.MinimumOperations || stopwatch.Elapsed < protocol.MinimumSteadyState; invocation++)
         {
-            var start = Stopwatch.GetTimestamp();
-            await operation.InvokeAsync(invocation, token);
+            var start = 0L;
+            await InvokePreparedAsync(operation, invocation, () => start = Stopwatch.GetTimestamp(), token);
             samples.Add(Math.Round(Stopwatch.GetElapsedTime(start).TotalMilliseconds, 4));
         }
         var elapsed = stopwatch.Elapsed.TotalSeconds;
         return new OperationSample(operation.Id, samples.Count, elapsed, elapsed > 0 ? samples.Count / elapsed : 0, Statistics.Percentile(samples, 50), Statistics.Percentile(samples, 95), Statistics.Percentile(samples, 99), samples);
+    }
+
+    internal static Task InvokeOnceForTestAsync(
+        IBenchmarkOperation operation,
+        long invocation,
+        Action timingStarted,
+        CancellationToken cancellationToken) =>
+        InvokePreparedAsync(operation, invocation, timingStarted, cancellationToken);
+
+    private static async Task InvokePreparedAsync(
+        IBenchmarkOperation operation,
+        long invocation,
+        Action timingStarted,
+        CancellationToken cancellationToken)
+    {
+        await operation.PrepareInvocationAsync(invocation, cancellationToken);
+        timingStarted();
+        await operation.InvokeAsync(invocation, cancellationToken);
     }
 }
 

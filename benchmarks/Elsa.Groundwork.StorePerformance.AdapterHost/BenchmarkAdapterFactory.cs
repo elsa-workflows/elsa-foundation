@@ -5,7 +5,10 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>Everything a leaf needs to bind a frozen workload to a real provider.</summary>
-internal sealed record AdapterContext(RunRequest Request, PerformanceWorkload Workload);
+internal sealed record AdapterContext(
+    RunRequest Request,
+    PerformanceWorkload Workload,
+    NativePlanEvidenceDocument? NativePlan = null);
 
 /// <summary>
 /// Maps a frozen workload id to the leaf that can execute it against a real provider.
@@ -21,7 +24,10 @@ internal static class BenchmarkAdapterFactory
         {
             // Keyed by workload id alone, so one entry covers every provider and physical form; the leaf
             // itself validates the requested provider against the frozen topology contract.
-            [RuntimeCheckpointCommitWorkload.WorkloadId] = CheckpointCommitAdapter.CreateAsync
+            [RuntimeBookmarkLookupWorkload.WorkloadId] = BookmarkLookupAdapter.CreateAsync,
+            [RuntimeCheckpointCommitWorkload.WorkloadId] = CheckpointCommitAdapter.CreateAsync,
+            [RuntimeOutboxDrainWorkload.WorkloadId] = OutboxDrainAdapter.CreateAsync,
+            [RuntimeQueueDrainWorkload.WorkloadId] = QueueDrainAdapter.CreateAsync
         };
 
     public static IReadOnlyCollection<string> RegisteredWorkloads => Leaves.Keys.Order(StringComparer.Ordinal).ToArray();
