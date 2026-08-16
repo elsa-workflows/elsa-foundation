@@ -1,7 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Agent.Api.Models;
 using Elsa.Agent.Core.Models;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Agent.Api;
 

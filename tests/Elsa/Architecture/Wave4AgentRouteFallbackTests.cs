@@ -1,6 +1,6 @@
-using System.Text;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using System.Text;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

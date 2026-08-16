@@ -1,7 +1,7 @@
 # Wave 4 Agent REST and SSE API migration
 
-Status: implementation evidence complete for the bounded Agent slice; control-room integration
-gates are still required.
+Status: implementation and control-room integration evidence complete for the bounded Agent slice;
+independent final review is pending.
 
 This report records issue [#1370](https://github.com/elsa-workflows/elsa-foundation/issues/1370).
 The scope is exactly the eleven concrete `Elsa.Agent.Api` FastEndpoints registrations. It does not
@@ -17,7 +17,7 @@ authoring model while FastEndpoints remains available to unrelated migration wav
 ## Contract baseline and implementation
 
 The immutable FastEndpoints-before evidence was committed separately in
-`9293cb029` (`test: freeze wave 4 Agent FastEndpoints baseline`) before production endpoint changes.
+`685ac5166` (`test: freeze wave 4 Agent FastEndpoints baseline`) before production endpoint changes.
 It contains eleven HTTP observations and the consumed OpenAPI document for:
 
 | Operation | Route family | Permission metadata |
@@ -50,7 +50,8 @@ names, routes, response metadata, and tags are explicit rather than discovered.
 | SSE cancellation/disposal | Tracking async enumerator test | Pass: cancellation reaches the enumerator finally path |
 | Collectibility | `Wave4AgentCollectibilityTests`, 3 real route-publication cycles | Pass: mapped binder, typed serializer, provider/auth delegates, completed and cancelled SSE, DI provider, route endpoints, and generated JSON context execute and collect |
 | Mixed coexistence | FE canary mapped with Agent Minimal API in one TestServer | Pass |
-| Transition ratchet | `FastEndpointsTransitionTests` and baseline JSON | Pass: 156 → 145 registrations; 11 Agent entries removed |
+| Transition ratchet | `FastEndpointsTransitionTests` and baseline JSON | Pass: 134 → 123 registrations; 11 Agent entries removed; five owners remain |
+| Control-room integration | Agent, Architecture, maps, and full solution build | Pass: 138 Agent tests, 437 Architecture tests, fresh maps, and a zero-error solution build after restore |
 
 The SSE baseline contains no heartbeat, resume token, or separate backpressure protocol. The test
 therefore preserves existing framing and awaited streaming/cancellation cleanup and explicitly does
@@ -84,8 +85,9 @@ and fail closed.
 
 ## Follow-up boundary
 
-1. Review and merge this bounded Agent migration only after the parent control room reruns the full
-   architecture, Agent, build, maps, and relevant E2E gates.
+1. Merge this bounded Agent migration only after the independent final review confirms the recorded
+   control-room evidence; no Agent-specific backend `e2e-tests/` harness exists, so the real
+   TestServer HTTP/OpenAPI/SSE suites are the host-level evidence for this slice.
 2. Apply the same exact-before-fixture, catalog-contributor, source-generation, and lifecycle pattern
    to Wave 5 OpenTelemetry, with protobuf and SSE-specific evidence.
 3. Keep dynamic shell collision/atomic publication work under #1345; this Agent migration does not

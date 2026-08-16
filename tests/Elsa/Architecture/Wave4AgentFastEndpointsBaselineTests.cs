@@ -1,6 +1,3 @@
-using System.Security.Claims;
-using System.Text;
-using System.Text.Encodings.Web;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
@@ -22,6 +19,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Encodings.Web;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

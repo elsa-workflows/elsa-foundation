@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Agent.Api.Constants;
 using Elsa.Agent.Api.Endpoints;
 using Elsa.Agent.Api.Models;
@@ -12,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 namespace Elsa.Agent.Api;
 

@@ -1,5 +1,5 @@
-using System.Text;
 using Elsa.Api.Compatibility.Testing.Baselines;
+using System.Text;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

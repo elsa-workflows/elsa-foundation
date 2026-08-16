@@ -73,7 +73,7 @@ docs/reports/wave-4-agent-api-migration-2026-08.md
 
 ## Rollback and Risks
 
-The implementation is split after commit `9293cb029`, which freezes the FastEndpoints-before
+The implementation is split after commit `685ac5166`, which freezes the FastEndpoints-before
 evidence. Reverting the migration commit restores the eleven endpoint adapters and transition
 entries without changing persistence. Risks are limited to serializer metadata/casing, SSE
 cancellation/disposal, and authentication delegate retention; each has a focused gate.

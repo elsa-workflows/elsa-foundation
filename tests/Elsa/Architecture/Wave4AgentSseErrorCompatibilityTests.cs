@@ -1,6 +1,6 @@
+using Elsa.Api.Compatibility.Testing.Baselines;
 using System.Net;
 using System.Text.Json;
-using Elsa.Api.Compatibility.Testing.Baselines;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;

@@ -31,7 +31,7 @@
 ## Phase 6: Polish and cross-cutting gates
 
 - [x] T014 Update the migration report, evidence index, specification, contracts, data model, and quickstart in `docs/reports/` and `specs/161-agent-api-minimal-migration/`.
-- [ ] T015 Run the full Agent tests, architecture tests, relevant backend/E2E checks, full solution build, maps check, formatter, and final diff review from the control room; no Agent-specific `e2e-tests/` harness exists, so the real TestServer HTTP/SSE suite is the available host-level evidence.
+- [x] T015 Run the full Agent tests, architecture tests, relevant backend/E2E checks, full solution build, maps check, formatter, and final diff review from the control room; no Agent-specific `e2e-tests/` harness exists, so the real TestServer HTTP/SSE suite is the available host-level evidence.
 
 ## Dependencies
 

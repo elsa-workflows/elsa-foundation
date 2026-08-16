@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-16
 
-**Status**: Implementation complete; control-room integration gates pending
+**Status**: Implementation and control-room integration gates complete; independent final review pending
 
 **Input**: Issue #1370: replace the eleven Elsa Agent API FastEndpoints registrations with explicit Minimal API mappings while preserving HTTP, OpenAPI, authorization, and SSE contracts.
 
@@ -100,8 +100,8 @@ cycles through a collectible `AssemblyLoadContext` with weak-reference evidence.
 - **SC-004**: Three repeated real route-publication cycles provide collectible-context evidence for
   the Agent assembly, mapper, endpoints, DI provider, auth/metadata delegates, serializer context,
   and disposal path.
-- **SC-005**: The transition inventory drops from 156 to 145 registrations and has no Agent owner
-  entries; unrelated FastEndpoints coexistence coverage remains.
+- **SC-005**: The transition inventory drops from 134 to 123 registrations, leaving five owners and
+  no Agent owner entries; unrelated FastEndpoints coexistence coverage remains.
 
 ## Assumptions and Scope
 

@@ -19,4 +19,5 @@ Expected outcomes:
 - an FE canary and Agent Minimal API route coexist in one host;
 - SSE framing, headers, cancellation, and disposal pass; no heartbeat/resume behavior is claimed;
 - three collectible route/DI/serializer/disposal cycles pass;
-- the transition ratchet is 145 registrations with no Agent owner and maps are fresh.
+- the transition ratchet is 123 registrations across five owners, with no Agent owner, and maps are
+  fresh.

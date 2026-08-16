@@ -1,9 +1,3 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.Loader;
-using System.Security.Claims;
-using System.Text;
-using System.Text.Json.Serialization;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
@@ -17,6 +11,12 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
