@@ -46,10 +46,11 @@ public sealed class GroundworkV2ExecutionLivenessStateStore : IExecutionLiveness
 
         var row = context.Open();
         var values = GroundworkV2RuntimeLivenessCodec.Values(state);
+        var identity = GroundworkV2RuntimeLivenessCodec.Identity(state.WorkflowExecutionId, state.OperationalStateId);
         var result = expectedRevision == 0
             ? row.Session.Insert(values, WriteOptions.CreateOnly)
             : row.ConditionalUpsert(
-                GroundworkV2RuntimeLivenessCodec.Identity(state.WorkflowExecutionId, state.OperationalStateId),
+                identity,
                 ElsaRuntimeV2StorageManifest.SchemaVersion,
                 values.Values[ElsaRuntimeV2StorageManifest.ContentField]!,
                 expectedRevision,
@@ -58,6 +59,16 @@ public sealed class GroundworkV2ExecutionLivenessStateStore : IExecutionLiveness
                                    not ElsaRuntimeV2StorageManifest.SchemaVersionField and
                                    not ElsaRuntimeV2StorageManifest.ContentField)
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+
+        // Groundwork deliberately reports a failed optimistic precondition as ConcurrencyConflict
+        // whether the row is stale or absent. Elsa's liveness contract distinguishes an absent row,
+        // so resolve that distinction after the failed write without adding a successful-path read.
+        if (expectedRevision > 0 &&
+            result.Status == WriteOutcomeStatus.ConcurrencyConflict &&
+            row.Read(identity) is null)
+        {
+            return ValueTask.FromResult(new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.NotFound));
+        }
 
         return ValueTask.FromResult(MapWriteResult(result));
     }

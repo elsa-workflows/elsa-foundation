@@ -6,7 +6,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <GroundworkVersion>0.1.0-preview.1</GroundworkVersion>
+    <GroundworkVersion>0.1.0-preview.2</GroundworkVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />
@@ -22,5 +22,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Runtime/**" />
+    <EmbeddedResource Remove="Runtime/**" />
+    <None Remove="Runtime/**" />
   </ItemGroup>
 </Project>

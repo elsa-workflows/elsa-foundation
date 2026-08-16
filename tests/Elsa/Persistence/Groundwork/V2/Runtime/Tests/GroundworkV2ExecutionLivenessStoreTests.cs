@@ -124,7 +124,7 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
         var scanner = new GroundworkV2RuntimeRecoveryScanner(source, scopeA);
         var candidates = await scanner.ScanAsync(new RuntimeRecoveryScanRequest(Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10));
         Assert.Equal(
-            ["op-detected", "op-lease", "op-heartbeat"],
+            ["op-detected", "op-heartbeat", "op-lease"],
             candidates.Select(candidate => candidate.OperationalStateId));
         Assert.Equal(RuntimeInterruptionReason.HostStopped, candidates.First().Reason);
 
@@ -132,7 +132,7 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
 
         source.QueryRequests.Clear();
         var ownerCandidates = await scanner.ScanAsync(new RuntimeRecoveryScanRequest(Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 10, "worker-a"));
-        Assert.Equal(["op-detected", "op-lease", "op-heartbeat"], ownerCandidates.Select(candidate => candidate.OperationalStateId));
+        Assert.Equal(["op-detected", "op-heartbeat", "op-lease"], ownerCandidates.Select(candidate => candidate.OperationalStateId));
 
         AssertOwnerRecoveryRoutes(source, 10);
     }
@@ -140,7 +140,7 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
     private static StorageUnit UniqueLivenessUnit()
     {
         var declaredUnit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind);
-        var suffix = Guid.NewGuid().ToString("N");
+        var suffix = Guid.NewGuid().ToString("N")[..12];
         return declaredUnit with
         {
             Id = new StorageUnitId($"{declaredUnit.Id.Value}-{suffix}"),
@@ -257,7 +257,9 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
                     $"lease-{operationalStateId}",
                     workflowExecutionId,
                     owner,
-                    Now.AddMinutes(-1),
+                    leaseExpiresAt is { } expires && expires <= Now
+                        ? expires.AddMinutes(-1)
+                        : Now.AddMinutes(-1),
                     leaseExpiresAt ?? Now.AddMinutes(5),
                     fencingToken: 1),
             owner is null

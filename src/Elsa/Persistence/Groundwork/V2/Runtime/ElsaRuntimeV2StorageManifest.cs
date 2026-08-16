@@ -246,16 +246,9 @@ public static class ElsaRuntimeV2StorageManifest
         foreach (var index in indexes)
             index.AddTo(declaration);
 
-        var built = declaration.Build();
-        var indexPolicies = indexes.ToDictionary(index => index.Name, StringComparer.Ordinal);
-        var unit = built with
+        var unit = declaration.Build() with
         {
-            SchemaVersion = StorageSchemaVersion,
-            Indexes = built.Indexes
-                .Select(index => indexPolicies.TryGetValue(index.Name, out var policy)
-                    ? index with { IsUnique = policy.Unique, MissingValues = policy.MissingValues }
-                    : index)
-                .ToArray()
+            SchemaVersion = StorageSchemaVersion
         };
 
         var portability = PortabilityValidator.Validate(unit);
@@ -321,12 +314,18 @@ public static class ElsaRuntimeV2StorageManifest
     {
         public void AddTo(StorageDeclarationBuilder declaration)
         {
-            // Build the declaration as an ordinary index first. Groundwork's builder defaults
-            // unique indexes to Included missing values, while the runtime deliberately retains
-            // sparse unique indexes (MissingValues.Excluded) from the legacy contract. The final
-            // immutable declaration below applies the explicit uniqueness and missing-value policy
-            // before running the public portability validator.
-            declaration.Index(Name, Columns.ToArray());
+            Action<IndexBuilder> configure = index =>
+            {
+                foreach (var column in Columns)
+                    index.Column(column);
+                if (MissingValues == MissingValueBehavior.Excluded)
+                    index.ExcludeMissingValues();
+            };
+
+            if (Unique)
+                declaration.UniqueIndex(Name, configure);
+            else
+                declaration.Index(Name, configure);
         }
     }
 }
