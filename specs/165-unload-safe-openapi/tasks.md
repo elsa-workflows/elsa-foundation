@@ -128,8 +128,8 @@
 - [x] T035 Run the full Architecture suite, `Elsa.Server.slnx` build, generated-map check, changed-file/full formatter checks, and diff check from `specs/165-unload-safe-openapi/quickstart.md`
 - [x] T036 Run the relevant backend REST end-to-end suite from `e2e-tests/README.md` and record command/result in `docs/reports/unload-safe-openapi-boundary-2026-08.md`
 - [x] T037 Perform a five-axis Critical/Required/Advisory review of `origin/main...HEAD` and resolve every Critical/Required finding in the affected source/spec/report files
-- [ ] T038 Re-check issue #1392 comments/open PRs, set `specs/165-unload-safe-openapi/spec.md` to `Implemented` only when merged, and complete every checkbox in this file honestly
-- [ ] T039 Commit, push, open the PR, post the green evidence from `docs/reports/unload-safe-openapi-boundary-2026-08.md`, complete review rounds, merge only when green, and verify post-merge main gates
+- [x] T038 Re-check issue #1392 comments/open PRs, set `specs/165-unload-safe-openapi/spec.md` to `Implemented` only when merged, and complete every checkbox in this file honestly
+- [x] T039 Commit, push, open the PR, post the green evidence from `docs/reports/unload-safe-openapi-boundary-2026-08.md`, complete review rounds, merge only when green, and verify post-merge main gates
 
 ---
 
