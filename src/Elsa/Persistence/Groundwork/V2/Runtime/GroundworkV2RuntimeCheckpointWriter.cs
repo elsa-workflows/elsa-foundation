@@ -711,7 +711,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         GroundworkV2BookmarkStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, bookmarkId),
                         cleanup.WorkflowExecutionId);
                 foreach (var timerId in cleanup.TimerIds)
-                    StageCleanupDelete(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind, timerId, cleanup.WorkflowExecutionId);
+                    StageCleanupDelete(
+                        ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind,
+                        GroundworkV2DurableTimerStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, timerId),
+                        cleanup.WorkflowExecutionId);
                 foreach (var workItemId in cleanup.SchedulerWorkItemIds)
                     StageCleanupDelete(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, workItemId, cleanup.WorkflowExecutionId);
             }
