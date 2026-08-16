@@ -48,6 +48,8 @@
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Http\Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
@@ -69,6 +71,7 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
