@@ -1,11 +1,22 @@
 using Elsa.Api.Compatibility.Testing.Collectibility;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Text.Encodings.Web;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -84,13 +95,50 @@ public sealed class Wave1MinimalApiCollectibilityTests
         var feature = Activator.CreateInstance(featureType)
             ?? throw new InvalidOperationException($"Unable to create {owner.FeatureType}.");
         var serviceDescriptors = new ServiceCollection().AddLogging().AddRouting();
+        if (owner.Owner == "Elsa.Workflows.Design.Api")
+        {
+            serviceDescriptors.AddAuthentication(CollectibilityAuthenticationHandler.SchemeName)
+                .AddScheme<AuthenticationSchemeOptions, CollectibilityAuthenticationHandler>(CollectibilityAuthenticationHandler.SchemeName, _ => { });
+            serviceDescriptors.AddAuthorization();
+            serviceDescriptors.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>([CollectibilityAuthenticationHandler.SchemeName], StringComparer.Ordinal));
+        }
         var configureServices = featureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)
             ?? throw new InvalidOperationException($"{owner.FeatureType} does not expose ConfigureServices.");
         configureServices.Invoke(feature, [serviceDescriptors]);
+        if (owner.Owner == "Elsa.Workflows.Design.Api")
+            serviceDescriptors.AddSingleton<IExpressionToolingProvider, CollectibilityExpressionToolingProvider>();
         var services = serviceDescriptors.BuildServiceProvider();
         var routes = new CollectibleRouteBuilder(services);
         mapper.Invoke(null, [routes]);
         var routeCount = routes.DataSources.Sum(source => source.Endpoints.Count);
+        if (owner.Owner == "Elsa.Workflows.Design.Api")
+        {
+            var designEndpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+            if (designEndpoints.Length != 27 || designEndpoints.Any(endpoint => endpoint.Metadata.GetMetadata<IAuthorizeData>() is null))
+                throw new InvalidOperationException("Workflows Design publication did not retain its complete authenticated endpoint metadata.");
+
+            var descriptorEndpoint = designEndpoints.Single(endpoint => endpoint.RoutePattern.RawText == "design/workflows/expression-tooling/descriptors");
+            using var delegateBody = new MemoryStream();
+            var delegateContext = new DefaultHttpContext
+            {
+                RequestServices = services,
+                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "collectible-author")], "collectible"))
+            };
+            delegateContext.Response.Body = delegateBody;
+            delegateContext.Request.Method = "GET";
+            delegateContext.Request.Path = "/design/workflows/expression-tooling/descriptors";
+            delegateContext.SetEndpoint(descriptorEndpoint);
+            var application = new ApplicationBuilder(services);
+            application.UseAuthentication();
+            application.UseAuthorization();
+            application.Run(httpContext => descriptorEndpoint.RequestDelegate!(httpContext));
+            var pipeline = application.Build();
+            pipeline(delegateContext).GetAwaiter().GetResult();
+            if (delegateContext.Response.StatusCode != StatusCodes.Status200OK || delegateBody.Length == 0)
+                throw new InvalidOperationException("Workflows Design mapped descriptor delegate did not execute successfully.");
+            delegateContext = null!;
+        }
         var endpointReferences = routes.DataSources
             .SelectMany(source => source.Endpoints)
             .Select(endpoint => new WeakReference(endpoint))
@@ -225,6 +273,54 @@ public sealed class Wave1MinimalApiCollectibilityTests
         protected override Assembly? Load(AssemblyName assemblyName) =>
             Default.Assemblies.FirstOrDefault(assembly =>
                 string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed class CollectibilityExpressionToolingProvider : IExpressionToolingProvider
+    {
+        public string ExpressionType => "Collectible";
+        public ExpressionToolingContractVersion SupportedVersion => ExpressionToolingContractVersion.V1;
+
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(
+            ExpressionToolingRequestScope scope,
+            CancellationToken cancellationToken) => ValueTask.FromResult(
+            ExpressionToolingOutcome<ExpressionToolingCapabilities>.Success(
+                new(), SupportedVersion, scope.Document.DocumentRevision, scope.Context.ContextRevision));
+
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> GetCompletionsAsync(
+            ExpressionCompletionRequest request,
+            CancellationToken cancellationToken) => ValueTask.FromResult(
+            ExpressionToolingOutcome<ExpressionToolingItems>.Success(
+                new(new ExpressionToolingItem[] { }), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
+
+        public ValueTask<ExpressionToolingOutcome<ExpressionHover>> GetHoverAsync(
+            ExpressionHoverRequest request,
+            CancellationToken cancellationToken) => ValueTask.FromResult(
+            ExpressionToolingOutcome<ExpressionHover>.Success(
+                new(""), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
+
+        public ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(
+            ExpressionValidationRequest request,
+            CancellationToken cancellationToken) => ValueTask.FromResult(
+            ExpressionToolingOutcome<ExpressionDiagnosticSet>.Success(
+                new(Array.Empty<ExpressionDiagnostic>()), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
+    }
+
+    private sealed class CollectibilityAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        public const string SchemeName = "ElsaCollectibility";
+
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            var identity = new ClaimsIdentity(Scheme.Name);
+            identity.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
+            identity.AddClaim(new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard));
+            identity.AddClaim(new Claim(IdentityClaimTypes.TenantId, "collectible-tenant"));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
+        }
     }
 }
 
