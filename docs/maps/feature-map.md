@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 116
 
 ## Features
 
@@ -43,6 +43,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | OpenTelemetryFeature | FastEndpoints feature | Elsa.Diagnostics.OpenTelemetry | FastEndpointsFeatureBase | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
 | EFCoreOpenTelemetryPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreOpenTelemetryPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs) |
 | SqliteOpenTelemetryPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | EFCoreOpenTelemetryPersistenceFeatureBase | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
+| GroundworkOpenTelemetryPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | IShellFeature | [GroundworkOpenTelemetryPersistenceFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs) |
 | DiagnosticsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.Persistence.Groundwork | IShellFeature | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
 | EFCoreStructuredLogsPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
