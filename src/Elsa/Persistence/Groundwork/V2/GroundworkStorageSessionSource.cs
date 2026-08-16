@@ -8,9 +8,9 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Persistence.Groundwork.Composition;
 
 /// <summary>
-/// Admits all contributed v2 units during both plain-host and shell startup and opens non-owning
-/// sessions from the selected provider connection. On-demand admission keeps direct test hosts safe
-/// without weakening startup admission in production.
+/// Admits all contributed v2 units during both plain-host and shell startup and reuses non-owning
+/// sessions from the selected provider connection for each unit and access context. On-demand admission
+/// keeps direct test hosts safe without weakening startup admission in production.
 /// </summary>
 public sealed class GroundworkStorageSessionSource(
     IServiceProvider services,
@@ -19,8 +19,12 @@ public sealed class GroundworkStorageSessionSource(
     IHostedService,
     IShellInitializer
 {
-    private readonly Lock gate = new();
+    private readonly Lock admissionGate = new();
+    private readonly Lock sessionGate = new();
     private readonly HashSet<(string Target, string Fingerprint)> admitted = [];
+    private readonly Dictionary<
+        (string Target, string UnitId, string Fingerprint, StorageAccess Access),
+        IStorageSession> sessions = [];
 
     public Task StartAsync(CancellationToken cancellationToken) => AdmitAllAsync(cancellationToken);
 
@@ -34,7 +38,20 @@ public sealed class GroundworkStorageSessionSource(
         var registration = registry.Require(unitId, targetName);
         var connection = RequireConnection(registration.TargetName);
         Admit(connection, registration);
-        return connection.OpenSession(registration.Unit, access);
+        var key = (
+            registration.TargetName,
+            registration.Unit.Id.Value,
+            registration.Fingerprint,
+            access);
+        lock (sessionGate)
+        {
+            if (sessions.TryGetValue(key, out var session))
+                return session;
+
+            session = connection.OpenSession(registration.Unit, access);
+            sessions.Add(key, session);
+            return session;
+        }
     }
 
     public IUnitOfWork BeginUnitOfWork(
@@ -76,7 +93,7 @@ public sealed class GroundworkStorageSessionSource(
         GroundworkStorageUnitRegistration registration)
     {
         var key = (registration.TargetName, registration.Fingerprint);
-        lock (gate)
+        lock (admissionGate)
         {
             if (admitted.Contains(key))
                 return;
