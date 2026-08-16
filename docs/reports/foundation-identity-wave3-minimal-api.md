@@ -20,10 +20,11 @@ The deterministic matrix covers anonymous 401/200 behavior, exact/implied/wildca
 grants, a trusted authenticated principal without the requested grant (403), malformed and empty
 JSON, unsupported content types, known and unknown challenge behavior, unknown and authenticated
 logout (including cookie invalidation), login form and JSON flows, antiforgery and `Set-Cookie`,
-local `returnUrl` validation, authenticated token issuance/refresh, and first-party bearer rejection
-at `/token`. `PermissionEndpointAdapterIntegrationTests` runs the capabilities matrix beside a
-remaining FastEndpoints endpoint so both endpoint styles use the same evaluator and normalized
-principal contract.
+local `returnUrl` validation, and authenticated token issuance/refresh. The separate real-host
+`TokenEndpointTests` regression proves a first-party bearer cannot be exchanged for a second token.
+`PermissionEndpointAdapterIntegrationTests` runs the capabilities matrix beside a remaining
+FastEndpoints endpoint so both endpoint styles use the same evaluator and normalized principal
+contract.
 
 All nine routes have explicit stable operation names (`FoundationIdentity*` or
 `AspNetCoreIdentityLogin*`) and the `Identity` tag. Public routes carry the public disposition;
@@ -54,3 +55,14 @@ SHA-256 `6c7571f070d7fb4e53b49bb7c94e9b69635f9810ea2bf376361a309c80a9b842`). The
 the known challenge status, legacy OpenAPI projections for challenge/login/logout/refresh/token,
 and the legacy malformed-refresh problem response. The real-host comparer rejects every other
 status, body, header, cookie, redirect, binding, media-type, schema, or operation difference.
+
+## Collectibility evidence
+
+`Wave3IdentityMinimalApiCollectibilityTests` repeats three collectible load/map/use/dispose/unload
+cycles for each owner. Every cycle configures the production feature services, maps the real route
+delegates, executes malformed JSON through the actual refresh or login request binder, serializes a
+typed response with the owner-local generated context, and materializes either the configured
+interactive-scheme options or the ASP.NET Core Identity provider module and its challenge
+descriptor. The route data sources and provider are then cleared/disposed before weak-reference
+verification of the load context, owner assembly, and mapper type. Both owners collect in every
+cycle; neither request binding nor response serialization uses reflection-based metadata.

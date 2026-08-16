@@ -11,6 +11,7 @@ namespace Elsa.Foundation.Identity.Api;
 [JsonSerializable(typeof(AuthSession))]
 [JsonSerializable(typeof(AccessTokenResponse))]
 [JsonSerializable(typeof(TokenRefreshResult))]
+[JsonSerializable(typeof(RefreshTokenRequest))]
 internal partial class FoundationIdentityApiJsonContext : JsonSerializerContext
 {
 }

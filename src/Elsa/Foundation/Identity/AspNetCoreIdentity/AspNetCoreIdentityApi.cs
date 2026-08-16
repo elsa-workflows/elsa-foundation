@@ -111,7 +111,14 @@ public static class AspNetCoreIdentityApi
                 };
             }
 
-            return await context.Request.ReadFromJsonAsync<LoginRequest>(context.RequestAborted);
+            var request = await context.Request.ReadFromJsonAsync(AspNetCoreIdentityJsonContext.Default.LoginRequest, context.RequestAborted);
+            return request is null
+                ? null
+                : request with
+                {
+                    Username = request.Username ?? string.Empty,
+                    Password = request.Password ?? string.Empty
+                };
         }
         catch (JsonException)
         {

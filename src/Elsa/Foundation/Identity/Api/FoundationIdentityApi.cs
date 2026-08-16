@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Foundation.Identity.Api;
 
@@ -224,7 +225,7 @@ public static class FoundationIdentityApi
 
     private static async Task HandleRefreshAsync(HttpContext context)
     {
-        var (request, malformed) = await ReadJsonAsync<RefreshTokenRequest>(context);
+        var (request, malformed) = await ReadJsonAsync(context, FoundationIdentityApiJsonContext.Default.RefreshTokenRequest);
         if (malformed)
             return;
 
@@ -249,11 +250,11 @@ public static class FoundationIdentityApi
         await Results.Json(result, FoundationIdentityApiJsonContext.Default.TokenRefreshResult).ExecuteAsync(context);
     }
 
-    private static async Task<(T? Value, bool Malformed)> ReadJsonAsync<T>(HttpContext context) where T : class
+    private static async Task<(T? Value, bool Malformed)> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> typeInfo) where T : class
     {
         try
         {
-            return (await context.Request.ReadFromJsonAsync<T>(context.RequestAborted), false);
+            return (await context.Request.ReadFromJsonAsync(typeInfo, context.RequestAborted), false);
         }
         catch (JsonException)
         {
