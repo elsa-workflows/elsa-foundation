@@ -35,7 +35,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.QVBJLUNBUEFCSUxJVElFUy5SRUFE"
+        "value": "Elsa.Permission:v1:s:QVBJLUNBUEFCSUxJVElFUy5SRUFE"
       },
       "sourceIdentity": "ElsaApiCapabilitiesEndpointsGetCapabilities"
     },
@@ -232,7 +232,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RVhQUkVTU0lPTlMuUkVBRA"
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
       },
       "sourceIdentity": "ElsaExpressionsApiEndpointsListExpressionDescriptors"
     },
@@ -271,7 +271,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RVhQUkVTU0lPTlMuUkVBRA"
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
       },
       "sourceIdentity": "ElsaExpressionsApiEndpointsListVariableTypeDescriptors"
     },
