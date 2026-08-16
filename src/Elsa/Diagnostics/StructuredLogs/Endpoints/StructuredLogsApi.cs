@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
@@ -13,6 +12,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
 
 namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
 
@@ -26,9 +26,9 @@ public static class StructuredLogsApi
 
         var options = endpoints.ServiceProvider.GetService<IOptions<StructuredLogsOptions>>()?.Value
             ?? new StructuredLogsOptions();
-        RequestDelegate recent = HandleRecentAsync;
-        RequestDelegate sources = HandleSourcesAsync;
-        RequestDelegate stream = HandleStreamAsync;
+        RequestDelegate recent = static context => HandleRecentAsync(context);
+        RequestDelegate sources = static context => HandleSourcesAsync(context);
+        RequestDelegate stream = static context => HandleStreamAsync(context);
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
@@ -40,7 +40,8 @@ public static class StructuredLogsApi
                 descriptionMethod,
                 Response(StatusCodes.Status204NoContent),
                 Unauthorized(),
-                Forbidden());
+                Forbidden())
+            .RequireStableOpenApi();
 
         endpoints.MapGet(options.SourcesPath, sources)
             .WithOwner(StructuredLogsPermissions.OwnerId)
@@ -50,7 +51,8 @@ public static class StructuredLogsApi
                 descriptionMethod,
                 Response(StatusCodes.Status200OK, typeof(IReadOnlyList<LogSource>), "application/json"),
                 Unauthorized(),
-                Forbidden());
+                Forbidden())
+            .RequireStableOpenApi();
 
         endpoints.MapGet(options.StreamPath, stream)
             .WithOwner(StructuredLogsPermissions.OwnerId)
@@ -60,7 +62,8 @@ public static class StructuredLogsApi
                 descriptionMethod,
                 Response(StatusCodes.Status204NoContent),
                 Unauthorized(),
-                Forbidden());
+                Forbidden())
+            .RequireStableOpenApi();
     }
 
     private static async Task HandleRecentAsync(HttpContext context)

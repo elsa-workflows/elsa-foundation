@@ -1,18 +1,16 @@
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.Loader;
-using System.Security.Claims;
-using System.Text;
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Tests.Support;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
@@ -21,6 +19,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
+using System.Collections.Concurrent;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
+using System.Security.Claims;
+using System.Text;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests.Support;
 
@@ -44,11 +49,14 @@ public sealed class StructuredLogsCollectibleCycle : IDisposable
         bool streamStarted,
         bool streamCancelled,
         bool serializerExercised,
+        bool authorizationExercised,
         bool documentationGenerated,
-        OpenApiCacheInspection openApiCache,
+        bool documentationFirst,
+        OpenApiDescriptionInspection openApiDescription,
         WeakReference loadContext,
         WeakReference assembly,
-        WeakReference endpointType)
+        WeakReference endpointType,
+        WeakReference serializerContextType)
     {
         CycleId = cycleId;
         RequestedStage = requestedStage;
@@ -59,11 +67,14 @@ public sealed class StructuredLogsCollectibleCycle : IDisposable
         StreamStarted = streamStarted;
         StreamCancelled = streamCancelled;
         SerializerExercised = serializerExercised;
+        AuthorizationExercised = authorizationExercised;
         DocumentationGenerated = documentationGenerated;
-        OpenApiCache = openApiCache;
+        DocumentationFirst = documentationFirst;
+        OpenApiDescription = openApiDescription;
         LoadContext = loadContext;
         Assembly = assembly;
         EndpointType = endpointType;
+        SerializerContextType = serializerContextType;
     }
 
     public Guid CycleId { get; }
@@ -75,8 +86,10 @@ public sealed class StructuredLogsCollectibleCycle : IDisposable
     public bool StreamStarted { get; }
     public bool StreamCancelled { get; }
     public bool SerializerExercised { get; }
+    public bool AuthorizationExercised { get; }
     public bool DocumentationGenerated { get; }
-    public OpenApiCacheInspection OpenApiCache { get; }
+    public bool DocumentationFirst { get; }
+    public OpenApiDescriptionInspection OpenApiDescription { get; }
 
     /// <summary>Weak reference to the collectible load context; never a strong context reference.</summary>
     public WeakReference LoadContext { get; }
@@ -87,8 +100,11 @@ public sealed class StructuredLogsCollectibleCycle : IDisposable
     /// <summary>Weak reference to a type loaded from the collectible production assembly.</summary>
     public WeakReference EndpointType { get; }
 
+    /// <summary>Weak reference to the production source-generated serializer context type.</summary>
+    public WeakReference SerializerContextType { get; }
+
     public StructuredLogsUnloadEvidence VerifyCollection(int maxAttempts = StructuredLogsUnloadEvidence.DefaultMaxCollectionAttempts) =>
-        StructuredLogsUnloadEvidence.Verify(CycleId, LoadContext, Assembly, EndpointType, DocumentationGenerated, OpenApiCache, maxAttempts);
+        StructuredLogsUnloadEvidence.Verify(CycleId, LoadContext, Assembly, EndpointType, SerializerContextType, DocumentationGenerated, OpenApiDescription, maxAttempts);
 
     public void ReleaseRetention() => StructuredLogsCollectibleFixture.ReleaseRetention(CycleId);
 
@@ -111,18 +127,18 @@ public enum StructuredLogsRetentionStage
 }
 
 /// <summary>
-/// String/value/weak-reference-only OpenAPI cache evidence. It deliberately does not expose cached
-/// contexts, endpoint metadata, <see cref="Type"/>, <see cref="MethodInfo"/>, or delegates.
+/// String/value/weak-reference-only API Explorer description evidence. It deliberately does not expose
+/// descriptions, endpoint metadata, <see cref="Type"/>, <see cref="MethodInfo"/>, or delegates.
 /// </summary>
-public sealed record OpenApiCacheInspection(
-    int ContextCount,
+public sealed record OpenApiDescriptionInspection(
+    int DescriptionCount,
     int ModuleOwnedTypeCount,
     int ModuleOwnedMethodInfoCount,
     int ModuleOwnedDelegateCount,
     string ModuleOwnedMetadataKinds,
-    bool ServiceInspected)
+    bool DescriptionsInspected)
 {
-    public static readonly OpenApiCacheInspection Empty = new(0, 0, 0, 0, string.Empty, false);
+    public static readonly OpenApiDescriptionInspection Empty = new(0, 0, 0, 0, string.Empty, false);
 
     public bool HasModuleOwnedMetadata =>
         ModuleOwnedTypeCount != 0 || ModuleOwnedMethodInfoCount != 0 || ModuleOwnedDelegateCount != 0;
@@ -140,20 +156,22 @@ public sealed class StructuredLogsUnloadEvidence
         WeakReference loadContext,
         WeakReference assembly,
         WeakReference endpointType,
+        WeakReference serializerContextType,
         bool collected,
         int collectionAttempts,
         string diagnostic,
-        OpenApiCacheInspection openApiCache)
+        OpenApiDescriptionInspection openApiDescription)
     {
         CycleId = cycleId;
         Stage = stage;
         LoadContext = loadContext;
         Assembly = assembly;
         EndpointType = endpointType;
+        SerializerContextType = serializerContextType;
         Collected = collected;
         CollectionAttempts = collectionAttempts;
         Diagnostic = diagnostic;
-        OpenApiCache = openApiCache;
+        OpenApiDescription = openApiDescription;
     }
 
     public Guid CycleId { get; }
@@ -161,10 +179,11 @@ public sealed class StructuredLogsUnloadEvidence
     public WeakReference LoadContext { get; }
     public WeakReference Assembly { get; }
     public WeakReference EndpointType { get; }
+    public WeakReference SerializerContextType { get; }
     public bool Collected { get; }
     public int CollectionAttempts { get; }
     public string Diagnostic { get; }
-    public OpenApiCacheInspection OpenApiCache { get; }
+    public OpenApiDescriptionInspection OpenApiDescription { get; }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static StructuredLogsUnloadEvidence Verify(
@@ -172,13 +191,15 @@ public sealed class StructuredLogsUnloadEvidence
         WeakReference loadContext,
         WeakReference assembly,
         WeakReference endpointType,
+        WeakReference serializerContextType,
         bool documentationGenerated,
-        OpenApiCacheInspection openApiCache,
+        OpenApiDescriptionInspection openApiDescription,
         int maxAttempts)
     {
         ArgumentNullException.ThrowIfNull(loadContext);
         ArgumentNullException.ThrowIfNull(assembly);
         ArgumentNullException.ThrowIfNull(endpointType);
+        ArgumentNullException.ThrowIfNull(serializerContextType);
         if (maxAttempts is < 1 or > MaximumCollectionAttempts)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), maxAttempts, $"Must be between 1 and {MaximumCollectionAttempts}.");
 
@@ -187,7 +208,7 @@ public sealed class StructuredLogsUnloadEvidence
         for (; attempts < maxAttempts; attempts++)
         {
             ForceCollection();
-            if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive)
+            if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive && !serializerContextType.IsAlive)
             {
                 collected = true;
                 attempts++;
@@ -200,7 +221,7 @@ public sealed class StructuredLogsUnloadEvidence
             : StructuredLogsRetentionProbe.PublishedStage(cycleId, documentationGenerated);
         var diagnostic = collected
             ? string.Empty
-            : Describe(stage, documentationGenerated, openApiCache);
+            : Describe(stage, documentationGenerated, openApiDescription);
 
         return new StructuredLogsUnloadEvidence(
             cycleId,
@@ -208,10 +229,11 @@ public sealed class StructuredLogsUnloadEvidence
             loadContext,
             assembly,
             endpointType,
+            serializerContextType,
             collected,
             attempts,
             diagnostic,
-            openApiCache);
+            openApiDescription);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -225,17 +247,17 @@ public sealed class StructuredLogsUnloadEvidence
     private static string Describe(
         StructuredLogsRetentionStage stage,
         bool documentationGenerated,
-        OpenApiCacheInspection openApiCache) => stage switch
-    {
-        StructuredLogsRetentionStage.ExercisedLifecycle =>
-            "combined exercised route, DI/services, SSE, and serializer lifecycle owner retention",
-        StructuredLogsRetentionStage.Harness => "harness retention",
-        StructuredLogsRetentionStage.OpenApi when openApiCache.HasModuleOwnedMetadata =>
-            "OpenAPI operation-context cache contains module-owned metadata; dynamic documentation lifetime is retained",
-        StructuredLogsRetentionStage.OpenApi when documentationGenerated =>
-            "OpenAPI generation retained the collectible context without a classified module metadata entry; external gcroot evidence is required",
-        _ => "unclassified collectible retention"
-    };
+        OpenApiDescriptionInspection openApiDescription) => stage switch
+        {
+            StructuredLogsRetentionStage.ExercisedLifecycle =>
+                "combined exercised route, DI/services, SSE, and serializer lifecycle owner retention",
+            StructuredLogsRetentionStage.Harness => "harness retention",
+            StructuredLogsRetentionStage.OpenApi when openApiDescription.HasModuleOwnedMetadata =>
+                "API Explorer descriptions contain module-owned metadata; dynamic documentation lifetime is retained",
+            StructuredLogsRetentionStage.OpenApi when documentationGenerated =>
+                "OpenAPI generation retained the collectible context without a classified module metadata entry; external gcroot evidence is required",
+            _ => "unclassified collectible retention"
+        };
 }
 
 internal static class StructuredLogsRetentionProbe
@@ -275,7 +297,8 @@ internal static class StructuredLogsRetentionProbe
 
 /// <summary>
 /// Loads the production Structured Logs assembly into a collectible context, invokes its real mapper,
-/// exercises query/stream/serialization/documentation, inspects OpenAPI's operation cache, and returns
+/// exercises query/stream/serialization/documentation, inspects the public API descriptions used by
+/// OpenAPI, and returns
 /// only weak references and value diagnostics.
 /// </summary>
 public static class StructuredLogsCollectibleFixture
@@ -284,18 +307,20 @@ public static class StructuredLogsCollectibleFixture
     private const string MapperTypeName = "Elsa.Diagnostics.StructuredLogs.Endpoints.StructuredLogsApi";
     private const string MapperMethodName = "MapStructuredLogsApi";
     private const string SerializerTypeName = "Elsa.Diagnostics.StructuredLogs.Endpoints.StructuredLogEntrySerializer";
+    private const string SerializerContextTypeName = "Elsa.Diagnostics.StructuredLogs.Endpoints.StructuredLogsJsonContext";
     private static int _assemblyNumber;
 
     public static StructuredLogsCollectibleCycle Create(
         StructuredLogsRetentionStage retentionStage = StructuredLogsRetentionStage.Clean,
-        bool generateDocumentation = true)
+        bool generateDocumentation = true,
+        bool documentationFirst = false)
     {
         if (retentionStage == StructuredLogsRetentionStage.Harness)
             throw new ArgumentOutOfRangeException(nameof(retentionStage), retentionStage, "Harness retention is covered by the shared fixture.");
 
         var cycleId = Guid.NewGuid();
         var assemblyName = $"Elsa.Diagnostics.StructuredLogs.Collectible.{Interlocked.Increment(ref _assemblyNumber)}";
-        return CreateAndUnload(cycleId, assemblyName, retentionStage, generateDocumentation);
+        return CreateAndUnload(cycleId, assemblyName, retentionStage, generateDocumentation, documentationFirst);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -306,7 +331,8 @@ public static class StructuredLogsCollectibleFixture
         Guid cycleId,
         string assemblyName,
         StructuredLogsRetentionStage retentionStage,
-        bool generateDocumentation)
+        bool generateDocumentation,
+        bool documentationFirst)
     {
         var productionPath = typeof(StructuredLogsFeature).Assembly.Location;
         if (string.IsNullOrWhiteSpace(productionPath) || !File.Exists(productionPath))
@@ -315,8 +341,9 @@ public static class StructuredLogsCollectibleFixture
         var loadContext = new ProductionApiLoadContext(assemblyName);
         var assembly = loadContext.LoadFromAssemblyPath(productionPath);
         var featureType = assembly.GetType(FeatureTypeName, throwOnError: true)!;
+        var serializerContextType = assembly.GetType(SerializerContextTypeName, throwOnError: true)!;
         var mapperName = FindMapper(assembly);
-        var lifecycle = BuildLifecycleOwner(featureType, assembly, generateDocumentation, out var routeCount, out var queryExercised, out var streamStarted, out var streamCancelled, out var serializerExercised, out var documentationGenerated, out var cacheInspection);
+        var lifecycle = BuildLifecycleOwner(featureType, assembly, generateDocumentation, documentationFirst, out var routeCount, out var queryExercised, out var streamStarted, out var streamCancelled, out var serializerExercised, out var authorizationExercised, out var documentationGenerated, out var descriptionInspection);
 
         if (routeCount == 0)
             throw new InvalidOperationException("The production Structured Logs mapper published no endpoints.");
@@ -342,6 +369,7 @@ public static class StructuredLogsCollectibleFixture
         var loadContextReference = new WeakReference(loadContext);
         var assemblyReference = new WeakReference(assembly);
         var endpointTypeReference = new WeakReference(featureType);
+        var serializerContextTypeReference = new WeakReference(serializerContextType);
         loadContext.Unload();
 
         return new StructuredLogsCollectibleCycle(
@@ -354,37 +382,47 @@ public static class StructuredLogsCollectibleFixture
             streamStarted,
             streamCancelled,
             serializerExercised,
+            authorizationExercised,
             documentationGenerated,
-            cacheInspection,
+            documentationFirst,
+            descriptionInspection,
             loadContextReference,
             assemblyReference,
-            endpointTypeReference);
+            endpointTypeReference,
+            serializerContextTypeReference);
     }
 
     private static LifecycleOwner BuildLifecycleOwner(
         Type featureType,
         Assembly assembly,
         bool generateDocumentation,
+        bool documentationFirst,
         out int routeCount,
         out bool queryExercised,
         out bool streamStarted,
         out bool streamCancelled,
         out bool serializerExercised,
+        out bool authorizationExercised,
         out bool documentationGenerated,
-        out OpenApiCacheInspection cacheInspection)
+        out OpenApiDescriptionInspection descriptionInspection)
     {
-        var services = CreateProductionServices(featureType);
+        var documentationSource = new MutableEndpointDataSource();
+        var services = CreateProductionServices(featureType, documentationSource);
         var routeBuilder = new CollectibleRouteBuilder(services);
         InvokeMapper(assembly, routeBuilder);
-        var owner = new LifecycleOwner(routeBuilder.DataSources.ToArray(), services);
+        documentationSource.Replace(routeBuilder.DataSources.SelectMany(source => source.Endpoints).ToArray());
+        var owner = new LifecycleOwner([documentationSource], services);
         routeCount = owner.Endpoints.Count(endpoint => endpoint is RouteEndpoint);
+        descriptionInspection = generateDocumentation && documentationFirst
+            ? GenerateOpenApiDocument(owner, assembly)
+            : OpenApiDescriptionInspection.Empty;
         queryExercised = ExerciseQuery(owner);
         (streamStarted, streamCancelled) = ExerciseStream(owner);
         serializerExercised = ExerciseSerializer(services, assembly);
-        cacheInspection = generateDocumentation
-            ? GenerateOpenApiDocument(owner, assembly)
-            : OpenApiCacheInspection.Empty;
-        documentationGenerated = generateDocumentation && cacheInspection.ServiceInspected;
+        authorizationExercised = ExerciseAuthorization(owner);
+        if (generateDocumentation && !documentationFirst)
+            descriptionInspection = GenerateOpenApiDocument(owner, assembly);
+        documentationGenerated = generateDocumentation && descriptionInspection.DescriptionsInspected;
         return owner;
     }
 
@@ -412,7 +450,9 @@ public static class StructuredLogsCollectibleFixture
         mapper.Invoke(null, [routeBuilder]);
     }
 
-    private static IServiceProvider CreateProductionServices(Type featureType)
+    private static IServiceProvider CreateProductionServices(
+        Type featureType,
+        MutableEndpointDataSource documentationSource)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -422,8 +462,13 @@ public static class StructuredLogsCollectibleFixture
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddRouting();
+        services.AddSingleton<EndpointDataSource>(documentationSource);
+        services.AddDynamicEndpointApiExplorerRefresh();
+        services.AddOpenApi();
         services.AddAuthentication();
         services.AddAuthorization();
+        services.AddFoundationIdentityAbstractions();
+        services.AddNormalizedAuthenticationType("structured-logs-collectibility");
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<IHostEnvironment>(new CollectibilityHostEnvironment());
 
@@ -453,6 +498,30 @@ public static class StructuredLogsCollectibleFixture
         context.Response.Body = new MemoryStream();
         endpoint.RequestDelegate(context).GetAwaiter().GetResult();
         return context.Response.StatusCode is >= 200 and < 500;
+    }
+
+    private static bool ExerciseAuthorization(LifecycleOwner owner)
+    {
+        var endpoint = owner.FindEndpoint("recent");
+        var authorizeData = endpoint?.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        if (endpoint is null || authorizeData is null || authorizeData.Count == 0)
+            return false;
+
+        using var scope = owner.Services.CreateScope();
+        var policyProvider = scope.ServiceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
+        var policy = AuthorizationPolicy.CombineAsync(policyProvider, authorizeData).GetAwaiter().GetResult();
+        if (policy is null)
+            return false;
+
+        var identity = new ClaimsIdentity(
+            [
+                new Claim(IdentityClaimTypes.Normalized, "v1"),
+                new Claim(IdentityClaimTypes.Permission, "DIAGNOSTICS:STRUCTUREDLOGS")
+            ],
+            "structured-logs-collectibility");
+        var principal = new ClaimsPrincipal(identity);
+        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
+        return authorization.AuthorizeAsync(principal, endpoint, policy).GetAwaiter().GetResult().Succeeded;
     }
 
     private static (bool Started, bool Cancelled) ExerciseStream(LifecycleOwner owner)
@@ -511,65 +580,43 @@ public static class StructuredLogsCollectibleFixture
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static OpenApiCacheInspection GenerateOpenApiDocument(LifecycleOwner owner, Assembly moduleAssembly)
+    private static OpenApiDescriptionInspection GenerateOpenApiDocument(LifecycleOwner owner, Assembly moduleAssembly)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddRouting();
-        services.AddSingleton<IHostEnvironment>(new CollectibilityHostEnvironment());
-        services.AddOpenApi();
-        foreach (var dataSource in owner.DataSources)
-            services.AddSingleton(dataSource);
-
-        using var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        var provider = serviceProvider.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
+        var provider = owner.Services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
         var document = provider.GetOpenApiDocumentAsync(CancellationToken.None).GetAwaiter().GetResult();
-        var serviceType = typeof(IOpenApiDocumentProvider).Assembly.GetType("Microsoft.AspNetCore.OpenApi.OpenApiDocumentService")
-            ?? Type.GetType("Microsoft.AspNetCore.OpenApi.OpenApiDocumentService, Microsoft.AspNetCore.OpenApi");
-        var documentService = serviceType is null ? null : serviceProvider.GetKeyedService(serviceType, "v1");
-        var cache = documentService is null
-            ? OpenApiCacheInspection.Empty
-            : InspectCache(documentService, moduleAssembly);
+        var descriptions = owner.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>()
+            .ApiDescriptionGroups.Items
+            .SelectMany(group => group.Items)
+            .ToArray();
+        var inspection = InspectDescriptions(descriptions, moduleAssembly);
         var paths = document.Paths?.Count(path => path.Key.Contains("structured-logs", StringComparison.OrdinalIgnoreCase)) ?? 0;
-        return cache with { ServiceInspected = cache.ServiceInspected && paths > 0 };
+        return inspection with { DescriptionsInspected = inspection.DescriptionsInspected && paths > 0 };
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static OpenApiCacheInspection InspectCache(object documentService, Assembly moduleAssembly)
+    private static OpenApiDescriptionInspection InspectDescriptions(
+        IReadOnlyCollection<ApiDescription> descriptions,
+        Assembly moduleAssembly)
     {
         var moduleLoadContext = AssemblyLoadContext.GetLoadContext(moduleAssembly)
             ?? throw new InvalidOperationException("The collectible Structured Logs assembly has no load context.");
-        var cacheField = documentService.GetType().GetField(
-            "_operationTransformerContextCache",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        if (cacheField?.GetValue(documentService) is not IEnumerable entries)
-            return OpenApiCacheInspection.Empty;
-
-        var contextCount = 0;
         var typeCount = 0;
         var methodCount = 0;
         var delegateCount = 0;
         var kinds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var entry in entries)
+        foreach (var description in descriptions)
         {
-            contextCount++;
-            var value = entry?.GetType().GetProperty("Value")?.GetValue(entry);
-            var description = value?.GetType().GetProperty("Description")?.GetValue(value);
-            var actionDescriptor = description?.GetType().GetProperty("ActionDescriptor")?.GetValue(description);
-            if (actionDescriptor?.GetType().GetProperty("EndpointMetadata")?.GetValue(actionDescriptor) is not IEnumerable metadata)
-                continue;
-
-            foreach (var item in metadata)
+            foreach (var item in description.ActionDescriptor.EndpointMetadata)
                 InspectMetadata(item, moduleLoadContext, ref typeCount, ref methodCount, ref delegateCount, kinds);
         }
 
-        return new OpenApiCacheInspection(
-            contextCount,
+        return new OpenApiDescriptionInspection(
+            descriptions.Count,
             typeCount,
             methodCount,
             delegateCount,
             string.Join(",", kinds.Order(StringComparer.Ordinal)),
-            ServiceInspected: true);
+            DescriptionsInspected: true);
     }
 
     private static void InspectMetadata(
@@ -664,6 +711,29 @@ public static class StructuredLogsCollectibleFixture
         public IServiceProvider ServiceProvider { get; } = serviceProvider;
         public ICollection<EndpointDataSource> DataSources { get; } = new List<EndpointDataSource>();
         public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
+    }
+
+    private sealed class MutableEndpointDataSource : EndpointDataSource, IDisposable
+    {
+        private IReadOnlyList<Endpoint> _endpoints = [];
+        private CancellationTokenSource _changeTokenSource = new();
+
+        public override IReadOnlyList<Endpoint> Endpoints => Volatile.Read(ref _endpoints);
+
+        public override IChangeToken GetChangeToken() =>
+            new CancellationChangeToken(Volatile.Read(ref _changeTokenSource).Token);
+
+        public void Replace(IReadOnlyList<Endpoint> endpoints)
+        {
+            Volatile.Write(ref _endpoints, endpoints);
+            Interlocked.Exchange(ref _changeTokenSource, new CancellationTokenSource()).Cancel();
+        }
+
+        public void Dispose()
+        {
+            Volatile.Write(ref _endpoints, []);
+            Interlocked.Exchange(ref _changeTokenSource, new CancellationTokenSource()).Cancel();
+        }
     }
 
     private sealed class LifecycleOwner(EndpointDataSource[] dataSources, IServiceProvider services) : IDisposable
