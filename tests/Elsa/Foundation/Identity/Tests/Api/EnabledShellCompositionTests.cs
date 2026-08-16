@@ -24,11 +24,11 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// <summary>
 /// Plan Workstream D "prove it": composes the enabled-by-default identity stack end to end (ASP.NET Core
 /// Identity + cookie sign-in + login, OpenIddict issuance + bearer validation, the identity API surface with
-/// its FastEndpoints claim-type bridge) in front of a real <see cref="ConfigurePermissions"/>-secured Elsa
+/// its shared Foundation permission-policy path) in front of a real <see cref="ConfigurePermissions"/>-secured Elsa
 /// endpoint — the same guard the D5 sweep applied across Design/Publishing/Activities. It asserts:
 /// (a) an anonymous request to the permission-secured endpoint is rejected with 401; and (b) the full
 /// login → token → bearer flow yields a token whose <c>elsa.identity.permission</c> claims satisfy
-/// <c>ConfigurePermissions()</c> (proving the claim-type bridge registered by the identity API feature).
+/// <c>ConfigurePermissions()</c> (proving the same normalized permission-policy evaluator is used).
 /// The Development-only behaviour of the ApiSecurity.AllowAnonymous kill-switch (c) is proven directly by
 /// <c>ApiSecurityConfiguratorTests</c> and <c>PerShellApiSecurityIntegrationTests</c>.
 /// </summary>

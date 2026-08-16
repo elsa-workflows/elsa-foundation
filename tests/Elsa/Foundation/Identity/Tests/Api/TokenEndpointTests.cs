@@ -84,6 +84,21 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FirstParty_Bearer_Cannot_Be_Exchanged_For_A_Second_Token()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, TokenRoute);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Unnormalized_External_Principal_Cannot_Exchange_Forged_Internal_Permissions()
     {
         using var exchangeRequest = new HttpRequestMessage(HttpMethod.Get, TokenRoute);

@@ -2,8 +2,11 @@ using System.Net;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Foundation.Identity.Api;
+using Elsa.Foundation.Identity.Api.Extensions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -36,7 +39,8 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                         .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(HeaderAuthenticationHandler.SchemeName, _ => { });
                     services.AddAuthorization(options =>
                         options.AddPolicy("host.custom", policy => policy.RequireClaim("host-access")));
-                    services.AddFoundationIdentityAbstractions(options =>
+                    services.AddFoundationIdentityApi();
+                    services.Configure<FoundationIdentityOptions>(options =>
                         options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
                         {
                             HeaderAuthenticationHandler.SchemeName
@@ -73,6 +77,7 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                             .RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
                         endpoints.MapGet("/minimal/wildcard", () => Results.Ok()).RequirePermission("*");
                         endpoints.MapGet("/minimal/unrelated", () => Results.Ok()).RequireAuthorization("host.custom");
+                        FoundationIdentityApi.MapFoundationIdentityApi(endpoints);
                         endpoints.MapFastEndpoints();
                     });
                 });
@@ -81,6 +86,21 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
 
         await _host.StartAsync();
         _client = _host.GetTestClient();
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized)]
+    [InlineData("read", HttpStatusCode.Forbidden, HttpStatusCode.OK)]
+    [InlineData("capabilities-exact", HttpStatusCode.OK, HttpStatusCode.OK)]
+    [InlineData("capabilities-implied", HttpStatusCode.OK, HttpStatusCode.Forbidden)]
+    [InlineData("wildcard", HttpStatusCode.OK, HttpStatusCode.OK)]
+    public async Task Capabilities_Uses_The_Same_Permission_Evaluator_As_The_Remaining_FastEndpoints(
+        string? identity,
+        HttpStatusCode expectedCapabilities,
+        HttpStatusCode expectedFastEndpoint)
+    {
+        Assert.Equal(expectedCapabilities, await SendAsync("/_elsa/identity/capabilities", identity));
+        Assert.Equal(expectedFastEndpoint, await SendAsync("/fast/single", identity == "capabilities-exact" ? "read" : identity));
     }
 
     public async Task DisposeAsync()
@@ -630,6 +650,8 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                     [new Claim("host-access", "true")],
                     "raw-provider")),
                 "read" => Principal(SchemeName, marked: true, "read"),
+                "capabilities-exact" => Principal(SchemeName, marked: true, DefaultIdentityPermissionKeys.IdentityProvidersRead),
+                "capabilities-implied" => Principal(SchemeName, marked: true, DefaultIdentityPermissionKeys.IdentityProvidersManage),
                 "projected-read" => new ClaimsPrincipal(TrustedIdentity("tenant-a", "provider-a", "read")),
                 "write" => Principal(SchemeName, marked: true, "write"),
                 "read-write" => Principal(SchemeName, marked: true, "read", "write"),

@@ -30,12 +30,12 @@ public static class AspNetCoreIdentityApi
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
         endpoints.MapGet("/" + AspNetCoreIdentityDefaults.LoginRoute, HandleLoginPageAsync)
-            .WithLoginMetadata(owner, descriptionMethod)
+            .WithLoginMetadata(owner, descriptionMethod, "AspNetCoreIdentityLoginPage")
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(string), ["text/html"]))
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapPost("/" + AspNetCoreIdentityDefaults.LoginRoute, HandleLoginAsync)
-            .WithLoginMetadata(owner, descriptionMethod, typeof(AuthSession), includeRequest: true)
+            .WithLoginMetadata(owner, descriptionMethod, "AspNetCoreIdentityLogin", typeof(AuthSession), includeRequest: true)
             .WithMetadata(new AcceptsMetadata(["application/json", "application/x-www-form-urlencoded"], typeof(LoginRequest), false))
             .AllowPublic(PublicCategory, PublicReason);
     }
@@ -92,7 +92,7 @@ public static class AspNetCoreIdentityApi
             return;
         }
 
-        await Results.Ok(outcome.Session!).ExecuteAsync(context);
+        await Results.Json(outcome.Session!, AspNetCoreIdentityJsonContext.Default.AuthSession).ExecuteAsync(context);
     }
 
     private static async Task<LoginRequest?> ReadLoginRequestAsync(HttpContext context)
@@ -169,11 +169,17 @@ public static class AspNetCoreIdentityApi
         this IEndpointConventionBuilder builder,
         string owner,
         System.Reflection.MethodInfo descriptionMethod,
+        string operationId,
         Type? responseType = null,
         bool includeRequest = false)
     {
         builder.WithOwner(owner).WithAuthoringModel(EndpointAuthoringModels.MinimalApi);
-        var metadata = new List<object> { descriptionMethod };
+        var metadata = new List<object>
+        {
+            descriptionMethod,
+            new EndpointNameMetadata(operationId),
+            new TagsAttribute("Identity")
+        };
         if (responseType is not null)
             metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, ["application/json"]));
         if (includeRequest)

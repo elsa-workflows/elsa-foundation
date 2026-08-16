@@ -46,6 +46,23 @@ public sealed class MinimalIdentityEndpointMetadataTests
 
         Assert.Equal(9, endpoints.Length);
 
+        Assert.Equal(
+            new[]
+            {
+                "AspNetCoreIdentityLogin",
+                "AspNetCoreIdentityLoginPage",
+                "FoundationIdentityBootstrap",
+                "FoundationIdentityCapabilities",
+                "FoundationIdentityChallenge",
+                "FoundationIdentityLogout",
+                "FoundationIdentityRefresh",
+                "FoundationIdentitySession",
+                "FoundationIdentityToken"
+            },
+            endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+                .OrderBy(name => name, StringComparer.Ordinal));
+        Assert.All(endpoints, endpoint => Assert.Equal(["Identity"], endpoint.Metadata.GetMetadata<ITagsMetadata>()?.Tags));
+
         var routes = endpoints
             .Select(endpoint => (Route: endpoint.RoutePattern.RawText ?? string.Empty, Methods: endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Single() ?? string.Empty))
             .OrderBy(endpoint => endpoint.Route, StringComparer.Ordinal)
@@ -78,8 +95,9 @@ public sealed class MinimalIdentityEndpointMetadataTests
         Assert.Equal(EndpointSecurityDispositionKind.Permission, permission.Kind);
         var policy = new PermissionPolicyCodec().Parse(permission.Value!);
         Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
-        Assert.Contains(PermissionKey.Normalize(DefaultIdentityPermissionKeys.IdentityProvidersRead), policy.Descriptor!.Permissions);
-        Assert.Contains(PermissionKey.Wildcard, policy.Descriptor.Permissions);
+        Assert.Equal(
+            [PermissionKey.Normalize(DefaultIdentityPermissionKeys.IdentityProvidersRead)],
+            policy.Descriptor!.Permissions);
         Assert.NotNull(capabilities.Metadata.GetMetadata<AuthorizeAttribute>());
 
         var owners = endpoints

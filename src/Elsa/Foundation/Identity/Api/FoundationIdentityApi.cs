@@ -32,33 +32,33 @@ public static class FoundationIdentityApi
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
         endpoints.MapGet(Route("bootstrap"), HandleBootstrapAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityBootstrapResponse))
+            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityBootstrapResponse), "FoundationIdentityBootstrap")
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapGet(Route("capabilities"), HandleCapabilitiesAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityCapabilitiesResponse), secured: true)
-            .RequireAnyPermission(PermissionKey.Wildcard, DefaultIdentityPermissionKeys.IdentityProvidersRead);
+            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityCapabilitiesResponse), "FoundationIdentityCapabilities", secured: true)
+            .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersRead);
 
         endpoints.MapGet(Route("session"), HandleSessionAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(AuthSession))
+            .WithIdentityMetadata(owner, descriptionMethod, typeof(AuthSession), "FoundationIdentitySession")
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapGet(Route("token"), HandleTokenAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(AccessTokenResponse))
+            .WithIdentityMetadata(owner, descriptionMethod, typeof(AccessTokenResponse), "FoundationIdentityToken")
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []))
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapGet(Route("challenge/{provider}"), HandleChallengeAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, responseType: null)
+            .WithIdentityMetadata(owner, descriptionMethod, responseType: null, operationId: "FoundationIdentityChallenge")
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapPost(Route("logout/{provider}"), HandleLogoutAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, responseType: null)
+            .WithIdentityMetadata(owner, descriptionMethod, responseType: null, operationId: "FoundationIdentityLogout")
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []))
             .AllowPublic(PublicCategory, PublicReason);
 
         endpoints.MapPost(Route("refresh"), HandleRefreshAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(TokenRefreshResult))
+            .WithIdentityMetadata(owner, descriptionMethod, typeof(TokenRefreshResult), "FoundationIdentityRefresh")
             .WithMetadata(
                 new AcceptsMetadata(["application/json"], typeof(RefreshTokenRequest), false),
                 new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(void), []),
@@ -77,7 +77,7 @@ public static class FoundationIdentityApi
             providers.Select(x => new IdentityProviderResponse(
                 x.Id, x.Kind, x.DisplayName, x.IsDefault, x.Enabled, x.Challenge)).ToList());
 
-        await Results.Ok(response).ExecuteAsync(context);
+        await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityBootstrapResponse).ExecuteAsync(context);
     }
 
     private static async Task HandleCapabilitiesAsync(HttpContext context)
@@ -105,24 +105,35 @@ public static class FoundationIdentityApi
                 x.Description,
                 x.Implies?.ToArray() ?? [])).ToList());
 
-        await Results.Ok(response).ExecuteAsync(context);
+        await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityCapabilitiesResponse).ExecuteAsync(context);
     }
 
     private static async Task HandleSessionAsync(HttpContext context)
     {
         var session = await context.RequestServices.GetRequiredService<IAuthSessionService>()
             .GetAsync(context.User, context.RequestAborted);
-        await Results.Ok(session).ExecuteAsync(context);
+        await Results.Json(session, FoundationIdentityApiJsonContext.Default.AuthSession).ExecuteAsync(context);
     }
 
     private static async Task HandleTokenAsync(HttpContext context)
     {
-        await AuthenticateInteractivePrincipalAsync(context);
-        if (!context.User.Identities.Any(identity => identity.IsAuthenticated))
+        if (await IsFirstPartyBearerAsync(context))
         {
             await Results.Unauthorized().ExecuteAsync(context);
             return;
         }
+
+        var principal = await AuthenticateInteractivePrincipalAsync(context);
+        if (principal is null || !principal.Identities.Any(identity => identity.IsAuthenticated))
+        {
+            await Results.Unauthorized().ExecuteAsync(context);
+            return;
+        }
+
+        // Never exchange an already-authenticated bearer (or any other ambient
+        // principal) for a fresh token. The exchange is exclusively backed by
+        // one of the explicitly configured interactive schemes above.
+        context.User = principal;
 
         var normalizedValidator = context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>();
         if (!normalizedValidator.TryGetNormalizedPrincipal(context.User, out var normalizedPrincipal))
@@ -146,7 +157,23 @@ public static class FoundationIdentityApi
         var result = await context.RequestServices.GetRequiredService<ITokenService>()
             .IssueAsync(new TokenIssueRequest(subject, tenantId, permissions), context.RequestAborted);
 
-        await Results.Ok(new AccessTokenResponse(result.AccessToken, result.ExpiresAt)).ExecuteAsync(context);
+        await Results.Json(new AccessTokenResponse(result.AccessToken, result.ExpiresAt), FoundationIdentityApiJsonContext.Default.AccessTokenResponse).ExecuteAsync(context);
+    }
+
+    private static async Task<bool> IsFirstPartyBearerAsync(HttpContext context)
+    {
+        var authorization = context.Request.Headers.Authorization.ToString();
+        const string prefix = "Bearer ";
+        if (!authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var token = authorization[prefix.Length..].Trim();
+        if (token.Length == 0)
+            return false;
+
+        var validation = await context.RequestServices.GetRequiredService<ITokenService>()
+            .ValidateAsync(new TokenValidationRequest(token), context.RequestAborted);
+        return validation.Succeeded;
     }
 
     private static async Task HandleChallengeAsync(HttpContext context)
@@ -219,7 +246,7 @@ public static class FoundationIdentityApi
             return;
         }
 
-        await Results.Ok(result).ExecuteAsync(context);
+        await Results.Json(result, FoundationIdentityApiJsonContext.Default.TokenRefreshResult).ExecuteAsync(context);
     }
 
     private static async Task<(T? Value, bool Malformed)> ReadJsonAsync<T>(HttpContext context) where T : class
@@ -250,11 +277,8 @@ public static class FoundationIdentityApi
         }
     }
 
-    private static async Task AuthenticateInteractivePrincipalAsync(HttpContext context)
+    private static async Task<ClaimsPrincipal?> AuthenticateInteractivePrincipalAsync(HttpContext context)
     {
-        if (context.User.Identities.Any(identity => identity.IsAuthenticated))
-            return;
-
         var options = context.RequestServices.GetRequiredService<IOptions<FoundationIdentityApiOptions>>().Value;
         var schemeProvider = context.RequestServices.GetRequiredService<IAuthenticationSchemeProvider>();
         foreach (var scheme in options.InteractiveAuthSchemes)
@@ -266,9 +290,10 @@ public static class FoundationIdentityApi
             if (!result.Succeeded || result.Principal is null)
                 continue;
 
-            context.User = result.Principal;
-            return;
+            return result.Principal;
         }
+
+        return null;
     }
 
     private static string RouteValue(HttpContext context, string name) =>
@@ -281,10 +306,16 @@ public static class FoundationIdentityApi
         string owner,
         System.Reflection.MethodInfo descriptionMethod,
         Type? responseType,
+        string operationId,
         bool secured = false)
     {
         builder.WithOwner(owner).WithAuthoringModel(EndpointAuthoringModels.MinimalApi);
-        var metadata = new List<object> { descriptionMethod };
+        var metadata = new List<object>
+        {
+            descriptionMethod,
+            new EndpointNameMetadata(operationId),
+            new TagsAttribute("Identity")
+        };
         if (responseType is not null)
             metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, ["application/json"]));
         if (secured)
