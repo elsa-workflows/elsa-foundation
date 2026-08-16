@@ -131,7 +131,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         using var cancellation = new CancellationTokenSource();
 
         var canceled = context.GetAuthorizationProfileAsync(cancellation.Token).AsTask();
-        await counter.Started.Task;
+        await counter.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
         cancellation.Cancel();
         var successful = context.GetAuthorizationProfileAsync().AsTask();
 
@@ -173,6 +173,8 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
 
         Assert.False(await context.CanAuthorProviderAsync("provider"));
         Assert.False(await context.CanManageActivityDefinitionsAsync());
+        Assert.False(await context.CanReadProviderPayloadAsync("provider"));
+        Assert.False(await context.CanReadAsync(new("ActivityVersion", "definition")));
         Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
         Assert.Equal(0, service.Calls);
 
@@ -192,6 +194,9 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             service,
             provider.GetRequiredService<NormalizedPrincipalValidator>());
         Assert.False(await rawContext.CanAuthorProviderAsync("provider"));
+        Assert.False(await rawContext.CanReadProviderPayloadAsync("provider"));
+        Assert.False(await rawContext.CanManageActivityDefinitionsAsync());
+        Assert.False(await rawContext.CanReadAsync(new("ActivityVersion", "definition")));
         Assert.Equal("untrusted", await rawContext.GetAuthorizationProfileAsync());
         Assert.Equal(0, service.Calls);
     }
@@ -218,6 +223,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
 
         Assert.Throws<InvalidOperationException>(() => context.AuthorizationProfile);
         Assert.Throws<InvalidOperationException>(() => context.CanAuthorProvider("provider"));
+        Assert.Throws<InvalidOperationException>(() => context.CanReadProviderPayload("provider"));
         Assert.Throws<InvalidOperationException>(() => context.CanRead(new("ActivityVersion", "definition")));
         Assert.Throws<InvalidOperationException>(() => context.CanManageActivityDefinitions);
     }
@@ -229,7 +235,26 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         var context = new HttpContextActivityDesignAuthorizationContext(accessor);
 
         Assert.False(await context.CanAuthorProviderAsync("provider"));
+        Assert.False(await context.CanReadProviderPayloadAsync("provider"));
+        Assert.False(await context.CanManageActivityDefinitionsAsync());
+        Assert.False(await context.CanReadAsync(new("ActivityVersion", "definition")));
         Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+    }
+
+    [Fact]
+    public void Constructors_guard_null_dependencies_and_public_adapters()
+    {
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityDesignAuthorizationContext(null!));
+        Assert.Throws<ArgumentNullException>(() => new LegacyActivityAuthoringContextAdapter(null!));
+        Assert.Throws<ArgumentNullException>(() => new LegacyActivityDependencyContextAdapter(null!));
+
+        using var provider = CreateServices().BuildServiceProvider();
+        var accessor = new HttpContextAccessor();
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        var validator = provider.GetRequiredService<NormalizedPrincipalValidator>();
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityDesignAuthorizationContext(null!, authorization, validator));
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityDesignAuthorizationContext(accessor, null!, validator));
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityDesignAuthorizationContext(accessor, authorization, null!));
     }
 
     [Fact]
@@ -248,7 +273,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             provider.GetRequiredService<NormalizedPrincipalValidator>());
         var pending = first.GetAuthorizationProfileAsync().AsTask();
 
-        await probe.Started.Task;
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
 
         Assert.False(string.IsNullOrWhiteSpace(await first.GetAuthorizationProfileAsync()));

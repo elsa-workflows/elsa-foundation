@@ -112,7 +112,7 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
         using var cancellation = new CancellationTokenSource();
 
         var canceled = context.GetAuthorizationProfileAsync(cancellation.Token).AsTask();
-        await counter.Started.Task;
+        await counter.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
         cancellation.Cancel();
         var successful = context.GetAuthorizationProfileAsync().AsTask();
 
@@ -157,6 +157,8 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
             provider.GetRequiredService<NormalizedPrincipalValidator>());
 
         Assert.False(await context.CanInspectStructureAsync(Execution("tenant")));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(Execution("tenant")));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(Execution("tenant")));
         Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
         Assert.Equal(0, service.Calls);
 
@@ -175,6 +177,8 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
             service,
             provider.GetRequiredService<NormalizedPrincipalValidator>());
         Assert.False(await rawContext.CanInspectStructureAsync(Execution("tenant")));
+        Assert.False(await rawContext.CanInspectSensitiveValuesAsync(Execution("tenant")));
+        Assert.False(await rawContext.CanResolveSensitiveValuePayloadsAsync(Execution("tenant")));
         Assert.Equal("untrusted", await rawContext.GetAuthorizationProfileAsync());
         Assert.Equal(0, service.Calls);
     }
@@ -211,7 +215,27 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
         var context = new HttpContextActivityExecutionInspectionAuthorizationContext(accessor);
 
         Assert.False(await context.CanInspectStructureAsync(Execution("tenant-a")));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(Execution("tenant-a")));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(Execution("tenant-a")));
         Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+    }
+
+    [Fact]
+    public void Constructors_guard_null_dependencies_and_public_adapter()
+    {
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityExecutionInspectionAuthorizationContext(null!));
+        Assert.Throws<ArgumentNullException>(() => new LegacyActivityInspectionContextAdapter(null!));
+
+        using var provider = new ServiceCollection()
+            .AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal))
+            .BuildServiceProvider();
+        var accessor = new HttpContextAccessor();
+        var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
+        var validator = provider.GetRequiredService<NormalizedPrincipalValidator>();
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityExecutionInspectionAuthorizationContext(null!, authorization, validator));
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityExecutionInspectionAuthorizationContext(accessor, null!, validator));
+        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityExecutionInspectionAuthorizationContext(accessor, authorization, null!));
     }
 
     [Fact]
@@ -232,7 +256,7 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
             provider.GetRequiredService<NormalizedPrincipalValidator>());
         var pending = first.GetAuthorizationProfileAsync().AsTask();
 
-        await probe.Started.Task;
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
 
         Assert.False(string.IsNullOrWhiteSpace(await first.GetAuthorizationProfileAsync()));

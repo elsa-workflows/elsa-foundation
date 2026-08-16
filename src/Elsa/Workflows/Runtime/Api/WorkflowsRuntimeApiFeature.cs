@@ -77,17 +77,14 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         var assembly = GetType().Assembly;
         services.AddRequestHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
-        var hasLegacyInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext));
         var hasAsyncInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync));
-        if (!hasLegacyInspectionHost)
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
             services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         if (!hasAsyncInspectionHost)
             services.AddScoped<IActivityInspectionContextAsync>(sp =>
-                hasLegacyInspectionHost
-                    ? new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>())
-                    : sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContextAsync asyncContext
-                        ? asyncContext
-                        : sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
+                sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>()));
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.

@@ -28,6 +28,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -183,6 +184,23 @@ public sealed class ActivityDesignFeatureCompositionTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authoring.CanManageActivityDefinitionsAsync(canceled.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.GetAuthorizationProfileAsync(canceled.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dependencies.CanReadAsync(new("ActivityVersion", "definition"), canceled.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task ActivitiesDesignApiFeature_adapts_a_legacy_replacement_registered_after_feature_configuration()
+    {
+        var services = MinimalServices();
+        new ActivitiesDesignApiFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Scoped<IActivityDependencyAuthorizationContext, LegacyDependencyContext>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var dependencies = scope.ServiceProvider.GetRequiredService<IActivityDependencyContextAsync>();
+
+        Assert.IsType<LegacyActivityDependencyContextAdapter>(dependencies);
+        Assert.Equal("legacy-tenant", dependencies.TenantId);
+        Assert.Equal("legacy-profile", await dependencies.GetAuthorizationProfileAsync());
+        Assert.True(await dependencies.CanReadAsync(new("ActivityVersion", "definition")));
     }
 
     [Fact]

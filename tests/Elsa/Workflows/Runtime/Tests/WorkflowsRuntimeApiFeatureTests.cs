@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -44,6 +45,27 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectStructureAsync(InspectionState(), canceled.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectSensitiveValuesAsync(InspectionState(), canceled.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanResolveSensitiveValuePayloadsAsync(InspectionState(), canceled.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task Adapts_a_legacy_replacement_registered_after_feature_configuration()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Scoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
+
+        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
+        Assert.Equal("tenant:legacy", context.TenantScope);
+        Assert.Equal("legacy-actor", context.AuditSubject);
+        Assert.Equal("legacy-request", context.RequestCorrelationId);
+        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
+        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
     }
 
     [Fact]

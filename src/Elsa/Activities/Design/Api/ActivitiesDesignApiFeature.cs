@@ -54,9 +54,8 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddHttpContextAccessor();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        var hasLegacyDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext));
         var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
-        if (!hasLegacyDependencyHost)
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
             services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
         {
@@ -67,11 +66,9 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         }
         if (!hasAsyncDependencyHost)
             services.AddScoped<IActivityDependencyContextAsync>(sp =>
-                hasLegacyDependencyHost
-                    ? new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>())
-                    : sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
-                        ? asyncContext
-                        : sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
+                    ? asyncContext
+                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
         services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
