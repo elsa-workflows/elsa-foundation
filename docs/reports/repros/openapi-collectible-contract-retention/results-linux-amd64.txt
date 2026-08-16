@@ -1,0 +1,14 @@
+Captured: 2026-08-16
+Container: mcr.microsoft.com/dotnet/sdk:10.0.300
+Platform: Linux, amd64
+.NET SDK: 10.0.300
+.NET host/runtime: 10.0.8
+Microsoft.AspNetCore.OpenApi: 10.0.10
+Microsoft.OpenApi: 2.7.5
+
+Command (repository mounted at /src):
+docker run --rm --platform linux/amd64 -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0.300 sh -lc 'dotnet build Contract/Contract.csproj && dotnet run --project Repro.csproj -- /src/Contract/bin/Debug/net10.0/OpenApiRetention.Contract.dll'
+
+Result (exit 0):
+Stable metadata:      CollectionResult { Collected = True, LoadContextAlive = False, AssemblyAlive = False, ContractTypeAlive = False, DelegateAlive = False, ProviderAlive = False }
+Collectible metadata: CollectionResult { Collected = False, LoadContextAlive = True, AssemblyAlive = True, ContractTypeAlive = True, DelegateAlive = False, ProviderAlive = False }
