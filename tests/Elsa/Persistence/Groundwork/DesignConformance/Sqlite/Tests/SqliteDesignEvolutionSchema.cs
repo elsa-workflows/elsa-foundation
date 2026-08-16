@@ -30,7 +30,6 @@ internal static class SqliteDesignEvolutionSources
     public static readonly IReadOnlyList<Type> Baseline =
     [
         typeof(RuntimeGroundworkStorageManifestSource),
-        typeof(SecretsGroundworkStorageManifestSource),
         typeof(DistributedGroundworkStorageManifestSource),
         typeof(WorkflowsDesignGroundworkStorageManifestSource),
         typeof(ActivitiesDesignGroundworkStorageManifestSource),

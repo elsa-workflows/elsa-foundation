@@ -42,7 +42,6 @@ public sealed class ColdStartSchemaOperationCountTests(ITestOutputHelper output)
     private static IReadOnlyList<IGroundworkStorageManifestSource> ReferenceDeploymentSources() =>
     [
         new RuntimeGroundworkStorageManifestSource(),
-        new SecretsGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),

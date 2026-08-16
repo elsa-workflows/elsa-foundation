@@ -6,9 +6,6 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
-using Elsa.Secrets.Core.Models;
-using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Secrets.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
@@ -215,35 +212,6 @@ public sealed class ProviderRecoveryContractTests
         Assert.NotNull(await applications.FindAsync(Tenant, application.Id));
     }
 
-    private static async Task AssertSecretRestartAsync(string providerKey)
-    {
-        await using var driver = await CreatePhysicalDriverAsync(providerKey, new SecretsGroundworkStorageManifestSource());
-        const string name = "recovery-secret";
-
-        await using (var client = await driver.OpenPhysicalClientAsync(Access(Tenant)))
-            await SecretRepository(client).SaveAsync(Secret(name, "first"));
-
-        await using var reopenedClient = await driver.OpenPhysicalClientAsync(Access(Tenant));
-        var reopened = await SecretRepository(reopenedClient).FindAsync(Tenant, name);
-        Assert.NotNull(reopened);
-        Assert.Equal("first", reopened!.LatestActiveVersion!.Payload.Value);
-    }
-
-    private static async Task AssertSecretCancellationAndReuseAsync(string providerKey)
-    {
-        await using var driver = await CreatePhysicalDriverAsync(providerKey, new SecretsGroundworkStorageManifestSource());
-        await using var client = await driver.OpenPhysicalClientAsync(Access(Tenant));
-        var store = SecretRepository(client);
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            store.FindAsync(Tenant, "recovery-secret-cancelled", cancelled.Token).AsTask());
-
-        await store.SaveAsync(Secret("recovery-secret-cancelled", "reused"));
-        Assert.Equal("reused", (await store.FindAsync(Tenant, "recovery-secret-cancelled"))!.LatestActiveVersion!.Payload.Value);
-    }
-
     private static async Task AssertDistributedFailureAndRestartAsync(string providerKey)
     {
         foreach (var window in new[]
@@ -324,9 +292,6 @@ public sealed class ProviderRecoveryContractTests
     private static GroundworkSchedulerStateStore SchedulerState(GroundworkProviderClient client) =>
         new(client.DocumentStore, GroundworkProviderTestSerialization.Serializer, client.BoundedDocumentStore);
 
-    private static GroundworkSecretRepository SecretRepository(GroundworkProviderClient client) =>
-        new(client.DocumentStore, client.BoundedDocumentStore);
-
     private static GroundworkExecutionCommandTransport Transport(GroundworkProviderClient client) =>
         new(client.DocumentStore, new FixedAccessContextAccessor(DistributedScope), client.BoundedDocumentStore);
 
@@ -346,23 +311,12 @@ public sealed class ProviderRecoveryContractTests
             Now,
             partition: new WorkflowExecutionPartition(DistributedScope));
 
-    private static Secret Secret(string name, string value) => new()
-    {
-        TenantId = Tenant,
-        Name = name,
-        DisplayName = name,
-        TypeName = SecretTypeNames.Text,
-        StoreName = SecretStoreNames.Encrypted,
-        Versions = [new SecretVersion { Version = 1, Payload = SecretPayload.FromValue(value) }]
-    };
-
     private static DocumentStoreAccess Access(string scope) =>
         DocumentStoreAccess.Scoped(new StorageScope(scope));
 
     private static IReadOnlyList<GroundworkStoreScenarioDefinition> AllDefinitions() =>
         GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Runtime)
             .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Identity))
-            .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Secrets))
             .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.DistributedRuntime))
             .OrderBy(definition => definition.ScenarioId, StringComparer.Ordinal)
             .ToArray();
@@ -390,8 +344,6 @@ public sealed class ProviderRecoveryContractTests
             ],
             AssertIdentityRecoveryAsync,
             FailureWindows()),
-        Probe(["secret-dispose-reopen-and-process-restart"], AssertSecretRestartAsync),
-        Probe(["secret-cancellation-dispose-and-reuse"], AssertSecretCancellationAndReuseAsync),
         Probe(["distributed-command-failure-and-restart"], AssertDistributedFailureAndRestartAsync, FailureWindows()),
         Probe(["distributed-cancellation-dispose-and-reuse"], AssertDistributedCancellationAndReuseAsync)
     ];

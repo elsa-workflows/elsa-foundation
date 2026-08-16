@@ -30,7 +30,6 @@ internal static class PostgreSqlDesignEvolutionSources
     public static readonly IReadOnlyList<Type> Baseline =
     [
         typeof(RuntimeGroundworkStorageManifestSource),
-        typeof(SecretsGroundworkStorageManifestSource),
         typeof(DistributedGroundworkStorageManifestSource),
         typeof(WorkflowsDesignGroundworkStorageManifestSource),
         typeof(ActivitiesDesignGroundworkStorageManifestSource),

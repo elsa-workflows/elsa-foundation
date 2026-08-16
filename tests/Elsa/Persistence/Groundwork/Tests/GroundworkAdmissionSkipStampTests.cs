@@ -29,7 +29,6 @@ public sealed class GroundworkAdmissionSkipStampTests
     private static IReadOnlyList<IGroundworkStorageManifestSource> ReferenceDeploymentSources() =>
     [
         new RuntimeGroundworkStorageManifestSource(),
-        new SecretsGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),

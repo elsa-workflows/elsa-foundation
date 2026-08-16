@@ -676,32 +676,9 @@ public class GroundworkStorageCompositionTests
                 SharedDocumentsStorage.StringProjectionLength));
     }
 
-    [Fact]
-    public async Task Durable_family_sources_cover_the_exact_ALL33_ledger_denominator_once()
-    {
-        var sources = new IGroundworkStorageManifestSource[]
-        {
-            new RuntimeGroundworkStorageManifestSource(),
-            new IdentityGroundworkStorageManifestSource(),
-            new SecretsGroundworkStorageManifestSource(),
-            new DistributedGroundworkStorageManifestSource()
-        };
-        var actualRows = new List<string>();
-        foreach (var source in sources)
-        {
-            var declaration = await source.CreateDeclarationAsync(CancellationToken.None);
-            actualRows.AddRange(declaration.CoverageRows);
-        }
-
-        Assert.Equal(33, actualRows.Count);
-        Assert.Equal(33, actualRows.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(ExpectedAll33CoverageRows, actualRows.Order(StringComparer.Ordinal));
-    }
-
     [Theory]
     [InlineData("runtime", typeof(RuntimeGroundworkStorageManifestSource))]
     [InlineData("iam", typeof(IdentityGroundworkStorageManifestSource))]
-    [InlineData("secrets", typeof(SecretsGroundworkStorageManifestSource))]
     [InlineData("distributed-runtime", typeof(DistributedGroundworkStorageManifestSource))]
     [InlineData("workflows-design", typeof(WorkflowsDesignGroundworkStorageManifestSource))]
     [InlineData("activities-design", typeof(ActivitiesDesignGroundworkStorageManifestSource))]
@@ -936,7 +913,6 @@ public class GroundworkStorageCompositionTests
     {
         "runtime" => new RuntimeGroundworkStorageManifestSource(),
         "iam" => new IdentityGroundworkStorageManifestSource(),
-        "secrets" => new SecretsGroundworkStorageManifestSource(),
         "distributed-runtime" => new DistributedGroundworkStorageManifestSource(),
         "workflows-design" => new WorkflowsDesignGroundworkStorageManifestSource(),
         "activities-design" => new ActivitiesDesignGroundworkStorageManifestSource(),

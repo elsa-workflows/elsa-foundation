@@ -5,10 +5,6 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Testing;
-using Elsa.Secrets.Core.Contracts;
-using Elsa.Secrets.Core.Models;
-using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Secrets.Persistence.Groundwork.Stores;
 using Groundwork.Core.Scoping;
 using Groundwork.Documents.Scoping;
 using Xunit;
@@ -16,7 +12,7 @@ using Xunit;
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 
 /// <summary>
-/// T088's IAM and secrets provider matrix. Lifecycle and injected-failure scenarios stay in T090.
+/// T088's IAM provider matrix. Lifecycle and injected-failure scenarios stay in T090.
 /// </summary>
 public sealed class IamSecretsProviderContractTests
 {
@@ -51,7 +47,7 @@ public sealed class IamSecretsProviderContractTests
 
     [SkippableFact]
     [Trait("Category", "GroundworkProviderMatrix")]
-    public async Task Iam_and_secrets_t088_public_contracts_pass_on_every_provider()
+    public async Task Iam_t088_public_contracts_pass_on_every_provider()
     {
         RequireProviderMatrixOptIn();
 
@@ -64,7 +60,6 @@ public sealed class IamSecretsProviderContractTests
 
     private static IReadOnlyList<GroundworkStoreScenarioDefinition> Definitions() =>
         GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Identity)
-            .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Secrets))
             .OrderBy(x => x.ScenarioId, StringComparer.Ordinal)
             .ToArray();
 
@@ -83,14 +78,7 @@ public sealed class IamSecretsProviderContractTests
         Probe(
             ["iam-provider-configuration-scope-and-privilege"],
             async providerKey => _ = await RunProviderConfigurationScopeAndPrivilegeAsync(providerKey)),
-        Probe(["iam-bounded-query-equivalence"], AssertIamBoundedQueriesAsync),
-        Probe(
-            ["secret-concurrent-create-only", "secret-revision-aware-mutation"],
-            async providerKey => _ = await RunSecretCreateOnlyAndRevisionAsync(providerKey)),
-        Probe(
-            ["secret-bounded-list-equivalence"],
-            providerKey => new FoundationBoundedQueryContractTests()
-                .Secret_filters_order_count_and_window_execute_before_materialization(providerKey))
+        Probe(["iam-bounded-query-equivalence"], AssertIamBoundedQueriesAsync)
     ];
 
     private static async Task AssertTenantLocalNormalizedUniquenessAsync(string providerKey)
@@ -249,104 +237,16 @@ public sealed class IamSecretsProviderContractTests
         ];
     }
 
-    internal static async Task<IamSecretsSecretEvidenceResults> RunSecretCreateOnlyAndRevisionAsync(string providerKey)
-    {
-        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
-        await driver.InitializeAsync();
-        await driver.ResetPhysicalAsync([new SecretsGroundworkStorageManifestSource()]);
-        await using var firstClient = await driver.OpenPhysicalClientAsync(Access(TenantA));
-        await using var secondClient = await driver.OpenPhysicalClientAsync(Access(TenantA));
-        await using var thirdClient = await driver.OpenPhysicalClientAsync(Access(TenantA));
-        var first = new GroundworkSecretRepository(firstClient.DocumentStore, firstClient.BoundedDocumentStore);
-        var second = new GroundworkSecretRepository(secondClient.DocumentStore, secondClient.BoundedDocumentStore);
-        var third = new GroundworkSecretRepository(thirdClient.DocumentStore, thirdClient.BoundedDocumentStore);
-
-        var ordinary = Secret("ordinary-secret", "ordinary");
-        await first.SaveAsync(ordinary);
-        var ordinaryStored = await first.FindAsync(TenantA, ordinary.Name);
-        Assert.NotNull(ordinaryStored);
-        Assert.Equal(ordinary.Name, ordinaryStored!.Name);
-        Assert.Equal("ordinary", ordinaryStored.LatestActiveVersion!.Payload.Value);
-
-        var create = await Task.WhenAll(
-            first.TryAddAsync(Secret("shared-secret", "first")).AsTask(),
-            second.TryAddAsync(Secret("shared-secret", "second")).AsTask());
-        Assert.Single(create.Where(result => result));
-
-        var revisionAware = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(first);
-        var original = Secret("revision-secret", "original");
-        Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisionAware.SaveWithRevisionAsync(original, null)).Status);
-        var current = await revisionAware.FindWithRevisionAsync(TenantA, original.Name);
-        var stale = await Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(second)
-            .FindWithRevisionAsync(TenantA, original.Name);
-        var staleDelete = await Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(third)
-            .FindWithRevisionAsync(TenantA, original.Name);
-        Assert.NotNull(current);
-        Assert.NotNull(stale);
-        Assert.NotNull(staleDelete);
-        current!.Secret.DisplayName = "first-update";
-        stale!.Secret.DisplayName = "second-update";
-        staleDelete!.Secret.Status = SecretStatus.Deleted;
-        var saved = await revisionAware.SaveWithRevisionAsync(current.Secret, current.Revision);
-        var staleUpdate = await ((IRevisionAwareSecretRepository)second).SaveWithRevisionAsync(stale.Secret, stale.Revision);
-        var staleDeletion = await ((IRevisionAwareSecretRepository)third).SaveWithRevisionAsync(staleDelete.Secret, staleDelete.Revision);
-        Assert.Equal(SecretRevisionSaveStatus.Saved, saved.Status);
-        Assert.Equal(SecretRevisionSaveStatus.Conflict, staleUpdate.Status);
-        Assert.Equal(SecretRevisionSaveStatus.Conflict, staleDeletion.Status);
-        Assert.Equal("first-update", (await first.FindAsync(TenantA, original.Name))!.DisplayName);
-
-        var createDefinition = GroundworkStoreScenarioCatalog.Get("secret-concurrent-create-only");
-        var revisionDefinition = GroundworkStoreScenarioCatalog.Get("secret-revision-aware-mutation");
-        var composition = Composition(driver, typeof(SecretsGroundworkStorageManifestSource));
-        return new IamSecretsSecretEvidenceResults(
-            revisionDefinition.CreateResult(
-                "secrets-repository",
-                driver.Descriptor,
-                composition,
-                3,
-                [
-                    new GroundworkScenarioObservation("current-revision", "advanced"),
-                    new GroundworkScenarioObservation("stale-delete-count", "1"),
-                    new GroundworkScenarioObservation("stale-update-count", "1")
-                ]),
-            createDefinition.CreateResult(
-                "secrets-repository",
-                driver.Descriptor,
-                composition,
-                2,
-                [
-                    new GroundworkScenarioObservation("loser-count", "1"),
-                    new GroundworkScenarioObservation("winner-count", "1"),
-                    new GroundworkScenarioObservation("winner-value-state", "one-persisted-winner")
-                ]),
-            revisionDefinition.CreateResult(
-                "secrets-repository",
-                driver.Descriptor,
-                composition,
-                3,
-                [
-                    new GroundworkScenarioObservation("current-revision", "advanced"),
-                    new GroundworkScenarioObservation("stale-delete-count", "1"),
-                    new GroundworkScenarioObservation("stale-update-count", "1")
-                ]));
-    }
-
     internal static async Task<IamSecretsBoundedRouteEvidence> RunBoundedRoutesAsync(string providerKey)
     {
         await new FoundationBoundedQueryContractTests()
             .Iam_claim_mapping_pages_are_complete_deterministic_and_bounded(providerKey);
-        await new FoundationBoundedQueryContractTests()
-            .Secret_filters_order_count_and_window_execute_before_materialization(providerKey);
-
         var descriptor = await DescribeAsync(providerKey);
         var plans = await ProviderNativePlanTests.CaptureNativeRoutePlansAsync(
             GroundworkProviderDriverFactory.Create(providerKey));
         var claimMappingPlan = plans.Single(candidate =>
             string.Equals(candidate.Request.DocumentKind, IdentityStorageManifest.IdentityClaimMappingDocumentKind, StringComparison.Ordinal) &&
             string.Equals(candidate.Request.QueryIdentity, IdentityStorageManifest.ListClaimMappingsByProviderQuery, StringComparison.Ordinal));
-        var secretPlan = plans.Single(candidate =>
-            string.Equals(candidate.Request.DocumentKind, SecretsStorageManifest.SecretDocumentKind, StringComparison.Ordinal) &&
-            string.Equals(candidate.Request.QueryIdentity, SecretsStorageManifest.ListFilteredQuery, StringComparison.Ordinal));
         return new IamSecretsBoundedRouteEvidence(
             CreateBoundedRouteResult(
                 providerKey,
@@ -354,14 +254,7 @@ public sealed class IamSecretsProviderContractTests
                 "iam-bounded-query-equivalence",
                 "iam-claim-mapping",
                 claimMappingPlan),
-            claimMappingPlan,
-            CreateBoundedRouteResult(
-                providerKey,
-                descriptor,
-                "secret-bounded-list-equivalence",
-                "secrets-repository",
-                secretPlan),
-            secretPlan);
+            claimMappingPlan);
     }
 
     private static GroundworkScenarioResult CreateBoundedRouteResult(
@@ -530,16 +423,6 @@ public sealed class IamSecretsProviderContractTests
         "oidc", null, "external-oidc", true, false, ProviderCapabilities.ExternalOidcDefault,
         new Dictionary<string, string> { ["authority"] = "https://global.example" });
 
-    private static Secret Secret(string name, string value) => new()
-    {
-        TenantId = TenantA,
-        Name = name,
-        DisplayName = name,
-        TypeName = SecretTypeNames.Text,
-        StoreName = SecretStoreNames.Encrypted,
-        Versions = [new SecretVersion { Version = 1, Payload = SecretPayload.FromValue(value) }]
-    };
-
     private static GroundworkCompositionFingerprint Composition(
         GroundworkProviderDriver driver,
         Type manifestSource) =>
@@ -570,7 +453,7 @@ public sealed class IamSecretsProviderContractTests
     private static void RequireProviderMatrixOptIn() =>
         Skip.If(
             !string.Equals(Environment.GetEnvironmentVariable(ProviderMatrixOptIn), "1", StringComparison.Ordinal),
-            $"Set {ProviderMatrixOptIn}=1 to run the SQLite, SQL Server, PostgreSQL, and MongoDB IAM/secrets contract matrix.");
+            $"Set {ProviderMatrixOptIn}=1 to run the SQLite, SQL Server, PostgreSQL, and MongoDB IAM contract matrix.");
 
     private sealed record IamSecretsScenarioProbe(IReadOnlyList<string> ScenarioIds, Func<string, Task> ExecuteAsync);
 
@@ -580,13 +463,6 @@ public sealed class IamSecretsProviderContractTests
     }
 }
 
-internal sealed record IamSecretsSecretEvidenceResults(
-    GroundworkScenarioResult Ordinary,
-    GroundworkScenarioResult CreateOnly,
-    GroundworkScenarioResult Revision);
-
 internal sealed record IamSecretsBoundedRouteEvidence(
     GroundworkScenarioResult ClaimMappingResult,
-    GroundworkNativeRoutePlanResult ClaimMappingPlan,
-    GroundworkScenarioResult SecretResult,
-    GroundworkNativeRoutePlanResult SecretPlan);
+    GroundworkNativeRoutePlanResult ClaimMappingPlan);

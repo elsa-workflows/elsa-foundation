@@ -546,6 +546,9 @@
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Secrets/Persistence/Groundwork/V2/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Secrets/Attention/">
     <Project Path="tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj" />
   </Folder>

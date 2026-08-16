@@ -657,7 +657,7 @@ public sealed class GroundworkPersistenceCoverageTests
             "src/Elsa/Workflows/Runtime/Distributed/Contracts/Stores.cs",
             "src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs",
             "src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs",
-            "src/Elsa/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs",
+            "src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkStorageSchema.cs",
             "src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkStorageManifest.cs"
         ];
 

@@ -288,7 +288,6 @@ public sealed class HistoricalSchemaUpgradeTests
     private static IReadOnlyList<IGroundworkStorageManifestSource> CurrentDeploymentSources() =>
     [
         new RuntimeGroundworkStorageManifestSource(),
-        new SecretsGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),

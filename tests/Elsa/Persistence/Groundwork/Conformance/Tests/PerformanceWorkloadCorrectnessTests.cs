@@ -145,12 +145,6 @@ public sealed class PerformanceWorkloadCorrectnessTests
             result.ObjectiveResultDigest);
     }
 
-    [Fact]
-    [Trait("Category", "Sqlite")]
-    public Task Sqlite_runs_the_public_secret_repository_bounded_query_contract() =>
-        new FoundationBoundedQueryContractTests()
-            .Secret_filters_order_count_and_window_execute_before_materialization("sqlite");
-
     private static IReadOnlyDictionary<string, JsonObject> LoadWorkloads() => WorkloadPaths
         .SelectMany(path => ReadJson(path)["workloads"]!.AsArray().Select(workload => workload!.AsObject()))
         .ToDictionary(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal);

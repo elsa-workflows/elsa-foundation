@@ -9,8 +9,7 @@ using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
@@ -79,12 +78,12 @@ public sealed class GroundworkStorageCompositionFactoryTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IGroundworkStorageManifestSource));
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            services.AddGroundworkStorageComposition<SecretsDeploymentSchema>());
+            services.AddGroundworkStorageComposition<AlternativeDeploymentSchema>());
         Assert.Contains(nameof(RuntimeDeploymentSchema), exception.Message, StringComparison.Ordinal);
-        Assert.Contains(nameof(SecretsDeploymentSchema), exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(AlternativeDeploymentSchema), exception.Message, StringComparison.Ordinal);
 
         var reverse = new ServiceCollection();
-        reverse.AddGroundworkStorageComposition<SecretsDeploymentSchema>();
+        reverse.AddGroundworkStorageComposition<AlternativeDeploymentSchema>();
         var reverseException = Assert.Throws<InvalidOperationException>(() =>
             reverse.AddGroundworkStorageComposition<RuntimeDeploymentSchema>());
         Assert.Equal(exception.Message, reverseException.Message);
@@ -185,7 +184,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
     {
         var services = new ServiceCollection();
         services.AddGroundworkStorageComposition<RuntimeDeploymentSchema>();
-        services.AddGroundworkSecretsStore();
+        services.AddGroundworkDistributedRuntimeStores();
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
 
@@ -197,7 +196,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
                 .AsTask());
 
         Assert.Contains(nameof(RuntimeDeploymentSchema), exception.Message, StringComparison.Ordinal);
-        Assert.Contains("elsa-secrets", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("elsa-workflows-runtime-distributed", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -285,10 +284,10 @@ public sealed class GroundworkStorageCompositionFactoryTests
             [typeof(RuntimeGroundworkStorageManifestSource)];
     }
 
-    public sealed class SecretsDeploymentSchema : GroundworkDeploymentSchemaManifestSource
+    public sealed class AlternativeDeploymentSchema : GroundworkDeploymentSchemaManifestSource
     {
         protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-            [typeof(SecretsGroundworkStorageManifestSource)];
+            [typeof(IdentityGroundworkStorageManifestSource)];
     }
 
     public sealed class PrefixedDesignDeploymentSchema : GroundworkDeploymentSchemaManifestSource

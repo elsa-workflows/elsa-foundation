@@ -3,7 +3,6 @@ using System.Reflection;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
-using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Distributed;
@@ -51,10 +50,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(79, declared.Length);
-        Assert.DoesNotContain(
-            RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
-            declared);
+        Assert.Equal(78, declared.Length);
     }
 
     [Fact]
@@ -548,11 +544,9 @@ public sealed class ProviderNativePlanTests
     {
         var runtimeSource = new RuntimeGroundworkStorageManifestSource();
         var identitySource = new IdentityGroundworkStorageManifestSource();
-        var secretsSource = new SecretsGroundworkStorageManifestSource();
         var distributedSource = new DistributedGroundworkStorageManifestSource();
         var runtime = (await runtimeSource.CreateDeclarationAsync()).Manifest;
         var identity = (await identitySource.CreateDeclarationAsync()).Manifest;
-        var secrets = (await secretsSource.CreateDeclarationAsync()).Manifest;
         var distributed = (await distributedSource.CreateDeclarationAsync()).Manifest;
 
         return
@@ -578,24 +572,6 @@ public sealed class ProviderNativePlanTests
                                 IdentityStorageManifest.MutationReceiptExpiresAtField)
                         ],
                         take: 256)
-                ]),
-            Group(secretsSource, secrets,
-                [
-                    Documents(
-                        SecretsStorageManifest.SecretDocumentKind,
-                        SecretsStorageManifest.ListFilteredQuery,
-                        [
-                            Equal(SecretsStorageManifest.TenantIdField, "tenant-a"),
-                            Equal(SecretsStorageManifest.StatusField, "active"),
-                            DocumentQueryClause.AnyOf(
-                                DocumentQueryComparison.Equal(
-                                    SecretsStorageManifest.HasNonExpiringActiveVersionField,
-                                    bool.TrueString.ToLowerInvariant()),
-                                DocumentQueryComparison.GreaterThan(
-                                    SecretsStorageManifest.MaxActiveVersionExpiresAtField,
-                                    Now.ToString("O", CultureInfo.InvariantCulture)))
-                        ],
-                        [new DocumentQueryOrder(SecretsStorageManifest.NormalizedNameField)])
                 ]),
             Group(distributedSource, distributed, DistributedQueries())
         ];

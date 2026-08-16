@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Persistence.Groundwork.Conformance.Tests;
 
 /// <summary>
-/// Opt-in publication entry point for the B6 local IAM/secrets facts executed by the provider matrix.
+/// Opt-in publication entry point for the B6 local IAM facts executed by the provider matrix.
 /// It intentionally excludes the #644 authority rows: their checked-in source artifacts target preview.60,
 /// whereas the Spec 094 ledger currently requires preview.103 evidence.
 /// </summary>
@@ -38,7 +38,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
 
     [SkippableFact]
     [Trait("Category", "GroundworkEvidencePublication")]
-    public async Task Publish_the_real_B6_provider_configuration_and_secret_matrices()
+    public async Task Publish_the_real_B6_provider_configuration_and_iam_matrices()
     {
         RequirePublicationOptIn();
         var output = Environment.GetEnvironmentVariable(EvidenceOutput)!;
@@ -49,10 +49,6 @@ public sealed class IamSecretsProviderEvidencePublicationTests
         var claimMappings = new List<GroundworkScenarioResult>();
         var memberships = new List<GroundworkScenarioResult>();
         var claimMappingRoutes = new List<(GroundworkScenarioResult Result, GroundworkNativeRoutePlanResult Plan)>();
-        var secretRoutes = new List<(GroundworkScenarioResult Result, GroundworkNativeRoutePlanResult Plan)>();
-        var secretOrdinary = new List<GroundworkScenarioResult>();
-        var secretCreateOnly = new List<GroundworkScenarioResult>();
-        var secretRevisions = new List<GroundworkScenarioResult>();
 
         foreach (var provider in GroundworkStoreScenarioCatalog.MandatoryProviderKeys)
         {
@@ -63,16 +59,11 @@ public sealed class IamSecretsProviderEvidencePublicationTests
             memberships.Add(iam.Single(result => result.CoverageEntryId == "iam-tenant-membership"));
             var routes = await IamSecretsProviderContractTests.RunBoundedRoutesAsync(provider);
             claimMappingRoutes.Add((routes.ClaimMappingResult, routes.ClaimMappingPlan));
-            secretRoutes.Add((routes.SecretResult, routes.SecretPlan));
 
             var configurations = await IamSecretsProviderContractTests.RunProviderConfigurationScopeAndPrivilegeAsync(provider);
             tenantConfigurations.Add(configurations.Single(result => result.CoverageEntryId == "iam-provider-configuration-tenant"));
             globalConfigurations.Add(configurations.Single(result => result.CoverageEntryId == "iam-provider-configuration-global"));
 
-            var secrets = await IamSecretsProviderContractTests.RunSecretCreateOnlyAndRevisionAsync(provider);
-            secretOrdinary.Add(secrets.Ordinary);
-            secretCreateOnly.Add(secrets.CreateOnly);
-            secretRevisions.Add(secrets.Revision);
         }
 
         GroundworkStoreScenarioCatalog.Get("iam-provider-configuration-scope-and-privilege")
@@ -90,16 +81,8 @@ public sealed class IamSecretsProviderEvidencePublicationTests
             GroundworkStoreScenarioCatalog.Get("iam-ordinary-store-revision-conflicts")
                 .RequireEquivalentProviderResults(entry, results);
         }
-        GroundworkStoreScenarioCatalog.Get("secret-concurrent-create-only")
-            .RequireEquivalentProviderResults("secrets-repository", secretCreateOnly);
-        GroundworkStoreScenarioCatalog.Get("secret-revision-aware-mutation")
-            .RequireEquivalentProviderResults("secrets-repository", secretOrdinary);
-        GroundworkStoreScenarioCatalog.Get("secret-revision-aware-mutation")
-            .RequireEquivalentProviderResults("secrets-repository", secretRevisions);
         GroundworkStoreScenarioCatalog.Get("iam-bounded-query-equivalence")
             .RequireEquivalentProviderResults("iam-claim-mapping", claimMappingRoutes.Select(route => route.Result));
-        GroundworkStoreScenarioCatalog.Get("secret-bounded-list-equivalence")
-            .RequireEquivalentProviderResults("secrets-repository", secretRoutes.Select(route => route.Result));
 
         var publications = await Task.WhenAll(
             GroundworkProviderEvidencePublisher.PublishAsync(
@@ -167,36 +150,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
                     "list-claim-mappings-by-provider",
                     "iam-bounded-query-equivalence"),
                 claimMappingRoutes.Select(route => route.Result),
-                claimMappingRoutes.Select(route => route.Plan)),
-            GroundworkProviderEvidencePublisher.PublishAsync(
-                output,
-                GroundworkLedgerObligation.QueryShape(
-                    "secrets-repository",
-                    "list-by-scope-bounded",
-                    "list-filtered",
-                    "secret-bounded-list-equivalence"),
-                secretRoutes.Select(route => route.Result),
-                secretRoutes.Select(route => route.Plan)),
-            GroundworkProviderEvidencePublisher.PublishAsync(
-                output,
-                GroundworkLedgerObligation.OrdinaryRoundTrip(
-                    "secrets-repository",
-                    "secret-revision-aware-mutation"),
-                secretOrdinary),
-            GroundworkProviderEvidencePublisher.PublishAsync(
-                output,
-                GroundworkLedgerObligation.ConcurrencySemantic(
-                    "secrets-repository",
-                    "create-only-try-add",
-                    "secret-concurrent-create-only"),
-                secretCreateOnly),
-            GroundworkProviderEvidencePublisher.PublishAsync(
-                output,
-                GroundworkLedgerObligation.ConcurrencySemantic(
-                    "secrets-repository",
-                    "expected-version-save",
-                    "secret-revision-aware-mutation"),
-                secretRevisions));
+                claimMappingRoutes.Select(route => route.Plan)));
 
         Assert.All(publications, publication => Assert.Equal(4, publication.LedgerRecords.Count));
         var attachment = await GroundworkProviderEvidencePublisher.WriteLedgerAttachmentAsync(
@@ -211,7 +165,7 @@ public sealed class IamSecretsProviderEvidencePublicationTests
     {
         Skip.If(
             !string.Equals(Environment.GetEnvironmentVariable(PublishOptIn), "1", StringComparison.Ordinal),
-            $"Set {PublishOptIn}=1 to publish the real IAM/secrets B6 provider matrices.");
+            $"Set {PublishOptIn}=1 to publish the real IAM B6 provider matrix.");
         Skip.If(
             string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(EvidenceOutput)),
             $"Set {EvidenceOutput} to an explicit artifact output directory before publication.");
