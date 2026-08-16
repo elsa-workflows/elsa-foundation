@@ -89,7 +89,7 @@ immutable version reads, list/get/version/draft/validation reads, and 404 handli
 ## Verification record
 
 - Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 123/123; the immutable baseline suite passed 8/8.
-- Architecture: the focused EndpointSecurity/collectibility suite passed 8/8 (three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 441/441.
+- Architecture: the focused EndpointSecurity/collectibility suite passed 8/8 (three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 442/442.
 - Full solution build: `dotnet restore Elsa.Server.slnx --ignore-failed-sources` followed by `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
 - Format/import verification: focused verification passes for all changed production, test, architecture, comparer, and OpenAPI projector files. The broad project verification still reports inherited charset/import diagnostics in untouched base files; these are recorded as an advisory baseline issue rather than normalized into this migration.
