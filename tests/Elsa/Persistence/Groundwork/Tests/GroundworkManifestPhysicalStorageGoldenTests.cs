@@ -3,7 +3,6 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -28,7 +27,6 @@ public class GroundworkManifestPhysicalStorageGoldenTests
             ["runtime"] = ElsaRuntimeStorageManifest.CreatePhysicalized,
             ["design-atomic-write"] = GroundworkDesignAtomicWriteStorageManifest.Create,
             ["publishing"] = PublishingGroundworkStorageManifest.Create,
-            ["studio-preferences"] = StudioPreferencesStorageManifest.Create,
             ["activities-design"] = ActivitiesDesignStorageManifest.Create,
             ["workflows-design"] = WorkflowsDesignStorageManifest.Create,
             ["distributed"] = DistributedGroundworkStorageManifest.Create,

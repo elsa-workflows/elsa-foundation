@@ -3,7 +3,6 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -21,7 +20,7 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// Deterministic cold-start schema baseline (spec 129, First-Request/Cold-Start Readiness).
 ///
 /// The reference <c>Elsa.Workbench</c> host admits <see cref="RuntimeGroundworkStorageManifestSource"/> plus the
-/// seven other feature families selected by <c>GroundworkAllFeaturesDeploymentSchema</c> against one SQLite file
+/// six other v1 feature families selected by <c>GroundworkAllFeaturesDeploymentSchema</c> against one SQLite file
 /// on the FIRST matching request (default <c>AutoApplyOnStartup = true</c>). This test reconstructs the exact
 /// SQLite physical target from that same manifest-source set and pins the number of DDL operations that fresh-DB
 /// admission applies. The count is load-independent, so it is the anchor evidence for the cold-start baseline
@@ -44,7 +43,6 @@ public sealed class ColdStartSchemaOperationCountTests(ITestOutputHelper output)
     [
         new RuntimeGroundworkStorageManifestSource(),
         new SecretsGroundworkStorageManifestSource(),
-        new StudioPreferencesGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),

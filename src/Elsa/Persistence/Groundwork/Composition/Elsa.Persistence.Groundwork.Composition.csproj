@@ -10,6 +10,8 @@
     <PackageReference Include="Groundwork.Documents" />
     <!-- Lanes bind their manifest contribution to a target through a service-collection extension. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="CShells.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

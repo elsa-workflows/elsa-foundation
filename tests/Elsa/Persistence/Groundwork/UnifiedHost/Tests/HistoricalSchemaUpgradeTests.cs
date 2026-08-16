@@ -10,7 +10,6 @@ using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -290,7 +289,6 @@ public sealed class HistoricalSchemaUpgradeTests
     [
         new RuntimeGroundworkStorageManifestSource(),
         new SecretsGroundworkStorageManifestSource(),
-        new StudioPreferencesGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),

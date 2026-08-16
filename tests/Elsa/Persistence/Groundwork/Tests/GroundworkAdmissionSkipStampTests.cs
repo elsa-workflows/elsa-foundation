@@ -4,7 +4,6 @@ using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
@@ -31,7 +30,6 @@ public sealed class GroundworkAdmissionSkipStampTests
     [
         new RuntimeGroundworkStorageManifestSource(),
         new SecretsGroundworkStorageManifestSource(),
-        new StudioPreferencesGroundworkStorageManifestSource(),
         new DistributedGroundworkStorageManifestSource(),
         new WorkflowsDesignGroundworkStorageManifestSource(),
         new ActivitiesDesignGroundworkStorageManifestSource(),
