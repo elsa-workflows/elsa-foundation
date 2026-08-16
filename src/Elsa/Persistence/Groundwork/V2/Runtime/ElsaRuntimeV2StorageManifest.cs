@@ -78,7 +78,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string TemplateHashField = "templateHash";
     public const string ExecutionScopeIdField = "executionScopeId";
     public const string PublicationIdField = "publicationId";
-    public const string ParentActivityExecutionIdField = "state.parentActivityExecutionId";
+    public const string ParentActivityExecutionIdField = "parentActivityExecutionId";
     public const string ParentWorkflowExecutionIdField = "parentWorkflowExecutionId";
     public const string ChildWorkflowExecutionIdField = "childWorkflowExecutionId";
     public const string StatusField = "status";
@@ -102,33 +102,34 @@ public static class ElsaRuntimeV2StorageManifest
     public const string WorkflowAlterationJobClaimableAtField = "claimableAt";
     public const string WorkflowAlterationJobStatusField = "status";
     public const string WorkflowAlterationJobCheckpointCommitIdField = "checkpointCommitId";
-    public const string WorkflowExecutableSourceReferenceIdField = "reference.sourceReferenceId";
+    public const string WorkflowExecutableSourceReferenceIdField = "sourceReferenceId";
     public const string DurableValueIdField = "durableValueId";
-    public const string ExecutionLivenessOperationalStateIdField = "state.operationalStateId";
-    public const string DurableTimerDueTimeField = "timer.dueTime";
-    public const string DurableTimerIdField = "timer.timerId";
+    public const string ExecutionLivenessOperationalStateIdField = "operationalStateId";
+    public const string ActivityExecutionIdField = "activityExecutionId";
+    public const string DurableTimerDueTimeField = "timerDueTime";
+    public const string DurableTimerIdField = "timerId";
     public const string DurableTimerClaimOrderKeyField = "claimOrderKey";
     public const string TriggerBindingIdField = "triggerBindingId";
     public const string WorkflowTriggerBindingIsActiveField = "isActive";
-    public const string RecurringTriggerSchedulePublicationIdField = "schedule.publicationId";
-    public const string RecurringTriggerScheduleNextOccurrenceField = "schedule.nextOccurrence";
-    public const string RecurringTriggerScheduleIdField = "schedule.scheduleId";
-    public const string RecurringTriggerScheduleIsActiveField = "schedule.isActive";
+    public const string RecurringTriggerSchedulePublicationIdField = "schedulePublicationId";
+    public const string RecurringTriggerScheduleNextOccurrenceField = "scheduleNextOccurrence";
+    public const string RecurringTriggerScheduleIdField = "scheduleId";
+    public const string RecurringTriggerScheduleIsActiveField = "scheduleIsActive";
     public const string SchedulerWorkOrderKeyField = "orderKey";
     public const string BookmarkIdField = "bookmarkId";
-    public const string PostCommitOutboxStatusField = "item.status";
+    public const string PostCommitOutboxStatusField = "outboxStatus";
     public const string PostCommitOutboxDeliverableAtField = "deliverableAt";
     public const string PostCommitOutboxClaimableAtField = "claimableAt";
-    public const string PostCommitOutboxRecordedAtField = "item.recordedAt";
-    public const string PostCommitOutboxItemIdField = "item.outboxItemId";
-    public const string PostCommitOutboxIntentKindField = "item.intent.kind";
-    public const string WorkflowDispatchCreatedAtField = "record.createdAt";
-    public const string WorkflowDispatchIdField = "record.dispatchId";
-    public const string WorkflowExecutableArtifactIdField = "executable.identity.artifactId";
-    public const string ExecutableActivityTemplateIdField = "template.templateId";
-    public const string ActivityExecutionInspectionSummaryExecutionSequenceField = "summary.executionSequence";
-    public const string ActivityExecutionInspectionSummaryScheduledAtField = "summary.scheduledAt";
-    public const string ActivityExecutionInspectionSummaryActivityExecutionIdField = "summary.activityExecutionId";
+    public const string PostCommitOutboxRecordedAtField = "outboxRecordedAt";
+    public const string PostCommitOutboxItemIdField = "outboxItemId";
+    public const string PostCommitOutboxIntentKindField = "outboxIntentKind";
+    public const string WorkflowDispatchCreatedAtField = "dispatchCreatedAt";
+    public const string WorkflowDispatchIdField = "dispatchId";
+    public const string WorkflowExecutableArtifactIdField = "executableArtifactId";
+    public const string ExecutableActivityTemplateIdField = "templateId";
+    public const string ActivityExecutionInspectionSummaryExecutionSequenceField = "summaryExecutionSequence";
+    public const string ActivityExecutionInspectionSummaryScheduledAtField = "summaryScheduledAt";
+    public const string ActivityExecutionInspectionSummaryActivityExecutionIdField = "summaryActivityExecutionId";
     public const string ActivityExecutionHierarchyIsScopeRootField = "isScopeRoot";
     public const string ActivityExecutionHierarchyExecutionSequenceField = "executionSequence";
     public const string ActivityExecutionHierarchyActivityExecutionIdField = "activityExecutionId";
@@ -143,13 +144,13 @@ public static class ElsaRuntimeV2StorageManifest
     public const string WorkflowExecutionHistoryCorrelationIdField = "historyCorrelationId";
     public const string WorkflowExecutionHistoryArtifactIdField = "historyArtifactId";
     public const string WorkflowExecutionHistoryStatusField = "historyStatus";
-    public const string RecoveryInterruptedStatusField = "state.interruptedExecution.status";
-    public const string RecoveryInterruptedAtField = "state.interruptedExecution.interruptedAt";
-    public const string RecoveryLeaseOwnerIdField = "state.executionLease.ownerId";
-    public const string RecoveryLeaseAcquiredAtField = "state.executionLease.acquiredAt";
-    public const string RecoveryLeaseExpiresAtField = "state.executionLease.expiresAt";
-    public const string RecoveryHeartbeatOwnerIdField = "state.heartbeat.ownerId";
-    public const string RecoveryHeartbeatRecordedAtField = "state.heartbeat.recordedAt";
+    public const string RecoveryInterruptedStatusField = "interruptedExecutionStatus";
+    public const string RecoveryInterruptedAtField = "interruptedExecutionAt";
+    public const string RecoveryLeaseOwnerIdField = "executionLeaseOwnerId";
+    public const string RecoveryLeaseAcquiredAtField = "executionLeaseAcquiredAt";
+    public const string RecoveryLeaseExpiresAtField = "executionLeaseExpiresAt";
+    public const string RecoveryHeartbeatOwnerIdField = "heartbeatOwnerId";
+    public const string RecoveryHeartbeatRecordedAtField = "heartbeatRecordedAt";
     public const string RecoveryHasOperationalOwnerField = "hasOperationalOwner";
 
     public const string ByWorkflowExecutionIndex = "by-workflow-execution";
@@ -203,7 +204,7 @@ public static class ElsaRuntimeV2StorageManifest
         Unit(ExecutableActivityTemplateDocumentKind, "runtime_executable_activity_template", [String(CollectionField, 128), String(TemplateHashField), String(ExecutableActivityTemplateIdField, 128)], [Index(ByCollectionIndex, CollectionField), IncludedIndex("by-collection-and-document-id", CollectionField, ExecutableActivityTemplateIdField), Index(ByTemplateHashIndex, TemplateHashField)]),
         Unit(ExecutableActivityTemplateHashClaimDocumentKind, "runtime_executable_activity_template_hash_claim", [], []),
         Unit(WorkflowExecutableSourceReferenceDocumentKind, "runtime_workflow_executable_source_reference", [String(CollectionField, 128), String(ArtifactIdField, 128), String(ScopeField), DateTime(ExpiresAtField), Boolean(IsRetiredField), String(WorkflowExecutableSourceReferenceIdField, 128)], [Index(ByCollectionIndex, CollectionField), Index(ByArtifactIndex, ArtifactIdField), Index(ByScopeIndex, ScopeField), Index(ByExpiresAtIndex, ExpiresAtField), Index(ByRetiredIndex, IsRetiredField), IncludedIndex("by-artifact-and-document-id", ArtifactIdField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-artifact-retired-expiry-and-document-id", ArtifactIdField, IsRetiredField, ExpiresAtField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-collection-and-document-id", CollectionField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-collection-retired-expiry-and-document-id", CollectionField, IsRetiredField, ExpiresAtField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-expiry-and-document-id", ExpiresAtField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-retired-and-document-id", IsRetiredField, ExpiresAtField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-scope-and-document-id", ScopeField, WorkflowExecutableSourceReferenceIdField), IncludedIndex("by-scope-retired-expiry-and-document-id", ScopeField, IsRetiredField, ExpiresAtField, WorkflowExecutableSourceReferenceIdField)]),
-        Unit(ActivityExecutionStateDocumentKind, "runtime_activity_execution_state", [String(WorkflowExecutionIdField, 128), String(ParentActivityExecutionIdField, 128), String("state.execution.activityExecutionId", 128)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index(ByParentActivityExecutionIndex, ParentActivityExecutionIdField), IncludedIndex("by-workflow-execution-and-activity-execution-id", WorkflowExecutionIdField, "state.execution.activityExecutionId"), IncludedIndex("by-workflow-parent-and-activity-execution-id", WorkflowExecutionIdField, ParentActivityExecutionIdField, "state.execution.activityExecutionId")]),
+        Unit(ActivityExecutionStateDocumentKind, "runtime_activity_execution_state", [String(WorkflowExecutionIdField, 128), String(ParentActivityExecutionIdField, 128), String(ActivityExecutionIdField, 128)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index(ByParentActivityExecutionIndex, ParentActivityExecutionIdField), IncludedIndex("by-workflow-execution-and-activity-execution-id", WorkflowExecutionIdField, ActivityExecutionIdField), IncludedIndex("by-workflow-parent-and-activity-execution-id", WorkflowExecutionIdField, ParentActivityExecutionIdField, ActivityExecutionIdField)]),
         Unit(ActivityExecutionInspectionDocumentKind, "runtime_activity_execution_inspection", [String(WorkflowExecutionIdField, 128), Int64(ActivityExecutionInspectionSummaryExecutionSequenceField), DateTime(ActivityExecutionInspectionSummaryScheduledAtField), String(ActivityExecutionInspectionSummaryActivityExecutionIdField, 128)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), IncludedIndex("by-workflow-execution-and-summary-order", WorkflowExecutionIdField, ActivityExecutionInspectionSummaryExecutionSequenceField, ActivityExecutionInspectionSummaryScheduledAtField, ActivityExecutionInspectionSummaryActivityExecutionIdField)]),
         Unit(ActivityExecutionHierarchyDocumentKind, "runtime_activity_execution_hierarchy", [String(WorkflowExecutionIdField, 128), String(ExecutionScopeIdField, 128), Boolean(ActivityExecutionHierarchyIsScopeRootField), Int64(ActivityExecutionHierarchyExecutionSequenceField), String(ActivityExecutionHierarchyActivityExecutionIdField, 128)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index(ByExecutionScopeIndex, ExecutionScopeIdField), IncludedIndex("by-workflow-execution-and-hierarchy-order", WorkflowExecutionIdField, ActivityExecutionHierarchyExecutionSequenceField, ActivityExecutionHierarchyActivityExecutionIdField), IncludedIndex("by-workflow-execution-scope-and-hierarchy-order", WorkflowExecutionIdField, ExecutionScopeIdField, ActivityExecutionHierarchyIsScopeRootField, ActivityExecutionHierarchyExecutionSequenceField, ActivityExecutionHierarchyActivityExecutionIdField)]),
         Unit(WorkflowExecutionStateDocumentKind, "runtime_workflow_execution_state", [String(CollectionField, RuntimeCollectionProjectionLength), Int64(WorkflowExecutionHistorySortTicksField), String(WorkflowExecutionHistoryWorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(WorkflowExecutionHistoryTenantIdField, RuntimeTenantProjectionLength), String(WorkflowExecutionHistoryAuthorityPartitionField, WorkflowExecutionHistoryAuthorityPartitionProjectionLength), String(WorkflowExecutionHistoryDefinitionIdField), Int32(WorkflowExecutionHistoryStatusField), Int32(WorkflowExecutionHistoryRunKindField), String(WorkflowExecutionHistoryCorrelationIdField), String(WorkflowExecutionHistoryArtifactIdField, RuntimeExecutionIdProjectionLength)], [IncludedIndex("by-history-order", WorkflowExecutionHistorySortTicksField, WorkflowExecutionHistoryWorkflowExecutionIdField), IncludedIndex("by-alteration-capture-tenant-and-execution", WorkflowExecutionHistoryTenantIdField, WorkflowExecutionHistoryAuthorityPartitionField, WorkflowExecutionHistoryWorkflowExecutionIdField), Index("by-collection-and-pinned-artifact", CollectionField, WorkflowExecutionHistoryArtifactIdField, WorkflowExecutionHistoryWorkflowExecutionIdField), UniqueIndex("by-collection-and-pinned-artifact-v2", CollectionField, WorkflowExecutionHistoryArtifactIdField, WorkflowExecutionHistoryWorkflowExecutionIdField), IncludedIndex("by-attention-fault-history", WorkflowExecutionHistoryStatusField, WorkflowExecutionHistorySortTicksField, WorkflowExecutionHistoryWorkflowExecutionIdField)]),

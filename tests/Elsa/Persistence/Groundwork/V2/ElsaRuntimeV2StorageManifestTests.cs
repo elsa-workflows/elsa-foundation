@@ -83,8 +83,8 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var timers = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
         AssertIndex(timers, "by-claim-order", ["claimOrderKey"], included: true);
-        AssertIndex(timers, "by-due-time-and-timer-id", ["timer.dueTime", "timer.timerId"], included: true);
-        AssertIndex(timers, "by-workflow-execution-and-timer-id", ["workflowExecutionId", "timer.timerId"], included: true);
+        AssertIndex(timers, "by-due-time-and-timer-id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+        AssertIndex(timers, "by-workflow-execution-and-timer-id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
 
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
         AssertIndex(triggerBindings, "by-stimulus-and-type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
@@ -181,10 +181,29 @@ public sealed class ElsaRuntimeV2StorageManifestTests
     }
 
     [Fact]
+    public void Every_runtime_v2_column_key_and_index_name_is_flat_and_portable()
+    {
+        foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+        {
+            Assert.All(unit.Columns, column => AssertFlatPhysicalName(unit.Id.Value, "column", column.Name));
+            Assert.All(unit.Key.Columns, column => AssertFlatPhysicalName(unit.Id.Value, "key", column));
+            Assert.All(
+                unit.Indexes.SelectMany(index => index.Columns.Select(column => (Index: index.Name, Column: column.Column))),
+                item => AssertFlatPhysicalName(unit.Id.Value, $"index '{item.Index}' column", item.Column));
+        }
+    }
+
+    [Fact]
     public void Legacy_physicalizer_projection_and_residual_fields_are_declared_in_v2_units()
     {
         var physicalizerFields = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
+            [ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+                ElsaRuntimeV2StorageManifest.ParentActivityExecutionIdField,
+                ElsaRuntimeV2StorageManifest.ActivityExecutionIdField
+            ],
             [ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind] =
             [
                 ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
@@ -333,5 +352,13 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         Assert.Equal(type, column.Type);
         Assert.Equal(maxLength, column.MaxLength);
         Assert.Equal(nullable, column.IsNullable);
+    }
+
+    private static void AssertFlatPhysicalName(string unitId, string kind, string name)
+    {
+        Assert.DoesNotContain('.', name);
+        Assert.DoesNotContain('/', name);
+        Assert.DoesNotContain(' ', name);
+        Assert.False(string.IsNullOrWhiteSpace(name), $"{unitId} {kind} must have a physical name.");
     }
 }

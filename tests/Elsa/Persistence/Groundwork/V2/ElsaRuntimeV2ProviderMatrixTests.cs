@@ -18,29 +18,55 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
     [MemberData(nameof(Providers))]
     public void Applies_all_runtime_units_and_opens_a_scoped_session_per_unit(string providerName)
     {
+        var sqlitePath = providerName == "sqlite"
+            ? Path.Combine(Path.GetTempPath(), $"elsa-runtime-v2-{Guid.NewGuid():N}.db")
+            : null;
         var connectionString = providerName == "sqlite"
-            ? $"Data Source=file:runtime-v2-{Guid.NewGuid():N};Mode=Memory;Cache=Shared"
+            ? $"Data Source={sqlitePath}"
             : Environment.GetEnvironmentVariable(EnvironmentVariable(providerName));
         Skip.If(
             string.IsNullOrWhiteSpace(connectionString),
             $"Set {EnvironmentVariable(providerName)} to run the {providerName} provider proof.");
 
-        using var connection = CreateConnection(providerName, connectionString!);
-        var units = FreshPhysicalUnits();
-        Assert.Equal(27, units.Count);
-        Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
-
-        foreach (var unit in units)
-            connection.Schema.Apply(unit);
-
-        Assert.All(units, unit =>
+        try
         {
-            var session = connection.OpenSession(
-                unit,
-                StorageAccess.Scoped(new StorageScope($"runtime-v2-{providerName}")));
-            Assert.Equal(unit.Id, session.Unit.Id);
-            Assert.Equal(unit.Name, session.Unit.Name);
-        });
+            using var connection = CreateConnection(providerName, connectionString!);
+            var units = providerName == "sqlite"
+                ? ElsaRuntimeV2StorageManifest.CreateUnits()
+                : FreshPhysicalUnits();
+            Assert.Equal(27, units.Count);
+            Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
+
+            foreach (var unit in units)
+                connection.Schema.Apply(unit);
+
+            Assert.All(units, unit =>
+            {
+                var session = connection.OpenSession(
+                    unit,
+                    StorageAccess.Scoped(new StorageScope($"runtime-v2-{providerName}")));
+                Assert.Equal(unit.Id, session.Unit.Id);
+                Assert.Equal(unit.Name, session.Unit.Name);
+                var outcome = session.Upsert(
+                    new StorageValues(new Dictionary<string, object?>
+                    {
+                        [ElsaRuntimeV2StorageManifest.IdField] = $"matrix-{providerName}-{unit.Id.Value}",
+                        [ElsaRuntimeV2StorageManifest.SchemaVersionField] = ElsaRuntimeV2StorageManifest.SchemaVersion,
+                        [ElsaRuntimeV2StorageManifest.ContentField] = "{}"
+                    }),
+                    WriteOptions.Unconditional);
+                Assert.True(outcome.Succeeded, $"Upsert failed for '{unit.Id.Value}' on {providerName}.");
+            });
+        }
+        finally
+        {
+            if (sqlitePath is not null)
+            {
+                foreach (var path in new[] { sqlitePath, $"{sqlitePath}-shm", $"{sqlitePath}-wal" })
+                    if (File.Exists(path))
+                        File.Delete(path);
+            }
+        }
     }
 
     private static IReadOnlyList<StorageUnit> FreshPhysicalUnits()
