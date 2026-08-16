@@ -789,6 +789,89 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         Assert.Equal(64, type.Length);
     }
 
+    [SkippableFact]
+    [Trait("Category", "Sqlite")]
+    public async Task Bookmark_checkpoint_upsert_and_delete_share_the_store_composite_identity()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-bookmark-checkpoint-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            Skip.If(
+                !connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)),
+                "The installed SQLite Groundwork package does not evidence AtomicCommit; run with the preview.3 candidate for this vertical gate.");
+            foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+                connection.Schema.Apply(unit);
+
+            var source = new NativeSessionSource(connection);
+            var accessor = new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var store = new GroundworkV2BookmarkStateStore(source, accessor);
+            var otherWorkflowBookmark = new BookmarkState(
+                "bookmark-shared",
+                "workflow-2",
+                "activity-2",
+                "node",
+                "resume",
+                "signal",
+                "hash-2",
+                null,
+                new Dictionary<string, string>(),
+                DateTimeOffset.UtcNow,
+                null);
+            await store.SaveAsync(otherWorkflowBookmark);
+
+            var bookmark = new BookmarkState(
+                "bookmark-shared",
+                "workflow-1",
+                "activity-1",
+                "node",
+                "resume",
+                "signal",
+                "hash-1",
+                null,
+                new Dictionary<string, string>(),
+                DateTimeOffset.UtcNow,
+                null);
+            var upsert = new RuntimeCheckpointStateChangeSet(
+                null,
+                null,
+                [],
+                [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId, RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>())],
+                [],
+                [],
+                []);
+            var writer = new GroundworkV2RuntimeCheckpointWriter(source, accessor);
+            await writer.CommitAsync(NewCommit("bookmark-composite-upsert") with { StateChanges = upsert }, Immediate());
+
+            var session = source.Open(
+                ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
+                StorageAccess.Scoped(new StorageScope("tenant-a")));
+            Assert.NotNull(session.Read(GroundworkRuntimeRowStore.Key(CompositeBookmarkId(bookmark.WorkflowExecutionId, bookmark.BookmarkId))));
+            Assert.Null(session.Read(GroundworkRuntimeRowStore.Key(bookmark.BookmarkId)));
+            Assert.NotNull(await store.FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId));
+            Assert.NotNull(await store.FindAsync(otherWorkflowBookmark.WorkflowExecutionId, otherWorkflowBookmark.BookmarkId));
+
+            var delete = new RuntimeCheckpointStateChangeSet(
+                null,
+                null,
+                [],
+                [new RuntimeStateChange<BookmarkState>(bookmark.BookmarkId, RuntimeStateChangeOperation.Delete, bookmark, new Dictionary<string, string>())],
+                [],
+                [],
+                []);
+            await writer.CommitAsync(NewCommit("bookmark-composite-delete") with { StateChanges = delete }, Immediate());
+
+            Assert.Null(await store.FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId));
+            Assert.NotNull(await store.FindAsync(otherWorkflowBookmark.WorkflowExecutionId, otherWorkflowBookmark.BookmarkId));
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
+    }
+
     [Fact]
     public async Task The_workflow_row_precedes_the_create_only_marker()
     {
@@ -1228,6 +1311,11 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []),
             [],
             new Dictionary<string, string>());
+
+    // Independent test oracle for the persisted identity. The production convention is intentionally
+    // internal; this keeps the checkpoint-writer/store compatibility assertion from merely reusing it.
+    private static string CompositeBookmarkId(string workflowExecutionId, string bookmarkId) =>
+        $"{workflowExecutionId.Length}:{workflowExecutionId}{bookmarkId.Length}:{bookmarkId}";
 
     private static WorkflowExecutionState NewExecution(string workflowExecutionId) =>
         new(

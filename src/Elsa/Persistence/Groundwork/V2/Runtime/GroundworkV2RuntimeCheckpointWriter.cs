@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Persistence.Core;
@@ -671,10 +669,25 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             }
         }
 
-        public void ApplyBookmarks() => ApplyMany(
-            ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
-            commit.StateChanges.Bookmarks,
-            ProjectBookmark);
+        public void ApplyBookmarks()
+        {
+            foreach (var change in commit.StateChanges.Bookmarks)
+            {
+                var physicalId = GroundworkV2BookmarkStorageConventions.PhysicalId(
+                    change.State.WorkflowExecutionId,
+                    change.State.BookmarkId);
+                if (change.Operation == RuntimeStateChangeOperation.Delete)
+                {
+                    StageDelete(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind, physicalId);
+                    continue;
+                }
+
+                StageValues(
+                    ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
+                    GroundworkV2BookmarkStorageConventions.Values(change.State),
+                    change.Operation);
+            }
+        }
 
         public void ApplyDurableValues() => ApplyMany(
             ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind,
@@ -686,7 +699,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             foreach (var cleanup in commit.StateChanges.ActivityScopeCleanups)
             {
                 foreach (var bookmarkId in cleanup.BookmarkIds)
-                    StageCleanupDelete(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind, bookmarkId, cleanup.WorkflowExecutionId);
+                    StageCleanupDelete(
+                        ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind,
+                        GroundworkV2BookmarkStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, bookmarkId),
+                        cleanup.WorkflowExecutionId);
                 foreach (var timerId in cleanup.TimerIds)
                     StageCleanupDelete(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind, timerId, cleanup.WorkflowExecutionId);
                 foreach (var workItemId in cleanup.SchedulerWorkItemIds)
@@ -1186,17 +1202,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField] = state.ActivityExecutionId
             };
 
-        private static IReadOnlyDictionary<string, object?> ProjectBookmark(BookmarkState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.StimulusHashField] = state.StimulusHash,
-                [ElsaRuntimeV2StorageManifest.StimulusTypeField] = state.StimulusType,
-                [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField] = StimulusLookupKey.FromPair(state.StimulusType, state.StimulusHash),
-                [ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField] = StimulusLookupKey.FromType(state.StimulusType),
-                [ElsaRuntimeV2StorageManifest.BookmarkIdField] = state.BookmarkId
-            };
-
         private static IReadOnlyDictionary<string, object?> ProjectDurableValue(DurableValueState state) =>
             new Dictionary<string, object?>(StringComparer.Ordinal)
             {
@@ -1325,14 +1330,4 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         IReadOnlyCollection<string> PendingPostCommitWorkIds,
         IReadOnlyCollection<string> ConsumedSchedulerWorkItemIds);
 
-    private static class StimulusLookupKey
-    {
-        public static string FromPair(string stimulusType, string stimulusHash) =>
-            Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");
-
-        public static string FromType(string stimulusType) => Hash(stimulusType);
-
-        private static string Hash(string value) =>
-            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
-    }
 }
