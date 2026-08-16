@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
-using Elsa.Api.FastEndpoints.Sse;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
@@ -33,7 +32,7 @@ public sealed class StructuredLogsFeatureTests
         Assert.NotNull(provider.GetRequiredService<IStructuredLogSourceProvider>());
         Assert.NotNull(provider.GetRequiredService<StructuredLogEntrySerializer>());
         Assert.NotNull(provider.GetRequiredService<StructuredLogSseFormatter>());
-        Assert.NotNull(provider.GetRequiredService<SseStreamWriter<StructuredLogStreamItem>>());
+        Assert.NotNull(provider.GetRequiredService<StructuredLogSseWriter>());
         Assert.NotNull(provider.GetRequiredService<StructuredLogFilterBinder>());
         Assert.NotNull(provider.GetRequiredService<IOptions<StructuredLogsOptions>>().Value);
         Assert.Contains(provider.GetServices<ILoggerProvider>(), p => p.GetType().Name == "StructuredLogCaptureProvider");

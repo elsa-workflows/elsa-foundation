@@ -26,7 +26,7 @@ public sealed class StructuredLogsApiContractTests
         AppContext.BaseDirectory, "Baselines", "structured-logs-openapi-fastendpoints.json");
 
     [Fact]
-    public void Committed_fastendpoints_http_baseline_is_complete_stable_and_cursor_safe()
+    public void Committed_fastendpoints_http_baseline_is_complete_and_cursor_safe()
     {
         var expected = BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath);
 
@@ -43,15 +43,26 @@ public sealed class StructuredLogsApiContractTests
             AssertSafe(observation.Json);
             AssertSafe(CompatibilityJson.Serialize(observation.Headers));
         });
+    }
 
-        var captures = Enumerable.Range(0, 10)
-            .Select(_ => CompatibilityJson.Serialize(BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath)))
+    [Fact]
+    public async Task Replacement_non_timing_evidence_is_byte_stable_across_ten_real_captures()
+    {
+        var stableCases = StructuredLogsCompatibilityCases.All
+            .Where(testCase => testCase.Case is not "stream-heartbeat" and not "stream-cancelled")
             .ToArray();
+        var captures = new List<string>();
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var observations = await StructuredLogsApiHost.CaptureAsync(stableCases);
+            captures.Add(CompatibilityJson.Serialize(observations));
+        }
+
         Assert.All(captures, capture => Assert.Equal(captures[0], capture));
     }
 
     [Fact]
-    public async Task Legacy_fastendpoints_http_capture_matches_the_immutable_baseline()
+    public async Task Minimal_api_http_capture_matches_the_immutable_fastendpoints_baseline()
     {
         var expected = BaselineFile.Load<HttpCompatibilityObservation[]>(HttpBaselinePath);
         var actual = await StructuredLogsApiHost.CaptureAsync(StructuredLogsCompatibilityCases.All);
@@ -60,9 +71,9 @@ public sealed class StructuredLogsApiContractTests
     }
 
     [Fact]
-    public async Task Actual_legacy_stream_cursors_are_present_valid_and_bounded_without_public_drop_frames()
+    public async Task Replacement_stream_cursors_are_present_valid_and_bounded_without_public_drop_frames()
     {
-        await using var host = await StructuredLogsApiHost.StartLegacyAsync(seed: false);
+        await using var host = await StructuredLogsApiHost.StartReplacementAsync(seed: false);
         using var request = new HttpRequestMessage(HttpMethod.Get, StructuredLogsCompatibilityCases.StreamPath);
         request.Headers.TryAddWithoutValidation(StructuredLogsApiHost.IdentityHeader, StructuredLogsApiHost.ExactIdentity);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -107,15 +118,15 @@ public sealed class StructuredLogsApiContractTests
             AssertSafe(operation.Schemas);
         });
 
-        await using var host = await StructuredLogsApiHost.StartLegacyAsync();
+        await using var host = await StructuredLogsApiHost.StartReplacementAsync();
         var actual = OpenApiEvidenceCapture.Capture(await host.GetCurrentOpenApiDocumentAsync());
         Assert.Equal(CompatibilityJson.Serialize(expected), CompatibilityJson.Serialize(actual));
     }
 
     [Fact]
-    public async Task Legacy_manifest_pins_three_routes_owner_fastendpoints_authoring_and_any_permission_policy()
+    public async Task Replacement_manifest_pins_three_routes_owner_minimal_authoring_and_any_permission_policy()
     {
-        await using var host = await StructuredLogsApiHost.StartLegacyAsync();
+        await using var host = await StructuredLogsApiHost.StartReplacementAsync();
         var manifest = EndpointManifestBuilder.Capture(
                 host.EndpointDataSources,
                 new EndpointManifestBuilderOptions(ValidateMetadata: false))
@@ -137,7 +148,7 @@ public sealed class StructuredLogsApiContractTests
         {
             Assert.Equal("Elsa.Diagnostics.StructuredLogs", entry.Owner);
             Assert.Equal(EndpointOwnerKind.Module, entry.OwnerKind);
-            Assert.Equal(EndpointAuthoringModels.FastEndpoints, entry.AuthoringModel);
+            Assert.Equal(EndpointAuthoringModels.MinimalApi, entry.AuthoringModel);
             Assert.Single(entry.Methods);
             Assert.NotNull(entry.SecurityDisposition);
             var policy = codec.Parse(entry.SecurityDisposition!.Value!);

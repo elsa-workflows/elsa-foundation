@@ -5,26 +5,22 @@ using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Diagnostics.StructuredLogs.Live;
 using Elsa.Diagnostics.StructuredLogs.Storage;
-using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
-using Elsa.Api.FastEndpoints.Sse;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 /// <summary>
 /// Covers the durable multi-process SSE tail. Provider read-after pages are the only payload/order source;
 /// each host's in-memory feed is only a wake hint, and bounded polling discovers remote-only commits.
-/// The endpoint is internal, so it is built through FastEndpoints' <see cref="Factory"/> via reflection.
+/// The stream handler is private to the Minimal API mapper, so the focused durable-tail tests invoke it
+/// through reflection while supplying the same request-scoped services as a host.
 /// </summary>
 public sealed class StreamEndpointTests
 {
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
-    private static readonly IServiceProvider FactoryServices = new ServiceCollection()
-        .AddServicesForUnitTesting()
-        .BuildServiceProvider();
 
     [Fact]
     public async Task Two_hosts_tail_shared_durable_order_and_reconnect_exactly_once()
@@ -165,6 +161,32 @@ public sealed class StreamEndpointTests
     }
 
     [Fact]
+    public async Task First_durable_read_failure_cancels_the_eager_live_subscription()
+    {
+        var options = TestOptions.Create();
+        var feed = new InMemoryStructuredLogLiveFeed(options);
+        var (endpoint, _) = CreateEndpoint(feed, new FailingFirstReadStore(), options, lastEventId: null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(endpoint, CancellationToken.None));
+
+        Assert.Equal(0, SubscriberCount(feed));
+    }
+
+    [Fact]
+    public async Task Initial_response_flush_failure_cancels_the_eager_live_subscription()
+    {
+        var options = TestOptions.Create();
+        var feed = new InMemoryStructuredLogLiveFeed(options);
+        var store = new InMemoryStructuredLogStore(options);
+        var (endpoint, _) = CreateEndpoint(feed, store, options, lastEventId: null);
+        endpoint.Response.Body = new FailingFlushStream();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => HandleAsync(endpoint, CancellationToken.None));
+
+        Assert.Equal(0, SubscriberCount(feed));
+    }
+
+    [Fact]
     public async Task Wrong_scope_cursor_returns_one_non_disclosing_conflict_response()
     {
         var options = TestOptions.Create();
@@ -176,7 +198,7 @@ public sealed class StreamEndpointTests
 
         await HandleAsync(endpoint, CancellationToken.None);
 
-        Assert.Equal(StatusCodes.Status409Conflict, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status409Conflict, endpoint.Response.StatusCode);
         Assert.Equal("The structured log replay cursor is unavailable.", body.Text);
         Assert.DoesNotContain("tenant", body.Text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("scope", body.Text, StringComparison.OrdinalIgnoreCase);
@@ -192,11 +214,19 @@ public sealed class StreamEndpointTests
 
         await HandleAsync(endpoint, CancellationToken.None);
 
-        Assert.Equal(StatusCodes.Status409Conflict, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status409Conflict, endpoint.Response.StatusCode);
         Assert.Equal("The structured log replay cursor is unavailable.", body.Text);
     }
 
     private static int CountFrames(string sse, StructuredLogReplayCursor cursor) => Regex.Matches(sse, $"id: {Regex.Escape(cursor.Value)}\n").Count;
+
+    private static int SubscriberCount(InMemoryStructuredLogLiveFeed feed)
+    {
+        var field = typeof(InMemoryStructuredLogLiveFeed).GetField(
+            "_subscribers",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return field?.GetValue(feed) is System.Collections.ICollection subscribers ? subscribers.Count : 0;
+    }
 
     private static StructuredLogReplayCursor Cursor(long sequence) => new($"slrc1.test.{sequence}");
 
@@ -211,7 +241,7 @@ public sealed class StreamEndpointTests
         return Options.Create(options);
     }
 
-    private static (BaseEndpoint Endpoint, CapturingResponseBody Body) CreateEndpoint(
+    private static (DefaultHttpContext Endpoint, CapturingResponseBody Body) CreateEndpoint(
         IStructuredLogLiveFeed feed,
         IStructuredLogStore store,
         IOptions<StructuredLogsOptions> options,
@@ -220,38 +250,33 @@ public sealed class StreamEndpointTests
     {
         var body = new CapturingResponseBody();
         var formatter = new StructuredLogSseFormatter(new StructuredLogEntrySerializer());
-        var streamWriter = new SseStreamWriter<StructuredLogStreamItem>(formatter, TimeSpan.FromMilliseconds(50));
+        var streamWriter = new StructuredLogSseWriter(formatter, TimeSpan.FromMilliseconds(50));
         var binder = new StructuredLogFilterBinder();
-
-        var endpointType = typeof(StructuredLogSseFormatter).Assembly
-            .GetType("Elsa.Diagnostics.StructuredLogs.Endpoints.StreamEndpoint", throwOnError: true)!;
-
-        var create = typeof(Factory).GetMethods()
-            .Single(m => m.Name == nameof(Factory.Create)
-                         && m.IsGenericMethodDefinition
-                         && m.GetParameters() is [var first, var rest]
-                         && first.ParameterType == typeof(DefaultHttpContext)
-                         && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        var context = new DefaultHttpContext { RequestServices = FactoryServices };
+        var services = new ServiceCollection()
+            .AddSingleton(feed)
+            .AddSingleton(store)
+            .AddSingleton(binder)
+            .AddSingleton(streamWriter)
+            .AddSingleton(options)
+            .BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
         if (lastEventId is not null)
             context.Request.Headers["Last-Event-ID"] = lastEventId;
         if (source is not null)
             context.Request.QueryString = new QueryString($"?source={Uri.EscapeDataString(source)}");
         context.Response.Body = body;
 
-        var endpoint = (BaseEndpoint)create.Invoke(
-            null,
-            [context, new object[] { feed, store, binder, streamWriter, options }])!;
-
-        return (endpoint, body);
+        return (context, body);
     }
 
-    private static Task HandleAsync(BaseEndpoint endpoint, CancellationToken ct) =>
-        (Task)endpoint.GetType()
-            .GetMethod("HandleAsync", [typeof(CancellationToken)])!
-            .Invoke(endpoint, [ct])!;
+    private static Task HandleAsync(DefaultHttpContext endpoint, CancellationToken ct)
+    {
+        endpoint.RequestAborted = ct;
+        var handler = typeof(StructuredLogsApi).GetMethod(
+            "HandleStreamAsync",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        return (Task)handler.Invoke(null, [endpoint])!;
+    }
 
     private sealed class SharedDurableSequence
     {
@@ -379,5 +404,45 @@ public sealed class StreamEndpointTests
 
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class FailingFirstReadStore : IStructuredLogStore
+    {
+        public ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(entry);
+
+        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) => Task.FromResult(0L);
+
+        public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(
+            StructuredLogFilter filter,
+            CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<StructuredLogEntry>>([]);
+
+        public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<StructuredLogReplayCursor?>(null);
+
+        public Task<StructuredLogReadPage> ReadAfterAsync(
+            StructuredLogReplayCursor? afterCursor,
+            StructuredLogFilter filter,
+            int maxCount,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<StructuredLogReadPage>(new InvalidOperationException("Simulated first durable read failure."));
+
+        public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class FailingFlushStream : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => 0;
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() => throw new InvalidOperationException("Simulated initial flush failure.");
+        public override Task FlushAsync(CancellationToken cancellationToken) =>
+            Task.FromException(new InvalidOperationException("Simulated initial flush failure."));
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

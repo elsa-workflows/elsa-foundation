@@ -88,12 +88,19 @@ public static class StructuredLogsStreamReader
                 terminalState = "Cancelled";
         }
 
+        // A transport read may coalesce several flushed SSE frames. Keep the observation bounded at the
+        // requested complete-frame boundary instead of accidentally recording every frame in that read.
+        var boundedFrames = frames.Take(options.MaxFrames).ToArray();
+        var rawText = automaticallyBounded && boundedFrames.Length == options.MaxFrames
+            ? string.Concat(boundedFrames)
+            : Encoding.UTF8.GetString(bytes.ToArray());
+
         return new StructuredLogsStreamObservation(
             (int)response.StatusCode,
             response.Content.Headers.ContentType?.ToString() ?? string.Empty,
             new SortedDictionary<string, string>(headers, StringComparer.Ordinal),
-            Encoding.UTF8.GetString(bytes.ToArray()),
-            frames,
+            rawText,
+            boundedFrames,
             terminalState,
             firstByteElapsed);
     }

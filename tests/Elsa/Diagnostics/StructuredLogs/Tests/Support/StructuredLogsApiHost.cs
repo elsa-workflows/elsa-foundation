@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Security.Claims;
-using CShells.FastEndpoints.Contracts;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
@@ -9,7 +8,6 @@ using Elsa.Diagnostics.StructuredLogs.Sources;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -25,8 +23,8 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Diagnostics.StructuredLogs.Tests.Support;
 
 /// <summary>
-/// Deterministic, plain TestServer host for capturing the current FastEndpoints contract. It deliberately
-/// maps the real legacy endpoint types and leaves production registration untouched.
+/// Deterministic, plain TestServer host for exercising the production Structured Logs mapping and comparing
+/// it with the immutable FastEndpoints compatibility baseline.
 /// </summary>
 public sealed class StructuredLogsApiHost : IAsyncDisposable
 {
@@ -54,7 +52,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
 
     public IReadOnlyList<EndpointDataSource> EndpointDataSources { get; }
 
-    public static Task<StructuredLogsApiHost> StartLegacyAsync(
+    public static Task<StructuredLogsApiHost> StartReplacementAsync(
         bool customPaths = false,
         bool seed = true) => StartAsync(customPaths, seed);
 
@@ -158,10 +156,6 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
                         options.TailPollInterval = TimeSpan.FromMilliseconds(10);
                     });
 
-                    services.AddFastEndpoints(options =>
-                    {
-                        options.Assemblies = [typeof(StructuredLogsFeature).Assembly];
-                    });
                 });
                 webHost.Configure(app =>
                 {
@@ -170,13 +164,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapFastEndpoints(config =>
-                        {
-                            using var scope = endpoints.ServiceProvider.CreateScope();
-                            foreach (var configurator in scope.ServiceProvider.GetServices<IFastEndpointsConfigurator>())
-                                configurator.Configure(config);
-                        });
-
+                        new StructuredLogsFeature().MapEndpoints(endpoints, null);
                         endpoints.MapOpenApi();
                         endpointDataSources = endpoints.DataSources.ToArray();
                     });
