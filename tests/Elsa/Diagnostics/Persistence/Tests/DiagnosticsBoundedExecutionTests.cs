@@ -2,8 +2,6 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Catalogs;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Records;
 using Elsa.Diagnostics.Persistence.Tests.Fixtures;
-using Elsa.Diagnostics.StructuredLogs.Core.Models;
-using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Groundwork.DiagnosticRecords;
 using Groundwork.Documents.Store;
 using Microsoft.Data.Sqlite;
@@ -30,19 +28,14 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
     {
         var provider = await providers.CreateIsolatedAsync(providerKind);
         var telemetryBinding = GroundworkOpenTelemetryBinding.Create("tenant-a", "scope-a", "collector-a");
-        var structuredBinding = new StructuredLogStoreBinding("tenant-a", "scope-a", "structured-logs");
         await using var telemetry = await DiagnosticsGroundworkProviderHarness.CreateOpenTelemetryAsync(provider, telemetryBinding);
-        await using var structured = await DiagnosticsGroundworkProviderHarness.CreateStructuredLogsAsync(provider, structuredBinding);
-        var definitions = new[]
-        {
-            GroundworkStructuredLogStore.CreateStreamDefinition(structuredBinding.StreamId)
-        }.Concat(OpenTelemetryGroundworkStorageSchema.CreateStreams(telemetryBinding)).ToArray();
+        var definitions = OpenTelemetryGroundworkStorageSchema.CreateStreams(telemetryBinding).ToArray();
         var deployment = new DiagnosticRecordDeploymentManifest(
             OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest(),
             definitions);
         var records = DiagnosticsGroundworkProviderHarness.CreateDiagnosticRecordPlanInspector(provider);
 
-        foreach (var route in DiagnosticRecordQueries(telemetryBinding, structuredBinding))
+        foreach (var route in DiagnosticRecordQueries(telemetryBinding))
         {
             var plan = await records.InspectQueryAsync(deployment, route.Query);
             AssertNativeDiagnosticPlan(records, DiagnosticRecordPlanOperation.Query, route.Name, plan);
@@ -54,7 +47,7 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
             AssertNativeDiagnosticPlan(records, DiagnosticRecordPlanOperation.GroupedQuery, route.Name, plan);
         }
 
-        foreach (var route in DiagnosticRecordTrims(telemetryBinding, structuredBinding))
+        foreach (var route in DiagnosticRecordTrims(telemetryBinding))
         {
             var plan = await records.InspectTrimSelectionAsync(deployment, route.Request);
             AssertNativeDiagnosticPlan(records, DiagnosticRecordPlanOperation.TrimSelection, route.Name, plan);
@@ -92,37 +85,10 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
     }
 
     private static IEnumerable<(string Name, DiagnosticRecordQuery Query)> DiagnosticRecordQueries(
-        GroundworkOpenTelemetryBinding telemetry,
-        StructuredLogStoreBinding structured)
+        GroundworkOpenTelemetryBinding telemetry)
     {
         var scope = new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId);
         var time = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
-        yield return (
-            "structured-recent-filter",
-            new(
-                new(structured.TenantId, structured.ScopeId),
-                new(structured.StreamId),
-                Limit: 7,
-                Order: DiagnosticRecordOrder.CursorDescending,
-                Predicate: new DiagnosticRecordPredicate.All(
-                [
-                    DiagnosticRecordPredicate.RangeInclusive("level", DiagnosticFieldValue.Int64(2), DiagnosticFieldValue.Int64(4)),
-                    DiagnosticRecordPredicate.Equal("categoryKey", DiagnosticFieldValue.String(new string('A', 64))),
-                    DiagnosticRecordPredicate.Equal("sourceKey", DiagnosticFieldValue.String(new string('B', 64)))
-                ])));
-        yield return (
-            "structured-replay-scan",
-            new(new(structured.TenantId, structured.ScopeId), new(structured.StreamId), Limit: 7, Order: DiagnosticRecordOrder.CursorAscending));
-        yield return (
-            "structured-tail",
-            new(new(structured.TenantId, structured.ScopeId), new(structured.StreamId), Limit: 1, Order: DiagnosticRecordOrder.CursorDescending));
-        yield return (
-            "structured-replay-anchor",
-            new(
-                new(structured.TenantId, structured.ScopeId),
-                new(structured.StreamId),
-                Limit: 1,
-                Predicate: DiagnosticRecordPredicate.Equal("replayToken", DiagnosticFieldValue.String("record-token"))));
         yield return (
             "span-by-trace",
             new(scope, new(telemetry.SpanStreamId), Limit: 7,
@@ -161,20 +127,18 @@ public sealed class DiagnosticsBoundedExecutionTests(DiagnosticsProviderFixture 
     }
 
     private static IEnumerable<(string Name, DiagnosticTrimRequest Request)> DiagnosticRecordTrims(
-        GroundworkOpenTelemetryBinding telemetry,
-        StructuredLogStoreBinding structured)
+        GroundworkOpenTelemetryBinding telemetry)
     {
         var issuedAt = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         foreach (var (name, scope, stream) in new[]
                  {
-                     ("structured-log", new DiagnosticStorageScope(structured.TenantId, structured.ScopeId), new DiagnosticStreamId(structured.StreamId)),
                      ("trace", new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId), new DiagnosticStreamId(telemetry.TraceStreamId)),
                      ("span", new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId), new DiagnosticStreamId(telemetry.SpanStreamId)),
                      ("metric-point", new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId), new DiagnosticStreamId(telemetry.MetricPointStreamId)),
                      ("telemetry-log", new DiagnosticStorageScope(telemetry.TenantId, telemetry.ScopeId), new DiagnosticStreamId(telemetry.LogStreamId))
                  })
         {
-            yield return (name, DiagnosticTrimRequest.Create(scope, stream, new(issuedAt, $"plan-{name}"), keepNewest: name == "structured-log" ? 0 : 7));
+            yield return (name, DiagnosticTrimRequest.Create(scope, stream, new(issuedAt, $"plan-{name}"), keepNewest: 7));
         }
     }
 

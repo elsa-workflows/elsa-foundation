@@ -431,7 +431,7 @@
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/">
-    <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj" />
+    <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Expressions/">
     <Project Path="tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj" />

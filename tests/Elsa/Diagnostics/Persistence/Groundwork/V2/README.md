@@ -4,14 +4,19 @@ This consumer is deliberately isolated from Elsa's v1 Groundwork graph. It resto
 Groundwork v2 production packages, with no source project references, `Groundwork.Testing`, internal
 access, reflection, or adapter dependencies.
 
-Pack the merged Groundwork target and run the proof with:
+From a checked-out Groundwork v2 repository, pack the target and run the proof from this
+repository with:
 
 ```sh
-dotnet pack /Users/sipke/.codex/worktrees/groundwork-v2/Groundwork.slnx \
+dotnet pack Groundwork.slnx \
   --configuration Release --output /tmp/groundwork-v2-feed-e2
 GROUNDWORK_E2_V2_PACKAGES=/tmp/groundwork-v2-feed-e2 \
-  tests/Elsa/Diagnostics/Persistence/Groundwork/V2/verify-e2-v2.sh
+  GROUNDWORK_E2_V2_VERSION=0.1.0-preview.1 \
+  /path/to/elsa-foundation/tests/Elsa/Diagnostics/Persistence/Groundwork/V2/verify-e2-v2.sh
 ```
+
+`GroundworkVersion` defaults to `0.1.0-preview.1`; set `GROUNDWORK_E2_V2_VERSION` when
+verifying another explicitly packed version.
 
 The green journey proves an ordinary SQLite manifest, schema application, idempotent append/replay,
 payload round-trip, a typed query, and an exact provider-sequence append/replay whose generated
@@ -20,6 +25,7 @@ record current public contract limits:
 
 - `ProviderSequence` must be the sole non-nullable `Int64` key; the exact append path returns the
   authoritative generated cursor and replays it without allocating a second sequence.
-- `KeepNewest(0)` is refused by portability validation, so an Elsa `TrimAsync(0)` equivalent is not
-  expressible through the current declarative retention API.
+- `KeepNewestOverride=0` is supported by exact retention execution: it removes all retained rows while
+  preserving the lifetime ProviderSequence high-water, which is the public equivalent of Elsa
+  `TrimAsync(0)`.
 - Scoped access and per-scope idempotency are currently isolated correctly.

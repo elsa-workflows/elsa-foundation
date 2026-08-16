@@ -6,7 +6,11 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
+    <!-- This source-cutover slice is staged with OpenTelemetry still on the old package, but the
+         slices land together as one clean break; a mixed v1/v2 runtime is not supported. -->
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />

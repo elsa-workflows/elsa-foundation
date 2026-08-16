@@ -10,7 +10,7 @@ try
     using var connection = new SqliteProviderFactory().Create("Data Source=" + databasePath);
     RunOrdinaryManifestJourney(connection);
     RunProviderSequenceBoundaryProof(connection);
-    RunRetentionBoundaryProof();
+    RunRetentionBoundaryProof(connection);
     RunScopeContractProof(connection);
     Console.WriteLine("E2 v2 SQLite diagnostics consumer passed.");
 }
@@ -101,18 +101,34 @@ static void RunProviderSequenceBoundaryProof(IStorageProviderConnection connecti
     Console.WriteLine($"[GREEN] ProviderSequence exact append/replay returned the authoritative cursor: sequence={returnedSequence}.");
 }
 
-static void RunRetentionBoundaryProof()
+static void RunRetentionBoundaryProof(IStorageProviderConnection connection)
 {
-    var refusal = AssertDeclarationRefusal(
-        () => StorageUnit.Declare("e2_zero_retention", "e2_zero_retention")
-            .String("entry_id", column => column.Required())
-            .Timestamp("occurred_at", column => column.Required())
-            .String("payload", 4096, column => column.Required())
-            .Key("entry_id")
-            .Retention(0, "occurred_at")
-            .Build(),
-        "GW-PORT-007");
-    Console.WriteLine($"[RED] KeepNewest(0) is refused, so an Elsa TrimAsync(0)-equivalent is not expressible: {refusal.Message}");
+    var unit = StorageUnit.Declare("e2_zero_retention", "e2_zero_retention")
+        .Int64("sequence", column => column.Required().ProviderSequence())
+        .String("payload", 4096, column => column.Required())
+        .Key("sequence")
+        .AppendIdempotency(TimeSpan.FromHours(1), "e2_zero_retention_append_operations")
+        .Retention(1, "sequence")
+        .RetentionIdempotency(TimeSpan.FromHours(1), "e2_zero_retention_operations")
+        .Build();
+    Require(connection.Schema.Apply(unit).Applied, "The zero-retention manifest did not apply.");
+
+    var session = connection.OpenSession(unit, StorageAccess.Global);
+    var append = session.AppendWithOutcomes(
+        new OperationId(DateTimeOffset.UtcNow, "zero-retention-append"),
+        new StorageValues(new Dictionary<string, object?> { ["payload"] = "discard me" }));
+    Require(append.Status == WriteOutcomeStatus.Inserted, "The zero-retention append did not insert.");
+
+    var retention = session.ApplyRetention(
+        new OperationId(DateTimeOffset.UtcNow, "zero-retention-pass"),
+        new RetentionExecutionOptions { KeepNewestOverride = 0 });
+    Require(retention.Status == RetentionOperationStatus.Executed && retention.DeletedRows == 1,
+        "KeepNewestOverride=0 did not delete the retained row.");
+    Require(session.Query(AllRows(unit)).Rows.Count == 0,
+        "KeepNewestOverride=0 left a row behind.");
+    Require(session.Inspect().LifetimeCommittedSequenceHighWater == 1,
+        "KeepNewestOverride=0 reset the durable ProviderSequence high-water.");
+    Console.WriteLine("[GREEN] KeepNewestOverride=0 deleted rows while preserving the durable high-water");
 }
 
 static void RunScopeContractProof(IStorageProviderConnection connection)

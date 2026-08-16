@@ -3,6 +3,7 @@ extern alias DiagnosticsGroundwork;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
@@ -32,9 +33,26 @@ public sealed class DiagnosticsSchemaDeploymentTests : IAsyncLifetime
         var deployment = diagnosticSource.CreateDeploymentManifest();
 
         Assert.True(source.CreateManifest().HasSameDefinitionAs(deployment.Storage));
-        Assert.Equal(5, deployment.Streams.Count);
+        Assert.Equal(4, deployment.Streams.Count);
+        Assert.DoesNotContain(deployment.Streams, stream => stream.Stream.Value == "structured-logs");
         Assert.Equal(deployment.Streams.Count, deployment.Streams.Select(stream => stream.Stream.Value).Distinct(StringComparer.Ordinal).Count());
         Assert.All(deployment.Streams, DiagnosticRecordStreamDefinitionValidator.ValidateAndThrow);
+    }
+
+    [Fact]
+    public void Structured_logs_are_declared_as_the_separate_v2_unit()
+    {
+        var unit = StructuredLogsGroundworkStorageSchema.CreateUnit();
+
+        Assert.Equal(StructuredLogsGroundworkStorageSchema.UnitId, unit.Id.Value);
+        Assert.Equal(StructuredLogsGroundworkStorageSchema.UnitName, unit.Name);
+        Assert.Equal(Groundwork.Kernel.ScopePolicy.Scoped, unit.Scope);
+        Assert.Equal(
+            Groundwork.Kernel.ColumnGeneration.ProviderSequence,
+            Assert.Single(unit.Columns, column => column.Name == StructuredLogsGroundworkStorageSchema.SequenceField).Generation);
+        Assert.Equal(
+            Groundwork.Kernel.PortableType.Json,
+            Assert.Single(unit.Columns, column => column.Name == StructuredLogsGroundworkStorageSchema.PayloadField).Type);
     }
 
     [Fact]
@@ -47,7 +65,7 @@ public sealed class DiagnosticsSchemaDeploymentTests : IAsyncLifetime
         using var report = result.ParseReport();
         Assert.Equal("blocked", report.RootElement.GetProperty("outcome").GetString());
         Assert.False(report.RootElement.GetProperty("targetMutated").GetBoolean());
-        Assert.Equal(5, DiagnosticRecords(report.RootElement)
+        Assert.Equal(4, DiagnosticRecords(report.RootElement)
             .GetProperty("pendingStreams").GetArrayLength());
         Assert.False(await TableExistsAsync(database, "groundwork_diagnostic_records"));
     }

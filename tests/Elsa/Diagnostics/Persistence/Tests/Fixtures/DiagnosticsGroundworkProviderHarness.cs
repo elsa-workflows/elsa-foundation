@@ -63,18 +63,6 @@ internal static class DiagnosticsGroundworkProviderHarness
             owners);
     }
 
-    public static async Task<GroundworkStructuredLogProviderLease> CreateStructuredLogsAsync(
-        DiagnosticsProviderLease provider,
-        StructuredLogStoreBinding binding,
-        CancellationToken cancellationToken = default)
-    {
-        var recordStore = await CreateRecordStoreAsync(
-            provider,
-            GroundworkStructuredLogStore.CreateStreamDefinition(binding.StreamId),
-            cancellationToken);
-        return new(recordStore.Store, recordStore.Owner is null ? [] : [recordStore.Owner]);
-    }
-
     public static IDiagnosticRecordPlanInspector CreateDiagnosticRecordPlanInspector(
         DiagnosticsProviderLease provider) =>
         provider.Provider switch
@@ -318,11 +306,4 @@ internal sealed class GroundworkOpenTelemetryProviderLease(
     IReadOnlyCollection<IAsyncDisposable> owners) : DiagnosticsGroundworkProviderLease(owners)
 {
     public GroundworkOpenTelemetryStores Stores { get; } = stores;
-}
-
-internal sealed class GroundworkStructuredLogProviderLease(
-    IDiagnosticRecordStore store,
-    IReadOnlyCollection<IAsyncDisposable> owners) : DiagnosticsGroundworkProviderLease(owners)
-{
-    public IDiagnosticRecordStore Store { get; } = store;
 }

@@ -184,9 +184,8 @@
       "requiredPerformanceVerdict": "pass",
       "deliveryOwner": "#642 adapter and provider conformance; #646 performance evidence",
       "behavioralBaseline": [
-        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogStoreTests.cs",
-        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogQueryConformanceTests.cs",
-        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs",
+        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/GroundworkV2StructuredLogStoreTests.cs",
+        "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/GroundworkV2ProviderMatrixTests.cs",
         "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsGroundworkProviderConformanceTests.cs",
         "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs",
         "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs"

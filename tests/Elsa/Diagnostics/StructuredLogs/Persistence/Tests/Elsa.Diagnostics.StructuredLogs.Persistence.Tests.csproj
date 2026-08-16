@@ -14,6 +14,8 @@
          Groundwork provider-driver test library: that library carries container-based provider packages,
          and ci.yml selects the fast PR gate by grepping csproj text, so referencing it here (or even
          naming the package family in this file) would route this project into nightly-only CI. -->
+    <!-- The nested package props pins this differential comparand to the public v2 provider while
+         the rest of the legacy diagnostics graph remains on its v1 provider package. -->
     <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="xunit" />

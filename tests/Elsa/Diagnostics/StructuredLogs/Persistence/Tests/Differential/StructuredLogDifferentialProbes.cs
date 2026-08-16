@@ -256,7 +256,7 @@ internal static class StructuredLogDifferentialProbes
     /// caller invoking <c>AppendAsync</c> twice. Neither stack exposes a seam to fail a commit between
     /// durable write and acknowledgement without a provider test double, so this probe deliberately does
     /// not claim to cover that clause. Both stacks already have same-stack coverage for it
-    /// (<c>GroundworkStructuredLogStoreTests</c> and <c>EfCoreStructuredLogStoreResilienceTests</c>);
+    /// (<c>GroundworkV2StructuredLogStoreTests</c> and <c>EfCoreStructuredLogStoreResilienceTests</c>);
     /// closing the gap here needs a shared failure-injecting provider, tracked as differential follow-up.
     /// </remarks>
     private static async Task<StructuredLogObservation> IdempotentReplayAsync(StructuredLogDifferentialTarget target)

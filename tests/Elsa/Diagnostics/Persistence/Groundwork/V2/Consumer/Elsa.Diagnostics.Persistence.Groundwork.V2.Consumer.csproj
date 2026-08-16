@@ -9,13 +9,14 @@
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.1.0-preview.1</GroundworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <PackageReference Include="Groundwork.Kernel" Version="1.0.0" />
-    <PackageReference Include="Groundwork.Query.Model" Version="1.0.0" />
-    <PackageReference Include="Groundwork.Store" Version="1.0.0" />
-    <PackageReference Include="Groundwork.Sqlite" Version="1.0.0" />
+    <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Query.Model" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Store" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Sqlite" Version="$(GroundworkVersion)" />
   </ItemGroup>
 </Project>

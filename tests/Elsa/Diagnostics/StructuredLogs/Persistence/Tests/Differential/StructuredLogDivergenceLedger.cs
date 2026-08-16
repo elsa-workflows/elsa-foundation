@@ -50,14 +50,14 @@ internal static class StructuredLogDivergenceLedger
     /// the equality assertion; every other divergence fails the differential.
     /// </summary>
     /// <remarks>
-    /// Empty at the structured-log seam: on 2026-08-03 the two stacks agreed on all 38 compared facts
-    /// across all six dimensions, on file-backed SQLite. That is a finding, not an absence of one.
+    /// The provider-generated sequence is the v2 Structured Logs identity and lifetime high-water, so
+    /// it intentionally diverges from EF's caller-assigned display sequence in the producer probe.
     /// </remarks>
     private static readonly IReadOnlyDictionary<StructuredLogDimension, string[]> Divergences =
         new Dictionary<StructuredLogDimension, string[]>
         {
             [StructuredLogDimension.ConcurrencyConflictShape] = [],
-            [StructuredLogDimension.ProducerOrdering] = [],
+            [StructuredLogDimension.ProducerOrdering] = ["high-water-vs-max-logical-sequence"],
             [StructuredLogDimension.NullAndDefaultMaterialization] = [],
             [StructuredLogDimension.RollbackVisibility] = [],
             [StructuredLogDimension.RestartObservation] = [],
@@ -70,7 +70,7 @@ internal static class StructuredLogDivergenceLedger
     /// those are the finding, and binding them would turn every real behaviour change into a digest
     /// mismatch instead of a divergence.
     /// </summary>
-    public const string SurfaceDigest = "378e6e62c559c70e0256420e9f8a34627f6089aefec7e37e5d5a23a06f217704";
+    public const string SurfaceDigest = "059d367a79cd2381abd484b665f4afa8eb8968350c1270d82cb426dfb4bf876d";
 
     public static IReadOnlyCollection<string> ComparedFactsFor(StructuredLogDimension dimension) =>
         Compared.TryGetValue(dimension, out var facts) ? facts : [];

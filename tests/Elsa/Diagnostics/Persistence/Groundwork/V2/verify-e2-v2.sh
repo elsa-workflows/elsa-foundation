@@ -4,14 +4,15 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../.." && pwd)"
 consumer_root="$repo_root/tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer"
 feed="${GROUNDWORK_E2_V2_PACKAGES:-$repo_root/artifacts/packages}"
+groundwork_version="${GROUNDWORK_E2_V2_VERSION:-0.1.0-preview.1}"
 test -d "$feed" || {
   echo "Missing packed Groundwork packages at '$feed'. Set GROUNDWORK_E2_V2_PACKAGES or pack Groundwork first." >&2
   exit 1
 }
 
 for required in Groundwork.Kernel Groundwork.Query.Model Groundwork.Store Groundwork.Sqlite; do
-  test -f "$feed/$required.1.0.0.nupkg" || {
-    echo "The local feed is missing $required.1.0.0.nupkg." >&2
+  test -f "$feed/$required.$groundwork_version.nupkg" || {
+    echo "The local feed is missing $required.$groundwork_version.nupkg." >&2
     exit 1
   }
 done
@@ -43,8 +44,10 @@ isolation_args=(
 NUGET_PACKAGES="$package_cache" dotnet restore "$external_root/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj" \
   --force --force-evaluate --packages "$package_cache" --nologo \
   -p:RestoreConfigFile="$external_root/NuGet.Config" \
+  -p:GroundworkVersion="$groundwork_version" \
   "${isolation_args[@]}" -m:1 -v:q
 NUGET_PACKAGES="$package_cache" dotnet run --project "$external_root/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj" \
-  --configuration Release --no-restore --nologo "${isolation_args[@]}"
+  --configuration Release --no-restore --nologo \
+  -p:GroundworkVersion="$groundwork_version" "${isolation_args[@]}"
 
 echo "E2 v2 package-only SQLite proof passed."

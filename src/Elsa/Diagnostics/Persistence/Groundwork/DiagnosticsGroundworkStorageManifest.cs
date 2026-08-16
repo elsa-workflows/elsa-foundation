@@ -1,5 +1,4 @@
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
-using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Core.Manifests;
 using Groundwork.DiagnosticRecords;
@@ -13,8 +12,7 @@ public static class DiagnosticsGroundworkStorageManifest
 {
     private static readonly IReadOnlyList<IGroundworkDiagnosticRecordManifestSource> DiagnosticRecordSources =
     [
-        new GroundworkOpenTelemetryPersistenceFeature(),
-        new GroundworkStructuredLogsPersistenceFeature()
+        new GroundworkOpenTelemetryPersistenceFeature()
     ];
 
     /// <summary>
@@ -25,9 +23,9 @@ public static class DiagnosticsGroundworkStorageManifest
         OpenTelemetryGroundworkStorageSchema.CreateDocumentManifest();
 
     /// <summary>
-    /// Returns the five immutable history streams deployed beside the document manifest. The default
-    /// OpenTelemetry binding is part of this parameterless first-party deployment contract; a customized
-    /// binding requires a matching host-owned deployment source.
+    /// Returns the four OpenTelemetry immutable history streams deployed beside the document manifest.
+    /// Structured Logs is a Groundwork v2 storage unit and is intentionally not part of the legacy
+    /// diagnostic-record deployment.
     /// </summary>
     public static IReadOnlyList<DiagnosticRecordStreamDefinition> CreateDiagnosticRecordStreams() =>
         DiagnosticRecordSources

@@ -16,8 +16,11 @@ using Elsa.Diagnostics.StructuredLogs.Storage;
 using Groundwork.DiagnosticRecords;
 using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
@@ -58,8 +61,10 @@ public sealed class DiagnosticsPersistenceReadinessTests
         });
 
         Assert.Same(failure, startupFailure);
-        Assert.Equal(1, ((ThrowingDiagnosticRecordStoreSessionFactory)provider
-            .GetRequiredService<IDiagnosticRecordStoreSessionFactory>()).OpenCount);
+        Assert.Equal(
+            1,
+            Assert.IsType<RecordingStorageProviderConnection>(
+                provider.GetRequiredService<IStorageProviderConnection>()).ApplyCount);
 
         await AssertDoesNotMaskFailureAsAnEmptyStructuredLogStoreAsync(provider, failure);
     }
@@ -95,6 +100,8 @@ public sealed class DiagnosticsPersistenceReadinessTests
         services.AddSingleton<IDiagnosticRecordDeploymentManifestSource>(new DiagnosticsDeploymentSchema());
         services.AddSingleton<IDiagnosticRecordStoreSessionFactory>(diagnosticSessions);
         services.AddSingleton<IGroundworkStoreSessionSource>(documents);
+        var storage = new RecordingStorageProviderConnection();
+        services.AddGroundworkStorageProviderConnection(storage);
         new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
         new GroundworkStructuredLogsPersistenceFeature().ConfigureServices(services);
 
@@ -104,8 +111,9 @@ public sealed class DiagnosticsPersistenceReadinessTests
 
         await StartHostAsync(provider);
 
-        Assert.Equal(2, diagnosticSessions.Sessions.Count);
-        Assert.Equal(5, diagnosticSessions.Sessions.Sum(session => session.OpenedStreams.Count));
+        Assert.Single(diagnosticSessions.Sessions);
+        Assert.Equal(4, diagnosticSessions.Sessions.Sum(session => session.OpenedStreams.Count));
+        Assert.Equal(1, storage.OpenCount);
         Assert.Equal(1, documents.OpenCount);
 
         foreach (var hostedService in provider.GetServices<IHostedService>())
@@ -187,10 +195,7 @@ public sealed class DiagnosticsPersistenceReadinessTests
         var services = new ServiceCollection();
         new StructuredLogsFeature().ConfigureServices(services);
         services.AddSingleton(StructuredLogStoreBinding.Default);
-        services.AddSingleton<IDiagnosticRecordDeploymentManifestSource>(
-            new DiagnosticsDeploymentSchema());
-        services.AddSingleton<IDiagnosticRecordStoreSessionFactory>(
-            new ThrowingDiagnosticRecordStoreSessionFactory(failure));
+        services.AddGroundworkStorageProviderConnection(new RecordingStorageProviderConnection(failure));
 
         ConfigureFeature<GroundworkStructuredLogStore>(services, "GroundworkStructuredLogsPersistenceFeature");
 
@@ -198,6 +203,90 @@ public sealed class DiagnosticsPersistenceReadinessTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkStructuredLogStore));
         Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryStructuredLogStore));
         return services;
+    }
+
+    private sealed class RecordingStorageProviderConnection : IStorageProviderConnection
+    {
+        private readonly DiagnosticsReadinessFailure? failure;
+
+        public RecordingStorageProviderConnection(DiagnosticsReadinessFailure? failure = null)
+        {
+            this.failure = failure;
+            Schema = new RecordingSchemaCoordinator(failure, () => ApplyCount++);
+        }
+
+        public int ApplyCount { get; private set; }
+
+        public int OpenCount { get; private set; }
+
+        public IProviderCatalog Catalog => throw new NotSupportedException();
+
+        public ISchemaCoordinator Schema { get; }
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities => [];
+
+        public IStorageSession OpenSession(StorageUnit unit, StorageAccess access)
+        {
+            if (failure is not null)
+                throw failure;
+            OpenCount++;
+            return CreateRecordingStorageSession(unit, access);
+        }
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
+            throw new NotSupportedException();
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            params StorageUnit[] units) => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingSchemaCoordinator(
+        DiagnosticsReadinessFailure? failure,
+        Action apply)
+        : ISchemaCoordinator
+    {
+        public SchemaDiff Diff(StorageUnit desired) => new([]);
+
+        public SchemaApplyResult Apply(StorageUnit desired)
+        {
+            apply();
+            if (failure is not null)
+                throw failure;
+            return new(new SchemaDiff([]), false);
+        }
+    }
+
+    private static IStorageSession CreateRecordingStorageSession(StorageUnit unit, StorageAccess access)
+    {
+        var session = DispatchProxy.Create<IStorageSession, RecordingStorageSessionProxy>();
+        ((RecordingStorageSessionProxy)(object)session).Configure(unit, access);
+        return session;
+    }
+
+    private class RecordingStorageSessionProxy : DispatchProxy
+    {
+        private StorageUnit unit = null!;
+        private StorageAccess access = null!;
+
+        public void Configure(StorageUnit unit, StorageAccess access)
+        {
+            this.unit = unit;
+            this.access = access;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            targetMethod?.Name switch
+            {
+                "get_Unit" => unit,
+                "get_Access" => access,
+                _ => throw new NotSupportedException($"Test proxy member '{targetMethod?.Name}' must not be invoked.")
+            };
     }
 
     private static void ConfigureFeature<TAssemblyAnchor>(IServiceCollection services, string featureTypeName)

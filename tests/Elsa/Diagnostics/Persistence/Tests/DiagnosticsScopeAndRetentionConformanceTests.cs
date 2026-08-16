@@ -24,33 +24,6 @@ public sealed class DiagnosticsScopeAndRetentionConformanceTests(DiagnosticsProv
 
     [Theory]
     [MemberData(nameof(ProviderKinds))]
-    public async Task Structured_log_retention_never_observes_or_mutates_another_scope(
-        DiagnosticsProviderKind providerKind)
-    {
-        var provider = await providers.CreateIsolatedAsync(providerKind);
-        var firstBinding = new StructuredLogStoreBinding("tenant-a", "scope-a", "structured-logs");
-        var secondBinding = new StructuredLogStoreBinding("tenant-b", "scope-b", "structured-logs");
-
-        await using var firstProvider = await DiagnosticsGroundworkProviderHarness.CreateStructuredLogsAsync(provider, firstBinding);
-        await using var secondProvider = await DiagnosticsGroundworkProviderHarness.CreateStructuredLogsAsync(provider, secondBinding);
-        await using var first = StartStructuredLogs(firstProvider, firstBinding);
-        await using var second = StartStructuredLogs(secondProvider, secondBinding);
-        var timestamp = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
-
-        await first.AppendAsync(StructuredEntry(1, "first-old", timestamp));
-        await first.AppendAsync(StructuredEntry(2, "first-new", timestamp));
-        await second.AppendAsync(StructuredEntry(1, "second-only", timestamp));
-
-        await first.TrimAsync(1);
-
-        Assert.Equal(["first-new"], (await first.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
-        Assert.Equal(["second-only"], (await second.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
-        Assert.Equal(2, await first.GetHighWaterMarkAsync());
-        Assert.Equal(1, await second.GetHighWaterMarkAsync());
-    }
-
-    [Theory]
-    [MemberData(nameof(ProviderKinds))]
     public async Task Telemetry_retention_never_observes_or_mutates_another_scope(
         DiagnosticsProviderKind providerKind)
     {
@@ -88,25 +61,6 @@ public sealed class DiagnosticsScopeAndRetentionConformanceTests(DiagnosticsProv
         Assert.Equal("orders-a", Assert.Single((await first.QueryResourcesAsync(new() { Take = 20 })).Items).ServiceName);
         Assert.Equal("orders-b", Assert.Single((await second.QueryResourcesAsync(new() { Take = 20 })).Items).ServiceName);
     }
-
-    private static GroundworkStructuredLogStore StartStructuredLogs(
-        GroundworkStructuredLogProviderLease provider,
-        StructuredLogStoreBinding binding)
-    {
-        var store = new GroundworkStructuredLogStore(provider.Store, Options.Create(new StructuredLogsOptions()), binding);
-        store.Start();
-        return store;
-    }
-
-    private static StructuredLogEntry StructuredEntry(long sequence, string message, DateTimeOffset timestamp) => new()
-    {
-        Sequence = sequence,
-        Timestamp = timestamp,
-        Level = LogLevel.Information,
-        Category = "Scope.Conformance",
-        Message = message,
-        SourceId = "scope-conformance"
-    };
 
     private static OpenTelemetryBatch Batch(string suffix, string serviceName, DateTimeOffset timestamp)
     {

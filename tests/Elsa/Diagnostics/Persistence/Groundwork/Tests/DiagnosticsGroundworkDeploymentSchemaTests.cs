@@ -25,7 +25,7 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
             declaration.Manifest.StorageUnits.Select(unit => unit.Identity.Value).Order(StringComparer.Ordinal),
             deployment.Storage.StorageUnits.Select(unit => unit.Identity.Value).Order(StringComparer.Ordinal));
         Assert.Equal(3, deployment.Storage.StorageUnits.Count);
-        Assert.Equal(5, deployment.Streams.Count);
+        Assert.Equal(4, deployment.Streams.Count);
         Assert.All(deployment.Storage.StorageUnits, unit => Assert.NotNull(unit.PhysicalStorage));
         Assert.All(deployment.Streams, DiagnosticRecordStreamDefinitionValidator.ValidateAndThrow);
         Assert.NotNull(source.CreateNamePolicy());
@@ -40,7 +40,7 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
         Assert.DoesNotContain(documentManifest.StorageUnits, unit =>
             unit.Identity.Value is "structured-logs" or "traces" or "spans" or "metric-points" or "logs");
         Assert.True(documentManifest.HasSameDefinitionAs(deployment.Storage));
-        Assert.Equal(5, deployment.Streams.Count);
+        Assert.Equal(4, deployment.Streams.Count);
     }
 
     [Fact]
@@ -67,18 +67,15 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
     {
         IGroundworkDiagnosticRecordManifestSource openTelemetry =
             new GroundworkOpenTelemetryPersistenceFeature();
-        IGroundworkDiagnosticRecordManifestSource structuredLogs =
-            new GroundworkStructuredLogsPersistenceFeature();
         var deployment = new DiagnosticsGroundworkDeploymentSchema().CreateDeploymentManifest();
+        var structuredLogsUnit = StructuredLogsGroundworkStorageSchema.CreateUnit();
 
         Assert.Equal(4, openTelemetry.CreateDiagnosticRecordStreams().Count);
-        Assert.Single(structuredLogs.CreateDiagnosticRecordStreams());
         Assert.Equal(
-            openTelemetry.CreateDiagnosticRecordStreams()
-                .Concat(structuredLogs.CreateDiagnosticRecordStreams())
-                .Select(stream => stream.Stream.Value)
-                .Order(StringComparer.Ordinal),
+            openTelemetry.CreateDiagnosticRecordStreams().Select(stream => stream.Stream.Value).Order(StringComparer.Ordinal),
             deployment.Streams.Select(stream => stream.Stream.Value));
+        Assert.Equal(StructuredLogsGroundworkStorageSchema.UnitId, structuredLogsUnit.Id.Value);
+        Assert.Equal(StructuredLogsGroundworkStorageSchema.UnitName, structuredLogsUnit.Name);
     }
 
     [Fact]
@@ -103,7 +100,7 @@ public sealed class DiagnosticsGroundworkDeploymentSchemaTests
         Assert.IsType<DiagnosticsGroundworkDeploymentSchema>(source);
         var deployment = provider.GetRequiredService<IDiagnosticRecordDeploymentManifestSource>();
         Assert.IsType<DiagnosticsGroundworkDeploymentSchema>(deployment);
-        Assert.Equal(5, deployment.CreateDeploymentManifest().Streams.Count);
+        Assert.Equal(4, deployment.CreateDeploymentManifest().Streams.Count);
         Assert.Equal(
             new DiagnosticsGroundworkDeploymentSchema().CreateManifest().StorageUnits.Select(unit => unit.Identity.Value).Order(),
             source.CreateManifest().StorageUnits.Select(unit => unit.Identity.Value).Order());
