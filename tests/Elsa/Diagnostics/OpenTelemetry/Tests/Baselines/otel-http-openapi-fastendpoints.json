@@ -1,0 +1,1458 @@
+{
+  "capturedAt": "c04d8dbbe",
+  "http": [
+    {
+      "item1": "resources",
+      "method": "POST",
+      "item3": "/diagnostics/opentelemetry/resources/search",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "traces",
+      "method": "POST",
+      "item3": "/diagnostics/opentelemetry/traces/search",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "metrics",
+      "method": "POST",
+      "item3": "/diagnostics/opentelemetry/metrics/search",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "logs",
+      "method": "POST",
+      "item3": "/diagnostics/opentelemetry/logs/search",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "trace-detail",
+      "method": "GET",
+      "item3": "/diagnostics/opentelemetry/traces/missing",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "storage",
+      "method": "GET",
+      "item3": "/diagnostics/opentelemetry/storage",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "collector-configuration",
+      "method": "GET",
+      "item3": "/diagnostics/opentelemetry/collector-configuration",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "otlp-traces",
+      "method": "POST",
+      "item3": "/elsa/otlp/v1/traces",
+      "status": 204,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "otlp-metrics",
+      "method": "POST",
+      "item3": "/elsa/otlp/v1/metrics",
+      "status": 204,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "otlp-logs",
+      "method": "POST",
+      "item3": "/elsa/otlp/v1/logs",
+      "status": 204,
+      "contentType": "",
+      "body": ""
+    },
+    {
+      "item1": "stream",
+      "method": "GET",
+      "item3": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "status": 302,
+      "contentType": "",
+      "body": ""
+    }
+  ],
+  "routes": [
+    {
+      "route": "/_elsa/studio/diagnostics/opentelemetry/stream",
+      "methods": [
+        "GET"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsStreamEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/traces/search",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTracesEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/traces/{traceId}",
+      "methods": [
+        "GET"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTraceEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/storage",
+      "methods": [
+        "GET"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryStorageEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/resources/search",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryResourcesEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/metrics/search",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryMetricsEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/logs/search",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryLogsEndpoint"
+    },
+    {
+      "route": "/diagnostics/opentelemetry/collector-configuration",
+      "methods": [
+        "GET"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryCollectorConfigurationEndpoint"
+    },
+    {
+      "route": "/elsa/otlp/v1/logs",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionLogsIngestionEndpoint"
+    },
+    {
+      "route": "/elsa/otlp/v1/metrics",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionMetricsIngestionEndpoint"
+    },
+    {
+      "route": "/elsa/otlp/v1/traces",
+      "methods": [
+        "POST"
+      ],
+      "name": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionTracesIngestionEndpoint"
+    },
+    {
+      "route": "_test_url_cache_",
+      "methods": [
+        "GET"
+      ],
+      "name": null
+    },
+    {
+      "route": "/openapi/{documentName}.json",
+      "methods": [
+        "GET"
+      ],
+      "name": null
+    }
+  ],
+  "openApi": {
+    "openapi": "3.1.1",
+    "info": {
+      "title": "Elsa.Diagnostics.OpenTelemetry.Tests | v1",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "http://localhost/"
+      }
+    ],
+    "paths": {
+      "/_elsa/studio/diagnostics/opentelemetry/stream": {
+        "get": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsStreamEndpoint",
+          "responses": {
+            "204": {
+              "description": "No Content"
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/traces/search": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTracesEndpoint",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTelemetryTraceFilter"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryTraceResult"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/traces/{traceId}": {
+        "get": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryTraceEndpoint",
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryTraceDetail"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/storage": {
+        "get": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryStorageEndpoint",
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryStorageDiagnostics"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/resources/search": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryResourcesEndpoint",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTelemetryResourceFilter"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryResourceResult"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/metrics/search": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryMetricsEndpoint",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTelemetryMetricFilter"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryMetricResult"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/logs/search": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryLogsEndpoint",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTelemetryLogFilter"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/OpenTelemetryLogResult"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/diagnostics/opentelemetry/collector-configuration": {
+        "get": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsOpenTelemetryCollectorConfigurationEndpoint",
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CollectorConfiguration"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            }
+          }
+        }
+      },
+      "/elsa/otlp/v1/logs": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionLogsIngestionEndpoint",
+          "responses": {
+            "204": {
+              "description": "No Content"
+            }
+          }
+        }
+      },
+      "/elsa/otlp/v1/metrics": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionMetricsIngestionEndpoint",
+          "responses": {
+            "204": {
+              "description": "No Content"
+            }
+          }
+        }
+      },
+      "/elsa/otlp/v1/traces": {
+        "post": {
+          "tags": [
+            "Elsa.Diagnostics.OpenTelemetry.Tests"
+          ],
+          "operationId": "ElsaDiagnosticsOpenTelemetryEndpointsIngestionTracesIngestionEndpoint",
+          "responses": {
+            "204": {
+              "description": "No Content"
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "CollectorConfiguration": {
+          "required": [
+            "http",
+            "grpc",
+            "serviceNameEnvironmentVariable",
+            "endpointEnvironmentVariable",
+            "protocolEnvironmentVariable",
+            "requiredHeaders"
+          ],
+          "type": "object",
+          "properties": {
+            "http": {
+              "$ref": "#/components/schemas/CollectorEndpointInfo"
+            },
+            "grpc": {
+              "$ref": "#/components/schemas/CollectorEndpointInfo"
+            },
+            "serviceNameEnvironmentVariable": {
+              "type": "string"
+            },
+            "endpointEnvironmentVariable": {
+              "type": "string"
+            },
+            "protocolEnvironmentVariable": {
+              "type": "string"
+            },
+            "requiredHeaders": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "CollectorEndpointInfo": {
+          "required": [
+            "protocol",
+            "endpoint",
+            "enabled",
+            "disabledReason"
+          ],
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "type": "string"
+            },
+            "endpoint": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "disabledReason": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          }
+        },
+        "MetricInstrument": {
+          "required": [
+            "id",
+            "resourceId",
+            "name",
+            "unit",
+            "description",
+            "kind",
+            "attributes"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "resourceId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "unit": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "description": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "kind": {
+              "$ref": "#/components/schemas/MetricKind"
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "MetricKind": {
+          "type": "integer"
+        },
+        "MetricPoint": {
+          "required": [
+            "id",
+            "instrumentId",
+            "instrumentName",
+            "resourceId",
+            "timestamp",
+            "value",
+            "sum",
+            "count",
+            "attributes",
+            "traceId",
+            "spanId"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "instrumentId": {
+              "type": "string"
+            },
+            "instrumentName": {
+              "type": "string"
+            },
+            "resourceId": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "value": {
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "type": [
+                "null",
+                "number",
+                "string"
+              ],
+              "format": "double"
+            },
+            "sum": {
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+              "type": [
+                "null",
+                "number",
+                "string"
+              ],
+              "format": "double"
+            },
+            "count": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "traceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "spanId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            }
+          }
+        },
+        "OpenTelemetryLogFilter": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "serviceName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "traceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "spanId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "severity": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "from": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "to": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "search": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "take": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        },
+        "OpenTelemetryLogResult": {
+          "required": [
+            "items",
+            "droppedCount"
+          ],
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/OtlpLogRecord"
+              }
+            },
+            "droppedCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "OpenTelemetryMetricFilter": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "serviceName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "instrumentName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "from": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "to": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "take": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        },
+        "OpenTelemetryMetricResult": {
+          "required": [
+            "instruments",
+            "points",
+            "droppedCount"
+          ],
+          "type": "object",
+          "properties": {
+            "instruments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/MetricInstrument"
+              }
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/MetricPoint"
+              }
+            },
+            "droppedCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "OpenTelemetryResourceFilter": {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "serviceName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/TelemetryResourceStatus"
+                }
+              ]
+            },
+            "take": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        },
+        "OpenTelemetryResourceResult": {
+          "required": [
+            "items",
+            "droppedCount"
+          ],
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetryResource"
+              }
+            },
+            "droppedCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "OpenTelemetryStorageDiagnostics": {
+          "required": [
+            "traceCapacity",
+            "spanCapacity",
+            "metricPointCapacity",
+            "logRecordCapacity",
+            "resourceCount",
+            "traceCount",
+            "spanCount",
+            "metricInstrumentCount",
+            "metricPointCount",
+            "logRecordCount",
+            "droppedTraceCount",
+            "droppedSpanCount",
+            "droppedMetricPointCount",
+            "droppedLogRecordCount"
+          ],
+          "type": "object",
+          "properties": {
+            "traceCapacity": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "spanCapacity": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "metricPointCapacity": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "logRecordCapacity": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "resourceCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "traceCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "spanCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "metricInstrumentCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "metricPointCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "logRecordCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "droppedTraceCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            },
+            "droppedSpanCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            },
+            "droppedMetricPointCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            },
+            "droppedLogRecordCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "OpenTelemetryTraceDetail": {
+          "required": [
+            "trace",
+            "spans",
+            "resources",
+            "logs"
+          ],
+          "type": "object",
+          "properties": {
+            "trace": {
+              "$ref": "#/components/schemas/TelemetryTrace"
+            },
+            "spans": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetrySpan"
+              }
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetryResource"
+              }
+            },
+            "logs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/OtlpLogRecord"
+              }
+            }
+          }
+        },
+        "OpenTelemetryTraceFilter": {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "serviceName": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "traceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "workflowInstanceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "status": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/SpanStatus"
+                }
+              ]
+            },
+            "from": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "to": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "format": "date-time"
+            },
+            "search": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "take": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        },
+        "OpenTelemetryTraceResult": {
+          "required": [
+            "items",
+            "droppedCount"
+          ],
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetryTrace"
+              }
+            },
+            "droppedCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "OtlpLogRecord": {
+          "required": [
+            "id",
+            "resourceId",
+            "timestamp",
+            "severityText",
+            "severityNumber",
+            "body",
+            "traceId",
+            "spanId",
+            "attributes"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "resourceId": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "severityText": {
+              "type": "string"
+            },
+            "severityNumber": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "null",
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            },
+            "body": {
+              "type": "string"
+            },
+            "traceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "spanId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "SpanStatus": {
+          "type": "integer"
+        },
+        "TelemetryResource": {
+          "required": [
+            "id",
+            "serviceName",
+            "serviceInstanceId",
+            "telemetrySdkLanguage",
+            "attributes",
+            "lastSeen",
+            "status"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "serviceName": {
+              "type": "string"
+            },
+            "serviceInstanceId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "telemetrySdkLanguage": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "lastSeen": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "status": {
+              "$ref": "#/components/schemas/TelemetryResourceStatus"
+            }
+          }
+        },
+        "TelemetryResourceStatus": {
+          "type": "integer"
+        },
+        "TelemetrySpan": {
+          "required": [
+            "id",
+            "traceId",
+            "spanId",
+            "parentSpanId",
+            "resourceId",
+            "name",
+            "kind",
+            "startTime",
+            "endTime",
+            "status",
+            "statusDescription",
+            "attributes",
+            "events",
+            "links"
+          ],
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "traceId": {
+              "type": "string"
+            },
+            "spanId": {
+              "type": "string"
+            },
+            "parentSpanId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "resourceId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "startTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "endTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "status": {
+              "$ref": "#/components/schemas/SpanStatus"
+            },
+            "statusDescription": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetrySpanEvent"
+              }
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TelemetrySpanLink"
+              }
+            }
+          }
+        },
+        "TelemetrySpanEvent": {
+          "required": [
+            "name",
+            "timestamp",
+            "attributes"
+          ],
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "TelemetrySpanLink": {
+          "required": [
+            "traceId",
+            "spanId",
+            "attributes"
+          ],
+          "type": "object",
+          "properties": {
+            "traceId": {
+              "type": "string"
+            },
+            "spanId": {
+              "type": "string"
+            },
+            "attributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "TelemetryTrace": {
+          "required": [
+            "traceId",
+            "rootSpanId",
+            "name",
+            "startTime",
+            "endTime",
+            "duration",
+            "status",
+            "resourceIds",
+            "workflowInstanceIds",
+            "spanCount"
+          ],
+          "type": "object",
+          "properties": {
+            "traceId": {
+              "type": "string"
+            },
+            "rootSpanId": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "name": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "startTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "endTime": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "duration": {
+              "pattern": "^-?(\\d\u002B\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/components/schemas/SpanStatus"
+            },
+            "resourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "workflowInstanceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "spanCount": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        }
+      }
+    },
+    "tags": [
+      {
+        "name": "Elsa.Diagnostics.OpenTelemetry.Tests"
+      }
+    ]
+  }
+}
