@@ -93,7 +93,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
         ValidateCommitBoundary(commit);
         EnsureTenantScope(context, commit);
-        RequireAtomicCommitCapability();
+        RequireCommitCapabilities(commit);
         var access = StorageAccess.Scoped(new StorageScope(context.Scope.Value));
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
 
@@ -166,10 +166,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             {
                 if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, RowWriteMode.ConditionalUpsert))
                     throw ReadCurrentFence(access, commit);
-                if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete))
+                if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete))
                     throw new RuntimeSchedulerWorkConsumeConflictException(
                         commit.WorkflowExecutionId,
-                        FindFailedWriteId(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete));
+                        FindFailedWriteId(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete));
                 throw new InvalidOperationException(
                     $"Groundwork rejected runtime checkpoint '{commit.CommitId}' with {report.Failed} failed row outcomes.");
             }
@@ -177,7 +177,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             return stage.Result;
         }
         catch (BatchWriteException exception) when (ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, RowWriteMode.ConditionalUpsert) ||
-                                                    ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete))
+                                                    ContainsConflict(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete))
         {
             try
             {
@@ -192,7 +192,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 throw ReadCurrentFence(access, commit);
             throw new RuntimeSchedulerWorkConsumeConflictException(
                 commit.WorkflowExecutionId,
-                FindFailedWriteId(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.Delete));
+                FindFailedWriteId(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -214,13 +214,24 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         }
     }
 
-    private void RequireAtomicCommitCapability()
+    private void RequireCommitCapabilities(RuntimeCheckpointCommit commit)
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
+        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource)
+            throw new NotSupportedException(
+                "Groundwork runtime checkpoint commits require provider capability evidence.");
+
+        var capabilities = capabilitySource.Capabilities(targetName);
+        if (!capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
         {
             throw new NotSupportedException(
                 "Groundwork runtime checkpoint commits require the provider's evidenced atomic-commit capability.");
+        }
+
+        if (commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 &&
+            !capabilities.Any(capability => capability.Id.Equals(BatchWriteCapabilities.CompareAndDelete)))
+        {
+            throw new NotSupportedException(
+                "Groundwork runtime scheduler-work consumption requires the provider's evidenced compare-and-delete capability.");
         }
     }
 
@@ -236,7 +247,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         outcomes.Any(outcome =>
             outcome.Write.Unit.Id.Value == unitId &&
             outcome.Write.Mode == mode &&
-            outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound);
+            outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound or WriteOutcomeStatus.ComparisonMismatch);
 
     private static string FindFailedWriteId(
         IEnumerable<RowWriteOutcome> outcomes,
@@ -245,7 +256,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         outcomes.Where(outcome =>
                 outcome.Write.Unit.Id.Value == unitId &&
                 outcome.Write.Mode == mode &&
-                outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound)
+                outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound or WriteOutcomeStatus.ComparisonMismatch)
             .Select(outcome => outcome.Write.Key?.Values.TryGetValue(ElsaRuntimeV2StorageManifest.IdField, out var raw) == true
                 ? raw as string
                 : outcome.Write.Values?.Values.TryGetValue(ElsaRuntimeV2StorageManifest.IdField, out var value) == true
@@ -925,15 +936,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 if (workflowExecutionId is null || !StringComparer.Ordinal.Equals(workflowExecutionId, consumed.WorkflowExecutionId))
                     throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
                 ValidateSchedulerClaim(values, consumed);
-                // The public exact-UOW precondition is a provider revision CAS. Groundwork v2 does not expose a
-                // composite owner+token precondition, so this revision guard is deliberately fail-closed: a claim
-                // renewal that advances the revision can be reported claim-lost even though owner+token are stable.
-                StageDelete(
-                    ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
-                    consumed.WorkItemId,
-                    WriteOptions.IfVersion(entry.Version ?? throw new RuntimeSchedulerWorkConsumeConflictException(
-                        consumed.WorkflowExecutionId,
-                        consumed.WorkItemId)));
+                unitOfWork.Stage(RowWrite.CompareAndDelete(
+                    Unit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+                    GroundworkRuntimeRowStore.Key(consumed.WorkItemId),
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = consumed.WorkflowExecutionId,
+                        [ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField] = consumed.ClaimOwnerId,
+                        [ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField] = consumed.FencingToken
+                    }));
             }
         }
 
@@ -1231,70 +1242,12 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             IReadOnlyDictionary<string, object?> values,
             ConsumedSchedulerWorkItem consumed)
         {
-            // Adapter seam for Groundwork #291: once the provider exposes a composite owner+token
-            // compare-and-delete, these projected fields become the atomic predicate. Until then a
-            // revision CAS remains deliberately fail-closed for renewal-stable claims.
             var projectedOwner = ReadOptionalString(values, ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField);
             var projectedToken = ReadOptionalInt64(values, ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField);
-            if (projectedOwner is not null || projectedToken is not null)
-            {
-                if (!StringComparer.Ordinal.Equals(projectedOwner, consumed.ClaimOwnerId) || projectedToken != consumed.FencingToken)
-                    throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
-                return;
-            }
-
-            var content = values.TryGetValue(ElsaRuntimeV2StorageManifest.ContentField, out var raw)
-                ? raw switch
-                {
-                    string text => text,
-                    JsonElement element => element.GetRawText(),
-                    _ => null
-                }
-                : null;
-            if (content is null)
+            if (projectedOwner is null || projectedToken is null ||
+                !StringComparer.Ordinal.Equals(projectedOwner, consumed.ClaimOwnerId) ||
+                projectedToken != consumed.FencingToken)
                 throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
-
-            using var document = ParseSchedulerContent(content, consumed);
-            var root = document.RootElement;
-            var owner = FindString(root, "claimOwnerId") ?? FindString(root, "ownerId");
-            var token = FindInt64(root, "fencingToken");
-            if (owner is null || token is null ||
-                !StringComparer.Ordinal.Equals(owner, consumed.ClaimOwnerId) || token != consumed.FencingToken)
-                throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
-        }
-
-        private static JsonDocument ParseSchedulerContent(string content, ConsumedSchedulerWorkItem consumed)
-        {
-            try
-            {
-                return JsonDocument.Parse(content);
-            }
-            catch (JsonException)
-            {
-                throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
-            }
-        }
-
-        private static string? FindString(JsonElement root, string propertyName)
-        {
-            if (root.ValueKind != JsonValueKind.Object)
-                return null;
-            if (root.TryGetProperty(propertyName, out var direct) && direct.ValueKind == JsonValueKind.String)
-                return direct.GetString();
-            if (root.TryGetProperty("claim", out var claim))
-                return FindString(claim, propertyName) ?? FindString(claim, "ownerId");
-            return null;
-        }
-
-        private static long? FindInt64(JsonElement root, string propertyName)
-        {
-            if (root.ValueKind != JsonValueKind.Object)
-                return null;
-            if (root.TryGetProperty(propertyName, out var direct) && direct.TryGetInt64(out var value))
-                return value;
-            if (root.TryGetProperty("claim", out var claim))
-                return FindInt64(claim, propertyName);
-            return null;
         }
 
         private static long ReadHighestIssuedToken(ExecutionLivenessState state)

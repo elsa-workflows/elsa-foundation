@@ -45,33 +45,33 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var expectedIndexes = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["activityExecutionHierarchy"] = ["by-execution-scope", "by-workflow-execution", "by-workflow-execution-and-hierarchy-order", "by-workflow-execution-scope-and-hierarchy-order"],
-            ["activityExecutionInspection"] = ["by-workflow-execution", "by-workflow-execution-and-summary-order"],
-            ["activityExecutionState"] = ["by-parent-activity-execution", "by-workflow-execution", "by-workflow-execution-and-activity-execution-id", "by-workflow-parent-and-activity-execution-id"],
-            ["bookmarkState"] = ["by-stimulus", "by-stimulus-and-type-and-bookmark-identity", "by-stimulus-type", "by-stimulus-type-and-bookmark-identity", "by-workflow-execution", "by-workflow-execution-and-bookmark-id"],
-            ["checkpointCommit"] = ["by-collection"],
-            ["controlPlaneState"] = ["by-collection", "by-workflow-execution"],
-            ["durableTimer"] = ["by-claim-order", "by-collection", "by-due-time", "by-due-time-and-timer-id", "by-timer-id", "by-workflow-execution", "by-workflow-execution-and-timer-id"],
-            ["durableValueState"] = ["by-workflow-execution", "by-workflow-execution-and-durable-value-id"],
-            ["executableActivityTemplate"] = ["by-collection", "by-collection-and-document-id", "by-template-hash"],
+            ["activityExecutionHierarchy"] = ["by_execution_scope", "by_workflow_execution", "by_workflow_execution_and_hierarchy_order", "by_workflow_execution_scope_and_hierarchy_order"],
+            ["activityExecutionInspection"] = ["by_workflow_execution", "by_workflow_execution_and_summary_order"],
+            ["activityExecutionState"] = ["by_parent_activity_execution", "by_workflow_execution", "by_workflow_execution_and_activity_execution_id", "by_workflow_parent_and_activity_execution_id"],
+            ["bookmarkState"] = ["by_stimulus", "by_stimulus_and_type_and_bookmark_identity", "by_stimulus_type", "by_stimulus_type_and_bookmark_identity", "by_workflow_execution", "by_workflow_execution_and_bookmark_id"],
+            ["checkpointCommit"] = ["by_collection"],
+            ["controlPlaneState"] = ["by_collection", "by_workflow_execution"],
+            ["durableTimer"] = ["by_claim_order", "by_collection", "by_due_time", "by_due_time_and_timer_id", "by_timer_id", "by_workflow_execution", "by_workflow_execution_and_timer_id"],
+            ["durableValueState"] = ["by_workflow_execution", "by_workflow_execution_and_durable_value_id"],
+            ["executableActivityTemplate"] = ["by_collection", "by_collection_and_document_id", "by_template_hash"],
             ["executableActivityTemplateHashClaim"] = [],
-            ["incidentState"] = ["by-status-created-at-workflow-and-incident", "by-workflow-execution"],
-            ["operationalState"] = ["by-collection", "by-collection-workflow-execution-and-operational-state-id", "by-recovery-detected", "by-recovery-detected-heartbeat-owner", "by-recovery-detected-lease-owner", "by-recovery-detected-ownerless", "by-recovery-heartbeat", "by-recovery-heartbeat-owner", "by-recovery-lease-acquisition", "by-recovery-lease-acquisition-owner", "by-recovery-lease-expiry", "by-recovery-lease-expiry-owner", "by-workflow-execution", "by-workflow-execution-and-operational-state-id"],
-            ["postCommitOutbox"] = ["by-claimable-by-intent-kind-time-recorded-id", "by-claimable-by-workflow-and-intent-kind-time-recorded-id", "by-claimable-by-workflow-time-recorded-id", "by-claimable-time-recorded-id", "by-collection", "by-deliverable-by-intent-kind-time-recorded-id", "by-deliverable-by-workflow-and-intent-kind-time-recorded-id", "by-deliverable-by-workflow-time-recorded-id", "by-deliverable-time-recorded-id", "by-outbox-claimable-at", "by-outbox-deliverable-at", "by-outbox-intent-kind", "by-outbox-item-id", "by-outbox-recorded-at", "by-outbox-status", "by-workflow-execution"],
+            ["incidentState"] = ["by_status_created_at_workflow_and_incident", "by_workflow_execution"],
+            ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
+            ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = [],
-            ["recurringTriggerSchedule"] = ["by-active-next-occurrence-and-schedule-id", "by-artifact", "by-artifact-and-schedule-id", "by-collection", "by-next-occurrence", "by-publication", "by-publication-and-schedule-id", "by-recurring-schedule-active", "by-recurring-schedule-id"],
-            ["schedulerPoison"] = ["by-workflow-execution"],
-            ["schedulerState"] = ["by-collection"],
-            ["schedulerWorkItem"] = ["by-scheduler-work-order", "by-workflow-execution", "by-workflow-execution-and-scheduler-work-order"],
-            ["workflowAlterationJob"] = ["alteration_job_checkpoint", "alteration_jobs_counts", "by-claimable-at", "by-plan-and-capture-ordinal", "by-plan-and-claimable-at", "by-plan-status-and-claimable-at", "checkpointCommitId", "status"],
-            ["workflowAlterationPlan"] = ["by-collection", "by-tenant-and-idempotency-key", "by-tenant-and-status", "status", "unique-tenant-and-idempotency-key"],
-            ["workflowDispatch"] = ["by-child-workflow-execution", "by-child-workflow-execution-and-status", "by-collection", "by-created-at", "by-dispatch-id", "by-parent-workflow-execution", "by-parent-workflow-execution-and-status", "by-parent-workflow-execution-created-at-dispatch-id", "by-parent-workflow-execution-status-created-at-dispatch-id", "by-parent-workflow-execution-status-test-scope-created-at-dispatch-id", "by-parent-workflow-execution-test-scope-created-at-dispatch-id", "by-status", "by-status-created-at-dispatch-id", "by-status-test-scope-created-at-dispatch-id", "by-test-scope", "by-test-scope-created-at-dispatch-id"],
-            ["workflowExecutable"] = ["by-collection", "by-collection-and-document-id"],
+            ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
+            ["schedulerPoison"] = ["by_workflow_execution"],
+            ["schedulerState"] = ["by_collection"],
+            ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_work_order"],
+            ["workflowAlterationJob"] = ["alteration_job_checkpoint", "alteration_jobs_counts", "by_claimable_at", "by_plan_and_capture_ordinal", "by_plan_and_claimable_at", "by_plan_status_and_claimable_at", "checkpointCommitId", "status"],
+            ["workflowAlterationPlan"] = ["by_collection", "by_tenant_and_idempotency_key", "by_tenant_and_status", "status", "unique_tenant_and_idempotency_key"],
+            ["workflowDispatch"] = ["by_child_workflow_execution", "by_child_workflow_execution_and_status", "by_collection", "by_created_at", "by_dispatch_id", "by_parent_execution_status_scope_created_at_dispatch_id", "by_parent_workflow_execution", "by_parent_workflow_execution_and_status", "by_parent_workflow_execution_created_at_dispatch_id", "by_parent_workflow_execution_status_created_at_dispatch_id", "by_parent_workflow_execution_test_scope_created_at_dispatch_id", "by_status", "by_status_created_at_dispatch_id", "by_status_test_scope_created_at_dispatch_id", "by_test_scope", "by_test_scope_created_at_dispatch_id"],
+            ["workflowExecutable"] = ["by_collection", "by_collection_and_document_id"],
             ["workflowExecutableCoordination"] = [],
-            ["workflowExecutableSourceReference"] = ["by-artifact", "by-artifact-and-document-id", "by-artifact-retired-expiry-and-document-id", "by-collection", "by-collection-and-document-id", "by-collection-retired-expiry-and-document-id", "by-expires-at", "by-expiry-and-document-id", "by-retired", "by-retired-and-document-id", "by-scope", "by-scope-and-document-id", "by-scope-retired-expiry-and-document-id"],
-            ["workflowExecutionState"] = ["by-alteration-capture-tenant-and-execution", "by-attention-fault-history", "by-collection-and-pinned-artifact", "by-collection-and-pinned-artifact-v2", "by-history-order"],
-            ["workflowTestScope"] = ["by-collection", "by-expires-at", "by-scope-id", "by-state-and-expires-at", "by-state-and-scope-id", "by-status"],
-            ["workflowTriggerBinding"] = ["by-active", "by-artifact", "by-artifact-and-trigger-binding-id", "by-publication", "by-publication-and-trigger-binding-id", "by-stimulus", "by-stimulus-and-type", "by-stimulus-type", "by-stimulus-type-and-active", "by-trigger-binding-id"]
+            ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id"],
+            ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
+            ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
+            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"]
         };
         var actualIndexes = units.ToDictionary(
             unit => unit.Id.Value,
@@ -82,16 +82,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             Assert.Equal(expected, actualIndexes[unitId]);
 
         var timers = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
-        AssertIndex(timers, "by-claim-order", ["claimOrderKey"], included: true);
-        AssertIndex(timers, "by-due-time-and-timer-id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
-        AssertIndex(timers, "by-workflow-execution-and-timer-id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+        AssertIndex(timers, "by_claim_order", ["claimOrderKey"], included: true);
+        AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+        AssertIndex(timers, "by_workflow_execution_and_timer_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
 
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
-        AssertIndex(triggerBindings, "by-stimulus-and-type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
-        Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by-trigger-binding-id").IsUnique);
+        AssertIndex(triggerBindings, "by_stimulus_and_type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
+        Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
-        AssertIndex(executionState, "by-collection-and-pinned-artifact-v2", ["collection", "historyArtifactId", "historyWorkflowExecutionId"], unique: true);
+        AssertIndex(executionState, "by_collection_and_pinned_artifact_v2", ["collection", "historyArtifactId", "historyWorkflowExecutionId"], unique: true);
         Assert.DoesNotContain(executionState.Indexes, index => index.Name == ElsaRuntimeV2StorageManifest.ByCollectionIndex);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryArtifactIdField, PortableType.String, 128, nullable: true);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField, PortableType.String, 128, nullable: true);
@@ -99,7 +99,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryDefinitionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: true);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryRunKindField, PortableType.Int32, null, nullable: true);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryCorrelationIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength, nullable: true);
-        Assert.Equal(MissingValueBehavior.Excluded, executionState.Indexes.Single(index => index.Name == "by-collection-and-pinned-artifact-v2").MissingValues);
+        Assert.Equal(MissingValueBehavior.Excluded, executionState.Indexes.Single(index => index.Name == "by_collection_and_pinned_artifact_v2").MissingValues);
 
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),

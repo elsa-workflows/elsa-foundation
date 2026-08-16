@@ -28,10 +28,99 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         Json.Converters.Add(new JsonStringEnumConverter());
     }
 
-    [SkippableFact]
-    public void Scheduler_claim_renewal_requires_groundwork_291_compare_and_delete()
+    [Fact]
+    public async Task Scheduler_claim_renewal_with_the_same_owner_and_token_is_consumed()
     {
-        Skip.If(true, "Groundwork #291 is required for renewal-stable owner+token compare-and-delete; v2 remains fail-closed until then.");
+        var source = new MemorySource();
+        var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
+        var workItemId = "work-item-renewed";
+        source.SeedRow(
+            "tenant-a",
+            unit,
+            workItemId,
+            new
+            {
+                workItemId,
+                workflowExecutionId = "workflow-1",
+                claimOwnerId = "owner-a",
+                fencingToken = 1L,
+                claimedUntil = DateTimeOffset.UtcNow.AddMinutes(1)
+            },
+            SchedulerWorkProjections("workflow-1", "owner-a", 1));
+        source.BeforeCommit = _ => source.SeedRow(
+            "tenant-a",
+            unit,
+            workItemId,
+            new
+            {
+                workItemId,
+                workflowExecutionId = "workflow-1",
+                claimOwnerId = "owner-a",
+                fencingToken = 1L,
+                claimedUntil = DateTimeOffset.UtcNow.AddMinutes(2)
+            },
+            SchedulerWorkProjections("workflow-1", "owner-a", 1),
+            version: 2);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", workItemId, "owner-a", 1)]);
+
+        var result = await NewWriter(source).CommitAsync(
+            NewCommit("consume-renewed") with { StateChanges = changes },
+            Immediate());
+
+        Assert.Equal([workItemId], result.ConsumedSchedulerWorkItemIds);
+        Assert.Null(source.Find(unit, workItemId, "tenant-a"));
+        Assert.NotNull(source.Find(
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            "consume-renewed",
+            "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Scheduler_work_reassigned_to_another_workflow_after_pre_read_is_not_consumed()
+    {
+        var source = new MemorySource();
+        var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
+        var workItemId = "work-item-reassigned";
+        source.SeedRow(
+            "tenant-a",
+            unit,
+            workItemId,
+            new { workItemId, workflowExecutionId = "workflow-1", claimOwnerId = "owner-a", fencingToken = 1L },
+            SchedulerWorkProjections("workflow-1", "owner-a", 1));
+        source.BeforeCommit = _ => source.SeedRow(
+            "tenant-a",
+            unit,
+            workItemId,
+            new { workItemId, workflowExecutionId = "workflow-2", claimOwnerId = "owner-a", fencingToken = 1L },
+            SchedulerWorkProjections("workflow-2", "owner-a", 1),
+            version: 2);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", workItemId, "owner-a", 1)]);
+
+        var exception = await Assert.ThrowsAsync<RuntimeSchedulerWorkConsumeConflictException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("consume-reassigned") with { StateChanges = changes },
+                Immediate()).AsTask());
+
+        Assert.Equal(workItemId, exception.WorkItemId);
+        Assert.Equal("workflow-2", source.Find(unit, workItemId, "tenant-a")!.Values.Values[ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField]);
+        Assert.Null(source.Find(
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            "consume-reassigned",
+            "tenant-a"));
     }
 
     [Fact]
@@ -109,6 +198,32 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             () => writer.CommitAsync(NewCommit("unsupported"), Immediate()).AsTask());
         Assert.Equal(0, source.UnitOfWorkCount);
         Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "unsupported", "tenant-a"));
+    }
+
+    [Fact]
+    public async Task Scheduler_consumption_requires_compare_and_delete_before_provider_io()
+    {
+        var source = new MemorySource { AdvertiseCompareAndDelete = false };
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups: null,
+            workflowDispatchCancellations: null,
+            consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", "work-item-1", "owner-a", 1)]);
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            NewWriter(source).CommitAsync(
+                NewCommit("unsupported-compare-delete") with { StateChanges = changes },
+                Immediate()).AsTask());
+
+        Assert.Contains("compare-and-delete", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, source.UnitOfWorkCount);
+        Assert.Null(source.Find(
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            "unsupported-compare-delete",
+            "tenant-a"));
     }
 
     [Fact]
@@ -492,24 +607,14 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             workflowExecutionId = "workflow-1",
             claimOwnerId = "owner-a",
             fencingToken = 1L
-        }, new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = "workflow-1",
-            [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
-            [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1"
-        });
+        }, SchedulerWorkProjections("workflow-1", "owner-a", 1));
         source.BeforeCommit = _ => source.SeedRow("tenant-a", unit, workItemId, new
         {
             workItemId,
             workflowExecutionId = "workflow-1",
             claimOwnerId = "owner-b",
             fencingToken = 2L
-        }, new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = "workflow-1",
-            [ElsaRuntimeV2StorageManifest.CollectionField] = unit,
-            [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1"
-        }, version: 2);
+        }, SchedulerWorkProjections("workflow-1", "owner-b", 2), version: 2);
 
         var changes = new RuntimeCheckpointStateChangeSet(
             null,
@@ -529,7 +634,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     }
 
     [Fact]
-    public async Task A_scheduler_claim_without_owner_and_token_content_fails_closed()
+    public async Task A_scheduler_claim_without_owner_and_token_projections_fails_closed()
     {
         var source = new MemorySource();
         var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
@@ -825,6 +930,67 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             Assert.Equal(
                 activity.Status.ToString(),
                 row.Values.Values[ElsaRuntimeV2StorageManifest.StatusField]);
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
+    }
+
+    [SkippableFact]
+    [Trait("Category", "Sqlite")]
+    public async Task Sqlite_native_scheduler_consume_uses_claim_compare_and_delete()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-scheduler-consume-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            Skip.If(
+                !connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)) ||
+                !connection.Capabilities.Any(capability => capability.Id.Equals(BatchWriteCapabilities.CompareAndDelete)),
+                "The installed SQLite Groundwork package does not evidence atomic compare-and-delete; run with the W5 Feedz candidate.");
+            foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+                connection.Schema.Apply(unit);
+
+            var source = new NativeSessionSource(connection);
+            var access = StorageAccess.Scoped(new StorageScope("tenant-a"));
+            var workItemId = "sqlite-work-item";
+            var values = GroundworkRuntimeRowStore.Values(
+                workItemId,
+                ElsaRuntimeV2StorageManifest.SchemaVersion,
+                JsonSerializer.Serialize(new
+                {
+                    workItemId,
+                    workflowExecutionId = "workflow-1",
+                    claimOwnerId = "owner-a",
+                    fencingToken = 1L
+                }, Json),
+                SchedulerWorkProjections("workflow-1", "owner-a", 1));
+            Assert.Equal(
+                WriteOutcomeStatus.Inserted,
+                source.Open(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, access).Insert(values).Status);
+            var changes = new RuntimeCheckpointStateChangeSet(
+                null, null, [], [], [], [], [],
+                workflowDispatches: null,
+                activityExecutionInspections: null,
+                postCommitOutbox: null,
+                activityScopeCleanups: null,
+                workflowDispatchCancellations: null,
+                consumedSchedulerWorkItems: [new ConsumedSchedulerWorkItem("workflow-1", workItemId, "owner-a", 1)]);
+            var commit = NewCommit("sqlite-scheduler-consume") with { StateChanges = changes };
+
+            var result = await new GroundworkV2RuntimeCheckpointWriter(
+                    source,
+                    new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))))
+                .CommitAsync(commit, Immediate());
+
+            Assert.Equal([workItemId], result.ConsumedSchedulerWorkItemIds);
+            Assert.Null(source.Open(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, access)
+                .Read(GroundworkRuntimeRowStore.Key(workItemId)));
+            Assert.NotNull(source.Open(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access)
+                .Read(GroundworkRuntimeRowStore.Key(commit.CommitId)));
         }
         finally
         {
@@ -1138,6 +1304,19 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             null,
             null);
 
+    private static IReadOnlyDictionary<string, object?> SchedulerWorkProjections(
+        string workflowExecutionId,
+        string claimOwnerId,
+        long fencingToken) =>
+        new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = workflowExecutionId,
+            [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField] = "order-1",
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField] = claimOwnerId,
+            [ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField] = fencingToken
+        };
+
     private static WorkflowDispatchRecord NewDispatch(
         string parentWorkflowExecutionId,
         WorkflowDispatchStatus status,
@@ -1213,6 +1392,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     {
         private readonly MemoryBacking backing = new();
         public bool AdvertiseAtomicCommit { get; init; } = true;
+        public bool AdvertiseCompareAndDelete { get; init; } = true;
         public bool OmitHierarchyFromAdmission { get; init; }
         public bool FailCommitBeforeApply { get; set; }
         public bool ThrowAfterApply { get; set; }
@@ -1221,8 +1401,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         public MemoryUnitOfWork? LastUnitOfWork { get; private set; }
         public List<RowWrite> AllStaged { get; } = [];
 
-        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
-            AdvertiseAtomicCommit ? WellKnownCapabilities.All : [];
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null)
+        {
+            var capabilities = new List<CapabilityDescriptor>();
+            if (AdvertiseAtomicCommit)
+                capabilities.AddRange(WellKnownCapabilities.All);
+            if (AdvertiseCompareAndDelete)
+                capabilities.Add(BatchWriteCapabilities.CompareAndDeleteDescriptor);
+            return capabilities;
+        }
 
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
             new MemorySession(ElsaRuntimeV2StorageManifest.Require(unitId), access, backing);
@@ -1351,16 +1538,17 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 if (owner.FailCommitBeforeApply)
                     throw new InvalidOperationException("simulated atomic failure");
                 owner.BeforeCommit?.Invoke(this);
-                var conflicts = Staged
-                    .Where(write => !PreconditionSatisfied(write))
-                    .ToHashSet();
-                if (conflicts.Count > 0)
+                var failures = Staged
+                    .Select(write => (Write: write, Status: FailureStatus(write)))
+                    .Where(item => item.Status is not null)
+                    .ToDictionary(item => item.Write, item => item.Status!.Value);
+                if (failures.Count > 0)
                 {
                     return new BatchWriteReport(Staged.Select(write => new RowWriteOutcome(
                         write,
                         new WriteOutcome(
-                            conflicts.Contains(write) ? WriteOutcomeStatus.ConcurrencyConflict : WriteOutcomeStatus.Upserted,
-                            conflicts.Contains(write) ? null : 1))).ToArray());
+                            failures.GetValueOrDefault(write, SuccessfulStatus(write)),
+                            failures.ContainsKey(write) ? null : 1))).ToArray());
                 }
                 foreach (var write in Staged)
                     Apply(write);
@@ -1370,7 +1558,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                     throw new InvalidOperationException("simulated ambiguous acknowledgement");
                 }
                 return new BatchWriteReport(Staged.Select(write => new RowWriteOutcome(write, new WriteOutcome(
-                    write.Mode == RowWriteMode.Delete ? WriteOutcomeStatus.Deleted : WriteOutcomeStatus.Upserted, 1))).ToArray());
+                    SuccessfulStatus(write), 1))).ToArray());
             }
 
             public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) =>
@@ -1389,13 +1577,11 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
 
             private void Apply(RowWrite write)
             {
-                var id = write.Mode == RowWriteMode.Delete
-                    ? (string)write.Key!.Values[ElsaRuntimeV2StorageManifest.IdField]!
-                    : (string)write.Values!.Values[ElsaRuntimeV2StorageManifest.IdField]!;
+                var id = RowId(write);
                 var existing = backing.Read(access.Scope!.Value, write.Unit.Id.Value, id);
                 if (write.Options.Precondition.Kind == WritePreconditionKind.CreateOnly && existing is not null)
                     throw new InvalidOperationException("create-only conflict");
-                if (write.Mode == RowWriteMode.Delete)
+                if (write.Mode is RowWriteMode.Delete or RowWriteMode.CompareAndDelete)
                 {
                     backing.Delete(access.Scope.Value, write.Unit.Id.Value, id);
                     return;
@@ -1405,20 +1591,38 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 backing.Write(access.Scope.Value, write.Unit.Id.Value, id, write.Values!, version);
             }
 
-            private bool PreconditionSatisfied(RowWrite write)
+            private WriteOutcomeStatus? FailureStatus(RowWrite write)
             {
-                var id = write.Mode == RowWriteMode.Delete
+                var id = RowId(write);
+                var existing = backing.Read(access.Scope!.Value, write.Unit.Id.Value, id);
+                WriteOutcomeStatus? preconditionFailure = write.Options.Precondition.Kind switch
+                {
+                    WritePreconditionKind.Unconditional => null,
+                    WritePreconditionKind.CreateOnly when existing is not null => WriteOutcomeStatus.ConcurrencyConflict,
+                    WritePreconditionKind.IfVersion when existing?.Version != write.Options.Precondition.Version => WriteOutcomeStatus.ConcurrencyConflict,
+                    WritePreconditionKind.CreateOnly or WritePreconditionKind.IfVersion => null,
+                    _ => WriteOutcomeStatus.ConcurrencyConflict
+                };
+                if (preconditionFailure is not null || write.Mode != RowWriteMode.CompareAndDelete)
+                    return preconditionFailure;
+                if (existing is null)
+                    return WriteOutcomeStatus.NotFound;
+                return write.ExpectedValues.Any(expected =>
+                        !existing.Values.Values.TryGetValue(expected.Key, out var actual) ||
+                        !Equals(actual, expected.Value))
+                    ? WriteOutcomeStatus.ComparisonMismatch
+                    : null;
+            }
+
+            private static string RowId(RowWrite write) =>
+                write.Mode is RowWriteMode.Delete or RowWriteMode.CompareAndDelete
                     ? (string)write.Key!.Values[ElsaRuntimeV2StorageManifest.IdField]!
                     : (string)write.Values!.Values[ElsaRuntimeV2StorageManifest.IdField]!;
-                var existing = backing.Read(access.Scope!.Value, write.Unit.Id.Value, id);
-                return write.Options.Precondition.Kind switch
-                {
-                    WritePreconditionKind.Unconditional => true,
-                    WritePreconditionKind.CreateOnly => existing is null,
-                    WritePreconditionKind.IfVersion => existing?.Version == write.Options.Precondition.Version,
-                    _ => false
-                };
-            }
+
+            private static WriteOutcomeStatus SuccessfulStatus(RowWrite write) =>
+                write.Mode is RowWriteMode.Delete or RowWriteMode.CompareAndDelete
+                    ? WriteOutcomeStatus.Deleted
+                    : WriteOutcomeStatus.Upserted;
         }
     }
 }
