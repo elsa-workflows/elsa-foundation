@@ -1,14 +1,18 @@
 {
   "owner": "Elsa.Workflows.Design.Api",
   "issue": "#1372",
-  "sourceCommit": "c04d8dbbe",
+  "sourceCommit": "181098caa",
   "source": "FastEndpoints registrations from Elsa.Workflows.Design.Api before Minimal API replacement",
-  "captureHost": "Elsa Workbench composition with WorkflowsDesignApiFeature and FastEndpoints",
+  "captureHost": "isolated historical worktree with WorkflowsDesignApiFeature, FastEndpoints, deterministic sender/store doubles, TestServer, and OpenAPI",
+  "captureCommand": "bash tools/compatibility/capture-workflows-design-before.sh tests/Elsa/Workflows/Design/Api/Tests/Baselines",
+  "captureRunnerCommit": "1b4b8310780e0dca7789a2be8a87408d2a950a04",
   "httpFixture": "workflows-design-http-fastendpoints.json",
   "openApiFixture": "workflows-design-openapi-fastendpoints.json",
-  "httpSha256": "c4963da060fab4920e4594baef980607bc0fde4abe3f2f005a090d33cff47ece",
+  "httpSha256": "f9e19ea8b6119f8664cce18b7b23b4d229aa82ad33ee4fcc04bb02fca0103a33",
   "openApiSha256": "4d5c8515328fdb2d320045798c3c3fa1f6f419240c0c0e3261a5e3fe42698da5",
-  "capturedAtUtc": "2026-08-16T14:11:00Z",
+  "capturedAtUtc": "2026-08-16T16:02:00Z",
   "volatileHeaders": ["date", "server"],
-  "registrationCount": 27
+  "registrationCount": 27,
+  "caseCount": 39,
+  "operationCount": 27
 }

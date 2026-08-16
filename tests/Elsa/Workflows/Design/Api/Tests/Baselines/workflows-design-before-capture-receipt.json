@@ -1,0 +1,22 @@
+{
+  "capture": "real-fastendpoints-historical-worktree",
+  "caseCount": 39,
+  "categories": [
+    "anonymous-401",
+    "authenticated-success",
+    "binding-failure",
+    "content-type",
+    "problem-details",
+    "paging-filtering",
+    "headers",
+    "concurrency",
+    "preflight-nonmutation",
+    "all-routes"
+  ],
+  "httpSha256": "f9e19ea8b6119f8664cce18b7b23b4d229aa82ad33ee4fcc04bb02fca0103a33",
+  "openApiSha256": "4d5c8515328fdb2d320045798c3c3fa1f6f419240c0c0e3261a5e3fe42698da5",
+  "operationCount": 27,
+  "registrationCount": 27,
+  "runnerCommit": "1b4b8310780e0dca7789a2be8a87408d2a950a04",
+  "sourceCommit": "181098caa9ad6032dee4c2a4a6bd9fd923164b5a"
+}

@@ -5,9 +5,7 @@
     "case": "analyze-scoped-variables",
     "contentType": "",
     "endpoint": "POST /design/workflows/scoped-variables/analyze",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -22,9 +20,7 @@
     "case": "complete-expression-tooling",
     "contentType": "",
     "endpoint": "POST /design/workflows/expression-tooling/completions",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -39,9 +35,7 @@
     "case": "describe-expression-tooling",
     "contentType": "",
     "endpoint": "GET /design/workflows/expression-tooling/descriptors",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -56,9 +50,7 @@
     "case": "hover-expression-tooling",
     "contentType": "",
     "endpoint": "POST /design/workflows/expression-tooling/hover",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -73,9 +65,7 @@
     "case": "resolve-activity-input-options",
     "contentType": "",
     "endpoint": "POST /design/workflows/activities/{param}/inputs/{param}/options",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -90,9 +80,7 @@
     "case": "resolve-expression-tooling-context",
     "contentType": "",
     "endpoint": "POST /design/workflows/expression-tooling/context",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -107,9 +95,7 @@
     "case": "search-expression-tooling-symbols",
     "contentType": "",
     "endpoint": "POST /design/workflows/expression-tooling/symbols",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -124,9 +110,7 @@
     "case": "validate-expression-tooling",
     "contentType": "",
     "endpoint": "POST /design/workflows/expression-tooling/validate",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -141,9 +125,7 @@
     "case": "add-definition",
     "contentType": "",
     "endpoint": "POST /design/workflows/definitions",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -158,9 +140,7 @@
     "case": "delete-definition",
     "contentType": "",
     "endpoint": "DELETE /design/workflows/definitions/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -175,9 +155,7 @@
     "case": "delete-definition-permanently",
     "contentType": "",
     "endpoint": "DELETE /design/workflows/definitions/{param}/permanent",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -192,9 +170,7 @@
     "case": "get-definition",
     "contentType": "",
     "endpoint": "GET /design/workflows/definitions/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -209,9 +185,7 @@
     "case": "list-definitions",
     "contentType": "",
     "endpoint": "GET /design/workflows/definitions",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -226,9 +200,7 @@
     "case": "restore-definition",
     "contentType": "",
     "endpoint": "POST /design/workflows/definitions/{param}/restore",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -243,9 +215,7 @@
     "case": "submit-definition",
     "contentType": "",
     "endpoint": "POST /design/workflows/definitions/submit",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -260,9 +230,7 @@
     "case": "submit-definition-schema",
     "contentType": "",
     "endpoint": "GET /design/workflows/definitions/submit/schema",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -277,9 +245,7 @@
     "case": "update-definition",
     "contentType": "",
     "endpoint": "PATCH /design/workflows/definitions/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -294,9 +260,7 @@
     "case": "discard-draft",
     "contentType": "",
     "endpoint": "DELETE /design/workflows/drafts/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -311,9 +275,7 @@
     "case": "get-draft",
     "contentType": "",
     "endpoint": "GET /design/workflows/drafts/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -328,9 +290,7 @@
     "case": "promote-draft",
     "contentType": "",
     "endpoint": "POST /design/workflows/drafts/{param}/promote",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -345,9 +305,7 @@
     "case": "promotion-preflight",
     "contentType": "",
     "endpoint": "POST /design/workflows/drafts/{param}/promotion-preflight",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -362,9 +320,7 @@
     "case": "replace-draft",
     "contentType": "",
     "endpoint": "PUT /design/workflows/drafts/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -379,9 +335,7 @@
     "case": "draft-validations",
     "contentType": "",
     "endpoint": "GET /design/workflows/drafts/{param}/validations",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -396,9 +350,7 @@
     "case": "list-structures",
     "contentType": "",
     "endpoint": "GET /design/workflows/structures",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -413,9 +365,7 @@
     "case": "add-version",
     "contentType": "",
     "endpoint": "POST /design/workflows/versions/ingest",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -430,9 +380,7 @@
     "case": "get-version",
     "contentType": "",
     "endpoint": "GET /design/workflows/versions/{param}",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
@@ -447,14 +395,215 @@
     "case": "list-versions",
     "contentType": "",
     "endpoint": "GET /design/workflows/definitions/{param}/versions",
-    "headers": {
-      "content-length": "0"
-    },
+    "headers": {},
     "json": "",
     "pagingFiltering": "",
     "problemDetails": "",
     "status": "401",
     "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022result\u0022: {\n    \u0022code\u0022: null,\n    \u0022contextRevision\u0022: \u0022descriptors\u0022,\n    \u0022contractVersion\u0022: {\n      \u0022major\u0022: 1,\n      \u0022minor\u0022: 0\n    },\n    \u0022documentRevision\u0022: \u0022descriptors\u0022,\n    \u0022isSuccess\u0022: true,\n    \u0022message\u0022: null,\n    \u0022payload\u0022: [],\n    \u0022state\u0022: 1\n  }\n}",
+    "case": "describe-expression-tooling|trusted-success",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /design/workflows/expression-tooling/descriptors",
+    "headers": {
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022result\u0022: {\n    \u0022code\u0022: null,\n    \u0022contextRevision\u0022: \u0022descriptors\u0022,\n    \u0022contractVersion\u0022: {\n      \u0022major\u0022: 1,\n      \u0022minor\u0022: 0\n    },\n    \u0022documentRevision\u0022: \u0022descriptors\u0022,\n    \u0022isSuccess\u0022: true,\n    \u0022message\u0022: null,\n    \u0022payload\u0022: [],\n    \u0022state\u0022: 1\n  }\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022\\u0027m\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 2.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "case": "analyze-scoped-variables|trusted-malformed-json",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /design/workflows/scoped-variables/analyze",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022\\u0027m\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 2.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022\\u0027m\\u0027 is an invalid start of a property name. Expected a \\u0027\\u0022\\u0027. LineNumber: 0 | BytePositionInLine: 2.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "",
+    "case": "add-definition|trusted-unsupported-content-type",
+    "contentType": "",
+    "endpoint": "POST /design/workflows/definitions",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "415",
+    "statusCode": 415,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022items\u0022: []\n}",
+    "case": "list-definitions|paging-filtering",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /design/workflows/definitions",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022items\u0022: []\n}",
+    "pagingFiltering": "query=?page=2\u0026pageSize=10\u0026search=sample;link=",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "case": "get-definition|trusted-not-found",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "GET /design/workflows/definitions/{param}",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022draft sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "case": "promote-draft|trusted-404",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /design/workflows/drafts/{param}/promote",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022draft sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022draft sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022A version \\u00271.0.0\\u0027 of workflow definition \\u0027definition sample\\u0027 already exists; a concurrent publish likely computed the same next version.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "case": "promote-draft|trusted-409-concurrency",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /design/workflows/drafts/{param}/promote",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022A version \\u00271.0.0\\u0027 of workflow definition \\u0027definition sample\\u0027 already exists; a concurrent publish likely computed the same next version.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022A version \\u00271.0.0\\u0027 of workflow definition \\u0027definition sample\\u0027 already exists; a concurrent publish likely computed the same next version.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 409\n}",
+    "status": "409",
+    "statusCode": 409,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "case": "promote-draft|trusted-500",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /design/workflows/drafts/{param}/promote",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "status": "500",
+    "statusCode": 500,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Permanent deletion of workflow definition \\u0027sample\\u0027 is unavailable on this host: it does not compose the publishing vertical, so it cannot verify whether the definition is still published, and deleting it could strand a live publication held elsewhere against the same design catalog. Soft-delete it here instead (DELETE design/workflows/definitions/sample), and permanently delete it from a host that composes publishing.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 501\n}",
+    "case": "delete-definition-permanently|trusted-501",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "DELETE /design/workflows/definitions/{param}/permanent",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Permanent deletion of workflow definition \\u0027sample\\u0027 is unavailable on this host: it does not compose the publishing vertical, so it cannot verify whether the definition is still published, and deleting it could strand a live publication held elsewhere against the same design catalog. Soft-delete it here instead (DELETE design/workflows/definitions/sample), and permanently delete it from a host that composes publishing.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 501\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Permanent deletion of workflow definition \\u0027sample\\u0027 is unavailable on this host: it does not compose the publishing vertical, so it cannot verify whether the definition is still published, and deleting it could strand a live publication held elsewhere against the same design catalog. Soft-delete it here instead (DELETE design/workflows/definitions/sample), and permanently delete it from a host that composes publishing.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 501\n}",
+    "status": "501",
+    "statusCode": 501,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "case": "delete-definition-permanently|trusted-404",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "DELETE /design/workflows/definitions/{param}/permanent",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022definition sample was not found\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 404\n}",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "case": "delete-definition-permanently|trusted-500",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "DELETE /design/workflows/definitions/{param}/permanent",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; charset=utf-8"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022generalErrors\u0022: [\n      \u0022Unexpected error occurred\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 500\n}",
+    "status": "500",
+    "statusCode": 500,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=definitionId,draftId,versionId,activityVersionId,inputName;body=request",
+    "body": "{\n  \u0022assignmentMode\u0022: \u0022exact\u0022,\n  \u0022isReady\u0022: true,\n  \u0022issues\u0022: [],\n  \u0022latestVersion\u0022: \u00221.0.0\u0022,\n  \u0022requestedVersion\u0022: \u00221.0.0\u0022,\n  \u0022resolvedVersion\u0022: \u00221.0.0\u0022\n}",
+    "case": "promotion-preflight|trusted-nonmutation",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /design/workflows/drafts/{param}/promotion-preflight",
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "json": "{\n  \u0022assignmentMode\u0022: \u0022exact\u0022,\n  \u0022isReady\u0022: true,\n  \u0022issues\u0022: [],\n  \u0022latestVersion\u0022: \u00221.0.0\u0022,\n  \u0022requestedVersion\u0022: \u00221.0.0\u0022,\n  \u0022resolvedVersion\u0022: \u00221.0.0\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
     "streaming": "",
     "terminalState": "Completed"
   }
