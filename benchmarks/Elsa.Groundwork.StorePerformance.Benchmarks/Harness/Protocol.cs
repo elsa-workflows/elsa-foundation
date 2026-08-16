@@ -191,16 +191,24 @@ public static class ProcessMeasurement
     private static async Task<OperationSample> MeasureAsync(IBenchmarkOperation operation, BenchmarkProtocol protocol, CancellationToken token)
     {
         var samples = new List<double>();
-        var stopwatch = Stopwatch.StartNew();
-        for (var invocation = 0L; samples.Count < protocol.MinimumOperations || stopwatch.Elapsed < protocol.MinimumSteadyState; invocation++)
+        var measuredElapsed = TimeSpan.Zero;
+        for (var invocation = 0L; ShouldContinue(samples.Count, measuredElapsed, protocol); invocation++)
         {
             var start = 0L;
             await InvokePreparedAsync(operation, invocation, () => start = Stopwatch.GetTimestamp(), token);
-            samples.Add(Math.Round(Stopwatch.GetElapsedTime(start).TotalMilliseconds, 4));
+            var elapsed = Stopwatch.GetElapsedTime(start);
+            measuredElapsed += elapsed;
+            samples.Add(Math.Round(elapsed.TotalMilliseconds, 4));
         }
-        var elapsed = stopwatch.Elapsed.TotalSeconds;
-        return new OperationSample(operation.Id, samples.Count, elapsed, elapsed > 0 ? samples.Count / elapsed : 0, Statistics.Percentile(samples, 50), Statistics.Percentile(samples, 95), Statistics.Percentile(samples, 99), samples);
+        var measuredSeconds = measuredElapsed.TotalSeconds;
+        return new OperationSample(operation.Id, samples.Count, measuredSeconds, measuredSeconds > 0 ? samples.Count / measuredSeconds : 0, Statistics.Percentile(samples, 50), Statistics.Percentile(samples, 95), Statistics.Percentile(samples, 99), samples);
     }
+
+    internal static bool ShouldContinueForTest(
+        int operationCount,
+        TimeSpan measuredElapsed,
+        BenchmarkProtocol protocol) =>
+        ShouldContinue(operationCount, measuredElapsed, protocol);
 
     internal static Task InvokeOnceForTestAsync(
         IBenchmarkOperation operation,
@@ -219,6 +227,12 @@ public static class ProcessMeasurement
         timingStarted();
         await operation.InvokeAsync(invocation, cancellationToken);
     }
+
+    private static bool ShouldContinue(
+        int operationCount,
+        TimeSpan measuredElapsed,
+        BenchmarkProtocol protocol) =>
+        operationCount < protocol.MinimumOperations || measuredElapsed < protocol.MinimumSteadyState;
 }
 
 public static class ArtifactAdmission

@@ -38,6 +38,25 @@ public sealed class ProtocolAndGateTests
         Assert.Equal(["prepare:7", "timer-start", "invoke:7"], events);
     }
 
+    [Theory]
+    [InlineData(99, 30, true)]
+    [InlineData(100, 29, true)]
+    [InlineData(100, 30, false)]
+    public void Steady_state_counts_only_measured_operation_time(
+        int operationCount,
+        int measuredSeconds,
+        bool expected)
+    {
+        var protocol = BenchmarkProtocol.Acceptance;
+
+        var actual = ProcessMeasurement.ShouldContinueForTest(
+            operationCount,
+            TimeSpan.FromSeconds(measuredSeconds),
+            protocol);
+
+        Assert.Equal(expected, actual);
+    }
+
     [Fact]
     public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
     {
