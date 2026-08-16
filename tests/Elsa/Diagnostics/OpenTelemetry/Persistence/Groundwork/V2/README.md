@@ -48,8 +48,8 @@ printing timing statistics.
 The retained local run is
 [`docs/reports/groundwork-v2-diagnostics-benchmark.json`](../../../../../../../docs/reports/groundwork-v2-diagnostics-benchmark.json).
 With 5 warmups, 30 samples, and 1,000 traces, both implementations returned the same 125 matches and
-the same ordered-result digest. Groundwork v1 measured 81.532 ms p95; v2 measured 3.903 ms p95, a
-0.0479 after/before ratio. These are reproducible local measurements for the Elsa provider route on the
+the same ordered-result digest. Groundwork v1 measured 101.579 ms p95; v2 measured 6.070 ms p95, a
+0.0598 after/before ratio. These are reproducible local measurements for the Elsa provider route on the
 recorded machine—not a claim about every deployment. HTTP routing, serialization, and network latency are
 outside the harness.
 

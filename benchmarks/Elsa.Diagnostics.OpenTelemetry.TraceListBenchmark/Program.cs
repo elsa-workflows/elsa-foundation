@@ -442,7 +442,7 @@ internal sealed record BenchmarkProvenance(
     public static BenchmarkProvenance Current { get; } = new(
         "e30c2d291a34d3c5e986a9339af9722748572cac",
         "0.0.1-preview.114",
-        "fc29bd5065cdeaced2b16dbd9ce5ffc1ff874806",
+        "cd72976ba3cf80f054d504df61be64c6633e57b8",
         "0.1.0-preview.1",
         System.Runtime.InteropServices.RuntimeInformation.OSDescription,
         System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
