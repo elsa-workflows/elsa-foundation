@@ -14,6 +14,15 @@
       "definitionId": "sample",
       "operationKey": "capture-permanent"
     },
+    "scenario": "trusted-delete-409",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "capture-permanent"
+    },
     "scenario": "trusted-delete-500",
     "type": "DeleteDefinitionPermanently"
   },
@@ -25,6 +34,62 @@
     },
     "scenario": "trusted-delete-501",
     "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "DeleteDefinitionPermanently"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "DiscardDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "draftId": "sample",
+      "operationKey": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "DiscardDraft"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "",
+      "reason": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "SoftDeleteDefinition"
+  },
+  {
+    "kind": "command",
+    "properties": {
+      "definitionId": "sample",
+      "operationKey": "",
+      "reason": ""
+    },
+    "scenario": "trusted-manage",
+    "type": "SoftDeleteDefinition"
   },
   {
     "kind": "command",
