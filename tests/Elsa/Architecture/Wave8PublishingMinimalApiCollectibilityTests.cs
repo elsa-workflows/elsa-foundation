@@ -342,7 +342,15 @@ public sealed class Wave8PublishingMinimalApiCollectibilityTests
         {
             ArgumentNullException.ThrowIfNull(endpoints);
             Volatile.Write(ref _endpoints, endpoints.ToArray());
-            Interlocked.Exchange(ref _changeSource, new CancellationTokenSource()).Cancel();
+            var previous = Interlocked.Exchange(ref _changeSource, new CancellationTokenSource());
+            try
+            {
+                previous.Cancel();
+            }
+            finally
+            {
+                previous.Dispose();
+            }
         }
     }
 
