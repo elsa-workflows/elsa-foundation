@@ -18,6 +18,10 @@ public static class PublishingApiCapabilities
             new("activity-publication", "design/activities/drafts/{draftId}/publish", templated: true),
             new("activity-publication-receipt", "design/activities/publications/{idempotencyKey}", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
+            // FR-B-010a. Rel and href are pinned verbatim for elsa-foundation-studio#493 and mirror
+            // RouteConstants.WorkflowExecutableExport with the inline route constraint stripped. Adding a link is
+            // additive, so ContractMajorVersion stays at 1: no existing rel changed meaning or shape.
+            new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
             new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),
             new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),

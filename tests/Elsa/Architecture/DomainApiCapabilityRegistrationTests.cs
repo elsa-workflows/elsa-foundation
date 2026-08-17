@@ -124,6 +124,22 @@ public sealed class DomainApiCapabilityRegistrationTests
     }
 
     [Fact]
+    public void Publishing_capabilities_advertise_the_executable_closure_export()
+    {
+        // FR-B-010a. Rel, href and templated flag are pinned verbatim for elsa-foundation-studio#493; the
+        // endpoint's own tests prove the href actually resolves, which nothing here can see.
+        Assert.Contains(PublishingApiCapabilities.StaticDeclaration.Links, link => link is
+        {
+            Rel: "workflow-executable-export",
+            Href: "publishing/workflows/{versionId}/executable-export",
+            Templated: true
+        });
+
+        // Adding a link is additive: no existing rel changed meaning, so the contract major version holds.
+        Assert.Equal(1, PublishingApiCapabilities.StaticDeclaration.ContractMajorVersion);
+    }
+
+    [Fact]
     public async Task Runtime_operational_source_contributes_diagnostics_only_when_a_store_is_composed()
     {
         Assert.Empty(await new RuntimeOperationalCapabilitySource().GetCapabilitiesAsync());

@@ -750,6 +750,17 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
+      "GET /publishing/workflows/{param:regex(^(?!drafts$).+$)}}/executable-export"
+    ],
+    "followUp": "#1374",
+    "owner": "Elsa.Workflows.Publishing.Api",
+    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ExportWorkflowExecutableClosureEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "a96ecf82b86bbb57cc47574d12dd412cd7b2b81b6c7153b1e09a588f4c8e15ac"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
       "GET /publishing/activity-drafts/{param}/test-runs/idempotency/{param}"
     ],
     "followUp": "#1374",

@@ -12,14 +12,17 @@ public sealed class FastEndpointsTransitionTests
     {
         var registrations = DiscoverRegistrations();
         Assert.NotEmpty(registrations);
-        Assert.Equal(112, registrations.Count);
+        // 113/24: spec 151 (FR-B-010a) adds the executable-closure export route to Publishing.Api, which was and
+        // remains a wholly transitional module — the route joins the existing #1374 wave rather than opening a new
+        // exception. The inventory is reviewed, so these numbers move only with a stated decision.
+        Assert.Equal(113, registrations.Count);
         Assert.Equal(4, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["Elsa.Activities.Design.Api"] = 38,
                 ["Elsa.Workflows.Design.Api"] = 27,
-                ["Elsa.Workflows.Publishing.Api"] = 23,
+                ["Elsa.Workflows.Publishing.Api"] = 24,
                 ["Elsa.Workflows.Runtime.Api"] = 24
             },
             registrations.GroupBy(registration => registration.Owner, StringComparer.Ordinal)
@@ -53,7 +56,7 @@ public sealed class FastEndpointsTransitionTests
             return;
         }
 
-        Assert.Equal(112, result.Issues.Count);
+        Assert.Equal(113, result.Issues.Count);
         Assert.All(result.Issues, issue => Assert.Equal("FirstPartyFastEndpointsRegistration", issue.Code));
     }
 

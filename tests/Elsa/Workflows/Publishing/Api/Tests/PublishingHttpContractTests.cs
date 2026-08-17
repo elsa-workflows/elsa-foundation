@@ -13,6 +13,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -372,6 +373,23 @@ public sealed class PublishingHttpContractTests
     }
 
     [Fact]
+    public void Executable_export_route_matches_the_reviewed_contract()
+    {
+        // FR-B-010a. Route and verb are pinned verbatim for elsa-foundation-studio#493, and the versioned-route
+        // constraint is the shared one, so the reserved 'drafts' literal can never bind as a version id.
+        var endpoint = CreateExportEndpoint();
+        endpoint.Configure();
+
+        Assert.Equal("GET", Assert.Single(endpoint.Definition.Verbs));
+        Assert.Equal(
+            "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export",
+            Assert.Single(endpoint.Definition.Routes));
+        Assert.Equal(
+            "{\"versionId\":\"version-1\"}",
+            JsonSerializer.Serialize(new ExportWorkflowExecutableClosure("version-1"), JsonOptions));
+    }
+
+    [Fact]
     public async Task Preflight_endpoint_maps_invalid_selection_to_rfc7807_400()
     {
         var endpoint = CreateEndpoint(
@@ -383,6 +401,28 @@ public sealed class PublishingHttpContractTests
         Assert.Equal(StatusCodes.Status400BadRequest, endpoint.HttpContext.Response.StatusCode);
         Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
         Assert.Contains("\"errorCode\":\"activity.request.invalid\"", await ResponseBodyAsync(endpoint), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The export endpoint takes the closure factory and the export-target fan-in rather than a request sender, so
+    /// it gets its own configuration-only construction. Both collaborators refuse to be called.
+    /// </summary>
+    private static BaseEndpoint CreateExportEndpoint()
+    {
+        var typeName = "Elsa.Workflows.Publishing.Api.Endpoints.ExportWorkflowExecutableClosureEndpoint";
+        var endpointType = typeof(PublishActivityDraft).Assembly.GetType(typeName, throwOnError: true)!;
+        var loggerType = typeof(NullLogger<>).MakeGenericType(endpointType);
+        var logger = loggerType.GetProperty(nameof(NullLogger<object>.Instance))?.GetValue(null)
+                     ?? loggerType.GetField(nameof(NullLogger<object>.Instance))!.GetValue(null)!;
+        var create = typeof(Factory).GetMethods()
+            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
+                              method.GetParameters() is [var first, var second] &&
+                              first.ParameterType == typeof(Action<DefaultHttpContext>) && second.ParameterType == typeof(object[]))
+            .MakeGenericMethod(endpointType);
+        Action<DefaultHttpContext> configure = context => context.Response.Body = new MemoryStream();
+        return (BaseEndpoint)create.Invoke(
+            null,
+            [configure, new object[] { new ThrowingClosureFactory(), Array.Empty<IWorkflowArtifactExportTarget>(), logger }])!;
     }
 
     private static BaseEndpoint CreateEndpoint(string typeName, IRequestSender sender)
@@ -563,6 +603,12 @@ public sealed class PublishingHttpContractTests
             Request = request;
             return Task.FromException<T>(new InvalidOperationException("Captured endpoint request."));
         }
+    }
+
+    private sealed class ThrowingClosureFactory : IWorkflowArtifactClosureFactory
+    {
+        public Task<WorkflowArtifactClosure> CreateAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Configuration-only test.");
     }
 
     private sealed class ThrowingSender : IRequestSender

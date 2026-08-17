@@ -34,4 +34,12 @@ internal static class RouteConstants
     internal static string WorkflowPolicy => GetRoute("workflows/{definitionId}/policy");
     internal static string VersionedWorkflowTestRuns => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/test-runs");
     internal static string WorkflowDraftTestRuns => GetRoute($"workflows/{DraftsSegment}/test-runs");
+
+    /// <summary>
+    /// FR-B-010a: the portable executable-closure export. Carries the same <see cref="VersionIdConstraint"/> as the
+    /// other versioned routes so it can never shadow the reserved <see cref="DraftsSegment"/> literal, and so a
+    /// caller cannot ask to export "the drafts". The href advertised by
+    /// <c>PublishingApiCapabilities.StaticDeclaration</c> mirrors this template with the constraint stripped.
+    /// </summary>
+    internal static string WorkflowExecutableExport => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/executable-export");
 }

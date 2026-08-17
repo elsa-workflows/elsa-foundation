@@ -73,5 +73,11 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         // into elsa.api.expressions.
         services.AddApiCapabilitySource<ConversionProfilesCapabilitySource>();
         services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
+
+        // FR-B-010a export targets are fan-in, never replacement: a folder writer or blob push arriving later must
+        // contribute alongside the built-in download rather than displace it, so this is TryAddEnumerable and the
+        // consumer resolves IEnumerable<> and selects by TargetId.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IWorkflowArtifactExportTarget, DownloadWorkflowArtifactExportTarget>());
     }
 }
