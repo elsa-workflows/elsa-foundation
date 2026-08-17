@@ -24,7 +24,7 @@ public sealed class GetDraftRequestHandler(IWorkflowDefinitionDraftStore draftSt
     {
         var result = await draftStore.FindWithLayoutByIdAsync(request.DraftId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
-        return WorkflowDraftView.From(
+        return WorkflowDraftViewFactory.From(
             result.Draft,
             result.Layout,
             result.ActivityPresentation);
@@ -57,7 +57,7 @@ public sealed class ReplaceDraftCommandHandler(
             cancellationToken);
         var updated = await draftStore.FindWithLayoutByIdAsync(command.DraftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow draft '{command.DraftId}' disappeared after replacement.");
-        return WorkflowDraftView.From(
+        return WorkflowDraftViewFactory.From(
             updated.Draft,
             updated.Layout,
             updated.ActivityPresentation);

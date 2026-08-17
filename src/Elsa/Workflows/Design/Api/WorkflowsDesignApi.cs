@@ -39,33 +39,61 @@ public static class WorkflowsDesignApi
         var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
             ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        Map(endpoints.MapPost(RouteConstants.ActivityInputOptions, HandleActivityInputOptionsAsync), "AuthoringResolveActivityInputOptions", WorkflowDesignPermissions.Read, typeof(ActivityInputOptionsRequest), typeof(ActivityInputOptionsResponse), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.Definitions, HandleListDefinitionsAsync), "DefinitionsList", WorkflowDesignPermissions.Read, typeof(ListDefinitions), typeof(WorkflowDefinitionListView), descriptionMethod, accepts: ["*/*", "application/json"]);
-        Map(endpoints.MapPost(RouteConstants.Definitions, HandleAddDefinitionAsync), "DefinitionsAdd", WorkflowDesignPermissions.Manage, typeof(AddDefinition), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("definitions/submit"), HandleSubmitDefinitionAsync), "DefinitionsSubmit", WorkflowDesignPermissions.Manage, typeof(SubmitDefinition), typeof(SubmittedWorkflowDefinitionView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.DefinitionSubmitSchema, HandleSubmitSchemaAsync), "DefinitionsSubmitSchema", WorkflowDesignPermissions.Read, null, typeof(WorkflowDefinitionSubmitSchemaView), descriptionMethod);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("definitions/{definitionId}"), HandleGetDefinitionAsync), "DefinitionsGet", WorkflowDesignPermissions.Read, typeof(GetDefinition), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["*/*", "application/json"]);
-        Map(endpoints.MapDelete(RouteConstants.GetRoute("definitions/{definitionId}"), HandleDeleteDefinitionAsync), "DefinitionsDelete", WorkflowDesignPermissions.Manage, typeof(SoftDeleteDefinition), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
-        Map(endpoints.MapPatch(RouteConstants.GetRoute("definitions/{definitionId}"), HandleUpdateDefinitionAsync), "DefinitionsUpdate", WorkflowDesignPermissions.Manage, typeof(UpdateDefinitionMetadata), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapDelete(RouteConstants.GetRoute("definitions/{definitionId}/permanent"), HandleDeleteDefinitionPermanentlyAsync), "DefinitionsDeletePermanently", WorkflowDesignPermissions.Manage, typeof(DeleteDefinitionPermanently), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("definitions/{definitionId}/restore"), HandleRestoreDefinitionAsync), "DefinitionsRestore", WorkflowDesignPermissions.Manage, typeof(RestoreDefinition), null, descriptionMethod, accepts: ["application/json"], noContent: true);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("definitions/{definitionId}/versions"), HandleListVersionsAsync), "VersionsList", WorkflowDesignPermissions.Read, typeof(ListDefinitionVersions), typeof(IEnumerable<WorkflowDefinitionVersionSummary>), descriptionMethod, accepts: ["*/*", "application/json"]);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("drafts/{draftId}"), HandleGetDraftAsync), "DraftsGet", WorkflowDesignPermissions.Read, typeof(GetDraft), typeof(WorkflowDraftView), descriptionMethod, accepts: ["*/*", "application/json"]);
-        Map(endpoints.MapPut(RouteConstants.GetRoute("drafts/{draftId}"), HandleReplaceDraftAsync), "DraftsReplace", WorkflowDesignPermissions.Manage, typeof(ReplaceDraft), typeof(WorkflowDraftView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapDelete(RouteConstants.GetRoute("drafts/{draftId}"), HandleDiscardDraftAsync), "DraftsDiscard", WorkflowDesignPermissions.Manage, typeof(DiscardDraft), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("drafts/{draftId}/promote"), HandlePromoteDraftAsync), "DraftsPromote", WorkflowDesignPermissions.Manage, typeof(PromoteDraft), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("drafts/{draftId}/promotion-preflight"), HandlePromotionPreflightAsync), "DraftsPromotionPreflight", WorkflowDesignPermissions.Manage, typeof(PreflightDraftPromotion), typeof(PromotionPreflightAssessmentView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("drafts/{draftId}/validations"), HandleDraftValidationsAsync), "DraftsValidations", WorkflowDesignPermissions.Read, typeof(GetDraftValidations), typeof(DraftValidationsView), descriptionMethod, accepts: ["*/*", "application/json"]);
-        Map(endpoints.MapPost(RouteConstants.ExpressionToolingCompletions, HandleExpressionCompletionsAsync), "AuthoringCompleteExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingCompletionRequest), typeof(ExpressionToolingOperationResponse<ExpressionToolingItems>), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.ExpressionToolingContext, HandleExpressionContextAsync), "AuthoringResolveExpressionToolingContext", WorkflowDesignPermissions.Read, typeof(ExpressionToolingContextRequest), typeof(ExpressionToolingContextResponse), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.ExpressionToolingDescriptors, HandleExpressionDescriptorsAsync), "AuthoringDescribeExpressionTooling", WorkflowDesignPermissions.Read, null, typeof(ExpressionToolingDescriptorsResponse), descriptionMethod);
-        Map(endpoints.MapPost(RouteConstants.ExpressionToolingHover, HandleExpressionHoverAsync), "AuthoringHoverExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingHoverRequest), typeof(ExpressionToolingOperationResponse<ExpressionHover>), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.ExpressionToolingSymbols, HandleExpressionSymbolsAsync), "AuthoringSearchExpressionToolingSymbols", WorkflowDesignPermissions.Read, typeof(ExpressionToolingContextRequest), typeof(ExpressionToolingOperationResponse<ExpressionToolingItems>), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.ExpressionToolingValidate, HandleExpressionValidateAsync), "AuthoringValidateExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingSourceRequest), typeof(ExpressionToolingOperationResponse<ExpressionDiagnosticSet>), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapPost(RouteConstants.ScopedVariableAnalysis, HandleScopedVariableAnalysisAsync), "AuthoringAnalyzeScopedVariables", WorkflowDesignPermissions.Read, typeof(AnalyzeScopedVariablesRequest), typeof(ScopedVariableAnalysisResponse), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.Structures, HandleStructuresAsync), "StructuresList", WorkflowDesignPermissions.Read, null, typeof(ActivityStructuresResponse), descriptionMethod);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("versions/ingest"), HandleAddVersionAsync), "VersionsAdd", WorkflowDesignPermissions.Manage, typeof(AddVersion), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["application/json"]);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("versions/{versionId}"), HandleGetVersionAsync), "VersionsGet", WorkflowDesignPermissions.Read, typeof(GetVersion), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["*/*", "application/json"]);
+        RequestDelegate activityInputOptions = static context => HandleActivityInputOptionsAsync(context);
+        RequestDelegate listDefinitions = static context => HandleListDefinitionsAsync(context);
+        RequestDelegate addDefinition = static context => HandleAddDefinitionAsync(context);
+        RequestDelegate submitDefinition = static context => HandleSubmitDefinitionAsync(context);
+        RequestDelegate submitSchema = static context => HandleSubmitSchemaAsync(context);
+        RequestDelegate getDefinition = static context => HandleGetDefinitionAsync(context);
+        RequestDelegate deleteDefinition = static context => HandleDeleteDefinitionAsync(context);
+        RequestDelegate updateDefinition = static context => HandleUpdateDefinitionAsync(context);
+        RequestDelegate deleteDefinitionPermanently = static context => HandleDeleteDefinitionPermanentlyAsync(context);
+        RequestDelegate restoreDefinition = static context => HandleRestoreDefinitionAsync(context);
+        RequestDelegate listVersions = static context => HandleListVersionsAsync(context);
+        RequestDelegate getDraft = static context => HandleGetDraftAsync(context);
+        RequestDelegate replaceDraft = static context => HandleReplaceDraftAsync(context);
+        RequestDelegate discardDraft = static context => HandleDiscardDraftAsync(context);
+        RequestDelegate promoteDraft = static context => HandlePromoteDraftAsync(context);
+        RequestDelegate promotionPreflight = static context => HandlePromotionPreflightAsync(context);
+        RequestDelegate draftValidations = static context => HandleDraftValidationsAsync(context);
+        RequestDelegate expressionCompletions = static context => HandleExpressionCompletionsAsync(context);
+        RequestDelegate expressionContext = static context => HandleExpressionContextAsync(context);
+        RequestDelegate expressionDescriptors = static context => HandleExpressionDescriptorsAsync(context);
+        RequestDelegate expressionHover = static context => HandleExpressionHoverAsync(context);
+        RequestDelegate expressionSymbols = static context => HandleExpressionSymbolsAsync(context);
+        RequestDelegate expressionValidate = static context => HandleExpressionValidateAsync(context);
+        RequestDelegate scopedVariableAnalysis = static context => HandleScopedVariableAnalysisAsync(context);
+        RequestDelegate structures = static context => HandleStructuresAsync(context);
+        RequestDelegate addVersion = static context => HandleAddVersionAsync(context);
+        RequestDelegate getVersion = static context => HandleGetVersionAsync(context);
+
+        Map(endpoints.MapPost(RouteConstants.ActivityInputOptions, activityInputOptions), "AuthoringResolveActivityInputOptions", WorkflowDesignPermissions.Read, typeof(ActivityInputOptionsRequest), typeof(ActivityInputOptionsResponse), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.Definitions, listDefinitions), "DefinitionsList", WorkflowDesignPermissions.Read, typeof(ListDefinitions), typeof(WorkflowDefinitionListView), descriptionMethod, accepts: ["*/*", "application/json"]);
+        Map(endpoints.MapPost(RouteConstants.Definitions, addDefinition), "DefinitionsAdd", WorkflowDesignPermissions.Manage, typeof(AddDefinition), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.GetRoute("definitions/submit"), submitDefinition), "DefinitionsSubmit", WorkflowDesignPermissions.Manage, typeof(SubmitDefinition), typeof(SubmittedWorkflowDefinitionView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.DefinitionSubmitSchema, submitSchema), "DefinitionsSubmitSchema", WorkflowDesignPermissions.Read, null, typeof(WorkflowDefinitionSubmitSchemaView), descriptionMethod);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("definitions/{definitionId}"), getDefinition), "DefinitionsGet", WorkflowDesignPermissions.Read, typeof(GetDefinition), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["*/*", "application/json"]);
+        Map(endpoints.MapDelete(RouteConstants.GetRoute("definitions/{definitionId}"), deleteDefinition), "DefinitionsDelete", WorkflowDesignPermissions.Manage, typeof(SoftDeleteDefinition), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
+        Map(endpoints.MapPatch(RouteConstants.GetRoute("definitions/{definitionId}"), updateDefinition), "DefinitionsUpdate", WorkflowDesignPermissions.Manage, typeof(UpdateDefinitionMetadata), typeof(WorkflowDefinitionDetailsView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapDelete(RouteConstants.GetRoute("definitions/{definitionId}/permanent"), deleteDefinitionPermanently), "DefinitionsDeletePermanently", WorkflowDesignPermissions.Manage, typeof(DeleteDefinitionPermanently), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
+        Map(endpoints.MapPost(RouteConstants.GetRoute("definitions/{definitionId}/restore"), restoreDefinition), "DefinitionsRestore", WorkflowDesignPermissions.Manage, typeof(RestoreDefinition), null, descriptionMethod, accepts: ["application/json"], noContent: true);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("definitions/{definitionId}/versions"), listVersions), "VersionsList", WorkflowDesignPermissions.Read, typeof(ListDefinitionVersions), typeof(IEnumerable<WorkflowDefinitionVersionSummary>), descriptionMethod, accepts: ["*/*", "application/json"]);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("drafts/{draftId}"), getDraft), "DraftsGet", WorkflowDesignPermissions.Read, typeof(GetDraft), typeof(WorkflowDraftView), descriptionMethod, accepts: ["*/*", "application/json"]);
+        Map(endpoints.MapPut(RouteConstants.GetRoute("drafts/{draftId}"), replaceDraft), "DraftsReplace", WorkflowDesignPermissions.Manage, typeof(ReplaceDraft), typeof(WorkflowDraftView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapDelete(RouteConstants.GetRoute("drafts/{draftId}"), discardDraft), "DraftsDiscard", WorkflowDesignPermissions.Manage, typeof(DiscardDraft), null, descriptionMethod, accepts: ["*/*", "application/json"], noContent: true);
+        Map(endpoints.MapPost(RouteConstants.GetRoute("drafts/{draftId}/promote"), promoteDraft), "DraftsPromote", WorkflowDesignPermissions.Manage, typeof(PromoteDraft), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.GetRoute("drafts/{draftId}/promotion-preflight"), promotionPreflight), "DraftsPromotionPreflight", WorkflowDesignPermissions.Manage, typeof(PreflightDraftPromotion), typeof(PromotionPreflightAssessmentView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("drafts/{draftId}/validations"), draftValidations), "DraftsValidations", WorkflowDesignPermissions.Read, typeof(GetDraftValidations), typeof(DraftValidationsView), descriptionMethod, accepts: ["*/*", "application/json"]);
+        Map(endpoints.MapPost(RouteConstants.ExpressionToolingCompletions, expressionCompletions), "AuthoringCompleteExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingCompletionRequest), typeof(ExpressionToolingOperationResponse<ExpressionToolingItems>), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.ExpressionToolingContext, expressionContext), "AuthoringResolveExpressionToolingContext", WorkflowDesignPermissions.Read, typeof(ExpressionToolingContextRequest), typeof(ExpressionToolingContextResponse), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.ExpressionToolingDescriptors, expressionDescriptors), "AuthoringDescribeExpressionTooling", WorkflowDesignPermissions.Read, null, typeof(ExpressionToolingDescriptorsResponse), descriptionMethod);
+        Map(endpoints.MapPost(RouteConstants.ExpressionToolingHover, expressionHover), "AuthoringHoverExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingHoverRequest), typeof(ExpressionToolingOperationResponse<ExpressionHover>), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.ExpressionToolingSymbols, expressionSymbols), "AuthoringSearchExpressionToolingSymbols", WorkflowDesignPermissions.Read, typeof(ExpressionToolingContextRequest), typeof(ExpressionToolingOperationResponse<ExpressionToolingItems>), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.ExpressionToolingValidate, expressionValidate), "AuthoringValidateExpressionTooling", WorkflowDesignPermissions.Read, typeof(ExpressionToolingSourceRequest), typeof(ExpressionToolingOperationResponse<ExpressionDiagnosticSet>), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapPost(RouteConstants.ScopedVariableAnalysis, scopedVariableAnalysis), "AuthoringAnalyzeScopedVariables", WorkflowDesignPermissions.Read, typeof(AnalyzeScopedVariablesRequest), typeof(ScopedVariableAnalysisResponse), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.Structures, structures), "StructuresList", WorkflowDesignPermissions.Read, null, typeof(ActivityStructuresResponse), descriptionMethod);
+        Map(endpoints.MapPost(RouteConstants.GetRoute("versions/ingest"), addVersion), "VersionsAdd", WorkflowDesignPermissions.Manage, typeof(AddVersion), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["application/json"]);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("versions/{versionId}"), getVersion), "VersionsGet", WorkflowDesignPermissions.Read, typeof(GetVersion), typeof(WorkflowDefinitionVersionDetailsView), descriptionMethod, accepts: ["*/*", "application/json"]);
     }
 
     private static void Map(
@@ -81,7 +109,6 @@ public static class WorkflowsDesignApi
     {
         var metadata = new List<object>
         {
-            descriptionMethod,
             Response(noContent ? StatusCodes.Status204NoContent : responseStatus, noContent ? typeof(void) : responseType!),
             Unauthorized(),
             Forbidden()
@@ -94,7 +121,9 @@ public static class WorkflowsDesignApi
             .WithOwner(OwnerId)
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .RequirePermission(permission)
-            .WithMetadata(metadata.ToArray());
+            .WithMetadata(metadata.ToArray())
+            .WithMetadata(descriptionMethod)
+            .RequireStableOpenApi();
     }
 
     private static async Task HandleActivityInputOptionsAsync(HttpContext context)
@@ -139,6 +168,11 @@ public static class WorkflowsDesignApi
 
     private static async Task HandleDeleteDefinitionAsync(HttpContext context)
     {
+        if (DeleteWithoutJsonBody(context))
+        {
+            await NoContentResult(context, new SoftDeleteDefinition(null, Route(context, "definitionId") ?? string.Empty));
+            return;
+        }
         var request = await ReadJsonAsync<SoftDeleteDefinition>(context);
         if (request is not null)
             request = request with { DefinitionId = Route(context, "definitionId") ?? request.DefinitionId };
@@ -155,6 +189,11 @@ public static class WorkflowsDesignApi
 
     private static async Task HandleDeleteDefinitionPermanentlyAsync(HttpContext context)
     {
+        if (DeleteWithoutJsonBody(context))
+        {
+            await NoContentResult(context, new DeleteDefinitionPermanently(null, Route(context, "definitionId") ?? string.Empty));
+            return;
+        }
         var request = await ReadJsonAsync<DeleteDefinitionPermanently>(context);
         if (request is not null)
             request = request with { DefinitionId = Route(context, "definitionId") ?? request.DefinitionId };
@@ -163,6 +202,12 @@ public static class WorkflowsDesignApi
 
     private static async Task HandleRestoreDefinitionAsync(HttpContext context)
     {
+        if (string.IsNullOrWhiteSpace(context.Request.ContentType) ||
+            !string.Equals(context.Request.ContentType.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
+            return;
+        }
         var request = await ReadJsonAsync<RestoreDefinition>(context);
         if (request is not null)
             request = request with { DefinitionId = Route(context, "definitionId") ?? request.DefinitionId };
@@ -185,6 +230,11 @@ public static class WorkflowsDesignApi
 
     private static async Task HandleDiscardDraftAsync(HttpContext context)
     {
+        if (DeleteWithoutJsonBody(context))
+        {
+            await NoContentResult(context, new DiscardDraft(null, Route(context, "draftId") ?? string.Empty));
+            return;
+        }
         var request = await ReadJsonAsync<DiscardDraft>(context);
         if (request is not null)
             request = request with { DraftId = Route(context, "draftId") ?? request.DraftId };
@@ -500,6 +550,11 @@ public static class WorkflowsDesignApi
 
     private static string? Route(HttpContext context, string key) =>
         context.Request.RouteValues.TryGetValue(key, out var value) ? value?.ToString() : null;
+
+    private static bool DeleteWithoutJsonBody(HttpContext context) =>
+        HttpMethods.IsDelete(context.Request.Method) &&
+        (string.IsNullOrWhiteSpace(context.Request.ContentType) ||
+         !string.Equals(context.Request.ContentType.Split(';', 2)[0].Trim(), "application/json", StringComparison.OrdinalIgnoreCase));
 
     private static string? Query(IQueryCollection query, string key) =>
         query.TryGetValue(key, out var value) ? value.ToString() : null;

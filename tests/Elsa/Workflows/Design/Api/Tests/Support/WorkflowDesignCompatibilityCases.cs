@@ -49,6 +49,7 @@ public static class WorkflowDesignCompatibilityCases
         Post("promote-draft|trusted-500", "/design/workflows/drafts/sample/promote", "trusted-promote-500", BodyFor("promote-draft")),
         Delete("delete-definition-permanently|trusted-501", "/design/workflows/definitions/sample/permanent", "trusted-delete-501", BodyFor("delete-definition-permanently")),
         Delete("delete-definition-permanently|trusted-404", "/design/workflows/definitions/sample/permanent", "trusted-delete-404", BodyFor("delete-definition-permanently")),
+        Delete("delete-definition-permanently|trusted-409-not-soft-deleted", "/design/workflows/definitions/sample/permanent", "trusted-delete-409", BodyFor("delete-definition-permanently")),
         Delete("delete-definition-permanently|trusted-500", "/design/workflows/definitions/sample/permanent", "trusted-delete-500", BodyFor("delete-definition-permanently")),
         Post("promotion-preflight|trusted-nonmutation", "/design/workflows/drafts/sample/promotion-preflight", "trusted-preflight", "{\"requestedVersion\":\"1.0.0\"}"),
         Post("analyze-scoped-variables|trusted-success", "/design/workflows/scoped-variables/analyze", "trusted-success", "{\"state\":{\"activities\":[],\"connections\":[]},\"nodeId\":null}"),
@@ -76,14 +77,26 @@ public static class WorkflowDesignCompatibilityCases
         Get("list-structures|trusted-success", "/design/workflows/structures", "trusted-success"),
         Post("add-version|trusted-success", "/design/workflows/versions/ingest", "trusted-success", BodyFor("add-version")),
         Get("get-version|trusted-success", "/design/workflows/versions/sample", "trusted-success"),
-        Get("list-versions|trusted-success", "/design/workflows/definitions/sample/versions", "trusted-success")
+        Get("list-versions|trusted-success", "/design/workflows/definitions/sample/versions", "trusted-success"),
+        Delete("delete-definition|trusted-missing-body", "/design/workflows/definitions/sample", "trusted-manage"),
+        Delete("delete-definition|trusted-malformed-json", "/design/workflows/definitions/sample", "trusted-manage", "{"),
+        Delete("delete-definition|trusted-unsupported-content-type", "/design/workflows/definitions/sample", "trusted-manage", "{}", "text/plain"),
+        Delete("delete-definition-permanently|trusted-missing-body", "/design/workflows/definitions/sample/permanent", "trusted-manage"),
+        Delete("delete-definition-permanently|trusted-malformed-json", "/design/workflows/definitions/sample/permanent", "trusted-manage", "{"),
+        Delete("delete-definition-permanently|trusted-unsupported-content-type", "/design/workflows/definitions/sample/permanent", "trusted-manage", "{}", "text/plain"),
+        Post("restore-definition|trusted-missing-body", "/design/workflows/definitions/sample/restore", "trusted-manage"),
+        Post("restore-definition|trusted-malformed-json", "/design/workflows/definitions/sample/restore", "trusted-manage", "{"),
+        Post("restore-definition|trusted-unsupported-content-type", "/design/workflows/definitions/sample/restore", "trusted-manage", "{}", "text/plain"),
+        Delete("discard-draft|trusted-missing-body", "/design/workflows/drafts/sample", "trusted-manage"),
+        Delete("discard-draft|trusted-malformed-json", "/design/workflows/drafts/sample", "trusted-manage", "{"),
+        Delete("discard-draft|trusted-unsupported-content-type", "/design/workflows/drafts/sample", "trusted-manage", "{}", "text/plain")
     ];
 
     public static IReadOnlyList<HttpCompatibilityCase> Anonymous => All.Take(27).ToArray();
 
     private static HttpCompatibilityCase Get(string name, string route) => Create(HttpMethod.Get, name, route);
     private static HttpCompatibilityCase Get(string name, string route, string identity) => Create(HttpMethod.Get, name, route, identity);
-    private static HttpCompatibilityCase Delete(string name, string route, string? identity = null, string? body = null) => Create(HttpMethod.Delete, name, route, identity, body);
+    private static HttpCompatibilityCase Delete(string name, string route, string? identity = null, string? body = null, string contentType = "application/json") => Create(HttpMethod.Delete, name, route, identity, body, contentType);
     private static HttpCompatibilityCase Post(string name, string route, string? identity = null, string? body = null, string contentType = "application/json") => Create(HttpMethod.Post, name, route, identity, body, contentType);
     private static HttpCompatibilityCase Put(string name, string route, string? identity = null, string? body = null) => Create(HttpMethod.Put, name, route, identity, body);
     private static HttpCompatibilityCase Patch(string name, string route, string? identity = null, string? body = null) => Create(HttpMethod.Patch, name, route, identity, body);

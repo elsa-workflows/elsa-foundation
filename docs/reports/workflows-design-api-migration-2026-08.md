@@ -12,6 +12,12 @@ the owner exposes an explicit public `IWebShellFeature` mapping seam, ordinary A
 source retains a FastEndpoints dependency. FastEndpoints remains only in the immutable historical
 capture tool, compatibility fixtures, and the retained test canary.
 
+The public request/response/command contract surface is emitted by the stable
+`Elsa.Workflows.Design.Api.Core` assembly; the implementation assembly forwards those types for
+source compatibility. Every documented route appends `RequireStableOpenApi()` after its owner
+metadata, and the Workbench plus collectible owner test host register the public API Explorer
+refresh bridge.
+
 The feature keeps virtual `ConfigureServices`/`MapEndpoints` seams, module-owned catalog
 contributions, source-generated JSON for every mapped payload (including `PreflightDraftPromotion`),
 and the shared normalized permission evaluator. Route metadata declares only the catalog action;
@@ -88,8 +94,8 @@ immutable version reads, list/get/version/draft/validation reads, and 404 handli
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 123/123; the immutable baseline suite passed 8/8.
-- Architecture: the focused EndpointSecurity/collectibility suite passed 8/8 (three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 442/442.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 145/145; the immutable baseline suite passed 8/8.
+- Architecture: the owner collectibility suite passed 1/1 (seven owners across three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 472/472.
 - Full solution build: `dotnet restore Elsa.Server.slnx --ignore-failed-sources` followed by `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
 - Format/import verification: focused verification passes for all changed production, test, architecture, comparer, and OpenAPI projector files. The broad project verification still reports inherited charset/import diagnostics in untouched base files; these are recorded as an advisory baseline issue rather than normalized into this migration.

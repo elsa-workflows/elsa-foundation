@@ -16,7 +16,7 @@ As a workflow-design API consumer, I can use all 27 existing routes with the sam
 
 **Why this priority**: Any unverified wire change breaks existing Studio and headless clients.
 
-**Independent Test**: Compare a real FastEndpoints-era capture host and a real Minimal API host using immutable HTTP and consumed OpenAPI evidence, including success, binding, domain-error, query, and concurrency cases for every route.
+**Independent Test**: Compare a real FastEndpoints-era capture host and a real Minimal API host using immutable HTTP and consumed OpenAPI evidence for all 27 routes, with a representative corpus covering success, binding, domain-error, query, and concurrency behavior.
 
 **Acceptance Scenarios**:
 
@@ -34,7 +34,7 @@ As a host operator, I can authorize Workflows Design routes through the shared F
 
 **Acceptance Scenarios**:
 
-1. **Given** no principal or an untrusted external principal, **when** a protected route is called, **then** the response is respectively 401 or 403.
+1. **Given** no principal or an untrusted external principal, **when** a protected route is called, **then** both responses are 401 and the permission evaluator/resource handlers are not invoked.
 2. **Given** exact, implied, or evaluator wildcard grants with a matching tenant/resource, **when** the route is called, **then** it succeeds; mismatched tenant/resource claims remain denied.
 3. **Given** a retained FastEndpoints route in the same host, **when** it is called with the same principals, **then** the evaluator produces the same authorization outcome.
 
@@ -68,7 +68,7 @@ As a platform maintainer, I can load and unload the design owner repeatedly with
 - **FR-002**: The system MUST express only each catalog-owned action in endpoint permission metadata; wildcard and implication compatibility MUST remain evaluator behavior.
 - **FR-003**: The system MUST retain an immutable FastEndpoints-era capture harness and fixtures for all 27 routes, with reproducible source/provenance hashes and representative success, binding, ProblemDetails/domain-error, paging/filtering, concurrency, header, and content-type evidence.
 - **FR-004**: The compatibility comparer MUST reject unused approvals, one-sided approvals, and fixture mutations; no post-hoc volatile-header normalization may hide a difference.
-- **FR-005**: The system MUST test 401, 403, exact, implied, evaluator wildcard, external-untrusted, tenant/resource allow-deny, and retained FastEndpoints authorization through one evaluator.
+- **FR-005**: The system MUST test 401 for anonymous and external-untrusted principals, 403 for a trusted normalized negative grant, exact, implied, evaluator wildcard, tenant/resource allow-deny, and retained FastEndpoints authorization through one evaluator.
 - **FR-006**: Consumed OpenAPI comparison MUST cover stable operation IDs, owner-local tags, route parameters, request bodies, responses, and security requirements for all 27 routes.
 - **FR-007**: Three real collectible cycles MUST invoke mapped delegates and exercise authorization, stores/adapters/providers, OpenAPI generation, source-generated serialization, DI disposal, and weak-reference collection.
 - **FR-008**: Existing expression-tooling and lifecycle semantic coverage MUST be restored without reintroducing production FastEndpoints dependencies.
@@ -87,7 +87,7 @@ As a platform maintainer, I can load and unload the design owner repeatedly with
 
 ### Measurable Outcomes
 
-- **SC-001**: All 27 routes have immutable before and real after HTTP evidence with zero unapproved differences across success, errors, binding, query, headers, and concurrency cases.
+- **SC-001**: All 27 routes have immutable before and real after HTTP evidence with zero unapproved differences across the representative success, errors, binding, query, headers, and concurrency corpus.
 - **SC-002**: All 27 consumed OpenAPI operations compare with consumed IDs/tags/parameters/bodies/responses/security and zero unused or one-sided approvals.
 - **SC-003**: The complete authorization matrix, including a retained FastEndpoints canary, passes with exact 401/403/allow/deny outcomes.
 - **SC-004**: Three mapped generations complete authorization, OpenAPI, serialization, DI disposal, and weak-reference collection checks without retaining owner state.

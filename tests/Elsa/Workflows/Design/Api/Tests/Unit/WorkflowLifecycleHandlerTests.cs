@@ -161,6 +161,53 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.Equal(WorkflowDefinitionState.Empty, draft.State);
     }
 
+    [Fact]
+    public async Task Promotion_preflight_trims_a_forward_exact_version_without_mutating_the_draft()
+    {
+        var (handler, draft, versions, publisher) = CreatePreflight("2.0.0", identityExists: false);
+
+        var result = await handler.Handle(new PreflightDraftPromotion("draft-1", " 3.0.0 "), CancellationToken.None);
+
+        Assert.True(result.IsReady);
+        Assert.Equal("exact", result.AssignmentMode);
+        Assert.Equal("3.0.0", result.RequestedVersion);
+        Assert.Equal("3.0.0", result.ResolvedVersion);
+        Assert.Empty(result.Issues);
+        Assert.Equal(WorkflowDefinitionState.Empty, draft.State);
+        Assert.False(versions.WasMutated);
+        Assert.Equal(1, publisher.PublishCalls);
+    }
+
+    [Theory]
+    [InlineData("2.0.0")]
+    [InlineData("1.0.0")]
+    public async Task Promotion_preflight_rejects_exact_latest_and_non_forward_versions_without_mutation(string requestedVersion)
+    {
+        var (handler, draft, versions, publisher) = CreatePreflight("2.0.0", identityExists: false);
+
+        var result = await handler.Handle(new PreflightDraftPromotion("draft-1", requestedVersion), CancellationToken.None);
+
+        Assert.False(result.IsReady);
+        Assert.Contains(result.Issues, issue => issue.Code == "not-forward");
+        Assert.Equal(WorkflowDefinitionState.Empty, draft.State);
+        Assert.False(versions.WasMutated);
+        Assert.Equal(1, publisher.PublishCalls);
+    }
+
+    private static (PreflightDraftPromotionRequestHandler Handler, WorkflowDefinitionDraft Draft, PreflightVersionStore Versions, RecordingInlineEventPublisher Publisher) CreatePreflight(string latestVersion, bool identityExists)
+    {
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-1",
+            WorkflowDefinitionId = "definition-1",
+            State = WorkflowDefinitionState.Empty,
+            LastModifiedAt = DateTimeOffset.UnixEpoch
+        };
+        var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", latestVersion), identityExists);
+        var publisher = new RecordingInlineEventPublisher(null);
+        return (new PreflightDraftPromotionRequestHandler(new MutableDraftStore(draft, []), versions, publisher), draft, versions, publisher);
+    }
+
     private sealed class MutableDraftStore(WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout)
         : IWorkflowDefinitionDraftStore
     {

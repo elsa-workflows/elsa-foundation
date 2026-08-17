@@ -28,6 +28,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -43,7 +44,7 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
     public void FastEndpoints_before_http_fixture_covers_exactly_all_27_registrations()
     {
         var observations = WorkflowDesignCompatibilityEvidence.LoadLegacyHttp();
-        Assert.Equal(65, observations.Count);
+        Assert.Equal(78, observations.Count);
         Assert.Equal(
             WorkflowDesignCompatibilityCases.Anonymous.Select(testCase => testCase.Endpoint + "|" + testCase.Case).Order(),
             observations.Where(observation => WorkflowDesignCompatibilityCases.Anonymous.Any(testCase =>
@@ -58,7 +59,27 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         });
         Assert.Contains(observations, observation => observation.Case == "describe-expression-tooling|trusted-success" && observation.StatusCode == 200);
         Assert.Contains(observations, observation => observation.Case == "promote-draft|trusted-409-concurrency" && observation.StatusCode == 409);
+        var permanentDeleteConflict = Assert.Single(observations, observation => observation.Case == "delete-definition-permanently|trusted-409-not-soft-deleted");
+        Assert.Equal(409, permanentDeleteConflict.StatusCode);
+        Assert.Equal("application/problem+json; charset=utf-8", permanentDeleteConflict.ContentType);
+        Assert.Contains("must be soft-deleted", permanentDeleteConflict.ProblemDetails, StringComparison.Ordinal);
         Assert.Contains(observations, observation => observation.Case == "promotion-preflight|trusted-nonmutation" && observation.StatusCode == 200);
+        foreach (var observation in observations.Where(observation => new[] { "delete-definition|", "delete-definition-permanently|", "restore-definition|", "discard-draft|" }.Any(prefix => observation.Case.StartsWith(prefix, StringComparison.Ordinal)) &&
+                                                                       (observation.Case.Contains("missing-body", StringComparison.Ordinal) ||
+                                                                        observation.Case.Contains("malformed-json", StringComparison.Ordinal) ||
+                                                                        observation.Case.Contains("unsupported-content-type", StringComparison.Ordinal))))
+        {
+            if (observation.Case.Contains("malformed-json", StringComparison.Ordinal))
+            {
+                Assert.Equal(400, observation.StatusCode);
+                Assert.Contains("serializerErrors", observation.ProblemDetails, StringComparison.Ordinal);
+                Assert.Equal("application/problem+json; charset=utf-8", observation.ContentType);
+            }
+            else if (observation.Case.StartsWith("restore-definition|", StringComparison.Ordinal))
+                Assert.Equal(415, observation.StatusCode);
+            else
+                Assert.Equal(204, observation.StatusCode);
+        }
     }
 
     [Fact]
@@ -93,14 +114,81 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.Equal(Hash(tracePath), root.GetProperty("handlerTraceSha256").GetString());
         Assert.Equal("#1372", root.GetProperty("issue").GetString());
         Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
-        Assert.Equal("3941846350023b8832090855d064825c67c98748", root.GetProperty("captureRunnerCommit").GetString());
-        Assert.Equal(65, root.GetProperty("caseCount").GetInt32());
+        Assert.Equal("3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93", root.GetProperty("captureRunnerCommit").GetString());
+        Assert.Equal(
+            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93 bash tools/compatibility/capture-workflows-design-before.sh",
+            root.GetProperty("captureCommand").GetString());
+        Assert.Equal(78, root.GetProperty("caseCount").GetInt32());
         Assert.Equal(27, root.GetProperty("operationCount").GetInt32());
+
+        using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, WorkflowDesignCompatibilityEvidence.ReceiptFileName)));
+        Assert.Equal(root.GetProperty("sourceCommit").GetString(), receipt.RootElement.GetProperty("sourceCommit").GetString());
+        Assert.Equal(root.GetProperty("captureRunnerCommit").GetString(), receipt.RootElement.GetProperty("runnerCommit").GetString());
+        Assert.Equal(
+            DependencyFingerprints(root.GetProperty("runnerDependencies")),
+            DependencyFingerprints(receipt.RootElement.GetProperty("runnerDependencies")));
 
         var firstHttp = CompatibilityJson.Serialize(BaselineFile.Load<object>(httpPath));
         var secondHttp = CompatibilityJson.Serialize(BaselineFile.Load<object>(httpPath));
         Assert.Equal(firstHttp, secondHttp);
     }
+
+    [Fact]
+    public void Historical_capture_receipt_pins_every_runner_dependency()
+    {
+        var directory = Path.Join(AppContext.BaseDirectory, "Baselines");
+        using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, WorkflowDesignCompatibilityEvidence.ReceiptFileName)));
+        var root = receipt.RootElement;
+        Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
+        Assert.Equal("3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93", root.GetProperty("runnerCommit").GetString());
+        Assert.Equal(
+            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93 bash tools/compatibility/capture-workflows-design-before.sh",
+            root.GetProperty("captureCommand").GetString());
+        var dependencies = root.GetProperty("runnerDependencies").EnumerateArray().ToArray();
+        Assert.Equal(
+            new[]
+            {
+                "tools/compatibility/capture-workflows-design-before.sh",
+                "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+                "tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj",
+                "tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+                "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+                "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+                "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
+            },
+            dependencies.Select(dependency => dependency.GetProperty("path").GetString()).ToArray());
+        Assert.All(dependencies, dependency => Assert.Matches("^[0-9a-f]{64}$", dependency.GetProperty("sha256").GetString()!));
+        foreach (var dependency in dependencies)
+        {
+            var path = dependency.GetProperty("path").GetString()!;
+            var expectedCommit = path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
+                ? root.GetProperty("runnerCommit").GetString()!
+                : root.GetProperty("sourceCommit").GetString()!;
+            Assert.Equal(expectedCommit, dependency.GetProperty("commit").GetString());
+            Assert.Equal(GitBlobHash(expectedCommit, path), dependency.GetProperty("sha256").GetString());
+        }
+    }
+
+    private static string GitBlobHash(string commit, string path)
+    {
+        var startInfo = new ProcessStartInfo("git", ["show", $"{commit}:{path}"])
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        var contents = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(contents))).ToLowerInvariant();
+    }
+
+    private static string[] DependencyFingerprints(JsonElement dependencies) =>
+        dependencies.EnumerateArray()
+            .Select(dependency => $"{dependency.GetProperty("commit").GetString()}|{dependency.GetProperty("path").GetString()}|{dependency.GetProperty("sha256").GetString()}")
+            .ToArray();
 
     [Fact]
     public async Task Minimal_api_after_evidence_matches_the_immutable_fastendpoints_before_surface()
@@ -347,6 +435,7 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
             {
                 "trusted-delete-404" => throw new EntityNotFoundException("definition sample was not found"),
                 "trusted-delete-501" => throw new PermanentDeletionUnavailableException("sample"),
+                "trusted-delete-409" => throw new WorkflowDefinitionNotSoftDeletedException("sample"),
                 "trusted-delete-500" => throw new InvalidOperationException("deterministic command failure"),
                 _ => Task.CompletedTask
             };

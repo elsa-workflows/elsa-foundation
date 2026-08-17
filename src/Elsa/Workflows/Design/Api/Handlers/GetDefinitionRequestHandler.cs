@@ -30,7 +30,7 @@ public sealed class GetDefinitionRequestHandler(
             definition.ToView(),
             draft is null
                 ? null
-                : WorkflowDraftView.From(
+                : WorkflowDraftViewFactory.From(
                     draft,
                     metadata?.Layout ?? [],
                     metadata?.ActivityPresentation ?? []),

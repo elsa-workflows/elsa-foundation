@@ -112,6 +112,40 @@ public sealed class ExpressionToolingEndpointTests
         Assert.Equal(1, provider.CompletionCalls);
     }
 
+    [Theory]
+    [InlineData(ExpressionToolingOutcomeState.Stale)]
+    [InlineData(ExpressionToolingOutcomeState.Canceled)]
+    public async Task Context_service_non_success_outcomes_preserve_revisions_without_invoking_provider(ExpressionToolingOutcomeState state)
+    {
+        var provider = new RecordingProvider();
+        await using var host = ExpressionToolingHost.Create(provider, outcomeState: state);
+
+        var response = await host.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", CompletionBody, "application/json");
+
+        Assert.Equal(state.ToString(), ReadState(response.Body));
+        Assert.Contains("document", response.Body, StringComparison.Ordinal);
+        Assert.Contains("context", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
+        Assert.Equal(0, provider.CapabilityCalls);
+        Assert.Equal(0, provider.CompletionCalls);
+    }
+
+    [Theory]
+    [InlineData("POST", "/design/workflows/expression-tooling/completions", CompletionBody)]
+    [InlineData("POST", "/design/workflows/expression-tooling/hover", HoverBody)]
+    [InlineData("POST", "/design/workflows/expression-tooling/validate", ValidateBody)]
+    public async Task Absent_provider_outcomes_preserve_request_revisions_for_all_provider_operations(string method, string route, string body)
+    {
+        await using var host = ExpressionToolingHost.Create();
+
+        var response = await host.InvokeAsync(method, route, body, "application/json");
+
+        Assert.Equal("Unavailable", ReadState(response.Body));
+        Assert.Contains("document", response.Body, StringComparison.Ordinal);
+        Assert.Contains("context", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
+    }
+
     [Fact]
     public async Task Denied_authoring_context_does_not_invoke_the_provider()
     {
@@ -123,9 +157,13 @@ public sealed class ExpressionToolingEndpointTests
         Assert.Equal("Unauthorized", ReadState(response.Body));
         Assert.Equal(0, provider.CapabilityCalls);
         Assert.Equal(0, provider.CompletionCalls);
+        Assert.DoesNotContain("args.symbol500", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
     }
 
     private const string CompletionBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"cursor\":{\"line\":0,\"character\":14}}";
+    private const string HoverBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"position\":{\"line\":0,\"character\":14}}";
+    private const string ValidateBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\"}";
 
     private static string ReadState(string json)
     {
@@ -135,11 +173,11 @@ public sealed class ExpressionToolingEndpointTests
 
     private sealed class ExpressionToolingHost(IServiceProvider services) : IAsyncDisposable
     {
-        public static ExpressionToolingHost Create(RecordingProvider? provider = null, IExpressionAuthoringAuthorizationPolicy? policy = null)
+        public static ExpressionToolingHost Create(RecordingProvider? provider = null, IExpressionAuthoringAuthorizationPolicy? policy = null, ExpressionToolingOutcomeState? outcomeState = null)
         {
             var serviceCollection = new ServiceCollection()
                 .AddLogging()
-                .AddSingleton<IExpressionAuthoringContextService>(new RecordingContextService(ContextWithSymbols()))
+                .AddSingleton<IExpressionAuthoringContextService>(new RecordingContextService(ContextWithSymbols(), outcomeState))
                 .AddSingleton<IExpressionAuthoringAuthorizationPolicy>(policy ?? new AllowAuthorizationPolicy())
                 .AddSingleton<IExpressionToolingProviderResolver>(new ProviderResolver(provider));
             if (provider is not null)
@@ -184,7 +222,7 @@ public sealed class ExpressionToolingEndpointTests
         return new(ExpressionToolingContractVersion.V1, document, "context", "catalog", symbols, new());
     }
 
-    private sealed class RecordingContextService(ExpressionAuthoringContext context) : IExpressionAuthoringContextService
+    private sealed class RecordingContextService(ExpressionAuthoringContext context, ExpressionToolingOutcomeState? outcomeState = null) : IExpressionAuthoringContextService
     {
         public ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveAsync(
             ResolveExpressionAuthoringContextRequest request,
@@ -197,7 +235,9 @@ public sealed class ExpressionToolingEndpointTests
             CancellationToken cancellationToken) => ValueTask.FromResult(Result(authorization));
 
         private ExpressionToolingOutcome<ExpressionAuthoringContext> Result(ExpressionAuthoringAuthorization authorization) =>
-            authorization.IsAuthorized
+            outcomeState is { } state
+                ? ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(state, ExpressionToolingContractVersion.V1, "context-state", documentRevision: context.Document.DocumentRevision, contextRevision: context.ContextRevision)
+                : authorization.IsAuthorized
                 ? ExpressionToolingOutcome<ExpressionAuthoringContext>.Success(context, ExpressionToolingContractVersion.V1, "document", "context")
                 : ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Unauthorized, ExpressionToolingContractVersion.V1);
     }

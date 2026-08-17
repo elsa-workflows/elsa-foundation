@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -21,6 +22,12 @@ namespace Elsa.Workflows.Design.Api;
 [JsonSerializable(typeof(SubmitDefinition))]
 [JsonSerializable(typeof(UpdateDefinition))]
 [JsonSerializable(typeof(UpdateDefinitionMetadata))]
+[JsonSerializable(typeof(ListDefinitions))]
+[JsonSerializable(typeof(GetDefinition))]
+[JsonSerializable(typeof(ListDefinitionVersions))]
+[JsonSerializable(typeof(GetDraft))]
+[JsonSerializable(typeof(GetDraftValidations))]
+[JsonSerializable(typeof(GetVersion))]
 [JsonSerializable(typeof(AnalyzeScopedVariablesRequest))]
 [JsonSerializable(typeof(ActivityInputOptionsRequest))]
 [JsonSerializable(typeof(ExpressionToolingContextRequest))]
@@ -48,4 +55,22 @@ namespace Elsa.Workflows.Design.Api;
 [JsonSerializable(typeof(WorkflowDesignError))]
 internal partial class WorkflowsDesignJsonContext : JsonSerializerContext
 {
+}
+
+/// <summary>
+/// Resolves Workflows Design metadata against the host's serializer options.
+/// A new generated context is required for each resolution because OpenAPI adds
+/// modifiers to the returned metadata and therefore freezes it in place.
+/// </summary>
+internal sealed class WorkflowsDesignJsonTypeInfoResolver : IJsonTypeInfoResolver
+{
+    public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+    {
+        // The generated context's explicit resolver implementation dispatches to
+        // its private Create_* factories with the caller's exact options. The
+        // context instance only supplies those generated factories; its own
+        // options are deliberately not used for the returned metadata.
+        return ((IJsonTypeInfoResolver)new WorkflowsDesignJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+            .GetTypeInfo(type, options);
+    }
 }

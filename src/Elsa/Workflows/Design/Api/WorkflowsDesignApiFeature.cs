@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -51,6 +52,11 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsDesignJsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsDesignJsonTypeInfoResolver());
+        });
     }
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
