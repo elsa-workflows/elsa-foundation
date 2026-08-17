@@ -79,7 +79,7 @@ Publishing 23, Runtime 24).
 
 ## E2E evidence
 
-On commit `d4589a492b691a6ce7857367b265962d467c3f89`, the Workbench was rebuilt with `--no-restore`,
+On commit `45ab1fa825f238ef2b553750623141c4c74e9ed7`, the Workbench was rebuilt with `--no-restore`,
 the existing SQLite files were moved to a recoverable temporary directory, and the schema was applied to a
 fresh `src/Apps/Elsa.Workbench/elsa-groundwork.db` using the documented reference composition command. The
 server ran from that exact executable at `http://localhost:5095`.
@@ -94,8 +94,8 @@ SUCCESS - workflow-design API: 8/8 GET endpoints/cases passed
 
 These runs exercised real login/authentication, design persistence, preflight, exact promotion,
 immutable version reads, list/get/version/draft/validation reads, and 404 handling.
-The final evidence-only commit follows this run and changes documentation only; it does not alter the
-Workbench executable or production source exercised above.
+The evidence-only commit recording this run follows it and changes documentation only; it does not alter
+the Workbench executable or production source exercised above.
 
 ## Verification record
 
@@ -104,7 +104,7 @@ Workbench executable or production source exercised above.
 - Full solution build: `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (218 repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
 - Format/import verification: focused verification passes for all changed production, test, architecture, comparer, and OpenAPI projector files. The broad project verification still reports inherited charset/import diagnostics in untouched base files; these are recorded as an advisory baseline issue rather than normalized into this migration.
-- E2E: the rebuilt Workbench/fresh-DB run passed `Test-WorkflowVersionOverride.ps1` 5/5 and `Test-DesignWorkflowGets.ps1` 8/8 against `http://localhost:5095`; commands and results are recorded above.
+- E2E: the rebuilt Workbench at final executable commit `45ab1fa825f238ef2b553750623141c4c74e9ed7`, with a fresh SQLite DB, passed `Test-WorkflowVersionOverride.ps1` 5/5 and `Test-DesignWorkflowGets.ps1` 8/8 against `http://localhost:5095`; commands and results are recorded above.
 - Final review: issue comments/open PRs were rechecked before commit; the final diff is checked for whitespace, exact 27-route removal, production FastEndpoints references, and map/spec consistency.
 
 ## Risks
