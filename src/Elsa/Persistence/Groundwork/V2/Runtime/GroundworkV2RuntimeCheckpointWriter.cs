@@ -636,7 +636,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             foreach (var dispatch in commit.StateChanges.WorkflowDispatches)
             {
                 var isNew = Open(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(dispatch.StateId)) is null;
+                    .Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(dispatch.State.DispatchId))) is null;
                 if (isNew && dispatch.State.TestScope is { } scope)
                     AssertOpenTestScope(scope, dispatch.State.ChildWorkflowExecutionId);
             }
@@ -950,16 +951,12 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     continue;
 
                 var entry = Open(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(change.StateId));
+                    .Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(change.State.DispatchId)));
                 if (entry is null)
                 {
                     WorkflowDispatchLifecycle.ValidateNew(change.State);
-                    StageUpsert(
-                        ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                        change.StateId,
-                        change.State,
-                        ProjectDispatch,
-                        WriteOptions.CreateOnly);
+                    StageDispatch(change.State, WriteOptions.CreateOnly);
                     continue;
                 }
 
@@ -967,11 +964,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 WorkflowDispatchLifecycle.ValidateTransition(existing, change.State);
                 if (WorkflowDispatchLifecycle.RecordsEqual(existing, change.State))
                     continue;
-                StageUpsert(
-                    ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                    change.StateId,
+                StageDispatch(
                     change.State,
-                    ProjectDispatch,
                     WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
                         $"Workflow dispatch '{change.StateId}' did not expose a provider revision.")));
             }
@@ -979,7 +973,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             foreach (var request in commit.StateChanges.WorkflowDispatchCancellations)
             {
                 var entry = Open(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(request.DispatchId));
+                    .Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(request.DispatchId)));
                 if (entry is null)
                     throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
 
@@ -997,22 +992,16 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 if (existing.Status == WorkflowDispatchStatus.Pending &&
                     !WorkflowDispatchLifecycle.WasCancelledBeforeAdmission(existing))
                 {
-                    StageUpsert(
-                        ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                        request.DispatchId,
+                    StageDispatch(
                         WorkflowDispatchLifecycle.CancelBeforeAdmission(existing, request.RequestedAt),
-                        ProjectDispatch,
                         WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
                             $"Workflow dispatch '{request.DispatchId}' did not expose a provider revision.")));
                 }
                 else if (existing.Status == WorkflowDispatchStatus.Started &&
                          !WorkflowDispatchLifecycle.IsCancellationRequested(existing))
                 {
-                    StageUpsert(
-                        ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                        request.DispatchId,
+                    StageDispatch(
                         WorkflowDispatchLifecycle.MarkCancellationRequested(existing, request.RequestedAt),
-                        ProjectDispatch,
                         WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
                             $"Workflow dispatch '{request.DispatchId}' did not expose a provider revision.")));
                 }
@@ -1246,6 +1235,13 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 RuntimeStateChangeOperation.Upsert,
                 options);
 
+        private void StageDispatch(WorkflowDispatchRecord state, WriteOptions? options = null) =>
+            StageValues(
+                ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+                GroundworkV2WorkflowDispatchStorageConventions.Values(state),
+                RuntimeStateChangeOperation.Upsert,
+                options);
+
         private void StageValues(
             string unitId,
             StorageValues values,
@@ -1343,18 +1339,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.StatusField] = state.Status.ToString(),
                 [ElsaRuntimeV2StorageManifest.CreatedAtField] = state.CreatedAt,
                 [ElsaRuntimeV2StorageManifest.IncidentIdField] = state.IncidentId
-            };
-
-        private static IReadOnlyDictionary<string, object?> ProjectDispatch(WorkflowDispatchRecord state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = state.ParentWorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = state.ChildWorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.StatusField] = state.Status.ToString(),
-                [ElsaRuntimeV2StorageManifest.TestScopeIdField] = state.TestScope?.ScopeId,
-                [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = state.CreatedAt,
-                [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = state.DispatchId
             };
 
         private static void ValidateSchedulerClaim(

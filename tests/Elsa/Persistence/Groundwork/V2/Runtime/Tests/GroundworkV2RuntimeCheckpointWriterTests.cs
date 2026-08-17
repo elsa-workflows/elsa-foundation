@@ -965,6 +965,62 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
 
     [SkippableFact]
     [Trait("Category", "Sqlite")]
+    public async Task Sqlite_checkpoint_writer_and_dispatch_store_share_the_same_physical_identity()
+    {
+        var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-dispatch-identity-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={database}");
+            Skip.If(
+                !connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)),
+                "The installed SQLite Groundwork package does not evidence AtomicCommit.");
+            foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+                connection.Schema.Apply(unit);
+
+            var source = new NativeSessionSource(connection);
+            var access = new Accessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var dispatch = NewDispatch("workflow-1", WorkflowDispatchStatus.Pending);
+            var changes = new RuntimeCheckpointStateChangeSet(
+                null,
+                null,
+                [],
+                [],
+                [],
+                [],
+                [],
+                workflowDispatches: [new RuntimeStateChange<WorkflowDispatchRecord>(
+                    dispatch.DispatchId,
+                    RuntimeStateChangeOperation.Upsert,
+                    dispatch,
+                    new Dictionary<string, string>())]);
+
+            await new GroundworkV2RuntimeCheckpointWriter(source, access)
+                .CommitAsync(NewCommit("dispatch-identity") with { StateChanges = changes }, Immediate());
+
+            var store = new GroundworkV2WorkflowDispatchStore(source, access);
+            var found = await store.FindAsync(dispatch.DispatchId);
+            Assert.NotNull(found);
+            Assert.Equal(dispatch.DispatchId, found!.DispatchId);
+            Assert.True(WorkflowDispatchLifecycle.RecordsEqual(dispatch, found));
+            Assert.Equal(
+                dispatch.DispatchId,
+                source.Open(
+                        ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
+                        StorageAccess.Scoped(new StorageScope("tenant-a")))
+                    .Read(GroundworkRuntimeRowStore.Key(dispatch.DispatchId))!
+                    .Values.Values[ElsaRuntimeV2StorageManifest.IdField]);
+            Assert.True(WorkflowDispatchLifecycle.RecordsEqual(dispatch, await store.SaveAsync(dispatch)));
+        }
+        finally
+        {
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+                if (File.Exists(path))
+                    File.Delete(path);
+        }
+    }
+
+    [SkippableFact]
+    [Trait("Category", "Sqlite")]
     public async Task Sqlite_native_activity_execution_write_accepts_all_declared_projections()
     {
         var database = Path.Combine(Path.GetTempPath(), $"elsa-runtime-activity-checkpoint-{Guid.NewGuid():N}.db");
