@@ -45,31 +45,35 @@ var openApi = HistoricalOpenApiEvidenceCapture.Capture(await host.GetOpenApiAsyn
 var trace = CaptureTrace.Snapshot();
 CaptureTrace.AssertMinimum(trace);
 
+var sourceCommit = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT")
+                   ?? throw new InvalidOperationException("WORKFLOWS_DESIGN_BEFORE_COMMIT must pin the historical source commit.");
+var runnerIdentity = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_IDENTITY")
+                     ?? throw new InvalidOperationException("WORKFLOWS_DESIGN_CAPTURE_RUNNER_IDENTITY must identify the checked-in runner.");
+var runnerDependencies = RunnerDependencies(args[0], sourceCommit, runnerIdentity);
+
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-http-fastendpoints.json"), CompatibilityJson.Serialize(observations));
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json"), CompatibilityJson.Serialize(openApi));
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-handler-trace-fastendpoints.json"), CompatibilityJson.Serialize(trace));
 var receipt = new
 {
     capture = "real-fastendpoints-historical-worktree",
-    sourceCommit = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown",
-    runnerCommit = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown",
-    captureCommand = $"WORKFLOWS_DESIGN_BEFORE_COMMIT={Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown"} WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT={Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown"} bash tools/compatibility/capture-workflows-design-before.sh",
+    sourceCommit,
+    runnerIdentity,
+    captureCommand = $"WORKFLOWS_DESIGN_BEFORE_COMMIT={sourceCommit} bash tools/compatibility/capture-workflows-design-before.sh",
     registrationCount = 27,
     caseCount = observations.Length,
     operationCount = openApi.Operations.Count,
     categories = observations.SelectMany(observation => observation.Case.Split('|', StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
     traceAssertions = new[] { "request-and-command-types-recorded", "lifecycle-body-properties-recorded", "list-query-properties-recorded", "promotion-error-paths-recorded", "permanent-delete-conflict-recorded" },
-    runnerDependencies = RunnerDependencies(
-        args[0],
-        Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown",
-        Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown"),
+    runnerFingerprint = Fingerprint(runnerDependencies),
+    runnerDependencies,
     httpSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-http-fastendpoints.json")))).ToLowerInvariant(),
     openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json")))).ToLowerInvariant(),
     traceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-handler-trace-fastendpoints.json")))).ToLowerInvariant()
 };
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
 
-static IReadOnlyList<object> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerCommit) =>
+static IReadOnlyList<RunnerDependency> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerIdentity) =>
 new[]
 {
     "tools/compatibility/capture-workflows-design-before.sh",
@@ -79,12 +83,18 @@ new[]
     "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
     "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
     "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
-}.Select(path => new
-{
+}.Select(path => new RunnerDependency(
+    path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
+        ? runnerIdentity
+        : $"source-commit:{sourceCommit}",
     path,
-    commit = path.StartsWith("tools/compatibility/", StringComparison.Ordinal) ? runnerCommit : sourceCommit,
-    sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(sourceRoot, path)))).ToLowerInvariant()
-}).Cast<object>().ToArray();
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(sourceRoot, path)))).ToLowerInvariant()))
+    .ToArray();
+
+static string Fingerprint(IEnumerable<RunnerDependency> dependencies) =>
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        Encoding.UTF8.GetBytes(string.Join("\n", dependencies.Select(dependency =>
+            $"{dependency.Identity}|{dependency.Path}|{dependency.Sha256}")) + "\n"))).ToLowerInvariant();
 
 static IReadOnlyList<HttpCompatibilityCase> Cases()
 {
@@ -412,3 +422,5 @@ sealed class CaptureActivityDefinitionVersionStore : IActivityDefinitionVersionS
     public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw NotExecuted();
     public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) => throw NotExecuted();
 }
+
+sealed record RunnerDependency(string Identity, string Path, string Sha256);

@@ -25,27 +25,22 @@ implied/manage and wildcard behavior is evaluator-owned.
 
 ## Immutable before evidence
 
-The baseline-first history is:
+The immutable before evidence is tied to the resolvable pre-migration source commit and the checked-in
+capture runner inputs rather than to an intermediate runner commit (which a squash merge may discard):
 
 ```text
-28f9c0624  freeze FastEndpoints before evidence
-07cdcd7a5  add historical FastEndpoints capture runner
-e28d43e9c  record expanded FastEndpoints evidence
-91f1eb61f  consume OpenAPI identity metadata
-18dcb7a40  bind capture to rebased FE source
-f8caa847f  capture against W5 main baseline
-a571cae1f  expand pre-migration workflows design capture
-c53580849  keep capture cases uniquely keyed
-6060aa63b  record activity route binding
-394184635  capture lifecycle command bodies in FE errors
-3caa7fd16  freeze the complete hermetic capture runner
-4b1810c0a  record the immutable 78-case FE oracle
-68f09233b  Minimal API migration
+67ba4b3b9  pinned pre-migration FastEndpoints source
+checked-in  tools/compatibility/ capture runner and projector inputs
+immutable  78-case HTTP/OpenAPI/handler-trace fixtures
+3157570ab  squash-merged Minimal API migration
 ```
 
-The hermetic runner `3caa7fd1638f8a61382cef87979d03b3c08bce45` is an ancestor of the production migration
-`68f09233b091de7b6fb1876059efc38c104e0fb3` and was executed detached against the pre-migration
-FastEndpoints source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. It captured all
+The checked-in runner is materialized from the committed Git tree under test and identified as `checked-in-commit`; its
+seven runner/source dependency paths are individually hashed and bound by fingerprint
+`8f2959632506958a510eafcc1430b423e5e9dca1157f34a46bc02b4ba8363d1e`. The source commit
+`67ba4b3b9bec3a6c2aac0d6d332099baf723e802` must resolve, be an ancestor of the current checkout, and
+contain the expected FastEndpoints feature/endpoint surface. The capture was executed detached against that
+pre-migration source and captured all
 27 OpenAPI operations and 78 uniquely keyed HTTP observations: anonymous 401s for every route, authenticated
 success and failure paths, one
 authenticated route case for every route, exact binding/content-type failures, ProblemDetails/domain errors,
@@ -58,7 +53,7 @@ handler trace is canonically sorted and two independent captures produce the sam
 | `workflows-design-openapi-fastendpoints.json` | `cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5` |
 | `workflows-design-handler-trace-fastendpoints.json` | `02dfcb7bbc50d64ea785df897128b8bc39caeec2709444b8fc34d91a04f6133c` |
 
-The receipt records the full runner commit, source commit, counts, categories, and both hashes.
+The receipt records the checked-in runner identity/fingerprint, source commit, counts, categories, and fixture hashes.
 The after comparison consumes all 78 HTTP cases and 27 OpenAPI operations with no content-length
 normalization. Exact bidirectional approval, unused-approval, reverse-approval, and fixture mutation
 tests are bite-proof. W5's transition baseline was 112 registrations; this branch removes exactly the
@@ -99,7 +94,7 @@ the Workbench executable or production source exercised above.
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 148/148; the immutable baseline suite passed 9/9, including source/runner ancestry and dependency-byte checks.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 150/150; the immutable baseline suite passed 11/11, including source/runner ancestry, committed raw-byte dependency checks, fixture metadata/counts, and mutation bites.
 - Architecture: the owner collectibility suite passed 1/1 (seven owners across three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 472/472.
 - Full solution build: `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (218 repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
