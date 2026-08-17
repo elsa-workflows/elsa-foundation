@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -52,6 +53,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         var assembly = GetType().Assembly;
 
         services.AddHttpContextAccessor();
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));

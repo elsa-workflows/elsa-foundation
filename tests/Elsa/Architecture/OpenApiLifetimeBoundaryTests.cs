@@ -138,6 +138,22 @@ public sealed class OpenApiLifetimeBoundaryTests
     }
 
     [Fact]
+    public void Stable_openapi_convention_removes_compiler_only_handler_metadata_before_validation()
+    {
+        var conventions = new RecordingConventionBuilder();
+        conventions.RequireStableOpenApi();
+        var builder = Endpoint("PUT /async", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
+        builder.Metadata.Add(new System.Runtime.CompilerServices.AsyncStateMachineAttribute(CreateCollectibleType("AsyncHandlerStateMachine")));
+        builder.Metadata.Add(new System.Diagnostics.DebuggerStepThroughAttribute());
+
+        conventions.FinalConventions.Single()(builder);
+
+        Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
+        Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
+        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+    }
+
+    [Fact]
     public void Final_convention_runs_after_metadata_added_by_ordinary_conventions()
     {
         var conventions = new RecordingConventionBuilder();

@@ -1,20 +1,19 @@
-using System.Security.Claims;
+using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
-using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Options;
+using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
@@ -27,12 +26,14 @@ using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Registration;
@@ -92,6 +93,20 @@ public sealed class ActivityDesignFeatureCompositionTests
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
+    }
+
+    [Fact]
+    public void ActivitiesDesignApiFeature_Registers_Dynamic_ApiExplorer_Refresh_Once()
+    {
+        var services = MinimalServices();
+        var feature = new ActivitiesDesignApiFeature();
+
+        feature.ConfigureServices(services);
+        feature.ConfigureServices(services);
+
+        var registrations = services.Where(descriptor => descriptor.ServiceType == typeof(IActionDescriptorChangeProvider)).ToArray();
+        Assert.Single(registrations);
+        Assert.Equal(ServiceLifetime.Singleton, registrations[0].Lifetime);
     }
 
     [Fact]
