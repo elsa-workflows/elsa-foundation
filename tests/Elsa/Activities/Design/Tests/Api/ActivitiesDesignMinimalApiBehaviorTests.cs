@@ -20,6 +20,18 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
         { "UpgradePlans.Refresh", "/design/activities/upgrade-plans/capture" }
     };
 
+    public static TheoryData<string, string, string> InvalidTypedQueries => new()
+    {
+        { "/design/activities/catalog?availability=invalid", "availability", "ActivityCatalogAvailability" },
+        { "/design/activities/definitions?limit=invalid", "limit", "Int32" },
+        { "/design/activities/definitions/picker?offset=invalid", "offset", "Int32" },
+        { "/design/activities/definitions/picker?limit=invalid", "limit", "Int32" },
+        { "/design/activities/definitions/definition-route/drafts?limit=invalid", "limit", "Int32" },
+        { "/design/activities/definitions/definition-route/versions?limit=invalid", "limit", "Int32" },
+        { "/design/activities/versions/version-route/dependencies?limit=invalid", "limit", "Int32" },
+        { "/design/activities/versions/version-route/dependencies?transitive=invalid", "transitive", "Boolean" }
+    };
+
     [Theory]
     [MemberData(nameof(CreatedRoutes))]
     public async Task Every_created_operation_returns_201_and_the_exact_location(
@@ -92,6 +104,27 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Contains("\"status\":404", body, StringComparison.Ordinal);
         Assert.Contains("Not Found", body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidTypedQueries))]
+    public async Task Every_malformed_typed_query_fails_before_mediator_dispatch(
+        string path,
+        string queryName,
+        string typeName)
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-binding");
+
+        using var response = await host.Client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains($"\"name\":\"{queryName}\"", body, StringComparison.Ordinal);
+        Assert.Contains($"Value [invalid] is not valid for a [{typeName}] property!", body, StringComparison.Ordinal);
+        Assert.Null(host.RequestSender.LastRequest);
     }
 
     [Fact]

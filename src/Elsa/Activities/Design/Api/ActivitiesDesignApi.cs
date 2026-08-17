@@ -142,10 +142,10 @@ public static class ActivitiesDesignApi
 
     private static Task HandleListCatalogAsync(HttpContext context)
     {
-        var availability = Enum.TryParse<ActivityCatalogAvailability>(Query(context, "availability"), true, out var value)
-            ? value
-            : ActivityCatalogAvailability.Addable;
-        return LegacyRequestResult(context, new ListActivityAuthoringCatalog(availability));
+        var availability = QueryEnum(context, "availability", ActivityCatalogAvailability.Addable);
+        if (!availability.IsValid)
+            return WriteQueryBindingProblemAsync(context, availability.Error!);
+        return LegacyRequestResult(context, new ListActivityAuthoringCatalog(availability.Value));
     }
 
     private static async Task HandleCreateDefinitionAsync(HttpContext context)
@@ -163,14 +163,19 @@ public static class ActivitiesDesignApi
         await AuthoringCommandResult(context, command);
     }
 
-    private static Task HandleListDefinitionsAsync(HttpContext context) =>
-        AuthoringRequestResult(context, new ListReusableActivityDefinitions(
-            QueryInt(context, "limit", 25),
+    private static Task HandleListDefinitionsAsync(HttpContext context)
+    {
+        var limit = QueryInt(context, "limit", 25);
+        if (!limit.IsValid)
+            return WriteQueryBindingProblemAsync(context, limit.Error!);
+        return AuthoringRequestResult(context, new ListReusableActivityDefinitions(
+            limit.Value,
             Query(context, "cursor"),
             Query(context, "search"),
             Query(context, "authority"),
             Query(context, "providerKey"),
             Query(context, "sort") ?? "identity-asc"));
+    }
 
     private static Task HandleGetDefinitionAsync(HttpContext context) =>
         AuthoringRequestResult(context, new GetReusableActivityDefinition(Route(context, "definitionId") ?? string.Empty));
@@ -191,19 +196,32 @@ public static class ActivitiesDesignApi
         await AuthoringCommandResult(context, command);
     }
 
-    private static Task HandlePickerAsync(HttpContext context) =>
-        AuthoringRequestResult(context, new ListRecommendedActivityDefinitions(
-            QueryInt(context, "offset", 0), QueryInt(context, "limit", 25)));
+    private static Task HandlePickerAsync(HttpContext context)
+    {
+        var offset = QueryInt(context, "offset", 0);
+        if (!offset.IsValid)
+            return WriteQueryBindingProblemAsync(context, offset.Error!);
 
-    private static Task HandleListDraftsAsync(HttpContext context) =>
-        AuthoringRequestResult(context, new ListReusableActivityDrafts(
+        var limit = QueryInt(context, "limit", 25);
+        if (!limit.IsValid)
+            return WriteQueryBindingProblemAsync(context, limit.Error!);
+        return AuthoringRequestResult(context, new ListRecommendedActivityDefinitions(offset.Value, limit.Value));
+    }
+
+    private static Task HandleListDraftsAsync(HttpContext context)
+    {
+        var limit = QueryInt(context, "limit", 25);
+        if (!limit.IsValid)
+            return WriteQueryBindingProblemAsync(context, limit.Error!);
+        return AuthoringRequestResult(context, new ListReusableActivityDrafts(
             Route(context, "definitionId") ?? string.Empty,
-            QueryInt(context, "limit", 25),
+            limit.Value,
             Query(context, "cursor"),
             Query(context, "search"),
             Query(context, "providerKey"),
             Query(context, "status"),
             Query(context, "sort") ?? "identity-asc"));
+    }
 
     private static async Task HandleCreateDraftAsync(HttpContext context)
     {
@@ -214,15 +232,20 @@ public static class ActivitiesDesignApi
             static response => $"/{RouteConstants.GetRoute($"drafts/{response.DraftId}")}");
     }
 
-    private static Task HandleListVersionsAsync(HttpContext context) =>
-        AuthoringRequestResult(context, new ListReusableActivityVersions(
+    private static Task HandleListVersionsAsync(HttpContext context)
+    {
+        var limit = QueryInt(context, "limit", 25);
+        if (!limit.IsValid)
+            return WriteQueryBindingProblemAsync(context, limit.Error!);
+        return AuthoringRequestResult(context, new ListReusableActivityVersions(
             Route(context, "definitionId") ?? string.Empty,
-            QueryInt(context, "limit", 25),
+            limit.Value,
             Query(context, "cursor"),
             Query(context, "search"),
             Query(context, "providerKey"),
             Query(context, "lifecycle"),
             Query(context, "sort") ?? "identity-asc"));
+    }
 
     private static Task HandleGetDraftAsync(HttpContext context) =>
         AuthoringRequestResult(context, new GetReusableActivityDraft(Route(context, "draftId") ?? string.Empty));
@@ -313,14 +336,23 @@ public static class ActivitiesDesignApi
     private static Task HandleGetForkStatusAsync(HttpContext context) =>
         AuthoringRequestResult(context, new GetReusableActivityForkStatus(Route(context, "idempotencyKey") ?? string.Empty));
 
-    private static Task HandleGetDependenciesAsync(HttpContext context) =>
-        AuthoringRequestResult(context, new GetActivityDependencies(
+    private static Task HandleGetDependenciesAsync(HttpContext context)
+    {
+        var transitive = QueryBool(context, "transitive");
+        if (!transitive.IsValid)
+            return WriteQueryBindingProblemAsync(context, transitive.Error!);
+
+        var limit = QueryNullableInt(context, "limit");
+        if (!limit.IsValid)
+            return WriteQueryBindingProblemAsync(context, limit.Error!);
+        return AuthoringRequestResult(context, new GetActivityDependencies(
             Route(context, "versionId") ?? string.Empty,
             Query(context, "direction") ?? "outbound",
-            QueryBool(context, "transitive") ?? false,
+            transitive.Value ?? false,
             Query(context, "include") ?? "versions",
             Query(context, "cursor"),
-            QueryNullableInt(context, "limit")));
+            limit.Value));
+    }
 
     private static Task HandleCompareVersionsAsync(HttpContext context) =>
         AuthoringRequestResult(context, new CompareActivityVersions(
@@ -571,6 +603,12 @@ public static class ActivitiesDesignApi
     private static Task WriteBindingProblemAsync(HttpContext context, string message) =>
         WriteLegacyProblemAsync(context, message, StatusCodes.Status400BadRequest, "serializerErrors");
 
+    private static Task WriteQueryBindingProblemAsync(HttpContext context, QueryBindingError error)
+    {
+        var detail = $"Value [{error.RawValue}] is not valid for a [{error.TypeName}] property!";
+        return WriteLegacyProblemAsync(context, detail, StatusCodes.Status400BadRequest, error.Name);
+    }
+
     private static Task WriteLegacyProblemAsync(HttpContext context, string detail, int statusCode, string? errorName = null)
     {
         var problem = new ProblemDetails
@@ -619,12 +657,50 @@ public static class ActivitiesDesignApi
     private static string? Query(HttpContext context, string name) =>
         context.Request.Query.TryGetValue(name, out var value) ? value.ToString() : null;
 
-    private static int QueryInt(HttpContext context, string name, int fallback) =>
-        int.TryParse(Query(context, name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+    private static QueryBinding<int> QueryInt(HttpContext context, string name, int fallback)
+    {
+        var raw = Query(context, name);
+        if (raw is null)
+            return new(fallback);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? new(value)
+            : new(default, new(name, raw, nameof(Int32)));
+    }
 
-    private static int? QueryNullableInt(HttpContext context, string name) =>
-        int.TryParse(Query(context, name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+    private static QueryBinding<int?> QueryNullableInt(HttpContext context, string name)
+    {
+        var raw = Query(context, name);
+        if (raw is null)
+            return new(null);
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? new(value)
+            : new(default, new(name, raw, nameof(Int32)));
+    }
 
-    private static bool? QueryBool(HttpContext context, string name) =>
-        bool.TryParse(Query(context, name), out var value) ? value : null;
+    private static QueryBinding<bool?> QueryBool(HttpContext context, string name)
+    {
+        var raw = Query(context, name);
+        if (raw is null)
+            return new(null);
+        return bool.TryParse(raw, out var value)
+            ? new(value)
+            : new(default, new(name, raw, nameof(Boolean)));
+    }
+
+    private static QueryBinding<T> QueryEnum<T>(HttpContext context, string name, T fallback) where T : struct, Enum
+    {
+        var raw = Query(context, name);
+        if (raw is null)
+            return new(fallback);
+        return Enum.TryParse<T>(raw, true, out var value)
+            ? new(value)
+            : new(default, new(name, raw, typeof(T).Name));
+    }
+
+    private readonly record struct QueryBinding<T>(T Value, QueryBindingError? Error = null)
+    {
+        public bool IsValid => Error is null;
+    }
+
+    private sealed record QueryBindingError(string Name, string RawValue, string TypeName);
 }

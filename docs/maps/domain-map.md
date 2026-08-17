@@ -7,15 +7,15 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 158
-- Test projects: 103
+- Test projects: 104
 - Domains: 27
-- Direct cross-domain references: 781
+- Direct cross-domain references: 786
 
 ## Domains
 
 | Domain | Source projects | Test projects | Roles |
 |---|---:|---:|---|
-| Elsa.Activities | 24 | 20 | contract<br>feature/implementation<br>test |
+| Elsa.Activities | 24 | 21 | contract<br>feature/implementation<br>test |
 | Elsa.Agent | 5 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Api | 3 | 4 | feature/implementation<br>test |
 | Elsa.Architecture | 0 | 1 | test |
@@ -213,6 +213,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj) | test | Elsa.Activities | Design.Persistence.Groundwork.TemporalProjectionTests | test | Elsa.Activities.Design.Persistence.Groundwork |
 | [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Activities | Design.Persistence.Groundwork.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Activities.Design.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj) | test | Elsa.Activities | Design.BeforeCapture | test | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Api.Core<br>Elsa.Activities.Design.Core<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Primitives |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | test | Elsa.Activities | Design.QueryBinding.BeforeCapture | test | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Tests.ClrFixture](../../tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | Design.Tests.ClrFixture | test | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | Design.Tests | test | Elsa.Activities.Bpmn<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Api.Core<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Api.Compatibility.Testing<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core |
 | [Elsa.Activities.DispatchWorkflow.Tests](../../tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj) | test | Elsa.Activities | DispatchWorkflow.Tests | test | Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Design<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Resumption |
@@ -367,6 +368,11 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | Elsa.Activities | [Elsa.Persistence.Groundwork.Querying](../../src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj) | Elsa.Persistence |
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | Elsa.Activities | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
 | [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | Elsa.Activities | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | Elsa.Activities | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | Elsa.Activities | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | Elsa.Activities | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | Elsa.Activities | [Elsa.Mediator.Core](../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | Elsa.Activities | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

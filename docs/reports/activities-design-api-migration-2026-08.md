@@ -34,6 +34,15 @@ reproducible from a detached checkout. Its runner fingerprint is
 | Raw OpenAPI fixture | `ee5ef34ceecea0d339b903d0a20eed943481c2883dd93c07f12a459ccb080f4b` |
 | Initial empty approvals | `37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570` |
 
+Independent review found that the original corpus exercised only valid typed query values. A separate
+historical supplement—without modifying the 84-case oracle—now captures four real FastEndpoints
+failures for malformed enum, integer, nullable-integer, and Boolean query values. Its four-case fixture
+hash is `b1dc3df083bd73f257ec753b4f344eca411cc412d9f9f9b67d99a9c128b00f8f`, its runner fingerprint is
+`1a2863db2483bc655098dd6bf4a372004261ade1357c366679e173230b2ba516`, and a detached checkout
+reproduces the fixture and receipt byte-for-byte. The after replay matches the historical structured
+`400 application/problem+json` response exactly, while an eight-route regression test proves every
+typed-query mapping rejects malformed values before mediator dispatch.
+
 Bidirectional comparison consumes 88 approval entries representing 44 reviewed deltas. Thirty-eight
 conceptual OpenAPI approvals record the owner-owned `Activities Design` tag and the truthful
 source-generated string-enum schemas; each has an exact reverse entry. The remaining six conceptual
@@ -161,22 +170,28 @@ that old run as if it had executed against later program waves.
 
 ## Verification record
 
-- Complete Activities Design owner suite: 606/606.
+- Complete Activities Design owner suite after review correction: 618/618.
 - Legacy Activities Design catalog/support suite migrated to the real mapper: 26/26.
 - Activities Design Groundwork persistence suite after the live fixes: 76/76.
-- Immutable before/after HTTP, OpenAPI, and compatibility subset: 41/41.
+- Immutable before/after HTTP, OpenAPI, malformed-query, compatibility, and behavior subset: 69/69.
 - Focused compatibility/security/collectibility/transition/combined-host Architecture gate: 36/36.
 - Authorization/security/context gate: 53/53; architecture security/transition gate: 10/10.
 - Full Architecture suite after a complete solution restore: 509/509.
-- Full `Elsa.Server.slnx` build: 0 errors, 73 aggregate existing warnings (package vulnerability/pruning,
+- Full `Elsa.Server.slnx` build: 0 errors, 176 aggregate existing warnings (package vulnerability/pruning,
   nullable/obsolete/compiler, analyzer, and pre-existing Workbench style warnings); no new warning
   was introduced by the final Wave 7 corrections.
 - Workbench rebuild: 0 errors; 17 existing repository warnings (package-pruning advisories and one
   pre-existing Workbench style warning).
 - Public contract compatibility is included in the 41-test immutable compatibility subset and the
   606-test owner suite.
-- PowerShell parser, 64-file changed-C# formatter, generated-map freshness, and
-  `git diff --check`: green. The independent five-axis outcome is recorded after its release gate.
+- PowerShell parser, changed-C# formatter, generated-map freshness, and `git diff --check`: green.
+
+Independent review round 1 reported no Critical findings, one Required malformed typed-query parity
+defect, and two advisories. The Required finding is closed by the receipt-pinned historical supplement,
+exact before/after replay, complete typed-query call-site regression, and shared fail-closed binder. The
+unused Wave 9 test helper advisory is also removed; the intentionally historical Wave 9 receipt scope
+remains documented rather than being represented as current-HEAD execution evidence. Final totals and
+the round-2 outcome are recorded after the repeated release gate.
 
 ## Risks, rollback, and follow-up
 

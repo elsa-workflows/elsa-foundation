@@ -20,6 +20,8 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
     private const string RawOpenApiFileName = "activities-design-openapi-fastendpoints.raw.json";
     private const string ReceiptFileName = "activities-design-before-capture-receipt.json";
     private const string InitialApprovalsFileName = "activities-design-approved-differences.initial.json";
+    private const string QueryBindingFileName = "activities-design-query-binding-fastendpoints.json";
+    private const string QueryBindingReceiptFileName = "activities-design-query-binding-before-receipt.json";
 
     [Fact]
     public void Reviewed_manifest_contains_exactly_38_one_to_one_route_registrations()
@@ -79,6 +81,46 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
         Assert.Contains(observations, observation => observation.Case == "Drafts.Validate|trusted-domain-conflict" && observation.StatusCode == 409);
         Assert.Contains(observations, observation => observation.Case == "UpgradePlans.Apply|trusted-domain-failure" && observation.StatusCode == 422);
         Assert.Contains(observations, observation => observation.Case == "Drafts.Get|trusted-cancellation" && observation.TerminalState.Contains("OperationCanceledException", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Historical_query_binding_supplement_pins_four_real_fastendpoints_failures()
+    {
+        var directory = BaselineDirectory();
+        var observations = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(directory, QueryBindingFileName));
+        using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, QueryBindingReceiptFileName)));
+        var root = receipt.RootElement;
+
+        Assert.Equal(4, observations.Length);
+        Assert.All(observations, observation =>
+        {
+            Assert.Equal(400, observation.StatusCode);
+            Assert.Equal("application/problem+json", observation.ContentType);
+            Assert.Equal("Completed", observation.TerminalState);
+            Assert.Contains("Value [invalid] is not valid for a [", observation.ProblemDetails, StringComparison.Ordinal);
+        });
+        Assert.Equal(4, root.GetProperty("caseCount").GetInt32());
+        Assert.Equal(Hash(Path.Join(directory, QueryBindingFileName)), root.GetProperty("evidenceSha256").GetString());
+        Assert.Equal("real-fastendpoints-query-binding-supplement", root.GetProperty("capture").GetString());
+        Assert.Equal("checked-in-commit", root.GetProperty("runnerIdentity").GetString());
+    }
+
+    [Fact]
+    public void Query_binding_receipt_pins_reproducible_runner_dependencies_and_rejects_mutation()
+    {
+        using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(BaselineDirectory(), QueryBindingReceiptFileName)));
+        var root = receipt.RootElement;
+        var sourceCommit = root.GetProperty("sourceCommit").GetString()!;
+        var dependencies = ReadDependencies(root);
+        var mutated = dependencies.Select((dependency, index) => index == 0
+            ? dependency with { Sha256 = new string('0', 64) }
+            : dependency).ToArray();
+
+        Assert.Equal("ancestor-before-migration", root.GetProperty("sourceRelationship").GetString());
+        Assert.True(GitSucceeds("merge-base", "--is-ancestor", sourceCommit, "HEAD"));
+        Assert.Equal(root.GetProperty("runnerFingerprint").GetString(), Fingerprint(dependencies));
+        Assert.True(DependenciesMatch(sourceCommit, dependencies));
+        Assert.False(DependenciesMatch(sourceCommit, mutated));
     }
 
     [Fact]

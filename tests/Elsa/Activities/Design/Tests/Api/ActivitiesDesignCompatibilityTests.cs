@@ -196,6 +196,24 @@ public sealed class ActivitiesDesignCompatibilityTests
         Assert.True(result.Deltas.Count > 0);
     }
 
+    [Fact]
+    public void Malformed_query_supplement_detects_an_unapproved_response_mutation()
+    {
+        var before = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(
+            BaselineDirectory(),
+            "activities-design-query-binding-fastendpoints.json"));
+        var after = before.Select((observation, index) => index == 0
+            ? observation with { StatusCode = 200 }
+            : observation).ToArray();
+
+        var comparison = CompatibilityComparer.Compare(
+            new CompatibilityEvidenceSet { Http = before },
+            new CompatibilityEvidenceSet { Http = after });
+
+        Assert.False(comparison.IsCompatible);
+        Assert.Contains(comparison.Deltas, delta => delta.Facet == CompatibilityFacet.Status);
+    }
+
     private static HttpCompatibilityObservation[] LoadHttp() =>
         BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory(), "activities-design-http-fastendpoints.json"));
 

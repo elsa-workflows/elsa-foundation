@@ -462,23 +462,6 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         return process.ExitCode;
     }
 
-    private static string GitRevision(string revision)
-    {
-        var startInfo = new ProcessStartInfo("git", ["rev-parse", revision])
-        {
-            WorkingDirectory = RepositoryRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
-        return output.Trim();
-    }
-
     private static BuildInputSnapshot[] ReadBuildInputs(JsonElement receipt) =>
         receipt.GetProperty("buildInputs").EnumerateArray()
             .Select(input => new BuildInputSnapshot(

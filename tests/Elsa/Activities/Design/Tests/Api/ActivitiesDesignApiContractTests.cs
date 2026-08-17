@@ -188,6 +188,23 @@ public sealed class ActivitiesDesignApiContractTests
         Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Failures));
     }
 
+    [Fact]
+    public async Task Historical_malformed_typed_query_contract_is_preserved_exactly()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var after = (await Task.WhenAll(ActivitiesDesignQueryBindingCases.All.Select(testCase => CaptureAfterAsync(host.Client, testCase)))).ToArray();
+        var before = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(
+            AppContext.BaseDirectory,
+            "Baselines",
+            "activities-design-query-binding-fastendpoints.json"));
+
+        var comparison = CompatibilityComparer.CompareBidirectional(
+            new CompatibilityEvidenceSet { Http = before },
+            new CompatibilityEvidenceSet { Http = after });
+
+        Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Failures));
+    }
+
     private static IEnumerable<RouteEndpoint> OwnedEndpoints(ActivitiesDesignMinimalApiHost host) =>
         host.Host.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()

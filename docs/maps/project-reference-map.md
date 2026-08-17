@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 158
-- Test projects: 103
-- Direct project references: 1336
+- Test projects: 104
+- Direct project references: 1343
 
 ## Projects
 
@@ -180,6 +180,7 @@ Records direct project references only.
 | [Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Groundwork |
 | [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Activities.Design.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj) | test | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Api.Core<br>Elsa.Activities.Design.Core<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Primitives |
+| [Elsa.Activities.Design.QueryBinding.BeforeCapture](../../tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj) | test | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Api.Compatibility.Testing<br>Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Tests.ClrFixture](../../tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Bpmn<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Api.Core<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Api.Compatibility.Testing<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core |
 | [Elsa.Activities.DispatchWorkflow.Tests](../../tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Design<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Resumption |
@@ -280,7 +281,7 @@ Records direct project references only.
 
 | Domain | Source projects | Test projects |
 |---|---:|---:|
-| Elsa.Activities | 24 | 20 |
+| Elsa.Activities | 24 | 21 |
 | Elsa.Agent | 5 | 1 |
 | Elsa.Api | 3 | 4 |
 | Elsa.Architecture | 0 | 1 |
