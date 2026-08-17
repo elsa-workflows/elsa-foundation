@@ -1051,7 +1051,18 @@ public sealed class GroundworkActivityUpgradePlanStore(
             JsonNode.Parse(JsonSerializer.Serialize(left, ActivityJson)),
             JsonNode.Parse(JsonSerializer.Serialize(right, ActivityJson)));
 
-    private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan);
-    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt);
+    // The applied physical manifest projects the standard `entity.id` path. Keep the established
+    // plan/receipt wire members and carry the compatibility identity on every Publishing-owned update.
+    private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan)
+    {
+        public ActivityUpgradeDocumentIdentity Entity { get; init; } = new(Plan.PlanId);
+    }
+
+    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt)
+    {
+        public ActivityUpgradeDocumentIdentity Entity { get; init; } = new(Receipt.ReceiptId);
+    }
+
+    private sealed record ActivityUpgradeDocumentIdentity(string Id);
     private sealed record WorkflowDraftDocument(string Collection, WorkflowDefinitionDraft Entity, IReadOnlyCollection<DesignMetadataRecord> Layout);
 }

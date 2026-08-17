@@ -101,7 +101,7 @@ jobs:
           echo "Kept ${#keep[@]} test project(s) in the container-free filter."
 
       - name: Restore
-        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
         run: dotnet tool restore
@@ -174,10 +174,10 @@ jobs:
             ${{ runner.os }}-nuget-
 
       # The EF surface ratchet inspects project.assets.json for every repository project, not only
-      # the architecture test dependency graph. Restore the full solution so the gate fails closed
-      # on real missing assets instead of a deliberately partial restore.
+      # the architecture test dependency graph. Restore the product solution and the intentionally
+      # out-of-solution historical evidence projects so the gate fails closed on real missing assets.
       - name: Restore repository graph for architecture ratchets
-        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
 
       - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
