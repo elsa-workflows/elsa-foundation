@@ -123,21 +123,23 @@ rejected rather than silently stripped.
 
 ## Live Workbench evidence
 
-The executable checkpoint was
-`70d690bd08ef9431d9a0507a0733f8ea476cfec5` on macOS 26.5.2, .NET SDK 10.0.300, and PowerShell
-7.4.2. The previous test database was moved to the recoverable directory
-`/tmp/wave7-workbench-db.O2e2Dg`; the reference-composition schema was applied to a fresh
-`src/Apps/Elsa.Workbench/elsa-groundwork.db` with `outcome=applied`, `targetMutated=true`, and no
-diagnostics. Workbench ran at `http://localhost:5095` from the rebuilt executable.
+The final executable checkpoint was
+`fec9a18b27178d5a548be7887c2159609769e78a` on macOS 26.5.2, .NET SDK 10.0.300, and PowerShell
+7.4.2. The original pre-Wave database remains recoverable at `/tmp/wave7-workbench-db.o5qkPF`;
+the exploratory correction database was moved to `/tmp/wave7-exact-prep.4bfA0w` before the final
+run. The reference-composition schema was applied to a fresh
+`src/Apps/Elsa.Workbench/elsa-groundwork.db` with `outcome=applied`, `targetMutated=true`, target
+fingerprint `12075de34576135f4825b2b9e707fbbcd505bf9fe1f80838c934dda301933be2`, and no diagnostics.
+Workbench ran at `http://localhost:5095` from the rebuilt executable.
 
 Durable Git identities for the tested checkpoint are:
 
 | Input | Git object |
 | --- | --- |
-| Commit tree | `59bcc6e5867d696753987ebfd8742c9d4d12d05a` |
+| Commit tree | `f0fbdafe50cee567c044972e252699877b9c37f6` |
 | Workbench project file | `bcbadbdc4bb7b2081f56a780e02f20ff932f6f05` |
-| Activities Design API tree | `96270e71b1842a5840fb821ef7fc92e31b33edca` |
-| Activities Design Groundwork tree | `bd0e00aeca3bd0bb584c78f1448d066a26ac6cbe` |
+| Activities Design API tree | `83ced3fc13d6a7eabf0c11796124fd5ce50034a5` |
+| Activities Design Groundwork tree | `983dc21264a10ce3d6aa495ecbb85900cd612f5b` |
 
 | Journey | Result |
 | --- | --- |
@@ -146,17 +148,28 @@ Durable Git identities for the tested checkpoint are:
 | Existing reusable activity scripts | 8/8 scripts green: author/publish/execute, three-level composition, pinning, two draft-test-run flows, outcome routing/limits, and sequence nesting |
 | `reusable-activities/Test-ActivityUpgradePlan.ps1` | Green: persisted create/get, staged apply, receipt, exact B publication, refresh/successor, final apply/receipt, exact A publication, and authoritative B-to-C-v2 / A-to-B-v2 pinning |
 
-The live gate found two product defects that in-process endpoint parity did not expose:
+The live and PR gates found three product defects that in-process endpoint parity did not expose. The
+first correction attempt made the live journeys pass but changed already-applied physical schema,
+which the PR gate correctly rejected. The final corrections preserve that schema:
 
 1. `definitions/picker` returned `500` because its exhaustive Groundwork route treated required
-   `entity.definitionId` as nullable and failed `GW-ROUTE-007`. The manifest now declares that
-   projection non-nullable; the rebuilt GET suite passes 13/13.
+   `entity.definitionId` as nullable and failed `GW-ROUTE-007`. The picker now reads the existing stable
+   management projection, whose definition identity, ordering, snapshot, and tenant visibility are
+   already admitted, instead of exhaustively scanning the authoring-state index. The authoring-state
+   physical definition remains byte-for-byte compatible with the applied schema.
 2. Upgrade-plan creation returned `500` because plan and receipt storage projected generic
-   `entity.id` although their canonical identities are `plan.planId` and `receipt.receiptId`. The
-   manifest now projects the actual paths; the complete persisted upgrade journey passes.
+   `entity.id` while the stored wrappers only contained `plan.planId` and `receipt.receiptId`. The
+   Activities Design durable store now retains those canonical wrapper members and adds the existing
+   `entity.id` compatibility projection; old documents remain readable and no physical column path changes.
+3. The first staged apply then returned `500` at the atomic Publishing write because that independent
+   writer reconstructed the plan and receipt wrappers without the compatibility identity. The
+   Publishing-owned update path now carries the same additive `entity.id` member, and its real staged
+   apply test asserts both updated documents before the black-box two-stage journey proves the fix.
 
-Both corrections have focused manifest regressions and passed the complete 76-test Activities
-Design Groundwork persistence suite. They are product fixes, not stale-test accommodations.
+The physical-storage golden, cold-start operation count, historical preview-to-current upgrade, and
+SQLite target-fingerprint gates all pass without changing their approved baselines. Focused tests also
+execute the management-projection picker and validate both upgrade wrapper identities against the real
+manifest. These are product fixes, not stale-test accommodations.
 
 The repository-wide gate exposed two further transition-infrastructure defects. The solution folder
 still grouped the new Activities Design API Core project at the owner root, and an older catalog
@@ -172,15 +185,16 @@ that old run as if it had executed against later program waves.
 
 - Complete Activities Design owner suite after review correction: 618/618.
 - Legacy Activities Design catalog/support suite migrated to the real mapper: 26/26.
-- Activities Design Groundwork persistence suite after the live fixes: 76/76.
+- Activities Design Groundwork persistence suite after the live fixes: 75/75.
+- Publishing API suite, including the atomic upgrade apply regression: 473/473.
 - Immutable before/after HTTP, OpenAPI, malformed-query, compatibility, and behavior subset: 69/69.
 - Focused compatibility/security/collectibility/transition/combined-host Architecture gate: 36/36.
 - Authorization/security/context gate: 53/53; architecture security/transition gate: 10/10.
 - Full Architecture suite after a complete solution restore: 509/509.
-- Full `Elsa.Server.slnx` build: 0 errors, 176 aggregate existing warnings (package vulnerability/pruning,
+- Full `Elsa.Server.slnx` build: 0 errors, 187 aggregate existing warnings (package vulnerability/pruning,
   nullable/obsolete/compiler, analyzer, and pre-existing Workbench style warnings); no new warning
   was introduced by the final Wave 7 corrections.
-- Workbench rebuild: 0 errors; 17 existing repository warnings (package-pruning advisories and one
+- Workbench rebuild: 0 errors; 9 existing repository warnings (package-pruning advisories and one
   pre-existing Workbench style warning).
 - Public contract compatibility is included in the 69-test immutable compatibility/behavior subset
   and the 618-test owner suite.
@@ -205,8 +219,12 @@ the container-free solution-filter generator discovered the two historical `*.Be
 executables even though they are intentionally absent from `Elsa.Server.slnx`, and MSBuild correctly
 rejected the inconsistent filter. The workflow now applies the same root-anchored evidence-project
 classification as the architecture guard before filtering Testcontainers projects. The exact generated
-filter loads successfully and excludes both historical capture projects; the subsequent PR CI rerun is
-the release gate for this correction.
+filter loads successfully and excludes both historical capture projects. The second CI run reached the
+architecture ratchet and exposed that those intentionally out-of-solution evidence projects still need
+`project.assets.json` for repository-wide inspection. A shared CI restore helper now restores the product
+solution plus exactly the historical evidence projects while keeping them out of the product build and
+container-free test filter. The same run exposed the unsafe first physical-schema correction described
+above; the additive-only/historical-upgrade gates now protect the final design.
 
 ## Risks, rollback, and follow-up
 
@@ -220,7 +238,7 @@ the release gate for this correction.
 - Framework constitution §2.24 and Elsa constitution §E2.9 remain provisional. This migration
   follows accepted ADR 0068 and does not ratify either section.
 - Reverting the mapper/retirement commits restores the 38 FastEndpoints endpoints and dependency
-  without changing domain data. The two Groundwork corrections are independently valuable fixes
+  without changing domain data. The two schema-preserving Groundwork corrections are independently valuable fixes
   for pre-existing live routes and should remain unless their persistence contracts are separately
   redesigned.
 
