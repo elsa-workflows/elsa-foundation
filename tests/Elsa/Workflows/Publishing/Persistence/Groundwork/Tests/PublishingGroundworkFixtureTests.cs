@@ -33,7 +33,6 @@ public sealed class PublishingGroundworkFixtureTests
     {
         var kinds = new[]
         {
-            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
             PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
             PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind,
             PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind,
@@ -61,8 +60,8 @@ public sealed class PublishingGroundworkFixtureTests
     }
 
     private static DocumentEnvelope Envelope(string schemaVersion, string content) => new(
-        PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
-        "slot-1",
+        PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
+        "publication-1",
         schemaVersion,
         1,
         content,

@@ -2976,10 +2976,35 @@
     },
     {
       "identity": "recurringTriggerSchedule",
-      "definitionDigest": "57b015bbe92c8268ca523d7c3fd394e35f6b91b3142c22364aea4d81af07345e",
+      "definitionDigest": "369150777147e62dd8d07c7e70804ed6cc390ddf75d4d797d662dd6aaf3c4d56",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
+        {
+          "identity": "by-activation",
+          "fields": [
+            {
+              "path": "schedule.activationId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-activation-and-schedule-id",
+          "fields": [
+            {
+              "path": "schedule.activationId"
+            },
+            {
+              "path": "schedule.scheduleId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
         {
           "identity": "by-active-next-occurrence-and-schedule-id",
           "fields": [
@@ -3045,31 +3070,6 @@
           "valueKind": "DateTime",
           "isUnique": false,
           "missingValueBehavior": "Excluded"
-        },
-        {
-          "identity": "by-publication",
-          "fields": [
-            {
-              "path": "schedule.publicationId"
-            }
-          ],
-          "valueKind": "Keyword",
-          "isUnique": false,
-          "missingValueBehavior": "Excluded"
-        },
-        {
-          "identity": "by-publication-and-schedule-id",
-          "fields": [
-            {
-              "path": "schedule.publicationId"
-            },
-            {
-              "path": "schedule.scheduleId"
-            }
-          ],
-          "valueKind": "Keyword",
-          "isUnique": false,
-          "missingValueBehavior": "IncludedAsNull"
         },
         {
           "identity": "by-recurring-schedule-active",
@@ -3139,7 +3139,7 @@
         },
         {
           "identity": "list-by-publication",
-          "indexIdentity": "by-publication",
+          "indexIdentity": "by-activation",
           "operations": [
             "Equal"
           ],
@@ -3241,7 +3241,7 @@
         },
         {
           "identity": "page-by-publication",
-          "indexIdentity": "by-publication-and-schedule-id",
+          "indexIdentity": "by-activation-and-schedule-id",
           "operations": [
             "Equal"
           ],
@@ -3259,7 +3259,7 @@
           ],
           "predicateFields": [
             {
-              "path": "schedule.publicationId",
+              "path": "schedule.activationId",
               "operations": [
                 "Equal"
               ]
@@ -3487,6 +3487,82 @@
             "First"
           ],
           "latestPerKeyPath": "workflowExecutionId"
+        }
+      ],
+      "nameOverrides": [],
+      "boundedMutations": []
+    },
+    {
+      "identity": "workflowActivationSlot",
+      "definitionDigest": "0a6cb1033b56898d00c7b217d0c31bba7c8aa7cea143663f30e241f3c7eada9c",
+      "provisioningMode": "Dynamic",
+      "policy": "Explicit(SharedDocuments)",
+      "logicalIndexes": [
+        {
+          "identity": "by-active-activation",
+          "fields": [
+            {
+              "path": "activeActivationId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-definition",
+          "fields": [
+            {
+              "path": "workflowDefinitionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        }
+      ],
+      "boundedQueries": [
+        {
+          "identity": "find-by-active-activation",
+          "indexIdentity": "by-active-activation",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "list-by-definition",
+          "indexIdentity": "by-definition",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
         }
       ],
       "nameOverrides": [],
@@ -6495,10 +6571,35 @@
     },
     {
       "identity": "workflowTriggerBinding",
-      "definitionDigest": "970726d090ef5ade8e535ee898f1f280d3ffbe68fa9a170adcbc8d03be169999",
+      "definitionDigest": "fb58dee6ee41e29ed1a5196c66cefca7190a6b02a7869f34922f4e3d130256df",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
+        {
+          "identity": "by-activation",
+          "fields": [
+            {
+              "path": "activationId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-activation-and-trigger-binding-id",
+          "fields": [
+            {
+              "path": "activationId"
+            },
+            {
+              "path": "triggerBindingId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
         {
           "identity": "by-active",
           "fields": [
@@ -6526,31 +6627,6 @@
           "fields": [
             {
               "path": "artifactId"
-            },
-            {
-              "path": "triggerBindingId"
-            }
-          ],
-          "valueKind": "Keyword",
-          "isUnique": false,
-          "missingValueBehavior": "IncludedAsNull"
-        },
-        {
-          "identity": "by-publication",
-          "fields": [
-            {
-              "path": "publicationId"
-            }
-          ],
-          "valueKind": "Keyword",
-          "isUnique": false,
-          "missingValueBehavior": "Excluded"
-        },
-        {
-          "identity": "by-publication-and-trigger-binding-id",
-          "fields": [
-            {
-              "path": "publicationId"
             },
             {
               "path": "triggerBindingId"
@@ -6667,7 +6743,7 @@
         },
         {
           "identity": "list-by-publication",
-          "indexIdentity": "by-publication-and-trigger-binding-id",
+          "indexIdentity": "by-activation-and-trigger-binding-id",
           "operations": [
             "Equal"
           ],
@@ -6685,7 +6761,7 @@
           ],
           "predicateFields": [
             {
-              "path": "publicationId",
+              "path": "activationId",
               "operations": [
                 "Equal"
               ]

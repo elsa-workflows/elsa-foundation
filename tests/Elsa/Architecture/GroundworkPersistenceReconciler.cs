@@ -456,7 +456,12 @@ internal sealed class GroundworkPersistenceReconciler
         new("runtime", "DesignOperationDocumentKind", "#641/T030"),
         // The design lane's post-commit intent outbox. Infrastructure for forward convergence of a
         // cross-target publication, not a store behind a public persistence contract.
-        new("runtime", "DesignPostCommitIntentDocumentKind", "#1171")
+        new("runtime", "DesignPostCommitIntentDocumentKind", "#1171"),
+        // Spec 151 / T026: the durable activation ledger behind IWorkflowActivationAuthority. It is an
+        // activation-authority slot, not a store behind one of spec 094's public I…Store persistence
+        // contracts — the inventory scanner does not discover it as a durable contract — so it belongs to
+        // its own work unit's evidence rather than to the frozen ALL32 contract denominator.
+        new("runtime", "WorkflowActivationSlotDocumentKind", "#1304")
     ];
 
     private static GroundworkPersistenceRowMapping Map(

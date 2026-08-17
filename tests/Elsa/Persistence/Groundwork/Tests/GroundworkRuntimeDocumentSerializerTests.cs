@@ -45,10 +45,12 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void Workflow_Executable_Source_Reference_Uses_V5_With_A_V4_Read_Baseline()
+    public void Workflow_Executable_Source_Reference_Uses_A_Clean_V5_Baseline()
     {
+        // Spec 151 / T036 closed the v4 read window: T033's `publicationId` -> `activationId` rename makes a
+        // v4 document unreadable without silently defaulting the activation identity.
         Assert.Equal(5, ElsaRuntimeDocumentVersions.CurrentFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
-        Assert.Equal(4, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
+        Assert.Equal(5, ElsaRuntimeDocumentVersions.MinimumReadableFor(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
     }
 
     [Fact]

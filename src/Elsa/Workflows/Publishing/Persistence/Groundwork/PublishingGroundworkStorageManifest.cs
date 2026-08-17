@@ -10,27 +10,25 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
 public static class PublishingGroundworkStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
-    public const string PublicationSlotDocumentKind = "publishingPublicationSlot";
+    // Spec 151 / T027 superseded publishing's slot store with the runtime activation authority
+    // (`workflowActivationSlot` in ElsaRuntimeStorageManifest). T027 removed the store, the contract and the
+    // DI registration but left `publishingPublicationSlot` declared here, so the deployment schema still
+    // provisioned a storage unit nothing could write. T036 removes the orphan: one physical activation
+    // ledger per engine. No migration — pre-1.0, no consumers (research R2).
     public const string PublicationRecordDocumentKind = "publishingPublicationRecord";
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
     public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
     public const string SnapshotReviewDocumentKind = "publishingSnapshotReview";
     public const string ActivityPublicationReceiptDocumentKind = "publishingActivityPublicationReceipt";
     public const string ActivityDraftTestRunDocumentKind = "publishingActivityDraftTestRun";
-    public const string ByDefinitionIndex = "by-definition";
     public const string BySlotIndex = "by-slot";
     public const string ByPublicationIndex = "by-publication";
-    public const string ByActivePublicationIndex = "by-active-publication";
     public const string ByExpiresAtIndex = "by-expires-at";
-    public const string ListByDefinitionQuery = "list-by-definition";
-    public const string FindByActivePublicationQuery = "find-by-active-publication";
     public const string ListBySlotQuery = "list-by-slot";
     public const string ListByPublicationQuery = "list-by-publication";
     public const string DeleteExpiredQuery = "delete-expired";
-    public const string WorkflowDefinitionIdField = "workflowDefinitionId";
     public const string SlotIdField = "slotId";
     public const string PublicationIdField = "publicationId";
-    public const string ActivePublicationIdField = "slot.activePublicationId";
     public const string ExpiresAtField = "expiresAt";
     public const string ReceiptExpiresAtField = "receiptExpiresAt";
 
@@ -39,9 +37,6 @@ public static class PublishingGroundworkStorageManifest
         new StorageManifestOwner("elsa.workflows.publishing"),
         new StorageManifestVersion(SchemaVersion),
         [
-            Unit(PublicationSlotDocumentKind, "Publication slot",
-                [Keyword(ByDefinitionIndex, WorkflowDefinitionIdField), Keyword(ByActivePublicationIndex, ActivePublicationIdField)],
-                [Query(ListByDefinitionQuery, ByDefinitionIndex), Query(FindByActivePublicationQuery, ByActivePublicationIndex)]),
             Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query(ListBySlotQuery, BySlotIndex)]),
             Unit(PublicationPolicyDocumentKind, "Publication policy", [], []),
             Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query(ListByPublicationQuery, ByPublicationIndex)]),

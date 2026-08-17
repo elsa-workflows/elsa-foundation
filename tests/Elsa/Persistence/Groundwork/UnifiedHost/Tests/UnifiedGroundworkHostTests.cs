@@ -334,12 +334,12 @@ public class UnifiedGroundworkHostTests
                     ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
                     activityDefinition),
                 GroundworkActivitiesDesignJson.Options)));
-        await SaveAsync(store, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1", "publicationSlot");
+        await SaveAsync(store, PublishingGroundworkStorageManifest.PublicationRecordDocumentKind, "publication-1", "publicationRecord");
 
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1"));
         Assert.NotNull(await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1"));
         Assert.NotNull(await store.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, "act-1"));
-        Assert.NotNull(await store.LoadAsync(PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1"));
+        Assert.NotNull(await store.LoadAsync(PublishingGroundworkStorageManifest.PublicationRecordDocumentKind, "publication-1"));
     }
 
     [Fact]

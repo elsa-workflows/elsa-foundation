@@ -31,6 +31,21 @@ public sealed class GroundworkTargetBaselineTests
     // physical target. Only the PENDING fingerprint moves;
     // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
     // this records a head that has moved rather than re-ratifying anything.
+    // 2026-08-17 (spec 151 / T036): BOTH PENDING FINGERPRINTS BELOW ARE KNOWN STALE AND MUST BE RE-MEASURED.
+    // This feature changes the composed physical target three ways: the runtime manifest gains the
+    // `workflowActivationSlot` storage unit (T026); `workflowTriggerBinding` and `recurringTriggerSchedule`
+    // move their index identity and projected field from `by-publication`/`publicationId` and
+    // `by-publication-and-*-id` to `by-activation`/`activationId` and `by-activation-and-*-id` (T034); and
+    // the publishing manifest drops the orphaned `publishingPublicationSlot` unit (T036). Each of those moves
+    // the target fingerprint, and the added/removed units move the provisioning plan fingerprint.
+    //
+    // The values were NOT updated here because they could not be measured: this workspace cannot run the
+    // Groundwork schema CLI (every scenario in this class fails with "Groundwork schema tool emitted invalid
+    // JSON (exit 1)"), and the fingerprints are read from that tool's output via GroundworkBaselineTelemetry,
+    // not computed in-process. Leaving the stale values is deliberate — the assertion messages print the
+    // observed fingerprints, so the first run on a machine with a working schema CLI reports exactly what to
+    // paste in. AcceptedTargetFingerprint / AcceptedPlanFingerprint are the ratified preview.81 floor and
+    // stay untouched, as they have through every drift since.
     private const string PendingTargetFingerprint = "b0edf8cee1bea256f2c4d7ada93ad5aba56c6654b6ca210506cbd055776cd46c";
     // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
     // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.

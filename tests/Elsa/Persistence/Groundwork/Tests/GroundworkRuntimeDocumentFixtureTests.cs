@@ -16,8 +16,12 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// real store bridge writes today against the fixture for that kind's current version and fails when a
 /// shape changes without a version bump. The read-path test loads every supported generation; every kind
 /// except explicitly retained rolling windows supports only its clean current baseline. Executable activity
-/// templates retain v1-to-v2, Source References retain v4-to-v5, and post-commit outbox documents
-/// retain v3-to-v4.
+/// templates retain v1-to-v2 and post-commit outbox documents retain v3-to-v4.
+///
+/// Spec 151 / T036 closed the Source Reference v4-to-v5 window. T033 renamed the persisted activation
+/// identity (<c>publicationId</c> -&gt; <c>activationId</c>), so a v4 document names a field this build no
+/// longer reads and would have deserialized the activation identity as null. The clean break advances the
+/// minimum-readable baseline to the current version, drops the upcaster, and deletes the v4 fixture.
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
@@ -32,7 +36,6 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
                 var expected = pair.Key switch
                 {
                     ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
-                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => 4,
                     ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
                     _ => pair.Value
                 };
@@ -67,11 +70,13 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     }
 
     [Fact]
-    public void Source_reference_v5_retains_v4_read_compatibility()
+    public void Source_reference_declares_a_clean_v5_baseline()
     {
+        // Spec 151 / T036: the v4-to-v5 read window closed when T033 renamed the persisted activation
+        // identity. v4 documents are rejected loudly rather than read with a null ActivationId.
         Assert.Equal(5, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
             ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
-        Assert.Equal(4, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
+        Assert.Equal(5, Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(
             ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
     }
 

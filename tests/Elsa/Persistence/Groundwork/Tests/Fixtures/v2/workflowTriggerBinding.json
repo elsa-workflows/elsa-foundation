@@ -1,4 +1,5 @@
 {
+  "activationId": "publication-1",
   "artifactHash": "hash-artifact-1",
   "artifactId": "artifact-1",
   "artifactVersion": "1",
@@ -11,7 +12,6 @@
   "metadata": {
     "tag": "v1"
   },
-  "publicationId": "publication-1",
   "slotId": "slot-default",
   "stimulusHash": "hash-order-approved",
   "stimulusLookupKey": "b928a46d3edbe79e77526cdd1737c4301ca3a527f402d2f56470169e6b5103a5",

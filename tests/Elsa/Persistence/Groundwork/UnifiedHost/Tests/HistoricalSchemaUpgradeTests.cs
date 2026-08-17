@@ -18,6 +18,7 @@ using Groundwork.Core.Capabilities;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.SchemaEvolution;
 using Groundwork.Core.Text;
+using Groundwork.Core.Validation;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
 using Groundwork.Sqlite;
@@ -35,6 +36,37 @@ public sealed class HistoricalSchemaUpgradeTests
     private const string LinuxNobleUnicodeIdentityAlgorithm =
         "groundwork-unicode-ordinal-ignore-case-v1-124ca0d0d2b045d7be0e6aea8f07f74fbc0428a13c53a47d8a7d41db71b5ec5f";
     private static readonly DateTimeOffset PlanningTime = DateTimeOffset.Parse("2026-07-31T00:00:00Z");
+
+    /// <summary>
+    /// The storage units spec 151 clean-breaks, excluded from the preview.95 upgrade proof **by name**.
+    /// Every other unit must still upgrade additively and in place, so this list is the whole exception —
+    /// adding to it is a decision, not a fix.
+    /// <list type="bullet">
+    /// <item><c>workflowTriggerBinding</c> and <c>recurringTriggerSchedule</c>: T033/T034 renamed the
+    /// persisted activation identity and the index built over it — index <c>by-publication</c> →
+    /// <c>by-activation</c>, <c>by-publication-and-trigger-binding-id</c> →
+    /// <c>by-activation-and-trigger-binding-id</c>, <c>by-publication-and-schedule-id</c> →
+    /// <c>by-activation-and-schedule-id</c>, projected field <c>publicationId</c> → <c>activationId</c> and
+    /// <c>schedule.publicationId</c> → <c>schedule.activationId</c>. The Groundwork serializer uses
+    /// <c>JsonSerializerDefaults.Web</c>, so the projected field path *is* the camelCase property name and the
+    /// rename necessarily moves both. A rename is a removal plus an addition, which the additive #44 contract
+    /// forbids (GW-SCHEMA-004); and the persisted rows themselves still spell <c>publicationId</c>, so they
+    /// could not be read after the rename either. These two projection units are dropped and re-created, not
+    /// upgraded.</item>
+    /// <item><c>publishingPublicationSlot</c>: T027 superseded publishing's slot store with the runtime
+    /// activation authority and T036 removed the orphaned manifest unit. One physical activation ledger per
+    /// engine; the old unit has no writer and no successor rows to carry over.</item>
+    /// </list>
+    /// Legitimate pre-1.0 with no consumers (research risk R2). A deployment carrying preview.95 data resets
+    /// these units and republishes — see <c>docs/serialization.md</c>.
+    /// </summary>
+    private static readonly HashSet<string> CleanBreakStorageUnits = new(StringComparer.Ordinal)
+    {
+        "workflowTriggerBinding",
+        "recurringTriggerSchedule",
+        "publishingPublicationSlot"
+    };
+
     private static readonly string[] ExpectedVersionedIndexes =
     [
         "activityDefinition/activity-definition-by-category-v2",
@@ -111,13 +143,46 @@ public sealed class HistoricalSchemaUpgradeTests
     {
         var fixture = FixturePath(provider);
         Assert.Equal(expectedCompressedDigest, Digest(File.ReadAllBytes(fixture)));
-        var historical = PhysicalSchemaAppliedStateSerializer.Deserialize(ReadGzip(fixture));
-        Assert.Equal(HistoricalProviderContractVersion, historical.Provider.Version);
+        var fixtureState = PhysicalSchemaAppliedStateSerializer.Deserialize(ReadGzip(fixture));
+        Assert.Equal(HistoricalProviderContractVersion, fixtureState.Provider.Version);
 
         var manifest = new GroundworkAllFeaturesWithIdentityAndDiagnosticsDeploymentSchema().CreateManifest();
         var current = CurrentTarget(provider, manifest);
-        Assert.Equal(historical.ManifestIdentity, current.ManifestIdentity);
-        Assert.Equal(historical.Provider.Name, current.Provider.Name);
+        Assert.Equal(fixtureState.ManifestIdentity, current.ManifestIdentity);
+        Assert.Equal(fixtureState.Provider.Name, current.Provider.Name);
+
+        // Nothing the clean break removed may still be declared on a clean-break unit: if a by-publication
+        // index survived T034's rename sweep, excluding that unit below would hide it instead of proving it
+        // gone. Scoped to the named units on purpose — publishing's own `publishingProjectionIntent` keeps
+        // `by-publication`, which T028 deliberately leaves on publication naming inside its own domain.
+        Assert.DoesNotContain(
+            current.Routes
+                .Where(route => IsCleanBreak(route.StorageUnit.Value))
+                .SelectMany(route => route.Indexes.Select(index => $"{route.StorageUnit.Value}/{index.Identity}")),
+            identity => identity.Contains("by-publication", StringComparison.Ordinal));
+
+        // Step 1, against the fixture VERBATIM: the only thing this upgrade removes is the named clean break.
+        // A removal touching any other storage unit — or any other diagnostic at all — fails here, so the
+        // exception cannot quietly widen.
+        var verbatimPlan = PhysicalSchemaDiffPlanner.Plan(
+            current,
+            PhysicalSchemaHistoryState.FromApplied(fixtureState),
+            PlanningTime);
+        var unexplained = verbatimPlan.Diagnostics
+            .Where(diagnostic => !IsCleanBreakRemoval(diagnostic))
+            .ToArray();
+        Assert.True(
+            unexplained.Length == 0,
+            $"{HistoricalElsaCommit}: {string.Join("; ", unexplained.Select(x => $"{x.Code}: {x.Message}"))}");
+        Assert.NotEmpty(verbatimPlan.Diagnostics);
+
+        // Step 2, against the deployment that reset exactly those units — which is what the clean break asks
+        // of an upgrading installation. Everything else must still plan as an additive, in-place upgrade, so
+        // the rest of this test is unchanged and still has all of its teeth.
+        var historical = WithoutCleanBreakUnits(fixtureState);
+        Assert.True(
+            historical.AppliedOperations.Count < fixtureState.AppliedOperations.Count,
+            "The preview.95 fixture no longer carries the clean-break units; prune CleanBreakStorageUnits instead of keeping a dead exception.");
 
         var plan = PhysicalSchemaDiffPlanner.Plan(
             current,
@@ -133,6 +198,7 @@ public sealed class HistoricalSchemaUpgradeTests
 
         var historicalIndexIdentities = historical.AppliedOperations
             .Where(operation => operation.Kind == PhysicalSchemaOperationKind.CreatePhysicalIndex)
+            .Where(operation => !IsCleanBreak(operation.StorageUnit?.Value))
             .Select(operation => $"{operation.StorageUnit!.Value}/{operation.SubjectIdentity}")
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -229,15 +295,85 @@ public sealed class HistoricalSchemaUpgradeTests
         Assert.Empty(currentAdmission.PendingOperations);
     }
 
+    /// <summary>
+    /// Returns the preview.95 applied state as a deployment that reset the <see cref="CleanBreakStorageUnits"/>
+    /// units and kept everything else. The fixture on disk is never rewritten: its recorded routes are read
+    /// verbatim, the clean-break units are dropped, and the remaining target is re-planned from an empty
+    /// history and completed — the same public path <c>Preview95SchemaFixtureReproducer</c> and
+    /// <see cref="CreateHistoricalSource"/> already use, and the only one available because
+    /// <c>PhysicalSchemaAppliedState</c> has no public constructor and validates its snapshot fingerprint.
+    /// </summary>
+    private static PhysicalSchemaAppliedState WithoutCleanBreakUnits(PhysicalSchemaAppliedState state)
+    {
+        var target = new PhysicalSchemaTarget(
+            state.ManifestIdentity,
+            state.ManifestVersion,
+            state.Provider,
+            [.. ValidatePhysicalSchemaOperation.ForAppliedState(state).Routes
+                .Where(route => !IsCleanBreak(route.StorageUnit.Value))]);
+        var plan = PhysicalSchemaDiffPlanner.Plan(target, PhysicalSchemaHistoryState.Empty, PlanningTime);
+        Assert.True(
+            plan.IsApplicable,
+            string.Join("; ", plan.Diagnostics.Select(x => $"{x.Code}: {x.Message}")));
+
+        return plan.Complete(
+            [.. plan.Operations
+                .Where(operation => operation is not RecordPhysicalSchemaAppliedStateOperation)
+                .Select(operation => new PhysicalSchemaOperationAcknowledgement(
+                    operation.Identity,
+                    operation.Fingerprint,
+                    PlanningTime))],
+            PlanningTime);
+    }
+
+    private static bool IsCleanBreak(string? storageUnit) =>
+        storageUnit is not null && CleanBreakStorageUnits.Contains(storageUnit);
+
+    /// <summary>
+    /// True when the diagnostic reports the removal of an applied operation that belongs to a storage unit
+    /// spec 151 clean-breaks. Applied operation identities are <c>kind:storageUnit:subject:fingerprint</c>,
+    /// so the unit is the second colon-separated segment of the identity the diagnostic names.
+    /// </summary>
+    private static bool IsCleanBreakRemoval(GroundworkDiagnostic diagnostic) =>
+        diagnostic.Code == "GW-SCHEMA-004" &&
+        RemovedOperationStorageUnit(diagnostic) is { } storageUnit &&
+        IsCleanBreak(storageUnit);
+
+    private static string? RemovedOperationStorageUnit(GroundworkDiagnostic diagnostic)
+    {
+        foreach (var candidate in new[] { diagnostic.Target, QuotedIdentity(diagnostic.Message) })
+        {
+            if (candidate?.Split(':') is [_, { Length: > 0 } storageUnit, _, ..])
+                return storageUnit;
+        }
+
+        return null;
+    }
+
+    private static string? QuotedIdentity(string? message)
+    {
+        if (message is null)
+            return null;
+        var start = message.IndexOf('\'');
+        if (start < 0)
+            return null;
+        var end = message.IndexOf('\'', start + 1);
+        return end < 0 ? null : message[(start + 1)..end];
+    }
+
     private static GroundworkPhysicalSchemaManifestSource CreateHistoricalSource(
         GroundworkPhysicalSchemaManifestSource current,
         PhysicalSchemaAppliedState historicalAppliedState)
     {
+        // Same named exception as the planning test: the units spec 151 clean-breaks are never materialized in
+        // the historical database, so the current target creates them fresh instead of upgrading them in place.
+        // Everything else must still upgrade without a reset — that is the proof this test owns.
         var historicalTarget = new PhysicalSchemaTarget(
             historicalAppliedState.ManifestIdentity,
             historicalAppliedState.ManifestVersion,
             historicalAppliedState.Provider,
-            ValidatePhysicalSchemaOperation.ForAppliedState(historicalAppliedState).Routes);
+            [.. ValidatePhysicalSchemaOperation.ForAppliedState(historicalAppliedState).Routes
+                .Where(route => !IsCleanBreak(route.StorageUnit.Value))]);
         var currentSnapshot = current.Snapshot;
 
         Assert.Equal(currentSnapshot.Manifest.Identity, historicalTarget.ManifestIdentity);

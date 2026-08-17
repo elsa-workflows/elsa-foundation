@@ -126,10 +126,20 @@ Every Runtime document kind except `executableActivityTemplate` currently admits
 `workflowExecutable` is current and minimum-readable version 6; input nullability is explicit and required.
 `executableActivityTemplate` is current version 2 and minimum-readable version 1; its identity v1-to-v2
 upcaster normalizes nested runtime descriptors without changing their consumer identity or payload.
-`workflowExecutableSourceReference` and `workflowExecutionState` are current and minimum-readable version 4;
-activity-execution state is version 4; activity-execution inspection, scheduler work items, workflow trigger
-bindings, recurring schedules, and durable timers are version 2; unchanged kinds remain at version 1.
-Source-reference v4 includes tenant scope; workflow-execution v4 includes dispatch nesting depth.
+`workflowExecutableSourceReference` is current and minimum-readable version 5; `workflowExecutionState` is
+current and minimum-readable version 4; activity-execution state is version 4; activity-execution inspection,
+scheduler work items, workflow trigger bindings, recurring schedules, and durable timers are version 2;
+unchanged kinds remain at version 1. Source-reference v4 included tenant scope; workflow-execution v4
+includes dispatch nesting depth.
+
+Spec 151 (T033/T036) renamed the persisted activation identity from `publicationId` to `activationId` on
+`workflowTriggerBinding`, `recurringTriggerSchedule`, `publicationProjectionState` and
+`workflowExecutableSourceReference`, and moved the two projection kinds' Groundwork index identity and
+projected field path from `by-publication`/`publicationId` to `by-activation`/`activationId`. This is a
+clean break: the source-reference v4-to-v5 rolling window closed (minimum-readable advanced 4 -> 5 and the
+upcaster was deleted), and every affected kind's golden fixture was replaced in place at its current
+version. Installations carrying pre-151 runtime documents must reset the Runtime and Publishing Groundwork
+persistence sets and republish, exactly as described below.
 
 If an installation carries any older Runtime generation, reset the complete Runtime and Publishing Groundwork
 persistence sets atomically while preserving Design and Activities data, then republish workflows before

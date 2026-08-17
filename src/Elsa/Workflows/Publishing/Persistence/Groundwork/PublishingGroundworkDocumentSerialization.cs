@@ -16,7 +16,6 @@ public sealed class PublishingGroundworkDocumentSerializer(IEnumerable<IPublishi
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyDictionary<string, int> CurrentVersions = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        [PublishingGroundworkStorageManifest.PublicationSlotDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.PublicationRecordDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind] = 1,

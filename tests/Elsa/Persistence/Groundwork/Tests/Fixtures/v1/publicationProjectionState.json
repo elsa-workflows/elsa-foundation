@@ -1,5 +1,5 @@
 {
+  "activationId": "publication-1",
   "isActive": false,
-  "projectionKind": "triggerBindings",
-  "publicationId": "publication-1"
+  "projectionKind": "triggerBindings"
 }

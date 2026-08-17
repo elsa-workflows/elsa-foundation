@@ -72,7 +72,12 @@ public static class ElsaRuntimeDocumentVersions
         return documentKind switch
         {
             ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind => 1,
-            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => 4,
+            // Spec 151 / T033 renamed the persisted activation identity on
+            // WorkflowExecutableSourceReference (`publicationId` -> `activationId`). A v4 document still
+            // spells the old name, so admitting it would deserialize the activation identity as null —
+            // exactly the silent default this boundary exists to prevent. T036 therefore advances the
+            // minimum-readable baseline from 4 to the current version and drops the v4-to-v5 upcaster:
+            // a clean break, not a rolling window. Pre-1.0, no consumers; the datastore is reset.
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => 3,
             _ => currentVersion
         };

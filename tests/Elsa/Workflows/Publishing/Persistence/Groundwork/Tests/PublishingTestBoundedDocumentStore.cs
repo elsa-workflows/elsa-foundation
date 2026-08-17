@@ -14,10 +14,6 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentEnumerationSou
     private static readonly IReadOnlyDictionary<string, (string Index, string Path)> Queries =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
         {
-            [PublishingGroundworkStorageManifest.ListByDefinitionQuery] =
-                (PublishingGroundworkStorageManifest.ByDefinitionIndex, PublishingGroundworkStorageManifest.WorkflowDefinitionIdField),
-            [PublishingGroundworkStorageManifest.FindByActivePublicationQuery] =
-                (PublishingGroundworkStorageManifest.ByActivePublicationIndex, PublishingGroundworkStorageManifest.ActivePublicationIdField),
             [PublishingGroundworkStorageManifest.ListBySlotQuery] =
                 (PublishingGroundworkStorageManifest.BySlotIndex, PublishingGroundworkStorageManifest.SlotIdField),
             [PublishingGroundworkStorageManifest.ListByPublicationQuery] =

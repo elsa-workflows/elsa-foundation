@@ -43,7 +43,6 @@ public sealed class GroundworkRuntimeDocumentSerializer : IGroundworkRuntimeDocu
                 pair.Value)),
             [
                 new ExecutableActivityTemplateDocumentV1ToV2Upcaster(),
-                new WorkflowExecutableSourceReferenceDocumentV4ToV5Upcaster(),
                 new PostCommitOutboxDocumentV3ToV4Upcaster()
             ],
             new DocumentSchemaVersionFormat(
