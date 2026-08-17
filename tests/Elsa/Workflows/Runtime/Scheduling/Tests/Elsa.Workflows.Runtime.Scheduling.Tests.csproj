@@ -17,6 +17,21 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <!-- T071a: an imported Timer/Cron artifact must actually FIRE, which needs the real recurring trigger
+         activities, the artifact importer, and a real engine to run what the pump starts. Unit-level coverage of
+         "prepared" and "activated" cannot show that. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One closure/artifact builder, shared rather than re-derived: it is the only place that knows how to mint
+         a content-addressed identity the importer's hash gate will accept, and how to pin a node's consumer key. -->
+    <Compile Include="..\..\Reconciliation\Tests\ArtifactClosureFixture.cs" Link="ArtifactClosureFixture.cs" />
   </ItemGroup>
 
 </Project>

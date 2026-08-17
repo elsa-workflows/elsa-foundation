@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Exceptions;
@@ -9,8 +9,8 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 
 /// <summary>
 /// Default <see cref="IWorkflowArtifactClosureReader"/>: reads the file text and decodes it into a
-/// <see cref="WorkflowArtifactClosure"/> through the shared <see cref="IPayloadSerializer"/>, then applies the
-/// fail-loud format gate.
+/// <see cref="WorkflowArtifactClosure"/> through the shared <see cref="IWorkflowArtifactClosureSerializer"/>,
+/// then applies the fail-loud format gate.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,11 +23,12 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// <para>
 /// §2.23.5: every <c>IOException</c> and <c>JsonException</c> is wrapped in an
 /// <see cref="InvalidWorkflowArtifactClosureException"/> carrying the offending path, with the original preserved
-/// as the inner exception.
+/// as the inner exception. This is the boundary that owns the file path, which is why the codec itself lets
+/// <c>JsonException</c> through rather than wrapping it identifier-less.
 /// </para>
 /// </remarks>
 public sealed class JsonWorkflowArtifactClosureReader(
-    IPayloadSerializer payloadSerializer,
+    IWorkflowArtifactClosureSerializer closureSerializer,
     ILogger<JsonWorkflowArtifactClosureReader> logger) : IWorkflowArtifactClosureReader
 {
     public WorkflowArtifactClosure Read(string filePath, CancellationToken cancellationToken = default)
@@ -53,7 +54,7 @@ public sealed class JsonWorkflowArtifactClosureReader(
         WorkflowArtifactClosure? closure;
         try
         {
-            closure = payloadSerializer.Deserialize<WorkflowArtifactClosure>(json);
+            closure = closureSerializer.Deserialize(json);
         }
         catch (JsonException exception)
         {

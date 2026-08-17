@@ -547,7 +547,22 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             activityContract: contract);
     }
 
-    private WorkflowExecutable PinClrActivityContracts(WorkflowExecutable executable) =>
+    /// <summary>
+    /// Pins a hand-built node's CLR activity contract exactly as <see cref="RunAsync(WorkflowExecutable)"/> and
+    /// <see cref="PublishAsync"/> do on save: reflects the activity type for its inputs, result projections and
+    /// outcomes, and stamps the <b>consumer key</b> as the node's descriptor type.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for tests that must produce a node in its <em>already-pinned</em> form, because whatever consumes
+    /// it will not pin it for them. A content-addressed artifact is the canonical case: the artifact importer
+    /// never rewrites a received payload — the bytes are the identity — so a closure whose nodes carried an
+    /// unpinned descriptor (the CLR type name rather than the consumer key) imports and activates cleanly and
+    /// then faults at first execution with <c>UnknownActivityConsumerException</c>. Building such a node through
+    /// this method instead of by hand makes that failure impossible to reintroduce by accident.
+    /// </remarks>
+    public static ExecutableNode NewPinnedClrNode(ExecutableNode node) => PinClrActivityContract(node);
+
+    private static WorkflowExecutable PinClrActivityContracts(WorkflowExecutable executable) =>
         new(
             executable.Identity,
             PinClrActivityContract(executable.RootActivity),
@@ -562,7 +577,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             checkpointCadence: executable.CheckpointCadence,
             workflowVariables: executable.WorkflowVariables);
 
-    private ExecutableNode PinClrActivityContract(ExecutableNode node)
+    private static ExecutableNode PinClrActivityContract(ExecutableNode node)
     {
         var childSlots = node.ChildSlots
             .Select(slot => new ExecutableChildSlot(slot.Name, slot.Activities.Select(PinClrActivityContract).ToArray()))

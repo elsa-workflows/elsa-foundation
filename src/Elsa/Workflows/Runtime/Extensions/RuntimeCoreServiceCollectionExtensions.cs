@@ -121,6 +121,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         // implementations would mean two definitions of identity. Extracted from Publishing so the
         // compiler (derivation) and the artifact importer (recompute-before-persist) share one.
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
+        // The portable envelope's ONE codec (FR-B-010). Export (Publishing) and import (Runtime.Reconciliation)
+        // both encode through it, which is what makes an exported artifact byte-consistent with the same artifact
+        // round-tripped through the durable store: both drop the recomputed Nodes/NodesById projections the
+        // WorkflowExecutable constructor rebuilds. Singleton to match IPayloadSerializer's lifetime and to keep
+        // System.Text.Json's per-options metadata cache alive across calls.
+        services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         // Replacement contract (§2.6.2) and the ONE activation ledger per engine (FR-B-006). Singleton
         // because the in-memory fallback holds the slot state itself; Groundwork runtime persistence
         // replaces this registration with the durable store.

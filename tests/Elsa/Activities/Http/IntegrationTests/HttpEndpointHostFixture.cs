@@ -23,6 +23,9 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Reconciliation;
+using Elsa.Workflows.Runtime.Reconciliation.Contracts;
+using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -91,6 +94,37 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null, null);
 
     /// <summary>
+    /// Starts the same production HTTP runtime with the JSON artifact reconciliation feature composed over it,
+    /// mounting <paramref name="mountFolder"/> as an import source (spec 151, US1 scenario 2 against a real
+    /// transport).
+    /// </summary>
+    /// <remarks>
+    /// The feature is registered alongside the others rather than through the persistence hook: it is a runtime
+    /// feature, and it depends on the triggers spine this fixture already composes.
+    /// </remarks>
+    public static Task<HttpEndpointHostFixture> StartWithArtifactReconciliationAsync(string sourceId, string mountFolder) =>
+        StartAsync(
+            null,
+            null,
+            null,
+            services =>
+            {
+                // The reconciler's startup task is [SingleNodeTask] and takes the lock before it reconciles. This
+                // fixture composes no locking provider (no host feature here needs one), so a single-process
+                // granting provider stands in — the task's own multi-node contract is covered by its unit tests.
+                services.AddSingleton<Elsa.Locking.Core.IDistributedLockProvider, SingleProcessLockProvider>();
+
+                new JsonWorkflowArtifactReconciliationFeature
+                {
+                    Options =
+                    {
+                        SourceId = sourceId,
+                        FolderPath = mountFolder,
+                    },
+                }.ConfigureServices(services);
+            });
+
+    /// <summary>
     /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
     /// checkpoint persistence policy after the provider has replaced the in-memory runtime stores.
     /// </summary>
@@ -124,7 +158,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private static async Task<HttpEndpointHostFixture> StartAsync(
         Action<IServiceCollection>? configurePersistence,
         string? databaseDirectory,
-        string? groundworkSqliteConnectionString)
+        string? groundworkSqliteConnectionString,
+        Action<IServiceCollection>? configureExtraFeatures = null)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -196,6 +231,11 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddAuthentication(TestAuthHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
                     services.AddAuthorization();
+
+                    // Optional runtime features layered over the HTTP set (today: artifact reconciliation). Placed
+                    // with the other features and before provider selection, because that is where a shell would
+                    // compose them.
+                    configureExtraFeatures?.Invoke(services);
 
                     // Provider selection must happen after the runtime has registered its in-memory defaults, and
                     // checkpoint decoration must happen after provider selection. This is the same ordering enforced
@@ -981,6 +1021,44 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityContract: contract);
     }
 
+    /// <summary>
+    /// Builds the same start-trigger HttpEndpoint node <see cref="PublishHttpEndpointWorkflowAsync(string, string, string, string[])"/>
+    /// publishes, for a caller that will ship it inside a portable closure envelope instead of activating it here.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the identical builder rather than a parallel one: the whole point of importing over a real
+    /// transport is that the node reaching the route table is the node this fixture already proves works. Note the
+    /// descriptor it stamps is the <b>consumer key</b>, not the CLR descriptor type — the importer never rewrites a
+    /// content-addressed payload, so an unpinned node would import, activate, route, and only then fault.
+    /// </remarks>
+    public ExecutableNode NewImportableHttpEndpointTriggerNode(
+        string path,
+        string resultOutputName,
+        string[] methods,
+        string nodeId) =>
+        NewHttpEndpointNode(
+            artifactId: nodeId,
+            path,
+            resultOutputName,
+            methods,
+            authorize: null,
+            policy: null,
+            requestSizeLimit: null,
+            canStartWorkflow: true,
+            isTriggerNode: true,
+            nodeId: nodeId);
+
+    /// <summary>Runs one artifact reconciliation pass against the mounted source.</summary>
+    /// <remarks>
+    /// Everything the pass touches — persistence, the activation coordinator, both projections, and the route-table
+    /// observer the coordinator notifies — is the host's own. Only the trigger to run it is the test's.
+    /// </remarks>
+    public async Task<WorkflowArtifactReconciliationResult> ReconcileArtifactsAsync()
+    {
+        using var scope = Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IWorkflowArtifactReconciler>().ReconcileAsync();
+    }
+
     /// <summary>The stable resume-target map the publish compiler emits for an HttpEndpoint node (mirrors Delay).</summary>
     private static Dictionary<string, WorkflowExecutableResumeTarget> NewHttpEndpointResumeTargets(string nodeId) =>
         new(StringComparer.Ordinal)
@@ -1096,5 +1174,27 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         using var scope = provider.CreateScope();
         foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
             task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    /// <summary>An always-granting lock provider for a fixture that runs exactly one node.</summary>
+    private sealed class SingleProcessLockProvider : Elsa.Locking.Core.IDistributedLockProvider
+    {
+        public Elsa.Locking.Core.IDistributedSynchronizationHandle? TryAcquireLock(
+            string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+
+        public ValueTask<Elsa.Locking.Core.IDistributedSynchronizationHandle?> TryAcquireLockAsync(
+            string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<Elsa.Locking.Core.IDistributedSynchronizationHandle?>(new Handle());
+
+        public ValueTask<Elsa.Locking.Core.IDistributedSynchronizationHandle> AcquireLockAsync(
+            string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<Elsa.Locking.Core.IDistributedSynchronizationHandle>(new Handle());
+
+        private sealed class Handle : Elsa.Locking.Core.IDistributedSynchronizationHandle
+        {
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

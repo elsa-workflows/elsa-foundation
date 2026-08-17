@@ -43,6 +43,16 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- T071b: US1 scenario 2 names HTTP explicitly, so the import→activate→route chain gets pinned against a
+         real transport here rather than only against a test-owned stimulus provider. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The one closure/artifact builder, shared with the reconciliation suite rather than re-derived: it owns the
+         content-addressed identity the importer's hash gate checks and the codec the exporter would use. -->
+    <Compile Include="..\..\..\Workflows\Runtime\Reconciliation\Tests\ArtifactClosureFixture.cs" Link="ArtifactClosureFixture.cs" />
   </ItemGroup>
 
   <ItemGroup>

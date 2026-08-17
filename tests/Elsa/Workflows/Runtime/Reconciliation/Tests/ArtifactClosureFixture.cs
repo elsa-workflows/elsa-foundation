@@ -1,5 +1,5 @@
+using System.Text.Json;
 using Elsa.Activities.Testing;
-using Elsa.Serialization.Core;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -52,6 +52,47 @@ internal static class ArtifactClosureFixture
         {
             [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType,
         });
+
+    /// <summary>
+    /// A start-trigger node for a <b>real</b> CLR trigger activity (Timer, Cron, HttpEndpoint, …), carrying one
+    /// authored literal input and pinned into the form a compiler would emit.
+    /// </summary>
+    /// <remarks>
+    /// The pinning is not cosmetic. A start trigger's stimulus and schedule are fixed at publish time, so the
+    /// providers read the literal off the node rather than off a running instance; and the descriptor must carry
+    /// the <em>consumer key</em>, because a content-addressed artifact is never rewritten on import. Delegating
+    /// both to <see cref="WorkflowExecutionHarness.NewPinnedClrNode"/> keeps the fixture from re-deriving a shape
+    /// that is only correct in one exact way.
+    /// </remarks>
+    public static ExecutableNode ClrTriggerNode(string nodeId, string activityType, string inputKey, string literal)
+    {
+        var valueType = new ValueTypeDescriptor("String");
+        using var value = JsonDocument.Parse(JsonSerializer.Serialize(literal));
+        var binding = new RuntimeInputBinding(
+            inputKey,
+            valueType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(valueType, value.RootElement.Clone(), ValueProtectionPolicy.InstanceInline));
+
+        using var descriptorPayload = JsonDocument.Parse("""{"kind":"placeholder"}""");
+        var unpinned = new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: activityType,
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor(
+                "placeholder",
+                RuntimeActivityDescriptor.InitialSchemaVersion,
+                descriptorPayload.RootElement.Clone()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase) { [inputKey] = binding },
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType,
+            });
+
+        return WorkflowExecutionHarness.NewPinnedClrNode(unpinned);
+    }
 
     private static ExecutableNode Rebuild(ExecutableNode node, IReadOnlyDictionary<string, string>? metadata) =>
         new(
@@ -154,12 +195,21 @@ internal static class ArtifactClosureFixture
                     SlotId: "exporter-slot")
             ]);
 
-    /// <summary>Serializes the envelope with the engine's own payload serializer and drops it in the mount folder.</summary>
+    /// <summary>
+    /// Serializes the envelope through the engine's own closure codec — the same encoder the export side uses —
+    /// and drops it in the mount folder.
+    /// </summary>
+    /// <remarks>
+    /// Going through <see cref="IWorkflowArtifactClosureSerializer"/> rather than the raw payload serializer is
+    /// what makes these fixtures exercise the real export→import bytes: the codec drops the recomputed
+    /// <c>Nodes</c>/<c>NodesById</c> projections, so a fixture that bypassed it would mount a document no exporter
+    /// would ever produce.
+    /// </remarks>
     public static string Mount(IServiceProvider services, string folder, string fileName, WorkflowArtifactClosure closure)
     {
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, fileName);
-        var serializer = (IPayloadSerializer)services.GetService(typeof(IPayloadSerializer))!;
+        var serializer = (IWorkflowArtifactClosureSerializer)services.GetService(typeof(IWorkflowArtifactClosureSerializer))!;
         File.WriteAllText(path, serializer.Serialize(closure));
         return path;
     }
