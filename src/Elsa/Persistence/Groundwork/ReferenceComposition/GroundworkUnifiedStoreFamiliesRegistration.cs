@@ -2,7 +2,6 @@ using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,7 +35,10 @@ public static class GroundworkUnifiedStoreFamiliesRegistration
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
 
         services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions, targetName);
-        services.AddGroundworkDistributedRuntimeStores(targetName);
+        // Distributed runtime has crossed the clean-break boundary to the public v2 store. Do not
+        // compose it into this legacy document-store preset: doing so creates a mixed provider graph
+        // and starts v2 schema admission without a v2 provider connection. Its public-v2 feature owns
+        // that dependency-closed registration until the shipping host makes the atomic v2 switch.
         services.AddGroundworkWorkflowsDesignStores(targetName);
         services.AddGroundworkActivitiesDesignStores(targetName);
         services.AddGroundworkPublishingStores(targetName);

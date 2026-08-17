@@ -11,7 +11,6 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
-using Elsa.Workflows.Runtime.Distributed.Contracts;
 using global::Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -31,7 +30,6 @@ public static class UnifiedGroundworkHostContract
 
         Assert.Same(store1, store2);
         Assert.NotNull(provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore>());
-        Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());

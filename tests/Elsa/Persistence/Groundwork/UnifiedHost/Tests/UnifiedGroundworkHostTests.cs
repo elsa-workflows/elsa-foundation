@@ -26,8 +26,6 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Distributed.Contracts;
-using Elsa.Workflows.Runtime.Distributed.Models;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -93,9 +91,8 @@ public class UnifiedGroundworkHostTests
         // One access-bound adapter instance backs everything within an operation scope.
         Assert.Same(store1, store2);
 
-        // Runtime and distributed-runtime ports resolve. Clean-break v2 adapters are composed separately.
+        // This legacy composition proves only the families that have not crossed the clean-break boundary.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
 
         // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
@@ -126,7 +123,6 @@ public class UnifiedGroundworkHostTests
             new Dictionary<string, string>(),
             now,
             null);
-        var placement = new ExecutionPlacementClaim("placement-execution-1", "node-a", now, now.AddMinutes(1));
         var workflowDefinition = new WorkflowDefinition { Id = "workflow-1", Name = "Order Processing" };
         var workflowDraft = new WorkflowDefinitionDraft
         {
@@ -169,8 +165,6 @@ public class UnifiedGroundworkHostTests
             await using var firstScope = firstHost.CreateAsyncScope();
             var firstServices = firstScope.ServiceProvider;
             await firstServices.GetRequiredService<IBookmarkStateStore>().SaveAsync(bookmark);
-            var claim = await firstServices.GetRequiredService<IExecutionPlacementStore>().TryClaimAsync(placement, now);
-            Assert.Equal(ExecutionPlacementClaimOutcome.Granted, claim.Outcome);
 
             using (var scope = firstHost.CreateScope())
             {
@@ -199,11 +193,6 @@ public class UnifiedGroundworkHostTests
             bookmark.StimulusHash,
             (await reopenedServices.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId))?.StimulusHash);
-        Assert.Equal(
-            placement.OwnerId,
-            (await reopenedServices.GetRequiredService<IExecutionPlacementStore>()
-                .FindAsync(placement.WorkflowExecutionId))?.OwnerId);
-
         using (var scope = reopenedHost.CreateScope())
         {
             Assert.Equal(

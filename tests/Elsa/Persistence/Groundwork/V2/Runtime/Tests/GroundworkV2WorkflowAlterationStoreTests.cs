@@ -386,13 +386,11 @@ public sealed class GroundworkV2WorkflowAlterationStoreTests
                     ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind)
                 .ToDictionary(
                     unit => unit.Id.Value,
-                    unit => providerName == "sqlite"
-                        ? unit
-                        : unit with
-                        {
-                            Id = new StorageUnitId($"{unit.Id.Value}-{Guid.NewGuid():N}"[..42]),
-                            Name = $"{unit.Name}_{Guid.NewGuid():N}"[..52]
-                        },
+                    unit => unit with
+                    {
+                        Id = new StorageUnitId($"{unit.Id.Value}-{Guid.NewGuid():N}"[..42]),
+                        Name = $"{unit.Name}_{Guid.NewGuid():N}"[..52]
+                    },
                     StringComparer.Ordinal);
             foreach (var unit in units.Values)
                 connection.Schema.Apply(unit);
@@ -427,7 +425,7 @@ public sealed class GroundworkV2WorkflowAlterationStoreTests
         public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
 
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-            connection.OpenSession(units[unitId], access);
+            connection.OpenSession(Resolve(unitId).Unit, access);
 
         public IUnitOfWork BeginUnitOfWork(
             StorageAccess access,
@@ -436,11 +434,23 @@ public sealed class GroundworkV2WorkflowAlterationStoreTests
             string? targetName = null)
         {
             LastUnitOfWorkOptions = options;
-            LastUnitOfWorkUnitIds = unitIds.ToArray();
-            return connection.BeginUnitOfWork(access, options, unitIds.Select(unitId => units[unitId]).ToArray());
+            var resolved = unitIds.Select(Resolve).ToArray();
+            LastUnitOfWorkUnitIds = resolved.Select(candidate => candidate.LogicalId).ToArray();
+            return connection.BeginUnitOfWork(access, options, resolved.Select(candidate => candidate.Unit).ToArray());
         }
 
-        public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+        public StorageUnit Unit(string unitId, string? targetName = null) => Resolve(unitId).Unit;
+
+        private (string LogicalId, StorageUnit Unit) Resolve(string unitId)
+        {
+            if (units.TryGetValue(unitId, out var logical))
+                return (unitId, logical);
+            var physical = units.SingleOrDefault(candidate =>
+                StringComparer.Ordinal.Equals(candidate.Value.Id.Value, unitId));
+            return physical.Value is not null
+                ? (physical.Key, physical.Value)
+                : throw new KeyNotFoundException($"No native alteration unit matches '{unitId}'.");
+        }
     }
 
     private sealed class DirectSource(IStorageProviderConnection connection) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
