@@ -8,6 +8,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -17,6 +18,8 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class RuntimeRequirementPreflightTests
 {
+    private const string IntrinsicArtifactId = "artifact-intrinsic";
+
     private static readonly DateTimeOffset Now = new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -161,6 +164,146 @@ public sealed class RuntimeRequirementPreflightTests
         Assert.Equal(
             ActivityActivationFailureHandler.DeploymentCorrectionRecoveryAction,
             missingType.Metadata[ActivityActivationFailureHandler.RecoveryActionMetadataKey]);
+    }
+
+    // Every compiled workflow carries engine intrinsics (Set, Merge, Return, Control, SetCorrelationId, …), and
+    // WorkflowExecutable's constructor *derives* RuntimeRequirements from every node's consumer key — so a
+    // realistic preflight subject declares RuntimeRequirement("intrinsic", "1"). Until the engine advertised that
+    // key, this endpoint reported every intrinsic-bearing workflow as not-ready, and this suite could not have
+    // noticed: no subject here had ever contained an intrinsic node, so the counts were identical before and
+    // after the fix. The pair below closes that blind spot from the publishing side.
+    [Fact]
+    public async Task Preflight_reports_an_intrinsic_bearing_artifact_ready_when_the_engine_advertises_the_intrinsic_consumer()
+    {
+        var service = await IntrinsicBearingPreflightAsync(
+            new RuntimeActivityConsumerCapability("sample.available", ["1"]),
+            // The production advertisement rather than a stand-in: this pins the exact key and schema version the
+            // engine publishes, so narrowing either one fails here and not only in the Runtime suite.
+            new WorkflowIntrinsicActivityConsumerCapability());
+
+        var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
+
+        // The load-bearing assertion is that the intrinsic requirement actually *reached* the checker. Without it,
+        // a change that stopped deriving the requirement would leave IsReady == true and this test green while
+        // proving nothing. The literal is deliberate alongside the constant: the consumer key is durable wire
+        // content inside content-addressed artifacts, so changing its value is a breaking change, not a rename.
+        var intrinsic = Assert.Single(result.Requirements, requirement => requirement.ConsumerKey == "intrinsic");
+        Assert.Equal(WellKnownRuntimeActivityConsumers.Intrinsic, intrinsic.ConsumerKey);
+        Assert.Equal(RuntimeActivityDescriptor.InitialSchemaVersion, intrinsic.SchemaVersion);
+        Assert.Equal("Available", intrinsic.Status);
+        Assert.Equal(1, intrinsic.AffectedArtifactCount);
+        Assert.True(result.IsReady);
+        Assert.DoesNotContain(
+            result.Diagnostics,
+            diagnostic => diagnostic.Metadata.TryGetValue("consumerKey", out var key) &&
+                          StringComparer.Ordinal.Equals(key, WellKnownRuntimeActivityConsumers.Intrinsic));
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public async Task Preflight_reports_an_intrinsic_bearing_artifact_unready_when_the_intrinsic_consumer_is_unadvertised()
+    {
+        // The counter-assertion that keeps the test above from passing vacuously. Withdraw the advertisement and
+        // this endpoint must go back to reporting the artifact unready naming 'intrinsic' — which is exactly the
+        // state every intrinsic-bearing workflow was in before the engine advertised the consumer.
+        var service = await IntrinsicBearingPreflightAsync(new RuntimeActivityConsumerCapability("sample.available", ["1"]));
+
+        var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
+
+        Assert.False(result.IsReady);
+        var intrinsic = Assert.Single(result.Requirements, requirement => requirement.ConsumerKey == "intrinsic");
+        Assert.Equal("Missing", intrinsic.Status);
+        var diagnostic = Assert.Single(result.Diagnostics, x => x.Code == "activity.runtime.consumer-missing");
+        Assert.Equal(ActivityDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal("intrinsic", diagnostic.Metadata["consumerKey"]);
+        Assert.Equal(RuntimeActivityDescriptor.InitialSchemaVersion, diagnostic.Metadata["schemaVersion"]);
+        Assert.Equal(IntrinsicArtifactId, diagnostic.Subject.Id);
+    }
+
+    /// <summary>
+    /// Wires the endpoint over one retained, available intrinsic-bearing executable. The advertised capability set
+    /// is the only thing that differs between the two intrinsic tests, so it is the only parameter.
+    /// </summary>
+    private static async Task<RuntimeRequirementPreflight> IntrinsicBearingPreflightAsync(
+        params IRuntimeActivityConsumerCapability[] consumers)
+    {
+        var executables = new InMemoryWorkflowExecutableStore();
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await executables.SaveAsync(IntrinsicBearingExecutable());
+        await references.SaveAsync(Reference("ref-intrinsic", IntrinsicArtifactId));
+        return new(
+            references,
+            executables,
+            new InMemoryExecutableActivityTemplateStore(),
+            new RuntimeRequirementChecker(
+                consumers,
+                new RuntimeDurableValueStorageDriverRegistry([]),
+                new WellKnownTypeRegistry(),
+                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
+            new FixedTimeProvider(Now));
+    }
+
+    /// <summary>
+    /// An executable in the shape the compiler actually emits: an engine intrinsic in a child slot beside an
+    /// ordinary root. No requirement is declared by hand — <see cref="WorkflowExecutable"/> derives both from the
+    /// nodes, which is the derivation that puts "intrinsic" in front of the checker in production.
+    /// </summary>
+    private static WorkflowExecutable IntrinsicBearingExecutable()
+    {
+        var root = new ExecutableNode(
+            "root",
+            "root",
+            "sample.available",
+            "1",
+            new("sample.available", "1", JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot("Body", [IntrinsicNode("node-correlate")])]);
+        return new(
+            new(IntrinsicArtifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            Now,
+            new Dictionary<string, string>(),
+            IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    /// <summary>
+    /// An engine-intrinsic node in the shape <c>ExecutableNodeCompiler</c> emits: the reserved <c>"intrinsic"</c>
+    /// descriptor type and no explicit descriptor schema version, so <see cref="ExecutableNode"/> defaults it to
+    /// <see cref="RuntimeActivityDescriptor.InitialSchemaVersion"/> exactly as a compiled node does.
+    /// </summary>
+    /// <remarks>
+    /// The shape is reproduced from <c>ArtifactClosureFixture.IntrinsicNode</c> rather than shared: that fixture
+    /// belongs to the Runtime reconciliation suite, and a handful of duplicated lines beats a project reference
+    /// between two test projects.
+    /// </remarks>
+    private static ExecutableNode IntrinsicNode(string nodeId)
+    {
+        const WorkflowIntrinsicKind kind = WorkflowIntrinsicKind.SetCorrelationId;
+        var valueType = new ValueTypeDescriptor("String");
+        return new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: $"elsa.intrinsic.{kind.ToString().ToLowerInvariant()}",
+            activityTypeVersion: "1.0.0",
+            descriptorType: WellKnownRuntimeActivityConsumers.Intrinsic,
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = kind.ToString(), schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+            {
+                [WorkflowIntrinsicInputKeys.Value] = new(
+                    WorkflowIntrinsicInputKeys.Value,
+                    valueType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        valueType,
+                        JsonSerializer.SerializeToElement("correlation-42"),
+                        ValueProtectionPolicy.InstanceInline))
+            },
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal),
+            intrinsicKind: kind);
     }
 
     private static WorkflowExecutable Executable(
