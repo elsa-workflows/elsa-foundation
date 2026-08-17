@@ -1,24 +1,24 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Activities.Design.Api.Capabilities;
+using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Contracts;
+using Elsa.Activities.Design.Api.Handlers;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Activities.Design.Api.Services;
-using Elsa.Activities.Design.Api.Contracts;
-using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Stores;
-using Elsa.Activities.Design.Api.Commands;
-using Elsa.Activities.Design.Api.Handlers;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.FastEndpoints;
-using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Mediator.Core.Extensions;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Elsa.Api.Capabilities.Extensions;
-using Elsa.Activities.Design.Api.Capabilities;
-using Elsa.Activities.Design.Api.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
 
@@ -121,6 +121,7 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
         services.AddPermissionContributor<ActivityDesignPermissionContributor>();
+        services.ConfigureHttpJsonOptions(options => ActivitiesDesignJsonOptions.Configure(options.SerializerOptions));
     }
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)

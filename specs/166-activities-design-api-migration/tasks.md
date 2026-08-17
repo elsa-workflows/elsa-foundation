@@ -33,11 +33,11 @@ or feature code until that checkpoint is committed.
 
 **Purpose**: Establish the API-visible lifetime boundary and source-generated metadata before mapping routes.
 
-- [ ] T010 Inventory every public request, response, problem, page, cursor, enum, fork, lifecycle, provider-payload, diff, dependency, availability, and upgrade type exposed by endpoint accepts/produces metadata; record former-assembly compatibility disposition in `specs/166-activities-design-api-migration/contracts/compatibility-evidence.md`
-- [ ] T011 Create the contracts-only `src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj`, link API-visible contract sources under their existing namespaces, and add only constitution-approved dependency-light references
-- [ ] T012 Add `src/Elsa/Activities/Design/Api/ApiContractTypeForwards.cs` and compile/source compatibility tests in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractCompatibilityTests.cs` for every moved public type/member
-- [ ] T013 [P] Add exhaustive source-generated JSON metadata and effective FastEndpoints-compatible serializer options in `src/Elsa/Activities/Design/Api/ActivitiesDesignJsonContext.cs`
-- [ ] T014 [P] Add accepts/produces completeness, resolver-chain precedence, casing, dictionary-key, string-enum, explicit-null, optional-type-key, and opaque-provider-payload bites in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignSerializationContractTests.cs`
+- [x] T010 Inventory every public request, response, problem, page, cursor, enum, fork, lifecycle, provider-payload, diff, dependency, availability, and upgrade type exposed by endpoint accepts/produces metadata; record former-assembly compatibility disposition in `specs/166-activities-design-api-migration/contracts/compatibility-evidence.md`
+- [x] T011 Create the contracts-only `src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj`, link API-visible contract sources under their existing namespaces, and add only constitution-approved dependency-light references
+- [x] T012 Add `src/Elsa/Activities/Design/Api/ApiContractTypeForwards.cs` and compile/source compatibility tests in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractCompatibilityTests.cs` for every moved public type/member
+- [x] T013 [P] Add exhaustive source-generated JSON metadata and effective FastEndpoints-compatible serializer options in `src/Elsa/Activities/Design/Api/ActivitiesDesignJsonContext.cs`
+- [x] T014 [P] Add accepts/produces completeness, resolver-chain precedence, casing, dictionary-key, string-enum, explicit-null, optional-type-key, and opaque-provider-payload bites in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignSerializationContractTests.cs`
 - [ ] T015 Wire stable API Core into the owner/test/host projects and solution manifests, then prove native OpenAPI metadata contains no collectible implementation contract type in `tests/Elsa/Architecture/OpenApiLifetimeBoundaryTests.cs`
 
 **Checkpoint**: Every public wire type is stable, compatible, source-generated, and safe for native OpenAPI metadata.

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Api\Core\Elsa.Activities.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />

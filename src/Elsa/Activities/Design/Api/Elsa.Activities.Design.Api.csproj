@@ -5,9 +5,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Core\**\*.cs" />
+    <Compile Remove="Models\**\*.cs" />
+    <Compile Remove="Requests\**\*.cs" />
+    <Compile Remove="Commands\**\*.cs" />
+    <Compile Include="Models\ActivityProblemDetails.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="Core\Elsa.Activities.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />

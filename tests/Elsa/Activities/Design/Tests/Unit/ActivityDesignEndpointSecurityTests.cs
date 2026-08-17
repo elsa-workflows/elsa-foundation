@@ -1,11 +1,11 @@
-using System.Reflection;
-using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Reflection;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
@@ -91,7 +91,7 @@ public sealed class ActivityDesignEndpointSecurityTests
     {
         // Guards the theory data itself: a newly added Activities.Design.Api endpoint must be added
         // above (and thereby pinned as permission-guarded) before this suite goes green again.
-        var endpointTypes = typeof(AddDefinition).Assembly.GetTypes()
+        var endpointTypes = typeof(ActivitiesDesignApiFeature).Assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false }
                         && t.Namespace?.StartsWith(Root, StringComparison.Ordinal) == true
                         && typeof(BaseEndpoint).IsAssignableFrom(t))
@@ -145,7 +145,7 @@ public sealed class ActivityDesignEndpointSecurityTests
 
     private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
     {
-        var endpointType = typeof(AddDefinition).Assembly.GetType(endpointTypeName, throwOnError: true)!;
+        var endpointType = typeof(ActivitiesDesignApiFeature).Assembly.GetType(endpointTypeName, throwOnError: true)!;
 
         // Supply each constructor dependency from the signature itself: the sender stub by contract,
         // the logger by its declared generic argument (not the endpoint type — see ListVersions).

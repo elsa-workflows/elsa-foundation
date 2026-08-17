@@ -60,6 +60,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/">
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <Project Path="src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj" />
     <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/Core/" />
