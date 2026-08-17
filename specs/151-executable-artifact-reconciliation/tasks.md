@@ -28,25 +28,54 @@
 
 > **Post-`/speckit.analyze` remediation (2026-08-15).** A cross-artifact consistency pass over spec/plan/tasks against both constitutions returned **zero CRITICAL findings and 100% requirement coverage**. Its 16 findings were remediated in one pass: plan.md gained a §2.21.1 Complexity Tracking entry recording the architect-approved test removals and a corrected golden-rule row; the phase-2 conventions block below carries the §2.23.3 / §2.6.2 / §2.5 obligations that had no task home; T021 carries the §E6 R4 reviewer flag; T091 was re-scoped after inspecting #1346's scanner; T115 covers the §2.22 README obligation; and the stale pre-sweep literals were fixed in the artifacts rather than deferred into an implementation task.
 
-## ⚠ SUPERSEDED 2026-08-16 — the export endpoint is a MINIMAL API, not FastEndpoints
+## ⚠ RESOLVED 2026-08-17 — the export endpoint is FASTENDPOINTS (architect exception to ADR 0068)
 
-**The 2026-08-15 resolution below is obsolete. Read this instead; the block after it is kept only to show what changed and why.**
+**Decided by Joey, 2026-08-17. This supersedes the 2026-08-16 Minimal API block, collapsed below along
+with the 2026-08-15 one.** The resolution moved three times; the full reasoning and the recorded
+exception live in [contracts/export-endpoint.md](contracts/export-endpoint.md).
 
-`main` merged into this branch on 2026-08-16 bringing the whole first-party Minimal API migration — waves 1 and 2 (#1382, #1383), Studio Preferences, Secrets, Structured Logs, Identity, Agent, OpenTelemetry — plus #1359, the REST API migration compatibility and authoring gates.
+**What was wrong with the 2026-08-16 reasoning.** It said the `main` merge "landed the whole first-party
+Minimal API migration". Waves 1 and 2 landed — **`Elsa.Workflows.Publishing.Api` was not in them.** It
+still carries live rows in the transition registry and all ~20 of its endpoints are FastEndpoints. The
+Minimal API decision rested on that overstatement.
 
-**The capability gap the FastEndpoints exception rested on has closed.** The 2026-08-15 evidence was *"no shell-scoped Minimal API mapping seam for module features; owned by #1345, unlanded."* It landed. Module features now map Minimal APIs directly through a `MapEndpoints(IEndpointRouteBuilder, IHostEnvironment?)` member — see `ActivitiesBpmnInterchangeFeature.cs:32-33` delegating to `BpmnInterchangeApi.MapBpmnInterchangeApi`, and the same shape in `FoundationAgentApiFeature` and `ApiCapabilitiesFeature`. A module-local Minimal API is now demonstrably possible, which is precisely what ADR 0068 requires to be *impossible* before an exception is granted. **No exception is available, and none is needed.**
+**Why FastEndpoints.** One Minimal API route in an otherwise wholly-FastEndpoints module would differ
+from its siblings on problem details, permissions, metadata and testing — for a single route, in a
+module that migrates as one wave regardless. **Be precise: ADR 0068's capability gap genuinely did
+close, so this is not compliance but a recorded architect exception on module-consistency grounds.**
 
-`Elsa.Workflows.Publishing.Api` has **not** migrated (still 46 entries in `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`), but ADR 0068 explicitly permits coexistence during bounded migration waves — a new Minimal API route may sit alongside the module's existing FastEndpoints ones.
+**Task dispositions:**
+- **T084** — no new permission: `ConfigurePermissions(PermissionNames.WorkflowPublishingRead)`. A
+  `.export` action is forbidden by `EndpointSecurityTests`' pinned name map *and* would gate nothing,
+  since executable content is already readable under this family.
+- **T085** — a FastEndpoints `ElsaEndpoint<TRequest>`, one endpoint per class, like every sibling.
+- **T085a — VOID.** `WithOwner` / `WithAuthoringModel` / route-ownership metadata are Minimal API
+  obligations; `ConfigurePermissions(...)` supplies the security disposition as it does for every
+  sibling. The feature class does **not** implement `IWebShellFeature`, so no feature-map regeneration.
+- **T086** — `Send.StringAsync` plus an explicitly written `Content-Disposition`. This endpoint is the
+  repo's first FastEndpoints byte-download, so there was no precedent to follow.
+- **T091 — BACK IN SCOPE, and done.** Its old text ("DELETE", "46 entries") is stale; the real count was
+  23, now 24. Counts move 112→113 and 23→24 with the reason stated in the test. No `sourceHash` restamp
+  was needed — measured: the validator compares the fingerprint only for dynamic routes.
+- **T091a — its open rule question is now LIVE**, having been moot while the route was a Minimal API:
+  does a route added to an already-wholly-transitional module need a fresh approved exception, or is it
+  bookkeeping under the module's existing entry? **This feature assumes bookkeeping.** If the ADR owner
+  rules otherwise, record an approving reviewer and linked PR on the new registry row.
 
-**Task changes:**
-- **T085** — implement `GET publishing/workflows/{versionId}/executable-export` as a **Minimal API**, via `MapEndpoints` on `WorkflowsPublishingApiFeature` delegating to a static `MapWorkflowsPublishingApi(IEndpointRouteBuilder)`, following the `BpmnInterchangeApi` shape.
-- **T085a (NEW)** — attach the ADR 0068 metadata the FastEndpoints route never needed: **route ownership metadata** (`OwnerKind: Module`, `OwnerId`) and an explicit **security disposition** (permission-protected, via a Foundation Identity policy rather than direct claim matching). Both are mandatory for every first-party endpoint under ADR 0068.
-- **T086** — the "no FastEndpoints byte-download precedent, add a helper beside `ServerSentEventResponseExtensions`" note is **void**. Minimal APIs return the closure JSON with standard `Results`/`TypedResults` plus a `Content-Disposition` header. Response contract is otherwise unchanged.
-- **T084** — permissions go through the Foundation Identity policy path (#1357 merged), not `ConfigurePermissions` on a FastEndpoints base.
-- **T091 — DELETE.** No transitional exception entry is required for a Minimal API, and the registry restamp it described was only needed because the endpoint was FastEndpoints. Publishing.Api's existing 46 entries are untouched by this feature.
-- **T091a** — already executed ([#1346 comment](https://github.com/elsa-workflows/elsa-foundation/issues/1346#issuecomment-5303337529)). Its rule question ("does a route in an already-transitional module need a fresh exception?") is now **moot** — we are not adding a FastEndpoints route. The owner-fingerprint collision it reported remains valid feedback for that issue.
+**Unchanged and still pinned for [studio#493](https://github.com/elsa-workflows/elsa-foundation-studio/issues/493)**:
+route `publishing/workflows/{versionId}/executable-export`, capability `elsa.api.publishing`, rel
+`workflow-executable-export`, and the response shape. The framework question changed three times; the
+contract never moved.
 
-**Unchanged and still pinned for [studio#493](https://github.com/elsa-workflows/elsa-foundation-studio/issues/493)**: route `publishing/workflows/{versionId}/executable-export`, capability `elsa.api.publishing`, rel `workflow-executable-export`, and the response shape. The framework changed; the contract did not.
+**One thing worth keeping from the Minimal API attempt:** it proved a feature can implement both
+`FastEndpointsFeatureBase` and `IWebShellFeature` and have `MapEndpoints` actually fire — unprecedented
+here, and the open risk that had blocked the decision. Evidence is preserved in the contract doc, and
+will matter when Publishing.Api's migration wave arrives.
+
+<details>
+<summary>Superseded 2026-08-16: the export endpoint is a MINIMAL API — kept for the record</summary>
+
+</details>
 
 <details>
 <summary>Superseded: endpoint-framework resolution (decided 2026-08-15) — kept for the record</summary>

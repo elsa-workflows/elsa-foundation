@@ -2,63 +2,74 @@
 
 **Project**: `Elsa.Workflows.Publishing.Api` · **Pinned for**: elsa-foundation-studio#493
 
-## Endpoint framework: Minimal API (ADR 0068)
+## Endpoint framework: FastEndpoints (architect exception to ADR 0068, 2026-08-17)
 
-**This endpoint is an ASP.NET Core Minimal API, not FastEndpoints.** The original draft of this
-contract named FastEndpoints before [ADR 0068](../../../docs/adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)
-was accepted (2026-08-15), and the resolution changed twice; this section records the final state and
-why, so the choice reads as examined rather than defaulted.
+**Decided by Joey, 2026-08-17.** The resolution moved three times; all three states are recorded
+because the reasoning matters more than the outcome.
 
-**First resolution (2026-08-15): FastEndpoints, under the ADR's capability-gap exception.** The
-evidence was that no shell-scoped Minimal API mapping seam existed for Elsa module features — every
-`IEndpointRouteBuilder` usage in `src/` was a host or root surface, and the per-shell seam was owned by
-issue #1345 and unlanded. Building it inside this feature would have pulled program work in.
+1. **2026-08-15 — FastEndpoints, under ADR 0068's capability-gap exception.** No shell-scoped Minimal
+   API mapping seam existed for Elsa module features; the seam was owned by #1345 and unlanded.
+2. **2026-08-16 — Minimal API.** The 2026-08-16 `main` merge landed the migration's waves 1 and 2 and
+   with them the mapping seam (`IWebShellFeature.MapEndpoints`). The capability gap closed, so no
+   exception was available under the ADR's own test.
+3. **2026-08-17 — FastEndpoints, as a deliberate architect exception.** The step-2 reasoning rested on
+   an overstatement: waves 1 and 2 landed, but **`Elsa.Workflows.Publishing.Api` was not in them.** It
+   still carries live rows in `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`
+   and every one of its ~20 endpoints is FastEndpoints.
 
-**Final resolution (2026-08-16): Minimal API. The gap closed.** `main` merged in the first-party
-Minimal API migration (waves 1 and 2, #1382/#1383, plus #1359's compatibility gates). Module features
-now map Minimal APIs directly through `MapEndpoints(IEndpointRouteBuilder, IHostEnvironment?)` on
-`IWebShellFeature` — see `ActivitiesBpmnInterchangeFeature` delegating to `BpmnInterchangeApi`, and the
-same shape in `FoundationAgentApiFeature` and `ApiCapabilitiesFeature`. ADR 0068 grants an exception
-only where a Minimal API is *impossible*; it is now demonstrably possible, so **no exception is
-available, and none is needed.**
+**Why the exception was taken.** One Minimal API route in an otherwise wholly-FastEndpoints module
+would differ from its siblings on problem-detail shape, permission mechanism, endpoint metadata and
+test approach — for a single route, in a module that will migrate as one wave regardless. The
+deviation's whole lifetime would be "until the wave arrives", and it would be the only route in the
+module needing its own coexistence proof.
 
-`Elsa.Workflows.Publishing.Api` has not itself migrated — it still holds 23 rows in
-`tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json` — but ADR 0068 explicitly
-permits coexistence during a bounded migration wave. A new Minimal API route may sit beside the
-module's existing FastEndpoints routes, and the module's eventual wave moves the rest.
+**Be precise about what this is.** ADR 0068 makes Minimal APIs normative for new first-party endpoints
+and grants exceptions only on a capability gap. That gap is closed. So **this is not compliance — it is
+a recorded architect exception on consistency grounds**, and a reviewer reading only the ADR should
+expect to find it flagged. Recorded here for exactly that reason.
 
-### Verified consequences of the framework choice
+**Consequence: [T091a](../tasks.md)'s open rule question is now live.** While the route was a Minimal
+API the question was moot. It is not: *does a route added to a module that is already wholly
+transitional — inheriting its existing `removalOwner` and wave — require a fresh approved compatibility
+exception, or is it bookkeeping under the module's existing entry?* **This feature assumes bookkeeping**
+(see the registry section below). If the ADR owner rules otherwise, an approving reviewer and linked PR
+must be recorded on the new registry row.
 
-Established by reading the code on 2026-08-17; each is a constraint on implementation, not a
-preference.
+### What the FastEndpoints choice restores
 
-1. **`WorkflowsPublishingApiFeature` must implement `IWebShellFeature` alongside its
-   `FastEndpointsFeatureBase` inheritance.** No feature in `src/` currently implements two shell
-   interfaces at once, so this combination is unprecedented here. It is dispatched safely:
-   `CShells.AspNetCore` walks features by interface in separate passes (`RegisterShellEndpoints`,
-   `RegisterShellMiddleware`) and contains no reference to `IFastEndpointsShellFeature` at all —
-   FastEndpoints support lives in a different assembly, where the shell-level `FastEndpointsFeature`
-   consumes module features only as an *assembly source*. That feature is itself an `IWebShellFeature`,
-   so both authoring models already map through one seam.
-   **This rests on assembly metadata, not on a passing test — it must be proven by a coexistence test
-   before the endpoint is considered done** (see Testing below).
-2. **The route is relative, with no leading slash.** The `IEndpointRouteBuilder` handed to
-   `MapEndpoints` is already shell-scoped, so `MapGet("publishing/…")` lands where a FastEndpoints
-   `Get("publishing/…")` lands. Follow `BpmnInterchangeApi`'s relative form, not
-   `StudioPreferencesApi`'s absolute one. `DomainApiCapabilityRegistrationTests` independently requires
-   capability hrefs to be non-rooted.
-3. **The class's base list must stay on one line.** `HostShellFeatureVisibilityTests` regex-matches the
-   declaration to require every direct `IWebShellFeature` to appear in `docs/maps/feature-map.md` and
-   `docs/maps/feature-dependency-map.md`, and does not handle multi-line base lists. The feature is
-   already in both maps, but both record it as a FastEndpoints feature and **must be regenerated**.
-4. **`WithOwner(...)` and `WithAuthoringModel(EndpointAuthoringModels.MinimalApi)` are mandatory**, plus
-   a security disposition — `RequirePermission(...)` supplies the third by adding
-   `EndpointSecurityDispositionMetadata`. `EndpointManifestBuilder` throws on any endpoint missing one
-   of the three wherever a host manifest is captured.
-5. **Do not name any member of the mapper `Configure`.** `EndpointSecurityTests` scans
-   `src/Elsa/Workflows/Publishing/Api/Endpoints/**` for classes with a `Configure` method and demands
-   exactly one `ConfigurePermissions(...)` call in each. A static Minimal API mapper is skipped only as
-   long as it has no such method.
+The two structural constraints the Minimal API route would have imposed are gone: the feature class
+does **not** implement `IWebShellFeature` (so no dual shell-interface dispatch, and no regeneration of
+`docs/maps/feature-map.md`'s authoring-model row), and no `WithOwner` / `WithAuthoringModel` /
+`EndpointAuthoringModels.MinimalApi` metadata is required. `ConfigurePermissions(...)` supplies the
+security disposition the manifest builder demands, as it does for every sibling.
+
+Two constraints still hold and are unrelated to framework choice: **no member of any class under
+`Endpoints/` may be named `Configure`** other than FastEndpoints' own override — `EndpointSecurityTests`
+scans that folder and demands exactly one `ConfigurePermissions(...)` call from any class defining one —
+and **nothing in the repo cross-checks a capability `Href` against a registered route**, so the
+endpoint's own tests must assert that the advertised href and the mapped route agree.
+
+<details>
+<summary>Recorded for the archive: the dual-interface question, answered before the reversal made it moot</summary>
+
+The Minimal API attempt required `WorkflowsPublishingApiFeature` to implement both
+`FastEndpointsFeatureBase` and `IWebShellFeature` — unprecedented in this repo. **That combination
+works.** Proven by a test (green at the time, since deleted): a `HostBuilder().ConfigureWebHost(UseTestServer)`
+that ran the feature's `ConfigureServices` once, then called **both** `MapFastEndpoints(...)` and
+`((IWebShellFeature)feature).MapEndpoints(endpoints, null)`. Both the new export route and the existing
+FastEndpoints `publishing/incident-strategies` route resolved — 401 unauthenticated, where an unmapped
+route would 404 — both appeared in `EndpointDataSource` with correct authoring metadata, and an
+authenticated GET returned 200 with `Content-Disposition: attachment` and a body that round-tripped
+through the production closure codec. Corroborating: `CShells.AspNetCore.dll` references
+`IWebShellFeature` and `IMiddlewareShellFeature` and contains **no reference to
+`IFastEndpointsShellFeature`**, so the FastEndpoints interface cannot exclude a feature from the web
+pass. Caveat: the test drove `MapEndpoints` directly rather than through CShells' own `MapShells()`, so
+"CShells itself calls it" still rests on that metadata.
+
+Kept because it settles the question cheaply if the Minimal API route is ever revisited — most likely
+when Publishing.Api's migration wave arrives.
+
+</details>
 
 ## Capability advertisement
 
@@ -132,13 +143,22 @@ missing-dependency case must expose the missing ids as structured data, so the h
 | Unknown version / no Published reference | 404 | problem detail |
 | Non-Published-only version (test-run) | 409 | problem detail: export restricted to published scope |
 | Incomplete closure in store | 409 | problem detail naming missing dependency artifact id(s) |
+| Cycle in the stored dependency graph | 500 | problem detail. Store corruption, not a client error — no content-addressed compiler can form a back edge, so this is never something the caller can fix by changing the request. |
+| Storage or codec fault | 500 | problem detail. §2.23.5 has already wrapped the provider's own exception, so the inner detail stays in the log and never reaches the wire. |
 
-**The FastEndpoints `Send.StringAsync` + response-helper note in the original draft is void.** A Minimal
-API returns the payload through `Results`/`TypedResults`, and the framework emits `Content-Disposition:
-attachment` from the file-download-name argument rather than from a manually written header. The single
-precedent in `src/` is `ExtensionBuilderApi`'s `Results.File(path, contentType, fileName)`; it uses the
-*path* overload, so an in-memory closure payload has no exact precedent — pick the byte/stream overload
-that keeps the filename argument, and do not hand-write the header. Response shape is otherwise unchanged.
+The factory raises **five** exception types and the table above has **five** outcomes: the four
+originally specified plus 500 for the two that describe the engine rather than the caller. They must stay
+distinguishable by type at the factory boundary, and the missing-dependency case must expose its ids as
+structured data, so the handler renders one error entry per unresolved id without parsing a message
+string.
+
+**Response mechanics.** There is no FastEndpoints byte-download precedent in the repo, so this endpoint
+is the first: `Send.StringAsync(json, 200, "application/json")` with `Content-Disposition` written
+explicitly onto the response headers. Both interpolated filename segments come from stored artifact
+identity and land in a header this code writes by hand, so both are first reduced to a conservative
+`[A-Za-z0-9._-]` alphabet with substituted runs collapsed and leading/trailing dots and dashes trimmed —
+a definition id carrying a quote, a path separator or a CRLF would otherwise be echoed straight onto the
+wire. That sanitisation is what makes quoting the header value safe.
 
 ## OpenAPI: no fragment (decided 2026-08-17, Joey)
 
@@ -168,27 +188,46 @@ the endpoint tests.
 
 ## FastEndpoints transition registry
 
-**No new row.** The registry inventories FastEndpoints registrations; a Minimal API is not one. The
-counts hard-coded in `FastEndpointsTransitionTests` (112 total, 23 for `Elsa.Workflows.Publishing.Api`)
-therefore stay as they are.
+**The route is inventoried, not exempted.** One new row in
+`tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json` for
+`Elsa.Workflows.Publishing.Api.Endpoints.ExportWorkflowExecutableClosureEndpoint`, carrying the module's
+existing `removalOwner: "First-party REST API Consolidation"` and its follow-up wave. It inherits the
+exit condition rather than opening a new exception — which is the assumption T091a's open rule question
+would overturn if the ADR owner rules the other way.
 
-Note the task list's figure of 19 Publishing.Api rows is **stale — it is 23**. The `sourceHash` in that
-registry is an *owner fingerprint* over every `.cs` file in the owning project, so this feature's edits
-to Publishing.Api invalidate all 23 rows at once. Whether that requires restamping depends on what
-`TransitionExceptionValidator.Reconcile` actually compares — verify before assuming either way.
+**The counts in `FastEndpointsTransitionTests` move deliberately: 112 → 113 total, Publishing.Api
+23 → 24, and the retirement-mode issue count 112 → 113.** The reason is stated in a comment beside them.
+This is a reviewed inventory, so it should change by a stated decision and never as a silent
+consequence of adding code.
+
+**No `sourceHash` restamp was needed, and that is measured rather than assumed.**
+`TransitionExceptionValidator.Validate` compares `sourceHash` **only when a registration's
+`DynamicRoute` is true**. Every Publishing.Api route resolves statically through `RouteConstants`, so the
+owner fingerprint is never compared for these 24 rows. Note the consequence honestly: the shared
+fingerprint *is* now stale for all 24, because this feature edited `.cs` files in the owning project —
+it simply is not a gate for static routes. Do not read the passing suite as evidence that the hash is
+current.
+
+(The task list's earlier figures — "19 rows", "46 entries", and "T091 — DELETE" — are all stale; the
+real pre-change count was 23.)
 
 ## Testing
 
-Beyond the response cases, two assertions carry the weight of the framework decision:
+Two assertions carry weight beyond the response cases:
 
-1. **A coexistence test proving one feature serves both authoring models.** Compose
-   `WorkflowsPublishingApiFeature` once into a test host that calls both `MapFastEndpoints(...)` and
-   `((IWebShellFeature)feature).MapEndpoints(endpoints, null)`, then assert an existing FastEndpoints
-   publishing route *and* the new export route both resolve. The pattern to copy is
-   `tests/Elsa/Studio/Preferences/Tests/Support/StudioPreferencesCanaryHost.cs`. Without this, the
-   dual-interface claim rests on assembly metadata alone — and a silently-ignored `MapEndpoints` yields
-   an endpoint that compiles, advertises a capability rel, and 404s.
-2. **The advertised href resolves to the mapped route**, since nothing else in the repo checks it.
+1. **The 200 body must decode back through the production import codec** — the same
+   `IWorkflowArtifactClosureSerializer` that `JsonWorkflowArtifactClosureReader` uses, with the format
+   version gate applied. A response that is valid JSON but not a *readable closure* would satisfy a
+   shape assertion and fail in production, and export/import sharing one codec is the only thing that
+   makes a round trip drift-proof.
+2. **The advertised capability href must agree with the mapped route**, since nothing else in the repo
+   checks it.
 
-Note that `PublishingHttpContractTests` cannot host this endpoint: it introspects FastEndpoints
-`Definition.Routes` via `FastEndpoints.Factory.Create` and never starts a server.
+Behavioural tests follow the module's own idiom (`Factory.Create` + `HandleAsync` against a real
+`DefaultHttpContext`), and the closure fixture derives identity from the production
+`WorkflowExecutableHasher` rather than hand-written ids. Hostile-identifier filtering is covered
+explicitly: a definition id containing `../`, a quote and a CRLF must not reach the header.
+
+The end-to-end portability proof is **not** here — it is T093's round trip
+(`ArtifactExportImportRoundTripTests`, in `Elsa.Architecture.Tests`), which exercises the factory and
+the codec without HTTP.
