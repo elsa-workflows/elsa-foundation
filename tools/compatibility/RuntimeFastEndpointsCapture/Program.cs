@@ -61,7 +61,7 @@ var receipt = new
     httpSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "runtime-http-fastendpoints.json")))).ToLowerInvariant(),
     openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "runtime-openapi-fastendpoints.json")))).ToLowerInvariant()
 };
-File.WriteAllText(Path.Join(outputDirectory, "runtime-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
+File.WriteAllText(Path.Join(outputDirectory, "runtime-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt) + Environment.NewLine);
 
 static IReadOnlyList<RunnerDependency> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerIdentity) =>
 new[]
