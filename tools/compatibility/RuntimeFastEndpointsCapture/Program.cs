@@ -73,7 +73,7 @@ new[]
     "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
     "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
     "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
-].Select(path => new RunnerDependency(
+}.Select(path => new RunnerDependency(
     path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
         ? runnerIdentity
         : $"source-commit:{sourceCommit}",
