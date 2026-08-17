@@ -140,22 +140,31 @@ precedent in `src/` is `ExtensionBuilderApi`'s `Results.File(path, contentType, 
 *path* overload, so an in-memory closure payload has no exact precedent — pick the byte/stream overload
 that keeps the filename argument, and do not hand-write the header. Response shape is otherwise unchanged.
 
-## OpenAPI
+## OpenAPI: no fragment (decided 2026-08-17, Joey)
 
-**The practice this section originally cited does not exist**: `specs/148-authoring-schema-endpoints/`
-contains only `spec.md` and `checklists/` — there is no `contracts/` folder and no OpenAPI fragment.
+**This feature produces no OpenAPI contract fragment.** The reasoning, so it is not relitigated:
 
-The fragments that are actually consumed are `specs/092-domain-owned-apis/contracts/management-api.openapi.yaml`
-and `specs/141-runtime-alterations/contracts/runtime-alterations.openapi.yaml`, both copied into the
-Architecture test output by `Elsa.Architecture.Tests.csproj` and read by `ManagementApiContractTests`
-and `ManagementApiOperationInventoryTests`. `ManagementApiContractTests` asserts the **exact** canonical
-path inventory and schema inventory, and Publishing's paths are already in that list.
+- **The practice this section originally cited does not exist.** `specs/148-authoring-schema-endpoints/`
+  contains only `spec.md` and `checklists/` — no `contracts/` folder, no fragment. The task list's
+  instruction to "mirror spec 148 practice" pointed at nothing.
+- **A new spec-151-local fragment would be read by no test.** Only two fragments are consumed —
+  `specs/092-domain-owned-apis/contracts/management-api.openapi.yaml` and
+  `specs/141-runtime-alterations/contracts/runtime-alterations.openapi.yaml`, copied into the
+  Architecture test output by `Elsa.Architecture.Tests.csproj`. A third file nobody reads is
+  documentation pretending to be a gate.
+- **The 092 fragment is a frozen snapshot, not a living inventory.** It carries 8 publishing paths
+  while the module serves roughly 13; `publishing/incident-strategies`, `publishing/workflows/preflight`,
+  `publishing/value-conversion/profiles` and the three activity-draft-test-run routes are all absent.
+  Adding the export path would make it the 9th of 13 with no rule explaining the selection — it would
+  encode this feature's recency, not a contract boundary.
 
-**So there are two real options, and they are not equivalent.** Adding the export path to the 092
-fragment makes it a *tested* contract but requires updating that test's `ExpectedPaths` in the same
-change. Writing a new spec-151-local fragment produces a file no test reads. Prefer the 092 fragment:
-an untested contract fragment is documentation pretending to be a gate. `elsa.api.publishing`'s
-enumerated capability ids are unchanged either way — rel additions are data, not schema.
+The per-spec fragment idea was started deliberately and never reached a working form. Rather than
+extend a half-built mechanism sideways, this feature leaves it untouched; whoever finishes or retires
+it should do so as its own piece of work, across all the endpoints at once.
+
+`elsa.api.publishing`'s enumerated capability ids are unchanged regardless — rel additions are data,
+not schema. The endpoint's contract is pinned instead by the capability declaration, this document, and
+the endpoint tests.
 
 ## FastEndpoints transition registry
 
