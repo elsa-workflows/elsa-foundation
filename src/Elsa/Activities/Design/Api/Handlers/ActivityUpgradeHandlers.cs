@@ -13,7 +13,7 @@ namespace Elsa.Activities.Design.Api.Handlers;
 public sealed class CreateActivityUpgradePlanHandler(
     IActivityUpgradePlanner planner,
     IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : ICommandHandler<CreateActivityUpgradePlan, ActivityUpgradePlanView>
 {
     public async Task<ActivityUpgradePlanView> Handle(CreateActivityUpgradePlan command, CancellationToken cancellationToken)
@@ -26,7 +26,7 @@ public sealed class CreateActivityUpgradePlanHandler(
                 command.IncludeTransitiveDependents,
                 command.CreateDraftsForPublishedDependents,
                 context.TenantId,
-                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)), cancellationToken);
+                ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))), cancellationToken);
             return await plan.ToViewAsync(publications, cancellationToken);
         }
         catch (ArgumentException exception)
@@ -44,7 +44,7 @@ public sealed class CreateActivityUpgradePlanHandler(
 public sealed class GetActivityUpgradePlanHandler(
     IActivityUpgradePlanStore store,
     IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : IRequestHandler<GetActivityUpgradePlan, ActivityUpgradePlanView>
 {
     public async Task<ActivityUpgradePlanView> Handle(GetActivityUpgradePlan request, CancellationToken cancellationToken)
@@ -52,7 +52,7 @@ public sealed class GetActivityUpgradePlanHandler(
         var plan = await store.FindAsync(request.PlanId, cancellationToken)
                    ?? throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
         EnsureTenant(plan);
-        EnsureAccessProfile(plan, context);
+        await EnsureAccessProfileAsync(plan, context, cancellationToken);
         return await plan.ToViewAsync(publications, cancellationToken);
     }
 
@@ -62,12 +62,15 @@ public sealed class GetActivityUpgradePlanHandler(
             throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
     }
 
-    private static void EnsureAccessProfile(ActivityUpgradePlan plan, IActivityAuthoringContext context)
+    private static async ValueTask EnsureAccessProfileAsync(
+        ActivityUpgradePlan plan,
+        IActivityAuthoringContextAsync context,
+        CancellationToken cancellationToken)
     {
         if (plan.Binding is null ||
             !StringComparer.Ordinal.Equals(
                 plan.Binding.AccessProfileFingerprint,
-                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)))
+                ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))))
             throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
     }
 }
@@ -75,7 +78,7 @@ public sealed class GetActivityUpgradePlanHandler(
 public sealed class ApplyActivityUpgradePlanHandler(
     IActivityUpgradePlanApplier applier,
     IActivityUpgradePlanStore store,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : ICommandHandler<ApplyActivityUpgradePlan, ActivityUpgradeApplyResultView>
 {
     public async Task<ActivityUpgradeApplyResultView> Handle(ApplyActivityUpgradePlan command, CancellationToken cancellationToken)
@@ -88,7 +91,7 @@ public sealed class ApplyActivityUpgradePlanHandler(
                 plan.Binding is null ||
                 !StringComparer.Ordinal.Equals(
                     plan.Binding.AccessProfileFingerprint,
-                    ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)))
+                    ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))))
                 throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
             return (await applier.ApplyAsync(new(command.PlanId, command.StageId, command.IdempotencyKey), cancellationToken)).ToView();
         }
@@ -108,7 +111,7 @@ public sealed class ApplyActivityUpgradePlanHandler(
 public sealed class GetActivityUpgradeApplyReceiptHandler(
     IActivityUpgradeApplyReceiptStore receipts,
     IActivityUpgradePlanStore plans,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : IRequestHandler<GetActivityUpgradeApplyReceipt, ActivityUpgradeApplyReceiptView>
 {
     public async Task<ActivityUpgradeApplyReceiptView> Handle(
@@ -116,7 +119,7 @@ public sealed class GetActivityUpgradeApplyReceiptHandler(
         CancellationToken cancellationToken)
     {
         var plan = await plans.FindAsync(request.PlanId, cancellationToken);
-        var fingerprint = ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile);
+        var fingerprint = ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken));
         if (plan is null ||
             !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId) ||
             plan.Binding is null ||
@@ -141,7 +144,7 @@ public sealed class GetActivityUpgradeApplyReceiptHandler(
 public sealed class RefreshActivityUpgradePlanHandler(
     IActivityUpgradePlanRefresher refresher,
     IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : ICommandHandler<RefreshActivityUpgradePlan, ActivityUpgradePlanView>
 {
     public async Task<ActivityUpgradePlanView> Handle(
@@ -154,7 +157,7 @@ public sealed class RefreshActivityUpgradePlanHandler(
                 command.PlanId,
                 command.Publications,
                 context.TenantId,
-                ActivityAccessProfileFingerprint.Create(context.AuthorizationProfile)), cancellationToken);
+                ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))), cancellationToken);
             return await plan.ToViewAsync(publications, cancellationToken);
         }
         catch (ActivityUpgradeApplyException exception)

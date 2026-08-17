@@ -1,12 +1,9 @@
-using Elsa.Api.FastEndpoints.Constants;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa3.Activities.Design.Import.Contracts;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa3.Activities.Design.Import.Endpoints;
-using Elsa3.Activities.Design.Import.Models;
-using Elsa3.Activities.Design.Import.Services;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa3.Mapping.Tests;
@@ -16,51 +13,41 @@ public sealed class ReusableActivityImportHttpContractTests
     [Fact]
     public void Routes_are_exact_and_permission_guarded()
     {
-        var service = new ThrowingService();
-        Action<DefaultHttpContext> context = _ => { };
-        var upload = Factory.Create<UploadReusableActivityCollectionEndpoint>(context, service);
-        var analyze = Factory.Create<AnalyzeReusableActivityCollectionEndpoint>(
-            context,
-            service,
-            Options.Create(new ReusableActivityImportOptions()));
-        var selection = Factory.Create<ExpandReusableActivityImportSelectionEndpoint>(context, service);
-        var apply = Factory.Create<ApplyReusableActivityImportEndpoint>(context, service);
-        var status = Factory.Create<GetReusableActivityImportStatusEndpoint>(context, service);
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddRouting();
+        using var app = builder.Build();
 
-        upload.Configure();
-        analyze.Configure();
-        selection.Configure();
-        apply.Configure();
-        status.Configure();
+        ReusableActivityImportApi.MapReusableActivityImportApi(app);
 
-        AssertEndpoint(upload.Definition, "POST", "migration/elsa3/reusable-activities/collections", PermissionNames.Elsa3ImportManage);
-        AssertEndpoint(analyze.Definition, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", PermissionNames.Elsa3ImportRead);
-        AssertEndpoint(selection.Definition, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", PermissionNames.Elsa3ImportRead);
-        AssertEndpoint(apply.Definition, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply", PermissionNames.Elsa3ImportManage);
-        AssertEndpoint(status.Definition, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", PermissionNames.Elsa3ImportRead);
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .ToArray();
+
+        Assert.Equal(5, endpoints.Length);
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import.manage");
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import.read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import.read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply", "elsa3-import.manage");
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import.read");
     }
 
     private static void AssertEndpoint(
-        EndpointDefinition definition,
+        IReadOnlyCollection<RouteEndpoint> endpoints,
         string verb,
         string route,
         string permission)
     {
-        Assert.Equal(verb, Assert.Single(definition.Verbs));
-        Assert.Equal(route, Assert.Single(definition.Routes));
-        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
-        Assert.All(
-            definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([permission]), policy));
-        Assert.Null(definition.AnonymousVerbs);
+        var endpoint = Assert.Single(endpoints, endpoint =>
+            endpoint.RoutePattern.RawText == route &&
+            endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains(verb, StringComparer.OrdinalIgnoreCase) == true);
+        var disposition = endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>();
+        Assert.NotNull(disposition);
+        Assert.Equal(EndpointSecurityDispositionKind.Permission, disposition!.Kind);
+        Assert.Equal(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission)), disposition.Value);
+        Assert.Equal(
+            new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission)),
+            endpoint.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>()?.Policy);
     }
 
-    private sealed class ThrowingService : IReusableActivityImportOperationService
-    {
-        public ValueTask<ReusableActivityImportUploadResult> UploadAsync(Stream json, long? contentLength, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<ReusableActivityImportAnalysisPage> AnalyzeAsync(string collectionHandle, int offset, int limit, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<ReusableActivityImportSelectionReadiness> ExpandSelectionAsync(string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<ReusableActivityImportReceipt> ApplyAsync(string collectionHandle, string planId, IReadOnlyCollection<string> selectedSourceVersionIds, string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<ReusableActivityImportReceipt> GetStatusAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
 }

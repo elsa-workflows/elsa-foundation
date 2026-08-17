@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using CShells.Lifecycle;
 using Microsoft.Extensions.Options;
 
@@ -7,7 +8,10 @@ public static class ShellReadinessEndpointExtensions
 {
     public static IEndpointRouteBuilder MapShellReadiness(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
+        endpoints.MapGet("/health/live", () => Results.Ok(new { status = "live" }))
+            .WithHostOwner("Elsa.Workbench")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .AllowPublic("health", "Reports whether the Workbench host process is live.");
         endpoints.MapGet("/health/ready", (IShellRegistry registry, ShellReadinessState state, IOptions<ShellReadinessOptions> options) =>
         {
             var shellName = options.Value.DefaultShellName;
@@ -33,7 +37,10 @@ public static class ShellReadinessEndpointExtensions
                 shell = shellName,
                 code = snapshot.Code
             }, statusCode: StatusCodes.Status503ServiceUnavailable);
-        });
+        })
+            .WithHostOwner("Elsa.Workbench")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .AllowPublic("health", "Reports whether the Workbench default shell is ready.");
 
         return endpoints;
     }

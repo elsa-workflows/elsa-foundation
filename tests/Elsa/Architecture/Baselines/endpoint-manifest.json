@@ -1,11 +1,11 @@
 {
   "entries": [
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: GET capabilities",
+      "displayName": "HTTP: GET /capabilities",
       "methods": [
         "GET"
       ],
@@ -35,7 +35,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.QVBJLUNBUEFCSUxJVElFUy5SRUFE"
+        "value": "Elsa.Permission:v1:s:QVBJLUNBUEFCSUxJVElFUy5SRUFE"
       },
       "sourceIdentity": "ElsaApiCapabilitiesEndpointsGetCapabilities"
     },
@@ -158,7 +158,7 @@
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsCatalogList"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
         "application/json"
@@ -193,12 +193,12 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaWorkflowsDesignApiEndpointsDefinitionsList"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],
@@ -232,9 +232,48 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RVhQUkVTU0lPTlMuUkVBRA"
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
       },
       "sourceIdentity": "ElsaExpressionsApiEndpointsListExpressionDescriptors"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET expressions/variable-types",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Expressions.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Expressions.Api.Models.VariableTypeDescriptorsResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/expressions/variable-types"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
+      },
+      "sourceIdentity": "ElsaExpressionsApiEndpointsListVariableTypeDescriptors"
     },
     {
       "authoringModel": "FastEndpoints",

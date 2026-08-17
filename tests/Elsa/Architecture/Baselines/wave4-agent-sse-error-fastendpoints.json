@@ -1,0 +1,24 @@
+{
+  "endpoint": "GET /_elsa/agent/sessions/session-1/stream",
+  "statusCode": 200,
+  "contentType": "text/event-stream",
+  "headers": {
+    "cache-control": "no-cache",
+    "connection": "keep-alive",
+    "x-accel-buffering": "no"
+  },
+  "event": {
+    "kind": 5,
+    "content": null,
+    "proposalId": null,
+    "error": {
+      "code": "agent.session.forbidden",
+      "message": "The agent session is not available to the current principal.",
+      "statusCode": 403
+    },
+    "id": "generated-by-agent-provider-primitives-new-id",
+    "createdAt": "DateTimeOffset.UtcNow",
+    "resultKind": null,
+    "payload": null
+  }
+}

@@ -20,8 +20,13 @@ public sealed class FastEndpointsRegistrationScanner
     public IReadOnlyList<FastEndpointsRegistration> Scan(IEnumerable<FastEndpointsSourceDocument> documents)
     {
         ArgumentNullException.ThrowIfNull(documents);
-        var sourceDocuments = documents.ToArray();
+        var sourceDocuments = documents.Where(document => !IsBuildArtifact(document.SourcePath ?? document.Identity)).ToArray();
         var constants = RouteConstantIndex.Create(sourceDocuments);
+        var parsedDocuments = sourceDocuments.Select(document => new ParsedSourceDocument(
+                document,
+                CSharpSyntaxTree.ParseText(document.Content, path: document.SourcePath ?? document.Identity)))
+            .ToArray();
+        var types = new FastEndpointsTypeIndex(parsedDocuments.SelectMany(document => document.Types));
         var ownerFingerprints = sourceDocuments
             .GroupBy(document => document.Owner ?? "<unknown>", StringComparer.Ordinal)
             .ToDictionary(
@@ -29,40 +34,39 @@ public sealed class FastEndpointsRegistrationScanner
                 group => Fingerprint(group.OrderBy(document => document.Identity, StringComparer.Ordinal)
                     .Select(document => document.Identity + "\n" + Normalize(document.Content))),
                 StringComparer.Ordinal);
-        return sourceDocuments.SelectMany(document => Scan(
+        return parsedDocuments.SelectMany(document => Scan(
                 document,
                 constants,
-                ownerFingerprints[document.Owner ?? "<unknown>"]))
+                ownerFingerprints[document.Source.Owner ?? "<unknown>"],
+                types))
             .OrderBy(registration => registration.Identity, StringComparer.Ordinal)
             .ToArray();
     }
 
     public IReadOnlyList<FastEndpointsRegistration> Scan(FastEndpointsSourceDocument document) =>
-        Scan(document, RouteConstantIndex.Create([document]), Fingerprint([Normalize(document.Content)]));
+        Scan([document]).ToArray();
 
     private static IReadOnlyList<FastEndpointsRegistration> Scan(
-        FastEndpointsSourceDocument document,
+        ParsedSourceDocument document,
         RouteConstantIndex constants,
-        string ownerFingerprint)
+        string ownerFingerprint,
+        FastEndpointsTypeIndex types)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var tree = CSharpSyntaxTree.ParseText(document.Content, path: document.SourcePath ?? document.Identity);
-        var root = tree.GetCompilationUnitRoot();
         var sourceHash = ownerFingerprint;
         var registrations = new List<FastEndpointsRegistration>();
-        foreach (var declaration in root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(IsFastEndpointsType))
+        foreach (var type in document.Types.Where(types.IsFastEndpointsType).Where(type => !type.IsAbstract))
         {
             var routes = new List<EndpointIdentity>();
             var dynamicRoute = false;
-            foreach (var invocation in declaration.Members.OfType<MethodDeclarationSyntax>()
-                         .Where(method => method.Identifier.ValueText == "Configure")
+            foreach (var invocation in types.GetEffectiveConfigureMethods(type)
                          .SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>())
                          .Where(invocation => TryGetHttpMethod(invocation.Expression, out _)))
             {
                 TryGetHttpMethod(invocation.Expression, out var method);
 
                 var routeExpression = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-                if (constants.TryResolve(routeExpression, document.Owner, out var route))
+                if (constants.TryResolve(routeExpression, document.Source.Owner, out var route))
                 {
                     routes.Add(new EndpointIdentity(route, method));
                 }
@@ -72,14 +76,14 @@ public sealed class FastEndpointsRegistrationScanner
                 }
             }
 
-            var identity = GetTypeIdentity(declaration);
+            var identity = type.Identity;
             registrations.Add(new FastEndpointsRegistration(
                 identity,
-                document.Owner ?? "<unknown>",
+                document.Source.Owner ?? "<unknown>",
                 routes.Distinct().OrderBy(route => route.Route.Value, StringComparer.Ordinal).ThenBy(route => route.Method.Value, StringComparer.Ordinal).ToArray(),
-                document.DynamicallyUnloadable,
+                document.Source.DynamicallyUnloadable,
                 dynamicRoute,
-                document.SourcePath ?? document.Identity,
+                document.Source.SourcePath ?? document.Source.Identity,
                 sourceHash));
         }
 
@@ -108,16 +112,6 @@ public sealed class FastEndpointsRegistrationScanner
         return Scan(new FastEndpointsSourceDocument(sourceIdentity, source, owner, dynamicallyUnloadable));
     }
 
-    private static bool IsFastEndpointsType(ClassDeclarationSyntax declaration)
-    {
-        if (declaration.BaseList is null)
-            return false;
-
-        return declaration.BaseList.Types
-            .Select(type => type.Type.ToString().Split('<')[0].Split('.').Last())
-            .Any(type => type is "Endpoint" or "EndpointWithoutRequest" or "EndpointWithMapper" || type.StartsWith("ElsaEndpoint", StringComparison.Ordinal));
-    }
-
     private static string GetTypeIdentity(ClassDeclarationSyntax declaration)
     {
         var names = new Stack<string>();
@@ -140,6 +134,192 @@ public sealed class FastEndpointsRegistrationScanner
         }
 
         return string.Join('.', names);
+    }
+
+    private static bool IsBuildArtifact(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        return normalized.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment is "bin" or "obj");
+    }
+
+    private sealed class ParsedSourceDocument
+    {
+        public ParsedSourceDocument(FastEndpointsSourceDocument source, SyntaxTree tree)
+        {
+            Source = source;
+            Types = tree.GetCompilationUnitRoot().DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .Select(declaration => new FastEndpointsType(
+                    GetTypeIdentity(declaration),
+                    source.Owner ?? "<unknown>",
+                    declaration,
+                    declaration.BaseList?.Types.Select(baseType => new FastEndpointsTypeReference(
+                        NormalizeTypeName(baseType.Type), GetGenericArity(baseType.Type))).ToArray() ?? []))
+                .ToArray();
+        }
+
+        public FastEndpointsSourceDocument Source { get; }
+        public IReadOnlyList<FastEndpointsType> Types { get; }
+    }
+
+    private sealed class FastEndpointsTypeIndex
+    {
+        private static readonly string[] KnownEndpointBaseNames = ["Endpoint", "EndpointWithoutRequest", "EndpointWithMapper"];
+        private readonly IReadOnlyDictionary<(string Owner, string Identity, int Arity), FastEndpointsType> _byIdentity;
+        private readonly IReadOnlyDictionary<(string Owner, string Name, int Arity), FastEndpointsType[]> _bySimpleName;
+        private readonly IReadOnlyDictionary<(string Identity, int Arity), FastEndpointsType> _byGlobalIdentity;
+        private readonly IReadOnlyDictionary<(string Name, int Arity), FastEndpointsType[]> _byGlobalSimpleName;
+
+        public FastEndpointsTypeIndex(IEnumerable<FastEndpointsType> types)
+        {
+            var allTypes = types.ToArray();
+            _byIdentity = allTypes
+                .GroupBy(type => (type.Owner, type.Identity, type.GenericArity))
+                .ToDictionary(group => group.Key, group => group.First());
+            _bySimpleName = allTypes
+                .GroupBy(type => (type.Owner, SimpleTypeName(type.Identity), type.GenericArity))
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            _byGlobalIdentity = allTypes
+                .GroupBy(type => (type.Identity, type.GenericArity))
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single());
+            _byGlobalSimpleName = allTypes
+                .GroupBy(type => (SimpleTypeName(type.Identity), type.GenericArity))
+                .ToDictionary(group => group.Key, group => group.ToArray());
+        }
+
+        public bool IsFastEndpointsType(FastEndpointsType type) => IsFastEndpointsType(type, []);
+
+        public IReadOnlyList<MethodDeclarationSyntax> GetEffectiveConfigureMethods(FastEndpointsType type)
+        {
+            var methods = new List<MethodDeclarationSyntax>();
+            CollectEffectiveConfigureMethods(type, [], methods);
+            return methods;
+        }
+
+        private void CollectEffectiveConfigureMethods(
+            FastEndpointsType type,
+            HashSet<string> visited,
+            List<MethodDeclarationSyntax> methods)
+        {
+            if (!visited.Add($"{type.Identity}`{type.GenericArity}"))
+                return;
+
+            var configureMethods = type.Declaration.Members.OfType<MethodDeclarationSyntax>()
+                .Where(method => method.Identifier.ValueText == "Configure" && method.ParameterList.Parameters.Count == 0)
+                .ToArray();
+            if (configureMethods.Length == 0)
+            {
+                if (ResolveBaseType(type) is { } inherited)
+                    CollectEffectiveConfigureMethods(inherited, visited, methods);
+                return;
+            }
+
+            methods.AddRange(configureMethods);
+            if (configureMethods.Any(CallsBaseConfigure) && ResolveBaseType(type) is { } baseType)
+                CollectEffectiveConfigureMethods(baseType, visited, methods);
+        }
+
+        private bool IsFastEndpointsType(FastEndpointsType type, HashSet<string> visited)
+        {
+            if (!visited.Add($"{type.Identity}`{type.GenericArity}"))
+                return false;
+
+            foreach (var baseType in type.BaseTypes)
+            {
+                if (IsKnownEndpointBase(baseType))
+                    return true;
+
+                if (ResolveBaseType(type, baseType) is { } inherited && IsFastEndpointsType(inherited, visited))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private FastEndpointsType? ResolveBaseType(FastEndpointsType type) =>
+            type.BaseTypes.Select(baseType => ResolveBaseType(type, baseType)).FirstOrDefault(candidate => candidate is not null);
+
+        private FastEndpointsType? ResolveBaseType(FastEndpointsType type, FastEndpointsTypeReference baseType)
+        {
+            var owner = type.Owner;
+            var identity = baseType.Identity.TrimStart('.');
+            foreach (var candidateIdentity in GetIdentityCandidates(type, identity))
+            {
+                if (_byIdentity.TryGetValue((owner, candidateIdentity, baseType.GenericArity), out var exact))
+                    return exact;
+
+                if (_byGlobalIdentity.TryGetValue((candidateIdentity, baseType.GenericArity), out var globalExact))
+                    return globalExact;
+            }
+
+            var candidates = _bySimpleName.GetValueOrDefault((owner, SimpleTypeName(identity), baseType.GenericArity)) ?? [];
+            if (candidates.Length == 1)
+                return candidates[0];
+
+            var globalCandidates = _byGlobalSimpleName.GetValueOrDefault((SimpleTypeName(identity), baseType.GenericArity)) ?? [];
+            return globalCandidates.Length == 1 ? globalCandidates[0] : null;
+        }
+
+        private static IEnumerable<string> GetIdentityCandidates(FastEndpointsType type, string identity)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var scope = type.Identity.LastIndexOf('.');
+            while (scope > 0)
+            {
+                var containingScope = type.Identity[..scope];
+                var candidate = $"{containingScope}.{identity}";
+                if (seen.Add(candidate))
+                    yield return candidate;
+                scope = containingScope.LastIndexOf('.');
+            }
+
+            if (seen.Add(identity))
+                yield return identity;
+        }
+
+        private static bool IsKnownEndpointBase(FastEndpointsTypeReference baseType)
+        {
+            var simpleName = SimpleTypeName(baseType.Identity);
+            return KnownEndpointBaseNames.Contains(simpleName, StringComparer.Ordinal) ||
+                   simpleName.StartsWith("ElsaEndpoint", StringComparison.Ordinal);
+        }
+
+        private static bool CallsBaseConfigure(MethodDeclarationSyntax method) => method.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Any(invocation => invocation.Expression is MemberAccessExpressionSyntax member &&
+                               member.Expression is BaseExpressionSyntax &&
+                               member.Name.Identifier.ValueText == "Configure");
+
+        private static string SimpleTypeName(string name) => name.Split('.').Last();
+    }
+
+    private sealed record FastEndpointsType(
+        string Identity,
+        string Owner,
+        ClassDeclarationSyntax Declaration,
+        IReadOnlyList<FastEndpointsTypeReference> BaseTypes)
+    {
+        public int GenericArity => Declaration.TypeParameterList?.Parameters.Count ?? 0;
+        public bool IsAbstract => Declaration.Modifiers.Any(SyntaxKind.AbstractKeyword);
+    }
+
+    private sealed record FastEndpointsTypeReference(string Identity, int GenericArity);
+
+    private static int GetGenericArity(TypeSyntax type) => type switch
+    {
+        GenericNameSyntax generic => generic.TypeArgumentList.Arguments.Count,
+        QualifiedNameSyntax qualified => GetGenericArity(qualified.Right),
+        AliasQualifiedNameSyntax aliasQualified => GetGenericArity(aliasQualified.Name),
+        _ => 0
+    };
+
+    private static string NormalizeTypeName(TypeSyntax type)
+    {
+        var name = type.ToString().Replace("global::", string.Empty, StringComparison.Ordinal);
+        var genericStart = name.IndexOf('<');
+        return (genericStart < 0 ? name : name[..genericStart]).Trim();
     }
 
     private sealed class RouteConstantIndex

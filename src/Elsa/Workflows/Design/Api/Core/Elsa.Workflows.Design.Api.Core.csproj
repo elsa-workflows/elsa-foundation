@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Elsa.Workflows.Design.Api</RootNamespace>
+    <AssemblyName>Elsa.Workflows.Design.Api.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Models\*.cs" />
+    <Compile Include="..\Requests\*.cs" />
+    <Compile Include="..\Commands\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+  </ItemGroup>
+
+</Project>

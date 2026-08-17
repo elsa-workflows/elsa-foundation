@@ -3,6 +3,7 @@
   <ItemGroup>
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
@@ -14,7 +15,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Apps\Elsa.Workbench\Elsa.Workbench.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Git\Elsa.Git.csproj" />

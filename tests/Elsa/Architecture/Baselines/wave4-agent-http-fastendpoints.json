@@ -1,0 +1,192 @@
+[
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022capabilities\u0022: [\n      {\n        \u0022description\u0022: \u0022Explain a workflow.\u0022,\n        \u0022displayName\u0022: \u0022Explain\u0022,\n        \u0022id\u0022: \u0022workflow.explain\u0022,\n        \u0022kind\u0022: \u0022answer\u0022,\n        \u0022moduleId\u0022: \u0022agent\u0022,\n        \u0022requiredPermissions\u0022: [\n          \u0022agent.use\u0022\n        ],\n        \u0022requiresApproval\u0022: false,\n        \u0022risk\u0022: \u0022read-only\u0022,\n        \u0022surfaces\u0022: [\n          \u0022studio\u0022\n        ]\n      }\n    ],\n    \u0022enabled\u0022: true,\n    \u0022modes\u0022: [\n      \u0022explain\u0022\n    ],\n    \u0022policy\u0022: {\n      \u0022allowedAutonomyModes\u0022: [\n        \u0022manual\u0022,\n        \u0022auto-read-only\u0022,\n        \u0022full-auto\u0022\n      ],\n      \u0022contextVisibility\u0022: true,\n      \u0022defaultAutonomyMode\u0022: \u0022auto-read-only\u0022,\n      \u0022maxAutonomyMode\u0022: \u0022full-auto\u0022,\n      \u0022retentionLabel\u0022: \u0022Configured by administrator\u0022\n    },\n    \u0022provider\u0022: {\n      \u0022isAvailable\u0022: true,\n      \u0022metadata\u0022: {},\n      \u0022providerId\u0022: \u0022provider-1\u0022,\n      \u0022providerKind\u0022: \u0022provider-sdk-binding\u0022,\n      \u0022riskProfile\u0022: \u0022read-only\u0022,\n      \u0022status\u0022: \u0022available\u0022,\n      \u0022supportedOperations\u0022: [\n        \u0022chat\u0022,\n        \u0022streaming\u0022\n      ]\n    },\n    \u0022providerStatus\u0022: \u0022available\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "bootstrap",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/agent/bootstrap",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022capabilities\u0022: [\n      {\n        \u0022description\u0022: \u0022Explain a workflow.\u0022,\n        \u0022displayName\u0022: \u0022Explain\u0022,\n        \u0022id\u0022: \u0022workflow.explain\u0022,\n        \u0022kind\u0022: \u0022answer\u0022,\n        \u0022moduleId\u0022: \u0022agent\u0022,\n        \u0022requiredPermissions\u0022: [\n          \u0022agent.use\u0022\n        ],\n        \u0022requiresApproval\u0022: false,\n        \u0022risk\u0022: \u0022read-only\u0022,\n        \u0022surfaces\u0022: [\n          \u0022studio\u0022\n        ]\n      }\n    ],\n    \u0022enabled\u0022: true,\n    \u0022modes\u0022: [\n      \u0022explain\u0022\n    ],\n    \u0022policy\u0022: {\n      \u0022allowedAutonomyModes\u0022: [\n        \u0022manual\u0022,\n        \u0022auto-read-only\u0022,\n        \u0022full-auto\u0022\n      ],\n      \u0022contextVisibility\u0022: true,\n      \u0022defaultAutonomyMode\u0022: \u0022auto-read-only\u0022,\n      \u0022maxAutonomyMode\u0022: \u0022full-auto\u0022,\n      \u0022retentionLabel\u0022: \u0022Configured by administrator\u0022\n    },\n    \u0022provider\u0022: {\n      \u0022isAvailable\u0022: true,\n      \u0022metadata\u0022: {},\n      \u0022providerId\u0022: \u0022provider-1\u0022,\n      \u0022providerKind\u0022: \u0022provider-sdk-binding\u0022,\n      \u0022riskProfile\u0022: \u0022read-only\u0022,\n      \u0022status\u0022: \u0022available\u0022,\n      \u0022supportedOperations\u0022: [\n        \u0022chat\u0022,\n        \u0022streaming\u0022\n      ]\n    },\n    \u0022providerStatus\u0022: \u0022available\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022contextAttachments\u0022: [],\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022active\u0022,\n    \u0022title\u0022: \u0022Agent session\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "sessions",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/sessions",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022contextAttachments\u0022: [],\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022active\u0022,\n    \u0022title\u0022: \u0022Agent session\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022contextAttachments\u0022: [],\n    \u0022messages\u0022: [\n      {\n        \u0022content\u0022: \u0022hello\u0022,\n        \u0022id\u0022: \u0022message-1\u0022,\n        \u0022role\u0022: \u0022user\u0022,\n        \u0022status\u0022: \u0022pending\u0022\n      }\n    ],\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022active\u0022,\n    \u0022title\u0022: \u0022Agent session\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "session",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/agent/sessions/session-1",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022contextAttachments\u0022: [],\n    \u0022messages\u0022: [\n      {\n        \u0022content\u0022: \u0022hello\u0022,\n        \u0022id\u0022: \u0022message-1\u0022,\n        \u0022role\u0022: \u0022user\u0022,\n        \u0022status\u0022: \u0022pending\u0022\n      }\n    ],\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022active\u0022,\n    \u0022title\u0022: \u0022Agent session\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022message\u0022: {\n      \u0022capabilityId\u0022: null,\n      \u0022completedAt\u0022: null,\n      \u0022content\u0022: \u0022hello\u0022,\n      \u0022context\u0022: [],\n      \u0022contextAttachmentIds\u0022: [],\n      \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022error\u0022: null,\n      \u0022id\u0022: \u0022message-1\u0022,\n      \u0022proposalIds\u0022: [],\n      \u0022role\u0022: \u0022user\u0022,\n      \u0022sessionId\u0022: \u0022session-1\u0022,\n      \u0022status\u0022: \u0022pending\u0022\n    },\n    \u0022warnings\u0022: []\n  },\n  \u0022error\u0022: null\n}",
+    "case": "message",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/sessions/session-1/messages",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022message\u0022: {\n      \u0022capabilityId\u0022: null,\n      \u0022completedAt\u0022: null,\n      \u0022content\u0022: \u0022hello\u0022,\n      \u0022context\u0022: [],\n      \u0022contextAttachmentIds\u0022: [],\n      \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n      \u0022error\u0022: null,\n      \u0022id\u0022: \u0022message-1\u0022,\n      \u0022proposalIds\u0022: [],\n      \u0022role\u0022: \u0022user\u0022,\n      \u0022sessionId\u0022: \u0022session-1\u0022,\n      \u0022status\u0022: \u0022pending\u0022\n    },\n    \u0022warnings\u0022: []\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022cancelled\u0022: false,\n    \u0022turnId\u0022: \u0022turn-1\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "cancel",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/sessions/session-1/turns/turn-1/cancel",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022cancelled\u0022: false,\n    \u0022turnId\u0022: \u0022turn-1\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "route=sessionId",
+    "body": "data: {\u0022Id\u0022:\u0022event-1\u0022,\u0022Kind\u0022:1,\u0022Content\u0022:\u0022hello\u0022,\u0022ProposalId\u0022:null,\u0022Error\u0022:null,\u0022CreatedAt\u0022:\u00222026-08-16T12:00:00\u002B00:00\u0022,\u0022ResultKind\u0022:null,\u0022Payload\u0022:null}\n\ndata: {\u0022Id\u0022:\u0022event-2\u0022,\u0022Kind\u0022:4,\u0022Content\u0022:null,\u0022ProposalId\u0022:null,\u0022Error\u0022:null,\u0022CreatedAt\u0022:\u00222026-08-16T12:00:00\u002B00:00\u0022,\u0022ResultKind\u0022:null,\u0022Payload\u0022:null}",
+    "case": "stream",
+    "contentType": "text/event-stream",
+    "endpoint": "GET /_elsa/agent/sessions/{param}/stream",
+    "headers": {
+      "cache-control": "no-cache",
+      "connection": "keep-alive",
+      "content-type": "text/event-stream",
+      "x-accel-buffering": "no"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "data: {\u0022Id\u0022:\u0022event-1\u0022,\u0022Kind\u0022:1,\u0022Content\u0022:\u0022hello\u0022,\u0022ProposalId\u0022:null,\u0022Error\u0022:null,\u0022CreatedAt\u0022:\u00222026-08-16T12:00:00\u002B00:00\u0022,\u0022ResultKind\u0022:null,\u0022Payload\u0022:null}\n\ndata: {\u0022Id\u0022:\u0022event-2\u0022,\u0022Kind\u0022:4,\u0022Content\u0022:null,\u0022ProposalId\u0022:null,\u0022Error\u0022:null,\u0022CreatedAt\u0022:\u00222026-08-16T12:00:00\u002B00:00\u0022,\u0022ResultKind\u0022:null,\u0022Payload\u0022:null}\n\n",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022actorId\u0022: \u0022actor-1\u0022,\n    \u0022comment\u0022: null,\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022feedback-1\u0022,\n    \u0022messageId\u0022: null,\n    \u0022rating\u0022: \u0022positive\u0022,\n    \u0022sessionId\u0022: \u0022session-1\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "feedback",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/feedback",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022actorId\u0022: \u0022actor-1\u0022,\n    \u0022comment\u0022: null,\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022feedback-1\u0022,\n    \u0022messageId\u0022: null,\n    \u0022rating\u0022: \u0022positive\u0022,\n    \u0022sessionId\u0022: \u0022session-1\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022approvedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022approvedBy\u0022: \u0022actor-1\u0022,\n    \u0022baseRevision\u0022: null,\n    \u0022capabilityId\u0022: \u0022workflow.explain\u0022,\n    \u0022changes\u0022: [],\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022proposal-1\u0022,\n    \u0022kind\u0022: \u0022answer\u0022,\n    \u0022messageId\u0022: null,\n    \u0022operations\u0022: [],\n    \u0022requiredPermissions\u0022: [],\n    \u0022requiresApproval\u0022: false,\n    \u0022resourceId\u0022: null,\n    \u0022resourceType\u0022: null,\n    \u0022risk\u0022: \u0022readOnly\u0022,\n    \u0022risks\u0022: [],\n    \u0022rollback\u0022: null,\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022approved\u0022,\n    \u0022summary\u0022: \u0022Summary\u0022,\n    \u0022title\u0022: \u0022Proposal\u0022,\n    \u0022updatedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "approve",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/proposals/proposal-1/approve",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022approvedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022approvedBy\u0022: \u0022actor-1\u0022,\n    \u0022baseRevision\u0022: null,\n    \u0022capabilityId\u0022: \u0022workflow.explain\u0022,\n    \u0022changes\u0022: [],\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022proposal-1\u0022,\n    \u0022kind\u0022: \u0022answer\u0022,\n    \u0022messageId\u0022: null,\n    \u0022operations\u0022: [],\n    \u0022requiredPermissions\u0022: [],\n    \u0022requiresApproval\u0022: false,\n    \u0022resourceId\u0022: null,\n    \u0022resourceType\u0022: null,\n    \u0022risk\u0022: \u0022readOnly\u0022,\n    \u0022risks\u0022: [],\n    \u0022rollback\u0022: null,\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022approved\u0022,\n    \u0022summary\u0022: \u0022Summary\u0022,\n    \u0022title\u0022: \u0022Proposal\u0022,\n    \u0022updatedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022approvedAt\u0022: null,\n    \u0022approvedBy\u0022: null,\n    \u0022baseRevision\u0022: null,\n    \u0022capabilityId\u0022: \u0022workflow.explain\u0022,\n    \u0022changes\u0022: [],\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022proposal-1\u0022,\n    \u0022kind\u0022: \u0022answer\u0022,\n    \u0022messageId\u0022: null,\n    \u0022operations\u0022: [],\n    \u0022requiredPermissions\u0022: [],\n    \u0022requiresApproval\u0022: false,\n    \u0022resourceId\u0022: null,\n    \u0022resourceType\u0022: null,\n    \u0022risk\u0022: \u0022readOnly\u0022,\n    \u0022risks\u0022: [],\n    \u0022rollback\u0022: null,\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022denied\u0022,\n    \u0022summary\u0022: \u0022Summary\u0022,\n    \u0022title\u0022: \u0022Proposal\u0022,\n    \u0022updatedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "deny",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/proposals/proposal-1/deny",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022approvedAt\u0022: null,\n    \u0022approvedBy\u0022: null,\n    \u0022baseRevision\u0022: null,\n    \u0022capabilityId\u0022: \u0022workflow.explain\u0022,\n    \u0022changes\u0022: [],\n    \u0022createdAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022,\n    \u0022id\u0022: \u0022proposal-1\u0022,\n    \u0022kind\u0022: \u0022answer\u0022,\n    \u0022messageId\u0022: null,\n    \u0022operations\u0022: [],\n    \u0022requiredPermissions\u0022: [],\n    \u0022requiresApproval\u0022: false,\n    \u0022resourceId\u0022: null,\n    \u0022resourceType\u0022: null,\n    \u0022risk\u0022: \u0022readOnly\u0022,\n    \u0022risks\u0022: [],\n    \u0022rollback\u0022: null,\n    \u0022sessionId\u0022: \u0022session-1\u0022,\n    \u0022status\u0022: \u0022denied\u0022,\n    \u0022summary\u0022: \u0022Summary\u0022,\n    \u0022title\u0022: \u0022Proposal\u0022,\n    \u0022updatedAt\u0022: \u00222026-08-16T12:00:00\\u002B00:00\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: {\n    \u0022executed\u0022: true,\n    \u0022message\u0022: \u0022executed\u0022,\n    \u0022proposalId\u0022: \u0022proposal-1\u0022,\n    \u0022resourceId\u0022: \u0022workflow-1\u0022,\n    \u0022resourceType\u0022: \u0022workflow\u0022,\n    \u0022summary\u0022: \u0022executed\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "case": "execute",
+    "contentType": "application/json",
+    "endpoint": "POST /_elsa/agent/proposals/proposal-1/execute",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: {\n    \u0022executed\u0022: true,\n    \u0022message\u0022: \u0022executed\u0022,\n    \u0022proposalId\u0022: \u0022proposal-1\u0022,\n    \u0022resourceId\u0022: \u0022workflow-1\u0022,\n    \u0022resourceType\u0022: \u0022workflow\u0022,\n    \u0022summary\u0022: \u0022executed\u0022\n  },\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "",
+    "body": "{\n  \u0022data\u0022: [],\n  \u0022error\u0022: null\n}",
+    "case": "audit",
+    "contentType": "application/json",
+    "endpoint": "GET /_elsa/agent/audit",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "json": "{\n  \u0022data\u0022: [],\n  \u0022error\u0022: null\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

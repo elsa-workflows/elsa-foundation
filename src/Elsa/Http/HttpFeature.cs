@@ -1,12 +1,18 @@
-﻿using CShells.Features;
+﻿using CShells;
+using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Models;
+using Elsa.Http.Core.Options;
 using Elsa.Http.Options;
 using Elsa.Http.Services;
 using Elsa.Primitives.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Reflection;
 
 namespace Elsa.Http;
@@ -53,6 +59,19 @@ public class HttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        // Register in the child shell, after CShells has composed root endpoint sources into that shell. This
+        // keeps Foundation Host independent of Elsa.Http while allowing the adapter to see the real manifest.
+        services.TryAddScoped<IHttpRouteManifestProvider>(serviceProvider =>
+        {
+            var shellSettings = serviceProvider.GetService<ShellSettings>();
+            return shellSettings is null
+                ? new EmptyHttpRouteManifestProvider()
+                : new AspNetCoreHttpRouteManifestProvider(
+                    serviceProvider.GetServices<EndpointDataSource>(),
+                    shellSettings);
+        });
+        services.TryAddSingleton<RouteTableState>();
+
         RegisterType<IContentTypeProvider>(services, ContentTypeProviderType);
         RegisterType<IZipFileCacheStorageProviders>(services, ZipFileCacheProviderType);
         RegisterType<IZipArchiveManager>(services, ZipArchiveManagerType);
@@ -65,14 +84,19 @@ public class HttpFeature : IShellFeature
             o.LocalCacheDirectory = LocalCacheDirectory;
         });
 
-        // Namespace the per-shell route table's cache key with the shell settings id (issue #592 item 5) so its
-        // isolation survives a future root-promoted, shell-shared IMemoryCache.
+        // Stamp the per-shell ownership discriminator. The child provider's RouteTableState singleton owns route
+        // authority and synchronization; this value is diagnostic identity, not a process-global cache key.
         var shellDiscriminator = _context.Settings.Id.ToString();
         services.Configure<RouteTableOptions>(o => o.ShellDiscriminator = shellDiscriminator);
 
         services
             .AddHttpContextAccessor()
-            .AddScoped<IRouteTable, RouteTable>()
+            .AddScoped<IRouteTable>(serviceProvider => new RouteTable(
+                serviceProvider.GetRequiredService<RouteTableState>(),
+                serviceProvider.GetRequiredService<ILogger<RouteTable>>(),
+                serviceProvider.GetService<IOptions<RouteTableOptions>>(),
+                serviceProvider.GetService<IHttpRouteManifestProvider>(),
+                serviceProvider.GetService<IOptions<HttpRoutePublicationOptions>>()))
             .AddSingleton<IRouteMatcher, RouteMatcher>()
 
             .AddSingleton<IHttpContentParser, JsonHttpContentParser>()
@@ -126,5 +150,10 @@ public class HttpFeature : IShellFeature
     {
         var type = typeName.GetLoadedType();
         services.AddScoped(typeof(TService), type);
+    }
+
+    private sealed class EmptyHttpRouteManifestProvider : IHttpRouteManifestProvider
+    {
+        public IEnumerable<HttpRouteData> GetRoutes() => [];
     }
 }

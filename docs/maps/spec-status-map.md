@@ -194,3 +194,12 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Draft | - | 35 | 0 | retained |
 | [154-secrets-api-migration](../../specs/154-secrets-api-migration/spec.md) | Secrets API Minimal API Migration | Draft | - | 42 | 0 | retained, out of scope |
 | [155-structured-logs-api-migration](../../specs/155-structured-logs-api-migration/spec.md) | Structured Logs API Minimal API Migration | Draft | - | 46 | 0 | retained, out of scope |
+| [156-retained-host-route-metadata](../../specs/156-retained-host-route-metadata/spec.md) | Retained Host Route Ownership and Security Metadata | Implemented | - | 14 | 0 | retained |
+| [157-workflow-dynamic-http-publication](../../specs/157-workflow-dynamic-http-publication/spec.md) | Workflow-authored Dynamic HTTP Publication | Draft | - | 10 | 0 | out of scope |
+| [158-wave1-small-read-api-migration](../../specs/158-wave1-small-read-api-migration/spec.md) | Wave 1 Small and Read-Oriented REST API Migration | Implemented | - | 16 | 0 | retained, out of scope |
+| [159-wave2-bounded-api-migration](../../specs/159-wave2-bounded-api-migration/spec.md) | Wave 2 Bounded API Migration | Draft | - | 22 | 0 | - |
+| [160-foundation-identity-minimal-api](../../specs/160-foundation-identity-minimal-api/spec.md) | Foundation Identity Minimal API Migration | Implemented | - | 18 | 0 | retained |
+| [161-agent-api-minimal-migration](../../specs/161-agent-api-minimal-migration/spec.md) | Wave 4 Agent REST and SSE API Migration | Implementation and control-room integration gates complete; independent final review pending | - | 15 | 0 | - |
+| [162-opentelemetry-api-migration](../../specs/162-opentelemetry-api-migration/spec.md) | OpenTelemetry API Minimal API Migration | Draft | - | 10 | 0 | retained |
+| [163-wave6-workflows-design-review](../../specs/163-wave6-workflows-design-review/spec.md) | Wave 6 Workflows Design API Review Corrections | Implementation | - | 20 | 0 | retained |
+| [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | Implemented — merged by #1394 as `efe280446cafc998cbeb305bf235527eafd30b19` | - | 39 | 0 | retained, out of scope |

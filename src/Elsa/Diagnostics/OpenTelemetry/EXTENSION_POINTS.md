@@ -70,7 +70,7 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 
 - The **OTLP/HTTP protobuf parser** (`OtlpHttpProtobufParser` + the internal `ProtobufReader`) is the verbatim, dependency-free wire decoder; it is internal machinery behind the collector endpoints, not a seam. It is exercised directly by unit tests via `InternalsVisibleTo`.
 - **`OtlpHttpIngestionHandler`** is the public, non-replaceable orchestration surface shared by both receiver compositions: authenticate → read/decompress under the configured limit → parse → call the context-aware ingestor. The parser remains internal machinery.
-- **`MapOpenTelemetryOtlpReceiver()`** maps exactly `POST {base}/traces`, `metrics`, and `logs` on any ASP.NET Core `IEndpointRouteBuilder`. Shell hosts can instead use the FastEndpoints collector endpoints auto-mapped through `MapShells()`; those endpoints delegate to the same handler. Do not map both surfaces in one route table.
+- **`MapOpenTelemetryOtlpReceiver()`** maps exactly `POST {base}/traces`, `metrics`, and `logs` on any ASP.NET Core `IEndpointRouteBuilder`. Shell composition uses this same owner mapper; do not map the collector routes a second time in one route table.
 - The **SSE `stream` endpoint** is a separate transport surface; the wire JSON/SSE shape is owned by `OpenTelemetryStreamItemSerializer` + `OpenTelemetrySseFormatter` (see [`README.md`](README.md)).
 
 ## Deferred
@@ -89,7 +89,7 @@ or supported companion to the Groundwork v2 host. The measured cutover deletes t
 ## Notes
 
 - Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from bounded `ReadAfterAsync` pages using an opaque committed cursor). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
-- This domain uses **SSE instead of SignalR** and exposes the same OTLP handler through both FastEndpoints shell composition and an explicit ASP.NET Core route mapper. See [`README.md`](README.md#deviations-from-the-elsa-core-source).
+- This domain uses **SSE instead of SignalR** and exposes the same OTLP handler through the owner Minimal API route mapper. See [`README.md`](README.md#deviations-from-the-elsa-core-source).
 
 ---
 

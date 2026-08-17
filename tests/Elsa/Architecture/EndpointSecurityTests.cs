@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
@@ -7,13 +5,15 @@ using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
 using Elsa.Api.FastEndpoints.Constants;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Expressions.Api;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa3.Activities.Design.Import;
 using FastEndpoints;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
@@ -21,6 +21,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -35,12 +37,9 @@ public sealed class EndpointSecurityTests
 {
     private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
     [
-        ("Workflow Design", "src/Elsa/Workflows/Design/Api/Endpoints"),
         ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints"),
-        ("Expressions", "src/Elsa/Expressions/Api/Endpoints"),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
         ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints"),
-        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints"),
         ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints"),
         ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints")
     ];
@@ -245,37 +244,17 @@ public sealed class EndpointSecurityTests
     [Fact]
     public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
     {
-        var endpointType = typeof(ApiCapabilitiesFeature).Assembly.GetType(
-            "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
-            throwOnError: true)!;
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single().GetParameters()
-            .Select(parameter => parameter.ParameterType.IsInterface
-                ? DispatchProxy.Create(parameter.ParameterType, typeof(NoopProxy))
-                : RuntimeHelpers.GetUninitializedObject(parameter.ParameterType))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(DefaultHttpContext) &&
-                              rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        // Factory.Create otherwise falls back to FastEndpoints' process-global service resolver. The
-        // representative management host in this assembly can replace and dispose that resolver concurrently.
-        // Supplying request services keeps this configuration-only assertion isolated from the host lifecycle.
-        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
-        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
-        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
-        endpoint.Configure();
-
-        var policyName = Assert.Single(endpoint.Definition.PreBuiltUserPolicies!.Distinct(StringComparer.Ordinal));
-        var policy = new PermissionPolicyCodec().Parse(policyName);
+        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(serviceProvider);
+        ApiCapabilitiesApi.MapApiCapabilitiesApi(routes);
+        var endpoint = Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints));
+        var security = endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>();
+        Assert.NotNull(security);
+        var policy = new PermissionPolicyCodec().Parse(security!.Value!);
         Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
-        Assert.Equal(PermissionRequirementMode.Any, policy.Descriptor!.Mode);
-        Assert.Contains(PermissionKey.Normalize(PermissionNames.ApiCapabilitiesRead), policy.Descriptor.Permissions);
-        Assert.Contains(PermissionKey.Normalize(PermissionNames.All), policy.Descriptor.Permissions);
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        Assert.Equal(PermissionRequirementMode.Single, policy.Descriptor!.Mode);
+        Assert.Equal([PermissionKey.Normalize(PermissionNames.ApiCapabilitiesRead)], policy.Descriptor.Permissions);
+        Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
     }
 
     private static RouteEndpoint Endpoint(string route, IReadOnlyList<EndpointSecurityDispositionMetadata> dispositions)
@@ -316,6 +295,13 @@ public sealed class EndpointSecurityTests
     {
         public override IReadOnlyList<Endpoint> Endpoints => endpoints;
         public override IChangeToken GetChangeToken() => new CancellationChangeToken(CancellationToken.None);
+    }
+
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
+    {
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 
     private class NoopProxy : DispatchProxy

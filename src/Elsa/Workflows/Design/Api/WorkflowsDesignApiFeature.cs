@@ -1,19 +1,22 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Api.FastEndpoints;
-using Elsa.Mediator.Core.Extensions;
-using Elsa.Events.Core.Extensions;
-using Elsa.Workflows.Design.Core.Extensions;
-using Elsa.Workflows.Design.Core.Contracts;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Elsa.Tasks.Core;
-using Elsa.Workflows.Design.Api.Services;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Mediator.Core.Extensions;
+using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Capabilities;
+using Elsa.Workflows.Design.Api.Services;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -27,12 +30,10 @@ namespace Elsa.Workflows.Design.Api;
     Description = "Contains endpoints to manage data in the Workflows Design Domain",
     DependsOn = new object[] { "ApiCapabilities" }
 )]
-public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
+public class WorkflowsDesignApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         var assembly = GetType().Assembly;
 
         services.AddEventHandlersFrom(assembly);
@@ -51,5 +52,13 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsDesignJsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsDesignJsonTypeInfoResolver());
+        });
     }
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        WorkflowsDesignApi.MapWorkflowsDesignApi(endpoints);
 }

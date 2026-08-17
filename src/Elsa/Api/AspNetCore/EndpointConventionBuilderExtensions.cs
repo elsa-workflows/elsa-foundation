@@ -1,5 +1,8 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Api.AspNetCore;
 
@@ -29,8 +32,17 @@ public static class EndpointConventionBuilderExtensions
         where TBuilder : IEndpointConventionBuilder
     {
         AddMetadata(builder, EndpointSecurityDispositionMetadata.HostCredential(credential, owner));
+        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
         return AddMetadata(builder, new AuthorizeAttribute { AuthenticationSchemes = credential });
     }
+
+    /// <summary>
+    /// Records a host-credential filter that is enforced by an endpoint filter
+    /// rather than ASP.NET Core authorization middleware.
+    /// </summary>
+    public static TBuilder WithHostCredentialEnforcement<TBuilder>(this TBuilder builder, string credential, string owner)
+        where TBuilder : IEndpointConventionBuilder =>
+        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
 
     public static TBuilder RequireNamedPolicy<TBuilder>(this TBuilder builder, string policy, string owner)
         where TBuilder : IEndpointConventionBuilder
@@ -47,6 +59,35 @@ public static class EndpointConventionBuilderExtensions
         where TBuilder : IEndpointConventionBuilder =>
         AddMetadata(builder, new EndpointAuthoringMetadata(model));
 
+    /// <summary>
+    /// Validates the completed endpoint metadata as the final standard ASP.NET Core convention.
+    /// The returned builder is the original builder and no request, routing, authorization, binding,
+    /// serialization, or result behavior is changed.
+    /// </summary>
+    public static TBuilder RequireStableOpenApi<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Finally(OpenApiLifetimeValidator.ValidateAndMark);
+        return builder;
+    }
+
+    /// <summary>
+    /// Preserves the host application's OpenAPI tag without introducing a module-specific endpoint
+    /// authoring abstraction. The tag is ordinary ASP.NET Core endpoint metadata and is resolved
+    /// from the host environment at mapping time.
+    /// </summary>
+    public static TBuilder WithHostApplicationOpenApiTag<TBuilder>(
+        this TBuilder builder,
+        IServiceProvider services)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        var applicationName = services.GetService<IHostEnvironment>()?.ApplicationName;
+        return string.IsNullOrWhiteSpace(applicationName)
+            ? builder
+            : AddMetadata(builder, new HostApplicationOpenApiTagMetadata(applicationName));
+    }
+
     private static TBuilder AddMetadata<TBuilder, TMetadata>(TBuilder builder, TMetadata metadata)
         where TBuilder : IEndpointConventionBuilder
     {
@@ -54,5 +95,10 @@ public static class EndpointConventionBuilderExtensions
         ArgumentNullException.ThrowIfNull(metadata);
         builder.Add(endpointBuilder => endpointBuilder.Metadata.Add(metadata));
         return builder;
+    }
+
+    private sealed record HostApplicationOpenApiTagMetadata(string ApplicationName) : ITagsMetadata
+    {
+        public IReadOnlyList<string> Tags { get; } = [ApplicationName];
     }
 }

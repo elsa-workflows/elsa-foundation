@@ -10,12 +10,12 @@ namespace Elsa.Workflows.Design.Api.Services;
 /// <summary>
 /// Exports JSON Schemas for authoring contract types so headless clients can generate valid
 /// request payloads without reverse-engineering the wire format. Schemas are generated from a
-/// serializer configuration identical to the FastEndpoints wire options, so property names,
+/// serializer configuration identical to the legacy wire options, so property names,
 /// dictionary keys, and enum values in the schema match actual traffic.
 /// </summary>
 internal static class AuthoringSchemaExporter
 {
-    // Duplicates the wire options of Elsa.Api.FastEndpoints' SerializationFastEndpointConfigurator
+    // Preserves the established camelCase/string-enum wire options.
     // (internal to that assembly, deliberately not exposed): camelCase properties, camelCase
     // dictionary keys, camelCase string enums, case-insensitive reads. Must stay in sync with it.
     private static readonly JsonSerializerOptions WireOptions = CreateWireOptions();

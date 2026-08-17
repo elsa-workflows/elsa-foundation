@@ -11,6 +11,24 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\fastendpoints-transition-exceptions.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave1-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave1-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave2-openapi-identities-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-http-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-binding-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-sse-error-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +37,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="xunit" />
@@ -32,13 +51,25 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Http\Core\Elsa.Http.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
     <ProjectReference Include="..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
     <!-- spec 145: the split publish engine DependsOn the Events feature (host assembly); the stock-shell
          composition test must be able to discover it. -->
@@ -48,10 +79,14 @@
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Core\Elsa.Workflows.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />

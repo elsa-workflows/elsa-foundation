@@ -8,6 +8,7 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
     <PackageReference Include="Groundwork.Testing" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -19,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />

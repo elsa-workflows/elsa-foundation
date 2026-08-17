@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+	<PropertyGroup>
+		<IsTestProject>true</IsTestProject>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector" PrivateAssets="all" />
 		<!-- Required to self-host a real CShells host and drive the shell-activation (IShellInitializer) path
@@ -7,6 +11,7 @@
 		<PackageReference Include="CShells" />
 		<PackageReference Include="CShells.AspNetCore" />
 		<PackageReference Include="Microsoft.AspNetCore.TestHost" />
+		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -19,6 +24,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
@@ -27,7 +33,15 @@
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
 		<ProjectReference Include="..\..\..\..\..\benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="Baselines\identity-http-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Baselines\identity-openapi-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Baselines\identity-openapi-fastendpoints.raw.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="Baselines\identity-approved-differences.json" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>

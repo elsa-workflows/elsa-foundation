@@ -1,10 +1,12 @@
-using CShells.FastEndpoints.Contracts;
-using Elsa.Api.FastEndpoints.Options;
+using CShells.AspNetCore.Features;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Diagnostics.OpenTelemetry.Permissions;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.Persistence.Draining;
-using FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
@@ -14,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using Xunit;
 
@@ -21,6 +24,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests;
 
 public sealed class GroundworkV2OpenTelemetryHttpEndpointTests
 {
+    private const string TestAuthenticationType = "groundwork-v2-http-proof";
+
     [Fact]
     public async Task Trace_search_HTTP_endpoint_returns_the_v2_Groundwork_result()
     {
@@ -74,6 +79,10 @@ public sealed class GroundworkV2OpenTelemetryHttpEndpointTests
 
     private static async Task<IHost> StartHostAsync(IStorageProviderConnection connection)
     {
+        var telemetry = new global::Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature
+        {
+            MaxQuerySize = 100
+        };
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
             {
@@ -83,30 +92,29 @@ public sealed class GroundworkV2OpenTelemetryHttpEndpointTests
                 {
                     services.AddRouting();
                     services.AddAuthorization();
-                    services.Configure<ApiSecurityOptions>(options =>
-                    {
-                        options.AllowAnonymous = true;
-                        options.ShellName = "groundwork-v2-http-proof";
-                    });
-                    new global::Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature
-                    {
-                        MaxQuerySize = 100
-                    }.ConfigureServices(services);
+                    services.AddFoundationIdentityAbstractions(options =>
+                        options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            TestAuthenticationType
+                        });
+                    telemetry.ConfigureServices(services);
                     services.AddSingleton(connection);
                     new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
-                    services.AddFastEndpoints(options =>
-                        options.Assemblies = [typeof(global::Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature).Assembly]);
                 });
                 webHost.Configure(app =>
                 {
                     app.UseRouting();
-                    app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints.MapFastEndpoints(config =>
+                    app.Use((context, next) =>
                     {
-                        using var scope = endpoints.ServiceProvider.CreateScope();
-                        foreach (var configurator in scope.ServiceProvider.GetServices<IFastEndpointsConfigurator>())
-                            configurator.Configure(config);
-                    }));
+                        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [
+                            new Claim(IdentityClaimTypes.Normalized, "v1"),
+                            new Claim(IdentityClaimTypes.Permission, OpenTelemetryPermissions.Read)
+                        ], TestAuthenticationType));
+                        return next(context);
+                    });
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints => ((IWebShellFeature)telemetry).MapEndpoints(endpoints, null));
                 });
             })
             .Build();

@@ -1,4 +1,3 @@
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Api.Capabilities.Authorization;
@@ -9,6 +8,6 @@ public sealed class ApiCapabilitiesPermissionContributor : IPermissionContributo
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(PermissionNames.ApiCapabilitiesRead, "Read API capabilities", "API capabilities", "Read the active first-party API capability document.")
+        new(ApiCapabilitiesPermissions.Read, "Read API capabilities", "API capabilities", "Read the active first-party API capability document.")
     ];
 }

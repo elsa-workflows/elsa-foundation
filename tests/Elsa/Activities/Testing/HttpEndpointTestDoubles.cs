@@ -61,7 +61,7 @@ public sealed class TestRouteMatcher : IRouteMatcher
 /// task's scope, the index observer's fresh scope) reads and mutates the same table, exactly like production.
 /// Shared across the HTTP test projects (#592 item 18).
 /// </summary>
-public sealed class FakeRouteTable : IRouteTable
+public sealed class FakeRouteTable : IRouteTable, IRouteTableSnapshotProvider
 {
     private readonly RouteTable _inner = new(new MemoryCache(new MemoryCacheOptions()), NullLogger<RouteTable>.Instance);
 
@@ -70,6 +70,8 @@ public sealed class FakeRouteTable : IRouteTable
     }
 
     public FakeRouteTable(params string[] templates) => _inner.Refresh(templates).AsTask().GetAwaiter().GetResult();
+
+    public FakeRouteTable(params HttpRouteData[] routes) => _inner.Refresh(routes).AsTask().GetAwaiter().GetResult();
 
     public ValueTask Add(string route) => _inner.Add(route);
     public ValueTask Add(HttpRouteData httpRouteData) => _inner.Add(httpRouteData);
@@ -80,6 +82,7 @@ public sealed class FakeRouteTable : IRouteTable
     public ValueTask RemoveRange(IEnumerable<string> routes) => _inner.RemoveRange(routes);
     public IEnumerator<HttpRouteData> GetEnumerator() => _inner.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    public HttpRouteTableSnapshotLease AcquireSnapshot() => _inner.AcquireSnapshot();
 }
 
 /// <summary>

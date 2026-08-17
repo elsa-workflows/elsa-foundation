@@ -1,18 +1,18 @@
+using Elsa.Workflows.Design.Api.Commands;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Workflows.Design.Api.Commands;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 // Contract guard for elsa-foundation#951: the AddDefinition request must bind whether or not the client
-// supplies an operationKey / initialState. Uses the same JsonSerializerOptions shape the shell's
-// FastEndpoints request deserializer is configured with (camelCase + string enums).
+// supplies an operationKey / initialState. Uses the same camelCase/string-enum options as the
+// Minimal API source-generated JSON context.
 public sealed class AddDefinitionDeserializationTests
 {
-    private static readonly JsonSerializerOptions Options = CreateFastEndpointsOptions();
+    private static readonly JsonSerializerOptions Options = CreateWireOptions();
 
-    private static JsonSerializerOptions CreateFastEndpointsOptions()
+    private static JsonSerializerOptions CreateWireOptions()
     {
         var result = new JsonSerializerOptions
         {

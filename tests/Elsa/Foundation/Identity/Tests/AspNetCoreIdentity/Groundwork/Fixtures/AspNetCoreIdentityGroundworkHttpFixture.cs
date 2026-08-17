@@ -1,3 +1,4 @@
+using CShells.AspNetCore.Features;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Api;
@@ -12,7 +13,6 @@ using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Tests.OpenIddict;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
-using FastEndpoints;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 
@@ -63,10 +64,6 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
 
     public HttpClient CreateClient() => _host.GetTestClient();
 
-    /// <remarks>
-    /// Mapping FastEndpoints mutates process-global state, so the calling test class must join
-    /// <see cref="Elsa.Foundation.Identity.Tests.FastEndpointsHostCollection"/>.
-    /// </remarks>
     public static async Task<AspNetCoreIdentityGroundworkHttpFixture> StartAsync(
         Action<IServiceCollection>? configureServices = null)
     {
@@ -95,15 +92,6 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     services.Configure<AspNetCoreIdentityOptions>(options =>
                         options.DefaultTenantId = AspNetCoreIdentityGroundworkHttpFixture.PrimaryTenant);
                     services.AddFoundationIdentityApi();
-                    services.AddFastEndpoints(options =>
-                    {
-                        options.Assemblies =
-                        [
-                            typeof(FoundationIdentityApiOptions).Assembly,
-                            typeof(AspNetCoreIdentityDefaults).Assembly
-                        ];
-                        options.DisableAutoDiscovery = true;
-                    });
                     configureServices?.Invoke(services);
                     serviceDescriptors = services.ToArray();
                 });
@@ -114,11 +102,8 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapFastEndpoints(config =>
-                        {
-                            config.Security.PermissionsClaimType = IdentityClaimTypes.Permission;
-                            config.Security.RoleClaimType = IdentityClaimTypes.Role;
-                        });
+                        ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
+                        ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
                         endpoints.MapGet(ClaimsRoute, async context =>
                         {
                             await context.Response.WriteAsJsonAsync(new

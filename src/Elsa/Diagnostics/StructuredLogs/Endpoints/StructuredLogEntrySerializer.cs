@@ -1,6 +1,5 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using System.Text.Json;
 
 namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
 
@@ -11,18 +10,15 @@ namespace Elsa.Diagnostics.StructuredLogs.Endpoints;
 /// </summary>
 public sealed class StructuredLogEntrySerializer
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never
-    };
-
     /// <summary>Serializes a single entry to its JSON object form.</summary>
-    public string Serialize(StructuredLogEntry entry) => JsonSerializer.Serialize(entry, Options);
+    public string Serialize(StructuredLogEntry entry) =>
+        JsonSerializer.Serialize(entry, StructuredLogsJsonContext.Default.StructuredLogEntry);
 
     /// <summary>Serializes a sequence of entries to a JSON array.</summary>
-    public string SerializeMany(IReadOnlyList<StructuredLogEntry> entries) => JsonSerializer.Serialize(entries, Options);
+    public string SerializeMany(IReadOnlyList<StructuredLogEntry> entries) =>
+        JsonSerializer.Serialize(entries.ToArray(), StructuredLogsJsonContext.Default.StructuredLogEntryArray);
 
     /// <summary>Serializes a drop signal to its JSON object form.</summary>
-    public string SerializeDropped(DroppedEntriesSignal signal) => JsonSerializer.Serialize(signal, Options);
+    public string SerializeDropped(DroppedEntriesSignal signal) =>
+        JsonSerializer.Serialize(signal, StructuredLogsJsonContext.Default.DroppedEntriesSignal);
 }

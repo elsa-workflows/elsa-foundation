@@ -1,9 +1,9 @@
-using System.Net;
-using System.Text;
-using System.Text.Json;
 using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Studio.Preferences.Tests.Support;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Studio.Preferences.Tests;
@@ -21,7 +21,7 @@ public sealed class StudioPreferencesApiWriteContractTests
         var result = CompatibilityComparer.Compare(
             new CompatibilityEvidenceSet { Http = before },
             new CompatibilityEvidenceSet { Http = after },
-            StudioPreferencesCompatibilityEvidence.LoadApprovals());
+            StudioPreferencesCompatibilityEvidence.LoadApprovals("PUT"));
 
         Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
     }
@@ -41,7 +41,7 @@ public sealed class StudioPreferencesApiWriteContractTests
         var result = CompatibilityComparer.Compare(
             new CompatibilityEvidenceSet { OpenApi = before },
             new CompatibilityEvidenceSet { OpenApi = after },
-            StudioPreferencesCompatibilityEvidence.LoadApprovals());
+            StudioPreferencesCompatibilityEvidence.LoadApprovals("PUT"));
 
         Assert.Single(after.Operations);
         Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));

@@ -11,6 +11,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
 | `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application replaces the whole catalog surface with `ReplacePermissionCatalog<T>()`. To *add* permissions, contribute an `IPermissionContributor` (below); the composite aggregates the active provider's contributions into one immutable snapshot. |
 | `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. Replace it with `ReplacePermissionEvaluator<T>()`; the shared handler still owns single/any/all and resource precedence. |
+| `IPermissionAuthorizationService` | `PermissionAuthorizationService` (`Elsa.Foundation.Identity.Abstractions`) | A first-party service, request context, or feature API needs one canonical asynchronous decision outside endpoint middleware. It validates the trusted normalized principal, preserves tenant/resource context, applies resource-handler precedence, and delegates to the replaceable evaluator. |
 | `IPermissionPolicyNameFormatter` | `PermissionPolicyNameFormatter` (`Elsa.Foundation.Identity.Abstractions`) | A compatibility host needs to parse an additional single-permission policy identity. Replace it with `ReplacePermissionPolicyNameFormatter<T>()`; new Elsa metadata always emits the canonical v1 grammar. |
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
@@ -56,10 +57,25 @@ authenticated callers are challenged; a trusted normalized caller with no grant 
 Foundation wraps one pre-existing `IAuthorizationMiddlewareResultHandler` (or the ASP.NET Core
 default) and delegates every unrelated outcome. Register a host result handler before Foundation;
 multiple prior handlers fail immediately and a handler added afterward fails startup validation.
-The evaluator, formatter, and catalog are single replacement contracts: use their `Replace*`
+The evaluator, authorization service, formatter, and catalog are single replacement contracts: use their `Replace*`
 methods before or after Foundation registration. Direct competing registrations are rejected rather
 than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
 remain additive fan-in seams.
+
+### Async authorization context replacement window
+
+Feature APIs that need authorization during request handling should depend on their asynchronous
+context sibling (`IActivityAuthoringContextAsync`, `IActivityDependencyContextAsync`,
+or `IActivityInspectionContextAsync`) and call the async methods with the
+request cancellation token. These contexts delegate decisions to `IPermissionAuthorizationService`;
+they do not inspect permission claims themselves. Provider-specific or resource-specific rules receive
+a stable resource object and remain in `IPermissionResourceHandler` implementations.
+
+The original synchronous context interfaces remain source-compatible during the advisory replacement
+window for external hosts, but the built-in HTTP adapters mark their permission members obsolete and
+fail closed rather than blocking on asynchronous work. First-party production callers are migrated to
+the async siblings. The synchronous members are candidates for removal in the next major release;
+hosts should migrate replacements before then.
 
 ### `ISecurityDefaultGuard`
 

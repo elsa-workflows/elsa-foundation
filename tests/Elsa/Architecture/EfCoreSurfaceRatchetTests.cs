@@ -122,6 +122,115 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_excludes_non_shipping_report_reproduction_projects_from_restore_inventory()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("docs/reports/repros/framework-retention/Repro.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "docs/reports/repros/framework-retention/Program.cs",
+            "services.AddDbContext<ReproDbContext>();");
+        fixture.Write(
+            "docs/reports/repros/framework-retention/Directory.Packages.props",
+            "<Project><ItemGroup><PackageVersion Include=\"Microsoft.EntityFrameworkCore\" Version=\"10.0.0\" /></ItemGroup></Project>");
+        fixture.Write(
+            "docs/reports/repros/framework-retention/Repro.props",
+            "<Project><ItemGroup><PackageReference Include=\"Microsoft.EntityFrameworkCore\" /></ItemGroup></Project>");
+        fixture.Write(
+            "docs/reports/repros/framework-retention/ReproDbContext.cs",
+            "public sealed class ReproDbContext : DbContext;");
+        fixture.Write(
+            "docs/reports/repros/framework-retention/Migrations/Initial.cs",
+            "[Migration(\"Initial\")] public sealed class Initial : Migration;");
+        fixture.Write(
+            "docs/reports/repros/framework-retention/appsettings.json",
+            "{ \"persistence\": \"entityframeworkcore\" }");
+
+        fixture.Write("src/docs/reports/repros/Elsa.Shipping.EFCore.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "src/docs/reports/repros/Program.cs",
+            "services.AddDbContext<ShippingDbContext>();");
+        fixture.Write(
+            "src/docs/reports/repros/Directory.Packages.props",
+            "<Project><ItemGroup><PackageVersion Include=\"Microsoft.EntityFrameworkCore\" Version=\"10.0.0\" /></ItemGroup></Project>");
+        fixture.Write(
+            "src/docs/reports/repros/Shipping.props",
+            "<Project><ItemGroup><PackageReference Include=\"Microsoft.EntityFrameworkCore\" /></ItemGroup></Project>");
+        fixture.Write(
+            "src/docs/reports/repros/ShippingDbContext.cs",
+            "public sealed class ShippingDbContext : DbContext;");
+        fixture.Write(
+            "src/docs/reports/repros/Migrations/Initial.cs",
+            "[Migration(\"Initial\")] public sealed class Initial : Migration;");
+        fixture.Write(
+            "src/docs/reports/repros/appsettings.json",
+            "{ \"persistence\": \"entityframeworkcore\" }");
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Equal(["src/docs/reports/repros/Elsa.Shipping.EFCore.csproj"], snapshot.EfProjects);
+        Assert.Contains(
+            "src/docs/reports/repros/Elsa.Shipping.EFCore.csproj -> Microsoft.EntityFrameworkCore.Sqlite",
+            snapshot.DirectPackageReferences);
+        Assert.Contains(
+            "src/docs/reports/repros/Directory.Packages.props -> Microsoft.EntityFrameworkCore",
+            snapshot.CentralPackageVersions);
+        Assert.Contains(
+            "src/docs/reports/repros/Shipping.props -> Microsoft.EntityFrameworkCore",
+            snapshot.SharedBuildPackageReferences);
+        Assert.Equal(["src/docs/reports/repros/Elsa.Shipping.EFCore.csproj"], snapshot.ProjectsMissingAssets);
+        Assert.Contains("src/docs/reports/repros/ShippingDbContext.cs", snapshot.DbContextFiles);
+        Assert.Contains("src/docs/reports/repros/Migrations/Initial.cs", snapshot.MigrationFiles);
+        Assert.Contains(snapshot.RegistrationFiles, entry => entry.StartsWith("src/docs/reports/repros/Program.cs -> ", StringComparison.Ordinal));
+        Assert.Contains(snapshot.HostConfigurationFiles, entry => entry.StartsWith("src/docs/reports/repros/appsettings.json -> ", StringComparison.Ordinal));
+        Assert.DoesNotContain(snapshot.Categories().SelectMany(category => category.Value), entry =>
+            entry.StartsWith("docs/reports/repros/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_excludes_only_the_canonical_historical_compatibility_subtree()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+            "services.AddDbContext<HistoricalCaptureDbContext>();");
+
+        fixture.Write("tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "tools/compatibility-copy/Program.cs",
+            "services.AddDbContext<UnrelatedCaptureDbContext>();");
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Equal(["tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj"], snapshot.EfProjects);
+        Assert.Equal(
+            ["tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj"],
+            snapshot.ProjectsMissingAssets);
+        Assert.Contains(
+            snapshot.RegistrationFiles,
+            entry => entry.StartsWith("tools/compatibility-copy/Program.cs -> ", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            snapshot.Categories().SelectMany(category => category.Value),
+            entry => entry.StartsWith("tools/compatibility/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scanner_inventories_declared_direct_and_central_ef_package_inputs()
     {
         using var fixture = new TemporaryRepository();

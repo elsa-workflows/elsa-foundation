@@ -8,6 +8,7 @@ using Elsa.Activities.Testing;
 using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
+using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -79,6 +80,29 @@ public sealed class HttpEndpointMiddlewareTests
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), dispatched.StimulusHash);
         Assert.Equal("42", dispatched.Input!.Value.GetProperty("RouteData").GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task SameTemplatePublicGetAndProtectedPostFollowTheirMethodSpecificRuntimeBehavior()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-get", "orders", "GET"),
+            Binding("artifact-post", "orders", "POST", authorize: true, policy: "orders.manage"));
+        var routeTable = new FakeRouteTable(
+            new HttpRouteData("orders") { Methods = ["GET"], Metadata = [HttpRouteSecurityDispositionMetadata.Public("test", "Public GET.")] },
+            new HttpRouteData("orders") { Methods = ["POST"], Metadata = [HttpRouteSecurityDispositionMetadata.NamedPolicy("orders.manage", "Elsa.Http")] });
+        var middleware = new HttpEndpointMiddleware(router, routeTable, new TestRouteMatcher(), store, EmptyBookmarkLookup(), Options());
+        var get = NewContext("/workflows/http/orders", "GET");
+        var post = NewContext("/workflows/http/orders", "POST");
+
+        await middleware.InvokeAsync(get, _ => Task.CompletedTask);
+        await middleware.InvokeAsync(post, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, get.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status401Unauthorized, post.Response.StatusCode);
+        Assert.Single(router.Requests);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders", "GET"), router.Requests[0].StimulusHash);
     }
 
     [Theory]

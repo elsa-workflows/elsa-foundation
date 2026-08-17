@@ -1,5 +1,5 @@
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa3.Activities.Design.Import.Endpoints;
 
 namespace Elsa3.Activities.Design.Import.Authorization;
 
@@ -9,7 +9,7 @@ public sealed class Elsa3ImportPermissionContributor : IPermissionContributor
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(PermissionNames.Elsa3ImportRead, "Read Elsa 3 imports", "Elsa 3 import", "Inspect Elsa 3 reusable activity import analyses and status."),
-        new(PermissionNames.Elsa3ImportManage, "Manage Elsa 3 imports", "Elsa 3 import", "Upload and apply Elsa 3 reusable activity imports.")
+        new(Elsa3ImportPermissions.Read, "Read Elsa 3 imports", "Elsa 3 import", "Inspect Elsa 3 reusable activity import analyses and status."),
+        new(Elsa3ImportPermissions.Manage, "Manage Elsa 3 imports", "Elsa 3 import", "Upload and apply Elsa 3 reusable activity imports.")
     ];
 }

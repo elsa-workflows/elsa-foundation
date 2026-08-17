@@ -44,6 +44,43 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Http` — the com
 
 ---
 
+## Dynamic workflow route publication *(Core + `Elsa.Http`)*
+
+`HttpRouteData` is the compatibility carrier for workflow-authored routes. Published entries include a normalized
+method set (an empty set retains the pre-metadata wildcard behavior) and an immutable `HttpRouteOwnershipMetadata`
+plus exactly one `HttpRouteSecurityDispositionMetadata`. The production `RouteTable` supplies the
+`DynamicShell` owner (`Elsa.Http`, shell discriminator, and monotonically increasing generation) and a public
+compatibility disposition for legacy callers that provide no metadata. `HttpRouteManifestValidator` can also
+validate a complete host/module/dynamic manifest, canonicalizing parameter names and rejecting overlapping methods
+with both owner identities in the exception.
+
+`HttpFeature` registers the shell-scoped `IHttpRouteManifestProvider` after CShells has composed root endpoint
+sources into the activated shell. The adapter projects root and current-shell `EndpointDataSource` entries, filters
+other shell generations, and converts shared ownership/security metadata into this lower-layer contract. Its
+host/module-owned `HttpRouteData` entries are a validation-only composition manifest: workflow refreshes merge the
+provider snapshot with the enriched candidate, reject same-method collisions before publication, and leave the
+previous generation untouched on failure. Shells that do not expose endpoint sources retain the empty-provider
+compatibility path.
+
+Workflow routes stay endpoint-relative for middleware matching. Before manifest validation, `RouteTable` resolves each
+candidate beneath `HttpRoutePublicationOptions.BasePath`, configured from the Activities HTTP feature's request base
+path, so absolute host/module endpoints and authored routes share one collision coordinate system. A disabled base path
+has no published dynamic address and therefore cannot conflict with a live host endpoint.
+
+Refresh constructs, compiles, validates, and enriches a complete candidate before one shell-state publication. A
+rejected candidate leaves the previous snapshot intact. One child-provider singleton owns the current generation and
+synchronization gate; the public `IMemoryCache` constructor parameter remains source-compatible but is not authoritative,
+so cache eviction cannot reset routes and no process-global shell-key dictionary retains shells.
+`IRouteTableSnapshotProvider` is an additive seam: requests lease one immutable generation through matching and dispatch,
+and the retired generation reports drained only after the lease is released. Existing `IRouteTable` implementations
+remain valid and use the enumerable fallback.
+
+The authoritative generation never exposes its mutable legacy `HttpRouteData` carriers. Snapshot inspection produces
+defensive route/dictionary copies, while the production lease uses the shared lower-layer route resolver directly over
+its private ordered generation. This keeps inspection mutation isolated without deep-cloning the table per request.
+Incremental publication accepts same-template entries with disjoint explicit methods; overlapping methods and wildcard
+claims still reject, and the historical methodless exact-duplicate exception remains compatible.
+
 ## HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)*
 
 The `IHttpEndpointAuthorizationHandler` and `IHttpEndpointFaultHandler` contracts (with `AuthorizeHttpEndpointContext`, `HttpEndpointFaultContext`, and `HttpBadRequestException`) live in `Elsa.Http.Core` (spec 089 sub-unit C) so the request middleware in `Elsa.Activities.Http` and the default handlers in `Elsa.Workflows.Runtime.Http` share them without a cross-module edge — same placement logic as the `HttpEndpointRouting` routing vocabulary. Default implementations and override points are catalogued in [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md).

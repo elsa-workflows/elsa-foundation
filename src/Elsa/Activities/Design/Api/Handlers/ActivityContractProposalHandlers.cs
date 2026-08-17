@@ -20,7 +20,7 @@ public sealed class ActivityContractProposalService(
     IApplyActivityContractProposalCommand applyProposal,
     ActivityContractAuthoringValidator contractValidator,
     ReusableActivityAuthoringService projections,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
 {
     public async Task<ActivityContractProposalView> ProposeAsync(
         ProposeReusableActivityContract request,
@@ -109,7 +109,7 @@ public sealed class ActivityContractProposalService(
                     ?? throw new ActivityAuthoringException(404, "activity.definition.not-found", "Activity definition not found", "The draft's activity definition was not found.");
         if (owner.ContentAuthority.Kind != ActivityContentAuthorityKind.Design)
             throw new ActivityAuthoringException(409, "activity.definition.content-authority", "Activity definition is source-owned", "Provider proposals cannot mutate a source-owned activity definition.");
-        if (!context.CanAuthorProvider(draft.State.Provider.ProviderKey))
+        if (!await context.CanAuthorProviderAsync(draft.State.Provider.ProviderKey, cancellationToken))
             throw new ActivityAuthoringException(403, ActivityErrorCodes.AuthorizationDenied, "Activity authoring is forbidden", "The caller is not authorized to author this activity provider.");
         if (draft.Status != ActivityDefinitionDraftStatus.Active ||
             draft.Revision != request.ExpectedRevision ||

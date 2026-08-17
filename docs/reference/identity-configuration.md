@@ -13,7 +13,7 @@ For the design rationale see [`docs/plans/studio-bearer-token-issuance.md`](../p
 |---|---|
 | `FoundationIdentityAbstractions` | Provider-agnostic auth/IAM contracts and the permission catalog. |
 | `FoundationIdentityOidc` | External OpenID Connect / JWT-bearer provider (optional; for an upstream IdP). |
-| `FoundationIdentityApi` | The provider-agnostic identity endpoints: `bootstrap`, `capabilities`, `session`, `challenge`, `logout`, `refresh`, and the `GET /_elsa/identity/token` cookie→bearer exchange. Also aligns FastEndpoints' permission/role claim types with the Elsa token claims. |
+| `FoundationIdentityApi` | The provider-agnostic identity endpoints: `bootstrap`, `capabilities`, `session`, `challenge`, `logout`, `refresh`, and the `GET /_elsa/identity/token` cookie→bearer exchange. Permission checks use the shared Foundation policy path. |
 | `FoundationIdentityAspNetCoreIdentity` | The provider-neutral ASP.NET Core Identity substrate (managers, principal factory, sign-in service, provider module, antiforgery). |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | Durable EF Core user/role store, `SignInManager` cookie sign-in, the login page/endpoints, and dev seeding. |
 | `FoundationIdentityOpenIddict` | OpenIddict-backed JWT access-token issuance + local bearer validation for the API surface. |

@@ -7,14 +7,16 @@
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="CShells.Abstractions" />
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-	</ItemGroup>
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->

@@ -1,0 +1,325 @@
+[
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/bootstrap;content-type=",
+    "body": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022providers\u0022: [\n    {\n      \u0022challenge\u0022: {\n        \u0022method\u0022: \u0022GET\u0022,\n        \u0022parameters\u0022: null,\n        \u0022scheme\u0022: \u0022Elsa.Identity.Cookie\u0022,\n        \u0022url\u0022: \u0022/_elsa/identity/login\u0022\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022challenge\u0022: null,\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "case": "anonymous-bootstrap",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/bootstrap",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022providers\u0022: [\n    {\n      \u0022challenge\u0022: {\n        \u0022method\u0022: \u0022GET\u0022,\n        \u0022parameters\u0022: null,\n        \u0022scheme\u0022: \u0022Elsa.Identity.Cookie\u0022,\n        \u0022url\u0022: \u0022/_elsa/identity/login\u0022\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022challenge\u0022: null,\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/capabilities;content-type=",
+    "body": "",
+    "case": "anonymous-capabilities",
+    "contentType": "",
+    "endpoint": "GET /_elsa/identity/capabilities",
+    "headers": {
+      "cache-control": "no-store",
+      "expires": "Thu, 01 Jan 1970 00:00:00 GMT",
+      "pragma": "no-cache",
+      "www-authenticate": "Bearer"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/challenge/unknown;content-type=",
+    "body": "",
+    "case": "unknown-challenge",
+    "contentType": "",
+    "endpoint": "GET /_elsa/identity/challenge/unknown",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "404",
+    "statusCode": 404,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=provider",
+    "body": "",
+    "case": "unknown-logout",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/logout/unknown",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "204",
+    "statusCode": 204,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/challenge/aspnetcore-identity;content-type=",
+    "body": "",
+    "case": "known-challenge",
+    "contentType": "",
+    "endpoint": "GET /_elsa/identity/challenge/aspnetcore-identity",
+    "headers": {
+      "location": "http://localhost/_elsa/identity/login?\u003Ccookie\u003E"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "204",
+    "statusCode": 204,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=refreshToken",
+    "body": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "case": "malformed-refresh",
+    "contentType": "application/problem\u002Bjson; charset=utf-8",
+    "endpoint": "POST /_elsa/identity/refresh",
+    "headers": {
+      "content-type": "application/problem\u002Bjson; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "pagingFiltering": "",
+    "problemDetails": "{\n  \u0022errors\u0022: {\n    \u0022serializerErrors\u0022: [\n      \u0022Expected depth to be zero at the end of the JSON payload. There is an open JSON object or array that should be closed. LineNumber: 0 | BytePositionInLine: 1.\u0022\n    ]\n  },\n  \u0022message\u0022: \u0022One or more errors occurred!\u0022,\n  \u0022statusCode\u0022: 400\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/session;content-type=",
+    "body": "{\n  \u0022displayName\u0022: null,\n  \u0022permissions\u0022: [],\n  \u0022provider\u0022: null,\n  \u0022roles\u0022: [],\n  \u0022status\u0022: \u0022anonymous\u0022,\n  \u0022subject\u0022: null,\n  \u0022tenantId\u0022: null,\n  \u0022tokenFreshness\u0022: \u0022none\u0022\n}",
+    "case": "anonymous-session",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/session",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022displayName\u0022: null,\n  \u0022permissions\u0022: [],\n  \u0022provider\u0022: null,\n  \u0022roles\u0022: [],\n  \u0022status\u0022: \u0022anonymous\u0022,\n  \u0022subject\u0022: null,\n  \u0022tenantId\u0022: null,\n  \u0022tokenFreshness\u0022: \u0022none\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/token;content-type=",
+    "body": "",
+    "case": "anonymous-token",
+    "contentType": "",
+    "endpoint": "GET /_elsa/identity/token",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/login;content-type=",
+    "body": "\u003C!doctype html\u003E\n\u003Chtml lang=\u0022en\u0022\u003E\n\u003Chead\u003E\n  \u003Cmeta charset=\u0022utf-8\u0022 /\u003E\n  \u003Cmeta name=\u0022viewport\u0022 content=\u0022\u003Ccookie\u003E\u0022 /\u003E\n  \u003Ctitle\u003ESign in \u0026middot; Elsa\u003C/title\u003E\n  \u003Cstyle\u003E\n    :root { color-scheme: dark; }\n    * { box-sizing: border-box; }\n    body {\n      margin: 0; min-height: 100vh;\n      display: flex; align-items: center; justify-content: center;\n      background: #0b1120;\n      color: #e2e8f0;\n      font-family: system-ui, -apple-system, \u0022Segoe UI\u0022, Roboto, Helvetica, Arial, sans-serif;\n    }\n    .card {\n      width: 100%; max-width: 360px;\n      background: #111a2e;\n      border: 1px solid #1e293b;\n      border-radius: 12px;\n      padding: 32px;\n      box-shadow: 0 10px 40px rgba(0,0,0,.4);\n    }\n    .brand { font-size: 20px; font-weight: 600; margin: 0 0 4px; color: #f8fafc; }\n    .subtitle { margin: 0 0 24px; font-size: 13px; color: #94a3b8; }\n    label { display: block; font-size: 13px; margin: 0 0 6px; color: #cbd5e1; }\n    input {\n      width: 100%; padding: 10px 12px; margin-bottom: 16px;\n      background: #0b1120; color: #e2e8f0;\n      border: 1px solid #334155; border-radius: 8px; font-size: 14px;\n    }\n    input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }\n    button {\n      width: 100%; padding: 11px; border: 0; border-radius: 8px;\n      background: #3b82f6; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;\n    }\n    button:hover { background: #2563eb; }\n    .error {\n      margin: 0 0 16px; padding: 10px 12px; font-size: 13px;\n      background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4);\n      border-radius: 8px; color: #fca5a5;\n    }\n  \u003C/style\u003E\n\u003C/head\u003E\n\u003Cbody\u003E\n  \u003Cform class=\u0022card\u0022 method=\u0022post\u0022 action=\u0022/_elsa/identity/login\u0022\u003E\n    \u003Ch1 class=\u0022brand\u0022\u003EElsa\u003C/h1\u003E\n    \u003Cp class=\u0022subtitle\u0022\u003ESign in to continue\u003C/p\u003E\n    \n    \u003Cinput type=\u0022hidden\u0022 name=\u0022__csrf\u0022 value=\u0022\u003Ccsrf\u003E\u0022 /\u003E\n    \u003Cinput type=\u0022hidden\u0022 name=\u0022returnUrl\u0022 value=\u0022/\u0022 /\u003E\n    \u003Clabel for=\u0022username\u0022\u003EUsername\u003C/label\u003E\n    \u003Cinput id=\u0022username\u0022 name=\u0022username\u0022 autocomplete=\u0022username\u0022 autofocus required /\u003E\n    \u003Clabel for=\u0022password\u0022\u003EPassword\u003C/label\u003E\n    \u003Cinput id=\u0022password\u0022 name=\u0022password\u0022 type=\u0022password\u0022 autocomplete=\u0022current-password\u0022 required /\u003E\n    \u003Cbutton type=\u0022submit\u0022\u003ESign in\u003C/button\u003E\n  \u003C/form\u003E\n\u003C/body\u003E\n\u003C/html\u003E",
+    "case": "login-page",
+    "contentType": "text/html; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/login",
+    "headers": {
+      "cache-control": "no-store, no-cache",
+      "content-type": "text/html; \u003Ccookie\u003E",
+      "pragma": "no-cache",
+      "set-cookie": "\u003Ccookie\u003E; \u003Ccookie\u003E; \u003Ccookie\u003E; httponly",
+      "x-frame-options": "SAMEORIGIN"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=username,password",
+    "body": "",
+    "case": "invalid-login-json",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/login",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/bootstrap;content-type=",
+    "body": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022providers\u0022: [\n    {\n      \u0022challenge\u0022: {\n        \u0022method\u0022: \u0022GET\u0022,\n        \u0022parameters\u0022: null,\n        \u0022scheme\u0022: \u0022Elsa.Identity.Cookie\u0022,\n        \u0022url\u0022: \u0022/_elsa/identity/login\u0022\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022challenge\u0022: null,\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "case": "authenticated-bootstrap",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/bootstrap",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022providers\u0022: [\n    {\n      \u0022challenge\u0022: {\n        \u0022method\u0022: \u0022GET\u0022,\n        \u0022parameters\u0022: null,\n        \u0022scheme\u0022: \u0022Elsa.Identity.Cookie\u0022,\n        \u0022url\u0022: \u0022/_elsa/identity/login\u0022\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022challenge\u0022: null,\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/capabilities;content-type=",
+    "body": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022permissions\u0022: [\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, and revoke applications and clients.\u0022,\n      \u0022displayName\u0022: \u0022Manage applications\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.applications.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.applications.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read registered applications and clients.\u0022,\n      \u0022displayName\u0022: \u0022Read applications\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.applications.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Issue, rotate, and revoke non-interactive credentials.\u0022,\n      \u0022displayName\u0022: \u0022Manage credentials\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.credentials.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read the shared identity permission catalog.\u0022,\n      \u0022displayName\u0022: \u0022Read permissions\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.permissions.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, test, and disable authentication providers.\u0022,\n      \u0022displayName\u0022: \u0022Manage providers\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.providers.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.providers.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read configured authentication providers.\u0022,\n      \u0022displayName\u0022: \u0022Read providers\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.providers.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, and assign identity roles.\u0022,\n      \u0022displayName\u0022: \u0022Manage roles\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.roles.read\u0022,\n        \u0022identity.permissions.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.roles.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read identity roles.\u0022,\n      \u0022displayName\u0022: \u0022Read roles\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.roles.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, disable, and link identity users.\u0022,\n      \u0022displayName\u0022: \u0022Manage users\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.users.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.users.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read identity users.\u0022,\n      \u0022displayName\u0022: \u0022Read users\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.users.read\u0022\n    }\n  ],\n  \u0022providers\u0022: [\n    {\n      \u0022capabilities\u0022: {\n        \u0022canIssueTokens\u0022: true,\n        \u0022canManageApplications\u0022: true,\n        \u0022canManageRoles\u0022: true,\n        \u0022canManageUsers\u0022: true,\n        \u0022canMapGroups\u0022: true,\n        \u0022canRefreshTokens\u0022: true,\n        \u0022canRevokeTokens\u0022: true,\n        \u0022permissionPropagation\u0022: 0\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022capabilities\u0022: {\n        \u0022canIssueTokens\u0022: true,\n        \u0022canManageApplications\u0022: true,\n        \u0022canManageRoles\u0022: true,\n        \u0022canManageUsers\u0022: true,\n        \u0022canMapGroups\u0022: true,\n        \u0022canRefreshTokens\u0022: true,\n        \u0022canRevokeTokens\u0022: true,\n        \u0022permissionPropagation\u0022: 0\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "case": "authenticated-capabilities",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/capabilities",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022ownershipMode\u0022: 0,\n  \u0022permissions\u0022: [\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, and revoke applications and clients.\u0022,\n      \u0022displayName\u0022: \u0022Manage applications\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.applications.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.applications.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read registered applications and clients.\u0022,\n      \u0022displayName\u0022: \u0022Read applications\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.applications.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Issue, rotate, and revoke non-interactive credentials.\u0022,\n      \u0022displayName\u0022: \u0022Manage credentials\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.credentials.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read the shared identity permission catalog.\u0022,\n      \u0022displayName\u0022: \u0022Read permissions\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.permissions.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, test, and disable authentication providers.\u0022,\n      \u0022displayName\u0022: \u0022Manage providers\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.providers.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.providers.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read configured authentication providers.\u0022,\n      \u0022displayName\u0022: \u0022Read providers\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.providers.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, and assign identity roles.\u0022,\n      \u0022displayName\u0022: \u0022Manage roles\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.roles.read\u0022,\n        \u0022identity.permissions.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.roles.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read identity roles.\u0022,\n      \u0022displayName\u0022: \u0022Read roles\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.roles.read\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Create, update, disable, and link identity users.\u0022,\n      \u0022displayName\u0022: \u0022Manage users\u0022,\n      \u0022implies\u0022: [\n        \u0022identity.users.read\u0022\n      ],\n      \u0022key\u0022: \u0022identity.users.manage\u0022\n    },\n    {\n      \u0022category\u0022: \u0022Identity\u0022,\n      \u0022description\u0022: \u0022Read identity users.\u0022,\n      \u0022displayName\u0022: \u0022Read users\u0022,\n      \u0022implies\u0022: [],\n      \u0022key\u0022: \u0022identity.users.read\u0022\n    }\n  ],\n  \u0022providers\u0022: [\n    {\n      \u0022capabilities\u0022: {\n        \u0022canIssueTokens\u0022: true,\n        \u0022canManageApplications\u0022: true,\n        \u0022canManageRoles\u0022: true,\n        \u0022canManageUsers\u0022: true,\n        \u0022canMapGroups\u0022: true,\n        \u0022canRefreshTokens\u0022: true,\n        \u0022canRevokeTokens\u0022: true,\n        \u0022permissionPropagation\u0022: 0\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022aspnetcore-identity\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022password\u0022\n    },\n    {\n      \u0022capabilities\u0022: {\n        \u0022canIssueTokens\u0022: true,\n        \u0022canManageApplications\u0022: true,\n        \u0022canManageRoles\u0022: true,\n        \u0022canManageUsers\u0022: true,\n        \u0022canMapGroups\u0022: true,\n        \u0022canRefreshTokens\u0022: true,\n        \u0022canRevokeTokens\u0022: true,\n        \u0022permissionPropagation\u0022: 0\n      },\n      \u0022displayName\u0022: \u0022Elsa Identity\u0022,\n      \u0022enabled\u0022: true,\n      \u0022id\u0022: \u0022openiddict\u0022,\n      \u0022isDefault\u0022: false,\n      \u0022kind\u0022: \u0022openiddict\u0022\n    }\n  ]\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/session;content-type=",
+    "body": "{\n  \u0022displayName\u0022: \u0022Administrator\u0022,\n  \u0022permissions\u0022: [\n    \u0022identity.applications.manage\u0022,\n    \u0022identity.applications.read\u0022,\n    \u0022identity.credentials.manage\u0022,\n    \u0022identity.permissions.read\u0022,\n    \u0022identity.providers.manage\u0022,\n    \u0022identity.providers.read\u0022,\n    \u0022identity.roles.manage\u0022,\n    \u0022identity.roles.read\u0022,\n    \u0022identity.users.manage\u0022,\n    \u0022identity.users.read\u0022,\n    \u0022*\u0022\n  ],\n  \u0022provider\u0022: \u0022aspnetcore-identity\u0022,\n  \u0022roles\u0022: [\n    \u0022\\u003Crole\\u003E\u0022\n  ],\n  \u0022status\u0022: \u0022authenticated\u0022,\n  \u0022subject\u0022: \u0022\\u003Csubject\\u003E\u0022,\n  \u0022tenantId\u0022: \u0022default\u0022,\n  \u0022tokenFreshness\u0022: \u0022fresh\u0022\n}",
+    "case": "authenticated-session",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/session",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022displayName\u0022: \u0022Administrator\u0022,\n  \u0022permissions\u0022: [\n    \u0022identity.applications.manage\u0022,\n    \u0022identity.applications.read\u0022,\n    \u0022identity.credentials.manage\u0022,\n    \u0022identity.permissions.read\u0022,\n    \u0022identity.providers.manage\u0022,\n    \u0022identity.providers.read\u0022,\n    \u0022identity.roles.manage\u0022,\n    \u0022identity.roles.read\u0022,\n    \u0022identity.users.manage\u0022,\n    \u0022identity.users.read\u0022,\n    \u0022*\u0022\n  ],\n  \u0022provider\u0022: \u0022aspnetcore-identity\u0022,\n  \u0022roles\u0022: [\n    \u0022\\u003Crole\\u003E\u0022\n  ],\n  \u0022status\u0022: \u0022authenticated\u0022,\n  \u0022subject\u0022: \u0022\\u003Csubject\\u003E\u0022,\n  \u0022tenantId\u0022: \u0022default\u0022,\n  \u0022tokenFreshness\u0022: \u0022fresh\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "method=GET;uri=http://localhost/_elsa/identity/token;content-type=",
+    "body": "{\n  \u0022accessToken\u0022: \u0022\\u003CaccessToken\\u003E\u0022,\n  \u0022expiresAt\u0022: \u0022\\u003CexpiresAt\\u003E\u0022\n}",
+    "case": "authenticated-token",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "GET /_elsa/identity/token",
+    "headers": {
+      "content-type": "application/json; \u003Ccookie\u003E"
+    },
+    "json": "{\n  \u0022accessToken\u0022: \u0022\\u003CaccessToken\\u003E\u0022,\n  \u0022expiresAt\u0022: \u0022\\u003CexpiresAt\\u003E\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=refreshToken",
+    "body": "",
+    "case": "empty-refresh",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/refresh",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=refreshToken",
+    "body": "",
+    "case": "garbage-refresh",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/refresh",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "401",
+    "statusCode": 401,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=refreshToken",
+    "body": "",
+    "case": "unsupported-refresh",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/refresh",
+    "headers": {},
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "415",
+    "statusCode": 415,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=username,password",
+    "body": "{\n  \u0022displayName\u0022: \u0022Administrator\u0022,\n  \u0022permissions\u0022: [\n    \u0022identity.applications.manage\u0022,\n    \u0022identity.applications.read\u0022,\n    \u0022identity.credentials.manage\u0022,\n    \u0022identity.permissions.read\u0022,\n    \u0022identity.providers.manage\u0022,\n    \u0022identity.providers.read\u0022,\n    \u0022identity.roles.manage\u0022,\n    \u0022identity.roles.read\u0022,\n    \u0022identity.users.manage\u0022,\n    \u0022identity.users.read\u0022,\n    \u0022*\u0022\n  ],\n  \u0022provider\u0022: \u0022aspnetcore-identity\u0022,\n  \u0022roles\u0022: [\n    \u0022\\u003Crole\\u003E\u0022\n  ],\n  \u0022status\u0022: \u0022authenticated\u0022,\n  \u0022subject\u0022: \u0022\\u003Csubject\\u003E\u0022,\n  \u0022tenantId\u0022: \u0022default\u0022,\n  \u0022tokenFreshness\u0022: \u0022fresh\u0022\n}",
+    "case": "authenticated-login-json",
+    "contentType": "application/json; charset=utf-8",
+    "endpoint": "POST /_elsa/identity/login",
+    "headers": {
+      "cache-control": "no-store, no-cache",
+      "content-type": "application/json; \u003Ccookie\u003E",
+      "expires": "Thu, 01 Jan 1970 00:00:00 GMT",
+      "pragma": "no-cache",
+      "set-cookie": "\u003Ccookie\u003E; \u003Ccookie\u003E; \u003Ccookie\u003E; httponly"
+    },
+    "json": "{\n  \u0022displayName\u0022: \u0022Administrator\u0022,\n  \u0022permissions\u0022: [\n    \u0022identity.applications.manage\u0022,\n    \u0022identity.applications.read\u0022,\n    \u0022identity.credentials.manage\u0022,\n    \u0022identity.permissions.read\u0022,\n    \u0022identity.providers.manage\u0022,\n    \u0022identity.providers.read\u0022,\n    \u0022identity.roles.manage\u0022,\n    \u0022identity.roles.read\u0022,\n    \u0022identity.users.manage\u0022,\n    \u0022identity.users.read\u0022,\n    \u0022*\u0022\n  ],\n  \u0022provider\u0022: \u0022aspnetcore-identity\u0022,\n  \u0022roles\u0022: [\n    \u0022\\u003Crole\\u003E\u0022\n  ],\n  \u0022status\u0022: \u0022authenticated\u0022,\n  \u0022subject\u0022: \u0022\\u003Csubject\\u003E\u0022,\n  \u0022tenantId\u0022: \u0022default\u0022,\n  \u0022tokenFreshness\u0022: \u0022fresh\u0022\n}",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "200",
+    "statusCode": 200,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "body=provider",
+    "body": "",
+    "case": "authenticated-logout",
+    "contentType": "",
+    "endpoint": "POST /_elsa/identity/logout/aspnetcore-identity",
+    "headers": {
+      "cache-control": "no-store, no-cache",
+      "expires": "Thu, 01 Jan 1970 00:00:00 GMT",
+      "pragma": "no-cache",
+      "set-cookie": "Elsa.Identity.Cookie=; \u003Ccookie\u003E; \u003Ccookie\u003E; \u003Ccookie\u003E; httponly"
+    },
+    "json": "",
+    "pagingFiltering": "",
+    "problemDetails": "",
+    "status": "204",
+    "statusCode": 204,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

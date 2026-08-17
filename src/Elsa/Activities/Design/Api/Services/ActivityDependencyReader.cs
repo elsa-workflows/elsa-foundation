@@ -101,7 +101,7 @@ public sealed class ActivityDependencyReader(
     IActivityDirectDependencyStore directStore,
     IActivityDependencyProjectionStore projectionStore,
     IActivityDependencyCursorCodec cursorCodec,
-    IActivityDependencyAuthorizationContext authorization,
+    IActivityDependencyContextAsync authorization,
     IOptions<ActivityDependencyReaderOptions> options)
 {
     public async Task<ActivityDependencyPageView> ReadAsync(
@@ -118,8 +118,8 @@ public sealed class ActivityDependencyReader(
         var rootPublication = await publicationStore.FindAsync(rootVersionId, cancellationToken)
             ?? throw NotFound();
         var root = Reference(rootPublication);
-        EnsureRootVisible(root);
-        EnsureAuthorizationProfile();
+        await EnsureRootVisibleAsync(root, cancellationToken);
+        await EnsureAuthorizationProfileAsync(cancellationToken);
 
         ActivityDependencyCursorState? cursorState = null;
         if (cursor is not null)
@@ -132,7 +132,7 @@ public sealed class ActivityDependencyReader(
             {
                 throw BindingMismatch(exception);
             }
-            EnsureBinding(cursorState, rootVersionId, query);
+            await EnsureBindingAsync(cursorState, rootVersionId, query, cancellationToken);
         }
 
         var page = query is { Direction: ActivityDependencyDirection.Outbound, Transitive: false }
@@ -165,7 +165,9 @@ public sealed class ActivityDependencyReader(
                 1,
                 [ownerReference, dependencyReference],
                 edge.MemberUsage.ToArray());
-            if (Visible(item.Owner) && Visible(item.Dependency) && authorization.CanRead(item.Owner) && authorization.CanRead(item.Dependency) && Included(item.Owner.Kind, query.Include))
+            if (Visible(item.Owner) && Visible(item.Dependency) &&
+                await authorization.CanReadAsync(item.Owner, cancellationToken) &&
+                await authorization.CanReadAsync(item.Dependency, cancellationToken) && Included(item.Owner.Kind, query.Include))
                 items.Add(item);
         }
 
@@ -177,7 +179,7 @@ public sealed class ActivityDependencyReader(
         if (offset > ordered.Count) throw BindingMismatch();
         var selected = ordered.Skip(offset).Take(limit).ToArray();
         var nextOffset = offset + selected.Length;
-        var nextCursor = nextOffset < ordered.Count ? EncodeCursor(rootPublication.DefinitionVersionId, query, watermark, nextOffset) : null;
+        var nextCursor = nextOffset < ordered.Count ? await EncodeCursorAsync(rootPublication.DefinitionVersionId, query, watermark, nextOffset, cancellationToken) : null;
         return new(
             Reference(rootPublication),
             query,
@@ -217,7 +219,9 @@ public sealed class ActivityDependencyReader(
                 {
                     consumed++;
                     position++;
-                    if (Visible(item.Owner) && Visible(item.Dependency) && authorization.CanRead(item.Owner) && authorization.CanRead(item.Dependency))
+                    if (Visible(item.Owner) && Visible(item.Dependency) &&
+                        await authorization.CanReadAsync(item.Owner, cancellationToken) &&
+                        await authorization.CanReadAsync(item.Dependency, cancellationToken))
                         items.Add(item);
                     if (items.Count == limit)
                     {
@@ -237,7 +241,7 @@ public sealed class ActivityDependencyReader(
         }
 
         if (last is null) throw OperationFailed("The dependency projection returned no snapshot.");
-        var nextCursor = hasMore || last.NextOffset is not null ? EncodeCursor(rootVersionId, query, watermark!, position) : null;
+        var nextCursor = hasMore || last.NextOffset is not null ? await EncodeCursorAsync(rootVersionId, query, watermark!, position, cancellationToken) : null;
         return new(last.Root, query, last.Consistency, items, nextCursor);
     }
 
@@ -268,10 +272,14 @@ public sealed class ActivityDependencyReader(
         return limit;
     }
 
-    private void EnsureBinding(ActivityDependencyCursorState cursor, string rootVersionId, ActivityDependencyQuery query)
+    private async ValueTask EnsureBindingAsync(
+        ActivityDependencyCursorState cursor,
+        string rootVersionId,
+        ActivityDependencyQuery query,
+        CancellationToken cancellationToken)
     {
         if (!StringComparer.Ordinal.Equals(cursor.TenantScope, TenantScope()) ||
-            !StringComparer.Ordinal.Equals(cursor.AuthorizationProfileFingerprint, AuthorizationProfileFingerprint()) ||
+            !StringComparer.Ordinal.Equals(cursor.AuthorizationProfileFingerprint, await AuthorizationProfileFingerprintAsync(cancellationToken)) ||
             !StringComparer.Ordinal.Equals(cursor.RootVersionId, rootVersionId) ||
             !StringComparer.OrdinalIgnoreCase.Equals(cursor.Direction, query.Direction.ToString()) ||
             cursor.Transitive != query.Transitive ||
@@ -279,10 +287,15 @@ public sealed class ActivityDependencyReader(
             throw BindingMismatch();
     }
 
-    private string EncodeCursor(string rootVersionId, ActivityDependencyQuery query, string watermark, int position) =>
+    private async ValueTask<string> EncodeCursorAsync(
+        string rootVersionId,
+        ActivityDependencyQuery query,
+        string watermark,
+        int position,
+        CancellationToken cancellationToken) =>
         cursorCodec.Encode(new(
             TenantScope(),
-            AuthorizationProfileFingerprint(),
+            await AuthorizationProfileFingerprintAsync(cancellationToken),
             rootVersionId,
             query.Direction.ToString(),
             query.Transitive,
@@ -290,15 +303,15 @@ public sealed class ActivityDependencyReader(
             watermark,
             position));
 
-    private void EnsureRootVisible(ActivityDefinitionReference root)
+    private async ValueTask EnsureRootVisibleAsync(ActivityDefinitionReference root, CancellationToken cancellationToken)
     {
-        if (!Visible(root) || !authorization.CanRead(root))
+        if (!Visible(root) || !await authorization.CanReadAsync(root, cancellationToken))
             throw new ActivityAuthoringException(403, "activity.tenant.reference-denied", "Activity dependency query is forbidden", "The requested activity version is outside the caller's authorized scope.");
     }
 
-    private void EnsureAuthorizationProfile()
+    private async ValueTask EnsureAuthorizationProfileAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(authorization.AuthorizationProfile))
+        if (string.IsNullOrWhiteSpace(await authorization.GetAuthorizationProfileAsync(cancellationToken)))
             throw OperationFailed("The dependency authorization profile is not configured.");
     }
 
@@ -307,8 +320,8 @@ public sealed class ActivityDependencyReader(
 
     private string TenantScope() => authorization.TenantId is null ? "global:" : $"tenant:{authorization.TenantId}";
 
-    private string AuthorizationProfileFingerprint() =>
-        ActivityAccessProfileFingerprint.Create(authorization.AuthorizationProfile);
+    private async ValueTask<string> AuthorizationProfileFingerprintAsync(CancellationToken cancellationToken) =>
+        ActivityAccessProfileFingerprint.Create(await authorization.GetAuthorizationProfileAsync(cancellationToken));
 
     private static bool Included(string ownerKind, IReadOnlySet<string> include) => ownerKind switch
     {

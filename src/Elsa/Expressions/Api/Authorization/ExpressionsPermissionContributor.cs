@@ -1,4 +1,3 @@
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Expressions.Api.Authorization;
@@ -9,6 +8,6 @@ public sealed class ExpressionsPermissionContributor : IPermissionContributor
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(PermissionNames.ExpressionsRead, "Read expression metadata", "Expressions", "Read expression and variable-type descriptors.")
+        new(ExpressionsPermissions.Read, "Read expression metadata", "Expressions", "Read expression and variable-type descriptors.")
     ];
 }

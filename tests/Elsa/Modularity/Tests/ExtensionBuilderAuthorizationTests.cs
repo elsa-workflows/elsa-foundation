@@ -117,6 +117,40 @@ public sealed class ExtensionBuilderAuthorizationTests
     }
 
     [Fact]
+    public async Task Host_credential_filter_rejects_anonymous_calls_before_the_endpoint_runs()
+    {
+        var invoked = false;
+        var context = new DefaultEndpointFilterInvocationContext(
+            CreateContextWithConfiguration("expected-key", providedApiKey: null));
+
+        var result = await ManagementApiKeyAuthentication.RequireAsync(context, _ =>
+        {
+            invoked = true;
+            return new ValueTask<object?>(Results.Ok());
+        });
+
+        Assert.IsType<UnauthorizedHttpResult>(result);
+        Assert.False(invoked);
+    }
+
+    [Fact]
+    public async Task Host_credential_filter_preserves_the_existing_endpoint_when_the_key_matches()
+    {
+        var invoked = false;
+        var context = new DefaultEndpointFilterInvocationContext(
+            CreateContextWithConfiguration("expected-key", providedApiKey: "expected-key"));
+
+        var result = await ManagementApiKeyAuthentication.RequireAsync(context, _ =>
+        {
+            invoked = true;
+            return new ValueTask<object?>(Results.Ok());
+        });
+
+        Assert.IsType<Ok>(result);
+        Assert.True(invoked);
+    }
+
+    [Fact]
     public void ManagementApiKeyKeysEqualUsesConstantTimeComparison()
     {
         Assert.True(ManagementApiKeyAuthentication.KeysEqual("secret", "secret"));

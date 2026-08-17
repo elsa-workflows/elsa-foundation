@@ -1,15 +1,10 @@
-using System.Diagnostics;
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
-using CShells.Lifecycle;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Management.Api;
-using Elsa.Api.FastEndpoints;
-using Elsa.Workbench;
-using Elsa.Workbench.Boot;
-using Elsa.Workbench.Readiness;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -21,11 +16,14 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
-using Elsa.Api.Capabilities;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.Workflows;
+using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Api.FastEndpoints;
+using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
@@ -43,42 +41,45 @@ using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Modularity.Attention;
 using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified;
+using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Primitives.Hosting;
+using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
-using Elsa.Tasks;
-using Elsa.Attention.Api;
-using Elsa.Modularity.Attention;
-using Elsa.Secrets.Attention;
 using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
+using Elsa.Tasks;
+using Elsa.Workbench;
+using Elsa.Workbench.Boot;
+using Elsa.Workbench.Readiness;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
-using Elsa.Workflows.Dashboard;
+using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
-using Elsa.Workflows.Runtime.Attention;
-using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Runtime.Tracing;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
-using Elsa.Modularity.ExtensionBuilder;
-using Elsa.Modularity.ExtensionBuilder.Extensions;
+using System.Diagnostics;
 
 // Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
 // attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
@@ -182,6 +183,7 @@ builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
 builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
+builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
@@ -383,7 +385,10 @@ if (bootTimeline is not null)
 
 app.UseCors(studioCorsPolicy);
 
-app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }));
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }))
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .AllowPublic("health", "Reports whether the Workbench root host is responding.");
 app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
@@ -397,7 +402,16 @@ app.MapShells();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapShellManagementApi("/_admin/shells");
+// ADR 0037: CShells host-control remains server-to-server management-key traffic. It is not a Foundation
+// user permission and the key is never exposed to browser clients.
+app.MapShellManagementApi("/_admin/shells")
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+        ManagementApiKeyAuthentication.HeaderName,
+        "Elsa.Workbench"))
+    .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench")
+    .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
 
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
 // note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
@@ -408,6 +422,9 @@ if (consoleLogStreamingEnabled)
 {
     var consoleLogEndpoints = app.MapGroup("");
     consoleLogEndpoints.RequireAuthorization();
+    consoleLogEndpoints.WithHostOwner("Elsa.Workbench")
+        .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
 app.Run();
