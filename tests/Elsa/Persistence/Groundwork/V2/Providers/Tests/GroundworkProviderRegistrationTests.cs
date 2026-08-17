@@ -1,7 +1,9 @@
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Providers;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 using Xunit.Sdk;
 
@@ -134,6 +136,63 @@ public sealed class GroundworkProviderRegistrationTests
         }
     }
 
+    [Fact]
+    public async Task SQLite_host_startup_admits_units_and_persists_across_fresh_provider_composition()
+    {
+        var path = TemporaryDatabasePath();
+        var unit = ProviderCompositionUnit();
+        var access = StorageAccess.Scoped(new StorageScope("tenant-a"));
+        var key = new StorageKey(new Dictionary<string, object?>
+        {
+            ["id"] = "row-1"
+        });
+        try
+        {
+            await using (var first = BuildSqliteHost(path, unit))
+            {
+                await first.GetRequiredService<IHostedService>().StartAsync(CancellationToken.None);
+                var sessions = first.GetRequiredService<IGroundworkStorageSessionSource>();
+                var outcome = sessions.Open(unit.Id.Value, access).Insert(
+                    new StorageValues(new Dictionary<string, object?>
+                    {
+                        ["id"] = "row-1",
+                        ["value"] = "survives-recomposition"
+                    }),
+                    WriteOptions.Unconditional);
+
+                Assert.Equal(WriteOutcomeStatus.Inserted, outcome.Status);
+            }
+
+            await using (var second = BuildSqliteHost(path, unit))
+            {
+                await second.GetRequiredService<IHostedService>().StartAsync(CancellationToken.None);
+                var sessions = second.GetRequiredService<IGroundworkStorageSessionSource>();
+                var entry = sessions.Open(unit.Id.Value, access).Read(key);
+
+                Assert.NotNull(entry);
+                Assert.Equal("survives-recomposition", entry!.Values.Values["value"]);
+            }
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
+    [Fact]
+    public async Task Host_startup_refuses_a_declared_target_without_a_provider_connection()
+    {
+        await using var provider = new ServiceCollection()
+            .AddGroundworkStorageUnit(ProviderCompositionUnit(), "missing-target")
+            .BuildServiceProvider();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provider.GetRequiredService<IHostedService>().StartAsync(CancellationToken.None));
+
+        Assert.Contains("missing-target", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("no v2 provider connection", exception.Message, StringComparison.Ordinal);
+    }
+
     [SkippableTheory]
     [InlineData("postgresql")]
     [InlineData("sqlserver")]
@@ -159,6 +218,12 @@ public sealed class GroundworkProviderRegistrationTests
             .Key("id")
             .Scoped()
             .Build();
+
+    private static ServiceProvider BuildSqliteHost(string path, StorageUnit unit) =>
+        new ServiceCollection()
+            .AddGroundworkSqliteProvider($"Data Source={path}")
+            .AddGroundworkStorageUnit(unit)
+            .BuildServiceProvider();
 
     private static void DeleteDatabase(string path)
     {

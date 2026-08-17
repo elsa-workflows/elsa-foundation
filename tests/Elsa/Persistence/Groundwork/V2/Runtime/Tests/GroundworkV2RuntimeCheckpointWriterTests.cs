@@ -1116,7 +1116,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             var row = source.Open(
                     ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind,
                     StorageAccess.Scoped(new StorageScope("tenant-a")))
-                .Read(GroundworkRuntimeRowStore.Key(activity.Execution.ActivityExecutionId));
+                .Read(GroundworkRuntimeRowStore.Key(
+                    GroundworkV2ActivityExecutionStorageConventions.PhysicalId(
+                        activity.Execution.WorkflowExecutionId,
+                        activity.Execution.ActivityExecutionId)));
             Assert.NotNull(row);
             Assert.Equal(
                 activity.Execution.ActivityExecutionId,

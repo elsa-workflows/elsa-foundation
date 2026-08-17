@@ -648,10 +648,18 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             commit.StateChanges.Scheduler,
             ProjectScheduler);
 
-        public void ApplyActivityExecutions() => ApplyMany(
-            ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind,
-            commit.StateChanges.ActivityExecutions,
-            ProjectActivityExecution);
+        public void ApplyActivityExecutions()
+        {
+            foreach (var change in commit.StateChanges.ActivityExecutions)
+            {
+                // Activity execution identity is composite. The direct store and the checkpoint funnel must stage
+                // the same injective physical key and envelope, not merely the activity component of that key.
+                unitOfWork.Stage(RowWrite.Upsert(
+                    Unit(ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind),
+                    GroundworkV2ActivityExecutionStorageConventions.Values(change.State),
+                    WriteOptions.Unconditional));
+            }
+        }
 
         public void ApplyInspectionsAndHierarchy()
         {
@@ -1291,20 +1299,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             GroundworkV2WorkflowExecutionStorageConventions.Projections(state);
 
         private static IReadOnlyDictionary<string, object?> ProjectScheduler(SchedulerState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind
-            };
-
-        private static IReadOnlyDictionary<string, object?> ProjectActivityExecution(ActivityExecutionState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.ActivityExecutionIdField] = state.Execution.ActivityExecutionId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.Execution.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.ParentActivityExecutionIdField] = state.ParentActivityExecutionId,
-                [ElsaRuntimeV2StorageManifest.ExecutionScopeIdField] = EffectiveExecutionScope(state.ExecutionScopeId, state.Provenance.ExecutionScopeId),
-                [ElsaRuntimeV2StorageManifest.StatusField] = state.Status.ToString()
-            };
+            GroundworkV2SchedulerStateStorageConventions.Projections(state);
 
         private static string? EffectiveExecutionScope(string? stateScope, string? provenanceScope) =>
             string.IsNullOrWhiteSpace(stateScope) ? provenanceScope : stateScope;
