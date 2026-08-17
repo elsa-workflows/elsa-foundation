@@ -114,7 +114,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.Equal(Hash(tracePath), root.GetProperty("handlerTraceSha256").GetString());
         Assert.Equal("#1372", root.GetProperty("issue").GetString());
         Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
-        Assert.Equal("checked-in-worktree", root.GetProperty("captureRunnerIdentity").GetString());
+        Assert.Equal("checked-in-commit", root.GetProperty("captureRunnerIdentity").GetString());
+        Assert.False(root.TryGetProperty("captureRunnerCommit", out _));
         Assert.Equal(
             "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 bash tools/compatibility/capture-workflows-design-before.sh",
             root.GetProperty("captureCommand").GetString());
@@ -125,6 +126,7 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.Equal(root.GetProperty("sourceCommit").GetString(), receipt.RootElement.GetProperty("sourceCommit").GetString());
         Assert.Equal(root.GetProperty("captureRunnerIdentity").GetString(), receipt.RootElement.GetProperty("runnerIdentity").GetString());
         Assert.Equal(root.GetProperty("runnerFingerprint").GetString(), receipt.RootElement.GetProperty("runnerFingerprint").GetString());
+        AssertReceiptMetadataMatchesFixtures(receipt.RootElement, directory);
         Assert.Equal(
             DependencyFingerprints(root.GetProperty("runnerDependencies")),
             DependencyFingerprints(receipt.RootElement.GetProperty("runnerDependencies")));
@@ -141,7 +143,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, WorkflowDesignCompatibilityEvidence.ReceiptFileName)));
         var root = receipt.RootElement;
         Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
-        Assert.Equal("checked-in-worktree", root.GetProperty("runnerIdentity").GetString());
+        Assert.Equal("checked-in-commit", root.GetProperty("runnerIdentity").GetString());
+        Assert.False(root.TryGetProperty("runnerCommit", out _));
         Assert.Equal(
             "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 bash tools/compatibility/capture-workflows-design-before.sh",
             root.GetProperty("captureCommand").GetString());
@@ -183,6 +186,19 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.False(RunnerDependenciesMatch(root, mutated));
     }
 
+    [Fact]
+    public void Historical_capture_receipt_rejects_mutated_fixture_metadata()
+    {
+        var directory = Path.Join(AppContext.BaseDirectory, "Baselines");
+        using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, WorkflowDesignCompatibilityEvidence.ReceiptFileName)));
+
+        AssertReceiptMetadataMatchesFixtures(receipt.RootElement, directory);
+        Assert.False(ReceiptMetadataMatchesFixtures(
+            receipt.RootElement,
+            directory,
+            expectedHttpSha256: new string('0', 64)));
+    }
+
     private static string GitBlobHash(string commit, string path)
     {
         var startInfo = new ProcessStartInfo("git", ["show", $"{commit}:{path}"])
@@ -194,10 +210,11 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
             CreateNoWindow = true
         };
         using var process = Process.Start(startInfo)!;
-        var contents = process.StandardOutput.ReadToEnd();
+        using var contents = new MemoryStream();
+        process.StandardOutput.BaseStream.CopyTo(contents);
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(contents))).ToLowerInvariant();
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(contents.ToArray())).ToLowerInvariant();
     }
 
     private static string GitBlobText(string commit, string path)
@@ -211,10 +228,11 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
             CreateNoWindow = true
         };
         using var process = Process.Start(startInfo)!;
-        var contents = process.StandardOutput.ReadToEnd();
+        using var contents = new MemoryStream();
+        process.StandardOutput.BaseStream.CopyTo(contents);
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
-        return contents;
+        return Encoding.UTF8.GetString(contents.ToArray());
     }
 
     private static int GitPathCount(string commit, string path)
@@ -306,13 +324,34 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         return (dependencies ?? ReadRunnerDependencies(root)).All(dependency =>
         {
             var expectedIdentity = dependency.Path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
-                ? "checked-in-worktree"
+                ? "checked-in-commit"
                 : $"source-commit:{sourceCommit}";
-            var expectedHash = dependency.Identity == "checked-in-worktree"
-                ? Hash(Path.Join(RepositoryRoot, dependency.Path))
+            var expectedHash = dependency.Identity == "checked-in-commit"
+                ? GitBlobHash(CurrentHead(), dependency.Path)
                 : GitBlobHash(sourceCommit, dependency.Path);
             return dependency.Identity == expectedIdentity && dependency.Sha256 == expectedHash;
         });
+    }
+
+    private static void AssertReceiptMetadataMatchesFixtures(JsonElement receipt, string directory) =>
+        Assert.True(ReceiptMetadataMatchesFixtures(receipt, directory));
+
+    private static bool ReceiptMetadataMatchesFixtures(
+        JsonElement receipt,
+        string directory,
+        string? expectedHttpSha256 = null)
+    {
+        var httpPath = Path.Join(directory, WorkflowDesignCompatibilityEvidence.HttpFileName);
+        var openApiPath = Path.Join(directory, WorkflowDesignCompatibilityEvidence.OpenApiFileName);
+        var tracePath = Path.Join(directory, WorkflowDesignCompatibilityEvidence.HandlerTraceFileName);
+        var http = WorkflowDesignCompatibilityEvidence.LoadLegacyHttp();
+        var openApi = WorkflowDesignCompatibilityEvidence.LoadLegacyOpenApi();
+        return receipt.GetProperty("httpSha256").GetString() == (expectedHttpSha256 ?? Hash(httpPath)) &&
+               receipt.GetProperty("openApiSha256").GetString() == Hash(openApiPath) &&
+               receipt.GetProperty("traceSha256").GetString() == Hash(tracePath) &&
+               receipt.GetProperty("registrationCount").GetInt32() == 27 &&
+               receipt.GetProperty("caseCount").GetInt32() == http.Count &&
+               receipt.GetProperty("operationCount").GetInt32() == openApi.Operations.Count;
     }
 
     private static string RepositoryRoot

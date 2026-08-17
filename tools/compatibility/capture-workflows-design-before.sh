@@ -8,7 +8,8 @@ git merge-base --is-ancestor "$source_commit" HEAD || {
     echo "the pinned historical source must be an ancestor of the current checkout" >&2
     exit 1
 }
-capture_runner_identity=checked-in-worktree
+capture_runner_identity=checked-in-commit
+runner_tree=$(git rev-parse HEAD^{tree})
 worktree_dir=$(mktemp -d "${TMPDIR:-/tmp}/elsa-workflows-design-before.XXXXXX")
 output_dir=${1:-"$repo_root/tests/Elsa/Workflows/Design/Api/Tests/Baselines"}
 trap 'git -C "$repo_root" worktree remove --force "$worktree_dir" >/dev/null 2>&1 || true' EXIT
@@ -17,14 +18,27 @@ git -C "$repo_root" worktree add --detach "$worktree_dir" "$source_commit" >/dev
 test -f "$worktree_dir/src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs"
 rg -q 'FastEndpointsFeatureBase' "$worktree_dir/src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs"
 test "$(git -C "$worktree_dir" ls-files 'src/Elsa/Workflows/Design/Api/Endpoints' | wc -l | tr -d ' ')" -ge 25
-mkdir -p "$worktree_dir/tools/compatibility/WorkflowsDesignFastEndpointsCapture"
-cp "$repo_root/tools/compatibility/capture-workflows-design-before.sh" \
+copy_committed_blob() {
+    local path=$1
+    local destination=$2
+    local blob
+    blob=$(git -C "$repo_root" rev-parse "$runner_tree:$path")
+    git -C "$repo_root" cat-file -e "$blob"
+    mkdir -p "$(dirname "$destination")"
+    git -C "$repo_root" cat-file blob "$blob" > "$destination"
+}
+
+copy_committed_blob \
+    tools/compatibility/capture-workflows-design-before.sh \
     "$worktree_dir/tools/compatibility/capture-workflows-design-before.sh"
-cp "$repo_root/tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs" \
+copy_committed_blob \
+    tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs \
     "$worktree_dir/tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs"
-cp "$repo_root/tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj" \
+copy_committed_blob \
+    tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj \
     "$worktree_dir/tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj"
-cp "$repo_root/tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs" \
+copy_committed_blob \
+    tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs \
     "$worktree_dir/tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs"
 for dependency in \
     tools/compatibility/capture-workflows-design-before.sh \
