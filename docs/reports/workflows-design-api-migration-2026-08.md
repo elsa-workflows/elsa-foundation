@@ -35,9 +35,9 @@ immutable  78-case HTTP/OpenAPI/handler-trace fixtures
 3157570ab  squash-merged Minimal API migration
 ```
 
-The checked-in runner is copied from the checkout under test and identified as `checked-in-worktree`; its
+The checked-in runner is materialized from the committed Git tree under test and identified as `checked-in-commit`; its
 seven runner/source dependency paths are individually hashed and bound by fingerprint
-`6a6254f7c91c7bec695bfcdca305d81ce1809e826f4240e4324a8d5e7d6207b0`. The source commit
+`1aa0f7e8e2d32c3f5b9cebed20e1ecd0f8503d33455ebffa47852e0a4f389277`. The source commit
 `67ba4b3b9bec3a6c2aac0d6d332099baf723e802` must resolve, be an ancestor of the current checkout, and
 contain the expected FastEndpoints feature/endpoint surface. The capture was executed detached against that
 pre-migration source and captured all
