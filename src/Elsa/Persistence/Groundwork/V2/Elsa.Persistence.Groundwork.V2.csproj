@@ -20,6 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Current-only serialization/projection seams stay internal; these two dependency-closed suites
+         verify them without widening Elsa's public persistence API. Architecture-reviewed for #269. -->
+    <InternalsVisibleTo Include="Elsa.Persistence.Groundwork.V2.Runtime.Tests" />
+    <InternalsVisibleTo Include="Elsa.Persistence.Groundwork.V2.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Provider-specific composition lives in its own dependency-closed project. -->
     <Compile Remove="Providers/**/*" />
     <EmbeddedResource Remove="Providers/**/*" />

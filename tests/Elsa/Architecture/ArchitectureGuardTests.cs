@@ -30,7 +30,11 @@ public sealed class ArchitectureGuardTests
         ("Elsa.Modularity.ExtensionBuilder", "Elsa.Modularity.Tests"),
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
-        ("Elsa.Workbench", "Elsa.Modularity.Tests")
+        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
+        // Groundwork v2 keeps its current-only row codecs and storage conventions internal while its
+        // dependency-closed runtime and manifest suites prove exact provider behavior during #269.
+        ("Elsa.Persistence.Groundwork.V2", "Elsa.Persistence.Groundwork.V2.Runtime.Tests"),
+        ("Elsa.Persistence.Groundwork.V2", "Elsa.Persistence.Groundwork.V2.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
