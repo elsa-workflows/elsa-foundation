@@ -19,7 +19,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | Contract | Built-in default | Replace when |
 |---|---|---|
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
-| `IPublicationSlotStore` | `InMemoryPublicationSlotStore` (singleton) | Slot authority and revision CAS must survive restart. |
+| `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. **Owned by the runtime, not publishing** — see the note under Authority stores. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
 | `IPublicationProjectionIntentStore` | `InMemoryPublicationProjectionIntentStore` (singleton) | Projection delivery facts and retries must survive restart. |
@@ -47,8 +47,14 @@ accepting the receipt.
 
 ### Authority stores
 
-- `IPublicationSlotStore` owns the unique `(WorkflowDefinitionId, SlotName)` authority and revisioned
-  `TryActivateAsync` / `TryUnpublishAsync` transitions. A failed expected revision must leave the slot unchanged.
+- **`IPublicationSlotStore` no longer exists.** Publishing does not own activation authority (spec 151,
+  FR-B-006). The definition-keyed ledger is `IWorkflowActivationAuthority` in
+  `Elsa.Workflows.Runtime.Core`, with revisioned `TryActivateAsync` / `TryDeactivateAsync` transitions and an
+  explicit `WorkflowActivationSource` ownership field; a failed expected revision must leave the slot
+  unchanged. There is **one ledger per engine**, so the publish pipeline and the artifact importer cannot
+  double-activate a definition. Publishing requests activation through `IWorkflowActivationCoordinator`,
+  which owns the complete lifecycle, and retains only compilation, publication policy and its
+  `IPublicationRecordStore` attempt journal — that journal is never consulted to decide serving.
 - `IPublicationRecordStore` retains publication lifecycle and failure facts and supports conditional status
   transitions.
 - `IPublicationPolicyStore` stores the host policy under a null workflow ID and optional workflow overrides;
@@ -83,9 +89,11 @@ after the durable serving set reaches its final state; Runtime HTTP consumes the
 
 A Publishing persistence package that backs the engine's authority state should:
 
-1. Implement all four authority stores (`IPublicationSlotStore`, `IPublicationRecordStore`,
+1. Implement the three publishing-owned authority stores (`IPublicationRecordStore`,
    `IPublicationPolicyStore`, `IPublicationProjectionIntentStore`) plus `IActivityPublicationReceiptStore` and
-   register them as one composition unit.
+   register them as one composition unit. **The activation slot is not among them**: it is
+   `IWorkflowActivationAuthority`, backed by the *runtime* Groundwork store family, and a publishing
+   persistence package must neither implement nor register it.
 2. Enforce unique slot identity and compare-and-swap revisions in storage, not only in process memory.
 3. Index publication records by slot and projection intents by publication.
 4. Version wire documents and provide upcasters/fixtures for every prior version.

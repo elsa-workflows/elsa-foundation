@@ -29,8 +29,10 @@ services.AddGroundworkPublishingStores();
 ```
 
 The registration replaces (or, when composed first, prevents) the API feature's in-memory defaults for
-`IPublicationSlotStore`, `IPublicationRecordStore`, `IPublicationPolicyStore`, and
+`IPublicationRecordStore`, `IPublicationPolicyStore`, and
 `IPublicationProjectionIntentStore`; it does not couple Publishing to a particular server application.
+Activation is not included — the slot ledger is `IWorkflowActivationAuthority`, owned by the runtime
+store family (spec 151, FR-B-006).
 The host must also compose the Runtime persistence used for executable artifacts, source references, trigger
 bindings, and recurring schedules.
 

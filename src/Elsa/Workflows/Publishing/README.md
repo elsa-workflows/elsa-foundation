@@ -32,9 +32,10 @@ compose:
 services.AddGroundworkPublishingStores();
 ```
 
-This replaces (or, when composed first, prevents) the in-memory defaults for `IPublicationSlotStore`,
+This replaces (or, when composed first, prevents) the in-memory defaults for
 `IPublicationRecordStore`, `IPublicationPolicyStore`, `IPublicationProjectionIntentStore`, and the activity
-publication receipt store. The host must also compose the Runtime persistence used for executable artifacts,
+publication receipt store. It does **not** cover activation: the slot ledger is
+`IWorkflowActivationAuthority`, owned by the runtime store family (spec 151, FR-B-006). The host must also compose the Runtime persistence used for executable artifacts,
 source references, trigger bindings, and recurring schedules.
 
 ## What the engine owns vs. what the API owns
