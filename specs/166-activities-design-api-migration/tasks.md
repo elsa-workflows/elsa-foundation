@@ -134,7 +134,7 @@ or feature code until that checkpoint is committed.
 
 **Purpose**: Publish only a green wave and verify the exact merged main state.
 
-- [ ] T050 Push the organization branch, open the Wave 7 PR linked to #1373, comment the PR URL and exact evidence on #1373, and synchronize its label/Project status to Review
+- [x] T050 Push the organization branch, open the Wave 7 PR linked to #1373, comment the PR URL and exact evidence on #1373, and synchronize its label/Project status to Review
 - [ ] T051 Wait for every required PR check and requested review to pass, reconcile concurrent main changes, rerun any invalidated local evidence, and merge only on a clean gate
 - [ ] T052 Verify CI, HTTP workflow performance, maps, packages, and code-quality/security workflows on the exact merged main commit; fix forward or revert any red main gate
 - [ ] T053 Post the final merged SHA, post-merge run URLs, evidence/report links, exact 38→0 owner result and 61→23 program ratchet on #1373; close the issue, set `status:done`, and move its Project item to Done only after exact-main is green

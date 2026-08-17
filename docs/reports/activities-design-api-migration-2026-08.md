@@ -200,6 +200,14 @@ contract/baseline/behavior suite (35/35), and the Architecture security/collecti
 (105/105); map freshness, `git diff --check`, and the clean-worktree check also passed. Its sole release
 bookkeeping requirement was to record these final totals and close T049, which this update completes.
 
+The first PR CI run then found a repository gate integration defect rather than an endpoint defect:
+the container-free solution-filter generator discovered the two historical `*.BeforeCapture` evidence
+executables even though they are intentionally absent from `Elsa.Server.slnx`, and MSBuild correctly
+rejected the inconsistent filter. The workflow now applies the same root-anchored evidence-project
+classification as the architecture guard before filtering Testcontainers projects. The exact generated
+filter loads successfully and excludes both historical capture projects; the subsequent PR CI rerun is
+the release gate for this correction.
+
 ## Risks, rollback, and follow-up
 
 - Publishing still owns the final 23 first-party FastEndpoints registrations. Removing the shared
