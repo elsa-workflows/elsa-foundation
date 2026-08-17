@@ -6,7 +6,8 @@ public class ElsaEndpoint<TRequest> : Endpoint<TRequest> where TRequest : notnul
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions(ElsaEndpointPermissions.Compose(permissions));
+        Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
+        Description(ElsaEndpointPermissions.StandardMetadata(GetType(), permissions));
     }
 
     protected void ThrowError(Exception exception, int statusCode = 500) => ThrowError(exception.Message, statusCode);

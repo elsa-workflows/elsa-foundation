@@ -11,6 +11,11 @@ public sealed record AgentApiResponse<T>(T? Data, AgentError? Error)
     public static AgentApiResponse<T> Failure(AgentError error) => new(default, error);
 }
 
+public sealed record AgentBindingErrorResponse(
+    int StatusCode,
+    string Message,
+    IReadOnlyDictionary<string, string[]> Errors);
+
 public sealed record AgentBootstrapResponse(
     bool Enabled,
     string ProviderStatus,

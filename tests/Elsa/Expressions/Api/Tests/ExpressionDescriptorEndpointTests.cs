@@ -1,20 +1,20 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Api.Handlers;
+using Elsa.Expressions.Api.Authorization;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Expressions.Api.Tests;
 
-/// <summary>RED contract for the reference-server descriptor projections moving into Expressions API.</summary>
 public sealed class ExpressionDescriptorEndpointTests
 {
     private static readonly Assembly ApiAssembly = Assembly.Load("Elsa.Expressions.Api");
@@ -26,15 +26,22 @@ public sealed class ExpressionDescriptorEndpointTests
     {
         var endpoint = FindEndpoint(route);
 
-        Assert.Contains(PermissionNames.ExpressionsRead, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        var owner = Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>());
+        Assert.Equal("Elsa.Expressions.Api", owner.OwnerId);
+        Assert.Equal(EndpointAuthoringModels.MinimalApi, endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model);
+        var security = Assert.IsType<EndpointSecurityDispositionMetadata>(
+            endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        Assert.Equal(EndpointSecurityDispositionKind.Permission, security.Kind);
+        var policy = new PermissionPolicyCodec().Parse(security.Value!);
+        Assert.Contains(PermissionKey.Normalize(ExpressionsPermissions.Read), policy.Descriptor!.Permissions);
+        Assert.DoesNotContain(endpoint.Metadata, item => item is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute);
     }
 
     [Fact]
     public void Expression_descriptor_contract_preserves_semantic_editing_modes()
     {
-        var item = ResponseItemType(FindEndpoint("expressions/descriptors"));
+        var item = typeof(ExpressionDescriptorsResponse).GetProperty(nameof(ExpressionDescriptorsResponse.Items))!.PropertyType
+            .GetGenericArguments()[0];
 
         AssertProperties(item, "Type", "DisplayName", "Description", "EditingMode");
         Assert.Equal(new[] { "Literal", "Text", "Structured", "Reference" }, Enum.GetNames(item.GetProperty("EditingMode")!.PropertyType));
@@ -77,7 +84,8 @@ public sealed class ExpressionDescriptorEndpointTests
     [Fact]
     public void Variable_type_contract_excludes_runtime_clr_type_details()
     {
-        var item = ResponseItemType(FindEndpoint("expressions/variable-types"));
+        var item = typeof(VariableTypeDescriptorsResponse).GetProperty(nameof(VariableTypeDescriptorsResponse.Items))!.PropertyType
+            .GetGenericArguments()[0];
 
         AssertProperties(item, "Alias", "DisplayName", "Category", "DefaultEditor");
         Assert.Null(item.GetProperty("ClrType"));
@@ -94,6 +102,17 @@ public sealed class ExpressionDescriptorEndpointTests
             "Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog");
     }
 
+    private static RouteEndpoint FindEndpoint(string route)
+    {
+        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        ExpressionsApi.MapExpressionsApi(routes);
+        var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .SingleOrDefault(candidate => candidate.RoutePattern.RawText == route);
+        Assert.NotNull(endpoint);
+        return endpoint!;
+    }
+
     private static void AssertHandlerDependency(string typeName, string dependencyName)
     {
         var handler = ApiAssembly.GetType(typeName);
@@ -101,72 +120,17 @@ public sealed class ExpressionDescriptorEndpointTests
         Assert.Contains(handler!.GetConstructors().Single().GetParameters(), parameter => parameter.ParameterType.FullName == dependencyName);
     }
 
-    private static BaseEndpoint FindEndpoint(string route)
-    {
-        var endpoint = ApiAssembly.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(BaseEndpoint).IsAssignableFrom(type))
-            .Select(CreateEndpoint)
-            .SingleOrDefault(candidate => candidate.Definition.Routes.Contains(route, StringComparer.Ordinal));
-        Assert.NotNull(endpoint);
-        return endpoint;
-    }
-
-    private static Type ResponseItemType(BaseEndpoint endpoint)
-    {
-        var response = ResponseContract(endpoint);
-        var items = response.GetProperty("Items", BindingFlags.Public | BindingFlags.Instance);
-        Assert.NotNull(items);
-        return CollectionElementType(items!.PropertyType);
-    }
-
-    private static Type ResponseContract(BaseEndpoint endpoint)
-    {
-        for (var current = endpoint.GetType().BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Elsa.Api.FastEndpoints.Abstractions.ElsaEndpointWithoutRequest<>))
-                return current.GenericTypeArguments[0];
-        }
-        throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no response contract.");
-    }
-
-    private static BaseEndpoint CreateEndpoint(Type endpointType)
-    {
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single().GetParameters().Select(parameter => ResolveDependency(parameter.ParameterType)).ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
-        endpoint.Configure();
-        return endpoint;
-    }
-
-    private static object ResolveDependency(Type type)
-    {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
-        {
-            var nullLogger = typeof(NullLogger<>).MakeGenericType(type.GenericTypeArguments[0]);
-            return (nullLogger.GetProperty("Instance")?.GetValue(null) ?? nullLogger.GetField("Instance")?.GetValue(null))!;
-        }
-        if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(NoopProxy));
-        return RuntimeHelpers.GetUninitializedObject(type);
-    }
-
-    private static Type CollectionElementType(Type collectionType) => collectionType.GetInterfaces().Append(collectionType)
-        .First(type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GenericTypeArguments[0];
+    private static ExpressionDescriptor Descriptor(string type, string displayName, ExpressionEditingMode editingMode) =>
+        new(type, editingMode) { DisplayName = displayName };
 
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
 
-    private static ExpressionDescriptor Descriptor(string type, string displayName, ExpressionEditingMode editingMode) =>
-        new(type, editingMode) { DisplayName = displayName };
-
-    private class NoopProxy : DispatchProxy
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => throw new NotSupportedException();
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 
     private sealed class StubExpressionDescriptorRegistry(IEnumerable<IExpressionDescriptor> descriptors) : IExpressionDescriptorRegistry
@@ -174,13 +138,9 @@ public sealed class ExpressionDescriptorEndpointTests
         private readonly List<IExpressionDescriptor> _descriptors = [.. descriptors];
 
         public void Add(IExpressionDescriptor descriptor) => _descriptors.Add(descriptor);
-
         public void AddRange(IEnumerable<IExpressionDescriptor> descriptors) => _descriptors.AddRange(descriptors);
-
         public IEnumerable<IExpressionDescriptor> ListAll() => _descriptors;
-
         public IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate) => _descriptors.FirstOrDefault(predicate);
-
         public IExpressionDescriptor? Find(string type) => _descriptors.FirstOrDefault(x => x.TypeName == type);
     }
 }

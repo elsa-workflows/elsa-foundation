@@ -15,8 +15,7 @@ public sealed class RuntimeExecutionEndpointTests
         var endpoint = RuntimeApiEndpointTestFactory.Create(type!);
 
         Assert.Contains("runtime/workflows/executables/{artifactId}/execute", endpoint.Definition.Routes);
-        Assert.Contains(PermissionNames.WorkflowRuntimeExecute, endpoint.Definition.AllowedPermissions!);
-        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeExecute);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
         Assert.Null(typeof(ExecuteWorkflow).GetProperty("RunKind", BindingFlags.Public | BindingFlags.Instance));
         Assert.NotNull(typeof(ExecuteWorkflow).GetProperty("SourceReferenceId", BindingFlags.Public | BindingFlags.Instance));

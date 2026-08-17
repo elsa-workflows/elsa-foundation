@@ -12,7 +12,8 @@ Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
   - **`InMemoryStructuredLogLiveFeed`** → `IStructuredLogLiveFeed` + `IStructuredLogLivePublisher` — an independent bounded channel per subscriber. For SSE it is only a wake hint; durable storage remains the payload and ordering authority.
 - **`LocalStructuredLogSourceProvider`** → `IStructuredLogSourceProvider` — exposes the single local host as the only known source and stamps every captured entry with its source id.
 - **`StructuredLogCaptureProvider`** — an `ILoggerProvider` (registered via `TryAddEnumerable`) that bridges host logging into `IStructuredLogSink`. It ignores its own categories (prefix `Elsa.Diagnostics.StructuredLogs`) to prevent feedback loops and swallows sink failures so capture never throws into the host logging path.
-- **Endpoints** (FastEndpoints, auto-mapped via `app.MapShells()`):
+- **Endpoints** (explicit Minimal APIs mapped by `StructuredLogsFeature.MapEndpoints` through
+  `StructuredLogsApi.MapStructuredLogsApi`):
   - `GET /_elsa/studio/diagnostics/structured-logs/recent` — newest-aligned recent entries as a JSON array.
   - `GET /_elsa/studio/diagnostics/structured-logs/sources` — known log sources.
   - `GET /_elsa/studio/diagnostics/structured-logs/stream` — live tail as Server-Sent Events with
@@ -35,7 +36,15 @@ Exposed manifest settings: **Minimum level** (default `Information`), **Buffer c
 
 ## Authorization
 
-All three endpoints call `ConfigurePermissions("Diagnostics:StructuredLogs")` (the FastEndpoints permission model used across the foundation). They are **default-permissive (anonymous)** while host endpoint security is disabled; once the host enables security (`EndpointSecurityOptions`), it assigns this permission to authorized principals. There is no separate ASP.NET named authorization policy.
+All three endpoints use the shared Foundation policy model and require **any** of
+`Diagnostics:StructuredLogs` or the retained administrative wildcard. Authentication establishes a
+normalized principal before endpoint selection; anonymous and rejected, non-normalized identities receive
+`401`, while authenticated callers without the permission receive `403`. `StructuredLogsPermissionContributor` catalogs
+the non-wildcard permission once under owner `Elsa.Diagnostics.StructuredLogs`, with no implication. The
+wildcard remains a grant and is deliberately not contributed to the catalog.
+
+The routes carry explicit module ownership, Minimal API authoring, and security-disposition metadata, so
+they can coexist with still-unmigrated FastEndpoints routes while using the same Foundation evaluator.
 
 ## Query parameters (recent + stream)
 
@@ -50,6 +59,10 @@ All three endpoints call `ConfigurePermissions("Diagnostics:StructuredLogs")` (t
 
 - **`event: entry`** — carries `id: <opaque committed cursor>` and a `data:` line with the entry JSON. The id lets a reconnecting client send `Last-Event-ID`; the server validates that opaque anchor and tails bounded durable read-after pages from it. The process-local feed can wake the tail early, while bounded polling discovers commits from other hosts. Feed payloads and drop signals are not forwarded.
 - **`: keep-alive`** — an SSE comment heartbeat (every 15s) that keeps idle connections open.
+
+`StructuredLogSseWriter` is module-local and framework-neutral. It flushes each frame, links request
+cancellation, and bounds cleanup of a pending async read to five seconds. The endpoint validates filters,
+replay cursors, and its first durable page before starting the SSE response.
 
 ## Capture scope (host-wide logging)
 
@@ -76,3 +89,4 @@ All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTEN
 
 - Domain extension points: [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
+- Migration evidence: [`../../../../docs/reports/structured-logs-minimal-api-migration-2026-08.md`](../../../../docs/reports/structured-logs-minimal-api-migration-2026-08.md).

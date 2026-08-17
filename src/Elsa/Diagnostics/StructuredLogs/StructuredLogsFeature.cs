@@ -1,17 +1,20 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
-using Elsa.Api.FastEndpoints.Sse;
-using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Capture;
+using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Diagnostics.StructuredLogs.Live;
 using Elsa.Diagnostics.StructuredLogs.Sources;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Diagnostics.StructuredLogs;
@@ -28,7 +31,7 @@ namespace Elsa.Diagnostics.StructuredLogs;
     DisplayName = "Diagnostics: Structured Logs",
     Description = "Captures structured log entries and exposes them for live tailing and recent-history queries."
 )]
-public class StructuredLogsFeature : FastEndpointsFeatureBase
+public class StructuredLogsFeature : IWebShellFeature
 {
     [ManifestSetting(DisplayName = "Minimum level", Description = "Lowest log level captured into the diagnostics pipeline.", Category = "Diagnostics", DefaultValue = "Information")]
     public string MinimumLevel { get; set; } = LogLevel.Information.ToString();
@@ -42,10 +45,8 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
     [ManifestSetting(DisplayName = "Source display name", Description = "UI label for the local log source.", Category = "Diagnostics")]
     public string? SourceDisplayName { get; set; }
 
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         var minimumLevel = Enum.TryParse<LogLevel>(MinimumLevel, ignoreCase: true, out var parsed)
             ? parsed
             : LogLevel.Information;
@@ -74,9 +75,13 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
         services.AddSingleton<StructuredLogEntrySerializer>();
         services.AddSingleton<StructuredLogSseFormatter>();
         services.AddSingleton(provider =>
-            new SseStreamWriter<StructuredLogStreamItem>(provider.GetRequiredService<StructuredLogSseFormatter>()));
+            new StructuredLogSseWriter(provider.GetRequiredService<StructuredLogSseFormatter>()));
         services.AddSingleton<StructuredLogFilterBinder>();
+        services.AddPermissionContributor<StructuredLogsPermissionContributor>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, StructuredLogCaptureProvider>());
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        StructuredLogsApi.MapStructuredLogsApi(endpoints);
 }

@@ -1,9 +1,12 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
+using Elsa.Modularity.Api.Endpoints;
 using Elsa.Modularity.Api.Extensions;
 using Elsa.Modularity.Api.Options;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Modularity.Api;
 
@@ -15,17 +18,18 @@ namespace Elsa.Modularity.Api;
     DisplayName = "Modularity API",
     Description = "Shell-scoped feature catalog and feature-configuration management endpoints."
 )]
-public class ModularityApiFeature : FastEndpointsFeatureBase
+public class ModularityApiFeature : IWebShellFeature
 {
     public string ShellsJsonPath { get; set; } = "shells.json";
 
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         services.AddModularityApi(options =>
         {
             options.ShellsJsonPath = ShellsJsonPath;
         });
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        ModularityApi.MapModularityApi(endpoints);
 }

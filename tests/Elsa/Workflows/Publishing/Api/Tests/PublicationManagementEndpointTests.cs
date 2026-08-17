@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -43,8 +44,10 @@ public sealed class PublicationManagementEndpointTests
         var definition = ConfiguredDefinition($"{Root}.{endpointName}");
 
         Assert.Contains(route, definition.Routes);
-        Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
-        Assert.Contains(permission, definition.AllowedPermissions!);
+        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
+        Assert.All(
+            definition.PreBuiltUserPolicies!,
+            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([permission]), policy));
         Assert.Null(definition.AnonymousVerbs);
     }
 

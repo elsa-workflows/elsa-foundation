@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Api.AspNetCore;
 using Nuplane.Admin;
 
 namespace Elsa.Foundation.Host.ModuleManagement;
@@ -17,11 +18,17 @@ namespace Elsa.Foundation.Host.ModuleManagement;
 /// </list>
 /// This is mapped only when <see cref="ModuleManagementOptions.Enabled"/> is true at startup.
 /// </summary>
-internal static class ModuleManagementEndpoints
+public static class ModuleManagementEndpoints
 {
     public static IEndpointRouteBuilder MapModuleManagementApi(this IEndpointRouteBuilder endpoints, ModuleManagementOptions options)
     {
         var group = endpoints.MapGroup("/_module-management");
+        group.WithHostOwner("Elsa.Foundation.Host")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+                ModuleManagementOptions.ApiKeyHeader,
+                "Elsa.Foundation.Host"))
+            .WithHostCredentialEnforcement(ModuleManagementOptions.ApiKeyHeader, "Elsa.Foundation.Host");
         group.AddEndpointFilter(async (context, next) =>
             Authorized(context.HttpContext, options) ? await next(context) : Results.Unauthorized());
 

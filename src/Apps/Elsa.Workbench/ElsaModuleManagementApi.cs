@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text;
 using System.Xml.Linq;
+using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.ExtensionBuilder;
@@ -24,6 +25,12 @@ internal static class ElsaModuleManagementApi
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/_elsa/module-management");
+        group.WithHostOwner("Elsa.Workbench")
+            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+            .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+                ManagementApiKeyAuthentication.HeaderName,
+                "Elsa.Workbench"))
+            .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench");
         group.AddEndpointFilter(RequireManagementApiKeyAsync);
 
         group.MapGet("/registry", GetRegistryAsync);

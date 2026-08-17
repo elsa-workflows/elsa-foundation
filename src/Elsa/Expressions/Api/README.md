@@ -13,7 +13,9 @@ The package has no dependency on `Elsa.Workbench` and can be composed directly b
 - `GET /expressions/descriptors`
 - `GET /expressions/variable-types`
 
-Both routes require `expressions.read` or the shared wildcard permission. Authentication and RFC 7807 errors use the common FastEndpoints API infrastructure.
+Both routes require `expressions.read` or the shared wildcard permission. Authentication and
+authorization use the shared Foundation Identity policy infrastructure exposed through standard
+ASP.NET Core endpoint metadata.
 
 ## Extension points
 

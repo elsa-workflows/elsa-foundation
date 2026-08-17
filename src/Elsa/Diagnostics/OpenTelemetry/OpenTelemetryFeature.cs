@@ -1,12 +1,15 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
-using Elsa.Api.FastEndpoints.Sse;
+using Elsa.Diagnostics.OpenTelemetry.Authorization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Diagnostics.OpenTelemetry;
 
@@ -25,7 +28,7 @@ namespace Elsa.Diagnostics.OpenTelemetry;
     DisplayName = "Diagnostics: OpenTelemetry",
     Description = "Collects OpenTelemetry traces, metrics, and logs over OTLP/HTTP and exposes them for querying and live streaming."
 )]
-public class OpenTelemetryFeature : FastEndpointsFeatureBase
+public class OpenTelemetryFeature : IWebShellFeature
 {
     [ManifestSetting(DisplayName = "Trace capacity", Description = "Maximum number of recent traces retained in memory.", Category = "Diagnostics", DefaultValue = "5000")]
     public int TraceCapacity { get; set; } = 5_000;
@@ -63,17 +66,21 @@ public class OpenTelemetryFeature : FastEndpointsFeatureBase
     [ManifestSetting(DisplayName = "Allow unauthenticated loopback", Description = "Allow OTLP ingestion from loopback addresses without an API key.", Category = "Diagnostics", DefaultValue = "true")]
     public bool AllowUnauthenticatedLoopback { get; set; } = true;
 
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         services.AddOpenTelemetryDiagnosticsServices(ConfigureOptions);
+        services.AddPermissionContributor<OpenTelemetryPermissionContributor>();
 
         services.AddSingleton<OpenTelemetryStreamItemSerializer>();
         services.AddSingleton<OpenTelemetrySseFormatter>();
-        services.AddSingleton(provider =>
-            new SseStreamWriter<OpenTelemetryStreamItem>(provider.GetRequiredService<OpenTelemetrySseFormatter>()));
+        services.AddSingleton<OpenTelemetrySseStreamWriter>();
         services.AddSingleton<OpenTelemetryTraceFilterBinder>();
+    }
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    {
+        Endpoints.OpenTelemetryApi.MapOpenTelemetryApi(endpoints);
+        endpoints.MapOpenTelemetryOtlpReceiver();
     }
 
     private void ConfigureOptions(OpenTelemetryDiagnosticsOptions options)

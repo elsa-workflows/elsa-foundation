@@ -3,10 +3,14 @@
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
 		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-		<PackageReference Include="Microsoft.AspNetCore.Authorization" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-		<PackageReference Include="Microsoft.Extensions.Options" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
 	</ItemGroup>
 
 </Project>

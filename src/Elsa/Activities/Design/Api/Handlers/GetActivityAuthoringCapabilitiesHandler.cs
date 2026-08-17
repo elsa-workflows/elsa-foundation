@@ -13,18 +13,21 @@ public sealed class GetActivityAuthoringCapabilitiesHandler(
     IActivityProviderRegistry providers,
     IActivityContractCapabilityCatalog contractTypes,
     IActivityTypeKeyPolicy typeKeys,
-    IActivityAuthoringContext context)
+    IActivityAuthoringContextAsync context)
     : IRequestHandler<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>
 {
-    public Task<ActivityAuthoringCapabilitiesView> Handle(
+    public async Task<ActivityAuthoringCapabilitiesView> Handle(
         GetActivityAuthoringCapabilities request,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var providerViews = providers.Providers
-            .Where(x => context.CanAuthorProvider(x.ProviderKey))
-            .OrderBy(x => x.ProviderKey, StringComparer.Ordinal)
-            .Select(provider => new ActivityProviderAuthoringCapabilityView(
+        var providerViews = new List<ActivityProviderAuthoringCapabilityView>();
+        foreach (var provider in providers.Providers.OrderBy(x => x.ProviderKey, StringComparer.Ordinal))
+        {
+            if (!await context.CanAuthorProviderAsync(provider.ProviderKey, cancellationToken))
+                continue;
+
+            providerViews.Add(new(
                 provider.ProviderKey,
                 provider.AuthoringCapabilities.DisplayName,
                 provider.AuthoringCapabilities.ManifestSchemas
@@ -37,8 +40,8 @@ public sealed class GetActivityAuthoringCapabilitiesHandler(
                 provider.AuthoringCapabilities.ContractConstraints.RequiredOutcomes
                     .OrderBy(x => x.ReferenceKey, StringComparer.Ordinal)
                     .Select(x => new ActivityOutcomeContractView(x.ReferenceKey, x.Name, x.IsEmitted, x.Description))
-                    .ToArray()))
-            .ToArray();
+                    .ToArray()));
+        }
         var typeViews = contractTypes.Types
             .OrderBy(x => x.Alias, StringComparer.Ordinal)
             .Select(x => new ActivityContractTypeCapabilityView(
@@ -62,12 +65,12 @@ public sealed class GetActivityAuthoringCapabilitiesHandler(
         };
         var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var fingerprint = $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
-        return Task.FromResult(new ActivityAuthoringCapabilitiesView(
+        return new ActivityAuthoringCapabilitiesView(
             snapshot.contractSchemaVersions,
             typeKeys.Rules,
             providerViews,
             typeViews,
             drivers,
-            fingerprint));
+            fingerprint);
     }
 }

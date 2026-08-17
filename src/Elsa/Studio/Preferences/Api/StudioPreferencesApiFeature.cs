@@ -1,8 +1,10 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Studio.Preferences.Api.Services;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Studio.Preferences.Api;
 
@@ -14,11 +16,13 @@ namespace Elsa.Studio.Preferences.Api;
     DisplayName = "Studio Preferences API",
     Description = "Exposes authenticated, conditionally updated Studio preference documents.",
     DependsOn = new object[] { "StudioPreferences" })]
-public sealed class StudioPreferencesApiFeature : FastEndpointsFeatureBase
+public class StudioPreferencesApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.AddScoped<StudioPreferenceScopeResolver>();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        StudioPreferencesApi.MapStudioPreferencesApi(endpoints);
 }

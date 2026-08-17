@@ -190,12 +190,17 @@ public sealed class ActivityVersionLifecycleTests
         LastModifiedAt = Now
     };
 
-    private sealed class Context : IActivityAuthoringContext
+    private sealed class Context : IActivityAuthoringContext, IActivityAuthoringContextAsync
     {
         public string? TenantId => "tenant-a";
+        public string ActorId => "actor-a";
         public string AuthorizationProfile => "tenant-a/manage";
         public bool CanAuthorProvider(string providerKey) => true;
         public bool CanReadProviderPayload(string providerKey) => true;
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
+        public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class Clock : TimeProvider

@@ -1,7 +1,10 @@
 using CShells.Features;
-using Elsa.Api.FastEndpoints;
+using CShells.AspNetCore.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Attention.Api;
 
@@ -11,11 +14,14 @@ namespace Elsa.Attention.Api;
     name: "AttentionApi",
     DisplayName = "Attention API",
     Description = "Aggregates permission-scoped attention contributors through a shared query endpoint.")]
-public sealed class AttentionApiFeature : FastEndpointsFeatureBase
+public sealed class AttentionApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
         services.AddAttentionCore();
+        services.AddPermissionContributor<AttentionPermissionContributor>();
     }
+
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        AttentionApi.MapAttentionApi(endpoints);
 }

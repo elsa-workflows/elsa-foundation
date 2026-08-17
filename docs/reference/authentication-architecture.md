@@ -41,14 +41,35 @@ feature), which defines the contracts both planes speak:
 | `IAuthenticationProviderModule` / `IAuthenticationProviderResolver` | protocol | Each auth provider (local, OIDC, …) describes itself (id, kind, challenge metadata) so the API can enumerate providers. |
 | `IPrincipalFactory` | seam | Turn an external principal into a provisioned, normalized Elsa principal. |
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
-| `IPermissionCatalog` / `IPermissionEvaluator` | IAM | The permission model: catalog, implication expansion, and `[RequirePermission]` policy evaluation. |
+| `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 | `ISecurityDefaultGuard` | cross-cutting | Refuse weak/missing keys and non-HTTPS metadata outside development. |
 
-Because these contracts are provider-agnostic, a permission check (`[RequirePermission("...")]`)
-reads the same `elsa.identity.permission` claims whether the user signed in with a local password
-or an external IdP token. The provider plane's only job is to get a normalized principal onto the
-request.
+Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
+translate their existing `ConfigurePermissions(...)` calls into the same ASP.NET Core policies.
+Both paths reach one Foundation Identity evaluator and resource-handler pipeline.
+
+The provider plane must put a *trusted normalized principal* onto the request. Normalization strips
+incoming Elsa-internal claims, applies only mapping rules for the current tenant/provider, and then
+emits exactly one `elsa.identity.normalized = v1` marker. A marker alone is insufficient: its
+identity's exact runtime `AuthenticationType` must also be registered in
+`FoundationIdentityOptions.NormalizedAuthenticationTypes` (ordinal comparison). Permission
+authorization selects exactly one matching identity and passes only that identity to grant sources;
+zero or multiple matches are challenged so tenants/providers cannot be unioned accidentally.
+
+The built-in trusted runtime types are `Elsa.Foundation.Identity` for the normalized external
+principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests, and
+the OpenIddict validation scheme for validated bearer requests. OpenIddict's token-construction
+identity type (`openiddict`) is deliberately not trusted as an endpoint identity. Custom adapters
+call `AddNormalizedAuthenticationType(...)` only after implementing the same strip-map-mark rule.
+
+Permission keys are compared as Unicode NFC plus invariant uppercase using ordinal equality.
+Implications expand from grants toward requests and terminate safely on cycles. An explicit `*`
+grant satisfies an ordinary request, while requesting `*` itself requires that explicit grant.
+For a member, resource denial vetoes resource grant and the general evaluator; the evaluator runs
+only after every resource source abstains. Exceptions, timeouts, and HTTP request cancellation
+propagate as operational failures rather than becoming `403`.
 
 ---
 
@@ -63,7 +84,7 @@ The stack is a set of composable CShells features. You enable them per shell in 
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | `…AspNetCoreIdentity.EntityFrameworkCore` | Durable EF Core user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and dev seeding. | IAM / protocol |
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |
 | `FoundationIdentityOidc` | `…Identity.Oidc` | **Trust an external IdP:** the external OIDC provider module + ASP.NET Core `OpenIdConnect` / `JwtBearer` handler configuration (Keycloak, Entra, Auth0, …). | protocol |
-| `FoundationIdentityApi` | `…Identity.Api` | The `/_elsa/identity/*` HTTP surface (see §6) including the `GET /_elsa/identity/token` cookie→bearer exchange, and FastEndpoints permission/role claim-type alignment. | protocol |
+| `FoundationIdentityApi` | `…Identity.Api` | The `/_elsa/identity/*` HTTP surface (see §6) including the `GET /_elsa/identity/token` cookie→bearer exchange and shared Foundation policy enforcement. | protocol |
 | `IdentityGroundworkPersistence` | `…Identity.Persistence.Groundwork` | Alternative durable substrate: replaces the in-memory IAM stores with Groundwork-backed ones (users/roles/external identities/tenant memberships). Not enabled in the default shell. | IAM |
 
 > **Note on ASP.NET Core Identity split.** The domain half (`FoundationIdentityAspNetCoreIdentity`)
@@ -140,6 +161,10 @@ mounted (OpenIddict's server is registered with only a custom flow marker,
 `AllowAnonymous` at the routing layer only so an anonymous caller reaches the handler and gets a bare
 `401` (which the Studio client reads as "no token") rather than a `302` redirect to the login page —
 the handler itself refuses to issue a token to an unauthenticated principal.
+
+FastEndpoints remains available for unrelated transitional endpoints during the migration. Those
+endpoints and these Minimal API routes both consume the same normalized-principal and permission
+policy services; the identity protocol owner no longer installs a FastEndpoints claim-type bridge.
 
 ### The scheme selector
 

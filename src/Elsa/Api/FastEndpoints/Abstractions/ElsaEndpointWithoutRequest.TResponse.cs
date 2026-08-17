@@ -6,6 +6,7 @@ public abstract class ElsaEndpointWithoutRequest<TResponse> : EndpointWithoutReq
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions(ElsaEndpointPermissions.Compose(permissions));
+        Policies(ElsaEndpointPermissions.ComposePolicy(permissions));
+        Description(ElsaEndpointPermissions.StandardMetadata(GetType(), permissions));
     }
 }

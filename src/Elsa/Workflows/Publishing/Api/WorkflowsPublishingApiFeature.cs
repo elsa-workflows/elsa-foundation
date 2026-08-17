@@ -11,6 +11,8 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Capabilities;
+using Elsa.Workflows.Publishing.Api.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Publishing.Api.Commands;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -70,5 +72,6 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         // the engine) but advertised under the client's expressions capability; the source merges that relation
         // into elsa.api.expressions.
         services.AddApiCapabilitySource<ConversionProfilesCapabilitySource>();
+        services.AddPermissionContributor<WorkflowPublishingPermissionContributor>();
     }
 }

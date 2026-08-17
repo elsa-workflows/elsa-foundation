@@ -45,6 +45,20 @@ Resolved dependency failures identify the consuming project and EF package; use
 The final zero-EF cleanup tracked by GitHub issue #647 deletes this baseline and update switch. It
 retains the scanner with every category required to be empty, including all transitive consumers.
 
+## FastEndpoints transition registry
+
+`fastendpoints-transition-exceptions.json` is the temporary reviewed registry for first-party
+FastEndpoints registrations while bounded Minimal API migration waves land. The architecture scanner
+resolves endpoint inheritance transitively across source documents, expands inherited route
+configuration, includes ignored source folders, excludes `bin`/`obj` and abstract bases, and pins the
+current baseline at 156 concrete registrations across 12 owners after the completed Wave 1 reduction. The registry is not a retirement
+allowlist: `TransitionExceptionValidator.ValidateRetirement` requires zero first-party registrations,
+including entries still covered by this file. See
+[`first-party-rest-api-inventory-2026-08.md`](../../../docs/reports/first-party-rest-api-inventory-2026-08.md)
+for the owner breakdown, per-owner security/catalog/unloadability dispositions, retained-surface
+dispositions, and migration-wave links. The architecture test also pins each owner's `followUp` to
+its executable wave issue (#1367–#1375), so the closed planning issue cannot silently return.
+
 `frozen-aspnetcore-identity-ef-oracle.json` is stricter than the repository-wide surface inventory:
 it fingerprints every source, project, and migration file in the temporary ASP.NET Core Identity EF
 oracle. The fingerprint is immutable until issue #647 removes that oracle; there is intentionally no

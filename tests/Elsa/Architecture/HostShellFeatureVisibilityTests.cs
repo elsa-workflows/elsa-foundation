@@ -26,6 +26,10 @@ public sealed class HostShellFeatureVisibilityTests
         @"^(?<indent>[ \t]*)(?<modifiers>(?:\w+[ \t]+)*)class[ \t]+(?<name>\w+)[^\r\n{]*:[^\r\n{]*\b(?:I(?:Web)?ShellFeature|\w+FeatureBase)\b",
         RegexOptions.Multiline | RegexOptions.Compiled);
 
+    private static readonly Regex DirectWebFeatureDeclaration = new(
+        @"^public\s+(?:\w+\s+)*class\s+(?<name>\w+)[^\r\n{]*:[^\r\n{]*\bIWebShellFeature\b",
+        RegexOptions.Multiline | RegexOptions.Compiled);
+
     // A text scan that matches nothing passes vacuously. This floor is well below the ~80 declarations
     // present today, so it tolerates deleting features but catches the regex silently going dead.
     private const int MinimumExpectedFeatureDeclarations = 40;
@@ -60,6 +64,27 @@ public sealed class HostShellFeatureVisibilityTests
             "Shell feature classes must be public — CShells discovery scans exported types only, so an " +
             "internal IShellFeature is silently dropped from every shell that enables it:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Generated_feature_maps_include_direct_web_shell_features()
+    {
+        var webFeatures = Directory
+            .EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsGeneratedOutput(file))
+            .SelectMany(file => DirectWebFeatureDeclaration.Matches(File.ReadAllText(file))
+                .Select(match => match.Groups["name"].Value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var featureMap = File.ReadAllText(Path.Join(RepoRoot, "docs", "maps", "feature-map.md"));
+        var dependencyMap = File.ReadAllText(Path.Join(RepoRoot, "docs", "maps", "feature-dependency-map.md"));
+
+        Assert.NotEmpty(webFeatures);
+        Assert.All(webFeatures, feature =>
+        {
+            Assert.Contains(feature, featureMap, StringComparison.Ordinal);
+            Assert.Contains(feature, dependencyMap, StringComparison.Ordinal);
+        });
     }
 
     private static bool IsGeneratedOutput(string file) =>

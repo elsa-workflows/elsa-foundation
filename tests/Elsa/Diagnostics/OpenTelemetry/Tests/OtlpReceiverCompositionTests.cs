@@ -1,5 +1,3 @@
-using System.IO.Compression;
-using System.Net;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -13,6 +11,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.IO.Compression;
+using System.Net;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Tests.Ingestion;
 
@@ -52,7 +52,7 @@ public sealed class OtlpReceiverCompositionTests
         var client = app.GetTestClient();
         var response = await client.PostAsync("/custom/otlp/logs", new ByteArrayContent([]));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("workspace-1", Assert.Single(ingestor.Contexts).Claims["workspace"]);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync("/custom/otlp/unknown", new ByteArrayContent([]))).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await client.GetAsync("/custom/otlp/logs")).StatusCode);
@@ -94,7 +94,7 @@ public sealed class OtlpReceiverCompositionTests
 
         await handler.HandleAsync(httpContext, OtlpSignal.Traces);
 
-        Assert.Equal(StatusCodes.Status200OK, httpContext.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status204NoContent, httpContext.Response.StatusCode);
         Assert.Equal(1, ingestor.IngestCount);
     }
 

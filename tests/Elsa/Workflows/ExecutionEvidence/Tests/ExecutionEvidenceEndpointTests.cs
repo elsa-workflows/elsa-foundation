@@ -1,15 +1,20 @@
-using System.Diagnostics;
-using System.Net;
-using System.Text.Json;
+using Elsa.Foundation.Identity.Abstractions.Authentication;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
+using Elsa.Workflows.ExecutionEvidence.Endpoints;
 using Elsa.Workflows.Runtime.Core.Constants;
-using FastEndpoints;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
+using System.Net;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace Elsa.Workflows.ExecutionEvidence.Tests;
 
@@ -288,16 +293,17 @@ public sealed class ExecutionEvidenceEndpointTests(ExecutionEvidenceEndpointTest
             builder.Logging.ClearProviders();
 
             new WorkflowsExecutionEvidenceFeature().ConfigureServices(builder.Services);
-
-            var moduleAssembly = typeof(WorkflowsExecutionEvidenceFeature).Assembly;
-            builder.Services.AddFastEndpoints(options =>
-            {
-                options.Assemblies = [moduleAssembly];
-                options.Filter = type => type.Assembly == moduleAssembly;
-            });
+            builder.Services.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "none" });
+            builder.Services.AddAuthentication(options => options.DefaultAuthenticateScheme = "none")
+                .AddScheme<AuthenticationSchemeOptions, WildcardAuthenticationHandler>("none", _ => { });
+            builder.Services.AddAuthorization();
 
             _app = builder.Build();
-            _app.UseFastEndpoints(options => options.Endpoints.Configurator = endpoint => endpoint.AllowAnonymous());
+            _app.UseRouting();
+            _app.UseAuthentication();
+            _app.UseAuthorization();
+            ExecutionEvidenceApi.MapExecutionEvidenceApi(_app);
             await _app.StartAsync();
             Client = _app.GetTestClient();
         }
@@ -306,6 +312,27 @@ public sealed class ExecutionEvidenceEndpointTests(ExecutionEvidenceEndpointTest
         {
             Client.Dispose();
             await _app.DisposeAsync();
+        }
+
+        private sealed class WildcardAuthenticationHandler(
+            Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
+            Microsoft.Extensions.Logging.ILoggerFactory logger,
+            System.Text.Encodings.Web.UrlEncoder encoder)
+            : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+        {
+            protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+            {
+                var claims = new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, "execution-evidence-test"),
+                    new Claim(IdentityClaimTypes.Normalized, "v1"),
+                    new Claim(IdentityClaimTypes.Provider, "execution-evidence-test"),
+                    new Claim(IdentityClaimTypes.TenantId, "execution-evidence-test"),
+                    new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard)
+                };
+                var identity = new ClaimsIdentity(claims, Scheme.Name);
+                return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
+            }
         }
     }
 }

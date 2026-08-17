@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -10,12 +11,115 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
+    [Fact]
+    public async Task Adapts_a_legacy_host_inspection_context_when_async_replacement_is_omitted()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
+
+        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
+        Assert.Equal("tenant:legacy", context.TenantScope);
+        Assert.Equal("legacy-actor", context.AuditSubject);
+        Assert.Equal("legacy-request", context.RequestCorrelationId);
+        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
+        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
+
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.GetAuthorizationProfileAsync(canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectStructureAsync(InspectionState(), canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectSensitiveValuesAsync(InspectionState(), canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanResolveSensitiveValuePayloadsAsync(InspectionState(), canceled.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task Adapts_a_legacy_replacement_registered_after_feature_configuration()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Scoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>());
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
+
+        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
+        Assert.Equal("tenant:legacy", context.TenantScope);
+        Assert.Equal("legacy-actor", context.AuditSubject);
+        Assert.Equal("legacy-request", context.RequestCorrelationId);
+        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
+        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
+        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
+        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
+    }
+
+    [Fact]
+    public void Inspection_replacement_contract_requires_marker_and_rejects_duplicate_descriptors()
+    {
+        var unmarked = new ServiceCollection();
+        Assert.Throws<InvalidOperationException>(() =>
+            unmarked.EnsureReplacementContract<UnmarkedInspectionContract, UnmarkedInspectionContract>());
+
+        var duplicate = new ServiceCollection();
+        duplicate.AddScoped<IActivityInspectionContextAsync, CustomInspectionContext>();
+        duplicate.AddScoped<IActivityInspectionContextAsync, SecondInspectionContext>();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            duplicate.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>());
+        Assert.Contains(nameof(CustomInspectionContext), exception.Message);
+        Assert.Contains(nameof(SecondInspectionContext), exception.Message);
+    }
+
+    [Fact]
+    public void Inspection_replacement_contract_resolves_default_custom_and_idempotent_markers()
+    {
+        var defaults = new ServiceCollection();
+        defaults.AddFoundationIdentityAbstractions();
+        defaults.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        defaults.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
+        using (var provider = defaults.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true }))
+        using (var defaultScope = provider.CreateScope())
+            Assert.IsType<HttpContextActivityExecutionInspectionAuthorizationContext>(defaultScope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>());
+
+        var custom = new ServiceCollection();
+        custom.AddFoundationIdentityAbstractions();
+        custom.AddScoped<IActivityInspectionContextAsync, CustomInspectionContext>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(custom);
+        using var customProvider = custom.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = customProvider.CreateScope();
+        Assert.IsType<CustomInspectionContext>(scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>());
+    }
+
+    [Fact]
+    public void Inspection_late_conflict_is_reported_by_startup_validation()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddScoped<IActivityInspectionContextAsync, SecondInspectionContext>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+        Assert.Contains("IActivityInspectionContextAsync", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecondInspectionContext), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exactly one tagged implementation", exception.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Registers_runtime_diagnostics_settings_command_handler()
     {
@@ -26,6 +130,51 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var provider = services.BuildServiceProvider();
 
         provider.GetRequiredService<ICommandHandler<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>>();
+    }
+
+    private static WorkflowExecutionState InspectionState() =>
+        new(
+            "workflow",
+            new("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running,
+            null,
+            DateTimeOffset.UnixEpoch,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "tenant",
+            new Dictionary<string, string>());
+
+    private sealed class LegacyInspectionContext : IActivityExecutionInspectionAuthorizationContext
+    {
+        public string TenantScope => "tenant:legacy";
+        public string AuthorizationProfile => "legacy-profile";
+        public string AuditSubject => "legacy-actor";
+        public string RequestCorrelationId => "legacy-request";
+        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
+        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
+        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
+    }
+
+    private class UnmarkedInspectionContract : IActivityInspectionContextAsync
+    {
+        public string TenantScope => "tenant";
+        public string AuditSubject => "subject";
+        public string RequestCorrelationId => "request";
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => new("profile");
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => new(false);
+    }
+
+    private sealed class CustomInspectionContext : UnmarkedInspectionContract
+    {
+    }
+
+    private sealed class SecondInspectionContext : UnmarkedInspectionContract
+    {
     }
 
     [Fact]
@@ -44,6 +193,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     {
         var services = new ServiceCollection();
 
+        services.AddFoundationIdentityAbstractions();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         // TS-1 (constitution §2.23.1): assert registration presence + resolvability, not internal wiring.
@@ -114,6 +264,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = rootProvider.CreateScope();
         var provider = scope.ServiceProvider;
+        provider.GetRequiredService<IActivityInspectionContextAsync>();
+        provider.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>();
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();

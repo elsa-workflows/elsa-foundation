@@ -4,6 +4,8 @@ namespace Elsa.Foundation.Identity.Abstractions;
 
 public sealed class FoundationIdentityOptions
 {
+    public IReadOnlySet<string> NormalizedAuthenticationTypes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
     public OwnershipMode OwnershipMode { get; set; } = OwnershipMode.FoundationOwned;
 
     public ProviderCapabilities ProviderCapabilities { get; set; } = ProviderCapabilities.FoundationReference;

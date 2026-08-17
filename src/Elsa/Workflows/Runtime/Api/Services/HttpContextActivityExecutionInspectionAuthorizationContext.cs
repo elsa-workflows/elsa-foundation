@@ -1,68 +1,224 @@
-using System.Security.Cryptography;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
 
-/// <summary>Fail-closed HTTP authorization adapter with independent structure and captured-value grants.</summary>
-public sealed class HttpContextActivityExecutionInspectionAuthorizationContext(IHttpContextAccessor httpContextAccessor)
-    : IActivityExecutionInspectionAuthorizationContext
+#pragma warning disable CS0618 // The implementation intentionally bridges the obsolete host contract.
+
+/// <summary>
+/// Fail-closed HTTP authorization adapter with independent structure and captured-value grants.
+/// Permission decisions use Foundation Identity's canonical asynchronous evaluator. Synchronous
+/// members remain only for source compatibility and fail closed during the advisory window.
+/// </summary>
+public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
+    IActivityExecutionInspectionAuthorizationContext,
+    IActivityInspectionContextAsync
 {
     public const string StructurePermission = "workflows.activity-executions.inspect";
     public const string SensitiveValuesPermission = "workflows.activity-executions.inspect-values";
     public const string ResolveValuePayloadsPermission = "workflows.activity-executions.resolve-value-payloads";
-    private const string ElsaTenantClaim = "elsa.identity.tenant_id";
-    private const string ConventionalTenantClaim = "tenant_id";
-    private const string PermissionClaim = "elsa.identity.permission";
+    private readonly IPermissionAuthorizationService _authorization;
+    private readonly NormalizedPrincipalValidator _principalValidator;
+    private readonly ClaimsPrincipal _principal;
+    private readonly bool _trusted;
+    private readonly string? _tenantId;
+    private readonly string _auditSubject;
+    private readonly string _requestCorrelationId;
+    private readonly CancellationToken _requestCancellationToken;
+    private Lazy<Task<AuthorizationSnapshot>>? _snapshot;
 
-    private HttpContext? HttpContext => httpContextAccessor.HttpContext;
-    private string? TenantId =>
-        HttpContext?.User.FindFirst(ElsaTenantClaim)?.Value
-        ?? HttpContext?.User.FindFirst(ConventionalTenantClaim)?.Value;
-
-    public string TenantScope => TenantId is null ? "global" : $"tenant:{TenantId}";
-    public string AuditSubject
+    [Obsolete("Use the Foundation Identity-enabled constructor selected by dependency injection.")]
+    public HttpContextActivityExecutionInspectionAuthorizationContext(IHttpContextAccessor httpContextAccessor)
     {
-        get
-        {
-            var principal = HttpContext?.User;
-            var subject = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!string.IsNullOrWhiteSpace(subject))
-                return subject;
-
-            subject = principal?.FindFirst("sub")?.Value;
-            return string.IsNullOrWhiteSpace(subject) ? string.Empty : subject;
-        }
-    }
-    public string RequestCorrelationId => HttpContext?.TraceIdentifier ?? string.Empty;
-
-    public string AuthorizationProfile
-    {
-        get
-        {
-            var material = $"{TenantScope}|structure:{HasPermission(StructurePermission)}|values:{HasPermission(SensitiveValuesPermission)}|resolve:{HasPermission(ResolveValuePayloadsPermission)}";
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant();
-        }
+        ArgumentNullException.ThrowIfNull(httpContextAccessor);
+        _authorization = null!;
+        _principalValidator = null!;
+        _principal = new ClaimsPrincipal(new ClaimsIdentity());
+        _trusted = false;
+        _tenantId = null;
+        _auditSubject = string.Empty;
+        _requestCorrelationId = string.Empty;
+        _requestCancellationToken = CancellationToken.None;
     }
 
-    public bool CanInspectStructure(WorkflowExecutionState workflowExecution) =>
-        CanAccess(workflowExecution) && HasPermission(StructurePermission);
+    [ActivatorUtilitiesConstructor]
+    public HttpContextActivityExecutionInspectionAuthorizationContext(
+        IHttpContextAccessor httpContextAccessor,
+        IPermissionAuthorizationService authorization,
+        NormalizedPrincipalValidator principalValidator)
+    {
+        ArgumentNullException.ThrowIfNull(httpContextAccessor);
+        _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
+        _principalValidator = principalValidator ?? throw new ArgumentNullException(nameof(principalValidator));
 
-    public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) =>
-        CanInspectStructure(workflowExecution) && HasPermission(SensitiveValuesPermission);
+        var httpContext = httpContextAccessor.HttpContext;
+        var rawPrincipal = httpContext?.User ?? new ClaimsPrincipal(new ClaimsIdentity());
+        _trusted = _principalValidator.TryGetNormalizedPrincipal(rawPrincipal, out var normalizedPrincipal);
+        _principal = _trusted ? normalizedPrincipal : new ClaimsPrincipal(new ClaimsIdentity());
+        _tenantId = _trusted ? FindTenantId(_principal) : null;
+        _auditSubject = _trusted ? FindAuditSubject(_principal) : string.Empty;
+        _requestCorrelationId = httpContext?.TraceIdentifier ?? string.Empty;
+        _requestCancellationToken = httpContext?.RequestAborted ?? CancellationToken.None;
+    }
 
-    public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) =>
-        CanInspectSensitiveValues(workflowExecution) && HasPermission(ResolveValuePayloadsPermission);
+    public string TenantScope => _tenantId is null ? "global" : $"tenant:{_tenantId}";
+    public string AuditSubject => _auditSubject;
+    public string RequestCorrelationId => _requestCorrelationId;
+
+    [Obsolete("Use IActivityInspectionContextAsync.GetAuthorizationProfileAsync.")]
+    public string AuthorizationProfile => throw SynchronousAccess();
+
+    [Obsolete("Use IActivityInspectionContextAsync.CanInspectStructureAsync.")]
+    public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
+
+    [Obsolete("Use IActivityInspectionContextAsync.CanInspectSensitiveValuesAsync.")]
+    public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
+
+    [Obsolete("Use IActivityInspectionContextAsync.CanResolveSensitiveValuePayloadsAsync.")]
+    public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
+
+    public async ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshot = await GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        return snapshot.Profile;
+    }
+
+    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        CanAccess(workflowExecution)
+            ? AuthorizeAsync(StructurePermission, workflowExecution, cancellationToken)
+            : ValueTask.FromResult(false);
+
+    public async ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
+    {
+        if (!CanAccess(workflowExecution) || !await CanInspectStructureAsync(workflowExecution, cancellationToken).ConfigureAwait(false))
+            return false;
+
+        return await AuthorizeAsync(SensitiveValuesPermission, workflowExecution, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
+    {
+        if (!CanAccess(workflowExecution) || !await CanInspectSensitiveValuesAsync(workflowExecution, cancellationToken).ConfigureAwait(false))
+            return false;
+
+        return await AuthorizeAsync(ResolveValuePayloadsPermission, workflowExecution, cancellationToken).ConfigureAwait(false);
+    }
 
     private bool CanAccess(WorkflowExecutionState workflowExecution) =>
-        workflowExecution.TenantId is null || StringComparer.Ordinal.Equals(workflowExecution.TenantId, TenantId);
+        _trusted && (workflowExecution.TenantId is null || StringComparer.Ordinal.Equals(workflowExecution.TenantId, _tenantId));
 
-    private bool HasPermission(string permission)
+    private async ValueTask<bool> AuthorizeAsync(
+        string permission,
+        WorkflowExecutionState workflowExecution,
+        CancellationToken cancellationToken)
     {
-        var values = HttpContext?.User.FindAll(PermissionClaim).Select(x => x.Value).ToArray() ?? [];
-        return values.Contains("*", StringComparer.Ordinal) || values.Contains(permission, StringComparer.Ordinal);
+        var result = await _authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(_principal, permission, _tenantId, workflowExecution),
+            cancellationToken).ConfigureAwait(false);
+        return result.Succeeded;
     }
+
+    private async Task<AuthorizationSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
+    {
+        if (!_trusted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return DeniedSnapshot;
+        }
+
+        var existing = Volatile.Read(ref _snapshot);
+        if (existing is null)
+        {
+            var created = new Lazy<Task<AuthorizationSnapshot>>(
+                CreateSnapshotAsync,
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            existing = Interlocked.CompareExchange(ref _snapshot, created, null) ?? created;
+        }
+
+        var snapshotTask = existing.Value;
+        try
+        {
+            // Keep caller cancellation local to this wait. One canceled caller must not
+            // cancel the shared computation used by concurrent callers.
+            return await snapshotTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (snapshotTask.IsCanceled || snapshotTask.IsFaulted)
+                Interlocked.CompareExchange(ref _snapshot, null, existing);
+            throw;
+        }
+    }
+
+    private async Task<AuthorizationSnapshot> CreateSnapshotAsync()
+    {
+        var canInspectStructure = await AuthorizeAsync(StructurePermission, resource: null, _requestCancellationToken).ConfigureAwait(false);
+        var canInspectSensitiveValues = await AuthorizeAsync(SensitiveValuesPermission, resource: null, _requestCancellationToken).ConfigureAwait(false);
+        var canResolveValuePayloads = await AuthorizeAsync(ResolveValuePayloadsPermission, resource: null, _requestCancellationToken).ConfigureAwait(false);
+        var material = $"{TenantScope}|structure:{canInspectStructure}|values:{canInspectSensitiveValues}|resolve:{canResolveValuePayloads}";
+        var profile = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant();
+        return new AuthorizationSnapshot(canInspectStructure, canInspectSensitiveValues, canResolveValuePayloads, profile);
+    }
+
+    private async ValueTask<bool> AuthorizeAsync(string permission, object? resource, CancellationToken cancellationToken)
+    {
+        var result = await _authorization.AuthorizeAsync(
+            new PermissionEvaluationContext(_principal, permission, _tenantId, resource),
+            cancellationToken).ConfigureAwait(false);
+        return result.Succeeded;
+    }
+
+    private static string? FindTenantId(ClaimsPrincipal principal) =>
+        principal.FindFirst(IdentityClaimTypes.TenantId)?.Value
+        ?? principal.FindFirst("tenant_id")?.Value;
+
+    private static string FindAuditSubject(ClaimsPrincipal principal)
+    {
+        var subject = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrWhiteSpace(subject))
+            return subject;
+
+        subject = principal.FindFirst("sub")?.Value;
+        return string.IsNullOrWhiteSpace(subject) ? string.Empty : subject;
+    }
+
+    private static InvalidOperationException SynchronousAccess() =>
+        new("Synchronous activity inspection authorization access is obsolete and intentionally unavailable. Use the asynchronous authorization context.");
+
+    private sealed record AuthorizationSnapshot(
+        bool CanInspectStructure,
+        bool CanInspectSensitiveValues,
+        bool CanResolveValuePayloads,
+        string Profile);
+
+    private static readonly AuthorizationSnapshot DeniedSnapshot =
+        new(false, false, false, "untrusted");
 }
+
+public sealed class LegacyActivityInspectionContextAdapter : IActivityInspectionContextAsync
+{
+    private readonly IActivityExecutionInspectionAuthorizationContext _legacy;
+
+    public LegacyActivityInspectionContextAdapter(IActivityExecutionInspectionAuthorizationContext legacy) =>
+        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
+
+    public string TenantScope => _legacy.TenantScope;
+    public string AuditSubject => _legacy.AuditSubject;
+    public string RequestCorrelationId => _legacy.RequestCorrelationId;
+    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
+    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanInspectStructure(workflowExecution));
+    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanInspectSensitiveValues(workflowExecution));
+    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanResolveSensitiveValuePayloads(workflowExecution));
+}
+
+#pragma warning restore CS0618

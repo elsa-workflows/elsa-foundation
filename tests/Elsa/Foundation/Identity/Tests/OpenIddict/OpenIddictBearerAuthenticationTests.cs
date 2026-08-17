@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
 
@@ -32,6 +33,29 @@ public sealed class OpenIddictBearerAuthenticationTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("tenant-a", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Validated_Bearer_UsesValidationRuntimeTypeAndOneTrustedMarker()
+    {
+        using var host = await StartHostAsync();
+        var issued = await IssueAsync(host);
+
+        var response = await CallIdentityAsync(host, issued.AccessToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal($"{OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme}|1", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Validated_Bearer_Grant_Authorizes_Through_Foundation_Permission_Policy()
+    {
+        using var host = await StartHostAsync();
+        var granted = await IssueAsync(host);
+        var denied = await IssueAsync(host, "identity.roles.read");
+
+        Assert.Equal(HttpStatusCode.OK, (await CallPermissionAsync(host, granted.AccessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await CallPermissionAsync(host, denied.AccessToken)).StatusCode);
     }
 
     [Fact]
@@ -108,10 +132,17 @@ public sealed class OpenIddictBearerAuthenticationTests
                     app.UseRouting();
                     app.UseAuthentication();
                     app.UseAuthorization();
-                    app.UseEndpoints(endpoints => endpoints
-                        .MapGet("/protected", context =>
-                            context.Response.WriteAsync(context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? string.Empty))
-                        .RequireAuthorization());
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapGet("/protected", context =>
+                                context.Response.WriteAsync(context.User.FindFirst(IdentityClaimTypes.TenantId)?.Value ?? string.Empty))
+                            .RequireAuthorization();
+                        endpoints.MapGet("/identity", context =>
+                                context.Response.WriteAsync($"{context.User.Identity?.AuthenticationType}|{context.User.FindAll(IdentityClaimTypes.Normalized).Count()}"))
+                            .RequireAuthorization();
+                        endpoints.MapGet("/permission", () => Results.Ok())
+                            .RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
+                    });
                 });
             })
             .StartAsync();
@@ -122,12 +153,12 @@ public sealed class OpenIddictBearerAuthenticationTests
         return host;
     }
 
-    private static async ValueTask<TokenIssueResult> IssueAsync(IHost host)
+    private static async ValueTask<TokenIssueResult> IssueAsync(IHost host, params string[] permissions)
     {
         // Resolve the (scoped) token service from a scope — the Development environment enables scope validation.
         await using var scope = host.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<ITokenService>()
-            .IssueAsync(new TokenIssueRequest("user-1", "tenant-a", ["identity.users.read"]));
+            .IssueAsync(new TokenIssueRequest("user-1", "tenant-a", permissions.Length == 0 ? ["identity.users.read"] : permissions));
     }
 
     private static async Task<HttpResponseMessage> CallProtectedAsync(IHost host, string? accessToken)
@@ -138,6 +169,22 @@ public sealed class OpenIddictBearerAuthenticationTests
         if (accessToken is not null)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> CallIdentityAsync(IHost host, string accessToken)
+    {
+        var client = host.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/identity");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> CallPermissionAsync(IHost host, string accessToken)
+    {
+        var client = host.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/permission");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         return await client.SendAsync(request);
     }
 }

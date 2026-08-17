@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
@@ -116,6 +117,37 @@ public sealed class IdentityProviderModuleTests
         var externalIdentities = provider.GetRequiredService<IExternalIdentityStore>();
         var linkedIdentity = await externalIdentities.FindBySubjectAsync("tenant-a", "entra", "external-ada");
         Assert.Equal(session.Subject, linkedIdentity?.UserId);
+    }
+
+    [Fact]
+    public async Task ExternalPrincipalFactory_EmitsTrustedMarkerAfterProjection()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationAspNetCoreIdentity();
+        using var provider = services.BuildServiceProvider();
+
+        var principal = await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(
+            CreateContext("entra", "external-ada", "ada@example.com"));
+        var identity = Assert.Single(principal.Identities);
+
+        Assert.Equal("Elsa.Foundation.Identity", identity.AuthenticationType);
+        Assert.Equal("v1", Assert.Single(identity.FindAll(IdentityClaimTypes.Normalized)).Value);
+        Assert.True(provider.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(principal, out _));
+    }
+
+    [Fact]
+    public async Task ExternalPrincipalFactory_PropagatesNormalizationFailureWithoutReturningPrincipal()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationAspNetCoreIdentity();
+        services.AddScoped<IClaimsNormalizer, ThrowingClaimsNormalizer>();
+        using var provider = services.BuildServiceProvider();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await provider.GetRequiredService<IPrincipalFactory>().CreateAsync(
+                CreateContext("entra", "external-ada", "ada@example.com")));
+
+        Assert.Equal("normalization failed", exception.Message);
     }
 
     [Fact]
@@ -238,5 +270,13 @@ public sealed class IdentityProviderModuleTests
         ], provider));
 
         return new PrincipalFactoryContext("tenant-a", provider, providerSubject, principal, [], []);
+    }
+
+    private sealed class ThrowingClaimsNormalizer : IClaimsNormalizer
+    {
+        public ValueTask<ClaimsNormalizationResult> NormalizeAsync(
+            ClaimsNormalizationContext context,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<ClaimsNormalizationResult>(new InvalidOperationException("normalization failed"));
     }
 }

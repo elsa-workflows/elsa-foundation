@@ -1,4 +1,6 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
@@ -59,6 +61,28 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
         var outcome = await signIn.PasswordSignInAsync("nobody", "whatever", tenantId: null);
 
         Assert.False(outcome.Succeeded);
+    }
+
+    [Fact]
+    public async Task ReconstructedCookiePrincipal_UsesTrustedRuntimeTypeAndMarker()
+    {
+        await CreateUserAsync("cookie-user", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await using var scope = _fixture.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+        var user = await userManager.FindByNameAsync("cookie-user");
+        var principal = await scope.ServiceProvider
+            .GetRequiredService<IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>>()
+            .CreateAsync(user!);
+        var identity = Assert.Single(principal.Identities);
+
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, identity.AuthenticationType);
+        Assert.Equal("v1", Assert.Single(identity.FindAll(IdentityClaimTypes.Normalized)).Value);
+        Assert.True(scope.ServiceProvider.GetRequiredService<NormalizedPrincipalValidator>()
+            .TryGetNormalizedPrincipal(principal, out _));
+
+        var options = scope.ServiceProvider.GetRequiredService<IOptions<FoundationIdentityOptions>>().Value;
+        Assert.Contains(AspNetCoreIdentityDefaults.CookieScheme, options.NormalizedAuthenticationTypes);
     }
 
     [Fact]
