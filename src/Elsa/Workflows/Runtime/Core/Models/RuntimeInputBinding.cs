@@ -1,8 +1,8 @@
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Expressions.Core.Models;
-using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -231,14 +231,22 @@ public sealed class RuntimeExpressionBinding
     {
     }
 
-    public string Language { get; }
-    public string Expression { get; }
-    public RuntimeValueTypeDescriptor? ResultType { get; }
-    public IReadOnlyDictionary<string, string> Metadata { get; }
-    public IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters { get; }
-    public IReadOnlyDictionary<string, ValueConversionPlan> ParameterConversionPlans { get; }
-    public JsonElement Options { get; }
-    public string CapabilityProfile { get; }
+    [JsonRequired]
+    public string Language { get; init; }
+    [JsonRequired]
+    public string Expression { get; init; }
+    [JsonRequired]
+    public RuntimeValueTypeDescriptor? ResultType { get; init; }
+    [JsonRequired]
+    public IReadOnlyDictionary<string, string> Metadata { get; init; }
+    [JsonRequired]
+    public IReadOnlyDictionary<string, ExpressionParameterBinding> Parameters { get; init; }
+    [JsonRequired]
+    public IReadOnlyDictionary<string, ValueConversionPlan> ParameterConversionPlans { get; init; }
+    [JsonRequired]
+    public JsonElement Options { get; init; }
+    [JsonRequired]
+    public string CapabilityProfile { get; init; }
 }
 
 public sealed record RuntimeResolvedInput(

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,6 +38,13 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
     [InlineData("wildcard", HttpStatusCode.OK)]
     [InlineData("tenant-match", HttpStatusCode.OK)]
     [InlineData("tenant-mismatch", HttpStatusCode.Forbidden)]
+    [InlineData("external", HttpStatusCode.OK)]
+    [InlineData("external-resource-denied", HttpStatusCode.Forbidden)]
+    [InlineData("external-no-tenant", HttpStatusCode.OK)]
+    [InlineData("external-no-tenant-resource-denied", HttpStatusCode.Forbidden)]
+    [InlineData("resource-allow-no-permission", HttpStatusCode.OK)]
+    [InlineData("implied-resource-denied", HttpStatusCode.Forbidden)]
+    [InlineData("wildcard-resource-denied", HttpStatusCode.Forbidden)]
     public async Task Minimal_and_retained_FastEndpoints_routes_share_the_Foundation_Identity_permission_evaluator(
         string? identity,
         HttpStatusCode expected)
@@ -48,6 +57,25 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
         Assert.Equal(expected, fast.StatusCode);
     }
 
+    [Fact]
+    public async Task Runtime_routes_publish_their_catalog_owned_execute_manage_and_publishing_read_actions()
+    {
+        await using var host = await RuntimeAuthorizationHost.StartAsync();
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["runtime/workflows/executables/{artifactId}/execute"] = WorkflowRuntimePermissions.WorkflowRuntimeExecute,
+            ["runtime/workflows/dispatches/{dispatchId}/redrive"] = WorkflowRuntimePermissions.WorkflowRuntimeManage,
+            ["runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources"] = WorkflowRuntimePermissions.WorkflowPublishingRead
+        };
+
+        foreach (var (route, permission) in expected)
+        {
+            var endpoint = Assert.Single(host.Endpoints.OfType<RouteEndpoint>(), endpoint =>
+                string.Equals(endpoint.RoutePattern.RawText, route, StringComparison.Ordinal));
+            Assert.Equal(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Single(permission)), endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>()?.Value);
+        }
+    }
+
     private static async Task<HttpResponseMessage> SendAsync(HttpClient client, string path, string? identity)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -55,6 +83,10 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
         {
             request.Headers.TryAddWithoutValidation(RuntimeAuthentication.IdentityHeader, identity);
             request.Headers.TryAddWithoutValidation(TenantResourceHandler.TenantHeader, "tenant-a");
+            if (identity.Contains("resource-denied", StringComparison.Ordinal))
+                request.Headers.TryAddWithoutValidation(TenantResourceHandler.ResourceHeader, "deny");
+            else if (identity == "resource-allow-no-permission")
+                request.Headers.TryAddWithoutValidation(TenantResourceHandler.ResourceHeader, "allow");
         }
         return await client.SendAsync(request);
     }
@@ -62,6 +94,7 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
     private sealed class RuntimeAuthorizationHost(IHost host) : IAsyncDisposable
     {
         public HttpClient Client { get; } = host.GetTestClient();
+        public IReadOnlyList<Endpoint> Endpoints => host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
 
         public static async Task<RuntimeAuthorizationHost> StartAsync()
         {
@@ -146,6 +179,10 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
             PermissionEvaluationContext context,
             CancellationToken cancellationToken = default)
         {
+            var resourceDisposition = httpContextAccessor.HttpContext?.Request.Headers[ResourceHeader].ToString();
+            if (string.Equals(resourceDisposition, "deny", StringComparison.Ordinal))
+                return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Denied("Wave 9 resource mismatch."));
+
             if (context.Principal.FindFirst(IdentityClaimTypes.TenantId) is null)
                 return ValueTask.FromResult<PermissionEvaluationResult?>(null);
 
@@ -155,6 +192,8 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
                     ? PermissionEvaluationResult.Success
                     : PermissionEvaluationResult.Denied("Wave 9 tenant mismatch."));
         }
+
+        public const string ResourceHeader = "X-Wave9-Runtime-Resource";
     }
 
     private sealed class Wave9FastEndpoint : ElsaEndpointWithoutRequest<string>
@@ -172,32 +211,61 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
     private sealed class RuntimeAuthentication(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
-        UrlEncoder encoder)
+        UrlEncoder encoder,
+        IClaimsNormalizer claimsNormalizer)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         public const string SchemeName = "Wave9RuntimeAuthorization";
         public const string IdentityHeader = "X-Wave9-Runtime-Identity";
 
-        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var identity = Request.Headers[IdentityHeader].ToString();
             if (string.IsNullOrWhiteSpace(identity))
-                return Task.FromResult(AuthenticateResult.NoResult());
+                return AuthenticateResult.NoResult();
+
+            if (identity is "external" or "external-resource-denied")
+            {
+                var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.Name, "wave9-external-user")], Scheme.Name));
+                var normalized = await claimsNormalizer.NormalizeAsync(new ClaimsNormalizationContext(
+                    externalPrincipal,
+                    "tenant-a",
+                    "external-provider",
+                    [new ClaimMappingRule(
+                        "wave9-external-read",
+                        "tenant-a",
+                        "external-provider",
+                        ClaimTypes.Name,
+                        "wave9-external-user",
+                        new HashSet<string>(StringComparer.Ordinal),
+                        new HashSet<string>(StringComparer.Ordinal) { WorkflowRuntimePermissions.WorkflowRuntimeRead },
+                        0,
+                        StopOnMatch: true)],
+                    Scheme.Name));
+                return AuthenticateResult.Success(new AuthenticationTicket(normalized.Principal, Scheme.Name));
+            }
+
+            var noTenant = identity.StartsWith("external-no-tenant", StringComparison.Ordinal);
+            var noPermission = identity == "resource-allow-no-permission";
 
             var permissions = identity switch
             {
                 "exact" => new[] { WorkflowRuntimePermissions.WorkflowRuntimeRead },
                 "implied" => new[] { "wave9.runtime.admin" },
                 "wildcard" => new[] { PermissionKey.Wildcard },
-                "tenant-match" or "tenant-mismatch" => new[] { WorkflowRuntimePermissions.WorkflowRuntimeRead },
+                "tenant-match" or "tenant-mismatch" or "external-no-tenant" or "external-no-tenant-resource-denied" => new[] { WorkflowRuntimePermissions.WorkflowRuntimeRead },
+                "implied-resource-denied" => new[] { "wave9.runtime.admin" },
+                "wildcard-resource-denied" => new[] { PermissionKey.Wildcard },
+                "resource-allow-no-permission" => Array.Empty<string>(),
                 _ => new[] { "runtime.other" }
             };
             var claims = permissions.Select(permission => new Claim(IdentityClaimTypes.Permission, permission)).ToList();
             claims.Add(new Claim(IdentityClaimTypes.Normalized, identity == "invalid-normalization" ? "invalid" : "v1"));
-            if (identity is "tenant-match" or "tenant-mismatch")
+            if (!noTenant && (identity is "tenant-match" or "tenant-mismatch" or "implied-resource-denied" or "wildcard-resource-denied" or "resource-allow-no-permission"))
                 claims.Add(new Claim(IdentityClaimTypes.TenantId, identity == "tenant-mismatch" ? "tenant-b" : "tenant-a"));
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name));
-            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
+            return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));
         }
     }
 }

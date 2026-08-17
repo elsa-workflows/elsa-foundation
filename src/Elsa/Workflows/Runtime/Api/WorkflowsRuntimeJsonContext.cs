@@ -5,11 +5,12 @@ using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Api;
 
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false)]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(GetWorkflowInstance))]
 [JsonSerializable(typeof(ListWorkflowInstances))]
 [JsonSerializable(typeof(ListWorkflowExecutables))]
@@ -62,7 +63,12 @@ namespace Elsa.Workflows.Runtime.Api;
 [JsonSerializable(typeof(WorkflowAlterationJobPageView))]
 [JsonSerializable(typeof(WorkflowAlterationJobView))]
 [JsonSerializable(typeof(WorkflowAlterationPlanCancellationView))]
+[JsonSerializable(typeof(WorkflowAlterationProblemView))]
 [JsonSerializable(typeof(RuntimeProblemDetails))]
+[JsonSerializable(typeof(RuntimeValidationProblemDetails))]
+[JsonSerializable(typeof(ActivityExecutionProblemDetailsView))]
+[JsonSerializable(typeof(ActivityExecutionCursorProblemView))]
+[JsonSerializable(typeof(ActivityExecutionProblemDiagnosticView))]
 internal partial class WorkflowsRuntimeJsonContext : JsonSerializerContext;
 
 internal sealed record RuntimeProblemDetails(
@@ -73,3 +79,8 @@ internal sealed record RuntimeProblemDetails(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Instance,
     IReadOnlyDictionary<string, string[]>? Errors = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code = null);
+
+internal sealed record RuntimeValidationProblemDetails(
+    IReadOnlyDictionary<string, string[]> Errors,
+    string Message,
+    int StatusCode);

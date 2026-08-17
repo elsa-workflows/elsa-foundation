@@ -4,8 +4,8 @@
 - [x] Baseline has 24 route registrations and 24 OpenAPI operations.
 - [x] Baseline includes all-route 401, all-route authenticated success, errors, not-found, and route/body evidence.
 - [x] Production mapper has complete HTTP/OpenAPI deep comparison with reviewed two-sided approvals.
-- [ ] Shared authorization matrix covers 401/403/exact/implied/wildcard/normalized/tenant/resource behavior.
-- [ ] Three-cycle collectibility executes mapped delegates, serializers, auth/provider seams, DI, and disposal.
-- [ ] Runtime E2E runs against rebuilt Workbench and fresh DB.
-- [ ] Architecture, maps, formatter, full build, and diff gates are green.
+- [x] Shared authorization matrix covers 401/403/exact/implied/wildcard/normalized/tenant/resource behavior (16 cases with retained FE canary).
+- [x] Three-cycle collectibility executes mapped delegates, serializers, auth/provider seams, DI, and disposal.
+- [x] Runtime E2E runs against rebuilt Workbench and fresh DB (20 GET and 10 write cases).
+- [ ] Architecture, maps, repository-wide formatter, full build, and diff gates are green (the changed Runtime/API/Core files pass scoped formatter verification; repository-wide formatter diagnostics remain an existing follow-up).
 - [ ] Final report and follow-up issues are reviewed.

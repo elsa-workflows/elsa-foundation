@@ -600,7 +600,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -639,7 +639,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowDispatchResponse",
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView",
           "contentTypes": [
             "application/json"
           ],
@@ -912,7 +912,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -990,7 +990,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Workflows.Runtime.Api.Requests.GetWorkflowInstanceResponse",
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView",
           "contentTypes": [
             "application/json"
           ],
@@ -1146,7 +1146,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Workflows.Runtime.Api.Contracts.ActivityExecutionValuePayloadReadResult",
+          "bodyType": "Elsa.Workflows.Runtime.Api.Contracts.ActivityExecutionValuePayloadView",
           "contentTypes": [
             "application/json"
           ],

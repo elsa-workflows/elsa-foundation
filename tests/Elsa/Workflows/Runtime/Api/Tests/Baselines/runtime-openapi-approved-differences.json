@@ -2180,24 +2180,6 @@
         }
       },
       "afterSchemas": {
-        "GetWorkflowDispatchResponse": {
-          "properties": {
-            "dispatch": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/WorkflowDispatchView"
-                }
-              ]
-            }
-          },
-          "required": [
-            "dispatch"
-          ],
-          "type": "object"
-        },
         "WorkflowDispatchInputCaptureView": {
           "properties": {
             "captureMode": {
@@ -2358,20 +2340,6 @@
         },
         "WorkflowRunKind": {
           "type": "integer"
-        }
-      },
-      "beforeResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/WorkflowDispatchView"
-          }
-        }
-      },
-      "afterResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/GetWorkflowDispatchResponse"
-          }
         }
       }
     },
@@ -4305,7 +4273,14 @@
               ]
             },
             "resultType": {
-              "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
+                }
+              ]
             }
           },
           "required": [
@@ -6220,7 +6195,14 @@
               ]
             },
             "resultType": {
-              "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
+                }
+              ]
             }
           },
           "required": [
@@ -8350,24 +8332,6 @@
           ],
           "type": "object"
         },
-        "GetWorkflowInstanceResponse": {
-          "properties": {
-            "instance": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/WorkflowInstanceDetailsView"
-                }
-              ]
-            }
-          },
-          "required": [
-            "instance"
-          ],
-          "type": "object"
-        },
         "IncidentResolutionOutcomeView": {
           "properties": {
             "actionKind": {
@@ -8731,20 +8695,6 @@
             "capturedAt"
           ],
           "type": "object"
-        }
-      },
-      "beforeResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/WorkflowInstanceDetailsView"
-          }
-        }
-      },
-      "afterResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/GetWorkflowInstanceResponse"
-          }
         }
       }
     },
@@ -11942,31 +11892,6 @@
         "JsonElement": {}
       },
       "afterSchemas": {
-        "ActivityExecutionValuePayloadReadOutcome": {
-          "type": "integer"
-        },
-        "ActivityExecutionValuePayloadReadResult": {
-          "properties": {
-            "outcome": {
-              "$ref": "#/components/schemas/ActivityExecutionValuePayloadReadOutcome"
-            },
-            "value": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/ActivityExecutionValuePayloadView"
-                }
-              ]
-            }
-          },
-          "required": [
-            "outcome",
-            "value"
-          ],
-          "type": "object"
-        },
         "ActivityExecutionValuePayloadView": {
           "properties": {
             "captureMode": {
@@ -11987,20 +11912,6 @@
           "type": "object"
         },
         "JsonElement": {}
-      },
-      "beforeResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/ActivityExecutionValuePayloadView"
-          }
-        }
-      },
-      "afterResponseSchemas": {
-        "200": {
-          "application/json": {
-            "$ref": "#/components/schemas/ActivityExecutionValuePayloadReadResult"
-          }
-        }
       }
     },
     {

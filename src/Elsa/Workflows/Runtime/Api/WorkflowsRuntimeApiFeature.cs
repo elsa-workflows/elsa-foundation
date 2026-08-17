@@ -56,6 +56,11 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsRuntimeJsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsRuntimeJsonTypeInfoResolver());
+        });
         services.TryAddScoped<HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.Configure<ActivityExecutionHierarchyCursorOptions>(options =>
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);

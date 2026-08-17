@@ -19,6 +19,6 @@
 - [x] T009 Run the Runtime owner suite and composition/anonymous route tests.
 - [x] T010 Add deep HTTP/OpenAPI comparer and explicit difference approvals.
 - [x] T011 Add real three-cycle collectible-context evidence.
-- [ ] T012 Run affected Runtime E2E against rebuilt Workbench/fresh DB.
-- [ ] T013 Refresh maps, run Architecture/build/format/diff gates, and publish the report.
+- [x] T012 Run affected Runtime E2E against rebuilt Workbench/fresh DB (Runtime GET 20/20 and write 10/10).
+- [ ] T013 Refresh maps, run Architecture/build/format/diff gates, and publish the report (maps, Architecture, solution build, scoped Runtime formatter, and diff checks pass; repository-wide formatter remains a documented baseline follow-up).
 - [ ] T014 Review the final migration recommendation and follow-up issues.
