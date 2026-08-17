@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations;
+using Groundwork.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -90,6 +91,10 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // activities-design) stores + commands over one physical document store. autoApplyOnStartup
         // applies the pending schema in-process during IShellInitializer, so no external CLI is needed.
         services.AddGroundworkSqliteUnifiedPersistence(connectionString, autoApplyOnStartup: true);
+        // The partially cut-over feature graph also declares public-v2 units. Give those units an
+        // explicit test provider so initialization preserves the shipping fail-fast invariant.
+        services.AddGroundworkStorageProviderConnection(_ =>
+            new InMemoryProviderFactory().Create($"workflows-design-tests:{Guid.NewGuid():N}"));
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
 
