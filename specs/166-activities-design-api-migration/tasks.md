@@ -66,7 +66,7 @@ or feature code until that checkpoint is committed.
 - [x] T024 [US1] Publish stable operation names, Activities Design tag/owner/Minimal-authoring metadata, accepts/produces/content types, success/error statuses, and native OpenAPI security for all 38 routes in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
 - [x] T025 [US1] Replay the real after host, deep-compare every HTTP/OpenAPI facet bidirectionally, and add only exact reviewed two-sided differences to `tests/Elsa/Activities/Design/Tests/Api/Baselines/activities-design-approved-differences.json`; reject duplicate, unused, no-op, unknown, wrong-value, one-sided, and stale approvals
 - [x] T026 [US1] Rewire—not delete or weaken—existing endpoint/binder/handler semantic objectives across `tests/Elsa/Activities/Design/Tests/`; add a recorded architect disposition if a subject genuinely ceased to exist
-- [ ] T027 [US1] Delete exactly the 38 superseded production endpoint registrations/classes, remove the owner production `Elsa.Api.FastEndpoints` dependency from `src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj`, and update `tests/Elsa/Architecture/FastEndpointsTransitionTests.cs` from 61 to 23 registrations without removing retained test oracles/canaries
+- [x] T027 [US1] Delete exactly the 38 superseded production endpoint registrations/classes, remove the owner production `Elsa.Api.FastEndpoints` dependency from `src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj`, and update `tests/Elsa/Architecture/FastEndpointsTransitionTests.cs` from 61 to 23 registrations without removing retained test oracles/canaries
 
 **Checkpoint**: All 38 migrated routes match the immutable HTTP/OpenAPI oracle and owner semantic suites.
 
