@@ -28,6 +28,29 @@
 
 > **Post-`/speckit.analyze` remediation (2026-08-15).** A cross-artifact consistency pass over spec/plan/tasks against both constitutions returned **zero CRITICAL findings and 100% requirement coverage**. Its 16 findings were remediated in one pass: plan.md gained a §2.21.1 Complexity Tracking entry recording the architect-approved test removals and a corrected golden-rule row; the phase-2 conventions block below carries the §2.23.3 / §2.6.2 / §2.5 obligations that had no task home; T021 carries the §E6 R4 reviewer flag; T091 was re-scoped after inspecting #1346's scanner; T115 covers the §2.22 README obligation; and the stale pre-sweep literals were fixed in the artifacts rather than deferred into an implementation task.
 
+## ⚠ SUPERSEDED 2026-08-16 — the export endpoint is a MINIMAL API, not FastEndpoints
+
+**The 2026-08-15 resolution below is obsolete. Read this instead; the block after it is kept only to show what changed and why.**
+
+`main` merged into this branch on 2026-08-16 bringing the whole first-party Minimal API migration — waves 1 and 2 (#1382, #1383), Studio Preferences, Secrets, Structured Logs, Identity, Agent, OpenTelemetry — plus #1359, the REST API migration compatibility and authoring gates.
+
+**The capability gap the FastEndpoints exception rested on has closed.** The 2026-08-15 evidence was *"no shell-scoped Minimal API mapping seam for module features; owned by #1345, unlanded."* It landed. Module features now map Minimal APIs directly through a `MapEndpoints(IEndpointRouteBuilder, IHostEnvironment?)` member — see `ActivitiesBpmnInterchangeFeature.cs:32-33` delegating to `BpmnInterchangeApi.MapBpmnInterchangeApi`, and the same shape in `FoundationAgentApiFeature` and `ApiCapabilitiesFeature`. A module-local Minimal API is now demonstrably possible, which is precisely what ADR 0068 requires to be *impossible* before an exception is granted. **No exception is available, and none is needed.**
+
+`Elsa.Workflows.Publishing.Api` has **not** migrated (still 46 entries in `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json`), but ADR 0068 explicitly permits coexistence during bounded migration waves — a new Minimal API route may sit alongside the module's existing FastEndpoints ones.
+
+**Task changes:**
+- **T085** — implement `GET publishing/workflows/{versionId}/executable-export` as a **Minimal API**, via `MapEndpoints` on `WorkflowsPublishingApiFeature` delegating to a static `MapWorkflowsPublishingApi(IEndpointRouteBuilder)`, following the `BpmnInterchangeApi` shape.
+- **T085a (NEW)** — attach the ADR 0068 metadata the FastEndpoints route never needed: **route ownership metadata** (`OwnerKind: Module`, `OwnerId`) and an explicit **security disposition** (permission-protected, via a Foundation Identity policy rather than direct claim matching). Both are mandatory for every first-party endpoint under ADR 0068.
+- **T086** — the "no FastEndpoints byte-download precedent, add a helper beside `ServerSentEventResponseExtensions`" note is **void**. Minimal APIs return the closure JSON with standard `Results`/`TypedResults` plus a `Content-Disposition` header. Response contract is otherwise unchanged.
+- **T084** — permissions go through the Foundation Identity policy path (#1357 merged), not `ConfigurePermissions` on a FastEndpoints base.
+- **T091 — DELETE.** No transitional exception entry is required for a Minimal API, and the registry restamp it described was only needed because the endpoint was FastEndpoints. Publishing.Api's existing 46 entries are untouched by this feature.
+- **T091a** — already executed ([#1346 comment](https://github.com/elsa-workflows/elsa-foundation/issues/1346#issuecomment-5303337529)). Its rule question ("does a route in an already-transitional module need a fresh exception?") is now **moot** — we are not adding a FastEndpoints route. The owner-fingerprint collision it reported remains valid feedback for that issue.
+
+**Unchanged and still pinned for [studio#493](https://github.com/elsa-workflows/elsa-foundation-studio/issues/493)**: route `publishing/workflows/{versionId}/executable-export`, capability `elsa.api.publishing`, rel `workflow-executable-export`, and the response shape. The framework changed; the contract did not.
+
+<details>
+<summary>Superseded: endpoint-framework resolution (decided 2026-08-15) — kept for the record</summary>
+
 ## Endpoint-framework resolution (decided 2026-08-15, supersedes contracts/export-endpoint.md as written)
 
 [ADR 0068](../../docs/adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md) (accepted 2026-08-15) landed **after** the export-endpoint contract was written citing FastEndpoints, and makes Minimal APIs the normative model for new first-party REST endpoints. Resolution for this feature:
@@ -39,6 +62,8 @@
 - **Registry**: handled by T091, with the cross-branch coordination split into T091a. Note the mechanic: `sourceHash` in that registry is an **owner fingerprint** over every `.cs` file in the owning project, so this feature's edits to Publishing.Api invalidate all 19 existing rows, not just the new one. No hard dependency on #1346's merge order either way.
 - **Unchanged**: route, capability id, rel, href, response shape. studio#493's pins hold regardless of framework.
 
+</details>
+
 ---
 
 ## Verified test baselines (captured 2026-08-15, before any implementation code)
@@ -48,7 +73,7 @@ Recorded at commit `100a5497c` so the §2.21.1 golden-rule checks (T040, T112) c
 | Suite | Baseline | Note |
 |---|---|---|
 | `dotnet build Elsa.Server.slnx` | 0 errors, 228 warnings | |
-| `Elsa.Workflows.Runtime.Tests` | 1653 passed, 0 failed | |
+| `Elsa.Workflows.Runtime.Tests` | **1706 passed, 0 failed** | Was 1653 at `100a5497c`; grew with this feature's own tests, then +18 from the 2026-08-16 `main` merge. **Current working number: 1706.** |
 | `Elsa.Workflows.Publishing.Tests` | 23 passed, 0 failed | |
 | `Elsa.Workflows.Runtime.Api.Tests` | 93 passed, 0 failed | |
 | `Elsa.Activities.DispatchWorkflow.Tests` | **202 passed, 0 failed** | **Added to the baseline set 2026-08-16 after it caught a regression nothing else did.** The hasher extraction (T016–T020) deleted `TryAddScoped<WorkflowExecutableHasher>()` from `WorkflowsPublishingFeature`; the compiler then depended on `IWorkflowExecutableHasher`, which only `AddWorkflowRuntime()` registers, so a host composing publishing **standalone** could not construct it. Invisible to Runtime/Publishing/Publishing.Api because they all arm the runtime spine. **Lesson: when a service moves out of a feature, check every composition that used to get it from there** — run this suite after any registration change. |
