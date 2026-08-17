@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
@@ -16,7 +17,7 @@ Directory.CreateDirectory(outputDirectory);
 await using var host = await ActivitiesDesignCompatibilityHost.StartAsync();
 var observations = new List<HttpCompatibilityObservation>(ActivitiesDesignCompatibilityCases.All.Count);
 foreach (var testCase in ActivitiesDesignCompatibilityCases.All)
-    observations.Add(await CaptureAsync(host.Client, testCase));
+    observations.Add(NormalizeVolatileFields(await CaptureAsync(host.Client, testCase)));
 
 var rawOpenApi = await host.GetOpenApiAsync();
 var projectedOpenApi = OpenApiEvidenceCapture.Capture(rawOpenApi, includeIdentityMetadata: true);
@@ -51,7 +52,8 @@ var receipt = new
     openApiSha256 = Hash(openApiPath),
     rawOpenApiSha256 = Hash(rawOpenApiPath),
     approvalsSha256 = Hash(approvalsPath),
-    categories = new[] { "anonymous", "trusted-success", "historical-defect", "binding", "domain", "cancellation" }
+    categories = new[] { "anonymous", "trusted-success", "historical-defect", "binding", "domain", "cancellation" },
+    volatileFields = new[] { "response-json.traceId" }
 };
 File.WriteAllText(Path.Join(outputDirectory, "activities-design-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
 
@@ -74,6 +76,25 @@ static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, 
             TerminalState = $"Faulted:{terminal.GetType().FullName}"
         };
     }
+}
+
+static HttpCompatibilityObservation NormalizeVolatileFields(HttpCompatibilityObservation observation)
+{
+    if (observation.Json.Length == 0)
+        return observation;
+
+    var node = JsonNode.Parse(observation.Json);
+    if (node is not JsonObject body || !body.ContainsKey("traceId"))
+        return observation;
+
+    body["traceId"] = "<volatile-trace-id>";
+    var normalized = CompatibilityJson.Canonicalize(body.ToJsonString());
+    return observation with
+    {
+        Json = normalized,
+        Body = observation.Body == observation.Json ? normalized : observation.Body,
+        ProblemDetails = observation.ProblemDetails == observation.Json ? normalized : observation.ProblemDetails
+    };
 }
 
 static IReadOnlyList<RunnerDependency> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerIdentity) =>
