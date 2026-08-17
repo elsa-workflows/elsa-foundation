@@ -16,14 +16,14 @@ or feature code until that checkpoint is committed.
 **Purpose**: Freeze a reproducible, bite-proof oracle from the real FastEndpoints owner before production changes.
 
 - [x] T001 Recheck issue #1373 comments, open PRs, red-main gate issues, and exact base health; record any competing claim or inherited failure on #1373 before writing code
-- [ ] T002 Add the exact 38 method/template/action/success inventory and one-to-one registration assertions in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiBeforeBaselineTests.cs` and `specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md`
-- [ ] T003 [P] Build the deterministic 38-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs`
-- [ ] T004 [P] Build the real FastEndpoints historical host and deterministic provider/store/auth fixtures in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs`
-- [ ] T005 Add a clean-content-guarded, self-contained capture runner and script in `tests/Elsa/Activities/Design/Tests/Api/Capture/` and `tools/capture-activities-design-before.sh`; pin branch-durable source-tree and build-input identities without relying on a local or squash-lost commit
-- [ ] T006 Capture and commit immutable HTTP, projected OpenAPI, raw OpenAPI, receipt, and initially empty approval artifacts under `tests/Elsa/Activities/Design/Tests/Api/Baselines/`
-- [ ] T007 Validate fixture hashes, exact case/operation counts, runner/dependency identities, capture command/environment, parent-before-migration ordering, and clean-checkout reproducibility in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiBeforeBaselineTests.cs`
-- [ ] T008 Add exact mutation bites for receipt/source identity and for HTTP/OpenAPI status, headers, body, content type, route, operation ID, tags, security, schemas, parameters, and response metadata in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignCompatibilityTests.cs`
-- [ ] T009 Recheck #1373/open PRs, run the before-host capture and baseline tests, prove the fixtures reproduce byte-for-byte, and commit the complete baseline checkpoint before touching `src/Elsa/Activities/Design/Api/`
+- [x] T002 Add the exact 38 method/template/action/success inventory and one-to-one registration assertions in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiBeforeBaselineTests.cs` and `specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md`
+- [x] T003 [P] Build the deterministic 38-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs`
+- [x] T004 [P] Build the real FastEndpoints historical host and deterministic provider/store/auth fixtures in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs`
+- [x] T005 Add a clean-content-guarded, self-contained capture runner and script in `tests/Elsa/Activities/Design/Tests/Api/Capture/` and `tools/capture-activities-design-before.sh`; pin branch-durable source-tree and build-input identities without relying on a local or squash-lost commit
+- [x] T006 Capture and commit immutable HTTP, projected OpenAPI, raw OpenAPI, receipt, and initially empty approval artifacts under `tests/Elsa/Activities/Design/Tests/Api/Baselines/`
+- [x] T007 Validate fixture hashes, exact case/operation counts, runner/dependency identities, capture command/environment, ancestor-before-migration ordering, and clean-checkout reproducibility in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiBeforeBaselineTests.cs`
+- [x] T008 Add exact mutation bites for receipt/source identity and for HTTP/OpenAPI status, headers, body, content type, route, operation ID, tags, security, schemas, parameters, and response metadata in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignCompatibilityTests.cs`
+- [x] T009 Recheck #1373/open PRs, run the before-host capture and baseline tests, prove the fixtures reproduce byte-for-byte, and commit the complete baseline checkpoint before touching `src/Elsa/Activities/Design/Api/`
 
 **Checkpoint**: The historical oracle is immutable, reproducible, complete for all 38 routes, and predates migration.
 
