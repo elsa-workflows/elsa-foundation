@@ -187,6 +187,13 @@ Current real state:
 
 **Cross-check with FR-B-005**: the checker's two axes are described as never intersecting and jointly sufficient. They are not jointly sufficient. Worth a line to Sipke at review, since it adjusts a clarified decision (2026-08-14 session, Q1).
 
+## Real-transport trigger coverage (added 2026-08-16 — US1 scenario 2 names HTTP/timer explicitly)
+
+T071 pinned US1 scenario 2 with a test-owned `IActivityTriggerStimulusProvider` over a probe node. That was the right call for a test whose subject is import→activation→routing — pulling a transport in would have dragged its host, middleware and clock along. But scenario 2 names **HTTP/timer**, so the real transports need their own coverage, in their own domains.
+
+- [ ] T071a **Recurring/timer — do this first.** An imported timer/cron artifact must actually **fire**. This is the projection the 2026-08-14 PR re-review added on the explicit grounds that *"binding-store-only activation would import timer/cron workflows that never fire"* — and it is currently the least-proven part of the feature: the recurring-schedule projection is verified only at unit level (prepared, activated), never observed firing from an imported artifact. Belongs in `tests/Elsa/Workflows/Runtime/Scheduling/Tests` (baseline 83/0) beside the pump and indexer tests. Assert the schedule row is activation-scoped, that `RecurringTriggerPumpTask` picks it up, and that the workflow executes — then that a superseding import re-projects the schedule rather than leaving the old one firing.
+- [ ] T071b **HTTP — second.** Pin scenario 2 against a real transport using `HttpEndpointHostFixture`, in the HTTP integration suite (`Elsa.Activities.Http.IntegrationTests`, currently 28 passed / 1 failed — the failure is a SQLite-teardown `IOException`, environmental). Lower priority than T071a because it exercises the **binding** projection T071 already proved end to end; its value is confirming a real transport rather than an unproven mechanism. Note the fixture already had to mint an activation-scoped reference once `(ActivationId, SlotId)` began driving source-reference selection — reuse that.
+
 ## Follow-up tasks raised during implementation
 
 Numbered so they are executed and tracked, not rediscovered. IDs are appended (never renumbered) because T001–T115 are referenced by pushed commits.
