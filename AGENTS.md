@@ -246,5 +246,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/165-unload-safe-openapi/plan.md`.
+`specs/166-activities-design-api-migration/plan.md`.
 <!-- SPECKIT END -->
