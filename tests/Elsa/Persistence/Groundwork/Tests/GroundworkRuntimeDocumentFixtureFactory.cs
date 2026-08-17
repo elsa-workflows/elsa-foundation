@@ -58,24 +58,23 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
-        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind
+        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind
     ];
 
     private const string Wf = "wf-1";
 
     // Captures the exact (SchemaVersion, ContentJson) the real store bridge writes for a kind's canonical
     // instance. Direct-save kinds are captured at the SaveDocumentRequest boundary through a capturing
-    // store; transactional and checkpoint documents are driven through an in-memory store and read back.
+    // store; transactional, checkpoint and compare-and-swap documents are driven through an in-memory
+    // store and read back.
     public static async Task<(string SchemaVersion, string ContentJson)> CaptureAsync(string kind)
     {
-        if (kind is ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind or ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind)
+        if (ReadBackDocumentId(kind) is { } readBackId)
         {
             var store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
             await DriveSaveAsync(kind, store);
-            var documentId = kind == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind
-                ? CommitId
-                : ProjectionStateId;
-            var envelope = await store.LoadAsync(kind, documentId);
+            var envelope = await store.LoadAsync(kind, readBackId);
             return (envelope!.SchemaVersion, envelope.ContentJson);
         }
 
@@ -83,6 +82,19 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         await DriveSaveAsync(kind, capturing);
         return capturing.Captured(kind);
     }
+
+    // Kinds whose write path cannot be observed at the SaveDocumentRequest boundary, paired with the
+    // document id the bridge assigns. The checkpoint marker and the publication projection are written
+    // inside a transaction; the activation slot is written by a compare-and-swap that presents the
+    // loaded document version as the expected version, so it needs a store that actually retains
+    // documents and honours ExpectedVersion rather than one that reports an empty store to every probe.
+    private static string? ReadBackDocumentId(string kind) => kind switch
+    {
+        ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
+        ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind => ProjectionStateId,
+        ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind => ActivationSlotId,
+        _ => null
+    };
 
     // Seeds an in-memory store with committed fixture content under its exact schema-version stamp, at
     // the composite id the bridge assigns. Driving a real save first discovers the id without duplicating
@@ -188,6 +200,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
                     .PrepareActivationAsync("publication-1", []);
                 break;
+            case ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind:
+                await DriveActivationSlotAsync(store);
+                break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
@@ -267,6 +282,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 .FindAsync(RecurringTriggerSchedule.BuildId("publication-1", "artifact-1", "node-1")))?.StimulusHash,
         ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind =>
             await ReadProjectionKindAsync(store),
+        ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind =>
+            (await new GroundworkWorkflowActivationAuthority(store, Serializer)
+                .FindAsync(ActivationSlotDefinitionId, ActivationSlotName))?.ActiveActivationId,
         // The checkpoint marker has no typed domain store; the writer's dedup reads it via LoadAsync, so
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
@@ -301,6 +319,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
         ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind => "schedule-hash-1",
         ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind => "triggerBindings",
+        ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind => ActivationId,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
@@ -340,6 +359,40 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private const string CommitId = "commit-1";
     private const string ProjectionStateId = "triggerBindings:13:publication-1";
     private const string TemplateHashClaimId = "templateHash:15:hash-template-1";
+
+    private const string ActivationSlotDefinitionId = "definition-1";
+    private const string ActivationSlotName = "default";
+    private const string ActivationId = "activation-1";
+
+    // Composed through the production identity helper rather than restated as a literal, so a change to
+    // the slot-id scheme surfaces as a fixture drift on the persisted document rather than as a missing
+    // document here.
+    private static readonly string ActivationSlotId =
+        WorkflowActivationSlotIdentity.Create(ActivationSlotDefinitionId, ActivationSlotName);
+
+    /// <summary>
+    /// The activation ledger has no plain save: a slot moves only through the CAS transition, and revision 0
+    /// with no active activation is the canonical "never activated" state, so activating from expected
+    /// revision 0 is the ordinary first write. Every value on the persisted document comes from this
+    /// request or is derived from it (<c>Revision</c> becomes 1), so the written shape is byte-stable.
+    /// </summary>
+    private static async Task DriveActivationSlotAsync(IDocumentStore store)
+    {
+        var transition = await new GroundworkWorkflowActivationAuthority(store, Serializer).TryActivateAsync(
+            new WorkflowActivationSlotRequest(
+                WorkflowDefinitionId: ActivationSlotDefinitionId,
+                SlotName: ActivationSlotName,
+                ActivationId: ActivationId,
+                Source: WorkflowActivationSource.ArtifactReconciliation("prod-drop"),
+                ExpectedRevision: 0,
+                UpdatedAt: DateTimeOffset.UnixEpoch));
+
+        if (!transition.Succeeded)
+        {
+            throw new InvalidOperationException(
+                $"The canonical activation-slot transition was refused ({transition.Conflict}): {transition.Diagnostic}");
+        }
+    }
 
     private static WorkflowTestScope TestScope() => new(
         "test-scope-1",

@@ -1,0 +1,16 @@
+{
+  "activeActivationId": "activation-1",
+  "slot": {
+    "activeActivationId": "activation-1",
+    "revision": 1,
+    "slotId": "activation-slot:12:definition-1:7:default",
+    "slotName": "default",
+    "source": {
+      "kind": "artifact-reconciliation",
+      "sourceId": "prod-drop"
+    },
+    "updatedAt": "1970-01-01T00:00:00\u002B00:00",
+    "workflowDefinitionId": "definition-1"
+  },
+  "workflowDefinitionId": "definition-1"
+}
