@@ -34,32 +34,18 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         var source = new MemorySource();
         var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
         var workItemId = "work-item-renewed";
-        source.SeedRow(
+        var physicalId = GroundworkV2SchedulerWorkStorageConventions.PhysicalId("workflow-1", workItemId);
+        source.ReplaceRow(
             "tenant-a",
             unit,
-            workItemId,
-            new
-            {
-                workItemId,
-                workflowExecutionId = "workflow-1",
-                claimOwnerId = "owner-a",
-                fencingToken = 1L,
-                claimedUntil = DateTimeOffset.UtcNow.AddMinutes(1)
-            },
-            SchedulerWorkProjections("workflow-1", "owner-a", 1));
-        source.BeforeCommit = _ => source.SeedRow(
+            physicalId,
+            SchedulerWorkValues("workflow-1", workItemId, "owner-a", 1, DateTimeOffset.UtcNow.AddMinutes(1)),
+            version: 1);
+        source.BeforeCommit = _ => source.ReplaceRow(
             "tenant-a",
             unit,
-            workItemId,
-            new
-            {
-                workItemId,
-                workflowExecutionId = "workflow-1",
-                claimOwnerId = "owner-a",
-                fencingToken = 1L,
-                claimedUntil = DateTimeOffset.UtcNow.AddMinutes(2)
-            },
-            SchedulerWorkProjections("workflow-1", "owner-a", 1),
+            physicalId,
+            SchedulerWorkValues("workflow-1", workItemId, "owner-a", 1, DateTimeOffset.UtcNow.AddMinutes(2)),
             version: 2);
         var changes = new RuntimeCheckpointStateChangeSet(
             null, null, [], [], [], [], [],
@@ -75,7 +61,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             Immediate());
 
         Assert.Equal([workItemId], result.ConsumedSchedulerWorkItemIds);
-        Assert.Null(source.Find(unit, workItemId, "tenant-a"));
+        Assert.Null(source.Find(unit, physicalId, "tenant-a"));
         Assert.NotNull(source.Find(
             ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
             "consume-renewed",
@@ -88,19 +74,27 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         var source = new MemorySource();
         var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
         var workItemId = "work-item-reassigned";
-        source.SeedRow(
+        var physicalId = GroundworkV2SchedulerWorkStorageConventions.PhysicalId("workflow-1", workItemId);
+        source.ReplaceRow(
             "tenant-a",
             unit,
-            workItemId,
-            new { workItemId, workflowExecutionId = "workflow-1", claimOwnerId = "owner-a", fencingToken = 1L },
-            SchedulerWorkProjections("workflow-1", "owner-a", 1));
-        source.BeforeCommit = _ => source.SeedRow(
-            "tenant-a",
-            unit,
-            workItemId,
-            new { workItemId, workflowExecutionId = "workflow-2", claimOwnerId = "owner-a", fencingToken = 1L },
-            SchedulerWorkProjections("workflow-2", "owner-a", 1),
-            version: 2);
+            physicalId,
+            SchedulerWorkValues("workflow-1", workItemId, "owner-a", 1, DateTimeOffset.UtcNow.AddMinutes(1)),
+            version: 1);
+        source.BeforeCommit = _ =>
+        {
+            var reassigned = SchedulerWorkValues(
+                "workflow-2",
+                workItemId,
+                "owner-a",
+                1,
+                DateTimeOffset.UtcNow.AddMinutes(1));
+            var values = reassigned.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            // Keep the foreign content/projections internally consistent while occupying the
+            // original physical alias, exercising collision refusal in the clean-break writer.
+            values[ElsaRuntimeV2StorageManifest.IdField] = physicalId;
+            source.ReplaceRow("tenant-a", unit, physicalId, new StorageValues(values), version: 2);
+        };
         var changes = new RuntimeCheckpointStateChangeSet(
             null, null, [], [], [], [], [],
             workflowDispatches: null,
@@ -116,7 +110,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 Immediate()).AsTask());
 
         Assert.Equal(workItemId, exception.WorkItemId);
-        Assert.Equal("workflow-2", source.Find(unit, workItemId, "tenant-a")!.Values.Values[ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField]);
+        Assert.Equal("workflow-2", source.Find(unit, physicalId, "tenant-a")!.Values.Values[ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField]);
         Assert.Null(source.Find(
             ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
             "consume-reassigned",
@@ -866,7 +860,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         }
         finally
         {
-            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal", $"{database}-journal", $"{database}.schema.lock" })
                 if (File.Exists(path))
                     File.Delete(path);
         }
@@ -963,7 +957,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         }
         finally
         {
-            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal", $"{database}-journal", $"{database}.schema.lock" })
                 if (File.Exists(path))
                     File.Delete(path);
         }
@@ -1017,7 +1011,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         }
         finally
         {
-            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal", $"{database}-journal", $"{database}.schema.lock" })
                 if (File.Exists(path))
                     File.Delete(path);
         }
@@ -1041,17 +1035,13 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             var source = new NativeSessionSource(connection);
             var access = StorageAccess.Scoped(new StorageScope("tenant-a"));
             var workItemId = "sqlite-work-item";
-            var values = GroundworkRuntimeRowStore.Values(
+            var physicalId = GroundworkV2SchedulerWorkStorageConventions.PhysicalId("workflow-1", workItemId);
+            var values = SchedulerWorkValues(
+                "workflow-1",
                 workItemId,
-                ElsaRuntimeV2StorageManifest.SchemaVersion,
-                JsonSerializer.Serialize(new
-                {
-                    workItemId,
-                    workflowExecutionId = "workflow-1",
-                    claimOwnerId = "owner-a",
-                    fencingToken = 1L
-                }, Json),
-                SchedulerWorkProjections("workflow-1", "owner-a", 1));
+                "owner-a",
+                1,
+                DateTimeOffset.UtcNow.AddMinutes(1));
             Assert.Equal(
                 WriteOutcomeStatus.Inserted,
                 source.Open(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, access).Insert(values).Status);
@@ -1072,13 +1062,13 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
 
             Assert.Equal([workItemId], result.ConsumedSchedulerWorkItemIds);
             Assert.Null(source.Open(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, access)
-                .Read(GroundworkRuntimeRowStore.Key(workItemId)));
+                .Read(GroundworkRuntimeRowStore.Key(physicalId)));
             Assert.NotNull(source.Open(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access)
                 .Read(GroundworkRuntimeRowStore.Key(commit.CommitId)));
         }
         finally
         {
-            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal", $"{database}-journal", $"{database}.schema.lock" })
                 if (File.Exists(path))
                     File.Delete(path);
         }
@@ -1568,7 +1558,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         }
         finally
         {
-            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal" })
+            foreach (var path in new[] { database, $"{database}-shm", $"{database}-wal", $"{database}-journal", $"{database}.schema.lock" })
                 if (File.Exists(path))
                     File.Delete(path);
         }
@@ -1721,6 +1711,36 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             [ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField] = claimOwnerId,
             [ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField] = fencingToken
         };
+
+    private static StorageValues SchedulerWorkValues(
+        string workflowExecutionId,
+        string workItemId,
+        string claimOwnerId,
+        long fencingToken,
+        DateTimeOffset visibleAfter)
+    {
+        var claimedAt = visibleAfter.AddMinutes(-1);
+        using var payload = JsonDocument.Parse($"{{\"workItemId\":\"{workItemId}\"}}");
+        var item = new RuntimeSchedulerWorkItem(
+            workItemId,
+            workflowExecutionId,
+            $"command-{workItemId}",
+            WorkflowExecutionCommandKind.RunSchedulerWork,
+            $"envelope-{workItemId}",
+            $"{workflowExecutionId}:{workItemId}",
+            claimedAt,
+            claimedAt,
+            1,
+            payload.RootElement.Clone());
+        var envelope = GroundworkV2SchedulerWorkStorageConventions.NewEnvelope(item) with
+        {
+            ClaimOwnerId = claimOwnerId,
+            ClaimToken = fencingToken,
+            ClaimedAt = claimedAt,
+            VisibleAfter = visibleAfter
+        };
+        return GroundworkV2SchedulerWorkStorageConventions.Values(envelope);
+    }
 
     private static WorkflowDispatchRecord NewDispatch(
         string parentWorkflowExecutionId,

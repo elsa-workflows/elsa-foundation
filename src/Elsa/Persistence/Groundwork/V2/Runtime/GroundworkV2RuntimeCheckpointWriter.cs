@@ -161,7 +161,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 if (ContainsConflict(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete))
                     throw new RuntimeSchedulerWorkConsumeConflictException(
                         commit.WorkflowExecutionId,
-                        FindFailedWriteId(report.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete));
+                        FindFailedSchedulerWorkItemId(report.Outcomes, commit));
                 throw new InvalidOperationException(
                     $"Groundwork rejected runtime checkpoint '{commit.CommitId}' with {report.Failed} failed row outcomes.");
             }
@@ -184,7 +184,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 throw ReadCurrentFence(access, commit);
             throw new RuntimeSchedulerWorkConsumeConflictException(
                 commit.WorkflowExecutionId,
-                FindFailedWriteId(exception.Outcomes, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, RowWriteMode.CompareAndDelete));
+                FindFailedSchedulerWorkItemId(exception.Outcomes, commit));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -255,6 +255,24 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     ? value as string
                     : null)
             .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id)) ?? string.Empty;
+
+    private static string FindFailedSchedulerWorkItemId(
+        IEnumerable<RowWriteOutcome> outcomes,
+        RuntimeCheckpointCommit commit)
+    {
+        var physicalId = FindFailedWriteId(
+            outcomes,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+            RowWriteMode.CompareAndDelete);
+        return commit.StateChanges.ConsumedSchedulerWorkItems
+                   .FirstOrDefault(item => StringComparer.Ordinal.Equals(
+                       GroundworkV2SchedulerWorkStorageConventions.PhysicalId(
+                           item.WorkflowExecutionId,
+                           item.WorkItemId),
+                       physicalId))
+                   ?.WorkItemId
+               ?? physicalId;
+    }
 
     private RuntimeStaleFencingTokenException ReadCurrentFence(StorageAccess access, RuntimeCheckpointCommit commit)
     {
@@ -725,7 +743,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         GroundworkV2DurableTimerStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, timerId),
                         cleanup.WorkflowExecutionId);
                 foreach (var workItemId in cleanup.SchedulerWorkItemIds)
-                    StageCleanupDelete(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, workItemId, cleanup.WorkflowExecutionId);
+                    StageCleanupDelete(
+                        ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
+                        GroundworkV2SchedulerWorkStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, workItemId),
+                        cleanup.WorkflowExecutionId);
             }
         }
 
@@ -1039,9 +1060,20 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             foreach (var consumed in commit.StateChanges.ConsumedSchedulerWorkItems)
             {
                 var entry = Open(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(consumed.WorkItemId));
+                    .Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2SchedulerWorkStorageConventions.PhysicalId(
+                            consumed.WorkflowExecutionId,
+                            consumed.WorkItemId)));
                 if (entry is null)
                     throw new RuntimeSchedulerWorkConsumeConflictException(consumed.WorkflowExecutionId, consumed.WorkItemId);
+                var envelope = GroundworkV2SchedulerWorkStorageConventions.Deserialize(entry.Values.Values);
+                GroundworkV2SchedulerWorkStorageConventions.EnsureLogicalIdentity(
+                    envelope,
+                    consumed.WorkflowExecutionId,
+                    consumed.WorkItemId);
+                GroundworkV2SchedulerWorkStorageConventions.EnsurePhysicalIdentity(
+                    entry.Values.Values,
+                    envelope);
                 var values = entry.Values.Values;
                 var workflowExecutionId = ReadOptionalString(values, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
                 if (workflowExecutionId is null || !StringComparer.Ordinal.Equals(workflowExecutionId, consumed.WorkflowExecutionId))
@@ -1049,7 +1081,10 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 ValidateSchedulerClaim(values, consumed);
                 unitOfWork.Stage(RowWrite.CompareAndDelete(
                     Unit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
-                    GroundworkRuntimeRowStore.Key(consumed.WorkItemId),
+                    GroundworkRuntimeRowStore.Key(
+                        GroundworkV2SchedulerWorkStorageConventions.PhysicalId(
+                            consumed.WorkflowExecutionId,
+                            consumed.WorkItemId)),
                     new Dictionary<string, object?>(StringComparer.Ordinal)
                     {
                         [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = consumed.WorkflowExecutionId,
