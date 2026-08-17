@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -21,6 +22,21 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// promise that.
 /// </para>
 /// <para>
+/// <b>The isolation unit is the closure, and isolation across the mounted set is per unit.</b> Any member failing
+/// any gate rejects every member of its unit and writes nothing at all — no sibling persistence, no partial
+/// import — while every other unit in the batch is still reconciled. That is why a rejection is a diagnostic on
+/// the pass result rather than a thrown exception: one broken export must not be able to take down the deploy.
+/// </para>
+/// <para>
+/// <b>Known caveat, deliberate.</b> The one path that cannot honour "a failed unit writes nothing" literally is a
+/// <em>persistence</em> failure partway through the unit's writes: earlier members are already in the store. The
+/// guarantee that still holds is the one that matters — the unit activates nothing, so no reference, binding or
+/// schedule points at those rows and nothing can execute them. They are unreferenced content-addressed blobs,
+/// reclaimable by reference garbage collection, and a later pass over a repaired mount re-saves them idempotently.
+/// Making this atomic would need a transaction spanning a store whose whole contract is create-only,
+/// content-addressed writes.
+/// </para>
+/// <para>
 /// <b>Activation is one call.</b> The importer never takes a lease, writes a projection, notifies an observer or
 /// compensates — <see cref="IWorkflowActivationCoordinator"/> owns that entire sequence for every path, and a
 /// second copy of it here would be exactly the duplicated authority FR-B-006 exists to remove. The importer's
@@ -31,6 +47,8 @@ public sealed class WorkflowArtifactReconciler(
     IEnumerable<IWorkflowArtifactReconciliationSource> sources,
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableHasher hasher,
+    IRuntimeRequirementChecker requirementChecker,
+    IEnumerable<IActivityActivationStrategy> activationStrategies,
     IWorkflowTriggerBindingExtractor triggerBindingExtractor,
     IWorkflowActivationAuthority activationAuthority,
     IWorkflowActivationCoordinator activationCoordinator,
@@ -47,6 +65,20 @@ public sealed class WorkflowArtifactReconciler(
     private const string ActivationIdPrefix = "import";
 
     private readonly IReadOnlyCollection<IWorkflowArtifactReconciliationSource> _sources = sources.ToArray();
+
+    /// <summary>
+    /// Every installed activation strategy indexed by the consumer key <c>ActivityActivator</c> dispatches on.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> _schemasByConsumerKey = activationStrategies
+        .GroupBy(strategy => strategy.ConsumerKey, StringComparer.Ordinal)
+        .ToDictionary(
+            group => group.Key,
+            group => (IReadOnlyCollection<string>)group
+                .SelectMany(strategy => strategy.SupportedSchemaVersions)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray(),
+            StringComparer.Ordinal);
 
     public async ValueTask<WorkflowArtifactReconciliationResult> ReconcileAsync(CancellationToken cancellationToken = default)
     {
@@ -142,9 +174,23 @@ public sealed class WorkflowArtifactReconciler(
             }
         }
 
-        // Gate 2b — the carried trigger surface is an expectation to check, never rows to import. A disagreement
+        // Gate 3 — the executability gate (FR-B-005a). Every member must be runnable by *this* engine before any
+        // member of the unit is written: this is the whole reason US2 exists, and running it after a sibling had
+        // been persisted would leave the store holding artifacts for a unit that never activates.
+        foreach (var member in plan.Members)
+        {
+            if (TryFindRequirementFault(member) is { } fault)
+            {
+                RejectUnit(entries, source, file, plan.Members, WorkflowArtifactRejectionKind.UnmetRequirement, fault);
+                return;
+            }
+        }
+
+        // Gate 3b — the carried trigger surface is an expectation to check, never rows to import. A disagreement
         // between what the exporter said the artifact's triggers are and what this runtime extracts from the very
-        // same payload means the two sides do not agree on what the artifact does.
+        // same payload means the two sides do not agree on what the artifact does. It runs *after* the
+        // executability gate so an artifact this engine simply cannot run is named as such, rather than as a
+        // trigger-materialization failure downstream of the same missing package.
         foreach (var member in plan.Members)
         {
             if (TryFindTriggerSurfaceFault(member, closure) is { } fault)
@@ -400,6 +446,105 @@ public sealed class WorkflowArtifactReconciler(
     }
 
     /// <summary>
+    /// The import gate (FR-B-005a): can <em>this</em> engine actually run this artifact? Returns one diagnostic
+    /// naming everything that is missing, or <see langword="null"/> when the artifact is executable here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three axes, evaluated together and reported together. A partial answer ("your activity package is missing")
+    /// that hides a second problem ("…and so is your storage driver") costs the operator a second deploy cycle to
+    /// discover, so every fault is collected before the unit is refused.
+    /// </para>
+    /// <para>
+    /// Axes (a) declared consumer/schema requirements and (b) per-node CLR activity-type presence come from the
+    /// shared <see cref="IRuntimeRequirementChecker"/>, which publishing's deployment preflight uses too — one
+    /// definition of "executable here" for both callers.
+    /// </para>
+    /// <para>
+    /// Axis (c) — <see cref="TryFindUnresolvableConsumerFault"/> — is import-only and lives here rather than in the
+    /// shared checker. It asks whether each node's descriptor consumer key resolves to an installed
+    /// <see cref="IActivityActivationStrategy"/>, which is the registry <c>ActivityActivator</c> literally
+    /// dispatches on. The shared checker deliberately reads the <em>advertised</em>
+    /// <c>IRuntimeActivityConsumerCapability</c> set instead: it is a singleton description, whereas the strategies
+    /// are scoped execution-path services, and publishing's preflight is an advisory read model whose diagnostic
+    /// vocabulary has no code for a per-node activation-strategy fault. Only the importer admits artifacts to
+    /// execution, so only the importer needs the stronger question.
+    /// </para>
+    /// </remarks>
+    private string? TryFindRequirementFault(WorkflowExecutable member)
+    {
+        var faults = new List<string>();
+
+        if (TryFindUnresolvableConsumerFault(member) is { } consumerFault)
+            faults.Add(consumerFault);
+
+        var verdict = requirementChecker.Check(RuntimeRequirementCheckSubject.FromExecutable(member));
+
+        foreach (var requirement in verdict.Requirements.Where(entry => entry.Status != RuntimeRequirementStatus.Available))
+        {
+            faults.Add(requirement.Status == RuntimeRequirementStatus.UnsupportedSchema
+                ? $"activity consumer '{requirement.ConsumerKey}' is installed but does not support descriptor schema "
+                  + $"'{requirement.SchemaVersion}' (supported: [{string.Join(", ", requirement.SupportedSchemaVersions)}])"
+                : $"activity consumer '{requirement.ConsumerKey}' schema '{requirement.SchemaVersion}' is not installed on this runtime");
+        }
+
+        foreach (var driver in verdict.StorageDrivers.Where(entry => entry.Status != RuntimeRequirementStatus.Available))
+            faults.Add($"durable-value storage driver '{driver.DriverKey}' is not installed on this runtime");
+
+        foreach (var activityType in verdict.ActivityTypes.Where(entry => entry.Status != RuntimeRequirementStatus.Available))
+        {
+            var nodes = string.Join(", ", activityType.NodeIds);
+            faults.Add(string.IsNullOrEmpty(activityType.TypeAlias)
+                ? $"node(s) [{nodes}] carry a CLR activity descriptor this runtime cannot read"
+                : $"activity type '{activityType.TypeAlias}' is not registered on this runtime (used by node(s) [{nodes}])");
+        }
+
+        return faults.Count == 0
+            ? null
+            : $"artifact '{member.Identity.ArtifactId}' cannot be executed by this runtime: {string.Join("; ", faults)}.";
+    }
+
+    /// <summary>
+    /// Axis (c): every non-intrinsic node's descriptor consumer key must resolve to an installed activation
+    /// strategy at the node's descriptor schema version.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This closes a gap the two declared axes do not: a node whose <c>DescriptorType</c> carries the descriptor's
+    /// <em>CLR type name</em> instead of the consumer key (<c>elsa.clr-activity</c>) parses, validates, hashes to
+    /// its own content-addressed id, activates cleanly — and then faults on first execution with
+    /// <c>UnknownActivityConsumerException</c>, exactly the production-time surprise US2 exists to prevent. The
+    /// importer cannot repair it either: a content-addressed artifact is never rewritten, because the bytes are
+    /// the identity.
+    /// </para>
+    /// <para>
+    /// Intrinsics are skipped: they carry the reserved <c>"intrinsic"</c> descriptor type, are executed by the
+    /// engine's own intrinsic executor and never reach the activation-strategy registry at all.
+    /// </para>
+    /// </remarks>
+    private string? TryFindUnresolvableConsumerFault(WorkflowExecutable member)
+    {
+        var faults = new List<string>();
+
+        foreach (var node in member.Nodes.Where(node => node.IntrinsicKind is null))
+        {
+            if (!_schemasByConsumerKey.TryGetValue(node.DescriptorType, out var schemas))
+            {
+                faults.Add($"node '{node.ExecutableNodeId}' declares descriptor consumer '{node.DescriptorType}', "
+                           + "which no activity activation strategy installed on this runtime handles");
+                continue;
+            }
+
+            if (!schemas.Contains(node.DescriptorSchemaVersion, StringComparer.Ordinal))
+                faults.Add($"node '{node.ExecutableNodeId}' declares descriptor consumer '{node.DescriptorType}' at schema "
+                           + $"'{node.DescriptorSchemaVersion}', which its activation strategy does not support "
+                           + $"(supported: [{string.Join(", ", schemas)}])");
+        }
+
+        return faults.Count == 0 ? null : string.Join("; ", faults.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// Cross-checks the trigger surface this runtime extracts from the payload against the one the envelope
     /// carries. Returns the fault, or <see langword="null"/> when they agree.
     /// </summary>
@@ -465,10 +610,15 @@ public sealed class WorkflowArtifactReconciler(
         $"{ActivationIdPrefix}:{sourceId}:{identity.DefinitionId}:{identity.ArtifactId}";
 
     /// <summary>
-    /// Records a rejection for every member of a unit that failed a gate. The unit has written nothing at this
-    /// point, so no sibling is left half-imported — that is what makes the closure, rather than the artifact, the
-    /// isolation unit.
+    /// Records a rejection for every member of a unit that failed a gate, as a named diagnostic on the pass result
+    /// <b>and</b> a log entry — never as a thrown exception, which is what keeps one bad unit from failing the batch.
     /// </summary>
+    /// <remarks>
+    /// Every member is listed, not just the one that failed, because the closure is the isolation unit: none of them
+    /// were imported and an operator reading the result needs to see that. For every gate but
+    /// <see cref="WorkflowArtifactRejectionKind.PersistenceFailure"/> the unit has written nothing at this point —
+    /// see the type-level note for why that one path is the documented exception.
+    /// </remarks>
     private void RejectUnit(
         List<WorkflowArtifactImportEntry> entries,
         IWorkflowArtifactReconciliationSource source,

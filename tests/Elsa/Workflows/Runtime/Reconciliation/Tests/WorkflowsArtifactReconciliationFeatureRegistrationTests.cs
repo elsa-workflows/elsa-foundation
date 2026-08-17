@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -128,11 +129,12 @@ public sealed class WorkflowsArtifactReconciliationFeatureRegistrationTests
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
 
         // Contributed by the composed host rather than by AddWorkflowRuntime(): the trigger spine comes from
-        // WorkflowsRuntimeTriggers, the payload serializer from the Serialization feature, and the lock provider
-        // from whichever locking feature the shell composes. Stubbing them here is what makes the assertions
-        // below about *this* feature's registrations rather than about the shell's.
+        // WorkflowsRuntimeTriggers, the payload serializer and well-known type registry from the Serialization
+        // feature, and the lock provider from whichever locking feature the shell composes. Stubbing them here is
+        // what makes the assertions below about *this* feature's registrations rather than about the shell's.
         services.AddSingleton<IWorkflowTriggerBindingExtractor, StubTriggerBindingExtractor>();
         services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
+        services.AddSingleton<IWellKnownTypeRegistry, WellKnownTypeRegistry>();
         services.AddSingleton<IDistributedLockProvider, StubDistributedLockProvider>();
 
         feature.ConfigureServices(services);

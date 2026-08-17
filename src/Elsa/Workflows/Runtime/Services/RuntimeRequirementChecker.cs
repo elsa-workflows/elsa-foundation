@@ -46,7 +46,18 @@ public sealed class RuntimeRequirementChecker(
     IWellKnownTypeRegistry typeRegistry,
     IPayloadSerializer payloadSerializer) : IRuntimeRequirementChecker
 {
-    private static readonly string ClrDescriptorKind = typeof(ClrActivityDescriptor).FullName!;
+    /// <summary>
+    /// The <b>consumer key</b> a CLR-activated node carries in <see cref="ExecutableNode.DescriptorType"/> — not the
+    /// descriptor's CLR type name.
+    /// </summary>
+    /// <remarks>
+    /// Two different identifiers live one hop apart and are easy to confuse: <c>ActivityContract.DescriptorKind</c>
+    /// is <c>ClrActivityDescriptor</c>'s CLR full name (what <c>ClrActivityActivator</c> asserts on once it has
+    /// been selected), while <c>ExecutableNode.DescriptorType</c> is the stable consumer key
+    /// <c>ActivityActivator</c> <em>selects</em> on. Filtering this axis on the CLR name matched only nodes in the
+    /// unpinned form no compiler emits, so the type-presence check silently skipped every real CLR node.
+    /// </remarks>
+    private const string ClrConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity;
 
     public RuntimeRequirementCheckResult Check(RuntimeRequirementCheckSubject subject)
     {
@@ -127,7 +138,7 @@ public sealed class RuntimeRequirementChecker(
         {
             if (node.IntrinsicKind is not null)
                 continue;
-            if (!StringComparer.Ordinal.Equals(node.DescriptorType, ClrDescriptorKind))
+            if (!StringComparer.Ordinal.Equals(node.DescriptorType, ClrConsumerKey))
                 continue;
 
             if (!TryReadTypeAlias(node.DescriptorPayload, out var alias))

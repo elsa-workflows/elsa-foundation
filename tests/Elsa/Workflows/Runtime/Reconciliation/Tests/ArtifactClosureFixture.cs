@@ -94,6 +94,63 @@ internal static class ArtifactClosureFixture
         return WorkflowExecutionHarness.NewPinnedClrNode(unpinned);
     }
 
+    /// <summary>
+    /// A CLR node in the correct <em>shape</em> — consumer-keyed descriptor, readable payload — whose declared
+    /// <c>TypeAlias</c> names an activity this runtime does not have. The US2 scenario-1 artifact.
+    /// </summary>
+    /// <remarks>
+    /// Built by hand rather than through <see cref="WorkflowExecutionHarness.NewPinnedClrNode"/>, which reflects
+    /// over loaded assemblies to pin a contract and therefore cannot produce a node for a type that is absent —
+    /// which is precisely the condition under test.
+    /// </remarks>
+    public static ExecutableNode UnregisteredClrNode(string nodeId, string typeAlias) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeAlias,
+            activityTypeVersion: "1.0.0",
+            descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ClrActivityDescriptor(typeAlias)),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal),
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+
+    /// <summary>
+    /// The same wrapping as <see cref="Executable(ExecutableNode, string, string, WorkflowExecutableDependency[])"/>
+    /// with explicitly declared requirement sets, for artifacts that demand capabilities this runtime lacks.
+    /// </summary>
+    /// <remarks>
+    /// Requirements are <b>not</b> hash inputs — <c>IWorkflowExecutableHasher.ComputeHash</c> covers the
+    /// root activity, input contract, dependencies, cadence, variables and incident strategy — so an artifact
+    /// built here still verifies against the importer's content-hash recompute. That is deliberate: the gate under
+    /// test must be the requirements gate, not the integrity gate standing in front of it.
+    /// </remarks>
+    public static WorkflowExecutable ExecutableRequiring(
+        ExecutableNode rootActivity,
+        string definitionId,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements = null,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements = null,
+        string artifactVersion = "1.0.0") =>
+        Build(rootActivity, definitionId, artifactVersion, [], runtimeRequirements, storageDriverRequirements);
+
+    /// <summary>
+    /// A copy of <paramref name="executable"/> that keeps its identity but carries a <em>different</em> payload, so
+    /// the declared hash and id no longer describe the content. What a truncated or mis-merged export looks like.
+    /// </summary>
+    public static WorkflowExecutable TamperedCopy(WorkflowExecutable executable, ExecutableNode replacementRoot) =>
+        new(
+            identity: executable.Identity,
+            rootActivity: replacementRoot,
+            resumeTargets: executable.ResumeTargets,
+            createdAt: executable.CreatedAt,
+            compatibilityMetadata: executable.CompatibilityMetadata,
+            inputContract: executable.InputContract,
+            dependencies: [],
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            incidentStrategy: executable.IncidentStrategy,
+            checkpointCadence: executable.CheckpointCadence,
+            workflowVariables: executable.WorkflowVariables);
+
     private static ExecutableNode Rebuild(ExecutableNode node, IReadOnlyDictionary<string, string>? metadata) =>
         new(
             executableNodeId: node.ExecutableNodeId,
@@ -121,7 +178,16 @@ internal static class ArtifactClosureFixture
         ExecutableNode rootActivity,
         string definitionId,
         string artifactVersion = "1.0.0",
-        params WorkflowExecutableDependency[] dependencies)
+        params WorkflowExecutableDependency[] dependencies) =>
+        Build(rootActivity, definitionId, artifactVersion, dependencies, null, null);
+
+    private static WorkflowExecutable Build(
+        ExecutableNode rootActivity,
+        string definitionId,
+        string artifactVersion,
+        WorkflowExecutableDependency[] dependencies,
+        IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
+        IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements)
     {
         var inputContract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []);
         var workflowVariables = Array.Empty<RuntimeVariableDeclaration>();
@@ -148,8 +214,8 @@ internal static class ArtifactClosureFixture
             compatibilityMetadata: new Dictionary<string, string>(),
             inputContract: inputContract,
             dependencies: dependencies,
-            runtimeRequirements: null,
-            storageDriverRequirements: null,
+            runtimeRequirements: runtimeRequirements,
+            storageDriverRequirements: storageDriverRequirements,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: null,
             workflowVariables: workflowVariables);
@@ -167,6 +233,10 @@ internal static class ArtifactClosureFixture
             artifacts,
             [],
             []);
+
+    /// <summary>An envelope claiming a wire-format version this build does not know how to read.</summary>
+    public static WorkflowArtifactClosure ClosureWithFormatVersion(int formatVersion, params WorkflowExecutable[] artifacts) =>
+        new(formatVersion, artifacts[0].Identity.ArtifactId, artifacts, [], []);
 
     /// <summary>An envelope that also carries the exporting engine's trigger surface as an expectation.</summary>
     public static WorkflowArtifactClosure ClosureWithCarriedBindings(
@@ -211,6 +281,15 @@ internal static class ArtifactClosureFixture
         var path = Path.Combine(folder, fileName);
         var serializer = (IWorkflowArtifactClosureSerializer)services.GetService(typeof(IWorkflowArtifactClosureSerializer))!;
         File.WriteAllText(path, serializer.Serialize(closure));
+        return path;
+    }
+
+    /// <summary>Drops arbitrary bytes in the mount folder — for envelopes no encoder would ever produce.</summary>
+    public static string MountRaw(string folder, string fileName, string content)
+    {
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, fileName);
+        File.WriteAllText(path, content);
         return path;
     }
 

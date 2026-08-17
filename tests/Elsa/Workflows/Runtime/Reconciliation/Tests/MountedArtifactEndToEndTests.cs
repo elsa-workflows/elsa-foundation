@@ -32,7 +32,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 /// </remarks>
 public sealed class MountedArtifactEndToEndTests : IDisposable
 {
-    private const string SourceId = "mounted-artifacts";
+    private const string SourceId = ArtifactImportHarness.SourceId;
 
     private readonly string _mount = Path.Combine(
         Path.GetTempPath(),
@@ -226,15 +226,8 @@ public sealed class MountedArtifactEndToEndTests : IDisposable
         Assert.Null(await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(executable.Identity.ArtifactId));
     }
 
-    private static async Task<WorkflowArtifactReconciliationResult> ReconcileAsync(WorkflowExecutionHarness harness)
-    {
-        // The activity-type registry must be populated before the import gate asks whether each node's CLR type is
-        // present — the same ordering [TaskDependency(typeof(RegisterActivityTypesStartupTask))] enforces at boot.
-        harness.InitializeActivityTypes();
-
-        await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IWorkflowArtifactReconciler>().ReconcileAsync();
-    }
+    private static Task<WorkflowArtifactReconciliationResult> ReconcileAsync(WorkflowExecutionHarness harness) =>
+        ArtifactImportHarness.ReconcileAsync(harness);
 
     private static async Task<WorkflowExecutableSourceReference> FindMintedReferenceAsync(
         WorkflowExecutionHarness harness,
@@ -246,23 +239,5 @@ public sealed class MountedArtifactEndToEndTests : IDisposable
         return reference!;
     }
 
-    private WorkflowExecutionHarness BuildHarness() =>
-        WorkflowExecutionHarness.Create()
-            .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
-            .WithFeature(services => new JsonWorkflowArtifactReconciliationFeature
-            {
-                Options =
-                {
-                    SourceId = SourceId,
-                    FolderPath = _mount,
-                },
-            }.ConfigureServices(services))
-            .ConfigureServices(services =>
-            {
-                // The host always composes logging; the bare harness does not, and the reconciliation services take
-                // a non-optional ILogger<T>.
-                services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-                services.AddSingleton<IActivityTriggerStimulusProvider, ProbeTriggerStimulusProvider>();
-            })
-            .Build(Enumerable.Range(1, 32).Select(index => $"activity-execution-{index}").ToArray());
+    private WorkflowExecutionHarness BuildHarness() => ArtifactImportHarness.Build(_mount);
 }
