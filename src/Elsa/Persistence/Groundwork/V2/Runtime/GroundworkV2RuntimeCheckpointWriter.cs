@@ -1034,20 +1034,24 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 }
 
                 staged.Add(change.StateId, candidate);
+                var physicalId = GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(candidate.OutboxItemId);
                 var entry = Open(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(change.StateId));
+                    .Read(GroundworkRuntimeRowStore.Key(physicalId));
                 if (entry is null)
                 {
-                    StageUpsert(
-                        ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
-                        change.StateId,
-                        candidate,
-                        ProjectOutbox,
-                        WriteOptions.CreateOnly);
+                    unitOfWork.Stage(RowWrite.Upsert(
+                        Unit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind),
+                        GroundworkV2PostCommitOutboxStorageConventions.Values(candidate),
+                        WriteOptions.CreateOnly));
                     continue;
                 }
 
-                var existing = Deserialize<RuntimePostCommitOutboxItem>(entry.Values.Values);
+                var existing = GroundworkV2PostCommitOutboxStorageConventions.Deserialize(entry.Values.Values);
+                if (!StringComparer.Ordinal.Equals(existing.OutboxItemId, candidate.OutboxItemId))
+                {
+                    throw new InvalidOperationException(
+                        $"Groundwork physical outbox identity collision detected for '{candidate.OutboxItemId}'.");
+                }
                 if (PendingOutboxItemsEquivalent(existing, candidate))
                     continue;
                 throw new InvalidOperationException(
@@ -1351,19 +1355,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.TestScopeIdField] = state.TestScope?.ScopeId,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = state.CreatedAt,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = state.DispatchId
-            };
-
-        private static IReadOnlyDictionary<string, object?> ProjectOutbox(RuntimePostCommitOutboxItem state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.Intent.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField] = (int)state.Status,
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = state.AvailableAt,
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = state.DeliveryVisibleAfter,
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField] = state.RecordedAt,
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField] = RuntimePostCommitOutboxIdentity.CreateProjectionValue(state.OutboxItemId),
-                [ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField] = state.Intent.Kind
             };
 
         private static void ValidateSchedulerClaim(
