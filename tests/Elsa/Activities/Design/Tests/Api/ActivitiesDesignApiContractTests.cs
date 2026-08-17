@@ -5,6 +5,7 @@ using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.OpenApi;
+using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Api;
@@ -43,7 +45,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
         ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraft",
         ["Definitions.ListVersions"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions",
-        ["Drafts.Get"] = "Elsa.Activities.Design.Api.Requests.GetReusableActivityDraft",
+        ["Drafts.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
         ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraft",
         ["Drafts.UpdatePresentation"] = "Elsa.Activities.Design.Api.Commands.UpdateReusableActivityDraftPresentation",
         ["Drafts.ConflictCopy"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftConflictCopy",
@@ -57,7 +59,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Forks.GetStatus"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityForkStatus",
         ["Versions.Dependencies"] = "Elsa.Activities.Design.Api.Requests.GetActivityDependencies",
         ["Versions.Diff"] = "Elsa.Activities.Design.Api.Requests.CompareActivityVersions",
-        ["Versions.Get"] = "Elsa.Activities.Design.Api.Requests.GetReusableActivityVersion",
+        ["Versions.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityVersion",
         ["Versions.Retire"] = "Elsa.Activities.Design.Api.Commands.RetireReusableActivityVersion",
         ["Versions.Restore"] = "Elsa.Activities.Design.Api.Commands.RestoreReusableActivityVersion",
         ["Versions.Revoke"] = "Elsa.Activities.Design.Api.Commands.RevokeReusableActivityVersion",
@@ -70,9 +72,9 @@ public sealed class ActivitiesDesignApiContractTests
 
     private static readonly IReadOnlyDictionary<string, string> ResponseTypes = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["Availability.GetSettings"] = "Elsa.Activities.Design.Api.Models.ActivityAvailabilitySettings",
-        ["Availability.ListDiagnostics"] = "Elsa.Activities.Design.Api.Models.ActivityAvailabilityDiagnostics",
-        ["Availability.SaveSettings"] = "Elsa.Activities.Design.Api.Models.ActivityAvailabilitySettings",
+        ["Availability.GetSettings"] = "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
+        ["Availability.ListDiagnostics"] = "Elsa.Activities.Design.Core.Models.ActivityAvailabilityDiagnostics",
+        ["Availability.SaveSettings"] = "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
         ["AuthoringCapabilities.Get"] = "Elsa.Activities.Design.Api.Models.ActivityAuthoringCapabilitiesView",
         ["Catalog.List"] = "Elsa.Activities.Design.Api.Models.ActivityAuthoringCatalogView",
         ["Definitions.Add"] = "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionMutationView",
@@ -205,7 +207,7 @@ public sealed class ActivitiesDesignApiContractTests
     {
         try
         {
-            return await HttpEvidenceCapture.CaptureAsync(client, testCase);
+            return NormalizeVolatileFields(await HttpEvidenceCapture.CaptureAsync(client, testCase));
         }
         catch (Exception exception)
         {
@@ -220,5 +222,20 @@ public sealed class ActivitiesDesignApiContractTests
                 TerminalState = $"Faulted:{terminal.GetType().FullName}"
             };
         }
+    }
+
+    private static HttpCompatibilityObservation NormalizeVolatileFields(HttpCompatibilityObservation observation)
+    {
+        if (observation.Json.Length == 0 || JsonNode.Parse(observation.Json) is not JsonObject body || !body.ContainsKey("traceId"))
+            return observation;
+
+        body["traceId"] = "<volatile-trace-id>";
+        var normalized = CompatibilityJson.Canonicalize(body.ToJsonString());
+        return observation with
+        {
+            Json = normalized,
+            Body = observation.Body == observation.Json ? normalized : observation.Body,
+            ProblemDetails = observation.ProblemDetails == observation.Json ? normalized : observation.ProblemDetails
+        };
     }
 }

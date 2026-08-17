@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,46 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed class OpenApiLifetimeBoundaryTests
 {
+    [Fact]
+    public void Activities_design_native_openapi_metadata_uses_only_stable_contract_types()
+    {
+        var implementationAssembly = typeof(ActivitiesDesignApi).Assembly;
+        var builder = WebApplication.CreateBuilder();
+        using var app = builder.Build();
+
+        ActivitiesDesignApi.MapActivitiesDesignApi(app);
+
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(dataSource => dataSource.Endpoints)
+            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Activities.Design.Api")
+            .ToArray();
+
+        Assert.Equal(38, endpoints.Length);
+        Assert.All(endpoints, endpoint =>
+        {
+            var marker = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
+            Assert.Equal(OpenApiLifetimeClassification.SharedContract, marker.Classification);
+            Assert.Equal("Elsa.Activities.Design.Api", marker.Owner);
+
+            var acceptedTypes = endpoint.Metadata
+                .GetOrderedMetadata<IAcceptsMetadata>()
+                .Select(metadata => metadata.RequestType)
+                .Where(type => type is not null)
+                .Cast<Type>();
+            var responseTypes = endpoint.Metadata
+                .GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Select(metadata => metadata.Type)
+                .Where(type => type is not null)
+                .Cast<Type>();
+
+            Assert.All(acceptedTypes.Concat(responseTypes), type =>
+            {
+                Assert.NotSame(implementationAssembly, type.Assembly);
+                Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly.");
+            });
+        });
+    }
+
     [Fact]
     public void Accepted_metadata_gets_one_immutable_value_only_marker()
     {

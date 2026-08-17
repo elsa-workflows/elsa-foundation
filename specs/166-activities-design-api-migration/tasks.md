@@ -38,7 +38,7 @@ or feature code until that checkpoint is committed.
 - [x] T012 Add `src/Elsa/Activities/Design/Api/ApiContractTypeForwards.cs` and compile/source compatibility tests in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractCompatibilityTests.cs` for every moved public type/member
 - [x] T013 [P] Add exhaustive source-generated JSON metadata and effective FastEndpoints-compatible serializer options in `src/Elsa/Activities/Design/Api/ActivitiesDesignJsonContext.cs`
 - [x] T014 [P] Add accepts/produces completeness, resolver-chain precedence, casing, dictionary-key, string-enum, explicit-null, optional-type-key, and opaque-provider-payload bites in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignSerializationContractTests.cs`
-- [ ] T015 Wire stable API Core into the owner/test/host projects and solution manifests, then prove native OpenAPI metadata contains no collectible implementation contract type in `tests/Elsa/Architecture/OpenApiLifetimeBoundaryTests.cs`
+- [x] T015 Wire stable API Core into the owner/test/host projects and solution manifests, then prove native OpenAPI metadata contains no collectible implementation contract type in `tests/Elsa/Architecture/OpenApiLifetimeBoundaryTests.cs`
 
 **Checkpoint**: Every public wire type is stable, compatible, source-generated, and safe for native OpenAPI metadata.
 
@@ -58,12 +58,12 @@ or feature code until that checkpoint is committed.
 
 ### Implementation
 
-- [ ] T019 [US1] Add public standard route-group mapping in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs` and convert `src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs` to public non-sealed `IWebShellFeature` composition without a custom endpoint DSL
-- [ ] T020 [US1] Map availability, catalog, and authoring-capability routes through existing senders/handlers with their historical shared mediator error semantics in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
-- [ ] T021 [US1] Map definition, draft, contract-proposal, and fork routes with route-over-body binding, created locations, typed authoring diagnostics, sanitization, logging, and cancellation parity in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
-- [ ] T022 [US1] Map version, diff, dependency, recommendation, lifecycle, picker, paging, and signed-cursor routes through the existing services in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
-- [ ] T023 [US1] Map create/get/apply/receipt/refresh upgrade-plan routes with exact tenant/access-profile, idempotency, staged handoff, status, location, and error translation in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
-- [ ] T024 [US1] Publish stable operation names, Activities Design tag/owner/Minimal-authoring metadata, accepts/produces/content types, success/error statuses, and native OpenAPI security for all 38 routes in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
+- [x] T019 [US1] Add public standard route-group mapping in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs` and convert `src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs` to public non-sealed `IWebShellFeature` composition without a custom endpoint DSL
+- [x] T020 [US1] Map availability, catalog, and authoring-capability routes through existing senders/handlers with their historical shared mediator error semantics in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
+- [x] T021 [US1] Map definition, draft, contract-proposal, and fork routes with route-over-body binding, created locations, typed authoring diagnostics, sanitization, logging, and cancellation parity in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
+- [x] T022 [US1] Map version, diff, dependency, recommendation, lifecycle, picker, paging, and signed-cursor routes through the existing services in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
+- [x] T023 [US1] Map create/get/apply/receipt/refresh upgrade-plan routes with exact tenant/access-profile, idempotency, staged handoff, status, location, and error translation in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
+- [x] T024 [US1] Publish stable operation names, Activities Design tag/owner/Minimal-authoring metadata, accepts/produces/content types, success/error statuses, and native OpenAPI security for all 38 routes in `src/Elsa/Activities/Design/Api/ActivitiesDesignApi.cs`
 - [ ] T025 [US1] Replay the real after host, deep-compare every HTTP/OpenAPI facet bidirectionally, and add only exact reviewed two-sided differences to `tests/Elsa/Activities/Design/Tests/Api/Baselines/activities-design-approved-differences.json`; reject duplicate, unused, no-op, unknown, wrong-value, one-sided, and stale approvals
 - [ ] T026 [US1] Rewire—not delete or weaken—existing endpoint/binder/handler semantic objectives across `tests/Elsa/Activities/Design/Tests/`; add a recorded architect disposition if a subject genuinely ceased to exist
 - [ ] T027 [US1] Delete exactly the 38 superseded production endpoint registrations/classes, remove the owner production `Elsa.Api.FastEndpoints` dependency from `src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj`, and update `tests/Elsa/Architecture/FastEndpointsTransitionTests.cs` from 61 to 23 registrations without removing retained test oracles/canaries
