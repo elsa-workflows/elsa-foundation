@@ -34,6 +34,10 @@ var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);
 
 await using var host = await StartHostAsync();
+var runnerCommit = Environment.GetEnvironmentVariable("RUNTIME_CAPTURE_RUNNER_COMMIT");
+if (string.IsNullOrWhiteSpace(runnerCommit) || runnerCommit.Length != 40 || runnerCommit.Any(character => !Uri.IsHexDigit(character)))
+    throw new InvalidOperationException("RUNTIME_CAPTURE_RUNNER_COMMIT must pin the 40-character historical, branch-reachable capture runner commit.");
+
 var observations = (await Task.WhenAll(Cases().Select(testCase => CaptureAsync(host.Client, testCase)))).ToArray();
 var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
 
@@ -43,7 +47,7 @@ var receipt = new
 {
     capture = "real-fastendpoints-historical-worktree",
     sourceCommit = Environment.GetEnvironmentVariable("RUNTIME_BEFORE_COMMIT") ?? "unknown",
-    runnerCommit = Environment.GetEnvironmentVariable("RUNTIME_CAPTURE_RUNNER_COMMIT") ?? "unknown",
+    runnerCommit,
     registrationCount = 24,
     caseCount = observations.Length,
     operationCount = openApi.Operations.Count,
@@ -283,7 +287,8 @@ internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor)
                 throw new ArgumentException("The take value must be between 1 and 100.");
         }
 
-        return (T)CreateValue(typeof(T), typeof(T).Name, context?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true);
+        return (T)(CreateValue(typeof(T), typeof(T).Name, context?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true)
+            ?? throw new InvalidOperationException($"No capture value was defined for '{typeof(T)}'."));
     }
 
     private static object CreateResponseWrapper(Type type)

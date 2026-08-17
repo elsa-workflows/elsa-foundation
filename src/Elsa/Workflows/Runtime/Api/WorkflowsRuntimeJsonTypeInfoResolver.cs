@@ -1,4 +1,3 @@
-using Elsa.Workflows.Runtime.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
@@ -16,12 +15,6 @@ internal sealed class WorkflowsRuntimeJsonTypeInfoResolver : IJsonTypeInfoResolv
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
     {
         var typeInfo = ((IJsonTypeInfoResolver)_context).GetTypeInfo(type, options);
-        if (typeInfo?.Type == typeof(RuntimeExpressionBinding))
-        {
-            foreach (var property in typeInfo.Properties)
-                property.IsRequired = true;
-        }
-
         return typeInfo;
     }
 }

@@ -4273,25 +4273,12 @@
               ]
             },
             "resultType": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
-                }
-              ]
+              "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
             }
           },
           "required": [
             "language",
-            "expression",
-            "resultType",
-            "metadata",
-            "parameters",
-            "parameterConversionPlans",
-            "options",
-            "capabilityProfile"
+            "expression"
           ],
           "type": "object"
         },
@@ -6195,25 +6182,12 @@
               ]
             },
             "resultType": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
-                }
-              ]
+              "$ref": "#/components/schemas/RuntimeValueTypeDescriptor"
             }
           },
           "required": [
             "language",
-            "expression",
-            "resultType",
-            "metadata",
-            "parameters",
-            "parameterConversionPlans",
-            "options",
-            "capabilityProfile"
+            "expression"
           ],
           "type": "object"
         },

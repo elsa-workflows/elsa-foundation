@@ -4,6 +4,7 @@ using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Api.Compatibility.Testing.Serialization;
+using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -13,11 +14,13 @@ using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
@@ -98,6 +101,29 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         Assert.Contains(typeof(WorkflowInstanceListView), forwardedTypes);
         Assert.Contains(typeof(ExecuteWorkflow), forwardedTypes);
         Assert.Contains(typeof(ActivityExecutionValuePayloadView), forwardedTypes);
+    }
+
+    [Fact]
+    public async Task Runtime_expression_binding_preserves_legacy_read_only_shape_and_wire_fields()
+    {
+        await using var host = await RuntimeHost.StartAsync();
+        var expression = new RuntimeExpressionBinding("JavaScript", "input.value");
+        var binding = new WorkflowExecutableInputBindingView(
+            "answer",
+            "Expression",
+            "input.value",
+            Expression: expression);
+
+        Assert.All(
+            typeof(RuntimeExpressionBinding).GetProperties(BindingFlags.Instance | BindingFlags.Public),
+            property => Assert.False(property.CanWrite, $"RuntimeExpressionBinding.{property.Name} must retain its getter-only public contract."));
+
+        var json = JsonSerializer.Serialize(binding, host.JsonOptions);
+        using var document = JsonDocument.Parse(json);
+        var expressionJson = document.RootElement.GetProperty("expression");
+        Assert.Equal("JavaScript", expressionJson.GetProperty("language").GetString());
+        Assert.Equal("input.value", expressionJson.GetProperty("expression").GetString());
+        Assert.Equal(JsonValueKind.Object, expressionJson.GetProperty("options").ValueKind);
     }
 
     [Fact]
@@ -557,6 +583,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         public HttpClient Client { get; } = host.GetTestClient();
         public IReadOnlyList<Endpoint> Endpoints => host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
+        public JsonSerializerOptions JsonOptions => host.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<JsonOptions>>().Value.SerializerOptions;
 
         public static async Task<RuntimeHost> StartAsync()
         {
@@ -664,7 +691,8 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
                     throw new ArgumentException("The take value must be between 1 and 100.");
             }
 
-            return (T)CreateValue(typeof(T), typeof(T).Name, context?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true);
+            return (T)(CreateValue(typeof(T), typeof(T).Name, context?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true)
+                ?? throw new InvalidOperationException($"No replay value was defined for '{typeof(T)}'."));
         }
 
         private static object CreateResponseWrapper(Type type)

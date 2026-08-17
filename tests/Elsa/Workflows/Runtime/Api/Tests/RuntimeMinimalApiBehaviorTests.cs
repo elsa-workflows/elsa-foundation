@@ -11,6 +11,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -79,6 +81,28 @@ public sealed class RuntimeMinimalApiBehaviorTests
             Assert.Contains("runtime-request", body, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("someOtherParam")]
+    [InlineData("artifactId")]
+    [InlineData(null)]
+    public async Task Execute_argument_exceptions_use_the_same_non_disclosing_problem_details_shape(string? parameterName)
+    {
+        await using var host = await StartAsync(_ => throw new ArgumentException("Invalid execute request.", parameterName));
+
+        using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(new[] { "type", "title", "status", "detail", "errors" }, body.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("https://elsa.dev/problems/runtime-request", body.GetProperty("type").GetString());
+        Assert.Equal("Runtime request failed", body.GetProperty("title").GetString());
+        Assert.Equal(400, body.GetProperty("status").GetInt32());
+        Assert.Equal("Invalid execute request.", body.GetProperty("detail").GetString());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("errors").ValueKind);
+        if (parameterName is not null)
+            Assert.DoesNotContain(parameterName, body.GetRawText(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Execute_rethrows_cancellation_and_does_not_convert_it_to_a_problem()
     {
@@ -86,6 +110,24 @@ public sealed class RuntimeMinimalApiBehaviorTests
         await using var host = await StartAsync(_ => throw cancellation);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => host.Client.PostAsJsonAsync(ExecutePath, new { }));
+    }
+
+    [Fact]
+    public async Task Execute_mapped_delegate_rethrows_the_same_cancellation_instance()
+    {
+        var cancellation = new OperationCanceledException("request canceled");
+        await using var host = await StartAsync(_ => throw cancellation);
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => host.InvokeMappedAsync(
+            "runtime/workflows/executables/{artifactId}/execute",
+            context =>
+            {
+                context.Request.RouteValues["artifactId"] = "artifact-1";
+                context.Request.ContentType = "application/json";
+                context.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("{}"));
+            }));
+
+        Assert.Same(cancellation, exception);
     }
 
     [Fact]
@@ -145,6 +187,37 @@ public sealed class RuntimeMinimalApiBehaviorTests
             var body = await AssertActivityProblemAsync(response, HttpStatusCode.NotFound, "activity.execution.not-found");
             Assert.Equal(path, body.GetProperty("instance").GetString());
         }
+    }
+
+    [Fact]
+    public async Task Activity_problem_details_are_exact_at_the_mapped_delegate_boundary()
+    {
+        await using var host = await StartAsync(_ => new GetActivityExecutionResponse(null));
+
+        var context = await host.InvokeMappedAsync(
+            "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}",
+            configured =>
+            {
+                configured.Request.RouteValues["workflowExecutionId"] = "wf-1";
+                configured.Request.RouteValues["activityExecutionId"] = "ae-1";
+                configured.Request.Path = ActivityPath;
+                configured.TraceIdentifier = "trace-runtime-inspection";
+            });
+        using var document = JsonDocument.Parse(((MemoryStream)context.Response.Body).ToArray());
+        var body = document.RootElement;
+
+        Assert.Equal(HttpStatusCode.NotFound, (HttpStatusCode)context.Response.StatusCode);
+        Assert.Equal("application/problem+json", context.Response.ContentType);
+        Assert.Equal(new[] { "type", "title", "status", "detail", "instance", "errorCode", "traceId", "diagnostics", "cursor" }, body.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("https://elsa.dev/problems/activity-execution-not-found", body.GetProperty("type").GetString());
+        Assert.Equal("Activity execution not found", body.GetProperty("title").GetString());
+        Assert.Equal(404, body.GetProperty("status").GetInt32());
+        Assert.Equal("The requested activity execution was not found.", body.GetProperty("detail").GetString());
+        Assert.Equal(ActivityPath, body.GetProperty("instance").GetString());
+        Assert.Equal("activity.execution.not-found", body.GetProperty("errorCode").GetString());
+        Assert.Equal("trace-runtime-inspection", body.GetProperty("traceId").GetString());
+        Assert.Empty(body.GetProperty("diagnostics").EnumerateArray());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("cursor").ValueKind);
     }
 
     [Theory]
@@ -213,6 +286,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
             using var response = await host.Client.GetAsync(ValuePayloadPath);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("value-1", body.GetProperty("evidenceId").GetString());
+            Assert.Equal("Payload", body.GetProperty("captureMode").GetString());
             Assert.Equal(42, body.GetProperty("payload").GetProperty("answer").GetInt32());
         }
 
@@ -313,6 +388,18 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private sealed class BehaviorHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
         public HttpClient Client { get; } = client;
+
+        public async Task<DefaultHttpContext> InvokeMappedAsync(string route, Action<DefaultHttpContext> configure)
+        {
+            var endpoint = app.Services.GetRequiredService<EndpointDataSource>().Endpoints
+                .OfType<RouteEndpoint>()
+                .Single(candidate => candidate.RoutePattern.RawText == route);
+            var context = new DefaultHttpContext { RequestServices = app.Services };
+            context.Response.Body = new MemoryStream();
+            configure(context);
+            await endpoint.RequestDelegate!(context);
+            return context;
+        }
 
         public async ValueTask DisposeAsync()
         {

@@ -16,6 +16,7 @@
     <ProjectReference Include="../../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="../../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj" />
     <ProjectReference Include="../../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../src/Elsa/Workflows/Runtime/Api/Core/Elsa.Workflows.Runtime.Api.Core.csproj" />
     <ProjectReference Include="../../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>
 </Project>

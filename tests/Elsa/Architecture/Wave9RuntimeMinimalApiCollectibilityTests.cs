@@ -4,14 +4,18 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -37,14 +41,13 @@ namespace Elsa.Architecture.Tests;
 public sealed class Wave9RuntimeMinimalApiCollectibilityTests
 {
     [Fact]
-    public void Runtime_owner_is_collectible_after_alternating_real_mapping_openapi_and_serializer_use()
+    public async Task Runtime_owner_is_collectible_after_alternating_real_mapping_openapi_and_serializer_use()
     {
         var failures = new List<string>();
         for (var cycle = 0; cycle < 3; cycle++)
         {
-            var includeOpenApi = cycle % 2 == 0;
-            var evidence = CreateAndRelease(cycle, includeOpenApi, useSerializer: true);
-            Assert.Equal(includeOpenApi ? 24 : 0, evidence.OpenApiOperationCount);
+            var evidence = await CreateAndRelease(cycle);
+            Assert.Equal(24, evidence.OpenApiOperationCount);
             var collected = WaitForCollection(evidence.References);
             var unload = UnloadEvidence.Verify(evidence.CycleId, evidence.LoadContext, evidence.Assembly, evidence.MapperType, 32);
             if (!unload.Collected || !collected)
@@ -56,7 +59,7 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static Evidence CreateAndRelease(int cycle, bool includeOpenApi, bool useSerializer)
+    private static async Task<Evidence> CreateAndRelease(int cycle)
     {
         var sourcePath = typeof(WorkflowsRuntimeApiFeature).Assembly.Location;
         var bytes = File.ReadAllBytes(sourcePath);
@@ -70,67 +73,65 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
         var mapper = mapperType.GetMethod(nameof(WorkflowsRuntimeApi.MapWorkflowsRuntimeApi), BindingFlags.Public | BindingFlags.Static)!;
         var feature = Activator.CreateInstance(featureType)!;
         var providerProbeState = new CollectibleProviderProbeState();
-        var descriptors = new ServiceCollection();
-        descriptors.AddLogging();
-        descriptors.AddRouting();
-        descriptors.AddSingleton(providerProbeState);
-        descriptors.AddScoped<CollectibleRuntimeProviderProbe>();
-        descriptors.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(["Wave9Collectibility"], StringComparer.Ordinal));
-        descriptors.AddSingleton<IRequestSender>(serviceProvider => new CollectibleRequestSender(serviceProvider.GetRequiredService<IServiceScopeFactory>()));
-        descriptors.AddSingleton<ICommandSender, CollectibleCommandSender>();
-        var publishedEndpoints = new CollectibleEndpointDataSource();
-        descriptors.AddSingleton<EndpointDataSource>(publishedEndpoints);
-        descriptors.AddSingleton<IHostEnvironment>(new CollectibilityHostEnvironment());
-        if (includeOpenApi)
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            descriptors.AddDynamicEndpointApiExplorerRefresh();
-            descriptors.AddOpenApi();
-        }
-        featureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)!.Invoke(feature, [descriptors]);
-        descriptors.AddAuthentication("Wave9Collectibility")
+            ApplicationName = "Elsa.Workflows.Runtime.Api",
+            EnvironmentName = Environments.Development
+        });
+        builder.WebHost.UseTestServer();
+        builder.Services.AddLogging();
+        builder.Services.AddRouting();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton(providerProbeState);
+        builder.Services.AddScoped<CollectibleRuntimeProviderProbe>();
+        builder.Services.AddSingleton<IStimulusRouter, CollectibleStimulusRouter>();
+        builder.Services.AddScoped<IPermissionResourceHandler, CollectibleResourceHandler>();
+        builder.Services.AddFoundationIdentityAbstractions(options => options.NormalizedAuthenticationTypes = new HashSet<string>(["Wave9Collectibility"], StringComparer.Ordinal));
+        builder.Services.AddSingleton<IRequestSender>(serviceProvider => new CollectibleRequestSender(serviceProvider.GetRequiredService<IServiceScopeFactory>(), providerProbeState));
+        builder.Services.AddSingleton<ICommandSender, CollectibleCommandSender>();
+        builder.Services.AddDynamicEndpointApiExplorerRefresh();
+        builder.Services.AddOpenApi();
+        featureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)!.Invoke(feature, [builder.Services]);
+        builder.Services.AddAuthentication("Wave9Collectibility")
             .AddScheme<AuthenticationSchemeOptions, CollectibleAuthenticationHandler>("Wave9Collectibility", _ => { });
-        descriptors.AddAuthorization();
-        var services = descriptors.BuildServiceProvider();
+        builder.Services.AddAuthorization();
+        var app = builder.Build();
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        mapper.Invoke(null, [app]);
+        await app.StartAsync().ConfigureAwait(false);
+        var services = app.Services;
+        var client = app.GetTestClient();
         var jsonOptions = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value;
         var jsonResolver = jsonOptions.SerializerOptions.TypeInfoResolverChain.FirstOrDefault(resolver => resolver.GetType().Name == "WorkflowsRuntimeJsonTypeInfoResolver");
         Assert.NotNull(jsonResolver);
-        if (includeOpenApi)
-        {
-            Assert.Same(jsonResolver, jsonOptions.SerializerOptions.TypeInfoResolverChain.First(resolver => resolver.GetType().Name == "WorkflowsRuntimeJsonTypeInfoResolver"));
-        }
-        var routes = new RouteBuilder(services);
-        mapper.Invoke(null, [routes]);
-        publishedEndpoints.SetSources(routes.DataSources);
-        var endpoints = routes.DataSources.SelectMany(source => source.Endpoints)
+        Assert.Same(jsonResolver, jsonOptions.SerializerOptions.TypeInfoResolverChain.First(resolver => resolver.GetType().Name == "WorkflowsRuntimeJsonTypeInfoResolver"));
+        var endpoints = services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.Owner == "Elsa.Workflows.Runtime.Api")
             .ToArray();
-        IOpenApiDocumentProvider? openApiProvider = null;
-        OpenApiDocument? openApiDocument = null;
-        var openApiOperationCount = 0;
-        if (includeOpenApi)
-        {
-            openApiProvider = services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
-            openApiDocument = openApiProvider.GetOpenApiDocumentAsync(CancellationToken.None).GetAwaiter().GetResult();
-            var openApiPaths = openApiDocument.Paths;
-            openApiOperationCount = openApiPaths?.Sum(path => path.Value.Operations?.Count ?? 0) ?? 0;
-            Assert.Equal(24, openApiOperationCount);
-            Assert.True(openApiPaths?.ContainsKey("/runtime/workflows/instances/{workflowExecutionId}") == true);
-        }
         Assert.Equal(24, endpoints.Length);
 
-        var representative = endpoints.SingleOrDefault(endpoint => endpoint.RoutePattern.RawText == "runtime/workflows/instances/{workflowExecutionId}")
-            ?? throw new InvalidOperationException($"Runtime instance route was not published. Routes: {string.Join(",", endpoints.Select(endpoint => endpoint.RoutePattern.RawText))}");
-        var responseBody = new MemoryStream();
-        var http = new DefaultHttpContext { RequestServices = services };
-        http.Request.RouteValues["workflowExecutionId"] = "collectible-instance";
-        http.Response.Body = responseBody;
-        var authenticationResult = services.GetRequiredService<IAuthenticationService>()
-            .AuthenticateAsync(http, "Wave9Collectibility").GetAwaiter().GetResult();
-        Assert.True(authenticationResult.Succeeded);
-        http.User = authenticationResult.Principal!;
-        representative.RequestDelegate!(http).GetAwaiter().GetResult();
-        Assert.Equal(StatusCodes.Status404NotFound, http.Response.StatusCode);
+        var openApiProvider = services.GetRequiredKeyedService<IOpenApiDocumentProvider>("v1");
+        OpenApiDocument? openApiDocument = null;
+        var openApiOperationCount = 0;
+        if (cycle % 2 == 1)
+        {
+            openApiDocument = openApiProvider.GetOpenApiDocumentAsync(CancellationToken.None).GetAwaiter().GetResult();
+            openApiOperationCount = openApiDocument.Paths?.Sum(path => path.Value.Operations?.Count ?? 0) ?? 0;
+        }
+
+        ExerciseRealPipeline(client, providerProbeState);
+
+        if (cycle % 2 == 0)
+        {
+            openApiDocument = openApiProvider.GetOpenApiDocumentAsync(CancellationToken.None).GetAwaiter().GetResult();
+            openApiOperationCount = openApiDocument.Paths?.Sum(path => path.Value.Operations?.Count ?? 0) ?? 0;
+        }
+
+        Assert.Equal(24, openApiOperationCount);
+        Assert.True(openApiDocument?.Paths?.ContainsKey("/runtime/workflows/instances/{workflowExecutionId}") == true);
         Assert.Equal(1, providerProbeState.HandlerInvocations);
         Assert.Equal(1, providerProbeState.ExecutionStoreCalls);
         Assert.Equal(1, providerProbeState.DispatchStoreCalls);
@@ -139,23 +140,8 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
         Assert.Equal(1, providerProbeState.AlterationStoreCalls);
         Assert.Equal(1, providerProbeState.DiagnosticsStoreCalls);
 
-        var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard)], "Wave9Collectibility"));
-        var evaluator = services.GetRequiredService<IPermissionEvaluator>();
-        Assert.True(evaluator.EvaluateAsync(new PermissionEvaluationContext(principal, "workflow-runtime.read")).GetAwaiter().GetResult().Succeeded);
-
-        JsonTypeInfo? typeInfo = null;
-        object? value = null;
-        MemoryStream? output = null;
-        if (useSerializer)
-        {
-            var responseType = assembly.GetType("Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceListView", true)!;
-            typeInfo = jsonOptions.SerializerOptions.GetTypeInfo(responseType);
-            value = JsonSerializer.Deserialize("{\"items\":[],\"nextCursor\":null,\"hasNext\":false,\"count\":0,\"totalCount\":0}", typeInfo)!;
-            output = new MemoryStream();
-            JsonSerializer.Serialize(output, value, typeInfo);
-            Assert.NotEmpty(output.ToArray());
-        }
-
+        Assert.Equal(2, providerProbeState.ResourceHandlerInvocations);
+        Assert.Equal(1, providerProbeState.BodyBoundRequestInvocations);
         var references = new Dictionary<string, WeakReference>(StringComparer.Ordinal)
         {
             ["load-context"] = new(loadContext),
@@ -164,40 +150,59 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
             ["feature-type"] = new(featureType),
             ["feature"] = new(feature),
             ["services"] = new(services),
-            ["response-body"] = new(responseBody),
+            ["app"] = new(app),
+            ["client"] = new(client),
             ["provider-probe-state"] = new(providerProbeState),
             ["json-resolver"] = new(jsonResolver!)
         };
-        if (typeInfo is not null)
-            references["serializer-type-info"] = new(typeInfo);
         if (openApiDocument is not null)
             references["openapi-document"] = new(openApiDocument);
         foreach (var endpoint in endpoints.Select((endpoint, index) => (endpoint, index)))
             references[$"endpoint-{endpoint.index}"] = new(endpoint.endpoint);
 
-        publishedEndpoints.SetSources([]);
-        routes.DataSources.Clear();
-        services.Dispose();
-        responseBody.Dispose();
-        representative = null!;
+        client.Dispose();
+        await app.StopAsync().ConfigureAwait(false);
+        await app.DisposeAsync().ConfigureAwait(false);
         endpoints = null!;
-        feature = null!;
         featureType = null!;
         mapper = null!;
         mapperType = null!;
-        typeInfo = null;
-        value = null;
-        output?.Dispose();
-        descriptors = null!;
         services = null!;
-        routes = null!;
-        http = null!;
-        openApiProvider = null!;
         openApiDocument = null!;
+        openApiProvider = null!;
+        builder = null!;
+        app = null!;
         loadContext.Unload();
         loadContext = null!;
         assembly = null!;
         return new(Guid.NewGuid(), references["load-context"], references["assembly"], references["mapper-type"], references, openApiOperationCount);
+    }
+
+    private static void ExerciseRealPipeline(HttpClient client, CollectibleProviderProbeState state)
+    {
+        using (var request = new HttpRequestMessage(HttpMethod.Get, "/runtime/workflows/instances/collectible-instance"))
+        {
+            request.Headers.TryAddWithoutValidation("X-Wave9-Collectibility-Tenant", "tenant-a");
+            using var response = client.SendAsync(request).GetAwaiter().GetResult();
+            Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
+            using var document = JsonDocument.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("collectible-instance", document.RootElement.GetProperty("instance").GetProperty("workflowExecutionId").GetString());
+        }
+
+        using (var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/executables/collectible-artifact/execute")
+        {
+            Content = new StringContent("{\"inputs\":{\"answer\":42}}", Encoding.UTF8, "application/json")
+        })
+        {
+            request.Headers.TryAddWithoutValidation("X-Wave9-Collectibility-Tenant", "tenant-a");
+            using var response = client.SendAsync(request).GetAwaiter().GetResult();
+            Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
+            using var document = JsonDocument.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("collectible-artifact", document.RootElement.GetProperty("artifactId").GetString());
+        }
+
+        Assert.Equal(1, state.HandlerInvocations);
+        Assert.Equal(1, state.BodyBoundRequestInvocations);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -216,54 +221,75 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
 
     private sealed record Evidence(Guid CycleId, WeakReference LoadContext, WeakReference Assembly, WeakReference MapperType, IReadOnlyDictionary<string, WeakReference> References, int OpenApiOperationCount);
 
-    private sealed class CollectibleEndpointDataSource : EndpointDataSource
-    {
-        private IReadOnlyList<EndpointDataSource> _sources = [];
-        private CancellationTokenSource _changeTokenSource = new();
-
-        public void SetSources(IEnumerable<EndpointDataSource> sources)
-        {
-            Volatile.Write(ref _sources, sources.ToArray());
-            var previous = Interlocked.Exchange(ref _changeTokenSource, new CancellationTokenSource());
-            previous.Cancel();
-            previous.Dispose();
-        }
-
-        public override IReadOnlyList<Endpoint> Endpoints => Volatile.Read(ref _sources).SelectMany(source => source.Endpoints).ToArray();
-
-        public override IChangeToken GetChangeToken() =>
-            new CancellationChangeToken(Volatile.Read(ref _changeTokenSource).Token);
-    }
-
-    private sealed class RouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
-
-    private sealed class CollectibilityHostEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Development;
-        public string ApplicationName { get; set; } = typeof(Wave9RuntimeMinimalApiCollectibilityTests).Assembly.GetName().Name!;
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
     private sealed class RuntimeLoadContext(string name) : AssemblyLoadContext(name, isCollectible: true)
     {
         protected override Assembly? Load(AssemblyName assemblyName) =>
             Default.Assemblies.FirstOrDefault(assembly => string.Equals(assembly.GetName().Name, assemblyName.Name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private sealed class CollectibleRequestSender(IServiceScopeFactory scopeFactory) : IRequestSender
+    private sealed class CollectibleRequestSender(IServiceScopeFactory scopeFactory, CollectibleProviderProbeState state) : IRequestSender
     {
         public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             using var scope = scopeFactory.CreateScope();
             await scope.ServiceProvider.GetRequiredService<CollectibleRuntimeProviderProbe>().ProbeAsync(request, cancellationToken);
+            if (request is GetWorkflowInstance)
+            {
+                var summary = new WorkflowInstanceSummaryView(
+                    "collectible-instance",
+                    "collectible-artifact",
+                    "collectible-definition",
+                    "collectible-version",
+                    "1.0.0",
+                    "collectible-hash",
+                    "Running",
+                    "Root",
+                    null,
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0);
+                var details = new WorkflowInstanceDetailsView(summary, [], [], new Dictionary<string, WorkflowOutputView>(), "Immediate", null, "activity-level");
+                return (T)(object)new GetWorkflowInstanceResponse(details);
+            }
+
+            if (request is ExecuteWorkflow)
+            {
+                state.BodyBoundRequestInvocations++;
+                return (T)(object)new WorkflowExecutionStartDispatchView(
+                    "collectible-execution",
+                    "collectible-artifact",
+                    "1.0.0",
+                    "collectible-hash",
+                    "Accepted",
+                    "collectible-envelope",
+                    "collectible-agent",
+                    "collectibility",
+                    null);
+            }
+
             return (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
         }
+    }
+
+    private sealed class CollectibleResourceHandler(CollectibleProviderProbeState state) : IPermissionResourceHandler
+    {
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            state.ResourceHandlerInvocations++;
+            return ValueTask.FromResult<PermissionEvaluationResult?>(PermissionEvaluationResult.Success);
+        }
+    }
+
+    private sealed class CollectibleStimulusRouter : IStimulusRouter
+    {
+        public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new StimulusRoutingResult([], []));
     }
 
     private sealed class CollectibleRuntimeProviderProbe(
@@ -296,19 +322,18 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
         }
     }
 
-    [Obsolete]
     private sealed class CollectibleAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
-        UrlEncoder encoder,
-        ISystemClock clock)
-        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder, clock)
+        UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var identity = new ClaimsIdentity(
                 [
                     new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard),
+                    new Claim(IdentityClaimTypes.TenantId, "tenant-a"),
                     new Claim(IdentityClaimTypes.Normalized, "v1")
                 ],
                 Scheme.Name);
@@ -319,6 +344,8 @@ public sealed class Wave9RuntimeMinimalApiCollectibilityTests
     private sealed class CollectibleProviderProbeState
     {
         public int HandlerInvocations { get; set; }
+        public int BodyBoundRequestInvocations { get; set; }
+        public int ResourceHandlerInvocations { get; set; }
         public int ExecutionStoreCalls { get; set; }
         public int DispatchStoreCalls { get; set; }
         public int ExecutableStoreCalls { get; set; }

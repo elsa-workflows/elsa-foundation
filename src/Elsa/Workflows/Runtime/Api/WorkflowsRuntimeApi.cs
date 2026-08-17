@@ -198,7 +198,7 @@ public static class WorkflowsRuntimeApi
         }
         catch (WorkflowExecutableNotFoundException exception) { await ProblemAsync(context, StatusCodes.Status400BadRequest, exception.Message); }
         catch (WorkflowExecutableReferenceRejectedException exception) { await ProblemAsync(context, StatusCodes.Status409Conflict, exception.Message); }
-        catch (ArgumentException exception) { await ProblemAsync(context, StatusCodes.Status400BadRequest, exception.Message); }
+        catch (ArgumentException) { await ProblemAsync(context, StatusCodes.Status400BadRequest, "Invalid execute request."); }
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) { await UnexpectedAsync(context, exception, "executing workflow"); }
     }
