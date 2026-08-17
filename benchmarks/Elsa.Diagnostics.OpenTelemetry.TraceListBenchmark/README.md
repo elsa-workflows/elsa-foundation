@@ -2,10 +2,10 @@
 
 This is the smallest reproducible before/after measurement for issue #268's trace-list storage path. It seeds the same deterministic corpus into two isolated, file-backed SQLite databases and invokes the same `DefaultOpenTelemetryProvider.GetTracesAsync` route:
 
-- **Before/oracle:** the frozen EF Core OpenTelemetry store (the v1 persistence implementation).
+- **Before/oracle:** the pinned shipping Groundwork v1 OpenTelemetry adapter and store.
 - **After/target:** `GroundworkOpenTelemetryStore` over v2 ordinary storage units.
 
-The benchmark intentionally does not load both stores into one production host and does not use one implementation as a runtime fallback for the other. EF/v1 is a benchmark oracle only. It measures the provider/handler route after seeding; ASP.NET routing, request binding, JSON serialization, network, and authentication are outside this harness. Therefore its output is evidence for the trace-list persistence/provider route, not a claim about end-to-end HTTP latency.
+The benchmark intentionally does not load both stores into one production host and does not use one implementation as a runtime fallback for the other. The v1 store is a benchmark oracle only. It measures the provider/handler route after seeding; ASP.NET routing, request binding, JSON serialization, network, and authentication are outside this harness. Therefore its output is evidence for the trace-list persistence/provider route, not a claim about end-to-end HTTP latency.
 
 Run the complete isolated v1/v2 comparison from the repository root. The v1 child source is retained
 only at the reviewed evidence commit so the current tree contains no v1 Groundwork API or package
@@ -31,6 +31,9 @@ The command prints a canonical input fingerprint (including the filter and every
 
 ## Shipping Groundwork v1 versus v2
 
-The original EF comparison is retained as a third oracle, but it is not the issue #268 “before” implementation. The acceptance comparison is the shipping Groundwork v1 diagnostics adapter, whose trace route uses the v1 grouped-reduction/record-stream implementation, against the v2 ordinary-unit adapter. Their Groundwork package and assembly identities are intentionally never loaded into one process.
+The acceptance comparison is the pinned shipping Groundwork v1 diagnostics adapter, whose trace
+route uses the v1 grouped-reduction/record-stream implementation, against the v2 ordinary-unit
+adapter. Their Groundwork package and assembly identities are intentionally never loaded into one
+process.
 
 The v1 child seeds and times the same canonical input independently, emitting only a JSON measurement to its parent. The coordinator rejects input-fingerprint or ordered-result-ID mismatches before reporting `AfterToBeforeP95Ratio`. Build/run v1 and v2 in separate processes; do not add a project reference from the v2 benchmark to the v1 child.

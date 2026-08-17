@@ -27,8 +27,7 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
         var configured = Environment.GetEnvironmentVariable($"GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING");
         Skip.If(string.IsNullOrWhiteSpace(configured) && !IsCi(), $"Set GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING locally, or run the matrix in CI.");
         await using var runtime = await ProviderRuntime.CreateAsync(providerName, configured);
-        var path = runtime.ConnectionString;
-        var connection = CreateConnection(providerName, path);
+        using var connection = CreateConnection(providerName, runtime.ConnectionString);
         var testScope = Guid.NewGuid().ToString("N");
         await using var store = new GroundworkOpenTelemetryStore(
             connection,
@@ -83,8 +82,15 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
         {
             if (container is not null)
                 await container.DisposeAsync();
-            if (sqlitePath is not null && File.Exists(sqlitePath))
-                File.Delete(sqlitePath);
+            if (sqlitePath is not null)
+            {
+                foreach (var suffix in new[] { "", "-wal", "-shm", "-journal", ".schema.lock" })
+                {
+                    var path = sqlitePath + suffix;
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+            }
         }
 
         private static ProviderRuntime CreateSqlite()
