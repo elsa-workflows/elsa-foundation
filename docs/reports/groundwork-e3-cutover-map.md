@@ -77,15 +77,17 @@ API prerequisite itself no longer blocks that wave.
 
 ## Accepted-scan inventory
 
-The current source tree contains two reviewed `ScanAcceptance` declarations and matching assembly opt-ins:
+The current source tree contains three reviewed `ScanAcceptance` declarations and matching assembly opt-ins:
 
 | Acceptance | Route | Bound | Owner / expiry | Review decision |
 |---|---|---|---|---|
 | `GW-SCAN-ELSA-SECRETS-SUBSTRING` | Secrets list search over normalized name or display name with portable `Contains` semantics | Each search performs one early-stopping probe of at most 10,001 scoped rows and refuses catalogs over 10,000 rows before the substring query; the admitted query examines at most 10,000 scoped rows and returns at most 250 | `elsa-secrets` / 2027-08-16 UTC | Accepted. Portable case-insensitive substring matching has no index shape shared by SQLite, PostgreSQL, SQL Server, and MongoDB. Exact type/store/scope/status predicates remain provider-side and unsearched list requests carry no acceptance. |
 | `GW-SCAN-ELSA-ACTIVITY-DESIGN-SUBSTRING` | Activity-definition search route over the declared type, category, display name, description, id, and derived management-search fields with portable `Contains` semantics | The route admits one OR clause and first executes an attributed keyset cardinality probe capped at 10,001 rows; scopes over 10,000 activity-definition rows are refused. Matching pages are capped at 100 rows and use a keyset cursor. | `elsa-activities-design` / 2027-08-16 UTC | Accepted for the current public-v2 design because the existing cross-field substring contract has no portable index shape across SQLite, PostgreSQL, SQL Server, and MongoDB. The provider execution path carries the explicit acceptance, and the enforced 10,000-row scope ceiling bounds the subsequent substring scan. |
+| `GW-SCAN-ELSA-WORKFLOWS-DESIGN-CATALOG-CARDINALITY` | Workflow-definition catalog cardinality probe performed before the existing cross-field `SearchTerm` substring routes | Each search executes exactly one accepted keyset probe capped at 10,001 identities. A scope with at most 10,000 definitions is admitted; the 10,001st candidate refuses the request before any named substring route runs. | `elsa-workflows-design` / 2027-08-16 UTC | Accepted. The established workflow-definition `SearchTerm` contract spans id, name, description, materializer, and metadata fields and has no single portable substring index across the five providers. The separate probe makes the catalog ceiling provider-enforced and observable, while exact-id lookup uses its own Unicode case-insensitive derived-key index. |
 
 Sources: [`GroundworkSecretRepository`](../../src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs),
 [`GroundworkV2ActivityDesignStore`](../../src/Elsa/Activities/Design/Persistence/Groundwork/GroundworkV2ActivityDesignStore.cs),
+[`GroundworkDesignStorage`](../../src/Elsa/Workflows/Design/Persistence/Groundwork/GroundworkDesignStorage.cs),
 and their assembly-level `GwAllowAcceptedScans` declarations.
 Every additional marker must add a separately reviewed row here; the final #269 closure scan must
 match this inventory exactly.
