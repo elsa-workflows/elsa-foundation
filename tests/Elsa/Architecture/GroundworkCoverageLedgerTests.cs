@@ -12,7 +12,6 @@ public sealed class GroundworkCoverageLedgerTests
     private const string ExpectedGroundworkVersion = "0.0.1-preview.103";
     private const string CurrentLegacyGroundworkVersion = "0.0.1-preview.131";
     private const string CurrentV2GroundworkVersion = "0.2.0-preview.1";
-    private const string FrozenV1BenchmarkGroundworkVersion = "0.0.1-preview.114";
     private const string Prior88GroundworkVersion = "0.0.1-preview.88";
     private const string Prior86GroundworkVersion = "0.0.1-preview.86";
     private const string Prior81GroundworkVersion = "0.0.1-preview.81";
@@ -428,12 +427,8 @@ public sealed class GroundworkCoverageLedgerTests
                 if (version is null || version.StartsWith("$(", StringComparison.Ordinal))
                     continue;
 
-                var expected = relativePath ==
-                    "benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.csproj"
-                    ? FrozenV1BenchmarkGroundworkVersion
-                    : CurrentV2GroundworkVersion;
-                if (!string.Equals(version, expected, StringComparison.Ordinal))
-                    findings.Add($"{relativePath}: explicit {reference.Attribute("Include")!.Value} version is '{version}', expected '{expected}'.");
+                if (!string.Equals(version, CurrentV2GroundworkVersion, StringComparison.Ordinal))
+                    findings.Add($"{relativePath}: explicit {reference.Attribute("Include")!.Value} version is '{version}', expected '{CurrentV2GroundworkVersion}'.");
             }
 
             foreach (var versionProperty in document.Descendants().Where(element =>
@@ -455,6 +450,27 @@ public sealed class GroundworkCoverageLedgerTests
         }
 
         Assert.True(findings.Count == 0, string.Join(Environment.NewLine, findings.Order(StringComparer.Ordinal)));
+    }
+
+    [Fact]
+    public void Current_source_test_and_benchmark_code_has_no_diagnostic_records_dependency()
+    {
+        var retiredSurface = string.Concat("Groundwork.", "DiagnosticRecords");
+        var findings = new List<string>();
+        foreach (var root in new[] { "src", "tests", "benchmarks" })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, root), "*", SearchOption.AllDirectories)
+                         .Where(path => !IsGeneratedPath(path) &&
+                                        Path.GetExtension(path) is ".cs" or ".csproj"))
+            {
+                if (File.ReadAllText(file).Contains(retiredSurface, StringComparison.Ordinal))
+                    findings.Add(Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/'));
+            }
+        }
+
+        Assert.True(
+            findings.Count == 0,
+            $"Current code still references the retired diagnostic-record surface:{Environment.NewLine}{string.Join(Environment.NewLine, findings.Order(StringComparer.Ordinal))}");
     }
 
     [Fact]

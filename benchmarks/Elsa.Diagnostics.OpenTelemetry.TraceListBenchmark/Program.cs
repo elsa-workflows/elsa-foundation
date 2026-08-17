@@ -334,6 +334,7 @@ internal sealed record GroundworkVersionComparison(
 internal sealed record BenchmarkProvenance(
     string ElsaSourceCommit,
     string V1SourceCommit,
+    string V1HarnessSourceCommit,
     string V1GroundworkPackage,
     string GroundworkV2SourceCommit,
     string V2GroundworkPackage,
@@ -345,6 +346,7 @@ internal sealed record BenchmarkProvenance(
     public static BenchmarkProvenance Current { get; } = new(
         ReadElsaSourceCommit(),
         "e30c2d291a34d3c5e986a9339af9722748572cac",
+        "367160fd335274108a2b598b753bf930be4dc3c9",
         "0.0.1-preview.114",
         "aac398c2789fefd38c4640121cce24318989f031",
         "0.2.0-preview.1",

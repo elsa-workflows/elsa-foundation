@@ -7,16 +7,19 @@ This is the smallest reproducible before/after measurement for issue #268's trac
 
 The benchmark intentionally does not load both stores into one production host and does not use one implementation as a runtime fallback for the other. EF/v1 is a benchmark oracle only. It measures the provider/handler route after seeding; ASP.NET routing, request binding, JSON serialization, network, and authentication are outside this harness. Therefore its output is evidence for the trace-list persistence/provider route, not a claim about end-to-end HTTP latency.
 
-Run the complete isolated v1/v2 comparison from the repository root. The coordinator deliberately has
-no v2-only mode, so `--v1-v2` and the frozen child path are required:
+Run the complete isolated v1/v2 comparison from the repository root. The v1 child source is retained
+only at the reviewed evidence commit so the current tree contains no v1 Groundwork API or package
+reference. The coordinator deliberately has no v2-only mode, so `--v1-v2` and that frozen child path
+are required:
 
 ```sh
 git worktree add --detach /tmp/elsa-otel-groundwork-v1 e30c2d291
-dotnet build -c Release benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.csproj \
+git worktree add --detach /tmp/elsa-otel-groundwork-v1-harness 367160fd3
+dotnet build -c Release /tmp/elsa-otel-groundwork-v1-harness/benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.csproj \
   -p:V1Root=/tmp/elsa-otel-groundwork-v1
 dotnet build -c Release benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark.csproj
 dotnet run -c Release --project benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark --no-restore -- \
-  --v1-v2 --v1-child benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.dll \
+  --v1-v2 --v1-child /tmp/elsa-otel-groundwork-v1-harness/benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.dll \
   --warmups 5 --samples 30 --traces 1000 --seed 2682026
 ```
 
@@ -24,7 +27,7 @@ Restore must resolve the exact `0.2.0-preview.1` v2 Groundwork packages used by 
 Valence Works Feedz source configured by the repository `NuGet.config`. NuGet.org and local package
 directories are not accepted release evidence.
 
-The command prints a canonical input fingerprint (including the filter and every seeded batch), expected result count, ordered trace-ID digest, mean/p50/p95/p99, raw samples, and the target/oracle p95 ratio. Keep the complete stdout: the v1/v2 comparison report also emits the Elsa adapter commit, both Groundwork source/package identities, and OS/runtime/architecture/CPU-count details. `GroundworkV2SourceCommit` identifies the published Groundwork repository commit; `ElsaSourceCommit` identifies this repository checkout. No latency numbers are committed here because they are machine-dependent. The separate v2 TestServer acceptance test covers the public HTTP endpoint without mixing HTTP host noise into this storage comparison.
+The command prints a canonical input fingerprint (including the filter and every seeded batch), expected result count, ordered trace-ID digest, mean/p50/p95/p99, raw samples, and the target/oracle p95 ratio. Keep the complete stdout: the v1/v2 comparison report also emits the Elsa adapter commit, both Groundwork source/package identities, and OS/runtime/architecture/CPU-count details. `GroundworkV2SourceCommit` identifies the published Groundwork repository commit, `ElsaSourceCommit` identifies the current v2 checkout, and `V1HarnessSourceCommit` identifies the separately built child source. No latency numbers are committed here because they are machine-dependent. The separate v2 TestServer acceptance test covers the public HTTP endpoint without mixing HTTP host noise into this storage comparison.
 
 ## Shipping Groundwork v1 versus v2
 
