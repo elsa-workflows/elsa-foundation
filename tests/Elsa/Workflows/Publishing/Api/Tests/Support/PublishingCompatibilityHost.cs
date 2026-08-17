@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -72,6 +73,8 @@ public sealed class PublishingCompatibilityHost(IHost host) : IAsyncDisposable
                     services.AddSingleton<IWorkflowExecutableCompiler, CaptureWorkflowExecutableCompiler>();
                     new WorkflowsPublishingFeature().ConfigureServices(services);
                     new WorkflowsPublishingApiFeature().ConfigureServices(services);
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton<TimeProvider, CaptureTimeProvider>();
                     services.AddSingleton<IRequestSender, CaptureRequestSender>();
                     services.AddFastEndpoints(options => options.Assemblies = [typeof(WorkflowsPublishingApiFeature).Assembly]);
                 });
@@ -119,6 +122,13 @@ public sealed class PublishingCompatibilityHost(IHost host) : IAsyncDisposable
         Host.Dispose();
         return ValueTask.CompletedTask;
     }
+}
+
+internal sealed class CaptureTimeProvider : TimeProvider
+{
+    private static readonly DateTimeOffset FixedTime = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+
+    public override DateTimeOffset GetUtcNow() => FixedTime;
 }
 
 internal sealed class CaptureAuthenticationHandler(

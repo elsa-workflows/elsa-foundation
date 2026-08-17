@@ -61,7 +61,7 @@ var receipt = new
     rawOpenApiSha256 = Hash(rawOpenApiPath),
     initialApprovalsSha256 = Hash(approvalsPath),
     categories = new[] { "anonymous", "trusted-success", "binding", "domain", "cancellation" },
-    volatileFields = new[] { "response-json.traceId", "response-header.date" }
+    volatileFields = new[] { "response-json.traceId", "response-json.preflightToken", "response-header.date" }
 };
 File.WriteAllText(
     Path.Join(outputDirectory, "publishing-before-capture-receipt.json"),
@@ -97,10 +97,25 @@ static HttpCompatibilityObservation NormalizeVolatileFields(HttpCompatibilityObs
         return observation with { Headers = headers };
 
     var node = JsonNode.Parse(observation.Json);
-    if (node is not JsonObject body || !body.ContainsKey("traceId"))
+    if (node is not JsonObject body)
         return observation with { Headers = headers };
 
-    body["traceId"] = "<volatile-trace-id>";
+    var changed = false;
+    if (body.ContainsKey("traceId"))
+    {
+        body["traceId"] = "<volatile-trace-id>";
+        changed = true;
+    }
+
+    if (body.ContainsKey("preflightToken"))
+    {
+        body["preflightToken"] = "<volatile-preflight-token>";
+        changed = true;
+    }
+
+    if (!changed)
+        return observation with { Headers = headers };
+
     var normalized = CompatibilityJson.Canonicalize(body.ToJsonString());
     return observation with
     {
