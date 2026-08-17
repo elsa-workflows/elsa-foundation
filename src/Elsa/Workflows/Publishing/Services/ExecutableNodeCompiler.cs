@@ -254,7 +254,7 @@ public sealed class ExecutableNodeCompiler(
             authoredActivityId: activity.NodeId,
             activityType: activityType,
             activityTypeVersion: "1.0.0",
-            descriptorType: "intrinsic",
+            descriptorType: WellKnownRuntimeActivityConsumers.Intrinsic,
             descriptorPayload: descriptorPayload,
             inputBindings: bindings,
             metadata: new Dictionary<string, string>(StringComparer.Ordinal)

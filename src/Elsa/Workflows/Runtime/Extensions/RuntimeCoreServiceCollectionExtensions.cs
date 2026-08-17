@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Builders;
@@ -367,6 +368,11 @@ public static class RuntimeCoreServiceCollectionExtensions
         // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
+        // The engine is the provider of the "intrinsic" consumer: intrinsics are executed by WorkflowIntrinsicExecutor
+        // rather than through an IActivityActivationStrategy, so nothing else can advertise them. Without this,
+        // WorkflowExecutable's node-derived RuntimeRequirements make every intrinsic-bearing artifact look like it
+        // needs an uninstalled consumer. Fan-in beside the CLR/graph advertisements, never a replacement.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, WorkflowIntrinsicActivityConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.

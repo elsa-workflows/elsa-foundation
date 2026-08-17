@@ -95,6 +95,54 @@ internal static class ArtifactClosureFixture
     }
 
     /// <summary>
+    /// An <b>engine-intrinsic</b> node in exactly the shape <c>ExecutableNodeCompiler</c> emits: the reserved
+    /// <c>"intrinsic"</c> descriptor type, an <c>elsa.intrinsic.*</c> activity type, and the compiler's own
+    /// descriptor payload.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every other fixture node here is CLR-activated, which is precisely why the intrinsic consumer gap survived
+    /// undetected: <c>WorkflowExecutable</c>'s constructor derives <c>RuntimeRequirements</c> from every node's
+    /// consumer key, so an artifact carrying one of these declares <c>RuntimeRequirement("intrinsic", "1")</c> and
+    /// exercises the requirement axis against a consumer no activity package can advertise.
+    /// </para>
+    /// <para>
+    /// The descriptor's schema version is left unset on purpose: the compiler does not pass one either, so
+    /// <c>ExecutableNode</c> defaults it to <c>RuntimeActivityDescriptor.InitialSchemaVersion</c>. Stamping one
+    /// here would make the fixture disagree with the compiler about the very value the gate matches on.
+    /// </para>
+    /// </remarks>
+    public static ExecutableNode IntrinsicNode(
+        string nodeId,
+        WorkflowIntrinsicKind kind = WorkflowIntrinsicKind.SetCorrelationId,
+        string inputKey = WorkflowIntrinsicInputKeys.Value,
+        string literal = "correlation-42")
+    {
+        var valueType = new ValueTypeDescriptor("String");
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: $"elsa.intrinsic.{kind.ToString().ToLowerInvariant()}",
+            activityTypeVersion: "1.0.0",
+            descriptorType: WellKnownRuntimeActivityConsumers.Intrinsic,
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = kind.ToString(), schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+            {
+                [inputKey] = new(
+                    inputKey,
+                    valueType,
+                    ValueProtectionPolicy.InstanceInline,
+                    RuntimeInputBindingSource.Literal,
+                    literal: ValueEnvelope.Inline(
+                        valueType,
+                        JsonSerializer.SerializeToElement(literal),
+                        ValueProtectionPolicy.InstanceInline)),
+            },
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal),
+            intrinsicKind: kind);
+    }
+
+    /// <summary>
     /// A CLR node in the correct <em>shape</em> — consumer-keyed descriptor, readable payload — whose declared
     /// <c>TypeAlias</c> names an activity this runtime does not have. The US2 scenario-1 artifact.
     /// </summary>

@@ -63,6 +63,17 @@ public static class WellKnownRuntimeActivityConsumers
 {
     public const string ClrActivity = "elsa.clr-activity";
     public const string GraphActivity = "elsa.graph-activity";
+
+    /// <summary>
+    /// Engine intrinsics (<c>Set</c>, <c>Merge</c>, <c>Return</c>, <c>Control</c>, <c>SetCorrelationId</c>, …).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately <b>unprefixed</b>, unlike its two siblings: this is not a new identifier but the reserved
+    /// literal the compiler already stamps into every intrinsic node's <c>descriptorType</c>
+    /// (<c>ExecutableNodeCompiler</c>), which is therefore already durable wire content inside content-addressed
+    /// artifacts. Renaming it to <c>elsa.intrinsic</c> would move every compiled artifact's bytes and hash.
+    /// </remarks>
+    public const string Intrinsic = "intrinsic";
 }
 
 /// <summary>Classifies an artifact activation failure without treating deployment recovery as activity retry.</summary>

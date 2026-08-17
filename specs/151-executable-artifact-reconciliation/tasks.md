@@ -246,7 +246,15 @@ Import gate axes (b) and (c) skip intrinsics deliberately (they carry no CLR typ
 
 Why it has not blown up yet: no fixture in the repo is intrinsic-bearing, so every gate test uses CLR-only artifacts. **T093** (SC-B-003, the real export→import round trip with a parent dispatching a child) is the first task that compiles a realistic workflow and pushes it through the gate — it will hit this before US3 finishes.
 
-**This is a decision, not a patch.** Either register an `"intrinsic"` capability (a real consumer advertising the engine's own activation mechanism), or exclude intrinsics from the requirement derivation in `WorkflowExecutable` (a change to a content-addressed model, so it moves hashes and baselines). Decide before T093, and note it touches publishing's preflight too, since that reads the same derived requirement set.
+**RESOLVED 2026-08-16 (Joey): Option A — advertise an `"intrinsic"` capability.** Chosen over excluding intrinsics from the derivation because it costs no model change, no hash movement and no baseline churn (option B would have moved the `workflowExecutable` fixture and golden that T036 had just stabilised), it fixes publishing's preflight in the same stroke, and it keeps the requirement set a **complete** statement of what a portable artifact needs — so a future trimmed runtime lacking an intrinsic is caught at the import gate rather than passing silently. Correction to the pre-decision analysis above: option B would *not* have moved hashes, since the hasher's canonical payload does not include `RuntimeRequirements`; it would still have moved the persisted document baselines.
+
+**Confirmed real, not theoretical.** Before the fix an intrinsic-bearing artifact was rejected as requiring an uninstalled `intrinsic` consumer; that rejection is now reproduced on demand by a negative test that removes the capability.
+
+**The trap in implementing it**: the intrinsic descriptor *payload* carries `schemaVersion = "1.0.0"` (`ExecutableNodeCompiler.cs:249`), but the descriptor schema the capability axis matches on is `"1"` — the compiler passes no `descriptorSchemaVersion`, so `ExecutableNode` defaults it to `RuntimeActivityDescriptor.InitialSchemaVersion`. Advertising `"1.0.0"` would have looked right and silently failed.
+
+The key is deliberately **unprefixed** (`"intrinsic"`, not `elsa.intrinsic`) unlike its two siblings: it is not a new identifier but the literal the compiler already stamps into every intrinsic node, so it is already durable wire content inside content-addressed artifacts. Renaming it would move every compiled artifact's bytes.
+
+**Coverage gap that outlives this fix** — worth a line at review: publishing's deployment preflight would have reported *every* intrinsic-bearing workflow as not-ready, and `Publishing.Api.Tests` has **no coverage that would have caught it** (474/0 held before and after, with zero edits). The missing preflight coverage is a publishing concern, not a spec-151 one.
 
 ## Follow-up tasks raised during implementation
 
