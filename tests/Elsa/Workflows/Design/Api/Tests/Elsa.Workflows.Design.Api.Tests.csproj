@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Required to unit-test FastEndpoints endpoint configuration (security by construction). -->
+    <!-- Required for the ASP.NET Core endpoint metadata and request-delegate tests. -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
@@ -14,13 +14,23 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="CShells.FastEndpoints" />
+    <PackageReference Include="CShells.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Api\Core\Elsa.Workflows.Design.Api.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Baselines/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

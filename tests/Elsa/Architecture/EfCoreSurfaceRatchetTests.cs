@@ -195,6 +195,42 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_excludes_only_the_canonical_historical_compatibility_subtree()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+            "services.AddDbContext<HistoricalCaptureDbContext>();");
+
+        fixture.Write("tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "tools/compatibility-copy/Program.cs",
+            "services.AddDbContext<UnrelatedCaptureDbContext>();");
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Equal(["tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj"], snapshot.EfProjects);
+        Assert.Equal(
+            ["tools/compatibility-copy/EFCore/WorkflowsDesignFastEndpointsCapture.csproj"],
+            snapshot.ProjectsMissingAssets);
+        Assert.Contains(
+            snapshot.RegistrationFiles,
+            entry => entry.StartsWith("tools/compatibility-copy/Program.cs -> ", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            snapshot.Categories().SelectMany(category => category.Value),
+            entry => entry.StartsWith("tools/compatibility/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scanner_inventories_declared_direct_and_central_ef_package_inputs()
     {
         using var fixture = new TemporaryRepository();

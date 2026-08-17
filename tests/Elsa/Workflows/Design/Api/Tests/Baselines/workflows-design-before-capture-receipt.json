@@ -1,0 +1,97 @@
+{
+  "capture": "real-fastendpoints-historical-worktree",
+  "captureCommand": "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3caa7fd1638f8a61382cef87979d03b3c08bce45 bash tools/compatibility/capture-workflows-design-before.sh",
+  "caseCount": 78,
+  "categories": [
+    "add-definition",
+    "add-version",
+    "analyze-scoped-variables",
+    "complete-expression-tooling",
+    "delete-definition",
+    "delete-definition-permanently",
+    "describe-expression-tooling",
+    "discard-draft",
+    "draft-validations",
+    "get-definition",
+    "get-draft",
+    "get-version",
+    "hover-expression-tooling",
+    "list-definitions",
+    "list-structures",
+    "list-versions",
+    "paging-filtering",
+    "promote-draft",
+    "promotion-preflight",
+    "replace-draft",
+    "resolve-activity-input-options",
+    "resolve-expression-tooling-context",
+    "restore-definition",
+    "search-expression-tooling-symbols",
+    "submit-definition",
+    "submit-definition-schema",
+    "trusted-404",
+    "trusted-409-concurrency",
+    "trusted-409-not-soft-deleted",
+    "trusted-500",
+    "trusted-501",
+    "trusted-malformed-json",
+    "trusted-missing-body",
+    "trusted-nonmutation",
+    "trusted-not-found",
+    "trusted-success",
+    "trusted-unsupported-content-type",
+    "update-definition",
+    "validate-expression-tooling"
+  ],
+  "httpSha256": "25175448d9f3003dc28f879aea0b6e897c35b498b4a9c47a7aec7d40f81867fb",
+  "openApiSha256": "cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5",
+  "operationCount": 27,
+  "registrationCount": 27,
+  "runnerCommit": "3caa7fd1638f8a61382cef87979d03b3c08bce45",
+  "runnerDependencies": [
+    {
+      "commit": "3caa7fd1638f8a61382cef87979d03b3c08bce45",
+      "path": "tools/compatibility/capture-workflows-design-before.sh",
+      "sha256": "88e9db8598efc6535ded364cfeaf60b6b9911e75af1931d2d970dc687cc0b910"
+    },
+    {
+      "commit": "3caa7fd1638f8a61382cef87979d03b3c08bce45",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+      "sha256": "70941aa1a3db08f158fe7f9b2943ce8583ad712fc9c3a0c0e188986e37f30b06"
+    },
+    {
+      "commit": "3caa7fd1638f8a61382cef87979d03b3c08bce45",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj",
+      "sha256": "9a1c7b165ca3b1e1ef262f8947b6c4591f3b36a917ea9a847917054f2936bdaa"
+    },
+    {
+      "commit": "3caa7fd1638f8a61382cef87979d03b3c08bce45",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+      "sha256": "93c551149576e476c0e97dc9a958b0f19673f8ffa7806a5a25eceb17f0c06723"
+    },
+    {
+      "commit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+      "sha256": "74e3701ef05ac7edf4cef136e40d0c1385477b04c345b90ccbefa91d8ad88d97"
+    },
+    {
+      "commit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+      "sha256": "f2a7574bca741e335b275b25103627d47092caf475b43f311ca6803a4e53bf6c"
+    },
+    {
+      "commit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs",
+      "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
+    }
+  ],
+  "sourceCommit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+  "traceAssertions": [
+    "request-and-command-types-recorded",
+    "lifecycle-body-properties-recorded",
+    "list-query-properties-recorded",
+    "promotion-error-paths-recorded",
+    "permanent-delete-conflict-recorded"
+  ],
+  "traceSha256": "02dfcb7bbc50d64ea785df897128b8bc39caeec2709444b8fc34d91a04f6133c"
+}

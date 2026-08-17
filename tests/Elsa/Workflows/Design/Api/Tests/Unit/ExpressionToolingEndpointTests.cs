@@ -1,156 +1,219 @@
-using System.Reflection;
-using System.Text.Json;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Workflows.Design.Api;
-using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Services;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Workflows.Design.Api.Authorization;
+using Elsa.Workflows.Design.Api.Tests.Support;
 using Elsa.Workflows.Design.Core.Contracts;
-using FastEndpoints;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
+/// <summary>Guards the expression tooling operation names/routes and shared read permission.</summary>
 public sealed class ExpressionToolingEndpointTests
 {
-    [Theory]
-    [InlineData("ResolveExpressionToolingContext")]
-    [InlineData("SearchExpressionToolingSymbols")]
-    [InlineData("CompleteExpressionTooling")]
-    [InlineData("HoverExpressionTooling")]
-    [InlineData("ValidateExpressionTooling")]
-    [InlineData("DescribeExpressionTooling")]
-    public void Tooling_endpoints_require_design_read_permission_before_the_handler_runs(string endpointName)
+    public static TheoryData<string, string> ToolingEndpoints => new()
     {
-        var endpoint = Create(endpointName, new RecordingContextService(), new ProviderResolver());
+        { "AuthoringResolveExpressionToolingContext", "design/workflows/expression-tooling/context" },
+        { "AuthoringSearchExpressionToolingSymbols", "design/workflows/expression-tooling/symbols" },
+        { "AuthoringCompleteExpressionTooling", "design/workflows/expression-tooling/completions" },
+        { "AuthoringHoverExpressionTooling", "design/workflows/expression-tooling/hover" },
+        { "AuthoringValidateExpressionTooling", "design/workflows/expression-tooling/validate" },
+        { "AuthoringDescribeExpressionTooling", "design/workflows/expression-tooling/descriptors" }
+    };
 
-        endpoint.Configure();
-
-        Assert.Contains(
-            ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowDesignRead]),
-            endpoint.Definition.PreBuiltUserPolicies!);
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+    [Theory]
+    [MemberData(nameof(ToolingEndpoints))]
+    public void Tooling_endpoints_require_design_read_permission_before_the_handler_runs(string operation, string route)
+    {
+        var endpoint = WorkflowDesignEndpointTestSupport.MapEndpoints().Single(candidate =>
+            candidate.RoutePattern.RawText == route && candidate.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == $"ElsaWorkflowsDesignApiEndpoints{operation}");
+        var security = Assert.IsType<EndpointSecurityDispositionMetadata>(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
+        var policy = Assert.IsType<PermissionPolicyParseResult>(new PermissionPolicyCodec().Parse(security.Value!));
+        Assert.Contains(PermissionKey.Normalize(WorkflowDesignPermissions.Read), policy.Descriptor!.Permissions);
+        Assert.NotNull(endpoint.Metadata.GetMetadata<AuthorizeAttribute>());
     }
 
     [Fact]
-    public async Task Completion_passes_the_full_bounded_catalog_to_the_provider_and_marks_the_response_no_store()
+    public async Task Mapped_descriptor_endpoint_preserves_empty_catalog_and_no_store_cache_contract()
+    {
+        await using var host = ExpressionToolingHost.Create();
+
+        var response = await host.InvokeAsync(
+            "GET",
+            "/design/workflows/expression-tooling/descriptors",
+            body: null,
+            contentType: null);
+        using var document = JsonDocument.Parse(response.Body);
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.Equal("no-store", response.CacheControl);
+        Assert.Equal(1, document.RootElement.GetProperty("result").GetProperty("state").GetInt32());
+        Assert.Empty(document.RootElement.GetProperty("result").GetProperty("payload").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Mapped_completion_endpoint_preserves_full_catalog_and_provider_cache_contract()
     {
         var provider = new RecordingProvider();
-        var contextService = new RecordingContextService(ContextWithSymbols(501));
-        var endpoint = Create("CompleteExpressionTooling", contextService, new ProviderResolver(provider));
+        await using var host = ExpressionToolingHost.Create(provider);
 
-        await HandleAsync(endpoint, new ExpressionToolingCompletionRequest(
-            ExpressionToolingContractVersion.V1,
-            "draft",
-            "node",
-            "text",
-            "JavaScript",
-            "document",
-            "args.symbol500",
-            new(0, 14)));
+        var response = await host.InvokeAsync(
+            "POST",
+            "/design/workflows/expression-tooling/completions",
+            "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"cursor\":{\"line\":0,\"character\":14}}",
+            "application/json");
+        using var document = JsonDocument.Parse(response.Body);
+        var result = document.RootElement.GetProperty("result");
 
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.Equal("no-store", response.CacheControl);
+        Assert.Equal(0, result.GetProperty("state").GetInt32());
         Assert.Equal(501, provider.SymbolCount);
-        Assert.Equal(1, contextService.ProviderCalls);
-        Assert.Equal(0, contextService.PageCalls);
-        Assert.Equal("no-store", endpoint.HttpContext.Response.Headers.CacheControl.ToString());
-        Assert.Equal(StatusCodes.Status200OK, endpoint.HttpContext.Response.StatusCode);
+        Assert.Equal(1, provider.CompletionCalls);
     }
 
     [Fact]
-    public async Task Completion_maps_absent_and_faulted_providers_to_non_success_outcomes()
+    public async Task Mapped_completion_endpoint_preserves_absent_and_faulted_provider_outcomes()
     {
-        var context = ContextWithSymbols();
-        var absent = Create("CompleteExpressionTooling", new RecordingContextService(context), new ProviderResolver());
-        var faulted = Create("CompleteExpressionTooling", new RecordingContextService(context), new ProviderResolver(new RecordingProvider(failCapabilities: true)));
-        var request = CompletionRequest();
+        await using var absent = ExpressionToolingHost.Create();
+        await using var faulted = ExpressionToolingHost.Create(new RecordingProvider(failCapabilities: true));
+        const string body = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol\",\"cursor\":{\"line\":0,\"character\":11}}";
 
-        await HandleAsync(absent, request);
-        await HandleAsync(faulted, request);
+        var absentResponse = await absent.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", body, "application/json");
+        var faultedResponse = await faulted.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", body, "application/json");
 
-        Assert.Equal("Unavailable", ReadState(absent));
-        Assert.Equal("Unavailable", ReadState(faulted));
-        Assert.Equal(("document", "context"), ReadRevisions(absent));
-        Assert.Equal("no-store", absent.HttpContext.Response.Headers.CacheControl.ToString());
-        Assert.Equal("no-store", faulted.HttpContext.Response.Headers.CacheControl.ToString());
-    }
-
-    [Theory]
-    [InlineData("CompleteExpressionTooling")]
-    [InlineData("HoverExpressionTooling")]
-    [InlineData("ValidateExpressionTooling")]
-    public async Task Provider_absent_semantic_outcomes_preserve_resolved_revisions(string endpointName)
-    {
-        var endpoint = Create(endpointName, new RecordingContextService(ContextWithSymbols()), new ProviderResolver());
-        object request = endpointName switch
-        {
-            "CompleteExpressionTooling" => CompletionRequest(),
-            "HoverExpressionTooling" => new ExpressionToolingHoverRequest(
-                ExpressionToolingContractVersion.V1, "draft", "node", "text", "JavaScript", "document", "args.symbol", new(0, 11)),
-            _ => new ExpressionToolingSourceRequest(
-                ExpressionToolingContractVersion.V1, "draft", "node", "text", "JavaScript", "document", "args.symbol")
-        };
-
-        await HandleAsync(endpoint, request);
-
-        Assert.Equal("Unavailable", ReadState(endpoint));
-        Assert.Equal(("document", "context"), ReadRevisions(endpoint));
+        Assert.Equal("Unavailable", ReadState(absentResponse.Body));
+        Assert.Equal("Unavailable", ReadState(faultedResponse.Body));
+        Assert.Equal("no-store", absentResponse.CacheControl);
+        Assert.Equal("no-store", faultedResponse.CacheControl);
+        Assert.Contains("document", absentResponse.Body, StringComparison.Ordinal);
+        Assert.Contains("context", absentResponse.Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Host_authorization_policy_can_deny_context_without_source_disclosure()
+    public async Task Mapped_completion_endpoint_preserves_provider_cancellation()
     {
-        var contextService = new RecordingContextService(ContextWithSymbols());
-        var policy = new StubAuthorizationPolicy(new(false, "author-1", "permissions-2", "policy-2"));
-        var endpoint = Create(
-            "ResolveExpressionToolingContext",
-            contextService,
-            new ProviderResolver(new RecordingProvider()),
-            policy);
+        var provider = new RecordingProvider(cancelCompletions: true);
+        await using var host = ExpressionToolingHost.Create(provider);
 
-        await HandleAsync(endpoint, new ExpressionToolingContextRequest(
-            ExpressionToolingContractVersion.V1,
-            "draft",
-            "node",
-            "text",
-            "JavaScript",
-            "document"));
+        var response = await host.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", CompletionBody, "application/json");
 
-        Assert.Equal("Unauthorized", ReadState(endpoint));
-        Assert.False(contextService.LastAuthorization!.IsAuthorized);
-        Assert.Equal("policy-2", contextService.LastAuthorization.PolicyFingerprint);
+        Assert.Equal("Canceled", ReadState(response.Body));
+        Assert.Contains("provider-canceled", response.Body, StringComparison.Ordinal);
+        Assert.Equal(1, provider.CompletionCalls);
     }
 
     [Theory]
     [InlineData(ExpressionToolingOutcomeState.Stale)]
     [InlineData(ExpressionToolingOutcomeState.Canceled)]
-    public async Task Completion_preserves_non_success_context_states_without_invoking_the_provider(ExpressionToolingOutcomeState state)
+    public async Task Context_service_non_success_outcomes_preserve_revisions_without_invoking_provider(ExpressionToolingOutcomeState state)
     {
-        var contextService = new RecordingContextService(
-            ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(state, ExpressionToolingContractVersion.V1, contextRevision: "current"));
         var provider = new RecordingProvider();
-        var endpoint = Create("CompleteExpressionTooling", contextService, new ProviderResolver(provider));
+        await using var host = ExpressionToolingHost.Create(provider, outcomeState: state);
 
-        await HandleAsync(endpoint, CompletionRequest());
+        var response = await host.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", CompletionBody, "application/json");
 
-        Assert.Equal(state.ToString(), ReadState(endpoint));
+        Assert.Equal(state.ToString(), ReadState(response.Body));
+        Assert.Contains("document", response.Body, StringComparison.Ordinal);
+        Assert.Contains("context", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
+        Assert.Equal(0, provider.CapabilityCalls);
         Assert.Equal(0, provider.CompletionCalls);
-        Assert.Equal("no-store", endpoint.HttpContext.Response.Headers.CacheControl.ToString());
     }
 
-    private static ExpressionToolingCompletionRequest CompletionRequest() => new(
-        ExpressionToolingContractVersion.V1,
-        "draft",
-        "node",
-        "text",
-        "JavaScript",
-        "document",
-        "args.symbol",
-        new(0, 11));
+    [Theory]
+    [InlineData("POST", "/design/workflows/expression-tooling/completions", CompletionBody)]
+    [InlineData("POST", "/design/workflows/expression-tooling/hover", HoverBody)]
+    [InlineData("POST", "/design/workflows/expression-tooling/validate", ValidateBody)]
+    public async Task Absent_provider_outcomes_preserve_request_revisions_for_all_provider_operations(string method, string route, string body)
+    {
+        await using var host = ExpressionToolingHost.Create();
 
-    private static ExpressionAuthoringContext ContextWithSymbols(int count = 1)
+        var response = await host.InvokeAsync(method, route, body, "application/json");
+
+        Assert.Equal("Unavailable", ReadState(response.Body));
+        Assert.Contains("document", response.Body, StringComparison.Ordinal);
+        Assert.Contains("context", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
+    }
+
+    [Fact]
+    public async Task Denied_authoring_context_does_not_invoke_the_provider()
+    {
+        var provider = new RecordingProvider();
+        await using var host = ExpressionToolingHost.Create(provider, new DenyAuthorizationPolicy());
+
+        var response = await host.InvokeAsync("POST", "/design/workflows/expression-tooling/completions", CompletionBody, "application/json");
+
+        Assert.Equal("Unauthorized", ReadState(response.Body));
+        Assert.Equal(0, provider.CapabilityCalls);
+        Assert.Equal(0, provider.CompletionCalls);
+        Assert.DoesNotContain("args.symbol500", response.Body, StringComparison.Ordinal);
+        Assert.Equal("no-store", response.CacheControl);
+    }
+
+    private const string CompletionBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"cursor\":{\"line\":0,\"character\":14}}";
+    private const string HoverBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"position\":{\"line\":0,\"character\":14}}";
+    private const string ValidateBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\"}";
+
+    private static string ReadState(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return ((ExpressionToolingOutcomeState)document.RootElement.GetProperty("result").GetProperty("state").GetInt32()).ToString();
+    }
+
+    private sealed class ExpressionToolingHost(IServiceProvider services) : IAsyncDisposable
+    {
+        public static ExpressionToolingHost Create(RecordingProvider? provider = null, IExpressionAuthoringAuthorizationPolicy? policy = null, ExpressionToolingOutcomeState? outcomeState = null)
+        {
+            var serviceCollection = new ServiceCollection()
+                .AddLogging()
+                .AddSingleton<IExpressionAuthoringContextService>(new RecordingContextService(ContextWithSymbols(), outcomeState))
+                .AddSingleton<IExpressionAuthoringAuthorizationPolicy>(policy ?? new AllowAuthorizationPolicy())
+                .AddSingleton<IExpressionToolingProviderResolver>(new ProviderResolver(provider));
+            if (provider is not null)
+                serviceCollection.AddSingleton<IExpressionToolingProvider>(provider);
+            var services = serviceCollection.BuildServiceProvider();
+            return new(services);
+        }
+
+        public async Task<Response> InvokeAsync(string method, string path, string? body, string? contentType)
+        {
+            var endpoint = WorkflowDesignEndpointTestSupport.MapEndpoints().Single(candidate =>
+                string.Equals(candidate.RoutePattern.RawText, path.TrimStart('/'), StringComparison.Ordinal));
+            var context = new DefaultHttpContext { RequestServices = services };
+            context.Request.Method = method;
+            context.Request.Path = path;
+            context.Request.ContentType = contentType;
+            context.Request.Body = new MemoryStream(body is null ? [] : Encoding.UTF8.GetBytes(body));
+            context.Response.Body = new MemoryStream();
+            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "author-1")], "test"));
+            await endpoint.RequestDelegate!(context);
+            context.Response.Body.Position = 0;
+            using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
+            var responseBody = await reader.ReadToEndAsync();
+            return new(context.Response.StatusCode, context.Response.Headers.CacheControl.ToString(), responseBody);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            (services as IDisposable)?.Dispose();
+            return ValueTask.CompletedTask;
+        }
+
+        public sealed record Response(int StatusCode, string CacheControl, string Body);
+    }
+
+    private static ExpressionAuthoringContext ContextWithSymbols(int count = 501)
     {
         var document = new ExpressionAuthoringDocument("document", "draft", "node", "text", "JavaScript", "document");
         var symbols = Enumerable.Range(0, count)
@@ -159,192 +222,69 @@ public sealed class ExpressionToolingEndpointTests
         return new(ExpressionToolingContractVersion.V1, document, "context", "catalog", symbols, new());
     }
 
-    private static BaseEndpoint Create(
-        string endpointName,
-        IExpressionAuthoringContextService contextService,
-        IExpressionToolingProviderResolver resolver,
-        IExpressionAuthoringAuthorizationPolicy? authorizationPolicy = null)
+    private sealed class RecordingContextService(ExpressionAuthoringContext context, ExpressionToolingOutcomeState? outcomeState = null) : IExpressionAuthoringContextService
     {
-        var endpointType = typeof(WorkflowsDesignApiFeature).Assembly.GetType(
-            $"Elsa.Workflows.Design.Api.Endpoints.Authoring.{endpointName}",
-            throwOnError: true)!;
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(parameter => ResolveDependency(
-                parameter.ParameterType,
-                contextService,
-                resolver,
-                authorizationPolicy ?? new DefaultExpressionAuthoringAuthorizationPolicy()))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) &&
-                              rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        return (BaseEndpoint)create.Invoke(null,
-        [
-            (Action<DefaultHttpContext>)(context => context.Response.Body = new MemoryStream()),
-            dependencies
-        ])!;
-    }
-
-    private static object ResolveDependency(
-        Type type,
-        IExpressionAuthoringContextService contextService,
-        IExpressionToolingProviderResolver resolver,
-        IExpressionAuthoringAuthorizationPolicy authorizationPolicy) =>
-        type == typeof(IExpressionAuthoringContextService)
-            ? contextService
-            : type == typeof(IExpressionToolingProviderResolver)
-                ? resolver
-                : type == typeof(IExpressionAuthoringAuthorizationPolicy)
-                    ? authorizationPolicy
-                : type == typeof(IEnumerable<IExpressionToolingProvider>)
-                    ? ((ProviderResolver)resolver).Providers
-                    : throw new InvalidOperationException($"Unexpected tooling endpoint dependency '{type}'.");
-
-    private static Task HandleAsync(BaseEndpoint endpoint, ExpressionToolingCompletionRequest request) =>
-        HandleAsync(endpoint, (object)request);
-
-    private static Task HandleAsync(BaseEndpoint endpoint, ExpressionToolingContextRequest request) =>
-        HandleAsync(endpoint, (object)request);
-
-    private static Task HandleAsync(BaseEndpoint endpoint, object request) =>
-        (Task)endpoint.GetType()
-            .GetMethod("HandleAsync", [request.GetType(), typeof(CancellationToken)])!
-            .Invoke(endpoint, [request, CancellationToken.None])!;
-
-    private static string ReadState(BaseEndpoint endpoint)
-    {
-        var stream = Assert.IsType<MemoryStream>(endpoint.HttpContext.Response.Body);
-        stream.Position = 0;
-        using var json = JsonDocument.Parse(stream);
-        return ((ExpressionToolingOutcomeState)Property(Property(json.RootElement, "result"), "state").GetInt32()).ToString();
-
-        static JsonElement Property(JsonElement element, string name) =>
-            element.EnumerateObject()
-                .Single(property => string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-                .Value;
-    }
-
-    private static (string? DocumentRevision, string? ContextRevision) ReadRevisions(BaseEndpoint endpoint)
-    {
-        var stream = Assert.IsType<MemoryStream>(endpoint.HttpContext.Response.Body);
-        stream.Position = 0;
-        using var json = JsonDocument.Parse(stream);
-        var result = Property(json.RootElement, "result");
-        return (
-            Property(result, "documentRevision").GetString(),
-            Property(result, "contextRevision").GetString());
-
-        static JsonElement Property(JsonElement element, string name) =>
-            element.EnumerateObject()
-                .Single(property => string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-                .Value;
-    }
-
-    private sealed class RecordingContextService : IExpressionAuthoringContextService
-    {
-        private readonly ExpressionToolingOutcome<ExpressionAuthoringContext> _result;
-
-        public RecordingContextService(ExpressionAuthoringContext? context = null) : this(
-            ExpressionToolingOutcome<ExpressionAuthoringContext>.Success(
-                context ?? ContextWithSymbols(),
-                ExpressionToolingContractVersion.V1,
-                "document",
-                "context"))
-        {
-        }
-
-        public RecordingContextService(ExpressionToolingOutcome<ExpressionAuthoringContext> result) => _result = result;
-        public int PageCalls { get; private set; }
-        public int ProviderCalls { get; private set; }
-        public ExpressionAuthoringAuthorization? LastAuthorization { get; private set; }
-
         public ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveAsync(
             ResolveExpressionAuthoringContextRequest request,
             ExpressionAuthoringAuthorization authorization,
-            CancellationToken cancellationToken)
-        {
-            PageCalls++;
-            LastAuthorization = authorization;
-            return ValueTask.FromResult(AuthorizedResult(authorization));
-        }
+            CancellationToken cancellationToken) => ValueTask.FromResult(Result(authorization));
 
         public ValueTask<ExpressionToolingOutcome<ExpressionAuthoringContext>> ResolveForProviderAsync(
             ResolveExpressionAuthoringContextRequest request,
             ExpressionAuthoringAuthorization authorization,
-            CancellationToken cancellationToken)
-        {
-            ProviderCalls++;
-            LastAuthorization = authorization;
-            return ValueTask.FromResult(AuthorizedResult(authorization));
-        }
+            CancellationToken cancellationToken) => ValueTask.FromResult(Result(authorization));
 
-        private ExpressionToolingOutcome<ExpressionAuthoringContext> AuthorizedResult(ExpressionAuthoringAuthorization authorization) =>
-            authorization.IsAuthorized
-                ? _result
-                : ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(
-                    ExpressionToolingOutcomeState.Unauthorized,
-                    ExpressionToolingContractVersion.V1);
+        private ExpressionToolingOutcome<ExpressionAuthoringContext> Result(ExpressionAuthoringAuthorization authorization) =>
+            outcomeState is { } state
+                ? ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(state, ExpressionToolingContractVersion.V1, "context-state", documentRevision: context.Document.DocumentRevision, contextRevision: context.ContextRevision)
+                : authorization.IsAuthorized
+                ? ExpressionToolingOutcome<ExpressionAuthoringContext>.Success(context, ExpressionToolingContractVersion.V1, "document", "context")
+                : ExpressionToolingOutcome<ExpressionAuthoringContext>.Failure(ExpressionToolingOutcomeState.Unauthorized, ExpressionToolingContractVersion.V1);
     }
 
-    private sealed class ProviderResolver(params IExpressionToolingProvider[] providers) : IExpressionToolingProviderResolver
+    private sealed class AllowAuthorizationPolicy : IExpressionAuthoringAuthorizationPolicy
     {
-        public IReadOnlyList<IExpressionToolingProvider> Providers { get; } = providers;
-        public IExpressionToolingProvider? Find(string expressionType) =>
-            Providers.FirstOrDefault(provider => string.Equals(provider.ExpressionType, expressionType, StringComparison.Ordinal));
+        public ValueTask<ExpressionAuthoringAuthorization> AuthorizeAsync(ExpressionAuthoringAuthorization caller, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(caller with { IsAuthorized = true, PolicyFingerprint = "policy" });
     }
 
-    private sealed class RecordingProvider(bool failCapabilities = false) : IExpressionToolingProvider
+    private sealed class ProviderResolver(RecordingProvider? provider) : IExpressionToolingProviderResolver
+    {
+        public IExpressionToolingProvider? Find(string expressionType) => provider is not null && provider.ExpressionType == expressionType ? provider : null;
+    }
+
+    private sealed class RecordingProvider(bool failCapabilities = false, bool cancelCompletions = false) : IExpressionToolingProvider
     {
         public string ExpressionType => "JavaScript";
         public ExpressionToolingContractVersion SupportedVersion => ExpressionToolingContractVersion.V1;
-        public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new();
         public int SymbolCount { get; private set; }
+        public int CapabilityCalls { get; private set; }
         public int CompletionCalls { get; private set; }
 
-        public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(
-            ExpressionToolingRequestScope scope,
-            CancellationToken cancellationToken)
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(ExpressionToolingRequestScope scope, CancellationToken cancellationToken)
         {
+            CapabilityCalls++;
             if (failCapabilities)
                 throw new InvalidOperationException("provider failure");
-            return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionToolingCapabilities>.Success(
-                DeclaredCapabilities,
-                SupportedVersion,
-                scope.Document.DocumentRevision,
-                scope.Context.ContextRevision));
+            return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionToolingCapabilities>.Success(new(), SupportedVersion, scope.Document.DocumentRevision, scope.Context.ContextRevision));
         }
 
-        public ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> GetCompletionsAsync(
-            ExpressionCompletionRequest request,
-            CancellationToken cancellationToken)
+        public ValueTask<ExpressionToolingOutcome<ExpressionToolingItems>> GetCompletionsAsync(ExpressionCompletionRequest request, CancellationToken cancellationToken)
         {
             CompletionCalls++;
+            if (cancelCompletions)
+                throw new OperationCanceledException();
             SymbolCount = request.Scope.Context.RootSymbols.Count;
-            return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionToolingItems>.Success(
-                new([new ExpressionToolingItem("symbol500")]),
-                SupportedVersion,
-                request.Scope.Document.DocumentRevision,
-                request.Scope.Context.ContextRevision));
+            return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionToolingItems>.Success(new([new("symbol500")]), SupportedVersion, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
         }
 
-        public ValueTask<ExpressionToolingOutcome<ExpressionHover>> GetHoverAsync(ExpressionHoverRequest request, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(ExpressionValidationRequest request, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+        public ValueTask<ExpressionToolingOutcome<ExpressionHover>> GetHoverAsync(ExpressionHoverRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(ExpressionValidationRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class StubAuthorizationPolicy(ExpressionAuthoringAuthorization result)
-        : IExpressionAuthoringAuthorizationPolicy
+    private sealed class DenyAuthorizationPolicy : IExpressionAuthoringAuthorizationPolicy
     {
-        public ValueTask<ExpressionAuthoringAuthorization> AuthorizeAsync(
-            ExpressionAuthoringAuthorization caller,
-            CancellationToken cancellationToken) =>
-            ValueTask.FromResult(result);
+        public ValueTask<ExpressionAuthoringAuthorization> AuthorizeAsync(ExpressionAuthoringAuthorization caller, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(caller with { IsAuthorized = false, PolicyFingerprint = "denied" });
     }
 }

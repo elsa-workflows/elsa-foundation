@@ -1,7 +1,3 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Json;
 using CShells;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
@@ -16,6 +12,7 @@ using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Graph.Design;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Compatibility.Testing.Baselines;
@@ -27,31 +24,35 @@ using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
 using Elsa.Expressions.Api.Requests;
 using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Api;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
-using System.Text.Encodings.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -111,7 +112,9 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Single(captures.Distinct(StringComparer.Ordinal));
 
         var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "endpoint-manifest.json");
-        Assert.Equal(BaselineFile.Read(baselinePath), captures[0]);
+        // Git keeps this JSON baseline without a mandated final line ending; compare the
+        // serialized document while ignoring only that transport detail.
+        Assert.Equal(BaselineFile.Read(baselinePath).TrimEnd(), captures[0].TrimEnd());
 
         var manifest = new EndpointManifestBuilder(host.EndpointDataSources).Build();
         var permissions = new PermissionOwnershipValidator(host.Services.GetServices<IPermissionContributor>())
@@ -307,7 +310,6 @@ public sealed class DomainManagementApiCompositionTests
             "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
             "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
             "Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities.Get",
-            "Elsa.Workflows.Design.Api.Endpoints.Definitions.List",
             "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
             "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowExecutablesEndpoint"
         ];
@@ -317,6 +319,8 @@ public sealed class DomainManagementApiCompositionTests
         public IReadOnlyList<EndpointDataSource> EndpointDataSources => app.Services.GetServices<EndpointDataSource>()
             .Select(source => new RepresentativeEndpointDataSource(source.Endpoints
                 .Where(endpoint => endpoint is not RouteEndpoint route || route.RoutePattern.RawText != "_test_url_cache_")
+                .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId != "Elsa.Workflows.Design.Api" ||
+                                   endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == "ElsaWorkflowsDesignApiEndpointsDefinitionsList")
                 .ToArray()))
             .ToArray();
 
@@ -368,6 +372,7 @@ public sealed class DomainManagementApiCompositionTests
             // Wave 1 APIs are explicit Minimal API mappers. They share the same endpoint route
             // builder with the representative FastEndpoints registrations below.
             ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
+            WorkflowsDesignApi.MapWorkflowsDesignApi(app);
             if (includeExpressions)
                 ExpressionsApi.MapExpressionsApi(app);
             app.Use(async (context, next) =>

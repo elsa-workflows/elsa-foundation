@@ -1574,11 +1574,15 @@ internal sealed class EfCoreSurfaceScanner
             chars[index++] = ' ';
     }
 
-    private bool IsIgnored(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
-        Relative(path).StartsWith("docs/reports/repros/", StringComparison.OrdinalIgnoreCase);
+    private bool IsIgnored(string path)
+    {
+        var relative = Relative(path);
+        return path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+               path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+               path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+               relative.StartsWith("docs/reports/repros/", StringComparison.OrdinalIgnoreCase) ||
+               relative.StartsWith("tools/compatibility/", StringComparison.OrdinalIgnoreCase);
+    }
 
     private string Relative(string path) =>
         Path.GetRelativePath(_repoRoot, path).Replace(Path.DirectorySeparatorChar, '/');

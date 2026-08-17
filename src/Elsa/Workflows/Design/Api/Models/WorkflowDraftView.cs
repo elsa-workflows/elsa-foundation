@@ -1,6 +1,5 @@
-using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Api.Models;
 
@@ -20,7 +19,12 @@ public sealed record WorkflowDraftView(
             draft.Id,
             draft.WorkflowDefinitionId,
             draft.SourceVersionId,
-            draft.State.ToStateView(),
+            new(
+                draft.State.Variables,
+                draft.State.RootActivity,
+                draft.State.Inputs,
+                draft.State.Outputs,
+                draft.State.StrategyOptions),
             layout.Select(WorkflowDefinitionLayoutRecordView.From).ToArray(),
             (activityPresentation ?? []).Select(ActivityPresentationRecordView.From).ToArray());
 }
