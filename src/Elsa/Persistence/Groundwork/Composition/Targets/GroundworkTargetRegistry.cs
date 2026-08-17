@@ -98,6 +98,3 @@ public enum GroundworkTargetDeclarationResult
     /// <summary>The target was already declared against the same provider and connection.</summary>
     AlreadyDeclared
 }
-
-/// <summary>Raised when Groundwork target declarations cannot form one coherent host composition.</summary>
-public sealed class GroundworkTargetConflictException(string message) : InvalidOperationException(message);

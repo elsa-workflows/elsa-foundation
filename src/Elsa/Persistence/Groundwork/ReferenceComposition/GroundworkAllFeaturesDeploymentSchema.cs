@@ -8,10 +8,11 @@ namespace Elsa.Persistence.Groundwork.ReferenceComposition;
 
 /// <summary>
 /// The public, parameterless deployment schema for the shipped unified provider leaves. It selects
-/// Runtime, Workflows Design, Activities Design, their shared atomic-operation
-/// ledger, and Publishing with the identity host naming policy. Identity is intentionally explicit:
-/// Distributed Runtime owns independent public-v2 units and registers them directly; it is therefore not part of
-/// this transitional v1 deployment manifest.
+/// Runtime, the shared design atomic-operation ledger, and Publishing with the identity host naming
+/// policy. Several lanes are intentionally absent: Distributed Runtime, Workflows Design and Activities
+/// Design each own independent public-v2 units and declare them directly against the catalog, so they
+/// contribute no composed manifest to this transitional v1 deployment schema and provision their own
+/// schema. They remain resolvable as lanes for cross-lane target questions.
 /// ASP.NET Core Identity hosts opt in through the Groundwork Identity feature rather than through substrate
 /// provider selection.
 /// </summary>
@@ -26,8 +27,6 @@ internal static class GroundworkReferenceDeploymentSchemaSources
     public static readonly IReadOnlyCollection<Type> WithoutIdentity = Array.AsReadOnly<Type>(
     [
         typeof(RuntimeGroundworkStorageManifestSource),
-        typeof(WorkflowsDesignGroundworkStorageManifestSource),
-        typeof(ActivitiesDesignGroundworkStorageManifestSource),
         typeof(GroundworkDesignAtomicWriteStorageManifestSource),
         typeof(PublishingGroundworkStorageManifestSource)
     ]);

@@ -11,10 +11,12 @@ Groundwork is the sole workflow-design persistence provider.
   commands (`GroundworkWorkflowDefinitionStore`, `GroundworkWorkflowDefinitionDraftStore`,
   `GroundworkCreateDraftCommand`, `GroundworkPromoteDraftToVersionCommand`, …). See
   [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) for the full replacement-contract table.
-- **Storage manifest** — `WorkflowsDesignGroundworkStorageManifestSource` declares the physical shape
-  (projected columns, indexes, bounded scale-bearing queries, and width limits). Searchable text
-  columns are bounded to 256 characters and identity/sort-key columns to 128; over-limit values fail
-  projection validation rather than truncate.
+- **Storage manifest** — `WorkflowsDesignStorageManifest` declares the physical shape (projected
+  columns, indexes, bounded scale-bearing queries, and width limits). Its units are declared directly
+  against the public v2 catalog by the lane registration; `WorkflowsDesignGroundworkStorageManifestSource`
+  is the lane identity that publishes them and lets a cross-lane caller resolve this lane's target.
+  Searchable text columns are bounded to 256 characters and identity/sort-key columns to 128;
+  over-limit values fail projection validation rather than truncate.
 - **Atomic writer seam** — `IDesignAtomicWriter` (default `GroundworkDesignAtomicWrite`, from
   `Elsa.Persistence.Groundwork.Querying`) provides replay-safe multi-document mutation over the shared
   `designOperation` ledger, contributed once across both design lanes.

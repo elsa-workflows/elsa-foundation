@@ -14,19 +14,19 @@ namespace Elsa.Persistence.Groundwork.Targets;
 /// </summary>
 public sealed class GroundworkLaneStores(IServiceProvider serviceProvider, GroundworkLaneTargets laneTargets)
 {
-    /// <summary>The store backing the lane declared by <typeparamref name="TManifestSource"/>.</summary>
-    public IDocumentStore For<TManifestSource>()
-        where TManifestSource : IGroundworkStorageManifestSource => For(typeof(TManifestSource));
+    /// <summary>The store backing the lane identified by <typeparamref name="TLane"/>.</summary>
+    public IDocumentStore For<TLane>()
+        where TLane : IGroundworkStorageLane => For(typeof(TLane));
 
     /// <summary>
     /// The bounded-query store backing that lane. Resolved by its own contract rather than cast from the
     /// document store: the scoped Groundwork adapter satisfies both, but a host-supplied raw provider store
     /// need not, and silently treating one as the other is how a lane ends up querying nothing.
     /// </summary>
-    public IBoundedDocumentStore BoundedFor<TManifestSource>()
-        where TManifestSource : IGroundworkStorageManifestSource
+    public IBoundedDocumentStore BoundedFor<TLane>()
+        where TLane : IGroundworkStorageLane
     {
-        var target = laneTargets.For(typeof(TManifestSource));
+        var target = laneTargets.For(typeof(TLane));
         var keyed = serviceProvider.GetKeyedService<IBoundedDocumentStore>(target);
         if (keyed is not null)
             return keyed;
@@ -34,21 +34,21 @@ public sealed class GroundworkLaneStores(IServiceProvider serviceProvider, Groun
         if (!GroundworkTargetNames.IsDefault(target))
         {
             throw new InvalidOperationException(
-                $"Groundwork target '{target}' has no bounded document store, so the lane declared by " +
-                $"'{typeof(TManifestSource).Name}' cannot run its admitted queries.");
+                $"Groundwork target '{target}' has no bounded document store, so the lane identified by " +
+                $"'{typeof(TLane).Name}' cannot run its admitted queries.");
         }
 
         return serviceProvider.GetService<IBoundedDocumentStore>()
-               ?? For<TManifestSource>() as IBoundedDocumentStore
+               ?? For<TLane>() as IBoundedDocumentStore
                ?? throw new InvalidOperationException(
                    "The default Groundwork target has no bounded document store.");
     }
 
-    /// <summary>The store backing the lane whose manifest source is <paramref name="manifestSourceType"/>.</summary>
-    public IDocumentStore For(Type manifestSourceType)
+    /// <summary>The store backing the lane identified by <paramref name="laneType"/>.</summary>
+    public IDocumentStore For(Type laneType)
     {
-        ArgumentNullException.ThrowIfNull(manifestSourceType);
-        var target = laneTargets.For(manifestSourceType);
+        ArgumentNullException.ThrowIfNull(laneType);
+        var target = laneTargets.For(laneType);
         var keyed = serviceProvider.GetKeyedService<IDocumentStore>(target);
         if (keyed is not null)
             return keyed;
@@ -57,7 +57,7 @@ public sealed class GroundworkLaneStores(IServiceProvider serviceProvider, Groun
         {
             throw new InvalidOperationException(
                 $"Groundwork target '{target}' has no document store, so the lane declared by " +
-                $"'{manifestSourceType.Name}' cannot be reached. Declare the target on a provider feature.");
+                $"'{laneType.Name}' cannot be reached. Declare the target on a provider feature.");
         }
 
         // The default lane may be served by a host-supplied ambient store, exactly as the registrar allows.

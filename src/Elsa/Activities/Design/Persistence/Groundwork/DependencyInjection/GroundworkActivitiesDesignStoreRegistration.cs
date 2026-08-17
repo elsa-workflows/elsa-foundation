@@ -22,6 +22,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
         string? targetName = null)
     {
         services.AddPersistenceCore();
+        services.AddGroundworkStorageLane<ActivitiesDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in ActivitiesDesignStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
 

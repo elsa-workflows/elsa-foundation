@@ -10,11 +10,8 @@ namespace Elsa.Persistence.Groundwork.Composition;
 /// Implementations live with their feature adapters; the host-owned composition module consumes
 /// this acyclic seam before a provider is materialized.
 /// </summary>
-public interface IGroundworkStorageManifestSource
+public interface IGroundworkStorageManifestSource : IGroundworkStorageLane
 {
-    /// <summary>Gets the stable feature identity used for ordering, ownership and diagnostics.</summary>
-    string FeatureIdentity { get; }
-
     /// <summary>Creates the feature's provider-neutral durable storage declaration.</summary>
     ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
         CancellationToken cancellationToken = default);

@@ -13,30 +13,30 @@ namespace Elsa.Persistence.Groundwork.Targets;
 /// </summary>
 public sealed class GroundworkLaneTargets(GroundworkManifestBindings bindings)
 {
-    /// <summary>The target owning the lane declared by <typeparamref name="TManifestSource"/>.</summary>
-    public string For<TManifestSource>()
-        where TManifestSource : IGroundworkStorageManifestSource => For(typeof(TManifestSource));
+    /// <summary>The target owning the lane declared by <typeparamref name="TLane"/>.</summary>
+    public string For<TLane>()
+        where TLane : IGroundworkStorageLane => For(typeof(TLane));
 
     /// <summary>
-    /// The target owning the lane whose manifest source is <paramref name="manifestSourceType"/>.
+    /// The target owning the lane identified by <paramref name="laneType"/>.
     /// <para>
-    /// An unbound source resolves to the default target, which is intended — a lane that names no target
+    /// An unbound lane resolves to the default target, which is intended — a lane that names no target
     /// belongs to the default one. That makes passing the wrong type indistinguishable from an unbound lane,
     /// so the type is checked here rather than silently answering "default" for, say, a manifest type.
     /// </para>
     /// </summary>
-    public string For(Type manifestSourceType)
+    public string For(Type laneType)
     {
-        ArgumentNullException.ThrowIfNull(manifestSourceType);
-        if (!typeof(IGroundworkStorageManifestSource).IsAssignableFrom(manifestSourceType))
+        ArgumentNullException.ThrowIfNull(laneType);
+        if (!typeof(IGroundworkStorageLane).IsAssignableFrom(laneType))
         {
             throw new ArgumentException(
-                $"'{manifestSourceType.FullName}' is not an {nameof(IGroundworkStorageManifestSource)}. " +
-                "Lane targets are keyed by manifest source type; a manifest type resolves nothing.",
-                nameof(manifestSourceType));
+                $"'{laneType.FullName}' is not an {nameof(IGroundworkStorageLane)}. " +
+                "Lane targets are keyed by lane type; a manifest type resolves nothing.",
+                nameof(laneType));
         }
 
-        return bindings.TargetFor(manifestSourceType);
+        return bindings.TargetFor(laneType);
     }
 
     /// <summary>Whether every named lane resolves to the same target.</summary>

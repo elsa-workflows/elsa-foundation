@@ -22,6 +22,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddPersistenceCore();
+        services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
 

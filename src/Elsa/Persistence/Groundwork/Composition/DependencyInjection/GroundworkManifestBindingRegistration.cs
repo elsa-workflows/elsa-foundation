@@ -16,22 +16,17 @@ public static class GroundworkManifestBindingRegistration
     public static GroundworkManifestBindings GroundworkManifestBindings(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        var existing = services
-            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkManifestBindings))
-            .Select(descriptor => descriptor.ImplementationInstance as GroundworkManifestBindings)
-            .FirstOrDefault(bindings => bindings is not null);
-        if (existing is not null)
-            return existing;
-
-        var created = new GroundworkManifestBindings();
-        services.AddSingleton(created);
+        // The bindings themselves live with the v2 catalog, because a lane that declares its units
+        // directly has to be able to bind itself without taking the document-store closure. Resolving
+        // them over that seam keeps one instance whichever side registered first.
+        var bindings = GroundworkStorageUnitServiceCollectionExtensions.FindOrAddManifestBindings(services);
         // Cross-lane operations ask which target a lane landed on; everything else is handed its store.
         services.TryAddSingleton<GroundworkLaneTargets>();
         // ...and the few that write several lanes need each lane's store, not just its target name.
         // Scoped, because it hands back the scoped per-target document stores: a singleton holding the
         // root provider would resolve them from the root and capture them outside any request scope.
         services.TryAddScoped<GroundworkLaneStores>();
-        return created;
+        return bindings;
     }
 
     /// <summary>
