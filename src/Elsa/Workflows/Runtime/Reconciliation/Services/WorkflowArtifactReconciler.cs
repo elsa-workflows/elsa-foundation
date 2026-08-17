@@ -220,7 +220,7 @@ public sealed class WorkflowArtifactReconciler(
         var slot = await activationAuthority.FindAsync(identity.DefinitionId, DefaultSlotName, cancellationToken);
         var command = new WorkflowActivationCommand(
             member,
-            MintSourceReference(source, identity, activationId),
+            MintSourceReference(source, file.TenantId, identity, activationId),
             DefaultSlotName,
             activationId,
             WorkflowActivationSource.ArtifactReconciliation(source.SourceId),
@@ -323,6 +323,7 @@ public sealed class WorkflowArtifactReconciler(
     /// </remarks>
     private WorkflowExecutableSourceReference MintSourceReference(
         IWorkflowArtifactReconciliationSource source,
+        string? tenantId,
         WorkflowExecutableIdentity identity,
         string activationId)
     {
@@ -341,7 +342,7 @@ public sealed class WorkflowArtifactReconciler(
             Scope: WorkflowExecutableReferenceScope.Published,
             ActivationId: activationId,
             SlotId: WorkflowActivationSlotIdentity.Create(identity.DefinitionId, DefaultSlotName),
-            TenantId: source.TenantId);
+            TenantId: tenantId);
     }
 
     /// <summary>

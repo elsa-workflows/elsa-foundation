@@ -32,8 +32,6 @@ public sealed class JsonWorkflowArtifactReconciliationSource(
 
     public string SourceKind => Kind;
 
-    public string? TenantId => _options.TenantId;
-
     public async IAsyncEnumerable<WorkflowArtifactClosureFile> ReadAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -41,7 +39,7 @@ public sealed class JsonWorkflowArtifactReconciliationSource(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var closure = reader.Read(file.FilePath, cancellationToken);
-            yield return new WorkflowArtifactClosureFile(file.FilePath, closure);
+            yield return new WorkflowArtifactClosureFile(file.FilePath, closure, _options.TenantId);
         }
 
         // The method is async-iterator-shaped for the contract's benefit (a blob or OCI source genuinely awaits

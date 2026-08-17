@@ -11,7 +11,24 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 /// derive anything from it.
 /// </param>
 /// <param name="Closure">The envelope itself, already parsed by the source.</param>
-public sealed record WorkflowArtifactClosureFile(string Origin, WorkflowArtifactClosure Closure);
+/// <param name="TenantId">
+/// The tenant to stamp on every source reference minted from this file, or <see langword="null"/> for the
+/// untenanted default (FR-B-002).
+/// </param>
+/// <remarks>
+/// Tenancy rides on the file rather than on <see cref="IWorkflowArtifactReconciliationSource"/> so the contract
+/// keeps exactly the three members T052 pins. A defaulted interface member would have made every future source
+/// silently untenanted unless it remembered to opt in — and widening a public <c>.Core</c> contract to carry
+/// configuration is a change that is cheap now and breaking later. Duplicating one string per file costs nothing.
+/// <para>
+/// <b>Scope</b>: this is the tenant of the minted <em>source reference</em>. It is not an activation-slot key —
+/// the slot is deliberately untenanted, matching the untenanted trigger bindings it projects into — and it is not
+/// the execution tenant, which is stamped separately at execution time. Its one consumer is the same-artifact
+/// no-op comparison, which without it would read every imported reference as untenanted and refuse to no-op on a
+/// genuine same-tenant re-import. Per-tenant fan-out is deferred.
+/// </para>
+/// </remarks>
+public sealed record WorkflowArtifactClosureFile(string Origin, WorkflowArtifactClosure Closure, string? TenantId = null);
 
 /// <summary>
 /// A source of portable workflow-executable closures for the runtime-side reconciliation lifecycle (FR-B-002).
@@ -35,17 +52,6 @@ public interface IWorkflowArtifactReconciliationSource
 
     /// <summary>The kind of source, e.g. <c>"Json"</c>. Stamped on every minted source reference as provenance.</summary>
     string SourceKind { get; }
-
-    /// <summary>
-    /// The tenant stamped on every reference this source's artifacts mint, or <see langword="null"/> for the
-    /// untenanted default.
-    /// </summary>
-    /// <remarks>
-    /// Defaulted rather than required because tenancy is a source <em>configuration</em> axis, not part of a
-    /// source's identity: a source that has no tenant concept should not have to say so. Per-tenant fan-out (one
-    /// source serving several tenants) is deferred — FR-B-002 — so this is one value per source, not a set.
-    /// </remarks>
-    string? TenantId => null;
 
     /// <summary>
     /// Reads the closures this source currently offers. Called once per reconcile pass and enumerated lazily, so a
