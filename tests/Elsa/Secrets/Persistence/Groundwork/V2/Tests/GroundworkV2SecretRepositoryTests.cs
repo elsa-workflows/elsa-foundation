@@ -118,11 +118,54 @@ public sealed class GroundworkV2SecretRepositoryTests
 
         _ = await repository.ListPageAsync("tenant-a", new SecretRepositoryListRequest(search: "pay", take: 25));
 
+        Assert.Equal(2, source.Queries.Count);
+        var bound = source.Queries[0];
+        Assert.IsType<Predicate.AlwaysTrue>(bound.Where);
+        Assert.Equal(10_001, bound.Paging.Limit);
+        Assert.Equal("GW-SCAN-ELSA-SECRETS-SUBSTRING", bound.AcceptedScan!.Id);
+
+        var search = source.Queries[1];
+        Assert.Equal("GW-SCAN-ELSA-SECRETS-SUBSTRING", search.AcceptedScan!.Id);
+        Assert.True(search.AcceptedScan.Allowed);
+        Assert.Equal(25, search.Paging.Limit);
+        Assert.True(search.Result.IncludesTotalCount);
+    }
+
+    [Fact]
+    public async Task SearchRefusesAnOversizedScopedCatalogBeforeExecutingTheSubstringScan()
+    {
+        var source = new RecordingSessionSource(catalogRows: 10_001);
+        var repository = new GroundworkSecretRepository(source);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await repository.ListPageAsync(
+                "tenant-a",
+                new SecretRepositoryListRequest(search: "pay", take: 25)));
+
+        Assert.Contains("10,000", exception.Message, StringComparison.Ordinal);
         var request = Assert.Single(source.Queries);
-        Assert.Equal("GW-SCAN-ELSA-SECRETS-SUBSTRING", request.AcceptedScan!.Id);
-        Assert.True(request.AcceptedScan.Allowed);
-        Assert.Equal(25, request.Paging.Limit);
-        Assert.True(request.Result.IncludesTotalCount);
+        Assert.IsType<Predicate.AlwaysTrue>(request.Where);
+        Assert.Equal(10_001, request.Paging.Limit);
+    }
+
+    [Fact]
+    public async Task SqliteSubstringSearchAcceptsTheExactCatalogBoundAndRefusesTheNextRow()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        fixture.SeedCatalogRows(0, 10_000);
+
+        var admitted = await fixture.Repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(search: "not-present", take: 25));
+        Assert.Empty(admitted.Items);
+        Assert.Equal(0, admitted.TotalCount);
+
+        fixture.SeedCatalogRows(10_000, 1);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await fixture.Repository.ListPageAsync(
+                "tenant-a",
+                new SecretRepositoryListRequest(search: "not-present", take: 25)));
+        Assert.Contains("10,000", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -195,6 +238,7 @@ public sealed class GroundworkV2SecretRepositoryTests
     private sealed class SqliteFixture(
         TemporarySqliteDatabase database,
         IStorageProviderConnection connection,
+        StorageUnit unit,
         ISecretRepository repository) : IAsyncDisposable
     {
         public ISecretRepository Repository { get; } = repository;
@@ -206,13 +250,47 @@ public sealed class GroundworkV2SecretRepositoryTests
             var unit = SecretsGroundworkStorageSchema.CreateUnit();
             connection.Schema.Apply(unit);
             var source = new DirectSessionSource(connection, unit);
-            return ValueTask.FromResult(new SqliteFixture(database, connection, new GroundworkSecretRepository(source)));
+            return ValueTask.FromResult(new SqliteFixture(
+                database,
+                connection,
+                unit,
+                new GroundworkSecretRepository(source)));
+        }
+
+        public void SeedCatalogRows(int start, int count)
+        {
+            var session = connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")));
+            var batched = Assert.IsAssignableFrom<IBatchedStorageSession>(session);
+            foreach (var batch in Enumerable.Range(start, count).Chunk(500))
+            {
+                var writes = batch.Select(index => RowWrite.Insert(unit, RawSecretValues(index))).ToArray();
+                var outcomes = batched.ApplyBatch(writes);
+                Assert.Equal(writes.Length, outcomes.Count);
+                Assert.All(outcomes, outcome => Assert.True(outcome.Outcome.Succeeded));
+            }
         }
 
         public async ValueTask DisposeAsync()
         {
             connection.Dispose();
             await database.DisposeAsync();
+        }
+
+        private static StorageValues RawSecretValues(int index)
+        {
+            var name = $"bounded-{index:D5}";
+            return new StorageValues(new Dictionary<string, object?>
+            {
+                [SecretsGroundworkStorageSchema.TenantIdField] = "tenant-a",
+                [SecretsGroundworkStorageSchema.NormalizedNameField] = name,
+                [SecretsGroundworkStorageSchema.NameSearchKeyField] = name,
+                [SecretsGroundworkStorageSchema.DisplayNameSearchKeyField] = name,
+                [SecretsGroundworkStorageSchema.TypeNameLookupKeyField] = "text",
+                [SecretsGroundworkStorageSchema.StoreNameLookupKeyField] = "encrypted",
+                [SecretsGroundworkStorageSchema.StatusField] = "active",
+                [SecretsGroundworkStorageSchema.HasNonExpiringActiveVersionField] = true,
+                [SecretsGroundworkStorageSchema.PayloadField] = "{}"
+            });
         }
     }
 
@@ -231,16 +309,16 @@ public sealed class GroundworkV2SecretRepositoryTests
         public StorageUnit Unit(string unitId, string? targetName = null) => unit;
     }
 
-    private sealed class RecordingSessionSource : IGroundworkStorageSessionSource
+    private sealed class RecordingSessionSource(int catalogRows = 0) : IGroundworkStorageSessionSource
     {
-        private readonly RecordingSession session = new();
+        private readonly RecordingSession session = new(catalogRows);
         public List<QueryRequest> Queries => session.Queries;
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => session;
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => throw new NotSupportedException();
         public StorageUnit Unit(string unitId, string? targetName = null) => session.Unit;
     }
 
-    private sealed class RecordingSession : IStorageSession
+    private sealed class RecordingSession(int catalogRows) : IStorageSession
     {
         public StorageUnit Unit { get; } = SecretsGroundworkStorageSchema.CreateUnit();
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));
@@ -249,6 +327,14 @@ public sealed class GroundworkV2SecretRepositoryTests
         public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
         {
             Queries.Add(request);
+            if (request.Where is Predicate.AlwaysTrue && catalogRows > 0)
+            {
+                IReadOnlyDictionary<string, object?> row = new Dictionary<string, object?>
+                {
+                    [SecretsGroundworkStorageSchema.NormalizedNameField] = "bounded"
+                };
+                return new(Enumerable.Repeat(row, catalogRows).ToArray(), catalogRows, null);
+            }
             return new([], 0, null);
         }
         public AggregationResult Aggregate(AggregationQuery query) => throw new NotSupportedException();

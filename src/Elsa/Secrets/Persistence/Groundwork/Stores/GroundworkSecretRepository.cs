@@ -12,6 +12,8 @@ public sealed class GroundworkSecretRepository(
     IGroundworkStorageSessionSource sessions,
     string? targetName = null) : ISecretRepository, IRevisionAwareSecretRepository, IPagedSecretRepository
 {
+    private const int MaximumSubstringSearchCatalogRows = 10_000;
+
     public ValueTask<Secret?> FindAsync(
         string tenantId,
         string normalizedName,
@@ -51,7 +53,11 @@ public sealed class GroundworkSecretRepository(
         if (IsContradictory(request))
             return ValueTask.FromResult(new SecretRepositoryPage([], 0));
 
-        var result = Session(tenantId).Query(ListQuery(tenantId, request));
+        var session = Session(tenantId);
+        if (request.Search is not null)
+            EnsureSubstringSearchCatalogBound(session);
+
+        var result = session.Query(ListQuery(tenantId, request));
         var items = result.Rows.Select(row => Map(row, tenantId)).ToArray();
         return ValueTask.FromResult(new SecretRepositoryPage(
             items,
@@ -185,9 +191,25 @@ public sealed class GroundworkSecretRepository(
 
     private static readonly ScanAcceptance SearchScanAcceptance = ScanAcceptance.Allow(
         "GW-SCAN-ELSA-SECRETS-SUBSTRING",
-        "Portable case-insensitive substring search has no cross-provider index shape; the API bounds each page to 250 rows.",
+        "Portable case-insensitive substring search has no cross-provider index shape. Each request first probes at most 10,001 scoped rows and refuses catalogs over 10,000 rows; the admitted search then scans at most 10,000 rows and returns at most 250.",
         "elsa-secrets",
         new DateTimeOffset(2027, 8, 16, 0, 0, 0, TimeSpan.Zero));
+
+    private static void EnsureSubstringSearchCatalogBound(IStorageSession session)
+    {
+        var request = new QueryRequest(
+            new TableId(SecretsGroundworkStorageSchema.UnitName),
+            Predicate.AlwaysTrue.Instance,
+            [new OrderTerm(Columns.NormalizedName, OrderDirection.Ascending, NullOrder.First)],
+            Projection.ColumnsOnly([Columns.NormalizedName]),
+            Paging.Keyset(MaximumSubstringSearchCatalogRows + 1),
+            acceptedScan: SearchScanAcceptance);
+        if (session.Query(request).Rows.Count > MaximumSubstringSearchCatalogRows)
+        {
+            throw new InvalidOperationException(
+                "Secret substring search is limited to scoped catalogs containing at most 10,000 rows; narrow the storage scope before searching.");
+        }
+    }
 
     private static Predicate Equal(ColumnRef column, object? value) =>
         new Predicate.Equal(column, QueryConstant.Of(column, value));

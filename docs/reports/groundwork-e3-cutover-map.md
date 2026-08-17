@@ -1,8 +1,8 @@
-# Groundwork E3 atomic cutover map
+# Groundwork E3 atomic v2 delivery map
 
-This is the dependency order for the clean break tracked by Groundwork #269. The endpoint is one
-Groundwork v2 runtime in every shipping process: no v1 package, migration path, dual write, fallback,
-assembly alias, or mixed-runtime bridge. Catalogs are fresh.
+This is the dependency order tracked by Groundwork #269. The endpoint is one Groundwork v2 runtime
+in every shipping process, backed only by fresh catalogs. No v1 package, dual write, fallback,
+assembly alias, or mixed-runtime bridge is part of the delivered product.
 
 The effective `0.0.1-preview.131` direct-reference inventory at Elsa commit `de6b0f859` is:
 
@@ -41,7 +41,7 @@ package IDs intentionally remain unchanged.
    workflow test-scope/admission/cleanup, scheduler-state, incident-state, workflow-hold, and
    scheduler-poison verticals are complete. The
    remaining runtime stores and shipping composition still use v1.
-4. **Design and publishing dependants.** Migrate Activities Design, Workflows Design, Elsa3 reusable
+4. **Design and publishing dependants.** Replace Activities Design, Workflows Design, Elsa3 reusable
    activity import, and Workflows Publishing in that order. Preserve their atomic commands and
    projection/query behavior against the shared v2 runtime from step 3.
 5. **Dashboard and provider leaves.** Replace the four old provider projects with v2 provider
@@ -81,7 +81,7 @@ The current source tree contains one reviewed `ScanAcceptance` and one matching 
 
 | Acceptance | Route | Bound | Owner / expiry | Review decision |
 |---|---|---|---|---|
-| `GW-SCAN-ELSA-SECRETS-SUBSTRING` | Secrets list search over normalized name or display name with portable `Contains` semantics | The public request caps each page at 250 rows; the acceptance is attached only when `Search` is present | `elsa-secrets` / 2027-08-16 UTC | Accepted. Portable case-insensitive substring matching has no index shape shared by SQLite, PostgreSQL, SQL Server, and MongoDB. Exact type/store/scope/status predicates remain provider-side and unsearched list requests carry no acceptance. |
+| `GW-SCAN-ELSA-SECRETS-SUBSTRING` | Secrets list search over normalized name or display name with portable `Contains` semantics | Each search performs one early-stopping probe of at most 10,001 scoped rows and refuses catalogs over 10,000 rows before the substring query; the admitted query examines at most 10,000 scoped rows and returns at most 250 | `elsa-secrets` / 2027-08-16 UTC | Accepted. Portable case-insensitive substring matching has no index shape shared by SQLite, PostgreSQL, SQL Server, and MongoDB. Exact type/store/scope/status predicates remain provider-side and unsearched list requests carry no acceptance. |
 
 Source: [`GroundworkSecretRepository`](../../src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs)
 and its assembly-level [`GwAllowAcceptedScans`](../../src/Elsa/Secrets/Persistence/Groundwork/AcceptedScans.cs).
