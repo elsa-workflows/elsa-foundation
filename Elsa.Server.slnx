@@ -298,9 +298,12 @@
     <Project Path="src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Publishing/">
-    <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Workflows/Publishing/Api/">
+    <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <Project Path="src/Elsa/Workflows/Publishing/Api/Core/Elsa.Workflows.Publishing.Api.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Publishing/Persistence/">
     <Project Path="src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />

@@ -22,7 +22,6 @@ using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.Workflows;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
-using Elsa.Api.FastEndpoints;
 using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
@@ -283,9 +282,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
             // rejected with 401. All of these are enabled in the default shell (see shells.json) with
             // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
-            // The per-shell ApiSecurity feature is the only way to opt a shell out of endpoint security,
-            // and it is never enabled here (and is neutralized in Production regardless — see below).
-            //
             // W18 note (resolved): the earlier guard kept the token-issuance endpoints out of the default
             // shell because enabling them without an ITokenService would fault endpoint registration. The
             // OpenIddict module now supplies that service, so the fault condition no longer exists and the
@@ -300,7 +296,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
 
             typeof(OpenIddictIdentityFeature).Assembly,
-            typeof(ApiSecurityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
@@ -416,7 +411,7 @@ app.MapShellManagementApi("/_admin/shells")
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
 // note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
 // the captured console output is not readable anonymously — these are root-mapped endpoints that bypass the
-// per-shell ApiSecurity, so they must carry their own authorization. The empty-prefix group keeps the absolute
+// per-shell endpoint pipeline, so they must carry their own authorization. The empty-prefix group keeps the absolute
 // routes and applies the convention to every endpoint the mapper adds, including the hub.
 if (consoleLogStreamingEnabled)
 {

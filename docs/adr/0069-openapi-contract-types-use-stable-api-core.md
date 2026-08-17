@@ -87,4 +87,5 @@ contracts.
 
 - Spec and lifecycle matrix: [`specs/165-unload-safe-openapi`](../../specs/165-unload-safe-openapi/)
 - Decision report: [`docs/reports/unload-safe-openapi-boundary-2026-08.md`](../reports/unload-safe-openapi-boundary-2026-08.md)
+- Publishing owner proof: [`docs/reports/publishing-api-migration-2026-08.md`](../reports/publishing-api-migration-2026-08.md)
 - Parent authoring decision: [ADR 0068](0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)

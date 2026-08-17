@@ -8,7 +8,7 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 
 - Runtime-to-design direct reference signals: 0
 - Design-to-runtime direct reference signals: 5
-- Projects directly referencing both design and runtime projects: 14
+- Projects directly referencing both design and runtime projects: 15
 
 ## Direct Design/Runtime Signals
 
@@ -36,5 +36,6 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core | Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Publishing](../../src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Publishing.Api.Core](../../src/Elsa/Workflows/Publishing/Api/Core/Elsa.Workflows.Publishing.Api.Core.csproj) | Elsa.Activities.Design.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Publishing.Core](../../src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj) | Elsa.Activities.Design.Core<br>Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Publishing.Persistence.Groundwork](../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Groundwork | Elsa.Workflows.Runtime.Core |

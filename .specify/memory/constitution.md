@@ -145,7 +145,7 @@ owns always-fresh enumeration and project counts)*:
 | `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks`, `Elsa.Tasks.Schedules` (helper) |
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.{Api,JavaScript}`, `Elsa.Workflows.Design.{Reconciliation,Validations}.*`, `Elsa.Workflows.Design.Persistence.*` |
 | `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core`, `Elsa.Workflows.Runtime.{Api,Http,JavaScript}` |
-| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. | `Elsa.Workflows.Publishing.Api` |
+| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. | `Elsa.Workflows.Publishing.Api`, `Elsa.Workflows.Publishing.Api.Core` |
 | `Elsa.Workflows.Primitives` | Shares workflow primitives used by both Design and Runtime. | `Elsa.Workflows.Primitives` |
 | `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). | `Elsa3.Models`, `Elsa3.Mapping`, `Elsa3.Activities.Design.Import` |
 

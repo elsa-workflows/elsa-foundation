@@ -6,7 +6,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CShells.FastEndpoints" />
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Nuplane" />
@@ -93,6 +92,7 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
