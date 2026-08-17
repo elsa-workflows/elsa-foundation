@@ -260,9 +260,36 @@ public sealed class ShellReadinessTests
             owned.TraceId,
             ShellActivationTelemetry.SuccessOutcome,
             ShellActivationTelemetry.SuccessOutcome);
+        var selectedMeasurements = ShellActivationTelemetryRecorder.FindMeasurements(
+            new[]
+            {
+                new ShellActivationTelemetryRecorder.Measurement(
+                    foreign.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.ShellActivationPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.OverallPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.FeatureDiscoveryPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.ShellActivationPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)])
+            },
+            owned.TraceId);
 
         Assert.NotNull(selected);
         Assert.Equal(owned.TraceId, selected.TraceId);
+        Assert.Equal(3, selectedMeasurements.Length);
+        Assert.All(selectedMeasurements, measurement => Assert.Equal(owned.TraceId, measurement.TraceId));
 
         static (ActivityTraceId TraceId, Activity[] Activities) CreateTelemetryAttempt(bool includeFeatureDiscovery)
         {
@@ -444,7 +471,7 @@ public sealed class ShellReadinessTests
                 }
             };
             _meterListener.SetMeasurementEventCallback<double>((_, value, tags, _) =>
-                _measurements.Enqueue(new Measurement(value, tags.ToArray())));
+                _measurements.Enqueue(new Measurement(Activity.Current?.TraceId ?? default, value, tags.ToArray())));
             _meterListener.Start();
         }
 
@@ -473,16 +500,17 @@ public sealed class ShellReadinessTests
                     new[] { ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.PhaseTag },
                     activity.TagObjects.Select(tag => tag.Key).Order(StringComparer.Ordinal)));
 
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            var measurements = FindMeasurements(_measurements, traceId);
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.OverallPhase,
                 overallOutcome));
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.FeatureDiscoveryPhase,
                 ShellActivationTelemetry.SuccessOutcome));
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.ShellActivationPhase,
                 shellActivationOutcome));
-            Assert.All(_measurements, measurement =>
+            Assert.All(measurements, measurement =>
             {
                 Assert.True(measurement.Value >= 0);
                 Assert.Equal(
@@ -507,6 +535,9 @@ public sealed class ShellReadinessTests
                     && HasTags(child, ShellActivationTelemetry.ShellActivationPhase, shellActivationOutcome)));
         }
 
+        internal static Measurement[] FindMeasurements(IEnumerable<Measurement> measurements, ActivityTraceId traceId) =>
+            measurements.Where(measurement => measurement.TraceId == traceId).ToArray();
+
         public void Dispose()
         {
             _meterListener.Dispose();
@@ -517,7 +548,7 @@ public sealed class ShellReadinessTests
             Equals(activity.GetTagItem(ShellActivationTelemetry.PhaseTag), phase)
             && Equals(activity.GetTagItem(ShellActivationTelemetry.OutcomeTag), outcome);
 
-        private sealed record Measurement(double Value, KeyValuePair<string, object?>[] Tags)
+        internal sealed record Measurement(ActivityTraceId TraceId, double Value, KeyValuePair<string, object?>[] Tags)
         {
             public bool HasTags(string phase, string outcome) =>
                 Equals(Tag(ShellActivationTelemetry.PhaseTag), phase)
