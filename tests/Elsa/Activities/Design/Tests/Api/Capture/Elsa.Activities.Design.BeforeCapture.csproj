@@ -13,6 +13,8 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="../../../../../../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj"
+                      Condition="Exists('../../../../../../../src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj')" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj" />
@@ -20,8 +22,4 @@
     <ProjectReference Include="../../../../../../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="../Support/ActivitiesDesignCompatibilityCases.cs" Link="Support/ActivitiesDesignCompatibilityCases.cs" />
-    <Compile Include="../Support/ActivitiesDesignCompatibilityHost.cs" Link="Support/ActivitiesDesignCompatibilityHost.cs" />
-  </ItemGroup>
 </Project>

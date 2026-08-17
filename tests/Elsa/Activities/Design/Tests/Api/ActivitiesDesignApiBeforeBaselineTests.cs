@@ -4,9 +4,6 @@ using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.OpenApi;
-using Microsoft.AspNetCore.Http.Metadata;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,7 +19,7 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
     private const string OpenApiFileName = "activities-design-openapi-fastendpoints.json";
     private const string RawOpenApiFileName = "activities-design-openapi-fastendpoints.raw.json";
     private const string ReceiptFileName = "activities-design-before-capture-receipt.json";
-    private const string ApprovalsFileName = "activities-design-approved-differences.json";
+    private const string InitialApprovalsFileName = "activities-design-approved-differences.initial.json";
 
     [Fact]
     public void Reviewed_manifest_contains_exactly_38_one_to_one_route_registrations()
@@ -43,17 +40,18 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
     }
 
     [Fact]
-    public async Task Real_fastendpoints_host_exposes_exactly_the_reviewed_38_registrations()
+    public void Historical_fastendpoints_host_evidence_exposes_exactly_the_reviewed_38_registrations()
     {
-        await using var host = await ActivitiesDesignCompatibilityHost.StartAsync();
-        var endpoints = host.Host.Services.GetRequiredService<EndpointDataSource>().Endpoints
-            .Select(endpoint => (Endpoint: endpoint, Pattern: (endpoint as RouteEndpoint)?.RoutePattern))
-            .Where(item => item.Pattern?.RawText?.StartsWith("design/activities", StringComparison.OrdinalIgnoreCase) == true)
-            .SelectMany(item =>
-            {
-                var methods = item.Endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
-                return methods.Select(method => new EndpointIdentity("/" + item.Pattern!.RawText, method));
-            })
+        var source = File.ReadAllText(Path.Join(
+            RepositoryRoot,
+            "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityHost.cs"));
+        Assert.Contains("services.AddFastEndpoints(options => options.Assemblies = [typeof(ActivitiesDesignApiFeature).Assembly])", source, StringComparison.Ordinal);
+        Assert.Contains("endpoints.MapFastEndpoints", source, StringComparison.Ordinal);
+
+        var document = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory(), OpenApiFileName));
+        var endpoints = document.Operations
+            .Where(operation => operation.Endpoint.Route.Value.StartsWith("/design/activities", StringComparison.Ordinal))
+            .Select(operation => operation.Endpoint)
             .ToArray();
 
         Assert.Equal(38, endpoints.Length);
@@ -104,7 +102,7 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
     }
 
     [Fact]
-    public void Before_fixture_receipt_hashes_http_projected_raw_openapi_and_approvals()
+    public void Before_fixture_receipt_hashes_http_projected_raw_openapi_and_initial_empty_approvals()
     {
         var directory = BaselineDirectory();
         using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, ReceiptFileName)));
@@ -115,12 +113,12 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
         Assert.Equal(Hash(Path.Join(directory, HttpFileName)), root.GetProperty("httpSha256").GetString());
         Assert.Equal(Hash(Path.Join(directory, OpenApiFileName)), root.GetProperty("openApiSha256").GetString());
         Assert.Equal(Hash(Path.Join(directory, RawOpenApiFileName)), root.GetProperty("rawOpenApiSha256").GetString());
-        Assert.Equal(Hash(Path.Join(directory, ApprovalsFileName)), root.GetProperty("approvalsSha256").GetString());
+        Assert.Equal(Hash(Path.Join(directory, InitialApprovalsFileName)), root.GetProperty("initialApprovalsSha256").GetString());
         Assert.Equal("checked-in-commit", root.GetProperty("runnerIdentity").GetString());
         Assert.False(root.TryGetProperty("runnerCommit", out _));
         Assert.Contains("ACTIVITIES_DESIGN_BEFORE_COMMIT=", root.GetProperty("captureCommand").GetString(), StringComparison.Ordinal);
         Assert.Contains("git worktree add --detach", root.GetProperty("captureDescription").GetString(), StringComparison.Ordinal);
-        Assert.Equal("[]", BaselineFile.LoadCanonical(Path.Join(directory, ApprovalsFileName)));
+        Assert.Equal("[]", BaselineFile.LoadCanonical(Path.Join(directory, InitialApprovalsFileName)));
     }
 
     [Fact]
@@ -138,8 +136,8 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
                 "tools/capture-activities-design-before.sh",
                 "tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj",
                 "tests/Elsa/Activities/Design/Tests/Api/Capture/Program.cs",
-                "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs",
-                "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs",
+                "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityCases.cs",
+                "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityHost.cs",
                 "tests/Elsa/Api/Compatibility/Testing/Http/HttpEvidenceCapture.cs",
                 "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
                 "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
@@ -232,7 +230,7 @@ public sealed class ActivitiesDesignApiBeforeBaselineTests
         receipt.GetProperty("httpSha256").GetString() == (httpHash ?? Hash(Path.Join(directory, HttpFileName))) &&
         receipt.GetProperty("openApiSha256").GetString() == Hash(Path.Join(directory, OpenApiFileName)) &&
         receipt.GetProperty("rawOpenApiSha256").GetString() == Hash(Path.Join(directory, RawOpenApiFileName)) &&
-        receipt.GetProperty("approvalsSha256").GetString() == Hash(Path.Join(directory, ApprovalsFileName)) &&
+        receipt.GetProperty("initialApprovalsSha256").GetString() == Hash(Path.Join(directory, InitialApprovalsFileName)) &&
         receipt.GetProperty("registrationCount").GetInt32() == 38 &&
         receipt.GetProperty("caseCount").GetInt32() == ActivitiesDesignCompatibilityCases.All.Count &&
         receipt.GetProperty("operationCount").GetInt32() == 38;

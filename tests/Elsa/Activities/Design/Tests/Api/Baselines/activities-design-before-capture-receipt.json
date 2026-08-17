@@ -1,5 +1,5 @@
 {
-  "approvalsSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "initialApprovalsSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
   "capture": "real-fastendpoints-historical-worktree",
   "captureCommand": "ACTIVITIES_DESIGN_BEFORE_COMMIT=883b691eb8fdd4515b378e0d89b19c2185ea9e00 bash tools/capture-activities-design-before.sh",
   "captureDescription": "git worktree add --detach sourceCommit; execute only checked-in runner content",
@@ -21,26 +21,26 @@
     {
       "identity": "checked-in-commit",
       "path": "tools/capture-activities-design-before.sh",
-      "sha256": "57ddf595ac83e90ea686a01f38ede1806c32d6a79142978fd7d721209a703b34"
+      "sha256": "80e0ef98346bc5781bf19bb2c7b86cb14d62bb852e09e869d9ac3323cf621132"
     },
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj",
-      "sha256": "c159c3ca9ce2d8d74fd0c13856a57a3f8c195b5fd501d3cf0e6630a61cf1962f"
+      "sha256": "8b16241d35e12e15b4a0b70088bab9f92d36cd032e2fabfd57b9a37ac8bf1019"
     },
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/Program.cs",
-      "sha256": "cfd6df0bb55a9f1f295cc6cf23e335f2fd81399368b56d145ba5c0439f866e79"
+      "sha256": "ca7e599fe02c1d235e637580373f601b4f8481917e5fc90e0af6a1f069c2bc3d"
     },
     {
       "identity": "checked-in-commit",
-      "path": "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs",
+      "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityCases.cs",
       "sha256": "396b7a6d98671648785cda943dd94c69a9b0963eb4a4d85e48f92719492c0a78"
     },
     {
       "identity": "checked-in-commit",
-      "path": "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs",
+      "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityHost.cs",
       "sha256": "9a19a1db7cef74ea6ab74d510f01204f42d766e55ef99f33ea50e649db1a5f0c"
     },
     {
@@ -64,7 +64,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "a3187b3cbb9523d9bc5bf3e6d41f35b61e8eeb9e508093da4623a42b411f6955",
+  "runnerFingerprint": "07f703e9102103a0e95c2435fe20e1af3daf51f12ab7c481f73a0fa3057cc245",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "883b691eb8fdd4515b378e0d89b19c2185ea9e00",
   "sourceRelationship": "ancestor-before-migration",

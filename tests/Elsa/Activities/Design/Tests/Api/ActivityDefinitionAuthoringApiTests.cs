@@ -4,11 +4,10 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Tests.Api.Support;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
-using FastEndpoints;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -20,7 +19,7 @@ namespace Elsa.Activities.Design.Tests.Api;
 
 public sealed class ActivityDefinitionAuthoringApiTests
 {
-    private const string Root = "Elsa.Activities.Design.Api.Endpoints";
+    private const string OperationPrefix = "ElsaActivitiesDesignApiEndpoints";
 
     public static TheoryData<string, string, string> Routes => new()
     {
@@ -190,12 +189,15 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
     [Theory]
     [MemberData(nameof(Routes))]
-    public void Endpoint_routes_match_the_reviewed_wire_contract(string endpointName, string verb, string route)
+    public async Task Endpoint_routes_match_the_reviewed_wire_contract(string endpointName, string verb, string route)
     {
-        var definition = ConfiguredDefinition($"{Root}.{endpointName}");
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = host.Host.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(item => item.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == OperationPrefix + Compact(endpointName));
 
-        Assert.Equal(verb, Assert.Single(definition.Verbs));
-        Assert.Equal(route, Assert.Single(definition.Routes));
+        Assert.Equal(route, endpoint.RoutePattern.RawText?.TrimStart('/'));
+        Assert.Equal(verb, Assert.Single(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods));
     }
 
     [Fact]
@@ -287,13 +289,12 @@ public sealed class ActivityDefinitionAuthoringApiTests
     [InlineData(typeof(PreviewActivityDraftDiff), nameof(PreviewActivityDraftDiff.DraftId))]
     [InlineData(typeof(ApplyActivityUpgradePlan), nameof(ApplyActivityUpgradePlan.PlanId))]
     [InlineData(typeof(RefreshActivityUpgradePlan), nameof(RefreshActivityUpgradePlan.PlanId))]
-    public void Mutating_route_identifiers_are_explicitly_bound_from_the_route(Type requestType, string propertyName)
+    public void Mutating_route_identifiers_are_omitted_from_json_for_explicit_minimal_api_route_binding(Type requestType, string propertyName)
     {
         var property = requestType.GetProperty(propertyName);
 
         Assert.NotNull(property);
-        Assert.NotNull(property!.GetCustomAttribute<RouteParamAttribute>());
-        Assert.NotNull(property.GetCustomAttribute<System.Text.Json.Serialization.JsonIgnoreAttribute>());
+        Assert.NotNull(property!.GetCustomAttribute<System.Text.Json.Serialization.JsonIgnoreAttribute>());
     }
 
     public static TheoryData<string, string, string, object> RouteBoundDispatches => new()
@@ -332,22 +333,28 @@ public sealed class ActivityDefinitionAuthoringApiTests
         object request)
     {
         const string routeValue = "draft-from-route";
-        var sender = new CapturingMediatorSender();
-        var endpoint = CreateEndpoint(
-            $"{Root}.{endpointName}",
-            context => context.Request.RouteValues[routeParameterName] = routeValue,
-            sender);
-        var handle = endpoint.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .Single(method => method.Name == "HandleAsync"
-                              && method.GetParameters() is [var first, var second]
-                              && first.ParameterType == request.GetType()
-                              && second.ParameterType == typeof(CancellationToken));
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var endpoint = host.Host.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(item => item.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == OperationPrefix + Compact(endpointName));
+        Assert.Contains($"{{{routeParameterName}}}", endpoint.RoutePattern.RawText, StringComparison.Ordinal);
+        var contract = ActivitiesDesignCompatibilityCases.Manifest.Single(item => item.Id == endpointName);
+        var route = contract.RequestPath.Replace("draft-route", routeValue, StringComparison.Ordinal);
+        var method = Assert.Single(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        using var message = new HttpRequestMessage(new HttpMethod(method), route)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(request, request.GetType(), options), Encoding.UTF8, "application/json")
+        };
+        message.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
 
-        var invocation = (Task)handle.Invoke(endpoint, [request, CancellationToken.None])!;
+        using var response = await host.Client.SendAsync(message);
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => invocation);
-        Assert.NotNull(sender.Message);
-        Assert.Equal(routeValue, sender.Message!.GetType().GetProperty(propertyName)!.GetValue(sender.Message));
+        response.EnsureSuccessStatusCode();
+        var dispatched = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        Assert.NotNull(dispatched);
+        Assert.Equal(routeValue, dispatched!.GetType().GetProperty(propertyName)!.GetValue(dispatched));
     }
 
     [Fact]
@@ -594,93 +601,12 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Assert.Contains("\"impact\":\"Breaking\"", json, StringComparison.Ordinal);
     }
 
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
-    {
-        var endpoint = CreateEndpoint(endpointTypeName, _ => { });
-        endpoint.Configure();
-        return endpoint.Definition;
-    }
-
-    private static BaseEndpoint CreateEndpoint(
-        string endpointTypeName,
-        Action<DefaultHttpContext> configureContext,
-        CapturingMediatorSender? sender = null)
-    {
-        var endpointType = typeof(ActivitiesDesignApiFeature).Assembly.GetType(endpointTypeName, throwOnError: true)!;
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(x => ResolveDependency(x.ParameterType, sender))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(x => x.Name == nameof(Factory.Create)
-                         && x.IsGenericMethodDefinition
-                         && x.GetParameters() is [var first, var second]
-                         && first.ParameterType == typeof(Action<DefaultHttpContext>)
-                         && second.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        return (BaseEndpoint)create.Invoke(null, [configureContext, dependencies])!;
-    }
-
-    private static object ResolveDependency(Type type, CapturingMediatorSender? sender)
-    {
-        if (type == typeof(IRequestSender))
-            return sender is null ? new StubRequestSender() : sender;
-        if (type == typeof(ICommandSender))
-            return sender is null ? new StubCommandSender() : sender;
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Microsoft.Extensions.Logging.ILogger<>))
-        {
-            var loggerType = typeof(NullLogger<>).MakeGenericType(type.GetGenericArguments()[0]);
-            return (loggerType.GetProperty("Instance")?.GetValue(null)
-                    ?? loggerType.GetField("Instance")?.GetValue(null))!;
-        }
-        throw new InvalidOperationException($"Unexpected endpoint dependency '{type}'.");
-    }
-
     private static JsonElement Json(string json)
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
     }
 
-    private sealed class StubRequestSender : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-            throw new InvalidOperationException("Configuration-only test.");
-    }
+    private static string Compact(string id) => string.Concat(id.Split('.'));
 
-    private sealed class StubCommandSender : ICommandSender
-    {
-        public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-            throw new InvalidOperationException("Configuration-only test.");
-        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("Configuration-only test.");
-    }
-
-    private sealed class CapturingMediatorSender : ICommandSender, IRequestSender
-    {
-        public object? Message { get; private set; }
-
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            Message = request;
-            return Task.FromException<T>(new OperationCanceledException());
-        }
-
-        public Task<T> Send<T>(
-            Elsa.Mediator.Core.Contracts.ICommand<T> command,
-            CancellationToken cancellationToken = default) where T : notnull
-        {
-            Message = command;
-            return Task.FromException<T>(new OperationCanceledException());
-        }
-
-        public Task Send(
-            Elsa.Mediator.Core.Contracts.ICommand command,
-            CancellationToken cancellationToken = default)
-        {
-            Message = command;
-            return Task.FromException(new OperationCanceledException());
-        }
-    }
 }

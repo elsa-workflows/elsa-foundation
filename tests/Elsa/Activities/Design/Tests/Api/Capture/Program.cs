@@ -24,11 +24,11 @@ var projectedOpenApi = OpenApiEvidenceCapture.Capture(rawOpenApi, includeIdentit
 if (projectedOpenApi.Operations.Count(operation => operation.Endpoint.Route.Value.StartsWith("/design/activities", StringComparison.Ordinal)) != 38)
     throw new InvalidDataException("The before capture did not consume exactly 38 Activities Design OpenAPI operations.");
 
-var approvals = "[]";
+var approvals = "[]\n";
 var httpPath = Path.Join(outputDirectory, "activities-design-http-fastendpoints.json");
 var openApiPath = Path.Join(outputDirectory, "activities-design-openapi-fastendpoints.json");
 var rawOpenApiPath = Path.Join(outputDirectory, "activities-design-openapi-fastendpoints.raw.json");
-var approvalsPath = Path.Join(outputDirectory, "activities-design-approved-differences.json");
+var approvalsPath = Path.Join(outputDirectory, "activities-design-approved-differences.initial.json");
 File.WriteAllText(httpPath, CompatibilityJson.Serialize(observations));
 File.WriteAllText(openApiPath, CompatibilityJson.Serialize(projectedOpenApi));
 File.WriteAllText(rawOpenApiPath, CompatibilityJson.Canonicalize(rawOpenApi));
@@ -51,7 +51,7 @@ var receipt = new
     httpSha256 = Hash(httpPath),
     openApiSha256 = Hash(openApiPath),
     rawOpenApiSha256 = Hash(rawOpenApiPath),
-    approvalsSha256 = Hash(approvalsPath),
+    initialApprovalsSha256 = Hash(approvalsPath),
     categories = new[] { "anonymous", "trusted-success", "historical-defect", "binding", "domain", "cancellation" },
     volatileFields = new[] { "response-json.traceId" }
 };
@@ -103,8 +103,8 @@ new[]
     "tools/capture-activities-design-before.sh",
     "tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj",
     "tests/Elsa/Activities/Design/Tests/Api/Capture/Program.cs",
-    "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs",
-    "tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs",
+    "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityCases.cs",
+    "tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityHost.cs",
     "tests/Elsa/Api/Compatibility/Testing/Http/HttpEvidenceCapture.cs",
     "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
     "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",

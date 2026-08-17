@@ -13,8 +13,8 @@ runner_paths=(
     tools/capture-activities-design-before.sh
     tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj
     tests/Elsa/Activities/Design/Tests/Api/Capture/Program.cs
-    tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs
-    tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs
+    tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityCases.cs
+    tests/Elsa/Activities/Design/Tests/Api/Capture/Frozen/ActivitiesDesignCompatibilityHost.cs
 )
 if [[ "${ACTIVITIES_DESIGN_ALLOW_DIRTY:-0}" != 1 ]]; then
     git diff --quiet -- "${runner_paths[@]}" && git diff --cached --quiet -- "${runner_paths[@]}" || {
