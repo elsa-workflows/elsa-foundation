@@ -18,7 +18,8 @@ public static class GroundworkStorageAccessMapper
     public static StorageAccess Map(
         PersistenceAccessContext context,
         ScopePolicy unitScope,
-        string auditIdentity)
+        string auditIdentity,
+        IStorageAccessObserver? observer = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (!Enum.IsDefined(unitScope))
@@ -44,7 +45,7 @@ public static class GroundworkStorageAccessMapper
             }
 
             return StorageAccess.PrivilegedAcrossScopes(
-                new StorageAccessAudit(auditIdentity, context.Purpose.Value));
+                new StorageAccessAudit(auditIdentity, context.Purpose.Value, observer));
         }
 
         if (context.Scope is null)

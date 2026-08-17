@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Groundwork.Kernel;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Persistence.Groundwork.Composition;
@@ -38,6 +39,11 @@ public static class GroundworkStorageUnitServiceCollectionExtensions
 
     private static void AddRuntimeOnce(IServiceCollection services)
     {
+        services.TryAddSingleton<GroundworkPrivilegedQueryAuditSink>();
+        services.TryAddSingleton<IGroundworkPrivilegedQueryAuditSink>(provider =>
+            provider.GetRequiredService<GroundworkPrivilegedQueryAuditSink>());
+        services.TryAddScoped<GroundworkPrivilegedQueryAuditExecutor>();
+
         if (services.Any(descriptor => descriptor.ServiceType == typeof(GroundworkStorageSessionSource)))
             return;
 
