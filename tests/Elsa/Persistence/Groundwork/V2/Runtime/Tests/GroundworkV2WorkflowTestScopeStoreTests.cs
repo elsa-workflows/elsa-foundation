@@ -16,6 +16,7 @@ using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
+[Collection(GroundworkV2NativeProviderMatrixCollection.Name)]
 public sealed class GroundworkV2WorkflowTestScopeStoreTests
 {
     private static readonly DateTimeOffset CreatedAt = new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);

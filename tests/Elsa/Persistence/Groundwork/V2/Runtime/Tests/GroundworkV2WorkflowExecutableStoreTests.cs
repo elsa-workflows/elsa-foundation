@@ -19,6 +19,7 @@ using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
+[Collection(GroundworkV2NativeProviderMatrixCollection.Name)]
 public sealed class GroundworkV2WorkflowExecutableStoreTests
 {
     public static TheoryData<string> Providers => new() { "sqlite", "postgresql", "sqlserver", "mongodb" };

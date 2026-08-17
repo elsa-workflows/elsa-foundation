@@ -17,6 +17,7 @@ using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
+[Collection(GroundworkV2NativeProviderMatrixCollection.Name)]
 public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 17, 8, 0, 0, TimeSpan.Zero);
@@ -312,10 +313,20 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
             return connection.OpenSession(Unit(unitId, targetName), access);
         }
 
-        public StorageUnit Unit(string unitId, string? targetName = null) =>
-            units is not null && units.TryGetValue(unitId, out var unit)
-                ? unit
-                : ElsaRuntimeV2StorageManifest.Require(unitId);
+        public StorageUnit Unit(string unitId, string? targetName = null)
+        {
+            if (units is not null)
+            {
+                if (units.TryGetValue(unitId, out var logicalUnit))
+                    return logicalUnit;
+                var physicalUnit = units.Values.SingleOrDefault(candidate =>
+                    StringComparer.Ordinal.Equals(candidate.Id.Value, unitId));
+                if (physicalUnit is not null)
+                    return physicalUnit;
+            }
+
+            return ElsaRuntimeV2StorageManifest.Require(unitId);
+        }
 
         public IUnitOfWork BeginUnitOfWork(
             StorageAccess access,
