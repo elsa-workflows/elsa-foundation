@@ -1,4 +1,6 @@
+using System.Reflection;
 using Elsa.Events.Core.Contracts;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Commands;
@@ -10,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
@@ -19,6 +22,18 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class WorkflowLifecycleHandlerTests
 {
+    [Fact]
+    public void Workflow_draft_view_retains_its_public_factory_member()
+    {
+        var method = typeof(WorkflowDraftView).GetMethod(nameof(WorkflowDraftView.From), BindingFlags.Public | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        Assert.Equal(typeof(WorkflowDraftView), method.ReturnType);
+        Assert.Equal(
+            [typeof(WorkflowDefinitionDraft), typeof(IEnumerable<DesignMetadataRecord>), typeof(IEnumerable<ActivityPresentationRecord>)],
+            method.GetParameters().Select(parameter => parameter.ParameterType));
+    }
+
     [Fact]
     public async Task Draft_get_and_replace_use_the_first_class_draft_id_and_preserve_omitted_layout()
     {
@@ -79,6 +94,50 @@ public sealed class WorkflowLifecycleHandlerTests
             CancellationToken.None);
         Assert.Equal(definition.Id, permanent.DefinitionId);
         Assert.Equal(new DesignOperationKey("permanent-delete-1"), permanent.OperationKey);
+    }
+
+    [Fact]
+    public async Task Promotion_handler_preserves_direct_command_failures()
+    {
+        var failures = new Exception[]
+        {
+            EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), "draft-1"),
+            new WorkflowDefinitionVersionConflictException("definition-1", "1.0.0"),
+            new WorkflowPromotionOperationConflictException("promotion retry conflict")
+        };
+
+        foreach (var failure in failures)
+        {
+            var actual = await Record.ExceptionAsync(() => new PromoteDraftCommandHandler(
+                    new ThrowingPromoteDraftCommand(failure),
+                    new NeverRequestSender()).Handle(
+                    new PromoteDraft("operation-1", "draft-1", "1.0.0"),
+                    CancellationToken.None));
+
+            Assert.Same(failure, actual);
+        }
+    }
+
+    [Fact]
+    public async Task Permanent_delete_handler_preserves_direct_command_failures()
+    {
+        var failures = new Exception[]
+        {
+            EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), "definition-1"),
+            new WorkflowDefinitionNotSoftDeletedException("definition-1"),
+            new PermanentDeletionUnavailableException("definition-1"),
+            new InvalidOperationException("permanent-delete failed")
+        };
+
+        foreach (var failure in failures)
+        {
+            var actual = await Record.ExceptionAsync(() => new DeleteDefinitionPermanentlyCommandHandler(
+                    new ThrowingPermanentDeleteCommand(failure)).Handle(
+                    new DeleteDefinitionPermanently("operation-1", "definition-1"),
+                    CancellationToken.None));
+
+            Assert.Same(failure, actual);
+        }
     }
 
     [Fact]
@@ -281,6 +340,34 @@ public sealed class WorkflowLifecycleHandlerTests
             OperationKey = operationKey;
             DefinitionId = definitionId;
         }
+    }
+
+    private sealed class ThrowingPromoteDraftCommand(Exception failure) : IPromoteDraftToVersionCommand
+    {
+        public Task<string> Execute(
+            DesignOperationKey operationKey,
+            string draftId,
+            CancellationToken cancellationToken = default) => Task.FromException<string>(failure);
+
+        public Task<string> Execute(
+            DesignOperationKey operationKey,
+            string draftId,
+            string? requestedVersion,
+            CancellationToken cancellationToken = default) => Task.FromException<string>(failure);
+    }
+
+    private sealed class ThrowingPermanentDeleteCommand(Exception failure) : IDeleteWorkflowDefinitionPermanentlyCommand
+    {
+        public Task Execute(
+            DesignOperationKey operationKey,
+            string definitionId,
+            CancellationToken cancellationToken = default) => Task.FromException(failure);
+    }
+
+    private sealed class NeverRequestSender : IRequestSender
+    {
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
+            where T : notnull => throw new InvalidOperationException("The request sender must not be invoked after a command failure.");
     }
 
     private sealed class FixedTimeProvider : TimeProvider

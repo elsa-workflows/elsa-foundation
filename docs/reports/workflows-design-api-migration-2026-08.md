@@ -38,26 +38,28 @@ a571cae1f  expand pre-migration workflows design capture
 c53580849  keep capture cases uniquely keyed
 6060aa63b  record activity route binding
 394184635  capture lifecycle command bodies in FE errors
-b9c8f776b  record complete historical FE oracle
-9c3e00c1c  pin historical capture receipt
-3145babee  Minimal API migration
+3caa7fd16  freeze the complete hermetic capture runner
+4b1810c0a  record the immutable 78-case FE oracle
+68f09233b  Minimal API migration
 ```
 
-The corrected runner was executed detached from commit `3941846350023b8832090855d064825c67c98748`
-against the pre-migration FastEndpoints source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. It captured all
-27 OpenAPI operations and 65 uniquely keyed HTTP observations: anonymous 401s for every route, one
+The hermetic runner `3caa7fd1638f8a61382cef87979d03b3c08bce45` is an ancestor of the production migration
+`68f09233b091de7b6fb1876059efc38c104e0fb3` and was executed detached against the pre-migration
+FastEndpoints source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. It captured all
+27 OpenAPI operations and 78 uniquely keyed HTTP observations: anonymous 401s for every route, authenticated
+success and failure paths, one
 authenticated route case for every route, exact binding/content-type failures, ProblemDetails/domain errors,
 paging/filtering, headers, concurrency, preflight nonmutation, and permanent-delete status outcomes. The
 handler trace is canonically sorted and two independent captures produce the same hash. Fixture hashes are:
 
 | Fixture | SHA-256 |
 | --- | --- |
-| `workflows-design-http-fastendpoints.json` | `f515dde81efe0492d8468608038d1d26c4317af3aeee0c390771de4b607a1230` |
+| `workflows-design-http-fastendpoints.json` | `25175448d9f3003dc28f879aea0b6e897c35b498b4a9c47a7aec7d40f81867fb` |
 | `workflows-design-openapi-fastendpoints.json` | `cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5` |
-| `workflows-design-handler-trace-fastendpoints.json` | `3b7a93d37f92a7fab23805a1a5e893ad8724bae7da8d74b7eda84eac2be61909` |
+| `workflows-design-handler-trace-fastendpoints.json` | `02dfcb7bbc50d64ea785df897128b8bc39caeec2709444b8fc34d91a04f6133c` |
 
 The receipt records the full runner commit, source commit, counts, categories, and both hashes.
-The after comparison consumes all 65 HTTP cases and 27 OpenAPI operations with no content-length
+The after comparison consumes all 78 HTTP cases and 27 OpenAPI operations with no content-length
 normalization. Exact bidirectional approval, unused-approval, reverse-approval, and fixture mutation
 tests are bite-proof. W5's transition baseline was 112 registrations; this branch removes exactly the
 27 Workflows Design registrations, leaving the integrated 85-entry ratchet (Activity Design 38,

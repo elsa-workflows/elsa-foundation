@@ -49,7 +49,7 @@ public sealed class AddDefinitionCommandHandler(
         authoritativeDraft.WorkflowDefinitionId = result.DefinitionId;
         return new WorkflowDefinitionDetailsView(
             authoritativeDefinition.ToView(),
-            WorkflowDraftViewFactory.From(authoritativeDraft, layout, activityPresentation),
+            WorkflowDraftView.From(authoritativeDraft, layout, activityPresentation),
             Versions: []);
     }
 }

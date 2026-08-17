@@ -11,6 +11,7 @@ internal static class WorkflowDesignCompatibilityEvidence
     public const string OpenApiFileName = "workflows-design-openapi-fastendpoints.json";
     public const string HandlerTraceFileName = "workflows-design-handler-trace-fastendpoints.json";
     public const string ProvenanceFileName = "workflows-design-before-provenance.json";
+    public const string ReceiptFileName = "workflows-design-before-capture-receipt.json";
 
     private static readonly string HttpBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", HttpFileName);
     private static readonly string OpenApiBaselinePath = Path.Join(AppContext.BaseDirectory, "Baselines", OpenApiFileName);

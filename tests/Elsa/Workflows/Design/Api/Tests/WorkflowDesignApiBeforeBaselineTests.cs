@@ -114,9 +114,9 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         Assert.Equal(Hash(tracePath), root.GetProperty("handlerTraceSha256").GetString());
         Assert.Equal("#1372", root.GetProperty("issue").GetString());
         Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
-        Assert.Equal("3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93", root.GetProperty("captureRunnerCommit").GetString());
+        Assert.Equal("3caa7fd1638f8a61382cef87979d03b3c08bce45", root.GetProperty("captureRunnerCommit").GetString());
         Assert.Equal(
-            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93 bash tools/compatibility/capture-workflows-design-before.sh",
+            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3caa7fd1638f8a61382cef87979d03b3c08bce45 bash tools/compatibility/capture-workflows-design-before.sh",
             root.GetProperty("captureCommand").GetString());
         Assert.Equal(78, root.GetProperty("caseCount").GetInt32());
         Assert.Equal(27, root.GetProperty("operationCount").GetInt32());
@@ -140,9 +140,9 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         using var receipt = JsonDocument.Parse(BaselineFile.Read(Path.Join(directory, WorkflowDesignCompatibilityEvidence.ReceiptFileName)));
         var root = receipt.RootElement;
         Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", root.GetProperty("sourceCommit").GetString());
-        Assert.Equal("3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93", root.GetProperty("runnerCommit").GetString());
+        Assert.Equal("3caa7fd1638f8a61382cef87979d03b3c08bce45", root.GetProperty("runnerCommit").GetString());
         Assert.Equal(
-            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3c7ec1abb0de7d3e726d74bd182be6fce6ff6e93 bash tools/compatibility/capture-workflows-design-before.sh",
+            "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT=3caa7fd1638f8a61382cef87979d03b3c08bce45 bash tools/compatibility/capture-workflows-design-before.sh",
             root.GetProperty("captureCommand").GetString());
         var dependencies = root.GetProperty("runnerDependencies").EnumerateArray().ToArray();
         Assert.Equal(
@@ -158,6 +158,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
             },
             dependencies.Select(dependency => dependency.GetProperty("path").GetString()).ToArray());
         Assert.All(dependencies, dependency => Assert.Matches("^[0-9a-f]{64}$", dependency.GetProperty("sha256").GetString()!));
+        Assert.True(IsAncestor(root.GetProperty("sourceCommit").GetString()!, root.GetProperty("runnerCommit").GetString()!));
+        Assert.True(IsAncestor(root.GetProperty("runnerCommit").GetString()!, "68f09233b091de7b6fb1876059efc38c104e0fb3"));
         foreach (var dependency in dependencies)
         {
             var path = dependency.GetProperty("path").GetString()!;
@@ -183,6 +185,20 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(contents))).ToLowerInvariant();
+    }
+
+    private static bool IsAncestor(string ancestor, string descendant)
+    {
+        var startInfo = new ProcessStartInfo("git", ["merge-base", "--is-ancestor", ancestor, descendant])
+        {
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+        Assert.True(process.ExitCode is 0 or 1, process.StandardError.ReadToEnd());
+        return process.ExitCode == 0;
     }
 
     private static string[] DependencyFingerprints(JsonElement dependencies) =>
