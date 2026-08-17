@@ -709,10 +709,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         public void SeedExecution(WorkflowExecutionState state)
         {
             var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
-            var values = GroundworkRuntimeRowStore.Values(
-                state.WorkflowExecutionId,
-                ElsaRuntimeV2StorageManifest.SchemaVersion,
-                Serialize(state));
+            var values = GroundworkV2WorkflowExecutionStorageConventions.Values(state);
             Assert.Equal(WriteOutcomeStatus.Inserted, connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")))
                 .Insert(values, WriteOptions.CreateOnly).Status);
         }

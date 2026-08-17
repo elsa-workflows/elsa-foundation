@@ -1288,21 +1288,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             new(commit.WorkflowExecutionId, presentedToken, currentToken, reason);
 
         private static IReadOnlyDictionary<string, object?> ProjectWorkflowExecution(WorkflowExecutionState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistorySortTicksField] = (state.UpdatedAt ?? state.CreatedAt).UtcTicks,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryWorkflowExecutionIdField] = state.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryTenantIdField] = state.TenantId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryAuthorityPartitionField] = state.Authority is { } authority
-                    ? WorkflowExecutionAuthoritySnapshot.PartitionKey(authority.SystemIdentity, authority.RootInitiator, authority.Metadata)
-                    : null,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryDefinitionIdField] = state.PinnedExecutable.DefinitionId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryStatusField] = (int)state.Status,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryRunKindField] = (int)state.RunKind,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryCorrelationIdField] = state.CorrelationId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryArtifactIdField] = state.PinnedExecutable.ArtifactId
-            };
+            GroundworkV2WorkflowExecutionStorageConventions.Projections(state);
 
         private static IReadOnlyDictionary<string, object?> ProjectScheduler(SchedulerState state) =>
             new Dictionary<string, object?>(StringComparer.Ordinal)

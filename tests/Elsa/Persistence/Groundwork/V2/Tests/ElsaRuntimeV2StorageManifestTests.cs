@@ -92,6 +92,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
+        AssertIndex(executionState, "by_collection_and_pinned_artifact", ["collection", "historyArtifactId", "historyArtifactTimestamp", "historyWorkflowExecutionId"]);
         AssertIndex(executionState, "by_collection_and_pinned_artifact_v2", ["collection", "historyArtifactId", "historyWorkflowExecutionId"], unique: true);
         Assert.DoesNotContain(executionState.Indexes, index => index.Name == ElsaRuntimeV2StorageManifest.ByCollectionIndex);
         AssertColumn(executionState, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistoryArtifactIdField, PortableType.String, 128, nullable: true);
