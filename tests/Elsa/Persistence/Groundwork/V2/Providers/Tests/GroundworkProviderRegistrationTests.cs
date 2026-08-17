@@ -180,6 +180,40 @@ public sealed class GroundworkProviderRegistrationTests
     }
 
     [Fact]
+    public void Storage_session_source_reuses_sessions_per_unit_target_and_access_context()
+    {
+        var path = TemporaryDatabasePath();
+        var unit = ProviderCompositionUnit();
+        try
+        {
+            using var provider = BuildSqliteHost(path, unit);
+            var sessions = provider.GetRequiredService<IGroundworkStorageSessionSource>();
+            var first = sessions.Open(
+                unit.Id.Value,
+                StorageAccess.Scoped(new StorageScope("tenant-a")));
+
+            for (var attempt = 0; attempt < 1_000; attempt++)
+            {
+                Assert.Same(
+                    first,
+                    sessions.Open(
+                        unit.Id.Value,
+                        StorageAccess.Scoped(new StorageScope("tenant-a"))));
+            }
+
+            Assert.NotSame(
+                first,
+                sessions.Open(
+                    unit.Id.Value,
+                    StorageAccess.Scoped(new StorageScope("tenant-b"))));
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
+    [Fact]
     public async Task Host_startup_refuses_a_declared_target_without_a_provider_connection()
     {
         await using var provider = new ServiceCollection()
