@@ -18,7 +18,7 @@
 
 - [x] T009 Run the Runtime owner suite and composition/anonymous route tests.
 - [x] T010 Add deep HTTP/OpenAPI comparer and explicit difference approvals.
-- [ ] T011 Complete one honest three-cycle collectible application-pipeline proof: every cycle maps routes, exercises middleware authorization/resource evaluation, succeeds through typed and body-bound routes, uses source-generated JSON, generates native OpenAPI, and disposes/unloads.
-- [x] T012 Capture pre-W6 Runtime E2E evidence against rebuilt Workbench/fresh DB (Runtime GET 20/20 and write 10/10); final post-W6 rerun remains deferred.
-- [ ] T013 Refresh maps and run the final Architecture/build/format/diff gates (focused owner gates, maps, solution build, scoped Runtime formatter, and diff checks currently pass; repository-wide formatter has unrelated baseline diagnostics and final integration remains pending).
-- [ ] T014 Review the final migration recommendation and follow-up issues after the deferred integration gates complete.
+- [x] T011 Complete one honest three-cycle collectible application-pipeline proof: every cycle maps routes, exercises middleware authorization/resource evaluation, succeeds through typed and body-bound routes, uses source-generated JSON, generates native OpenAPI, and disposes/unloads.
+- [x] T012 Capture final post-W6 Runtime E2E evidence against rebuilt Workbench/fresh DB (Runtime GET 20/20 and write 10/10).
+- [ ] T013 Refresh maps and run the final Architecture/build/format/diff gates (focused owner gates, maps, affected builds, scoped Runtime formatter, and diff checks pass; repository-wide formatter has unrelated baseline diagnostics and is not claimed green).
+- [x] T014 Review the final migration recommendation and follow-up issues after the integration gates complete.

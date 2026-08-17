@@ -8,9 +8,9 @@ Implementation spec: [specs/164-runtime-api-minimal-migration](../../specs/164-r
 
 ## Baseline provenance
 
-The FastEndpoints oracle was captured before production endpoint deletion. The detached runner is committed in the branch-reachable baseline-only history ending at `6fe00ac47` (built on the baseline runner history `334b47d48`), and the frozen HTTP/receipt update is reproduced against migration parent `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. The receipt records runner commit `5f5e25cd7ebb2819d1c426b2a43326bc402d2207`, 24 registrations, 77 HTTP cases, and 24 OpenAPI operations.
+The FastEndpoints oracle was captured before production endpoint deletion. The detached runner is committed in the branch-reachable baseline-only history ending at `36fbda024` (built on the baseline runner history `334b47d48`), and the frozen HTTP/receipt update is reproduced against pre-Runtime-migration source `3157570abc007e6990683f045bfcd73caa47002d`. The receipt records branch-reachable runner commit `5fbc440bc105b0574075ede9c4d36855265d1f35`, 24 registrations, 77 HTTP cases, and 24 OpenAPI operations.
 
-The current frozen HTTP SHA-256 is `25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e`; the OpenAPI SHA-256 is `990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4`. The historical projection asserts that every captured ProblemDetails `traceId` is a non-empty JSON string, then replaces it with the deterministic value `capture-trace-id`; two independent captures from source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802` produced byte-identical HTTP, OpenAPI, and receipt files and these hashes.
+The current frozen HTTP SHA-256 is `25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e`; the OpenAPI SHA-256 is `990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4`. The historical projection asserts that every captured ProblemDetails `traceId` is a non-empty JSON string, then replaces it with the deterministic value `capture-trace-id`; two independent captures from source `3157570abc007e6990683f045bfcd73caa47002d` produced byte-identical HTTP, OpenAPI, and receipt files and these hashes.
 
 The 77 HTTP cases are observed from the FE host, not authored from the Minimal API implementation:
 
@@ -45,7 +45,7 @@ chain, with source-generated metadata covering the mapped accepts and produces t
 
 ## Evidence currently green
 
-- Runtime owner suite: 93 passed before the correction; direct Minimal API behavior coverage now includes the deleted execute/activity objectives, including argument-name, exact ProblemDetails, payload metadata, and delegate cancellation cases; complete Runtime API test project remains the focused gate.
+- Runtime owner suite: complete Runtime API test project passes 119/119; direct Minimal API behavior coverage includes the deleted execute/activity objectives, including argument-name, exact ProblemDetails, payload metadata, and delegate cancellation cases.
 - Runtime implementation suite: 1,640 passed after removing only endpoint-class tests that no longer have a production owner.
 - Runtime composition: 24 published routes, 24 OpenAPI operations, and anonymous 401 for every mapped route.
 - Baseline receipt/hash assertion and HTTP status mutation bite pass.
@@ -53,9 +53,9 @@ chain, with source-generated metadata covering the mapped accepts and produces t
 - Runtime authorization: 16 shared matrix cases pass for Minimal API and retained FastEndpoints, including 401/403, exact/implied/wildcard, normalization, tenant, external identity, and resource dispositions; the catalog actions for execute/manage/publishing-read are asserted.
 - Runtime collectibility correction: one combined three-cycle application-pipeline test now runs native OpenAPI in every cycle, alternates document-before-serializer and serializer-before-document order, and exercises real routing, authentication, authorization/resource evaluation, typed response, body binding, generated JSON, provider seams, disposal, and weak-reference collection.
 - Runtime API/Core compatibility: the stable Core assembly and legacy type forwarders are asserted, including the preserved `WorkflowOutputView.From` static member; the 24-route owner metadata scan passes.
-- Pre-W6 rebuilt Workbench/fresh SQLite E2E evidence records Runtime GET 20/20 and write 10/10; final post-W6 integration rerun is intentionally deferred.
-- Solution build: `Elsa.Server.slnx` builds with 0 errors; the generated-map check reports that committed maps still describe the tree. Scoped formatter verification passes for the changed Runtime/API/Core source files; repository-wide formatter diagnostics remain unrelated baseline follow-up.
+- Final post-W6 rebuilt Workbench/fresh SQLite E2E evidence at executable source `1302806c9` records Runtime GET 20/20 and write 10/10. The database was cleared and redeployed from the rebuilt reference-composition manifest before the run; the server registered 61 retained FastEndpoints and the mapped Runtime routes passed through the live HTTP/persistence/runtime path.
+- Affected builds pass with 0 errors (Workbench has only existing unrelated warnings; capture tool has 0 warnings), the generated-map check reports that committed maps still describe the tree, and scoped formatter verification passes for changed Runtime/API/Core files. Repository-wide formatter diagnostics remain unrelated baseline follow-up and are not claimed green.
 
 ## Remaining gates
 
-The deep OpenAPI comparison consumes a reviewed, exact 18-entry approval registry for GET-only metadata differences (Minimal API parameter/request-body metadata and generated schema ownership); POST/PUT operations remain byte-equivalent in the consumed projection. Focused Architecture owner/collectibility, Runtime API, map refresh, solution build, and scoped formatter gates are the affected correction gates; final post-W6 E2E and integration review remain deferred. The repository-wide formatter invocation still reports pre-existing unrelated diagnostics, so it remains an explicit follow-up rather than being hidden behind a broad unrelated formatting change.
+The deep OpenAPI comparison consumes a reviewed, exact 18-entry approval registry for GET-only metadata differences (Minimal API parameter/request-body metadata and generated schema ownership); POST/PUT operations remain byte-equivalent in the consumed projection. Focused Architecture owner/collectibility, Runtime API, transition ratchet, map refresh, affected build, scoped formatter, final E2E, and diff gates are green. The repository-wide formatter invocation still reports pre-existing unrelated diagnostics, so it remains an explicit follow-up rather than being hidden behind a broad unrelated formatting change.
