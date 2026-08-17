@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
+[Collection(OpenApiLifetimeCollectibilityCollection.Name)]
 public sealed class OpenApiLifetimeCollectibilityTests
 {
     [Fact]
@@ -59,4 +60,10 @@ public sealed class OpenApiLifetimeCollectibilityTests
         Assert.True(evidence.CandidateCallableAfter);
         Assert.True(evidence.ConcurrentDocumentsComplete);
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class OpenApiLifetimeCollectibilityCollection
+{
+    public const string Name = "OpenAPI lifetime collectibility";
 }
