@@ -1,11 +1,11 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
-using Elsa.Api.FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
@@ -14,12 +14,12 @@ using Elsa.Workflows.Runtime.Api.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Runtime.Api;
-
-#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
 
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -31,7 +31,7 @@ namespace Elsa.Workflows.Runtime.Api;
     Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
     DependsOn = new object[] { "ApiCapabilities" }
 )]
-public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
+public class WorkflowsRuntimeApiFeature : IWebShellFeature
 {
     /// <summary>
     /// Persistent HMAC key for restart- and multi-instance-stable hierarchy cursors. Configure at least 32 UTF-8 bytes
@@ -49,15 +49,18 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
     /// <summary>Key ring retained for as long as durable alteration plans may be read or cancelled.</summary>
     public IDictionary<string, string>? WorkflowAlterationPayloadProtectionKeys { get; set; }
 
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         // The runtime execution spine is host-agnostic (RT-4): it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        services.ConfigureHttpJsonOptions(options =>
+        {
+            if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsRuntimeJsonTypeInfoResolver))
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new WorkflowsRuntimeJsonTypeInfoResolver());
+        });
         services.TryAddScoped<HttpContextActivityExecutionInspectionAuthorizationContext>();
         services.Configure<ActivityExecutionHierarchyCursorOptions>(options =>
             options.SigningKey = ActivityExecutionHierarchyCursorSigningKey);
@@ -73,11 +76,12 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         }
         services.TryAddScoped<WorkflowExecutableInspector>();
 
-        // API-only wiring: the FastEndpoints request and command handlers this feature's endpoints dispatch through.
+        // API-only wiring: the request and command handlers this feature's endpoints dispatch through.
         var assembly = GetType().Assembly;
         services.AddRequestHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         var hasAsyncInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync));
+#pragma warning disable CS0618
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
             services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         if (!hasAsyncInspectionHost)
@@ -85,6 +89,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContextAsync asyncContext
                     ? asyncContext
                     : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>()));
+#pragma warning restore CS0618
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
@@ -101,6 +106,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
-}
 
-#pragma warning restore CS0618
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(endpoints);
+}

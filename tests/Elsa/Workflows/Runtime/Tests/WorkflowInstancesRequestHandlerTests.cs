@@ -1,4 +1,3 @@
-using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
@@ -9,9 +8,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -277,40 +273,6 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
         Assert.Equal("RunKind", exception.ParamName);
         Assert.Contains("TestRnu", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task ListWorkflowInstances_MapsMalformedCursorToBadRequestAtHttpBoundary()
-    {
-        var handler = NewListInstanceHandler();
-        var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
-        var endpoint = Factory.Create<TestListInstancesEndpoint>(
-            context => context.Response.Body = new MemoryStream(),
-            sender,
-            NullLogger<TestListInstancesEndpoint>.Instance);
-
-        var exception = await Assert.ThrowsAsync<ValidationFailureException>(() =>
-            endpoint.HandleAsync(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
-
-        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
-        Assert.Contains("cursor is invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task ListWorkflowInstances_MapsUnknownRunKindToBadRequestAtHttpBoundary()
-    {
-        var handler = NewListInstanceHandler();
-        var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
-        var endpoint = Factory.Create<TestListInstancesEndpoint>(
-            context => context.Response.Body = new MemoryStream(),
-            sender,
-            NullLogger<TestListInstancesEndpoint>.Instance);
-
-        var exception = await Assert.ThrowsAsync<ValidationFailureException>(() =>
-            endpoint.HandleAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
-
-        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
-        Assert.Contains("run kind", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -613,13 +575,4 @@ public sealed class WorkflowInstancesRequestHandlerTests
         }
     }
 
-    private sealed class TestListInstancesEndpoint(
-        IRequestSender requestSender,
-        Microsoft.Extensions.Logging.ILogger<TestListInstancesEndpoint> logger)
-        : ElsaRequestHandlerEndpoint<ListWorkflowInstances, WorkflowInstanceListView>(requestSender, logger)
-    {
-        public override void Configure()
-        {
-        }
-    }
 }

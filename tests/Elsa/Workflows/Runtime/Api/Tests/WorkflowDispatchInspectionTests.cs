@@ -1,6 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -25,7 +25,7 @@ public sealed class WorkflowDispatchInspectionTests
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
 
         Assert.Equal((request, response), RuntimeApiEndpointTestFactory.Contract(endpoint));
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -38,9 +38,9 @@ public sealed class WorkflowDispatchInspectionTests
         Assert.Equal(
             (typeof(RedriveWorkflowDispatch), typeof(WorkflowDispatchRedriveView)),
             RuntimeApiEndpointTestFactory.Contract(redrive));
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(redrive, PermissionNames.WorkflowRuntimeManage);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(redrive, WorkflowRuntimePermissions.WorkflowRuntimeManage);
         Assert.Null(redrive.Definition.AnonymousVerbs);
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(read, PermissionNames.WorkflowRuntimeRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(read, WorkflowRuntimePermissions.WorkflowRuntimeRead);
     }
 
     [Fact]
