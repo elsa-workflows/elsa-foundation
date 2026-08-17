@@ -79,9 +79,10 @@ Publishing 23, Runtime 24).
 
 ## E2E evidence
 
-On a rebuilt Workbench with the prior SQLite files moved aside to a temporary directory, the schema was
-applied to a fresh `src/Apps/Elsa.Workbench/elsa-groundwork.db` using the documented reference
-composition command. The server ran from the rebuilt branch at `http://localhost:5095`.
+On commit `d4589a492b691a6ce7857367b265962d467c3f89`, the Workbench was rebuilt with `--no-restore`,
+the existing SQLite files were moved to a recoverable temporary directory, and the schema was applied to a
+fresh `src/Apps/Elsa.Workbench/elsa-groundwork.db` using the documented reference composition command. The
+server ran from that exact executable at `http://localhost:5095`.
 
 ```text
 pwsh -NoProfile -File e2e-tests/workflow-version-override/Test-WorkflowVersionOverride.ps1 -BaseUrl http://localhost:5095
@@ -93,12 +94,14 @@ SUCCESS - workflow-design API: 8/8 GET endpoints/cases passed
 
 These runs exercised real login/authentication, design persistence, preflight, exact promotion,
 immutable version reads, list/get/version/draft/validation reads, and 404 handling.
+The final evidence-only commit follows this run and changes documentation only; it does not alter the
+Workbench executable or production source exercised above.
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 145/145; the immutable baseline suite passed 8/8.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 148/148; the immutable baseline suite passed 9/9, including source/runner ancestry and dependency-byte checks.
 - Architecture: the owner collectibility suite passed 1/1 (seven owners across three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 472/472.
-- Full solution build: `dotnet restore Elsa.Server.slnx --ignore-failed-sources` followed by `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (repository warnings only).
+- Full solution build: `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (218 repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
 - Format/import verification: focused verification passes for all changed production, test, architecture, comparer, and OpenAPI projector files. The broad project verification still reports inherited charset/import diagnostics in untouched base files; these are recorded as an advisory baseline issue rather than normalized into this migration.
 - E2E: the rebuilt Workbench/fresh-DB run passed `Test-WorkflowVersionOverride.ps1` 5/5 and `Test-DesignWorkflowGets.ps1` 8/8 against `http://localhost:5095`; commands and results are recorded above.
