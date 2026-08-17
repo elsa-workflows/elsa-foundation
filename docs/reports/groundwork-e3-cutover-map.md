@@ -36,8 +36,9 @@ package IDs intentionally remain unchanged.
    `Composition`, `Unified`, and `ReferenceComposition`. This wave owns checkpoint batching, bookmark/queue/outbox
    query routes, access mapping, and common runtime units. It must use exact v2 batch UOWs and the
    public query AST; the 28 v1 bounded-query declarations disappear. The public v2 manifest and the
-   checkpoint, bookmark, durable-value, durable-timer, trigger-binding, run-health, and liveness
-   verticals are complete; the remaining runtime stores and shipping composition still use v1.
+   checkpoint, bookmark, durable-value, durable-timer, trigger-binding, run-health, liveness,
+   activity-execution, and scheduler-state verticals are complete; the remaining runtime stores and
+   shipping composition still use v1.
 4. **Design and publishing dependants.** Migrate Activities Design, Workflows Design, Elsa3 reusable
    activity import, and Workflows Publishing in that order. Preserve their atomic commands and
    projection/query behavior against the shared v2 runtime from step 3.
