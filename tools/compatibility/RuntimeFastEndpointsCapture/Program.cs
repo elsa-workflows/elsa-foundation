@@ -65,6 +65,7 @@ File.WriteAllText(Path.Join(outputDirectory, "runtime-before-capture-receipt.jso
 
 static IReadOnlyList<RunnerDependency> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerIdentity) =>
 new[]
+{
     "tools/compatibility/capture-runtime-before.sh",
     "tools/compatibility/RuntimeFastEndpointsCapture/Program.cs",
     "tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj",
