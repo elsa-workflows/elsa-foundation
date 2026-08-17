@@ -95,6 +95,31 @@ public sealed class ActivitiesDesignStorageManifestTests
             field.Path == ActivitiesDesignStorageManifest.DefinitionIdField &&
             field.Operations.Contains(PortableQueryOperation.Equal) &&
             field.Operations.Contains(PortableQueryOperation.In));
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var definitionId = Assert.Single(table.ProjectedColumns, column =>
+            column.Path == ActivitiesDesignStorageManifest.DefinitionIdField);
+        Assert.False(definitionId.IsNullable);
+    }
+
+    [Theory]
+    [InlineData(
+        ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
+        ActivitiesDesignStorageManifest.ActivityUpgradePlanIdField)]
+    [InlineData(
+        ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+        ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptIdField)]
+    public void Upgrade_documents_project_their_actual_persisted_identity(
+        string documentKind,
+        string identityPath)
+    {
+        var unit = ActivitiesDesignStorageManifest.Create().StorageUnits.Single(candidate =>
+            candidate.Identity.Value == documentKind);
+        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
+        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var identity = Assert.Single(table.ProjectedColumns, column => column.LogicalName == "entity_id");
+
+        Assert.Equal(identityPath, identity.Path);
+        Assert.False(identity.IsNullable);
     }
 
     [Fact]

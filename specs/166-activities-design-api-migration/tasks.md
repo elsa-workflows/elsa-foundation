@@ -109,7 +109,7 @@ or feature code until that checkpoint is committed.
 
 **Purpose**: Validate real Workbench composition, persistence, authoring, publication, execution, and upgrade workflows.
 
-- [ ] T039 Add a focused persisted upgrade-plan create/get/apply/receipt/refresh and exact version-pinning journey in `e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1` and document it in `e2e-tests/reusable-activities/README.md`
+- [x] T039 Add a focused persisted upgrade-plan create/get/apply/receipt/refresh and exact version-pinning journey in `e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1` and document it in `e2e-tests/reusable-activities/README.md`
 - [ ] T040 Rebuild Workbench from current source, recreate the SQLite database/schema from scratch, and run `e2e-tests/get-endpoints/Test-DesignActivityGets.ps1` plus `e2e-tests/write-endpoints/Test-DesignActivityWrites.ps1`; record exact SHA/environment/counts in `docs/reports/activities-design-api-migration-2026-08.md`
 - [ ] T041 Run the reusable author/publish/execute, nesting, pinning, draft test-run, outcome-limit, sequence, and new upgrade-plan scripts under `e2e-tests/reusable-activities/`; record exact SHA/environment/counts and reconcile stale-test versus product defects in `docs/reports/activities-design-api-migration-2026-08.md`
 

@@ -126,8 +126,10 @@ public static class ActivitiesDesignStorageManifest
 
     public const string ActivityUpgradePlanDocumentKind = "activityUpgradePlan";
     public const string ActivityUpgradePlanCollection = "activityUpgradePlan";
+    public const string ActivityUpgradePlanIdField = "plan.planId";
     public const string ActivityUpgradeApplyReceiptDocumentKind = "activityUpgradeApplyReceipt";
     public const string ActivityUpgradeApplyReceiptCollection = "activityUpgradeApplyReceipt";
+    public const string ActivityUpgradeApplyReceiptIdField = "receipt.receiptId";
 
     public const string ActivityForkCandidateDocumentKind = "activityForkCandidate";
     public const string ActivityForkCandidateCollection = "activityForkCandidate";
@@ -186,7 +188,9 @@ public static class ActivitiesDesignStorageManifest
                             new BoundedQuerySortField(EntityIdField, PhysicalSortDirection.Ascending)
                         ]),
                     Query("list-by-head-version", ByHeadVersionIndex, HeadVersionIdField)
-                ]),
+                ],
+                lifecycle: LifecyclePolicy.Mutable,
+                requiredIndexFields: [DefinitionIdField]),
             Unit(
                 ActivityDefinitionDraftDocumentKind,
                 "Activity definition draft",
@@ -238,7 +242,9 @@ public static class ActivitiesDesignStorageManifest
                 ActivityUpgradePlanDocumentKind,
                 "Activity upgrade plan",
                 [],
-                []),
+                [],
+                lifecycle: LifecyclePolicy.Mutable,
+                projectedIdentityField: ActivityUpgradePlanIdField),
             Unit(
                 ActivityForkCandidateDocumentKind,
                 "Activity fork candidate",
@@ -274,7 +280,9 @@ public static class ActivitiesDesignStorageManifest
                 ActivityUpgradeApplyReceiptDocumentKind,
                 "Activity upgrade apply receipt",
                 [],
-                []),
+                [],
+                lifecycle: LifecyclePolicy.Mutable,
+                projectedIdentityField: ActivityUpgradeApplyReceiptIdField),
             ManagementUnit(
                 ActivityDefinitionManagementProjectionDocumentKind,
                 "Activity definition management projection",
@@ -571,8 +579,17 @@ public static class ActivitiesDesignStorageManifest
         string label,
         ActivityIndex[] indexes,
         ActivityQuery[] queries,
-        LifecyclePolicy lifecycle) =>
-        PhysicalUnit(documentKind, label, lifecycle, indexes, queries);
+        LifecyclePolicy lifecycle,
+        string projectedIdentityField = EntityIdField,
+        string[]? requiredIndexFields = null) =>
+        PhysicalUnit(
+            documentKind,
+            label,
+            lifecycle,
+            indexes,
+            queries,
+            projectedIdentityField,
+            requiredIndexFields ?? Array.Empty<string>());
 
     // The declared order leads with the index key field, then the document id. Leading at the index head
     // (rather than the document id alone) is what lets the route admit both a single-value equality read and
@@ -1024,7 +1041,9 @@ public static class ActivitiesDesignStorageManifest
         string label,
         LifecyclePolicy lifecycle,
         ActivityIndex[] indexes,
-        ActivityQuery[] queries)
+        ActivityQuery[] queries,
+        string projectedIdentityField,
+        string[] requiredIndexFields)
     {
         var documentIdOrderedIndexes = queries
             .Where(query => query.SortFields?.Any(field =>
@@ -1075,12 +1094,13 @@ public static class ActivitiesDesignStorageManifest
             .Select(field => Column(
                 ColumnName(field),
                 field,
+                nullable: !requiredIndexFields.Contains(field),
                 length: ColumnName(field).EndsWith("_id", StringComparison.Ordinal)
                     ? IdentityColumnLength
                     : TextColumnLength))
             .ToArray();
         ProjectedColumnDefinition[] columns = indexedColumns.Length == 0 || documentIdOrderedIndexes.Count > 0
-            ? [.. indexedColumns, Column("entity_id", EntityIdField, false, IdentityColumnLength)]
+            ? [.. indexedColumns, Column("entity_id", projectedIdentityField, false, IdentityColumnLength)]
             : indexedColumns;
         var physicalIndexes = indexes
             .SelectMany(index =>
