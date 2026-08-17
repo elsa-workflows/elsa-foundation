@@ -1,4 +1,4 @@
-using Elsa.Workflows.Publishing.Api.Handlers;
+﻿using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -283,11 +283,6 @@ public sealed class PublicationActivationTests
         private readonly TaskCompletionSource _allArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _arrived;
 
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(
-            WorkflowExecutable executable,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
-
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
@@ -304,33 +299,23 @@ public sealed class PublicationActivationTests
 
     private sealed class ThrowingTriggerIndexer : IWorkflowTriggerIndexer
     {
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(
-            WorkflowExecutable executable,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(
-                new InvalidOperationException("Candidate trigger projection could not be prepared."));
-
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
             string slotId,
             CancellationToken cancellationToken = default) =>
-            IndexAsync(executable, cancellationToken);
+            ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(
+                new InvalidOperationException("Candidate trigger projection could not be prepared."));
     }
 
     private sealed class NoopTriggerIndexer : IWorkflowTriggerIndexer
     {
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(
-            WorkflowExecutable executable,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
-
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
             string publicationId,
             string slotId,
             CancellationToken cancellationToken = default) =>
-            IndexAsync(executable, cancellationToken);
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
     }
 
     private class NoopTriggerBindingStore : IWorkflowTriggerBindingStore

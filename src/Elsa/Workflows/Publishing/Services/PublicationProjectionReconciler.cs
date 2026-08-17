@@ -30,6 +30,13 @@ public sealed class PublicationProjectionReconciler(
         var executable = await executableStore.FindAsync(candidate.ArtifactId, cancellationToken)
             ?? throw new InvalidOperationException($"Executable artifact '{candidate.ArtifactId}' was not found for publication '{candidate.PublicationId}'.");
 
+        // ONE owned write per projection (FR-B-006 writer census, finding 3). The indexer chain prepares both the
+        // trigger bindings and — through its recurring decorator, unconditionally, even with no recurring
+        // providers composed — the recurring schedules. The read-back-then-re-prepare that used to follow under a
+        // second delivery record wrote the schedule projection twice, and its independent record could short-
+        // circuit (see DeliverAsync's Delivered guard) out of step with the write that actually produced the
+        // projection: a replay whose bindings record was already Delivered skipped the indexer, then re-prepared
+        // the schedules from an empty read-back and erased them. One write under one record removes both hazards.
         await DeliverAsync(
             candidate.PublicationId,
             PublicationProjectionKinds.TriggerBindings,
@@ -37,24 +44,6 @@ public sealed class PublicationProjectionReconciler(
             ct => AsVoid(triggerIndexer.PrepareActivationAsync(executable, candidate.PublicationId, candidate.SlotId, ct)),
             cancellationToken,
             forceReplay);
-
-        if (recurringScheduleStore is not null)
-        {
-            // A host can compose the recurring store without composing any recurring providers. Ensure that even an
-            // empty recurring projection is explicitly prepared, while preserving schedules produced by the
-            // recurring indexer when providers are present.
-            var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(
-                recurringScheduleStore,
-                candidate.PublicationId,
-                cancellationToken);
-            await DeliverAsync(
-                candidate.PublicationId,
-                PublicationProjectionKinds.RecurringSchedules,
-                PublicationProjectionOperation.Prepare,
-                ct => recurringScheduleStore.PrepareActivationAsync(candidate.PublicationId, schedules, ct),
-                cancellationToken,
-                forceReplay);
-        }
     }
 
     public ValueTask ActivateAsync(

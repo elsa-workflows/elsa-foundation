@@ -1,4 +1,4 @@
-using Elsa.Workflows.Runtime.Core.Contracts;
+﻿using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
@@ -85,10 +85,12 @@ public sealed class RecurringTriggerPumpTaskTests
     }
 
     [Fact]
-    public async Task Sweep_DeletesSchedule_WhenCronExhausted()
+    public async Task Sweep_ParksScheduleWithoutDeletingIt_WhenCronExhausted()
     {
+        // Feb 30 never occurs: ComputeNext returns null. The pump used to DELETE the row here — a write to
+        // activation-owned serving state from outside any activation lifecycle (FR-B-006 writer census,
+        // finding 2). It now parks the row: never due again, but still there for the coordinator to own.
         var store = new InMemoryRecurringTriggerScheduleStore();
-        // Feb 30 never occurs: ComputeNext returns null, so the schedule is removed rather than left due.
         await store.SaveAsync(Schedule("dead", Now.AddMinutes(-1), kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
         var router = new FakeRouter();
         var (pump, _) = CreatePump(store, router);
@@ -96,11 +98,14 @@ public sealed class RecurringTriggerPumpTaskTests
         await pump.ExecuteAsync(CancellationToken.None);
 
         Assert.Empty(router.Requests);
-        Assert.Null(await store.FindAsync("dead"));
+        var parked = await store.FindAsync("dead");
+        Assert.NotNull(parked);
+        Assert.Equal(RecurringTriggerPumpTask.NeverOccurs, parked.NextOccurrence);
+        Assert.Empty(await store.ListDueAsync(DateTimeOffset.MaxValue.AddDays(-1), 10));
     }
 
     [Fact]
-    public async Task Sweep_DeletesSchedule_WhenExpressionInvalid()
+    public async Task Sweep_ParksScheduleWithoutDeletingIt_WhenExpressionInvalid()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         await store.SaveAsync(Schedule("bad", Now.AddMinutes(-1), expression: "not-a-duration"));
@@ -110,7 +115,77 @@ public sealed class RecurringTriggerPumpTaskTests
         await pump.ExecuteAsync(CancellationToken.None);
 
         Assert.Empty(router.Requests);
-        Assert.Null(await store.FindAsync("bad"));
+        var parked = await store.FindAsync("bad");
+        Assert.NotNull(parked);
+        Assert.Equal(RecurringTriggerPumpTask.NeverOccurs, parked.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Sweep_ParkingIsIdempotent_AndAnAlreadyParkedScheduleIsNeverDueAgain()
+    {
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        await store.SaveAsync(Schedule("bad", Now.AddMinutes(-1), expression: "not-a-duration"));
+        var router = new FakeRouter();
+        var (pump, _) = CreatePump(store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        var parked = await store.FindAsync("bad");
+        Assert.Equal(RecurringTriggerPumpTask.NeverOccurs, parked!.NextOccurrence);
+        Assert.Empty(router.Requests);
+    }
+
+    [Fact]
+    public async Task ParkedActivationOwnedSchedule_SurvivesRestoreAndCompensation()
+    {
+        // The point of parking instead of deleting: the row is still part of its activation's projection, so a
+        // later restore (compensation re-activating the predecessor) finds it and can serve it again. A deleted
+        // row was gone for good — the coordinator would re-activate an empty projection and the workflow's
+        // recurring start would be silently lost.
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var schedule = PublicationSchedule("bad", "activation-1") with { Expression = "not-a-duration" };
+        await store.PrepareActivationAsync("activation-1", [schedule]);
+        await store.ActivateAsync("activation-1", replacedActivationId: null);
+        var router = new FakeRouter();
+        var (pump, _) = CreatePump(store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        var parked = await store.FindAsync(schedule.ScheduleId);
+        Assert.NotNull(parked);
+        Assert.Equal("activation-1", parked.ActivationId);
+        Assert.Equal("slot-default", parked.SlotId);
+
+        // Compensation restores the activation's projection; the parked row is still a member of it.
+        await store.ActivateAsync("activation-1", replacedActivationId: null);
+        var restored = Assert.Single(await store.ListByActivationAsync("activation-1"));
+        Assert.Equal(schedule.ScheduleId, restored.ScheduleId);
+        Assert.True(restored.IsActive);
+    }
+
+    [Fact]
+    public async Task Sweep_AdvancesTheFireCursorWithoutTouchingActivationState()
+    {
+        // TryAdvanceAsync is the carved-out operational write: it moves the cursor and nothing else. Activation
+        // ownership, slot and serving visibility are the coordinator's, and a fire must not disturb them.
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var schedule = PublicationSchedule("s1", "activation-1") with { Expression = "PT1M" };
+        await store.PrepareActivationAsync("activation-1", [schedule]);
+        await store.ActivateAsync("activation-1", replacedActivationId: null);
+        await _bindingStore.SaveAsync(Binding(schedule));
+        var router = new FakeRouter();
+        var (pump, _) = CreatePump(store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Single(router.Requests);
+        var advanced = await store.FindAsync(schedule.ScheduleId);
+        Assert.Equal(Now.AddMinutes(1), advanced!.NextOccurrence);
+        Assert.Equal("activation-1", advanced.ActivationId);
+        Assert.Equal("slot-default", advanced.SlotId);
+        Assert.True(advanced.IsActive);
+        Assert.Equal(schedule.Expression, advanced.Expression);
     }
 
     [Fact]
@@ -218,6 +293,23 @@ public sealed class RecurringTriggerPumpTaskTests
             ActivationId: schedule.ActivationId,
             SlotId: schedule.SlotId));
     }
+
+    private static WorkflowTriggerBinding Binding(RecurringTriggerSchedule schedule) =>
+        new(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(
+                schedule.ActivationId!, schedule.ArtifactId, schedule.ExecutableNodeId, schedule.StimulusHash),
+            ArtifactId: schedule.ArtifactId,
+            DefinitionId: "definition-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:artifact",
+            ExecutableNodeId: schedule.ExecutableNodeId,
+            StimulusType: schedule.StimulusType,
+            StimulusHash: schedule.StimulusHash,
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now,
+            ActivationId: schedule.ActivationId,
+            SlotId: schedule.SlotId);
 
     private static RecurringTriggerSchedule Schedule(
         string id,

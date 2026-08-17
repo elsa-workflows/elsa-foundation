@@ -62,39 +62,52 @@ public sealed class WorkflowTriggerIndexerTests
     }
 
     [Fact]
-    public async Task Index_WritesExtractedBindings()
+    public async Task PrepareActivation_WritesExtractedBindings_AsPreparedRows()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         var indexer = new WorkflowTriggerIndexer(
             new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")]),
             store);
 
-        var bindings = await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
+        var bindings = await indexer.PrepareActivationAsync(
+            Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")),
+            "activation-1",
+            "slot-default");
 
         Assert.Single(bindings);
         var stored = Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal("Event", stored.StimulusType);
+        Assert.Equal("activation-1", stored.ActivationId);
+        Assert.Equal("slot-default", stored.SlotId);
+        // Prepared, not serving: only the coordinator's activate step exposes it to the router.
+        Assert.False(stored.IsActive);
+        Assert.Empty((await store.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery("Event", "sha256:event:hello"))).Items);
     }
 
     [Fact]
-    public async Task Index_ReplacesPriorBindingsForSameArtifact_OnRepublish()
+    public async Task PrepareActivation_LeavesEveryOtherActivationOnTheSameArtifactIntact()
     {
+        // The removed IndexAsync write path opened with DeleteByArtifactAsync, so preparing one activation wiped
+        // every other activation's projection for a shared artifact — a wipe no activation lifecycle authorized
+        // (FR-B-006 writer census, finding 1). Preparation is activation-scoped and touches nothing else.
         var store = new InMemoryWorkflowTriggerBindingStore();
         var indexer = new WorkflowTriggerIndexer(
             new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:new")]),
             store);
-        // Seed a stale binding on the same artifact that the current publish no longer contains.
         await store.SaveAsync(StaleBinding("artifact-1", "node-old"));
 
-        await indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event")));
+        await indexer.PrepareActivationAsync(
+            Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event")),
+            "activation-2",
+            "slot-blue");
 
         var bindings = await store.ListAllByArtifactAsync("artifact-1");
-        var binding = Assert.Single(bindings);
-        Assert.Equal("node-event", binding.ExecutableNodeId);
+        Assert.Equal(["node-event", "node-old"], bindings.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public async Task Index_LeavesOtherArtifactsBindingsIntact()
+    public async Task PrepareActivation_LeavesOtherArtifactsBindingsIntact()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         await store.SaveAsync(StaleBinding("artifact-2", "node-x"));
@@ -102,46 +115,16 @@ public sealed class WorkflowTriggerIndexerTests
             new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:v1")]),
             store);
 
-        await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
+        await indexer.PrepareActivationAsync(
+            Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")),
+            "activation-1",
+            "slot-default");
 
         Assert.Single(await store.ListAllByArtifactAsync("artifact-2"));
     }
 
     [Fact]
-    public async Task Index_NotifiesObservers_AfterSave_WithNewBindings()
-    {
-        var store = new InMemoryWorkflowTriggerBindingStore();
-        var observer = new RecordingObserver();
-        var indexer = new WorkflowTriggerIndexer(
-            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")]),
-            store,
-            [observer]);
-
-        await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
-
-        var snapshot = Assert.Single(observer.Snapshots);
-        Assert.Equal("artifact-1", snapshot.ArtifactId);
-        var binding = Assert.Single(snapshot.Bindings);
-        Assert.Equal("node-event", binding.ExecutableNodeId);
-        // Observer runs after the write: the binding it was handed is already durable in the store.
-        Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
-    }
-
-    [Fact]
-    public async Task Index_ObserverFailure_PropagatesAndFailsPublish()
-    {
-        var store = new InMemoryWorkflowTriggerBindingStore();
-        var indexer = new WorkflowTriggerIndexer(
-            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:v1")]),
-            store,
-            [new ThrowingObserver()]);
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event"))).AsTask());
-    }
-
-    [Fact]
-    public async Task Index_RunsValidators_BeforeAnyWrite_WithTheExtractedBindings()
+    public async Task PrepareActivation_RunsValidators_BeforeAnyWrite_WithTheExtractedBindings()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         var validator = new RecordingValidator(store);
@@ -150,7 +133,10 @@ public sealed class WorkflowTriggerIndexerTests
             store,
             validators: [validator]);
 
-        await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
+        await indexer.PrepareActivationAsync(
+            Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")),
+            "activation-1",
+            "slot-default");
 
         var snapshot = Assert.Single(validator.Snapshots);
         Assert.Equal("artifact-1", snapshot.ArtifactId);
@@ -160,10 +146,10 @@ public sealed class WorkflowTriggerIndexerTests
     }
 
     [Fact]
-    public async Task Index_ValidatorFailure_FailsThePublish_WithTheStoreUntouched()
+    public async Task PrepareActivation_ValidatorFailure_FailsTheActivation_WithTheStoreUntouched()
     {
-        // The seam's load-bearing property (issue #592 item 2): a validator throw fails the publish BEFORE the
-        // delete/save, so the artifact's prior bindings survive intact — no poisoned index, no rollback needed.
+        // The seam's load-bearing property (issue #592 item 2): a validator throw fails the activation BEFORE the
+        // projection is written, so the artifact's prior bindings survive intact — no poisoned index.
         var store = new InMemoryWorkflowTriggerBindingStore();
         await store.SaveAsync(StaleBinding("artifact-1", "node-old"));
         var indexer = new WorkflowTriggerIndexer(
@@ -172,7 +158,10 @@ public sealed class WorkflowTriggerIndexerTests
             validators: [new ThrowingValidator()]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event"))).AsTask());
+            indexer.PrepareActivationAsync(
+                Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event")),
+                "activation-2",
+                "slot-default").AsTask());
 
         // The prior generation is still durable, not deleted; the new binding was never written.
         var binding = Assert.Single(await store.ListAllByArtifactAsync("artifact-1"));
@@ -180,7 +169,7 @@ public sealed class WorkflowTriggerIndexerTests
     }
 
     [Fact]
-    public async Task Index_InvalidLaterNode_LeavesEverySeededBindingUntouched()
+    public async Task PrepareActivation_InvalidLaterNode_LeavesEverySeededBindingUntouched()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         await store.SaveAsync(StaleBinding("artifact-1", "node-old-1"));
@@ -197,7 +186,8 @@ public sealed class WorkflowTriggerIndexerTests
                 TriggerNode("node-invalid", "Elsa.Unknown"),
                 TriggerNode("node-valid", "Elsa.Event")));
 
-        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() => indexer.IndexAsync(executable).AsTask());
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
+            indexer.PrepareActivationAsync(executable, "activation-2", "slot-default").AsTask());
 
         Assert.Equal("node-invalid", exception.ExecutableNodeId);
         var bindings = await store.ListAllByArtifactAsync("artifact-1");
@@ -205,7 +195,7 @@ public sealed class WorkflowTriggerIndexerTests
     }
 
     [Fact]
-    public async Task Index_UsesCompletedPreflightBindingSet_AndValidatorFailurePreservesSeededBindings()
+    public async Task PrepareActivation_UsesCompletedPreflightBindingSet_AndValidatorFailurePreservesSeededBindings()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         await store.SaveAsync(StaleBinding("artifact-1", "node-old-1"));
@@ -218,7 +208,10 @@ public sealed class WorkflowTriggerIndexerTests
         var indexer = new WorkflowTriggerIndexer(extractor, store, validators: [validator]);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-new-1", "Elsa.Event"))).AsTask());
+            indexer.PrepareActivationAsync(
+                Executable("artifact-1", "sha256:v2", TriggerNode("node-new-1", "Elsa.Event")),
+                "activation-2",
+                "slot-default").AsTask());
 
         Assert.Equal("validator boom", exception.Message);
         var validated = Assert.Single(validator.Snapshots);
@@ -310,23 +303,6 @@ public sealed class WorkflowTriggerIndexerTests
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
                 ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash)])
                 : ActivityTriggerStimulusResult.NotRecognized;
-    }
-
-    private sealed class RecordingObserver : IWorkflowTriggerIndexObserver
-    {
-        public List<WorkflowTriggerIndexSnapshot> Snapshots { get; } = new();
-
-        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
-        {
-            Snapshots.Add(snapshot);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class ThrowingObserver : IWorkflowTriggerIndexObserver
-    {
-        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("observer boom");
     }
 
     /// <summary>Records the snapshot it was handed plus what the store held for the artifact at validation time.</summary>

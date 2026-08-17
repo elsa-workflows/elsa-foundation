@@ -43,6 +43,12 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// backlog is never replayed.
 /// </para>
 /// <para>
+/// <b>The pump never deletes a schedule.</b> A schedule that cannot produce a next occurrence — an expression
+/// that no longer parses, or a cron with no future occurrence — is <i>parked</i> (see <see cref="ParkAsync"/>)
+/// with a diagnostic, not removed: the row belongs to the activation lifecycle, whose sole writer is the
+/// activation coordinator (FR-B-006).
+/// </para>
+/// <para>
 /// <b>Whole-sweep backoff.</b> Comes from <see cref="BackoffSweepPumpTask"/>: a sweep that throws is caught,
 /// logged, and never rethrown; consecutive failures widen the schedule interval geometrically up to
 /// <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, and the first clean sweep resets it.
@@ -51,6 +57,12 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
 {
     private const string PumpRequestedBy = "runtime.recurring-trigger";
+
+    /// <summary>
+    /// The parked fire cursor: an instant no sweep can ever reach, so a schedule carrying it is never due again
+    /// while its row — and the activation that owns it — stays intact. See <see cref="ParkAsync"/>.
+    /// </summary>
+    public static readonly DateTimeOffset NeverOccurs = DateTimeOffset.MaxValue;
 
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly IRecurringTriggerScheduleStore? _store;
@@ -184,16 +196,30 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
         }
         catch (Exception exception)
         {
-            // A schedule whose expression no longer parses cannot advance; drop it so it does not jam the sweep.
-            Logger.LogError(exception, "Recurring schedule '{ScheduleId}' has an invalid expression; deleting it", schedule.ScheduleId);
-            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            // A schedule whose expression no longer parses cannot advance. It is PARKED, never deleted: the row is
+            // activation-owned serving state and the pump is not the activation authority (FR-B-006).
+            Logger.LogError(
+                exception,
+                "Recurring schedule '{ScheduleId}' of artifact '{ArtifactId}' node '{ExecutableNodeId}' has an invalid expression '{Expression}'; parking it instead of deleting activation-owned state. Re-activate the workflow to replace the schedule",
+                schedule.ScheduleId,
+                schedule.ArtifactId,
+                schedule.ExecutableNodeId,
+                schedule.Expression);
+            await ParkAsync(store, schedule, cancellationToken);
             return false;
         }
 
         if (next is null)
         {
-            // Cron exhausted (no future occurrence): remove the schedule rather than leave it perpetually due.
-            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            // Cron exhausted (no future occurrence): park it rather than leave it perpetually due — and, again,
+            // rather than delete a row the activation lifecycle owns.
+            Logger.LogInformation(
+                "Recurring schedule '{ScheduleId}' of artifact '{ArtifactId}' node '{ExecutableNodeId}' has no future occurrence for expression '{Expression}'; parking it",
+                schedule.ScheduleId,
+                schedule.ArtifactId,
+                schedule.ExecutableNodeId,
+                schedule.Expression);
+            await ParkAsync(store, schedule, cancellationToken);
             return false;
         }
 
@@ -242,6 +268,41 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             Logger.LogError(exception, "Recurring schedule '{ScheduleId}' start dispatch threw after claim; occurrence dropped", schedule.ScheduleId);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Retires a schedule from the due queue <b>without destroying it</b>, by advancing its fire cursor past every
+    /// reachable instant through the same compare-and-swap the ordinary fire path uses.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The pump used to <c>DeleteAsync</c> here. That made it a writer of activation-owned serving state while
+    /// standing outside any activation lifecycle, which FR-B-006 reserves for
+    /// <c>IWorkflowActivationCoordinator</c> alone: a later restore or compensation re-activates the schedule
+    /// projection, and a row the pump had deleted was simply gone — the workflow's recurring start was silently
+    /// lost with no diagnostic and no way for the coordinator to notice.
+    /// </para>
+    /// <para>
+    /// Parking stays on the right side of that line because <see cref="IRecurringTriggerScheduleStore.TryAdvanceAsync"/>
+    /// is explicitly carved out as operational fire-cursor state, not activation authority. The row keeps its
+    /// activation id, slot and serving flag; only "when does it next fire" changes, and for a schedule with no
+    /// computable next occurrence the honest answer is "never". The coordinator remains the only thing that can
+    /// remove or replace it.
+    /// </para>
+    /// <para>
+    /// A lost CAS needs no handling: another worker parked or advanced the same row, and either way this pump has
+    /// nothing left to do with it.
+    /// </para>
+    /// </remarks>
+    private async Task ParkAsync(
+        IRecurringTriggerScheduleStore store,
+        RecurringTriggerSchedule schedule,
+        CancellationToken cancellationToken)
+    {
+        if (schedule.NextOccurrence == NeverOccurs)
+            return;
+
+        await store.TryAdvanceAsync(schedule.ScheduleId, schedule.NextOccurrence, NeverOccurs, cancellationToken);
     }
 
     // The binding the schedule owns: same artifact, same trigger node, and same activation scope (named slots may

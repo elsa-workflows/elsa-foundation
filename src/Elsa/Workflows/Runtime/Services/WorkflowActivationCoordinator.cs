@@ -296,26 +296,23 @@ public sealed class WorkflowActivationCoordinator(
             transition.ReplacedActivationId);
     }
 
-    private async ValueTask PrepareProjectionsAsync(
+    /// <summary>
+    /// Prepares every serving projection through exactly <b>one</b> owned write per projection (FR-B-006 writer
+    /// census, finding 3).
+    /// </summary>
+    /// <remarks>
+    /// The indexer chain owns both writes: <see cref="IWorkflowTriggerIndexer"/> prepares the trigger bindings and
+    /// its recurring decorator prepares the recurring schedules — the latter unconditionally, so an engine that
+    /// composes the recurring store with no recurring providers still gets an explicit empty projection. The
+    /// read-back-then-re-prepare this replaced (inherited from <c>PublicationProjectionReconciler</c>) wrote the
+    /// schedule projection a second time and, worse, made the recurring projection's durability depend on a
+    /// separate delivery record from the one that governed the write that actually produced it.
+    /// </remarks>
+    private ValueTask PrepareProjectionsAsync(
         WorkflowActivationCommand command,
         string slotId,
-        CancellationToken cancellationToken)
-    {
-        await triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
-
-        if (recurringScheduleStore is null)
-            return;
-
-        // A host can compose the recurring store without composing any recurring providers, in which case the
-        // indexer chain prepared nothing. Reading back and re-preparing makes the empty projection explicit, so
-        // a later activate/compensate has a projection to move rather than silently nothing. Carried over from
-        // PublicationProjectionReconciler; the census's schedule double-write is collapsed by its own task.
-        var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(
-            recurringScheduleStore,
-            command.ActivationId,
-            cancellationToken);
-        await recurringScheduleStore.PrepareActivationAsync(command.ActivationId, schedules, cancellationToken);
-    }
+        CancellationToken cancellationToken) =>
+        AsVoid(triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken));
 
     private async ValueTask ActivateProjectionsAsync(
         string activationId,
@@ -552,6 +549,8 @@ public sealed class WorkflowActivationCoordinator(
             failures.Add($"{label} failed: {SafeMessage(exception)}");
         }
     }
+
+    private static async ValueTask AsVoid<T>(ValueTask<T> operation) => _ = await operation;
 
     private static bool NotRequestedCancellation(Exception exception, CancellationToken cancellationToken) =>
         exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested;

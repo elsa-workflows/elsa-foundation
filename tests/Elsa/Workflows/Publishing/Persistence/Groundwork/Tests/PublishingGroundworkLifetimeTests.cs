@@ -1,4 +1,4 @@
-using Elsa.Persistence.Groundwork.Testing;
+﻿using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
@@ -75,8 +75,10 @@ public sealed class PublishingGroundworkLifetimeTests
 
     private sealed class NoopWorkflowTriggerIndexer : IWorkflowTriggerIndexer
     {
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
+            string activationId,
+            string slotId,
             CancellationToken cancellationToken = default) =>
             new((IReadOnlyCollection<WorkflowTriggerBinding>)[]);
     }

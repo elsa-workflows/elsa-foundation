@@ -60,22 +60,30 @@ public sealed class RouteTableTriggerIndexObserverTests
     }
 
     [Fact]
-    public async Task Republish_RemovesSupersededRoutes()
+    public async Task Reactivation_RemovesSupersededRoutes()
     {
-        // Two artifacts publish routes; the route table reflects both.
-        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
+        // Two artifacts serve routes; the route table reflects both.
+        await _store.PrepareActivationAsync(
+            "activation-1",
+            [Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET") with { ActivationId = "activation-1", SlotId = "slot-a1", IsActive = false }]);
+        await _store.ActivateAsync("activation-1", replacedActivationId: null);
         await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "products", "GET"));
         await NotifyAsync("a2");
         Assert.Equal(2, _routeTable.RouteTemplates.Count);
 
-        // Republish a1 through the indexer's delete-and-resave: its route changes orders/{id} -> customers.
+        // Re-activate a1: its route changes orders/{id} -> customers. The indexer only PREPARES the successor's
+        // projection — nothing serves and no observer fires until the coordinator's activate step, which is what
+        // the two calls below stand in for.
         var executable = FakeExecutable("a1");
         var indexer = new WorkflowTriggerIndexer(
             new StaticExtractor(Bindings.HttpEndpoint("a1", executable.RootActivity.ExecutableNodeId, "customers", "GET")),
-            _store,
-            [Observer()]);
+            _store);
 
-        await indexer.IndexAsync(executable);
+        await indexer.PrepareActivationAsync(executable, "activation-2", "slot-a1");
+        Assert.Equal(2, _routeTable.RouteTemplates.Count);
+
+        await _store.ActivateAsync("activation-2", replacedActivationId: "activation-1");
+        await NotifyAsync("a1");
 
         // The observer's full refresh drops the superseded orders/{id} and keeps products + the new customers.
         Assert.Equal(

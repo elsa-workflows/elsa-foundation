@@ -62,6 +62,18 @@ Close the "runtime-only engine has nothing to execute" gap by (a) exporting a po
 
 **Nothing else is removed.** `PublicationRecord`, publication policies, `IPublicationRecordStore` attempt history, and the publishing preflight views all stay in Publishing with their tests intact (spec.md Non-Goals). If any *other* test turns out to require deletion during implementation, §2.23.4 applies: flag it, do not delete it solo, and extend this table.
 
+### Test removals (2) — §2.21.1, Phase 2D, recorded 2026-08-16
+
+Two tests were **deleted** in T041, not migrated. Recording per §2.21.1: removing a test requires explicit architect approval and a passing CI is not sufficient justification.
+
+**What was removed.** Two tests asserting that `WorkflowTriggerIndexer` **notifies `IWorkflowTriggerIndexObserver`**. Their subject was the observer notification that lived inside the artifact-scoped `IndexAsync` path.
+
+**Why the subject no longer exists.** FR-B-006 makes observer notification part of the activation lifecycle, owned by `WorkflowActivationCoordinator` — the indexer never notifies now, and `WorkflowTriggerIndexer` lost its `IEnumerable<IWorkflowTriggerIndexObserver>` constructor parameter entirely. This is §2.23.4's *"has the subject moved?"* case, and it moved to a component with its own coverage: notification is asserted in `WorkflowActivationCoordinatorTests`. **The objective is preserved; only its home changed.**
+
+**Everything else was migrated, not weakened.** T041's blast radius was nine test files — the artifact-scoped path was the standard publish shortcut in fixtures. All but these two were rewritten onto prepare→activate with assertions intact.
+
+**If Sipke disagrees**, the remedy is to re-add equivalent coverage against the coordinator rather than restore the indexer path, which no longer exists.
+
 ### Behaviour change — §2.23.4 recorded decision: the coordinator does not reproduce publishing's projection leak
 
 **Approved by Joey, 2026-08-15**, on the recommendation below. Recorded here because §2.23.4 treats "the refactor resolved a bug the tests silently relied on" as an architect decision, never a solo one.

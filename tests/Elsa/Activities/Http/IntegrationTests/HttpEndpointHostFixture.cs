@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
@@ -259,11 +259,30 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     {
         var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods, authorize, policy, requestSizeLimit);
 
-        // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
-        // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
-        // also fires the route-table index observer, so the published template lands in the live route table.
+        // Store the executable (start dispatch resolves it by artifact id) and make its trigger binding serve so
+        // the stimulus router can match an inbound request to it — the two things activation does.
         await SaveExecutableAsync(executable);
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        await ActivateHttpTriggerProjectionAsync(executable);
+    }
+
+    /// <summary>
+    /// Prepares the executable's trigger projection under an artifact-derived activation, makes it serve, and
+    /// notifies the route-table observer: the coordinator's prepare → activate → notify sequence, condensed for
+    /// fixtures that only need one artifact live on its default slot. There is no artifact-scoped index write to
+    /// shortcut through any more (FR-B-006 writer census, finding 1).
+    /// </summary>
+    private async Task ActivateHttpTriggerProjectionAsync(WorkflowExecutable executable)
+    {
+        var artifactId = executable.Identity.ArtifactId;
+        var activationId = $"activation:{artifactId}";
+        var slotId = $"{executable.Identity.DefinitionId}:default";
+        var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
+
+        await SaveActivationReferenceAsync(executable, activationId, slotId);
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
+            .PrepareActivationAsync(executable, activationId, slotId);
+        await store.ActivateAsync(activationId, replacedActivationId: null);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, await store.ListAllByActivationAsync(activationId));
     }
 
     /// <summary>
@@ -281,10 +300,21 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     {
         var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
         await SaveExecutableAsync(executable);
+        await SaveActivationReferenceAsync(executable, activationId, slotId);
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
+            .PrepareActivationAsync(executable, activationId, slotId);
+    }
+
+    /// <summary>
+    /// Mints the live source reference the activation owns. The stimulus router selects the executable a start
+    /// runs by the matched binding's (activation, slot), so a binding whose activation has no reference cannot
+    /// start anything.
+    /// </summary>
+    private async Task SaveActivationReferenceAsync(WorkflowExecutable executable, string activationId, string slotId) =>
         await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
             new WorkflowExecutableSourceReference(
                 $"reference:{activationId}",
-                artifactId,
+                executable.Identity.ArtifactId,
                 "WorkflowDefinitionVersion",
                 executable.Identity.DefinitionVersionId,
                 executable.Identity.ArtifactVersion,
@@ -296,9 +326,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 WorkflowExecutableReferenceScope.Published,
                 ActivationId: activationId,
                 SlotId: slotId));
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
-            .PrepareActivationAsync(executable, activationId, slotId);
-    }
 
     /// <summary>
     /// Switches publication-scoped trigger authority and notifies the real Runtime HTTP observer. The observer
@@ -426,8 +453,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         await SaveExecutableAsync(executable);
-        // Index so the START endpoint's (template, method) trigger binding lands in the route table.
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        // Activate so the START endpoint's (template, method) trigger binding lands in the route table.
+        await ActivateHttpTriggerProjectionAsync(executable);
     }
 
     // ---- Spec 089 sub-unit E (synchronous responses) publish helpers ----
@@ -572,8 +599,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         await SaveExecutableAsync(executable);
-        // Index so the START endpoint's (template, method) trigger binding lands in the route table.
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        // Activate so the START endpoint's (template, method) trigger binding lands in the route table.
+        await ActivateHttpTriggerProjectionAsync(executable);
     }
 
     /// <summary>Builds a real <see cref="SequenceActivity"/> container node (child slot + ordered structure) over <paramref name="children"/>.</summary>

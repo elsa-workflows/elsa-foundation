@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -48,6 +48,37 @@ public sealed class WorkflowActivationCoordinatorTests
             harness.Schedules.Calls);
         Assert.Single(harness.Observer.Snapshots);
         Assert.True(harness.Observer.Snapshots[0].RequiresProjectionRefresh);
+    }
+
+    [Fact]
+    public async Task Each_projection_is_prepared_by_exactly_one_owned_write_with_no_read_back()
+    {
+        // FR-B-006 writer census, finding 3. The schedule projection used to be written twice per activation:
+        // once by the indexer chain's recurring decorator, then again by a read-back-then-re-prepare the
+        // coordinator inherited from PublicationProjectionReconciler. The indexer chain owns both preparations
+        // now, so each projection has exactly one write and the coordinator never reads a projection it is about
+        // to write.
+        var harness = new Harness();
+
+        await harness.ActivateAsync("activation-1", "artifact-1");
+
+        Assert.Single(harness.Schedules.Calls, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+        Assert.Single(harness.Bindings.Calls, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Schedules.Calls, call => call.StartsWith("list:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_replacement_activation_prepares_each_projection_exactly_once_too()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+
+        await harness.ActivateAsync("activation-2", "artifact-2", expectedRevision: first.Slot.Revision);
+
+        Assert.Single(harness.Schedules.Calls, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+        Assert.Equal("prepare:activation-2", harness.Schedules.Calls[0]);
+        Assert.DoesNotContain(harness.Schedules.Calls, call => call.StartsWith("list:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -448,7 +479,7 @@ public sealed class WorkflowActivationCoordinatorTests
         {
             Bindings = new(new InMemoryWorkflowTriggerBindingStore());
             Schedules = new(new InMemoryRecurringTriggerScheduleStore());
-            Indexer = new(Bindings);
+            Indexer = new(Bindings, Schedules);
             Coordinator = new WorkflowActivationCoordinator(
                 Authority,
                 References,
@@ -627,13 +658,18 @@ public sealed class WorkflowActivationCoordinatorTests
         }
     }
 
-    /// <summary>Stands in for the real indexer chain: extracts one binding and prepares it, or fails on demand.</summary>
-    private sealed class RecordingTriggerIndexer(IWorkflowTriggerBindingStore bindingStore) : IWorkflowTriggerIndexer
+    /// <summary>
+    /// Stands in for the real indexer chain: extracts one binding and prepares it, or fails on demand. Like the
+    /// production chain it also prepares the recurring projection — <c>RecurringTriggerScheduleIndexer</c>
+    /// decorates the indexer and prepares that projection in the same call, unconditionally, so the coordinator
+    /// writes neither projection itself (FR-B-006 writer census, finding 3). Preparing is not cosmetic: the store
+    /// refuses to activate an activation that has no prepared projection.
+    /// </summary>
+    private sealed class RecordingTriggerIndexer(
+        IWorkflowTriggerBindingStore bindingStore,
+        IRecurringTriggerScheduleStore scheduleStore) : IWorkflowTriggerIndexer
     {
         public Exception? Failure { get; set; }
-
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("The activation lifecycle never uses the artifact-scoped write path.");
 
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
@@ -660,6 +696,7 @@ public sealed class WorkflowActivationCoordinatorTests
                 activationId,
                 slotId);
             await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            await scheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
             return [binding];
         }
     }
@@ -771,8 +808,12 @@ public sealed class WorkflowActivationCoordinatorTests
             return inner.PrepareActivationAsync(activationId, schedules, cancellationToken);
         }
 
-        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default) =>
-            inner.ListByActivationPageAsync(query, cancellationToken);
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default)
+        {
+            // Recorded so a test can prove the coordinator does NOT read the projection back before writing it.
+            Calls.Add($"list:{query.ActivationId}");
+            return inner.ListByActivationPageAsync(query, cancellationToken);
+        }
 
         public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
             inner.ListByArtifactPageAsync(query, cancellationToken);

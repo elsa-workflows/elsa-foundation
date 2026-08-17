@@ -1,4 +1,4 @@
-using Elsa.Workflows.Publishing.Services;
+﻿using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -32,10 +32,41 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.RemoveAsync(fixture.Publication);
 
         var intents = await fixture.IntentStore.ListByPublicationAsync(fixture.Publication.PublicationId);
-        Assert.Equal(6, intents.Count);
+        // FIVE, not six: preparation is ONE delivery covering both projections, because the indexer chain writes
+        // both in one call (FR-B-006 writer census, finding 3). The sixth record used to govern a second,
+        // read-back-driven write of the schedule projection — a duplicate whose independent Delivered guard could
+        // short-circuit out of step with the write that actually produced the projection.
+        Assert.Equal(5, intents.Count);
+        Assert.DoesNotContain(intents, intent =>
+            intent.ProjectionKind == PublicationProjectionKinds.RecurringSchedules &&
+            intent.Operation == PublicationProjectionOperation.Prepare);
         Assert.All(intents, intent => Assert.Equal(PublicationProjectionIntentStatus.Delivered, intent.Status));
         Assert.Empty(await fixture.BindingStore.ListAllByActivationAsync(fixture.Publication.PublicationId));
         Assert.Empty(await fixture.ScheduleStore.ListByActivationAsync(fixture.Publication.PublicationId));
+    }
+
+    [Fact]
+    public async Task Preparation_writes_each_projection_exactly_once_and_a_replay_cannot_erase_the_schedules()
+    {
+        // T044/T047. The reconciler used to prepare the recurring projection a SECOND time, from a read-back,
+        // under its own delivery record. Because that record was independent of the one governing the indexer
+        // call that actually produced the projection, a replay whose bindings record was already Delivered
+        // skipped the indexer, then re-prepared the schedules from an empty read-back and erased them.
+        var fixture = await Fixture.CreateAsync(_now);
+
+        await fixture.Reconciler.PrepareAsync(fixture.Publication);
+
+        Assert.Equal(1, fixture.Indexer.PrepareCallCount);
+        Assert.Equal(1, fixture.ScheduleStore.PrepareActivationCalls);
+        Assert.Single(await fixture.ScheduleStore.ListByActivationAsync(fixture.Publication.PublicationId));
+
+        await fixture.Reconciler.PrepareAsync(fixture.Publication);
+
+        // The replay short-circuits BOTH projections together, because one record governs one write per
+        // projection. Nothing is re-prepared, and nothing is lost.
+        Assert.Equal(1, fixture.Indexer.PrepareCallCount);
+        Assert.Equal(1, fixture.ScheduleStore.PrepareActivationCalls);
+        Assert.Single(await fixture.ScheduleStore.ListByActivationAsync(fixture.Publication.PublicationId));
     }
 
     [Fact]
@@ -124,11 +155,61 @@ public sealed class PublicationProjectionReconcilerTests
         Assert.Single(await fixture.ScheduleStore.ListDueAsync(_now.AddHours(2), 10));
     }
 
+    /// <summary>
+    /// Counts preparations of the recurring projection. T047's measuring instrument: exactly one write per
+    /// activation, by the indexer chain, with no read-back-driven second write from the reconciler.
+    /// </summary>
+    private sealed class CountingRecurringScheduleStore : IRecurringTriggerScheduleStore
+    {
+        private readonly InMemoryRecurringTriggerScheduleStore _inner = new();
+
+        public int PrepareActivationCalls { get; private set; }
+
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
+        {
+            PrepareActivationCalls++;
+            return _inner.PrepareActivationAsync(activationId, schedules, cancellationToken);
+        }
+
+        public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(schedule, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default) =>
+            _inner.ListByActivationPageAsync(query, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
+            _inner.ListByActivationAsync(activationId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            _inner.ListByArtifactPageAsync(query, cancellationToken);
+
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default) =>
+            _inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
+
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteByActivationAsync(activationId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>
+            _inner.ListDueAsync(asOf, limit, cancellationToken);
+
+        public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            _inner.FindAsync(scheduleId, cancellationToken);
+
+        public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default) =>
+            _inner.TryAdvanceAsync(scheduleId, expectedNextOccurrence, newNextOccurrence, cancellationToken);
+
+        public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteByArtifactAsync(artifactId, cancellationToken);
+
+        public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteAsync(scheduleId, cancellationToken);
+    }
+
     private sealed class Fixture(
         PublicationRecord publication,
         InMemoryPublicationProjectionIntentStore intentStore,
         InMemoryWorkflowTriggerBindingStore bindingStore,
-        InMemoryRecurringTriggerScheduleStore scheduleStore,
+        CountingRecurringScheduleStore scheduleStore,
         RecordingProjectionIndexer indexer,
         ServingProjectionObserver observer,
         PublicationProjectionReconciler reconciler)
@@ -136,7 +217,7 @@ public sealed class PublicationProjectionReconcilerTests
         public PublicationRecord Publication { get; } = publication;
         public InMemoryPublicationProjectionIntentStore IntentStore { get; } = intentStore;
         public InMemoryWorkflowTriggerBindingStore BindingStore { get; } = bindingStore;
-        public InMemoryRecurringTriggerScheduleStore ScheduleStore { get; } = scheduleStore;
+        public CountingRecurringScheduleStore ScheduleStore { get; } = scheduleStore;
         public RecordingProjectionIndexer Indexer { get; } = indexer;
         public ServingProjectionObserver Observer { get; } = observer;
         public PublicationProjectionReconciler Reconciler { get; } = reconciler;
@@ -148,7 +229,7 @@ public sealed class PublicationProjectionReconcilerTests
             await executableStore.SaveAsync(executable);
             var intentStore = new InMemoryPublicationProjectionIntentStore();
             var bindingStore = new InMemoryWorkflowTriggerBindingStore();
-            var scheduleStore = new InMemoryRecurringTriggerScheduleStore();
+            var scheduleStore = new CountingRecurringScheduleStore();
             var indexer = new RecordingProjectionIndexer(bindingStore, scheduleStore, now, failFirstPreparation);
             var observer = new ServingProjectionObserver(bindingStore);
             var reconciler = new PublicationProjectionReconciler(
@@ -218,11 +299,6 @@ public sealed class PublicationProjectionReconcilerTests
     {
         private bool _shouldFail = failFirstPreparation;
         public int PrepareCallCount { get; private set; }
-
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(
-            WorkflowExecutable executable,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
 
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,

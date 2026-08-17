@@ -24,6 +24,7 @@ namespace Elsa.Activities.Scheduling.Tests;
 public sealed class RecurringTriggerSampleWorkflowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
+    private const string SlotId = "definition-1:default";
 
     [Fact]
     public async Task TimerTrigger_PublishThenPump_StartsInstanceOnFirstOccurrence()
@@ -36,11 +37,11 @@ public sealed class RecurringTriggerSampleWorkflowTests
             [new TimerRecurringScheduleProvider()],
             store, calculator, clock, NullLogger<RecurringTriggerScheduleIndexer>.Instance);
 
-        // Publish a workflow that starts on a 5-minute timer.
-        await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT5M")));
+        // Activate a workflow that starts on a 5-minute timer.
+        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
 
         // Before the first occurrence nothing is due.
-        var bindingStore = await BindingStoreAsync("artifact-timer", TimerStimulus.StimulusType, TimerStimulus.Hash("PT5M"));
+        var bindingStore = await BindingStoreAsync("artifact-timer", TimerStimulus.StimulusType, TimerStimulus.Hash("PT5M"), "activation-1");
         var router = new RecordingRouter();
         var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
@@ -66,10 +67,10 @@ public sealed class RecurringTriggerSampleWorkflowTests
             [new CronRecurringScheduleProvider()],
             store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleIndexer>.Instance);
 
-        // Every hour on the hour; published at 12:00 the first occurrence is 13:00.
-        await indexer.IndexAsync(Workflow("artifact-cron", CronNode("0 * * * *")));
+        // Every hour on the hour; activated at 12:00 the first occurrence is 13:00.
+        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-cron", CronNode("0 * * * *")), "activation-1");
 
-        var bindingStore = await BindingStoreAsync("artifact-cron", CronStimulus.StimulusType, CronStimulus.Hash("0 * * * *"));
+        var bindingStore = await BindingStoreAsync("artifact-cron", CronStimulus.StimulusType, CronStimulus.Hash("0 * * * *"), "activation-1");
         var router = new RecordingRouter();
         var pump = Pump(store, bindingStore, router, calculator, new FixedClock(Now.AddHours(1).AddMinutes(1)));
         await pump.ExecuteAsync(CancellationToken.None);
@@ -81,7 +82,7 @@ public sealed class RecurringTriggerSampleWorkflowTests
     }
 
     [Fact]
-    public async Task Republish_ReplacesSchedule_ForSameArtifact()
+    public async Task Reactivation_ReplacesTheServingSchedule_ForSameArtifact()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         var calculator = new RecurringScheduleCalculator();
@@ -90,12 +91,14 @@ public sealed class RecurringTriggerSampleWorkflowTests
             [new TimerRecurringScheduleProvider()],
             store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleIndexer>.Instance);
 
-        await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT5M")));
-        await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT9M")));
+        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
+        await PrepareAndActivateAsync(
+            indexer, store, Workflow("artifact-timer", TimerNode("PT9M")), "activation-2", replacedActivationId: "activation-1");
 
-        // Only the republished schedule survives, keyed by the same node id.
+        // Only the re-activated schedule serves; supersession is activation-scoped, never an artifact-wide wipe.
         var schedule = Assert.Single(await store.ListDueAsync(Now.AddHours(1), 10));
         Assert.Equal(TimerStimulus.Hash("PT9M"), schedule.StimulusHash);
+        Assert.Equal("activation-2", schedule.ActivationId);
     }
 
     private static RecurringTriggerPumpTask Pump(
@@ -108,13 +111,32 @@ public sealed class RecurringTriggerSampleWorkflowTests
             Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions()),
             clock, NullLogger<RecurringTriggerPumpTask>.Instance);
 
-    // The trigger binding the publish would have indexed for the same node — the pump only dispatches a fire
-    // through the binding its schedule owns.
-    private static async Task<InMemoryWorkflowTriggerBindingStore> BindingStoreAsync(string artifactId, string stimulusType, string stimulusHash)
+    /// <summary>
+    /// Prepares the activation's recurring projection and then makes it serve — the two halves the activation
+    /// coordinator performs around the slot CAS. Preparation alone leaves the schedule invisible to the pump.
+    /// </summary>
+    private static async Task PrepareAndActivateAsync(
+        RecurringTriggerScheduleIndexer indexer,
+        IRecurringTriggerScheduleStore store,
+        WorkflowExecutable executable,
+        string activationId,
+        string? replacedActivationId = null)
+    {
+        await indexer.PrepareActivationAsync(executable, activationId, SlotId);
+        await store.ActivateAsync(activationId, replacedActivationId);
+    }
+
+    // The trigger binding the activation would have prepared for the same node — the pump only dispatches a fire
+    // through the binding its schedule owns, matching on artifact, node, activation and slot.
+    private static async Task<InMemoryWorkflowTriggerBindingStore> BindingStoreAsync(
+        string artifactId,
+        string stimulusType,
+        string stimulusHash,
+        string activationId)
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
         await bindingStore.SaveAsync(new WorkflowTriggerBinding(
-            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, "node-trigger", stimulusHash),
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(activationId, artifactId, "node-trigger", stimulusHash),
             ArtifactId: artifactId,
             DefinitionId: "definition-1",
             ArtifactVersion: "1.0.0",
@@ -124,7 +146,9 @@ public sealed class RecurringTriggerSampleWorkflowTests
             StimulusHash: stimulusHash,
             CorrelationScope: null,
             Metadata: new Dictionary<string, string>(),
-            CreatedAt: Now));
+            CreatedAt: Now,
+            ActivationId: activationId,
+            SlotId: SlotId));
         return bindingStore;
     }
 
@@ -175,7 +199,11 @@ public sealed class RecurringTriggerSampleWorkflowTests
 
     private sealed class NoopInner : IWorkflowTriggerIndexer
     {
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default) =>
             new(Array.Empty<WorkflowTriggerBinding>());
     }
 

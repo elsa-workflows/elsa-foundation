@@ -1,4 +1,4 @@
-using Elsa.Workflows.Publishing.Handlers;
+﻿using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
@@ -280,7 +280,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", eventName)]));
         var triggerActivity = TriggerActivityVersion();
         var extractor = new WorkflowTriggerBindingExtractor([provider]);
-        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore));
+        return Handler(workflowVersion, triggerActivity, extractor, IndexerChain(extractor));
     }
 
     private PublishWorkflowRequestHandler Handler(string activityType, params IActivityTriggerStimulusProvider[] providers)
@@ -288,8 +288,23 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node"));
         var triggerActivity = TriggerActivityVersion(activityType);
         var extractor = new WorkflowTriggerBindingExtractor(providers);
-        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore));
+        return Handler(workflowVersion, triggerActivity, extractor, IndexerChain(extractor));
     }
+
+    /// <summary>
+    /// The indexer chain a host composing the recurring store gets: the trigger indexer wrapped by the recurring
+    /// decorator, here with no recurring providers. The wrapper is not optional decoration — it is the sole owner
+    /// of the recurring projection's preparation (FR-B-006 writer census, finding 3), and the store refuses to
+    /// activate an activation whose recurring projection was never prepared, even when it is empty.
+    /// </summary>
+    private IWorkflowTriggerIndexer IndexerChain(IWorkflowTriggerBindingExtractor extractor) =>
+        new RecurringTriggerScheduleIndexer(
+            new WorkflowTriggerIndexer(extractor, _bindingStore),
+            [],
+            _scheduleStore,
+            new RecurringScheduleCalculator(),
+            TimeProvider.System,
+            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
 
     private PublishWorkflowRequestHandler FirstPartyHandler(
         FirstPartyScenario scenario,
