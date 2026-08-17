@@ -170,6 +170,23 @@ Current real state:
 - **T049 — STILL OWED**: export-side serialization through `IPayloadSerializer` with the Groundwork runtime document serializer's converter discipline (drop the recomputed `Nodes`/`NodesById` projections). Import-side deserialization works and round-trips; the export half is untested and unwritten. **Blocks US3 (T079–T080).**
 - **T051 — STILL OWED**: envelope tests (round-trip fidelity, projection-drop correctness, unknown/newer `FormatVersion` rejection, missing `RootArtifactId`).
 
+## ⚠ GAP IN US2's GATE — a third axis, found 2026-08-16 while writing T071
+
+**FR-B-005a's two axes do not catch a real "imports cleanly, faults at first execution" case.** This is precisely the failure US2 exists to prevent, on an axis US2 does not check. **T072–T078 must close it.**
+
+**What happens.** A compiled artifact's `descriptorType` must be the **consumer key** (`elsa.clr-activity`), not the descriptor's CLR type name. `WorkflowExecutionHarness.NewProbeNode` emits the CLR type name and relies on the harness rewriting it during `PinClrActivityContracts` on save. The importer — correctly — **never rewrites a content-addressed artifact**, so an envelope carrying the unpinned form:
+1. passes parse and closure validation,
+2. passes the content-hash recompute (the payload genuinely hashes to its id),
+3. passes **both** gate axes — consumer capabilities are checked against the requirement set, and CLR type presence resolves fine,
+4. activates cleanly,
+5. then fails at **first execution** with `UnknownActivityConsumerException` → `Waiting/ArtifactActivationFailed`.
+
+**Why the existing axes miss it.** Axis (a) evaluates the artifact's *declared* `RuntimeRequirements`. Axis (b) checks that each node's CLR **type alias** resolves in `IWellKnownTypeRegistry`. Neither checks that each node's `descriptorType` **consumer key resolves to a registered `IActivityActivationStrategy`** — the thing execution actually dispatches on.
+
+**Required for T072**: add that third check to the import gate — for every node, the descriptor's consumer key must resolve to a registered activation strategy — and reject at import with a diagnostic naming the unresolvable key. Add a T075/T077 case for an artifact whose `descriptorType` carries a CLR type name rather than a consumer key, asserting import-time rejection rather than a first-execution fault.
+
+**Cross-check with FR-B-005**: the checker's two axes are described as never intersecting and jointly sufficient. They are not jointly sufficient. Worth a line to Sipke at review, since it adjusts a clarified decision (2026-08-14 session, Q1).
+
 ## Follow-up tasks raised during implementation
 
 Numbered so they are executed and tracked, not rediscovered. IDs are appended (never renumbered) because T001–T115 are referenced by pushed commits.
@@ -307,10 +324,10 @@ Stated once here rather than repeated per task. These apply in all phases, not j
 - [x] T065 [US1] Add the concrete `JsonWorkflowArtifactReconciliationFeature` with `[ShellFeature]` id **`JsonWorkflowArtifactReconciliation`**, depending on `Tasks` and `WorkflowsRuntimeTriggers` (the binding/schedule/indexer spine is registered by the triggers feature, **not** by `AddWorkflowRuntime()`) and calling `AddWorkflowRuntime()` itself (idempotent per ADR 0029).
 - [x] T066 [US1] Add `WorkflowArtifactReconcilerStartupTask` in `Reconciliation/Startup/` with `[SingleNodeTask]` + distributed lock (`TryAcquireLockAsync(nameof(...))`, null lock → log + return), mirroring `WorkflowsVersionReconcilerStartupTask`. **MUST complete before readiness.**
 - [x] T067 [US1] Order the startup task **after** `RegisterActivityTypesStartupTask` via `[TaskDependency(typeof(RegisterActivityTypesStartupTask))]` — the import gate's type-presence axis is meaningless before the assembly scan completes. Verify the attribute accepts a cross-assembly type (research risk R4); documented fallback is `[Order]` above the scan task's order.
-- [ ] T068 [P] [US1] §2.23.1 registration tests in the new test project: abstract base via a test double, concrete Json feature, and the startup task's single-node/lock/ordering attributes.
-- [ ] T069 [P] [US1] §2.23.2 tests for the JSON source: folder scan ordering, explicit ordered files, single file, missing folder aborts, empty folder no-ops.
-- [ ] T070 [US1] **SC-B-001/005 composition assertion test** in `tests/Elsa/Architecture/`: a runtime-only composition executes a mounted artifact end-to-end (including a trigger-started workflow) while asserting **no `Elsa.Workflows.Design.*`, `Elsa.Workflows.Publishing*`, or `Elsa.Activities.Design.*` assembly is loaded**. This is the claim the feature exists to serve — assembly-enforced, not documentation.
-- [ ] T071 [US1] End-to-end test for US1 acceptance scenarios 1–2: mounted valid artifact reaches the executable store and runs to completion; a trigger-started (HTTP/timer) artifact routes its stimulus and executes — proving **both** projections were activated.
+- [x] T068 [P] [US1] §2.23.1 registration tests in the new test project: abstract base via a test double, concrete Json feature, and the startup task's single-node/lock/ordering attributes.
+- [x] T069 [P] [US1] §2.23.2 tests for the JSON source: folder scan ordering, explicit ordered files, single file, missing folder aborts, empty folder no-ops.
+- [x] T070 [US1] **SC-B-001/005 composition assertion test** in `tests/Elsa/Architecture/`: a runtime-only composition executes a mounted artifact end-to-end (including a trigger-started workflow) while asserting **no `Elsa.Workflows.Design.*`, `Elsa.Workflows.Publishing*`, or `Elsa.Activities.Design.*` assembly is loaded**. This is the claim the feature exists to serve — assembly-enforced, not documentation.
+- [x] T071 [US1] End-to-end test for US1 acceptance scenarios 1–2: mounted valid artifact reaches the executable store and runs to completion; a trigger-started (HTTP/timer) artifact routes its stimulus and executes — proving **both** projections were activated.
 
 **Checkpoint**: US1 independently testable — a design-free runtime imports and executes mounted artifacts, MVP delivered.
 
