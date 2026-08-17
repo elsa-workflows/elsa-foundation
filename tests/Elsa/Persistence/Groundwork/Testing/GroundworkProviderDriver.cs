@@ -168,10 +168,7 @@ public enum GroundworkProcessProbeOperation
 {
     Save,
     Load,
-    RuntimeCheckpointVerifyBundle,
-    IdentityCreateUser,
-    IdentityFindByNormalizedUserName,
-    IdentityDuplicateCreate
+    RuntimeCheckpointVerifyBundle
 }
 
 public sealed record GroundworkProcessProbeRequest
@@ -186,10 +183,7 @@ public sealed record GroundworkProcessProbeRequest
         if (string.IsNullOrWhiteSpace(documentId))
             throw new ArgumentException("A probe document ID is required.", nameof(documentId));
         var requiresValue = operation is GroundworkProcessProbeOperation.Save or
-            GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle or
-            GroundworkProcessProbeOperation.IdentityCreateUser or
-            GroundworkProcessProbeOperation.IdentityFindByNormalizedUserName or
-            GroundworkProcessProbeOperation.IdentityDuplicateCreate;
+            GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle;
         if (requiresValue && value is null)
             throw new ArgumentException("The selected process-probe operation requires a value.", nameof(value));
         ProbeId = probeId;

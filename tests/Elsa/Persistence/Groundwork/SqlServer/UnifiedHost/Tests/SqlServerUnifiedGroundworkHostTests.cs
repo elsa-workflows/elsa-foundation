@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
@@ -14,23 +13,14 @@ namespace Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests;
 [Collection(SqlServerContainerCollection.Name)]
 public sealed class SqlServerUnifiedGroundworkHostTests(SqlServerContainerFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync(bool withIdentity = false)
+    private async Task<ServiceProvider> BuildHostAsync()
     {
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        if (withIdentity)
-        {
-            services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-                connectionString);
-            services.AddFoundationAspNetCoreIdentityGroundwork();
-        }
-        else
-        {
-            services.AddGroundworkSqlServerUnifiedPersistence(connectionString);
-        }
+        services.AddGroundworkSqlServerUnifiedPersistence(connectionString);
 
         var provider = services.BuildServiceProvider();
         await provider.ApplySqlServerGroundworkSchemaAsync(connectionString);
@@ -44,13 +34,6 @@ public sealed class SqlServerUnifiedGroundworkHostTests(SqlServerContainerFixtur
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
         return UnifiedGroundworkHostContract.AssertRegistersOneDocumentStoreSharedByEveryLaneAsync(
             () => BuildHostAsync());
-    }
-
-    [SkippableFact]
-    public Task Explicit_identity_schema_and_feature_admit_and_resolve_on_the_unified_SQL_Server_target()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertExplicitIdentitySchemaAndFeatureAdmitAndResolveAsync(BuildHostAsync);
     }
 
     [SkippableFact]

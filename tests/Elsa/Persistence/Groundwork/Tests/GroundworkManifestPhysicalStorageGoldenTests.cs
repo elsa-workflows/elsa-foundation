@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
@@ -26,8 +25,7 @@ public class GroundworkManifestPhysicalStorageGoldenTests
             ["design-atomic-write"] = GroundworkDesignAtomicWriteStorageManifest.Create,
             ["publishing"] = PublishingGroundworkStorageManifest.Create,
             ["activities-design"] = ActivitiesDesignStorageManifest.Create,
-            ["workflows-design"] = WorkflowsDesignStorageManifest.Create,
-            ["identity"] = IdentityStorageManifest.Create
+            ["workflows-design"] = WorkflowsDesignStorageManifest.Create
         };
 
     public static TheoryData<string> ManifestNames => [.. Manifests.Keys];

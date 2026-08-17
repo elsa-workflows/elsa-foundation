@@ -79,39 +79,28 @@ from repair/import tooling can still remove relationships and be brought back wi
 
 ## Schema evolution
 
-The document shapes are frozen by a golden-fixture drift test (`Fixtures/v1/*.json`). Evolving a shape
-requires, in the same change: bump `IdentityStorageManifest.SchemaVersion` (add a reader/upcaster for the
-old shape if needed), regenerate the golden fixture (`GROUNDWORK_FIXTURE_REGEN=1`), and keep the old
-fixtures so historical documents still load.
+This is a clean-break Groundwork v2 store. `IdentityV2StorageManifest` is the one declaration authority and the
+runtime does not load, upcast, dual-write, or migrate legacy Groundwork documents. Any declaration change must
+update the v2 manifest contract tests and pass the four-provider Identity matrix from a fresh database.
 
-## Deployment schema and topology
+## Provider connection and topology
 
-Identity is not included in the default provider substrate schema. A host that selects ASP.NET Core Identity
-Groundwork must select the matching runtime deployment schema as well as the Identity feature. Code-composed
-hosts use the provider's generic unified registration; for example:
+Identity contributes its public v2 storage units directly; selecting Identity does not select a second legacy
+deployment schema. The host registers exactly one public provider connection for the target, then registers the
+Identity feature. For SQLite:
 
 ```csharp
-services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(connectionString);
+services.AddGroundworkStorageProviderConnection(
+    _ => new SqliteProviderFactory().Create(connectionString));
 services.AddFoundationAspNetCoreIdentityGroundwork();
 ```
 
-The same generic deployment-schema overload is available for PostgreSQL, SQL Server, and MongoDB. Provider
-registration still contributes only the six provider-level families; the explicit Identity feature contributes
-its own services and manifest. Validate/apply that same Identity deployment schema in the deployment pipeline:
+Use the equivalent `PostgreSqlProviderFactory`, `SqlServerProviderFactory`, or `MongoProviderFactory` for the
+other supported providers. `GroundworkStorageSessionSource` applies the declared Identity units during host or
+shell admission and fails when no matching provider connection is registered. MongoDB deployments require a
+transaction-capable replica set because Identity mutations span multiple units atomically; standalone MongoDB
+must be refused rather than degraded to partial writes.
 
-The repository pins the whole Groundwork package family and `Groundwork.Tool` to
-`0.0.1-preview.72`. `validate`, `plan`, and `status` inspect only; `apply --safe` is the only normal command
-that may mutate the target. Retain the emitted plan fingerprint for any protected operation and use the exact
-same public parameterless deployment-source type for runtime composition and every CLI command.
-
-```bash
-dotnet groundwork validate \
-  --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithIdentityDeploymentSchema \
-  --provider <sqlite|sqlserver|postgresql|mongodb> \
-  --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION
-```
-
-Use the same `--manifest-type` for `plan`, `status`, and `apply`. `validate`, `plan`, and `status` are
-read-only; `apply` is the only command that may change the target database. MongoDB deployments that rely on
-multi-document identity guarantees require a transaction-capable replica set or sharded topology.
+Groundwork packages are restored from the Valence Works Feedz source:
+`https://f.feedz.io/valence-works/groundwork/nuget/index.json`. This clean-break path does not publish or install
+Groundwork packages from NuGet.org.

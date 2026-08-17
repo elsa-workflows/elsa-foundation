@@ -1,9 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.MongoDb;
@@ -27,7 +23,6 @@ using Groundwork.Sqlite.PhysicalStorage;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.Documents;
 using Groundwork.SqlServer.PhysicalStorage;
-using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Persistence.Groundwork.ProcessProbe;
 
@@ -80,9 +75,6 @@ internal static class Program
             GroundworkProcessProbeOperation.Save => await SaveAsync(lease.Store, command, cancellationToken),
             GroundworkProcessProbeOperation.Load => await LoadAsync(lease.Store, command, cancellationToken),
             GroundworkProcessProbeOperation.RuntimeCheckpointVerifyBundle => await VerifyRuntimeCheckpointBundleAsync(lease.Store, command, cancellationToken),
-            GroundworkProcessProbeOperation.IdentityCreateUser => await ExecuteIdentityAsync(command, cancellationToken),
-            GroundworkProcessProbeOperation.IdentityFindByNormalizedUserName => await ExecuteIdentityAsync(command, cancellationToken),
-            GroundworkProcessProbeOperation.IdentityDuplicateCreate => await ExecuteIdentityAsync(command, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(command), command.Request.Operation, null)
         };
 
@@ -143,70 +135,6 @@ internal static class Program
             GroundworkTestAccess.DefaultAccessContextAccessor,
             payload,
             cancellationToken);
-        return (command.Request.PayloadSha256!, command.ProtocolVersion, observation.DocumentVersion);
-    }
-
-    private static async Task<(string PayloadSha256, string SchemaVersion, long DocumentVersion)> ExecuteIdentityAsync(
-        GroundworkProcessProbeCommand command,
-        CancellationToken cancellationToken)
-    {
-        if (command.ProviderKey is not ("sqlite" or "sqlserver" or "postgresql" or "mongodb"))
-            throw new NotSupportedException("Identity process probes are implemented per provider scenario.");
-
-        var payload = AspNetCoreIdentityRestartProbe.DecodePayload(command.Request.Value!);
-        await using var lease = await OpenIdentityStoreAsync(command, payload.User.TenantId, cancellationToken);
-        var accessor = new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(payload.User.TenantId)));
-        var store = new GroundworkIdentityUserStore(lease.Store, accessor, lease.BoundedStore);
-        var user = ToIdentityUser(payload.User);
-        AspNetCoreIdentityRestartProbeObservation observation;
-
-        switch (payload.Operation)
-        {
-            case AspNetCoreIdentityRestartProbeOperation.CreateUser:
-            {
-                var result = await store.CreateAsync(user, cancellationToken);
-                if (!result.Succeeded)
-                    throw new InvalidOperationException("The Identity create-user process probe did not create the user.");
-                var found = await store.FindByNameAsync(user.NormalizedUserName!, cancellationToken)
-                            ?? throw new InvalidOperationException("The Identity create-user process probe could not reload the user.");
-                observation = new AspNetCoreIdentityRestartProbeObservation(
-                    payload.Operation,
-                    "created",
-                    found.Id,
-                    null,
-                    ExtractUserVersion(found));
-                break;
-            }
-            case AspNetCoreIdentityRestartProbeOperation.FindByNormalizedUserName:
-            {
-                var found = await store.FindByNameAsync(user.NormalizedUserName!, cancellationToken)
-                            ?? throw new InvalidOperationException("The Identity normalized-user-name process probe could not find the user.");
-                observation = new AspNetCoreIdentityRestartProbeObservation(
-                    payload.Operation,
-                    "found",
-                    found.Id,
-                    null,
-                    ExtractUserVersion(found));
-                break;
-            }
-            case AspNetCoreIdentityRestartProbeOperation.DuplicateCreate:
-            {
-                var result = await store.CreateAsync(user, cancellationToken);
-                if (result.Succeeded)
-                    throw new InvalidOperationException("The Identity duplicate-create process probe unexpectedly created a duplicate user.");
-                var error = result.Errors.FirstOrDefault()?.Code ?? "unknown";
-                observation = new AspNetCoreIdentityRestartProbeObservation(
-                    payload.Operation,
-                    "duplicate-rejected",
-                    user.Id,
-                    error,
-                    1);
-                break;
-            }
-            default:
-                throw new ArgumentOutOfRangeException(nameof(command), payload.Operation, null);
-        }
-
         return (command.Request.PayloadSha256!, command.ProtocolVersion, observation.DocumentVersion);
     }
 
@@ -352,159 +280,6 @@ internal static class Program
                 RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
             });
 
-    private static ValueTask<IdentityStoreLease> OpenIdentityStoreAsync(
-        GroundworkProcessProbeCommand command,
-        string tenantId,
-        CancellationToken cancellationToken) =>
-        command.ProviderKey switch
-        {
-            "sqlite" => OpenSqliteIdentityStoreAsync(command, tenantId, cancellationToken),
-            "sqlserver" => OpenSqlServerIdentityStoreAsync(command, tenantId, cancellationToken),
-            "postgresql" => OpenPostgreSqlIdentityStoreAsync(command, tenantId, cancellationToken),
-            "mongodb" => OpenMongoDbIdentityStoreAsync(command, tenantId, cancellationToken),
-            _ => throw new ArgumentException("The Identity process-probe provider is unsupported.", nameof(command))
-        };
-
-    private static async ValueTask<IdentityStoreLease> OpenSqliteIdentityStoreAsync(
-        GroundworkProcessProbeCommand command,
-        string tenantId,
-        CancellationToken cancellationToken)
-    {
-        var topology = new GroundworkProviderTopologySnapshot(
-            SqliteGroundworkCapabilities.Provider.Name,
-            "sqlite-file",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-            });
-        var source = await GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
-            SqliteGroundworkCapabilities.Runtime(),
-            topology,
-            SqliteGroundworkCapabilities.PhysicalNames,
-            [new IdentityGroundworkStorageManifestSource()],
-            cancellationToken: cancellationToken);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(tenantId));
-        var manifest = source.CreateManifest();
-        var store = new SqlitePhysicalDocumentStore(
-            command.State.ConnectionString,
-            manifest,
-            source.PhysicalTarget.Routes,
-            access);
-        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-            source.PhysicalTarget.Routes.Select(route =>
-                KeyValuePair.Create<string, IBoundedDocumentStore>(
-                    route.StorageUnit.Value,
-                    SqlitePhysicalQueryRuntime.Create(
-                        store,
-                        manifest,
-                        route,
-                        source.PhysicalTarget.Provider))));
-        return new IdentityStoreLease(store, boundedStore);
-    }
-
-    private static async ValueTask<IdentityStoreLease> OpenSqlServerIdentityStoreAsync(
-        GroundworkProcessProbeCommand command,
-        string tenantId,
-        CancellationToken cancellationToken)
-    {
-        var topology = new GroundworkProviderTopologySnapshot(
-            SqlServerGroundworkCapabilities.Provider.Name,
-            "sqlserver",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-            });
-        var source = await GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
-            SqlServerGroundworkCapabilities.Runtime(),
-            topology,
-            SqlServerGroundworkCapabilities.PhysicalNames,
-            [new IdentityGroundworkStorageManifestSource()],
-            cancellationToken: cancellationToken);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(tenantId));
-        var manifest = source.CreateManifest();
-        var store = new SqlServerPhysicalDocumentStore(
-            command.State.ConnectionString,
-            manifest,
-            source.PhysicalTarget.Routes,
-            access);
-        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-            source.PhysicalTarget.Routes.Select(route =>
-                KeyValuePair.Create<string, IBoundedDocumentStore>(
-                    route.StorageUnit.Value,
-                    SqlServerPhysicalQueryRuntime.Create(
-                        store,
-                        manifest,
-                        route,
-                        source.PhysicalTarget.Provider))));
-        return new IdentityStoreLease(store, boundedStore);
-    }
-
-    private static async ValueTask<IdentityStoreLease> OpenPostgreSqlIdentityStoreAsync(
-        GroundworkProcessProbeCommand command,
-        string tenantId,
-        CancellationToken cancellationToken)
-    {
-        var topology = new GroundworkProviderTopologySnapshot(
-            PostgreSqlGroundworkCapabilities.Provider.Name,
-            "postgresql-server",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity
-            });
-        var source = await GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
-            PostgreSqlGroundworkCapabilities.Runtime(),
-            topology,
-            PostgreSqlGroundworkCapabilities.PhysicalNames,
-            [new IdentityGroundworkStorageManifestSource()],
-            cancellationToken: cancellationToken);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(tenantId));
-        var manifest = source.CreateManifest();
-        var store = new PostgreSqlPhysicalDocumentStore(
-            command.State.ConnectionString,
-            manifest,
-            source.PhysicalTarget.Routes,
-            access);
-        var boundedStore = new GroundworkBoundedDocumentStoreRouter(
-            source.PhysicalTarget.Routes.Select(route =>
-                KeyValuePair.Create<string, IBoundedDocumentStore>(
-                    route.StorageUnit.Value,
-                    PostgreSqlPhysicalQueryRuntime.Create(
-                        store,
-                        manifest,
-                        route,
-                        source.PhysicalTarget.Provider))));
-        return new IdentityStoreLease(store, boundedStore);
-    }
-
-    private static async ValueTask<IdentityStoreLease> OpenMongoDbIdentityStoreAsync(
-        GroundworkProcessProbeCommand command,
-        string tenantId,
-        CancellationToken cancellationToken)
-    {
-        var topology = await new MongoDbGroundworkRuntimeAdmission().InspectReplicaSetAsync(
-            command.State.ConnectionString,
-            command.State.MongoDatabaseName!,
-            cancellationToken);
-        var source = await GroundworkStoreInitialization.CreatePhysicalSchemaSourceAsync(
-            MongoDbGroundworkCapabilities.RuntimeForTransactionCapableDeployment(),
-            topology,
-            MongoDbPhysicalNameNormalizer.Instance,
-            [new IdentityGroundworkStorageManifestSource()],
-            MongoDbGroundworkPhysicalSchemaTargetCompiler.Instance,
-            cancellationToken);
-        var access = DocumentStoreAccess.Scoped(new StorageScope(tenantId));
-        var handle = await MongoDbDocumentStoreFactory.OpenPhysicalAsync(
-            command.State.ConnectionString,
-            command.State.MongoDatabaseName!,
-            source.CreateManifest(),
-            source.PhysicalTarget.Provider,
-            access,
-            source.CreateNamePolicy(),
-            cancellationToken: cancellationToken);
-        var store = handle.CreateStore(access);
-        return new IdentityStoreLease(store, store, handle);
-    }
-
     private static async ValueTask<StoreLease> OpenMongoDbAsync(
         GroundworkProcessProbeCommand command,
         global::Groundwork.Core.Manifests.StorageManifest manifest,
@@ -526,25 +301,6 @@ internal static class Program
     private sealed record ProbeDocument(
         [property: JsonPropertyName("value")] string Value,
         [property: JsonPropertyName("collection")] string Collection);
-
-    private static AspNetCoreIdentityUser ToIdentityUser(AspNetCoreIdentityRestartProbeUser user) => new()
-    {
-        Id = user.UserId,
-        TenantId = user.TenantId,
-        UserName = user.UserName,
-        NormalizedUserName = user.NormalizedUserName,
-        Email = user.Email,
-        NormalizedEmail = user.NormalizedEmail,
-        DisplayName = user.DisplayName,
-        EmailConfirmed = true,
-        SecurityStamp = $"security-{user.UserId}",
-        ConcurrencyStamp = $"revision-{user.UserId}"
-    };
-
-    private static long ExtractUserVersion(AspNetCoreIdentityUser user) =>
-        IdentityRevisionStamp.TryGetUserVersion(user.ConcurrencyStamp, user.TenantId, user.Id, out var version)
-            ? version
-            : throw new InvalidOperationException("The Identity process probe user did not contain a Groundwork revision stamp.");
 
     private static string ProviderFailureCode(Exception exception)
     {
@@ -608,16 +364,4 @@ internal static class Program
         public ValueTask DisposeAsync() => owner?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
 
-    private sealed class IdentityStoreLease(IDocumentStore store, IBoundedDocumentStore boundedStore, IAsyncDisposable? owner = null) : IAsyncDisposable
-    {
-        public IDocumentStore Store { get; } = store;
-        public IBoundedDocumentStore BoundedStore { get; } = boundedStore;
-        public ValueTask DisposeAsync() => owner?.DisposeAsync() ?? ValueTask.CompletedTask;
-    }
-
-    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
-        : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
 }

@@ -3,10 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
@@ -84,28 +81,6 @@ public class UnifiedGroundworkHostTests
         return provider;
     }
 
-    private static async Task<ServiceProvider> BuildIdentityHostAsync(
-        string connectionString,
-        bool identityFirst)
-    {
-        var services = new ServiceCollection()
-            .AddLogging()
-            .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
-            .AddSingleton<ISystemClock, FakeSystemClock>()
-            .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
-            .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
-        if (identityFirst)
-            services.AddFoundationAspNetCoreIdentityGroundwork();
-        services.AddGroundworkSqliteUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(connectionString);
-        if (!identityFirst)
-            services.AddFoundationAspNetCoreIdentityGroundwork();
-        var provider = services.BuildServiceProvider(
-            new ServiceProviderOptions { ValidateScopes = true });
-        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
-        await provider.InitializeGroundworkStoreAsync();
-        return provider;
-    }
-
     [Fact]
     public async Task Host_registers_one_document_store_shared_by_every_lane()
     {
@@ -121,7 +96,6 @@ public class UnifiedGroundworkHostTests
         // Runtime and distributed-runtime ports resolve. Clean-break v2 adapters are composed separately.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
-        Assert.Null(scope.ServiceProvider.GetService<IUserStore>());
 
         // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
@@ -133,39 +107,6 @@ public class UnifiedGroundworkHostTests
 
         await using var independentScope = provider.CreateAsyncScope();
         Assert.NotSame(store1, independentScope.ServiceProvider.GetRequiredService<IDocumentStore>());
-    }
-
-    [Fact]
-    public async Task Identity_only_composition_initializes_without_runtime_history_services()
-    {
-        await using var database = new TemporarySqliteDatabase();
-        var services = new ServiceCollection()
-            .AddLogging();
-        services.AddGroundworkIdentityStores();
-        services.AddSqliteGroundworkDocumentStore(database.ConnectionString);
-        await using var provider = services.BuildServiceProvider(
-            new ServiceProviderOptions { ValidateScopes = true });
-
-        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
-        await provider.InitializeGroundworkStoreAsync();
-
-        await using var scope = provider.CreateAsyncScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Explicit_identity_schema_and_feature_admit_in_either_registration_order(bool identityFirst)
-    {
-        await using var database = new TemporarySqliteDatabase();
-        await using var provider = await BuildIdentityHostAsync(database.ConnectionString, identityFirst);
-        await using var scope = provider.CreateAsyncScope();
-
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     [Fact]
@@ -258,7 +199,6 @@ public class UnifiedGroundworkHostTests
             bookmark.StimulusHash,
             (await reopenedServices.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(bookmark.WorkflowExecutionId, bookmark.BookmarkId))?.StimulusHash);
-        Assert.Null(reopenedServices.GetService<IUserStore>());
         Assert.Equal(
             placement.OwnerId,
             (await reopenedServices.GetRequiredService<IExecutionPlacementStore>()

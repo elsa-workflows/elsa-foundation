@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
@@ -32,23 +31,11 @@ public static class UnifiedGroundworkHostContract
 
         Assert.Same(store1, store2);
         Assert.NotNull(provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore>());
-        Assert.Null(provider.GetService<IUserStore>());
         Assert.NotNull(provider.GetRequiredService<IExecutionPlacementStore>());
 
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
-    }
-
-    public static async Task AssertExplicitIdentitySchemaAndFeatureAdmitAndResolveAsync(
-        Func<bool, Task<ServiceProvider>> buildHostAsync)
-    {
-        await using var provider = await buildHostAsync(true);
-        await using var scope = provider.CreateAsyncScope();
-
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     public static async Task AssertOneDatabaseMaterializesAndServesAllThreeLanesAsync(

@@ -1,8 +1,6 @@
 using CShells;
 using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Persistence.Groundwork.Targets;
@@ -10,8 +8,6 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
-using Elsa.Secrets.Core.Contracts;
-using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -92,7 +88,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_the_seven_provider_families_without_selecting_identity()
+    public void Unified_feature_registers_the_five_remaining_legacy_provider_families()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -106,13 +102,10 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         AssertRepresentativeFamilyContracts(
             services,
             typeof(IBookmarkStateStore),
-            typeof(ISecretRepository),
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
-            typeof(IPublicationRecordStore),
-            typeof(IStudioPreferenceStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
+            typeof(IPublicationRecordStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
     }
 
@@ -187,7 +180,7 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public async Task Unified_shell_standalone_composes_the_seven_provider_families_into_one_exact_MongoDB_target()
+    public async Task Unified_shell_standalone_composes_the_five_remaining_legacy_families_into_one_exact_MongoDB_target()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -210,8 +203,6 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
                 "elsa-activities-design",
                 // The design families' shared atomic-operation ledger registers as its own manifest source.
                 "elsa-design-atomic-write",
-                "elsa-secrets",
-                "elsa-studio-preferences",
                 "elsa-workflows-design",
                 "elsa-workflows-publishing",
                 "elsa-workflows-runtime",
@@ -228,29 +219,6 @@ public sealed class MongoDbGroundworkPersistenceRegistrationTests
         }
 
         Assert.True(admission.Handle.IsDisposed);
-    }
-
-    [Fact]
-    public async Task Explicit_identity_schema_and_feature_compose_and_admit_on_the_unified_MongoDB_target()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            ConnectionString,
-            DatabaseName);
-        services.AddFoundationAspNetCoreIdentityGroundwork();
-        var admission = new RecordingRuntimeAdmission();
-        services.Replace(ServiceDescriptor.Singleton<IMongoDbGroundworkRuntimeAdmission>(admission));
-
-        await using var provider = services.BuildServiceProvider(
-            new ServiceProviderOptions { ValidateScopes = true });
-        await provider.GetRequiredKeyedService<MongoDbGroundworkDocumentStoreInitializer>(GroundworkTargetNames.Default).AdmitAsync();
-        await using var scope = provider.CreateAsyncScope();
-
-        Assert.Contains("elsa-identity", admission.Source!.Snapshot.SelectedFeatures);
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
     }
 
     private static ShellFeatureContext CreateBareShellContext() =>

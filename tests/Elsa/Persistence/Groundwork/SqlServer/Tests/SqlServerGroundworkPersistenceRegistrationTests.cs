@@ -1,9 +1,6 @@
 using CShells;
 using CShells.Features;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Targets;
@@ -16,8 +13,6 @@ using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Unified.Composition;
-using Elsa.Secrets.Core.Contracts;
-using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -96,7 +91,7 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
     }
 
     [Fact]
-    public void Unified_feature_registers_the_seven_provider_families_without_selecting_identity()
+    public void Unified_feature_registers_the_five_remaining_legacy_provider_families()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -111,13 +106,10 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
         AssertRepresentativeFamilyContracts(
             services,
             typeof(IBookmarkStateStore),
-            typeof(ISecretRepository),
             typeof(IExecutionPlacementStore),
             typeof(IWorkflowDefinitionStore),
             typeof(IActivityDefinitionStore),
-            typeof(IPublicationRecordStore),
-            typeof(IStudioPreferenceStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
+            typeof(IPublicationRecordStore));
         AssertRegistrationDiagnosticsAreSanitized(services, RegistrationSecret, ConnectionString);
         Assert.False(typeof(SqlServerGroundworkUnifiedPersistenceShellFeature).IsSealed);
     }
@@ -197,46 +189,6 @@ public sealed class SqlServerGroundworkPersistenceRegistrationTests
 
         Assert.Single(routes);
         Assert.NotNull(store);
-    }
-
-    [Fact]
-    public async Task Explicit_identity_schema_and_feature_register_the_matching_SQL_Server_composition()
-    {
-        var services = new ServiceCollection();
-        services.AddGroundworkSqlServerUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            ConnectionString);
-        services.AddFoundationAspNetCoreIdentityGroundwork();
-
-        await using var provider = services.BuildServiceProvider(
-            new ServiceProviderOptions { ValidateScopes = true });
-        await using var scope = provider.CreateAsyncScope();
-
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            provider.GetRequiredService<global::Groundwork.Core.SchemaEvolution.IPhysicalSchemaManifestSource>());
-    }
-
-    [Fact]
-    public async Task Identity_only_provider_leaf_resolves_without_runtime_history_services()
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddGroundworkIdentityStores();
-        services.AddSqlServerGroundworkDocumentStore(ConnectionString);
-
-        await using var provider = services.BuildServiceProvider();
-
-        Assert.Null(provider.GetService<IGroundworkRuntimeDocumentSerializer>());
-        Assert.NotNull(provider.GetRequiredKeyedService<SqlServerGroundworkDocumentStoreInitializer>(
-            GroundworkTargetNames.Default));
-        // Admission runs behind the shared driver, so the hosted service and shell initializer are that
-        // driver; the provider's own admission reaches it through IGroundworkTargetAdmission.
-        Assert.NotNull(Assert.Single(provider.GetServices<IHostedService>()
-            .OfType<GroundworkTargetAdmissionInitializer>()));
-        Assert.NotNull(Assert.Single(provider.GetServices<CShells.Lifecycle.IShellInitializer>()
-            .OfType<GroundworkTargetAdmissionInitializer>()));
-        Assert.NotNull(Assert.Single(provider.GetServices<IGroundworkTargetAdmission>()
-            .OfType<SqlServerGroundworkDocumentStoreInitializer>()));
     }
 
     [Fact]

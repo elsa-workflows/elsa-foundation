@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -21,7 +20,7 @@ public sealed class ProviderNativePlanTests
 {
     private const int AcceptanceDatasetSize = 100_000;
     private const int PageSize = 16;
-    private const string ProviderMatrixOptIn = "ELSA_RUN_IDENTITY_NATIVE_PLAN_PROVIDERS";
+    private const string ProviderMatrixOptIn = "ELSA_RUN_GROUNDWORK_NATIVE_PLAN_PROVIDERS";
     private const string TenantId = "provider-native-plan-tenant";
     private static readonly DateTimeOffset Now = new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
 
@@ -40,8 +39,6 @@ public sealed class ProviderNativePlanTests
         var covered = groups
             .SelectMany(group => group.Scenarios)
             .Select(scenario => RouteKey(scenario.Query.DocumentKind, scenario.Query.QueryIdentity))
-            .Concat(AspNetCoreIdentityNativePlanTests.EvidenceRouteCatalog()
-                .Select(route => RouteKey(route.DocumentKind, route.QueryIdentity)))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -50,7 +47,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(74, declared.Length);
+        Assert.Equal(62, declared.Length);
     }
 
     [Fact]
@@ -543,34 +540,11 @@ public sealed class ProviderNativePlanTests
     private static async Task<IReadOnlyList<NativeRouteScenarioGroup>> ScenarioGroupsAsync()
     {
         var runtimeSource = new RuntimeGroundworkStorageManifestSource();
-        var identitySource = new IdentityGroundworkStorageManifestSource();
         var runtime = (await runtimeSource.CreateDeclarationAsync()).Manifest;
-        var identity = (await identitySource.CreateDeclarationAsync()).Manifest;
 
         return
         [
-            Group(runtimeSource, runtime, RuntimeQueries()),
-            Group(identitySource, identity,
-                [
-                    Documents(
-                        IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-                        IdentityStorageManifest.ListClaimMappingsByProviderQuery,
-                        [Equal(IdentityStorageManifest.ProviderLookupKeyField, "provider-key")],
-                        take: ElsaGroundworkQueryRoutes.MaximumResultCount),
-                    Documents(
-                        IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
-                        IdentityStorageManifest.ListExpiredMutationReceiptsQuery,
-                        [
-                            LessThanOrEqual(
-                                IdentityStorageManifest.MutationReceiptExpiresAtField,
-                                Now.ToString("O", CultureInfo.InvariantCulture))
-                        ],
-                        [
-                            new DocumentQueryOrder(
-                                IdentityStorageManifest.MutationReceiptExpiresAtField)
-                        ],
-                        take: 256)
-                ])
+            Group(runtimeSource, runtime, RuntimeQueries())
         ];
     }
 

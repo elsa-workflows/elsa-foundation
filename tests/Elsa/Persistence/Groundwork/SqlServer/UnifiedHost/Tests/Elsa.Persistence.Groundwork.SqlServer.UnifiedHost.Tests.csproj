@@ -18,7 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>

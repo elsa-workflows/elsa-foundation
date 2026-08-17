@@ -18,13 +18,8 @@ public static class GroundworkReferenceDeploymentSchemaSelector
         ShellFeatureContext context)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        return Select(context) switch
-        {
-            var type when type == typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema) =>
-                services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesWithIdentityDeploymentSchema>(),
-            _ => services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesDeploymentSchema>()
-        };
+        ArgumentNullException.ThrowIfNull(context);
+        return services.AddGroundworkReferenceDeploymentSchema<GroundworkAllFeaturesDeploymentSchema>();
     }
 
     /// <summary>
@@ -45,44 +40,6 @@ public static class GroundworkReferenceDeploymentSchemaSelector
     public static Type Select(ShellFeatureContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-
-        var enabledFeatureIds = context.Settings.EnabledFeatures.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var schemaFeatures = context.AllFeatures
-            .Where(descriptor => enabledFeatureIds.Contains(descriptor.Id))
-            .Select(descriptor => new
-            {
-                descriptor.Id,
-                Marker = descriptor.Metadata.TryGetValue(GroundworkSchemaFeatureMetadata.Key, out var marker)
-                    ? marker as string
-                    : null,
-                HasMarker = descriptor.Metadata.ContainsKey(GroundworkSchemaFeatureMetadata.Key)
-            })
-            .Where(feature => feature.HasMarker)
-            .OrderBy(feature => feature.Id, StringComparer.Ordinal)
-            .ToArray();
-
-        var unsupported = schemaFeatures
-            .Where(feature => !IsSupportedMarker(feature.Marker))
-            .ToArray();
-        if (unsupported.Length > 0)
-        {
-            var descriptions = unsupported.Select(feature =>
-                $"'{feature.Id}' ('{feature.Marker ?? "<non-string-or-null>"}')");
-            throw new InvalidOperationException(
-                $"Enabled shell features declare unsupported Groundwork schema markers: {string.Join(", ", descriptions)}. " +
-                $"Register a deployment schema mapping for every '{GroundworkSchemaFeatureMetadata.Key}' value before enabling the feature.");
-        }
-
-        var identityEnabled = schemaFeatures.Any(feature => string.Equals(
-            feature.Marker,
-            GroundworkSchemaFeatureMetadata.Identity,
-            StringComparison.Ordinal));
-        return identityEnabled
-            ? typeof(GroundworkAllFeaturesWithIdentityDeploymentSchema)
-            : typeof(GroundworkAllFeaturesDeploymentSchema);
+        return typeof(GroundworkAllFeaturesDeploymentSchema);
     }
-
-    private static bool IsSupportedMarker(string? marker) =>
-        string.Equals(marker, GroundworkSchemaFeatureMetadata.Identity, StringComparison.Ordinal);
-
 }

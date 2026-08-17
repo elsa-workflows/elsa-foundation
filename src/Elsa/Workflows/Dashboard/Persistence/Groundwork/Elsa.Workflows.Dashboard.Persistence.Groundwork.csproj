@@ -14,7 +14,10 @@
   <ItemGroup>
     <!-- The MongoDb provider project lives under this domain root; keep SDK globs scoped to this project. -->
     <Compile Remove="MongoDb/**/*" />
+    <Compile Remove="V2/**/*" />
     <EmbeddedResource Remove="MongoDb/**/*" />
+    <EmbeddedResource Remove="V2/**/*" />
     <None Remove="MongoDb/**/*" />
+    <None Remove="V2/**/*" />
   </ItemGroup>
 </Project>

@@ -21,17 +21,6 @@ public sealed class GroundworkAllFeaturesDeploymentSchema : GroundworkDeployment
         GroundworkReferenceDeploymentSchemaSources.WithoutIdentity;
 }
 
-/// <summary>
-/// Public, parameterless deployment schema for hosts that explicitly select the Groundwork-backed
-/// ASP.NET Core Identity feature in addition to the shipped unified provider leaves. Identity owns
-/// and admits its public-v2 units directly, so it is deliberately absent from this legacy manifest.
-/// </summary>
-public sealed class GroundworkAllFeaturesWithIdentityDeploymentSchema : GroundworkDeploymentSchemaManifestSource
-{
-    protected override IReadOnlyCollection<Type> ManifestSourceTypes =>
-        GroundworkReferenceDeploymentSchemaSources.WithoutIdentity;
-}
-
 internal static class GroundworkReferenceDeploymentSchemaSources
 {
     public static readonly IReadOnlyCollection<Type> WithoutIdentity = Array.AsReadOnly<Type>(

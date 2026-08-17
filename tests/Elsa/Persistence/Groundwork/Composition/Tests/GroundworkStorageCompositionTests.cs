@@ -2,9 +2,6 @@ using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DependencyInjection;
@@ -603,7 +600,6 @@ public class GroundworkStorageCompositionTests
 
     [Theory]
     [InlineData("runtime", "elsa-workflows-runtime")]
-    [InlineData("iam", "elsa-identity")]
     [InlineData("workflows-design", "elsa-workflows-design")]
     [InlineData("activities-design", "elsa-activities-design")]
     [InlineData("publishing", "elsa-workflows-publishing")]
@@ -670,7 +666,6 @@ public class GroundworkStorageCompositionTests
 
     [Theory]
     [InlineData("runtime", typeof(RuntimeGroundworkStorageManifestSource))]
-    [InlineData("iam", typeof(IdentityGroundworkStorageManifestSource))]
     [InlineData("workflows-design", typeof(WorkflowsDesignGroundworkStorageManifestSource))]
     [InlineData("activities-design", typeof(ActivitiesDesignGroundworkStorageManifestSource))]
     [InlineData("publishing", typeof(PublishingGroundworkStorageManifestSource))]
@@ -903,7 +898,6 @@ public class GroundworkStorageCompositionTests
     private static IGroundworkStorageManifestSource CreateFamilySource(string family) => family switch
     {
         "runtime" => new RuntimeGroundworkStorageManifestSource(),
-        "iam" => new IdentityGroundworkStorageManifestSource(),
         "workflows-design" => new WorkflowsDesignGroundworkStorageManifestSource(),
         "activities-design" => new ActivitiesDesignGroundworkStorageManifestSource(),
         "publishing" => new PublishingGroundworkStorageManifestSource(),
@@ -950,17 +944,6 @@ public class GroundworkStorageCompositionTests
             typeof(IWorkflowTriggerBindingStore),
             typeof(IRecurringTriggerScheduleStore)
         ],
-        "iam" =>
-        [
-            typeof(IUserStore),
-            typeof(IRoleStore),
-            typeof(IApplicationStore),
-            typeof(ICredentialStore),
-            typeof(IClaimMappingStore),
-            typeof(IProviderConfigurationStore),
-            typeof(IExternalIdentityStore),
-            typeof(ITenantMembershipStore)
-        ],
         "workflows-design" =>
         [
             typeof(IWorkflowDefinitionStore),
@@ -994,9 +977,6 @@ public class GroundworkStorageCompositionTests
         {
             case "runtime":
                 services.AddGroundworkRuntimeStores();
-                break;
-            case "iam":
-                services.AddGroundworkIdentityStores();
                 break;
             case "workflows-design":
                 services.AddGroundworkWorkflowsDesignStores();

@@ -1,7 +1,3 @@
-using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Stores;
@@ -180,37 +176,6 @@ public sealed class ProviderRecoveryContractTests
         Assert.Equal(state.Version, (await store.FindAsync(state.WorkflowExecutionId))!.Version);
     }
 
-    private static async Task AssertIdentityRecoveryAsync(string providerKey)
-    {
-        await using var driver = GroundworkProviderDriverFactory.Create(providerKey);
-        var result = await new AspNetCoreIdentityProviderAcceptanceRunner(driver).RunAsync();
-
-        AspNetCoreIdentityProviderAcceptanceCatalog.RequireExactCoverage(result.CompletedObjectiveIds);
-        Assert.True(result.FindProcessId > 0);
-        Assert.True(result.DuplicateProcessId > 0);
-
-        await using var client = await driver.OpenPhysicalClientAsync(Access(Tenant));
-        var applications = new GroundworkApplicationStore(
-            client.DocumentStore,
-            new FixedAccessContextAccessor(Tenant));
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            applications.FindAsync(Tenant, "recovery-application", cancelled.Token).AsTask());
-
-        var application = new ApplicationRecord(
-            "recovery-application",
-            Tenant,
-            "recovery-client",
-            "Recovery application",
-            ApplicationType.Confidential,
-            ResourceOwnership.Foundation,
-            new HashSet<string> { "client_credentials" },
-            new HashSet<string>());
-        await applications.SaveAsync(application);
-        Assert.NotNull(await applications.FindAsync(Tenant, application.Id));
-    }
-
     private static async ValueTask<GroundworkProviderDriver> CreatePhysicalDriverAsync(
         string providerKey,
         IGroundworkStorageManifestSource manifestSource)
@@ -232,7 +197,6 @@ public sealed class ProviderRecoveryContractTests
 
     private static IReadOnlyList<GroundworkStoreScenarioDefinition> AllDefinitions() =>
         GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Runtime)
-            .Concat(GroundworkStoreScenarioCatalog.ForFamily(GroundworkStoreScenarioFamily.Identity))
             .OrderBy(definition => definition.ScenarioId, StringComparer.Ordinal)
             .ToArray();
 
@@ -250,15 +214,6 @@ public sealed class ProviderRecoveryContractTests
         Probe(["runtime-scheduler-poison-restart"], providerKey => new RuntimeDeliveryContractTests()
             .Scheduler_poison_record_survives_restart_on_every_provider(providerKey)),
         Probe(["runtime-cancellation-dispose-and-reuse"], AssertRuntimeCancellationAndReuseAsync),
-        Probe(
-            [
-                "identity-authority-adaptation",
-                "identity-authority-relationship-atomicity",
-                "iam-dispose-reopen-and-process-restart",
-                "iam-cancellation-dispose-and-reuse"
-            ],
-            AssertIdentityRecoveryAsync,
-            FailureWindows()),
     ];
 
     private static IReadOnlyList<string> FailureWindows() =>
@@ -286,8 +241,4 @@ public sealed class ProviderRecoveryContractTests
         Func<string, Task> ExecuteAsync,
         IReadOnlyList<string> DeclaredFailureWindows);
 
-    private sealed class FixedAccessContextAccessor(string scope) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
-    }
 }

@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
@@ -14,7 +13,7 @@ namespace Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests;
 [Collection(MongoDbContainerCollection.Name)]
 public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync(bool withIdentity = false)
+    private async Task<ServiceProvider> BuildHostAsync()
     {
         var connectionString = fixture.ConnectionString;
         var databaseName = fixture.CreateIsolatedDatabaseName();
@@ -22,17 +21,7 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        if (withIdentity)
-        {
-            services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-                connectionString,
-                databaseName);
-            services.AddFoundationAspNetCoreIdentityGroundwork();
-        }
-        else
-        {
-            services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
-        }
+        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
 
         var provider = services.BuildServiceProvider();
         await provider.ApplyMongoDbGroundworkSchemaAsync(connectionString, databaseName);
@@ -46,13 +35,6 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
         return UnifiedGroundworkHostContract.AssertRegistersOneDocumentStoreSharedByEveryLaneAsync(
             () => BuildHostAsync());
-    }
-
-    [SkippableFact]
-    public Task Explicit_identity_schema_and_feature_admit_and_resolve_on_the_unified_MongoDB_target()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertExplicitIdentitySchemaAndFeatureAdmitAndResolveAsync(BuildHostAsync);
     }
 
     [SkippableFact]

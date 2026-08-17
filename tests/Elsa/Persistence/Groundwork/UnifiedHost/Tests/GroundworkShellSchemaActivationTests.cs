@@ -1,8 +1,6 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
@@ -26,50 +24,18 @@ public sealed class GroundworkShellSchemaActivationTests
     private const string ShellName = "groundwork-schema-selection";
 
     [Fact]
-    public async Task Identity_feature_selects_and_admits_the_identity_schema_through_real_shell_activation()
-    {
-        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
-        await ApplySchemaAsync<GroundworkAllFeaturesWithIdentityDeploymentSchema>(database.ConnectionString);
-        await using var root = BuildRoot(database.ConnectionString, includeIdentity: true);
-
-        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-        await using var scope = shell.BeginScope();
-
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-            scope.ServiceProvider.GetRequiredService<IPhysicalSchemaManifestSource>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUserStore>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
-    }
-
-    [Fact]
     public async Task Bare_provider_shell_selects_and_admits_the_default_schema_without_identity()
     {
         await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
         await ApplySchemaAsync<GroundworkAllFeaturesDeploymentSchema>(database.ConnectionString);
-        await using var root = BuildRoot(database.ConnectionString, includeIdentity: false);
+        await using var root = BuildRoot(database.ConnectionString);
 
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         await using var scope = shell.BeginScope();
 
         Assert.IsType<GroundworkAllFeaturesDeploymentSchema>(
             scope.ServiceProvider.GetRequiredService<IPhysicalSchemaManifestSource>());
-        Assert.Null(scope.ServiceProvider.GetService<IUserStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStore>());
-    }
-
-    [Fact]
-    public async Task Identity_shell_fails_readiness_when_only_the_default_schema_was_applied()
-    {
-        await using var database = new TemporarySqliteDatabase("elsa-groundwork-shell-schema");
-        await ApplySchemaAsync<GroundworkAllFeaturesDeploymentSchema>(database.ConnectionString);
-        await using var root = BuildRoot(database.ConnectionString, includeIdentity: true);
-
-        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
-            root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
-        var message = Flatten(exception);
-
-        Assert.Contains("schema", message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("admission failed", message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -80,7 +46,7 @@ public sealed class GroundworkShellSchemaActivationTests
         // First activation against a fresh database: auto-apply admits and records the applied-plan stamp.
         var firstLog = new CapturingLoggerProvider();
         await using (var first = BuildRoot(
-            database.ConnectionString, includeIdentity: false,
+            database.ConnectionString,
             autoApply: true, skipInspection: true, loggerProvider: firstLog))
         {
             var shell = await first.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
@@ -93,7 +59,7 @@ public sealed class GroundworkShellSchemaActivationTests
         // inspection walk is skipped and activation still yields a working document store.
         var secondLog = new CapturingLoggerProvider();
         await using (var second = BuildRoot(
-            database.ConnectionString, includeIdentity: false,
+            database.ConnectionString,
             autoApply: true, skipInspection: true, loggerProvider: secondLog))
         {
             var shell = await second.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
@@ -105,7 +71,6 @@ public sealed class GroundworkShellSchemaActivationTests
 
     private static ServiceProvider BuildRoot(
         string connectionString,
-        bool includeIdentity,
         bool autoApply = false,
         bool skipInspection = false,
         ILoggerProvider? loggerProvider = null)
@@ -126,7 +91,6 @@ public sealed class GroundworkShellSchemaActivationTests
             builder
                 .WithAssemblies(
                     typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
-                    typeof(AspNetCoreIdentityGroundworkFeature).Assembly,
                     typeof(GroundworkShellSchemaActivationTests).Assembly)
                 .AddShell(ShellName, shell =>
                 {
@@ -138,8 +102,6 @@ public sealed class GroundworkShellSchemaActivationTests
                             feature.AutoApplySchemaOnStartup = autoApply;
                             feature.SkipSchemaInspectionWhenPlanUnchanged = skipInspection;
                         });
-                    if (includeIdentity)
-                        shell.WithFeature<AspNetCoreIdentityGroundworkFeature>();
                 });
         });
 
@@ -157,14 +119,6 @@ public sealed class GroundworkShellSchemaActivationTests
             .AddGroundworkSqliteUnifiedPersistence<TDeploymentSource>(connectionString)
             .BuildServiceProvider();
         await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
-    }
-
-    private static string Flatten(Exception exception)
-    {
-        var messages = new List<string>();
-        for (var current = exception; current is not null; current = current.InnerException)
-            messages.Add(current.Message);
-        return string.Join(" | ", messages);
     }
 
     private sealed class CapturingLoggerProvider : ILoggerProvider

@@ -106,11 +106,6 @@ public sealed class PerformanceWorkloadCorrectnessTests
             Assert.Equal(ExpectedDigests[id].ResultDigest, scenario.ComputeResultDigest());
         }
 
-        var iam = workloads["iam-normalized-lookup-update"];
-        Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, iam["input"]!["fingerprintSha256"]!.GetValue<string>());
-        Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedResultDigest, iam["correctness"]!["resultDigestSha256"]!.GetValue<string>());
-        Assert.Equal(AspNetCoreIdentityPerformanceWorkload.ExpectedInputFingerprint, AspNetCoreIdentityPerformanceWorkload.ComputeInputFingerprint());
-
         var secret = workloads[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.BlockedVersion, secret["version"]!.GetValue<string>());
         Assert.Equal(
@@ -128,21 +123,6 @@ public sealed class PerformanceWorkloadCorrectnessTests
         Assert.Equal(
             ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode,
             diagnostics["benchmarkAdmission"]!["reason"]!.GetValue<string>());
-    }
-
-    [Fact]
-    [Trait("Category", "Sqlite")]
-    public async Task Sqlite_runs_the_existing_public_identity_acceptance_contract()
-    {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        var result = await new AspNetCoreIdentityProviderAcceptanceRunner(driver).RunAsync();
-
-        Assert.Equal(
-            AspNetCoreIdentityProviderAcceptanceCatalog.RequiredObjectiveIds.Order(StringComparer.Ordinal),
-            result.CompletedObjectiveIds.Order(StringComparer.Ordinal));
-        Assert.Equal(
-            AspNetCoreIdentityProviderAcceptanceCatalog.ComputeObjectiveResultDigest(result.CompletedObjectiveIds),
-            result.ObjectiveResultDigest);
     }
 
     private static IReadOnlyDictionary<string, JsonObject> LoadWorkloads() => WorkloadPaths

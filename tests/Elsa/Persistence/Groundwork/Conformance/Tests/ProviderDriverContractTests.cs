@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json;
-using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Conformance.Tests.Probes;
 using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Core.Scoping;
@@ -60,124 +59,6 @@ public class ProviderDriverContractTests
         await AssertDisposeAndReopenAsync(driver);
         await AssertProcessRestartAsync(driver);
         await AssertSanitizedEvidenceAsync(driver);
-    }
-
-    [Fact]
-    public async Task Sqlite_physical_driver_can_open_selected_identity_manifest_with_explicit_scope()
-    {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        await driver.InitializeAsync(CancellationToken.None);
-        await driver.ResetPhysicalAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-
-        await using (var tenantA = await driver.OpenPhysicalClientAsync(
-                         DocumentStoreAccess.Scoped(new StorageScope("tenant-a")),
-                         CancellationToken.None))
-        {
-            var saved = await tenantA.DocumentStore.SaveAsync(
-                new SaveDocumentRequest(
-                    IdentityStorageManifest.IdentityUserDocumentKind,
-                    "user-1",
-                    IdentityStorageManifest.SchemaVersion,
-                    """
-                    {
-                      "normalizedUserName": "ALICE",
-                      "normalizedEmail": "ALICE@example.test",
-                      "normalizedUserNameKey": "tenant-a:ALICE",
-                      "normalizedEmailKey": "tenant-a:ALICE@example.test"
-                    }
-                    """,
-                    ExpectedVersion: 0),
-                CancellationToken.None);
-
-            Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
-            Assert.NotNull(await tenantA.DocumentStore.LoadAsync(
-                IdentityStorageManifest.IdentityUserDocumentKind,
-                "user-1",
-                CancellationToken.None));
-        }
-
-        await using var tenantB = await driver.OpenPhysicalClientAsync(
-            DocumentStoreAccess.Scoped(new StorageScope("tenant-b")),
-            CancellationToken.None);
-        Assert.Null(await tenantB.DocumentStore.LoadAsync(
-            IdentityStorageManifest.IdentityUserDocumentKind,
-            "user-1",
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Sqlite_physical_schema_apply_preserves_existing_data_and_rejects_active_client_leases()
-    {
-        await using var driver = new SqliteGroundworkProviderDriver();
-        await driver.InitializeAsync(CancellationToken.None);
-        var source = await driver.PrepareSchemaParityAsync([new IdentityGroundworkStorageManifestSource()], CancellationToken.None);
-        await driver.ResetPhysicalAsync(source, CancellationToken.None);
-
-        await using (var activeClient = await driver.OpenPhysicalClientAsync(CancellationToken.None))
-        {
-            var saved = await activeClient.DocumentStore.SaveAsync(
-                new SaveDocumentRequest(
-                    IdentityStorageManifest.IdentityRoleDocumentKind,
-                    "role-1",
-                    IdentityStorageManifest.SchemaVersion,
-                    """{ "tenantId": "default", "normalizedName": "ADMIN", "normalizedNameKey": "default:ADMIN" }""",
-                    ExpectedVersion: 0),
-                CancellationToken.None);
-            Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
-
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                driver.ApplyPhysicalSchemaAsync(source, CancellationToken.None).AsTask());
-        }
-
-        await driver.ApplyPhysicalSchemaAsync(source, CancellationToken.None);
-        Assert.Equal(source.PhysicalTarget.Fingerprint, driver.PhysicalTargetFingerprint);
-
-        await using var reopenedClient = await driver.OpenPhysicalClientAsync(CancellationToken.None);
-        Assert.NotNull(await reopenedClient.DocumentStore.LoadAsync(
-            IdentityStorageManifest.IdentityRoleDocumentKind,
-            "role-1",
-            CancellationToken.None));
-    }
-
-    [Fact]
-    public void Identity_restart_probe_protocol_round_trips_and_redacts_payloads()
-    {
-        var user = new AspNetCoreIdentityRestartProbeUser(
-            "tenant-a",
-            "user-1",
-            "alice",
-            "ALICE",
-            "alice@example.test",
-            "ALICE@EXAMPLE.TEST",
-            "Alice");
-        var request = AspNetCoreIdentityRestartProbe.DuplicateCreate(user);
-        var command = new GroundworkProcessProbeCommand(
-            GroundworkProcessProbeProtocol.CurrentVersion,
-            new string('a', 64),
-            "sqlite",
-            "groundwork-sqlite",
-            "1.0.0",
-            IdentityStorageManifest.IdentityUserDocumentKind,
-            request,
-            new GroundworkProcessProbeState(FixtureConnectionString()));
-
-        var serialized = GroundworkProcessProbeProtocol.SerializeCommand(command);
-        var roundTrip = GroundworkProcessProbeProtocol.DeserializeCommand(serialized);
-        var payload = AspNetCoreIdentityRestartProbe.DecodePayload(roundTrip.Request.Value!);
-        var observation = new AspNetCoreIdentityRestartProbeObservation(
-            AspNetCoreIdentityRestartProbeOperation.DuplicateCreate,
-            "duplicate-rejected",
-            "user-1",
-            "DuplicateUserName",
-            1);
-
-        Assert.Equal(GroundworkProcessProbeOperation.IdentityDuplicateCreate, roundTrip.Request.Operation);
-        Assert.Equal(AspNetCoreIdentityRestartProbeOperation.DuplicateCreate, payload.Operation);
-        Assert.Equal("ALICE", payload.User.NormalizedUserName);
-        Assert.Equal(AspNetCoreIdentityRestartProbe.ObservationDigest(observation), GroundworkProcessProbeProtocol.ComputeSha256(AspNetCoreIdentityRestartProbe.EncodeObservation(observation)));
-        Assert.DoesNotContain("tenant-a", request.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("user-1", request.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain(FixtureConnectionString(), command.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -414,20 +295,20 @@ public class ProviderDriverContractTests
     }
 
     [Fact]
-    public async Task Identity_failure_decorator_rolls_back_before_commit_and_preserves_the_injected_failure()
+    public async Task Failure_decorator_rolls_back_before_commit_and_preserves_the_injected_failure()
     {
-        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var failures = new GroundworkFailureController();
         var store = new GroundworkFailureInjectingDocumentStore(inner, inner, inner.Access, failures);
         failures.FailAt(GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit);
         await using var unitOfWork = await store.BeginAsync(
-            new DocumentCommitScope([IdentityStorageManifest.IdentityUserDocumentKind]),
+            new DocumentCommitScope([ElsaRuntimeStorageManifest.SchedulerStateDocumentKind]),
             CancellationToken.None);
         await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
-                IdentityStorageManifest.IdentityUserDocumentKind,
+                ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
                 "rolled-back-user",
-                IdentityStorageManifest.SchemaVersion,
+                ElsaRuntimeStorageManifest.SchemaVersion,
                 "{}",
                 ExpectedVersion: 0),
             CancellationToken.None);
@@ -437,7 +318,7 @@ public class ProviderDriverContractTests
 
         Assert.Equal(GroundworkFailureInjectingDocumentStore.BeforeUnderlyingCommit, exception.Window);
         Assert.Null(await inner.LoadAsync(
-            IdentityStorageManifest.IdentityUserDocumentKind,
+            ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             "rolled-back-user",
             CancellationToken.None));
         Assert.Equal(
@@ -446,20 +327,20 @@ public class ProviderDriverContractTests
     }
 
     [Fact]
-    public async Task Identity_failure_decorator_throws_after_durable_commit_without_rolling_back()
+    public async Task Failure_decorator_throws_after_durable_commit_without_rolling_back()
     {
-        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var failures = new GroundworkFailureController();
         var store = new GroundworkFailureInjectingDocumentStore(inner, inner, inner.Access, failures);
         failures.FailAt(GroundworkFailureInjectingDocumentStore.AfterUnderlyingCommit);
         await using var unitOfWork = await store.BeginAsync(
-            new DocumentCommitScope([IdentityStorageManifest.IdentityUserDocumentKind]),
+            new DocumentCommitScope([ElsaRuntimeStorageManifest.SchedulerStateDocumentKind]),
             CancellationToken.None);
         await unitOfWork.SaveAsync(
             new SaveDocumentRequest(
-                IdentityStorageManifest.IdentityUserDocumentKind,
+                ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
                 "committed-user",
-                IdentityStorageManifest.SchemaVersion,
+                ElsaRuntimeStorageManifest.SchemaVersion,
                 "{}",
                 ExpectedVersion: 0),
             CancellationToken.None);
@@ -469,7 +350,7 @@ public class ProviderDriverContractTests
 
         Assert.Equal(GroundworkFailureInjectingDocumentStore.AfterUnderlyingCommit, exception.Window);
         Assert.NotNull(await inner.LoadAsync(
-            IdentityStorageManifest.IdentityUserDocumentKind,
+            ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             "committed-user",
             CancellationToken.None));
         Assert.Equal(
@@ -488,7 +369,7 @@ public class ProviderDriverContractTests
         string windowId,
         bool decisionIsDurable)
     {
-        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var failures = new GroundworkFailureController();
         var windows = GroundworkDocumentStoreFailureWindows.OperationalRuntime;
         var store = new GroundworkFailureInjectingDocumentStore(
@@ -503,24 +384,24 @@ public class ProviderDriverContractTests
         var exception = await Assert.ThrowsAsync<InjectedGroundworkFailureException>(() =>
             store.SaveAsync(
                 new SaveDocumentRequest(
-                    IdentityStorageManifest.IdentityUserDocumentKind,
+                    ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
                     "runtime-window-user",
-                    IdentityStorageManifest.SchemaVersion,
+                    ElsaRuntimeStorageManifest.SchemaVersion,
                     "{}",
                     ExpectedVersion: 0),
                 CancellationToken.None));
 
         Assert.Equal(window, exception.Window);
         Assert.Equal(decisionIsDurable, await inner.LoadAsync(
-            IdentityStorageManifest.IdentityUserDocumentKind,
+            ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             "runtime-window-user",
             CancellationToken.None) is not null);
     }
 
     [Fact]
-    public void Identity_failure_decorator_rejects_a_bounded_store_from_another_access_scope()
+    public void Failure_decorator_rejects_a_bounded_store_from_another_access_scope()
     {
-        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var inner = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
 
         var exception = Assert.Throws<ArgumentException>(() =>
             new GroundworkFailureInjectingDocumentStore(

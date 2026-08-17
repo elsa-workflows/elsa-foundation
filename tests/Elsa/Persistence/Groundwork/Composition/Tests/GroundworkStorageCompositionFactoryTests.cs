@@ -91,21 +91,16 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public void Reference_deployment_schemas_leave_identity_to_its_public_v2_registration()
+    public void Reference_deployment_schema_leaves_identity_to_its_public_v2_registration()
     {
-        var defaultManifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
-        var identityManifest = new GroundworkAllFeaturesWithIdentityDeploymentSchema().CreateManifest();
+        var manifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
 
         Assert.DoesNotContain(
-            defaultManifest.StorageUnits,
-            unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
-        Assert.DoesNotContain(
-            identityManifest.StorageUnits,
+            manifest.StorageUnits,
             unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
         Assert.Contains(
-            identityManifest.StorageUnits,
+            manifest.StorageUnits,
             unit => unit.Identity.Value == ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
-        Assert.Equal(defaultManifest.StorageUnits.Count, identityManifest.StorageUnits.Count);
     }
 
     [Fact]
@@ -165,10 +160,10 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public void Identity_reference_selection_registers_identity_as_direct_public_v2_units()
+    public void Identity_registration_uses_direct_public_v2_units_without_changing_the_legacy_schema()
     {
         var services = new ServiceCollection();
-        services.AddGroundworkStorageComposition<GroundworkAllFeaturesWithIdentityDeploymentSchema>();
+        services.AddGroundworkStorageComposition<GroundworkAllFeaturesDeploymentSchema>();
         services.AddGroundworkIdentityStores();
 
         using var provider = services.BuildServiceProvider();
@@ -179,7 +174,7 @@ public sealed class GroundworkStorageCompositionFactoryTests
             .Select(unit => unit.Id)
             .ToHashSet();
 
-        Assert.IsType<GroundworkAllFeaturesWithIdentityDeploymentSchema>(source);
+        Assert.IsType<GroundworkAllFeaturesDeploymentSchema>(source);
         Assert.DoesNotContain(
             manifest.StorageUnits,
             unit => unit.Identity.Value == IdentityStorageManifest.IdentityUserDocumentKind);
