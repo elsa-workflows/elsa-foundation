@@ -58,6 +58,19 @@ public sealed class WorkflowsPublishingFeatureTests
     }
 
     [Fact]
+    public void Registers_the_artifact_closure_factory_but_no_export_target()
+    {
+        var services = ComposeEngine();
+
+        // FR-B-010: the engine produces the portable closure headless — export is not a transport capability.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowArtifactClosureFactory));
+
+        // FR-B-010a: the destination seam is fan-in and the engine contributes no destination of its own, so an
+        // engine-only composition resolves an empty enumerable rather than acquiring a default it never chose.
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowArtifactExportTarget));
+    }
+
+    [Fact]
     public void Registers_the_publish_on_reconcile_subscriber()
     {
         var services = ComposeEngine();

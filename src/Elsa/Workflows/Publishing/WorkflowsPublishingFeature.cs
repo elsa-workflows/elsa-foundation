@@ -106,6 +106,12 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        // FR-B-010 export producer. Scoped because it reads the source-reference reader above, which durable
+        // providers register as scoped. No IWorkflowArtifactExportTarget is registered here: the seam is fan-in
+        // (TryAddEnumerable) and its first implementation — the API download target — is contributed by the
+        // transport feature, which is where a destination belongs. An engine composed without one still resolves
+        // an empty IEnumerable, so the absence is a composition fact, not a missing dependency.
+        services.TryAddScoped<IWorkflowArtifactClosureFactory, WorkflowArtifactClosureFactory>();
         services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         // Publish-on-reconcile (spec 147): independent subscriber on the Design-side reconcile completion
