@@ -160,6 +160,16 @@ The fix makes `RecurringTriggerScheduleIndexer` prepare **unconditionally** (emp
 
 **Also newly true and previously undocumented:** a binding's `(ActivationId, SlotId)` now drives source-reference selection in `WorkflowStartDispatcher`. Surfaced when `HttpEndpointHostFixture` had to mint an activation-scoped reference. A real consequence of activation-scoped bindings that nothing recorded — relevant to US1's import path.
 
+## Follow-up tasks raised during implementation
+
+Numbered so they are executed and tracked, not rediscovered. IDs are appended (never renumbered) because T001–T115 are referenced by pushed commits.
+
+- [ ] T036a Re-measure and update `GroundworkTargetBaselineTests`' `PendingTargetFingerprint` / `PendingPlanFingerprint` **on a machine where the Groundwork schema CLI runs**. All 25 scenarios currently fail with `Groundwork schema tool emitted invalid JSON (exit 1)` in this workspace, so the assertions are never reached and the values are genuinely unmeasurable here — they come from the CLI's JSON output via `GroundworkBaselineTelemetry`, not from in-process computation. A dated comment in the test names the three target-moving changes (the new `workflowActivationSlot` unit; the `by-publication`→`by-activation` index and field renames on `workflowTriggerBinding` + `recurringTriggerSchedule`; the removed `publishingPublicationSlot` unit), and the assertion messages print observed values — so the first run on a working machine reports exactly what to paste. **The ratified preview.81 `AcceptedTargetFingerprint`/`AcceptedPlanFingerprint` floor must stay untouched.** Blocks nothing in this feature; must not ship unresolved.
+- [ ] T039a [P] Add a golden fixture for the `workflowActivationSlot` document kind. T026's kind is absent from `GroundworkRuntimeDocumentFixtureFactory.AllKinds`, so the serialization drift test does not cover the one new persisted record this feature introduces — every other runtime kind is covered. Pairs naturally with T039's registration tests.
+- [ ] T044b Extract `IRecurringTriggerScheduleProjectionPreparer` so the coordinator calls it beside `IWorkflowTriggerIndexer`, retiring the decorator. Closes the residual §2.6.2 concern recorded above: the indexer is a **replacement contract** that now also silently owns the recurring projection's preparation, so replacing it breaks recurring activation **after the slot CAS** — landing in compensation instead of failing fast. Same hazard class T041 closed, one level up; two existing test compositions got it wrong, which is the evidence it is easy to get wrong. Today the invariant rests only on `WorkflowsRuntimeRecurringTriggersFeature` registering store and decorator together. **Decide alongside the parked `T044a`** — both are quality-of-design work that should stand on their own merits rather than be smuggled into a task with another purpose.
+
+**Status of `T044a` (journal repair): PARKED, not deferred.** The 2026-08-16 publish/activation reframing dissolved it — with `PublicationRecord.Status` describing publication rather than mirroring activation, slot/journal drift is impossible by construction. Revisit only if that reframing is reversed.
+
 ## Conventions binding EVERY task in this feature
 
 Stated once here rather than repeated per task. These apply in all phases, not just the one you are working in.
@@ -460,7 +470,8 @@ Phase 1 (Setup)
 | 6 — US4 | 7 (T094–T100) | US4 (P2) |
 | 7 — US5 | 4 (T101–T104) | US5 (P2) |
 | 8 — Polish | 11 (T105–T114, +T115) | — |
-| **Total** | **116** | |
+| Follow-ups | 3 (T036a, T039a, T044b) + T044a parked | — |
+| **Total** | **119 active** | |
 
 ## Out of scope — do not generate or expand work for these
 
