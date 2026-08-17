@@ -21,4 +21,4 @@
 - [x] T011 Complete one honest three-cycle collectible application-pipeline proof: every cycle maps routes, exercises middleware authorization/resource evaluation, succeeds through typed and body-bound routes, uses source-generated JSON, generates native OpenAPI, and disposes/unloads.
 - [x] T012 Capture final post-W6 Runtime E2E evidence against rebuilt Workbench/fresh DB (Runtime GET 20/20 and write 10/10).
 - [ ] T013 Refresh maps and run the final Architecture/build/format/diff gates (focused owner gates, maps, affected builds, scoped Runtime formatter, and diff checks pass; repository-wide formatter has unrelated baseline diagnostics and is not claimed green).
-- [x] T014 Review the final migration recommendation and follow-up issues after the integration gates complete.
+- [ ] T014 Complete the independent final migration recommendation and follow-up review after T013 closes; the review remains open while the integration gates are still being finalized.

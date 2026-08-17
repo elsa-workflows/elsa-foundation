@@ -8,9 +8,9 @@ Implementation spec: [specs/164-runtime-api-minimal-migration](../../specs/164-r
 
 ## Baseline provenance
 
-The FastEndpoints oracle was captured before production endpoint deletion. The detached runner is committed in the branch-reachable baseline-only history ending at `36fbda024` (built on the baseline runner history `334b47d48`), and the frozen HTTP/receipt update is reproduced against pre-Runtime-migration source `3157570abc007e6990683f045bfcd73caa47002d`. The receipt records branch-reachable runner commit `5fbc440bc105b0574075ede9c4d36855265d1f35`, 24 registrations, 77 HTTP cases, and 24 OpenAPI operations.
+The FastEndpoints oracle was captured before production endpoint deletion. The detached runner is committed in the branch-reachable baseline-only history ending at `36fbda024` (built on the baseline runner history `334b47d48`), and the frozen HTTP/receipt update is reproduced against pre-Runtime-migration source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`. The receipt records branch-reachable runner commit `5fbc440bc105b0574075ede9c4d36855265d1f35`, 24 registrations, 77 HTTP cases, and 24 OpenAPI operations.
 
-The current frozen HTTP SHA-256 is `25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e`; the OpenAPI SHA-256 is `990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4`. The historical projection asserts that every captured ProblemDetails `traceId` is a non-empty JSON string, then replaces it with the deterministic value `capture-trace-id`; two independent captures from source `3157570abc007e6990683f045bfcd73caa47002d` produced byte-identical HTTP, OpenAPI, and receipt files and these hashes.
+The current frozen HTTP SHA-256 is `25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e`; the OpenAPI SHA-256 is `990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4`. The historical projection asserts that every captured ProblemDetails `traceId` is a non-empty JSON string, then replaces it with the deterministic value `capture-trace-id`; two independent captures from source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802` produced byte-identical HTTP, OpenAPI, and receipt files and these hashes.
 
 The 77 HTTP cases are observed from the FE host, not authored from the Minimal API implementation:
 
@@ -22,6 +22,28 @@ The 77 HTTP cases are observed from the FE host, not authored from the Minimal A
 | Not-found cases | 5 |
 | Route/body precedence cases | 2 |
 | Invalid `take` and missing idempotency-header cases | 2 |
+
+The final live E2E run used the following exact sequence from the repository root. The server was stopped before
+the database reset; the schema was then deployed from the rebuilt Workbench output, and the server was launched in a
+separate terminal and left running while the two suites executed:
+
+```bash
+dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
+rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db src/Apps/Elsa.Workbench/elsa-groundwork.db-shm src/Apps/Elsa.Workbench/elsa-groundwork.db-wal src/Apps/Elsa.Workbench/*.schema.lock
+dotnet tool run groundwork -- apply \
+  --manifest-assembly src/Apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
+  --provider sqlite \
+  --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
+  --output json \
+  --safe
+dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+pwsh -NoProfile -File ./e2e-tests/get-endpoints/Test-RuntimeGets.ps1
+pwsh -NoProfile -File ./e2e-tests/write-endpoints/Test-RuntimeWrites.ps1
+```
+
+Results: `Test-RuntimeGets.ps1` passed 20/20 and `Test-RuntimeWrites.ps1` passed 10/10 against the rebuilt
+server and fresh SQLite schema. The executable application source for that run was `1302806c9`.
 
 The capture records actual route values and deserialized request values through a capture-only response diagnostic that is removed from the frozen response headers. It exercises query filters, paging, diagnostics, executables, dispatches, activity inspection, value evidence, incidents, and alteration routes. In particular, FE observed 415 for body requests with absent/non-JSON content type and 400 ProblemDetails for empty JSON; the Minimal reader preserves those dispositions.
 

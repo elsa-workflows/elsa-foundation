@@ -9,6 +9,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.FastEndpointsCapture;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -39,7 +40,7 @@ if (string.IsNullOrWhiteSpace(runnerCommit) || runnerCommit.Length != 40 || runn
     throw new InvalidOperationException("RUNTIME_CAPTURE_RUNNER_COMMIT must pin the 40-character historical, branch-reachable capture runner commit.");
 
 var observations = (await Task.WhenAll(Cases().Select(testCase => CaptureAsync(host.Client, testCase)))).ToArray();
-var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
+var openApi = HistoricalOpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
 
 File.WriteAllText(Path.Join(outputDirectory, "runtime-http-fastendpoints.json"), CompatibilityJson.Serialize(observations));
 File.WriteAllText(Path.Join(outputDirectory, "runtime-openapi-fastendpoints.json"), CompatibilityJson.Serialize(openApi));

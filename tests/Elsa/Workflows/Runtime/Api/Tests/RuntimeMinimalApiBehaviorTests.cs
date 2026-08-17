@@ -297,6 +297,24 @@ public sealed class RuntimeMinimalApiBehaviorTests
     }
 
     [Fact]
+    public async Task Value_payload_mapped_delegate_rethrows_the_same_cancellation_instance()
+    {
+        var cancellation = new OperationCanceledException("request canceled");
+        await using var host = await StartAsync(_ => throw cancellation);
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => host.InvokeMappedAsync(
+            "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
+            context =>
+            {
+                context.Request.RouteValues["workflowExecutionId"] = "wf-1";
+                context.Request.RouteValues["activityExecutionId"] = "ae-1";
+                context.Request.RouteValues["evidenceId"] = "value-1";
+            }));
+
+        Assert.Same(cancellation, exception);
+    }
+
+    [Fact]
     public async Task Activity_inspection_unexpected_failures_are_non_disclosing_and_invalid_requests_are_400()
     {
         await using (var invalidHost = await StartAsync(_ => throw new ArgumentException("invalid inspection request")))
