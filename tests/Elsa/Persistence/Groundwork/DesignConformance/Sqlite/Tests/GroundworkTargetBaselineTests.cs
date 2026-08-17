@@ -1,12 +1,12 @@
-using System.Security.Cryptography;
-using System.Reflection;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
@@ -18,6 +18,11 @@ public sealed class GroundworkTargetBaselineTests
     private const string AcceptedEvidenceGroundworkVersion = "0.0.1-preview.81";
     private const string AcceptedTargetFingerprint = "ed6bb6a165a08b34c8ad5a53da40f57f83ce0d2b67867abfd2e618da68473b8c";
     private const string AcceptedPlanFingerprint = "73f2004225f6c3ad58f57f807d2d81fcbd26e4d2603a61528c13ce36617197c4";
+    // 2026-08-17: the clean-break branch has removed the migrated Identity and distributed-runtime
+    // families from this residual v1 deployment. The legacy conformance host now initializes only its
+    // v1 provider graph, so these pending fingerprints describe the exact remaining v1 schema rather
+    // than an unrelated missing-v2-provider startup failure. The accepted preview.81 floor remains
+    // untouched and this fixture is deleted when #269 completes.
     // 2026-08-13: Groundwork moves to 0.0.1-preview.131, the first post-refactor family (provider
     // consolidation, core decomposition of physical-storage resolution and route compilation, declared
     // index key lengths/precision per ADR 0008). Zero-EF program re-entry per the #647 record; the
@@ -31,10 +36,10 @@ public sealed class GroundworkTargetBaselineTests
     // physical target. Only the PENDING fingerprint moves;
     // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
     // this records a head that has moved rather than re-ratifying anything.
-    private const string PendingTargetFingerprint = "b0edf8cee1bea256f2c4d7ada93ad5aba56c6654b6ca210506cbd055776cd46c";
+    private const string PendingTargetFingerprint = "e16393769a548d708605282a03e54be07d84dcb9edca882f49cb5dfb622bd0ad";
     // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
     // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "ac21d2897906bd3f7d37b706696983c09d6570c0c00f335325653a37055ea6f4";
+    private const string PendingPlanFingerprint = "6a01529f1ec176eccc3e188d541de0bb7d6f6a69ea6be31fdc9e0f13aa7169d8";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

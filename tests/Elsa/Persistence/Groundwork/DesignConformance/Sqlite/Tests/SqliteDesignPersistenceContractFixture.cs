@@ -1,8 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation;
@@ -13,6 +8,7 @@ using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -31,6 +27,11 @@ using Elsa.Workflows.Design.Validations.Core.Events;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 
@@ -257,8 +258,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     private async Task OpenAndAdmitAsync(CancellationToken cancellationToken)
     {
         _services = BuildServices();
-        foreach (var initializer in _services.GetServices<IShellInitializer>())
-            await initializer.InitializeAsync(cancellationToken);
+        await LegacyGroundworkTestHost.InitializeAsync(_services, cancellationToken);
 
         _backgroundEventCancellation = new CancellationTokenSource();
         _backgroundEventTasks = _services.GetServices<IBackgroundTask>().ToArray();

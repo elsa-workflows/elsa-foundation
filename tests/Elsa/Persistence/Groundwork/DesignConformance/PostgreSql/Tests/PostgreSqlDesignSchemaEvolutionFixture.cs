@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Events;
@@ -7,6 +5,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -28,6 +27,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests;
 
@@ -267,8 +268,7 @@ internal sealed class PostgreSqlDesignSchemaEvolutionFixture : IDesignSchemaEvol
         var host = BuildHost(evolved);
         try
         {
-            foreach (var initializer in host.GetServices<IShellInitializer>())
-                await initializer.InitializeAsync(cancellationToken);
+            await LegacyGroundworkTestHost.InitializeAsync(host, cancellationToken);
         }
         catch
         {

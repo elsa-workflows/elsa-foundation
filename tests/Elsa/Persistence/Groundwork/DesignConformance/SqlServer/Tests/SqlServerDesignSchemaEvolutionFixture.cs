@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Events;
@@ -7,9 +5,10 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
-using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
@@ -24,10 +23,12 @@ using Groundwork.Core.SchemaEvolution;
 using Groundwork.Documents.Store;
 using Groundwork.SqlServer;
 using Groundwork.SqlServer.PhysicalStorage;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Data.SqlClient;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests;
 
@@ -273,8 +274,7 @@ internal sealed class SqlServerDesignSchemaEvolutionFixture : IDesignSchemaEvolu
         var host = BuildHost(evolved);
         try
         {
-            foreach (var initializer in host.GetServices<IShellInitializer>())
-                await initializer.InitializeAsync(cancellationToken);
+            await LegacyGroundworkTestHost.InitializeAsync(host, cancellationToken);
         }
         catch
         {

@@ -332,9 +332,10 @@ internal sealed record GroundworkVersionComparison(
     BenchmarkProvenance Provenance);
 
 internal sealed record BenchmarkProvenance(
+    string ElsaSourceCommit,
     string V1SourceCommit,
     string V1GroundworkPackage,
-    string V2SourceCommit,
+    string GroundworkV2SourceCommit,
     string V2GroundworkPackage,
     string Os,
     string Runtime,
@@ -342,6 +343,7 @@ internal sealed record BenchmarkProvenance(
     int ProcessorCount)
 {
     public static BenchmarkProvenance Current { get; } = new(
+        ReadElsaSourceCommit(),
         "e30c2d291a34d3c5e986a9339af9722748572cac",
         "0.0.1-preview.114",
         "aac398c2789fefd38c4640121cce24318989f031",
@@ -350,4 +352,30 @@ internal sealed record BenchmarkProvenance(
         System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
         Environment.ProcessorCount);
+
+    private static string ReadElsaSourceCommit()
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        start.ArgumentList.Add("rev-parse");
+        start.ArgumentList.Add("HEAD");
+        using var process = Process.Start(start) ??
+                            throw new InvalidOperationException("Unable to start git for Elsa source provenance.");
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        var commit = stdout.Trim();
+        if (process.ExitCode != 0 || commit.Length != 40 || commit.Any(character => !Uri.IsHexDigit(character)))
+        {
+            throw new InvalidOperationException(
+                $"Unable to capture the Elsa source commit for benchmark provenance: {stderr.Trim()}");
+        }
+        return commit;
+    }
 }

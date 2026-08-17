@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>
