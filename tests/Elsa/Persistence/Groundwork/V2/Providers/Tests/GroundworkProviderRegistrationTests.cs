@@ -88,13 +88,11 @@ public sealed class GroundworkProviderRegistrationTests
                 .AddGroundworkSqliteProvider($"Data Source={path}")
                 .BuildServiceProvider();
 
-            _ = provider.GetRequiredService<IStorageProviderConnection>();
+            var connection = provider.GetRequiredService<IStorageProviderConnection>();
             provider.Dispose();
 
-            using var reopened = new ServiceCollection()
-                .AddGroundworkSqliteProvider($"Data Source={path}")
-                .BuildServiceProvider();
-            Assert.NotNull(reopened.GetRequiredService<IStorageProviderConnection>());
+            Assert.Throws<ObjectDisposedException>(() =>
+                connection.OpenSession(ProviderCompositionUnit(), StorageAccess.Scoped(new StorageScope("tenant-a"))));
         }
         finally
         {
@@ -112,12 +110,7 @@ public sealed class GroundworkProviderRegistrationTests
                 .AddGroundworkSqliteProvider($"Data Source={path}")
                 .BuildServiceProvider();
             var connection = provider.GetRequiredService<IStorageProviderConnection>();
-            var unit = StorageUnit.Declare("provider_composition", "provider_composition")
-                .String("id", 64, column => column.Required())
-                .String("value", 128)
-                .Key("id")
-                .Scoped()
-                .Build();
+            var unit = ProviderCompositionUnit();
 
             connection.Schema.Apply(unit);
             var session = connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")));
@@ -158,6 +151,14 @@ public sealed class GroundworkProviderRegistrationTests
 
     private static string TemporaryDatabasePath() =>
         Path.Combine(Path.GetTempPath(), $"groundwork-provider-composition-{Guid.NewGuid():N}.db");
+
+    private static StorageUnit ProviderCompositionUnit() =>
+        StorageUnit.Declare("provider_composition", "provider_composition")
+            .String("id", 64, column => column.Required())
+            .String("value", 128)
+            .Key("id")
+            .Scoped()
+            .Build();
 
     private static void DeleteDatabase(string path)
     {
