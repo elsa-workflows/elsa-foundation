@@ -568,6 +568,9 @@
     <Project Path="tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
+  <Folder Name="/tests/Elsa/Workflows/ArtifactPortability/">
+    <Project Path="tests/Elsa/Workflows/ArtifactPortability/Tests/Elsa.Workflows.ArtifactPortability.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
