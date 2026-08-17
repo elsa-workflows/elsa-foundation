@@ -37,7 +37,7 @@ immutable  78-case HTTP/OpenAPI/handler-trace fixtures
 
 The checked-in runner is materialized from the committed Git tree under test and identified as `checked-in-commit`; its
 seven runner/source dependency paths are individually hashed and bound by fingerprint
-`1aa0f7e8e2d32c3f5b9cebed20e1ecd0f8503d33455ebffa47852e0a4f389277`. The source commit
+`8f2959632506958a510eafcc1430b423e5e9dca1157f34a46bc02b4ba8363d1e`. The source commit
 `67ba4b3b9bec3a6c2aac0d6d332099baf723e802` must resolve, be an ancestor of the current checkout, and
 contain the expected FastEndpoints feature/endpoint surface. The capture was executed detached against that
 pre-migration source and captured all
@@ -94,7 +94,7 @@ the Workbench executable or production source exercised above.
 
 ## Verification record
 
-- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 148/148; the immutable baseline suite passed 9/9, including source/runner ancestry and dependency-byte checks.
+- Workflows Design API tests: `dotnet test tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj --no-restore` passed 150/150; the immutable baseline suite passed 11/11, including source/runner ancestry, committed raw-byte dependency checks, fixture metadata/counts, and mutation bites.
 - Architecture: the owner collectibility suite passed 1/1 (seven owners across three real collectible cycles), the integrated transition suite passed 2/2 with the 85-entry ratchet, and the full Architecture suite passed 472/472.
 - Full solution build: `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (218 repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.

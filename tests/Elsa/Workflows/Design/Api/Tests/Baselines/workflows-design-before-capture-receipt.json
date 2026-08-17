@@ -47,13 +47,13 @@
   "openApiSha256": "cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5",
   "operationCount": 27,
   "registrationCount": 27,
-  "runnerFingerprint": "1aa0f7e8e2d32c3f5b9cebed20e1ecd0f8503d33455ebffa47852e0a4f389277",
+  "runnerFingerprint": "8f2959632506958a510eafcc1430b423e5e9dca1157f34a46bc02b4ba8363d1e",
   "runnerIdentity": "checked-in-commit",
   "runnerDependencies": [
     {
       "identity": "checked-in-commit",
       "path": "tools/compatibility/capture-workflows-design-before.sh",
-      "sha256": "0f8c3748ff3c2cd74a7057488ef8b007109fbfac7b2b5edf929834ed28157a9a"
+      "sha256": "c14a3e4c4f5093e7f9094855a3e1fa70ccde05cb93d303a4a7530ca1e0061c54"
     },
     {
       "identity": "checked-in-commit",
