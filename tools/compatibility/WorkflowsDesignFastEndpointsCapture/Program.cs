@@ -6,7 +6,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
-using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
@@ -34,6 +33,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
+using HistoricalOpenApiEvidenceCapture = Elsa.Workflows.Design.FastEndpointsCapture.HistoricalOpenApiEvidenceCapture;
 
 var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);
@@ -41,7 +41,7 @@ Directory.CreateDirectory(outputDirectory);
 await using var host = await StartHostAsync();
 var cases = Cases();
 var observations = (await Task.WhenAll(cases.Select(testCase => HttpEvidenceCapture.CaptureAsync(host.Client, testCase)))).ToArray();
-var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
+var openApi = HistoricalOpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
 var trace = CaptureTrace.Snapshot();
 CaptureTrace.AssertMinimum(trace);
 
@@ -53,16 +53,38 @@ var receipt = new
     capture = "real-fastendpoints-historical-worktree",
     sourceCommit = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown",
     runnerCommit = Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown",
+    captureCommand = $"WORKFLOWS_DESIGN_BEFORE_COMMIT={Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown"} WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT={Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown"} bash tools/compatibility/capture-workflows-design-before.sh",
     registrationCount = 27,
     caseCount = observations.Length,
     operationCount = openApi.Operations.Count,
     categories = observations.SelectMany(observation => observation.Case.Split('|', StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-    traceAssertions = new[] { "request-and-command-types-recorded", "lifecycle-body-properties-recorded", "list-query-properties-recorded", "promotion-error-paths-recorded" },
+    traceAssertions = new[] { "request-and-command-types-recorded", "lifecycle-body-properties-recorded", "list-query-properties-recorded", "promotion-error-paths-recorded", "permanent-delete-conflict-recorded" },
+    runnerDependencies = RunnerDependencies(
+        args[0],
+        Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_BEFORE_COMMIT") ?? "unknown",
+        Environment.GetEnvironmentVariable("WORKFLOWS_DESIGN_CAPTURE_RUNNER_COMMIT") ?? "unknown"),
     httpSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-http-fastendpoints.json")))).ToLowerInvariant(),
     openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-openapi-fastendpoints.json")))).ToLowerInvariant(),
     traceSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "workflows-design-handler-trace-fastendpoints.json")))).ToLowerInvariant()
 };
 File.WriteAllText(Path.Join(outputDirectory, "workflows-design-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
+
+static IReadOnlyList<object> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerCommit) =>
+new[]
+{
+    "tools/compatibility/capture-workflows-design-before.sh",
+    "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+    "tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj",
+    "tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+    "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+    "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+    "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
+}.Select(path => new
+{
+    path,
+    commit = path.StartsWith("tools/compatibility/", StringComparison.Ordinal) ? runnerCommit : sourceCommit,
+    sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(sourceRoot, path)))).ToLowerInvariant()
+}).Cast<object>().ToArray();
 
 static IReadOnlyList<HttpCompatibilityCase> Cases()
 {
@@ -110,8 +132,21 @@ static IReadOnlyList<HttpCompatibilityCase> Cases()
     cases.Add(Create(HttpMethod.Post, "promote-draft|trusted-500", "/design/workflows/drafts/sample/promote", "trusted-promote-500", BodyFor("promote-draft")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-501", "/design/workflows/definitions/sample/permanent", "trusted-delete-501", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-404", "/design/workflows/definitions/sample/permanent", "trusted-delete-404", BodyFor("delete-definition-permanently")));
+    cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-409-not-soft-deleted", "/design/workflows/definitions/sample/permanent", "trusted-delete-409", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Delete, "delete-definition-permanently|trusted-500", "/design/workflows/definitions/sample/permanent", "trusted-delete-500", BodyFor("delete-definition-permanently")));
     cases.Add(Create(HttpMethod.Post, "promotion-preflight|trusted-nonmutation", "/design/workflows/drafts/sample/promotion-preflight", "trusted-preflight", "{\"requestedVersion\":\"1.0.0\"}"));
+    foreach (var lifecycle in new[]
+    {
+        (HttpMethod.Delete, "delete-definition", "/design/workflows/definitions/sample"),
+        (HttpMethod.Delete, "delete-definition-permanently", "/design/workflows/definitions/sample/permanent"),
+        (HttpMethod.Post, "restore-definition", "/design/workflows/definitions/sample/restore"),
+        (HttpMethod.Delete, "discard-draft", "/design/workflows/drafts/sample")
+    })
+    {
+        cases.Add(Create(lifecycle.Item1, $"{lifecycle.Item2}|trusted-missing-body", lifecycle.Item3, "trusted-manage"));
+        cases.Add(Create(lifecycle.Item1, $"{lifecycle.Item2}|trusted-malformed-json", lifecycle.Item3, "trusted-manage", "{"));
+        cases.Add(Create(lifecycle.Item1, $"{lifecycle.Item2}|trusted-unsupported-content-type", lifecycle.Item3, "trusted-manage", "{}", "text/plain"));
+    }
     return cases;
 
     static string? BodyFor(string name) => name switch
@@ -307,6 +342,7 @@ sealed class CaptureCommandSender(IHttpContextAccessor contextAccessor) : IComma
         {
             "trusted-delete-404" => throw new EntityNotFoundException("definition sample was not found"),
             "trusted-delete-501" => throw new PermanentDeletionUnavailableException("sample"),
+            "trusted-delete-409" => throw new WorkflowDefinitionNotSoftDeletedException("sample"),
             "trusted-delete-500" => throw new InvalidOperationException("deterministic command failure"),
             _ => Task.CompletedTask
         };
@@ -354,6 +390,8 @@ static class CaptureTrace
         foreach (var required in new[] { "ListDefinitions", "PreflightDraftPromotion", "PromoteDraft", "DeleteDefinitionPermanently", "SoftDeleteDefinition", "RestoreDefinition", "DiscardDraft" })
             if (!text.Contains(required, StringComparison.Ordinal))
                 throw new InvalidOperationException($"Historical capture did not execute required FE handler input '{required}'.");
+        if (!text.Contains("trusted-delete-409", StringComparison.Ordinal))
+            throw new InvalidOperationException("Historical capture did not execute permanent-delete conflict handling.");
     }
 }
 
