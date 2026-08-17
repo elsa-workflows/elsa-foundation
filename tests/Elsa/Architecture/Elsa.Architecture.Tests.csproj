@@ -9,6 +9,8 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\endpoint-manifest.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\runtime-e2e-build-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\fastendpoints-transition-exceptions.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave1-http-fastendpoints.json"

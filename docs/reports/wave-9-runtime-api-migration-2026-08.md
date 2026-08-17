@@ -12,7 +12,7 @@ The FastEndpoints oracle was captured before production endpoint deletion. The d
 the checked-in raw Git blobs in the branch-reachable tree (with the source dependency blobs pinned to the
 pre-Runtime-migration commit `67ba4b3b9bec3a6c2aac0d6d332099baf723e802`), so squash-merging the feature cannot lose
 the runner identity. The receipt records runner identity `checked-in-commit`, fingerprint
-`f63c79333c027e8aff452858ca4d87b1c68ea3d073efd1477564d59ec70470fb`, 24 registrations, 77 HTTP cases, and 24
+`003e3e3f56c3ef8eca08d647d39e944708a4f70faaa4bb55437471285a400823`, 24 registrations, 77 HTTP cases, and 24
 OpenAPI operations.
 
 The current frozen HTTP SHA-256 is `25b6895f014aa6fbfeae60b80588aa33abdd1a79ee0b739b4aa030bd62028a6e`; the OpenAPI SHA-256 is `990c5c4cbde8297b2e4cf4a3e3b8a30cb1e7215f0081d5df4e7d4b123a949eb4`. The historical projection asserts that every captured ProblemDetails `traceId` is a non-empty JSON string, then replaces it with the deterministic value `capture-trace-id`; two independent captures from source `67ba4b3b9bec3a6c2aac0d6d332099baf723e802` produced byte-identical HTTP, OpenAPI, and receipt files and these hashes.
@@ -48,9 +48,13 @@ pwsh -NoProfile -File ./e2e-tests/write-endpoints/Test-RuntimeWrites.ps1
 ```
 
 Results: `Test-RuntimeGets.ps1` passed 20/20 and `Test-RuntimeWrites.ps1` passed 10/10 against the rebuilt
-server and fresh SQLite schema. The executable application source for that run was `1302806c9`. This provenance
-correction changes only capture tooling, the immutable receipt, and report/test evidence; it does not change
-production Runtime code, so the exact executable-SHA E2E evidence remains valid and was not rerun.
+server and fresh SQLite schema. The durable receipt at
+`tests/Elsa/Architecture/Baselines/runtime-e2e-build-receipt.json` records the full tested executable source
+commit `1302806c9377b40f9bc10f04d12f206b137744a3`, its tree, the matching current `src` tree, every solution/build/
+package/tool Git object, and canonical composite digest `d672a0767b60dcf3a8adde95293a17c7dc326061a19e7a272b3f9cbb2eb0cbc4`.
+The executable commit is not required to remain an ancestor after squash: the receipt test verifies the current
+committed production/build objects match it. Subsequent changes are evidence/tests/tools/docs/maps only; no
+production Runtime tree or build input changed, so this exact E2E evidence remains valid and was not rerun.
 
 The capture records actual route values and deserialized request values through a capture-only response diagnostic that is removed from the frozen response headers. It exercises query filters, paging, diagnostics, executables, dispatches, activity inspection, value evidence, incidents, and alteration routes. In particular, FE observed 415 for body requests with absent/non-JSON content type and 400 ProblemDetails for empty JSON; the Minimal reader preserves those dispositions.
 
@@ -74,7 +78,7 @@ chain, with source-generated metadata covering the mapped accepts and produces t
 
 ## Evidence currently green
 
-- Runtime owner suite: complete Runtime API test project passes 119/119; direct Minimal API behavior coverage includes the deleted execute/activity objectives, including argument-name, exact ProblemDetails, payload metadata, and delegate cancellation cases.
+- Runtime owner suite: complete Runtime API test project passes 120/120; direct Minimal API behavior coverage includes the deleted execute/activity objectives, including argument-name, exact ProblemDetails, payload metadata, and delegate cancellation cases.
 - Runtime implementation suite: 1,640 passed after removing only endpoint-class tests that no longer have a production owner.
 - Runtime composition: 24 published routes, 24 OpenAPI operations, and anonymous 401 for every mapped route.
 - Baseline receipt/hash assertion and HTTP status mutation bite pass.
@@ -82,8 +86,8 @@ chain, with source-generated metadata covering the mapped accepts and produces t
 - Runtime authorization: 16 shared matrix cases pass for Minimal API and retained FastEndpoints, including 401/403, exact/implied/wildcard, normalization, tenant, external identity, and resource dispositions; the catalog actions for execute/manage/publishing-read are asserted.
 - Runtime collectibility correction: one combined three-cycle application-pipeline test now runs native OpenAPI in every cycle, alternates document-before-serializer and serializer-before-document order, and exercises real routing, authentication, authorization/resource evaluation, typed response, body binding, generated JSON, provider seams, disposal, and weak-reference collection.
 - Runtime API/Core compatibility: the stable Core assembly and legacy type forwarders are asserted, including the preserved `WorkflowOutputView.From` static member; the 24-route owner metadata scan passes.
-- Final post-W6 rebuilt Workbench/fresh SQLite E2E evidence at executable source `1302806c9` records Runtime GET 20/20 and write 10/10. The database was cleared and redeployed from the rebuilt reference-composition manifest before the run; the server registered 61 retained FastEndpoints and the mapped Runtime routes passed through the live HTTP/persistence/runtime path.
-- Affected builds pass with 0 errors (Workbench has only existing unrelated warnings; capture tool has 0 warnings), the generated-map check reports that committed maps still describe the tree, and scoped formatter verification passes for changed Runtime/API/Core files. Repository-wide formatter diagnostics remain unrelated baseline follow-up and are not claimed green.
+- Final post-W6 rebuilt Workbench/fresh SQLite E2E evidence records Runtime GET 20/20 and write 10/10 in the durable build receipt. The database was cleared and redeployed from the rebuilt reference-composition manifest before the run; the server registered 61 retained FastEndpoints and the mapped Runtime routes passed through the live HTTP/persistence/runtime path.
+- The detached historical capture replay builds and runs with 0 warnings. The direct current-HEAD capture project is intentionally not buildable because it has no post-migration `Api.Core` reference: it reports the three expected CS1069 type-forward errors plus pre-existing IDE0040. Workbench/Runtime production builds have only existing unrelated warnings; the generated-map check reports that committed maps still describe the tree, and scoped formatter verification passes for changed Runtime/API/Core files. Repository-wide formatter diagnostics remain unrelated baseline follow-up and are not claimed green.
 
 ## Remaining gates
 

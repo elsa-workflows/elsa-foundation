@@ -355,6 +355,28 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         }
     }
 
+    [Fact]
+    public void Runtime_e2e_receipt_matches_current_production_and_build_input_git_objects()
+    {
+        var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "runtime-e2e-build-receipt.json"));
+        var testedCommit = receipt.GetProperty("testedExecutableSourceCommit").GetString()!;
+        var currentSourceTree = receipt.GetProperty("currentSourceTree").GetString()!;
+        var components = ReadBuildInputs(receipt);
+
+        Assert.True(IsCommitResolvable(testedCommit));
+        Assert.Equal(receipt.GetProperty("testedExecutableTree").GetString(), GitRevision($"{testedCommit}^{{tree}}"));
+        Assert.Equal(currentSourceTree, GitRevision("HEAD:src"));
+        Assert.Equal("20/20", receipt.GetProperty("results").GetProperty("Test-RuntimeGets.ps1").GetString());
+        Assert.Equal("10/10", receipt.GetProperty("results").GetProperty("Test-RuntimeWrites.ps1").GetString());
+        Assert.True(E2eReceiptMatches(receipt, currentSourceTree, components, receipt.GetProperty("compositeSha256").GetString()!));
+
+        var mutatedComponent = components.Select((component, index) => index == 0
+            ? component with { GitObject = new string('0', 40) }
+            : component).ToArray();
+        Assert.False(E2eReceiptMatches(receipt, currentSourceTree, mutatedComponent, receipt.GetProperty("compositeSha256").GetString()!));
+        Assert.False(E2eReceiptMatches(receipt, currentSourceTree, components, new string('0', 64)));
+    }
+
     private static string Hash(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
@@ -433,6 +455,49 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         return process.ExitCode;
     }
 
+    private static string GitRevision(string revision)
+    {
+        var startInfo = new ProcessStartInfo("git", ["rev-parse", revision])
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
+        return output.Trim();
+    }
+
+    private static BuildInputSnapshot[] ReadBuildInputs(JsonElement receipt) =>
+        receipt.GetProperty("buildInputs").EnumerateArray()
+            .Select(input => new BuildInputSnapshot(
+                input.GetProperty("path").GetString()!,
+                input.GetProperty("gitObject").GetString()!))
+            .ToArray();
+
+    private static bool E2eReceiptMatches(
+        JsonElement receipt,
+        string currentSourceTree,
+        IReadOnlyList<BuildInputSnapshot> components,
+        string composite)
+    {
+        var expectedComponents = ReadBuildInputs(receipt);
+        return currentSourceTree == receipt.GetProperty("currentSourceTree").GetString() &&
+               components.SequenceEqual(expectedComponents) &&
+               components.All(component => component.GitObject == GitRevision($"HEAD:{component.Path}")) &&
+               composite == receipt.GetProperty("compositeSha256").GetString() &&
+               composite == E2eCompositeDigest(currentSourceTree, components);
+    }
+
+    private static string E2eCompositeDigest(string sourceTree, IEnumerable<BuildInputSnapshot> components) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Join("\n", new[] { $"src|{sourceTree}" }.Concat(components.Select(component =>
+                $"{component.Path}|{component.GitObject}"))) + "\n"))).ToLowerInvariant();
+
     private static bool IsAncestor(string ancestor, string descendant)
     {
         var startInfo = new ProcessStartInfo("git", ["merge-base", "--is-ancestor", ancestor, descendant])
@@ -478,6 +543,8 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     }
 
     private sealed record RunnerDependencySnapshot(string Identity, string Path, string Sha256);
+
+    private sealed record BuildInputSnapshot(string Path, string GitObject);
 
     [Fact]
     public async Task Runtime_minimal_host_replays_every_frozen_http_case_against_the_mapped_routes()
