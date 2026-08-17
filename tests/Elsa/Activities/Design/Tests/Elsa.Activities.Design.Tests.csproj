@@ -57,7 +57,7 @@
     <Compile Remove="Api/Capture/**/*" />
     <EmbeddedResource Remove="Api/Capture/**/*" />
     <None Remove="Api/Capture/**/*" />
-    <None Update="Api/Baselines/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <None Update="Api/Baselines/*.json" Link="Baselines/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

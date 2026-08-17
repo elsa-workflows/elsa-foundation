@@ -39,7 +39,7 @@ var receipt = new
     capture = "real-fastendpoints-historical-worktree",
     captureDescription = "git worktree add --detach sourceCommit; execute only checked-in runner content",
     sourceCommit,
-    sourceRelationship = "parent-before-migration",
+    sourceRelationship = "ancestor-before-migration",
     runnerIdentity,
     captureCommand = $"ACTIVITIES_DESIGN_BEFORE_COMMIT={sourceCommit} bash tools/capture-activities-design-before.sh",
     registrationCount = 38,
