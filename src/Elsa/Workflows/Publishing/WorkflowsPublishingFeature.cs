@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Publishing;
 /// </summary>
 /// <remarks>
 /// The Api feature obtains the engine by <c>DependsOn</c> composition (framework §2.11), not
-/// inheritance: it keeps its own <c>FastEndpointsFeatureBase</c> base and declares
+/// inheritance: it is its own <c>IWebShellFeature</c> and declares
 /// <c>DependsOn WorkflowsPublishing</c>.
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
