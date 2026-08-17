@@ -1,6 +1,7 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -9,6 +10,29 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// <summary>Registers the current-only executable, template, and source-reference Groundwork v2 family.</summary>
 public static class GroundworkV2RuntimeMaterialRegistration
 {
+    /// <summary>Registers the current-only v2 alteration plan/job ledger.</summary>
+    public static IServiceCollection AddGroundworkV2WorkflowAlterationStore(
+        this IServiceCollection services,
+        string? targetName = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddGroundworkStorageUnit(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind),
+            targetName);
+        services.AddGroundworkStorageUnit(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind),
+            targetName);
+        services.RemoveAll<GroundworkV2WorkflowAlterationStore>();
+        services.RemoveAll<IWorkflowAlterationStore>();
+        services.AddScoped<GroundworkV2WorkflowAlterationStore>(provider => new(
+            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            targetName));
+        services.AddScoped<IWorkflowAlterationStore>(provider =>
+            provider.GetRequiredService<GroundworkV2WorkflowAlterationStore>());
+        return services;
+    }
+
     public static IServiceCollection AddGroundworkV2RuntimeMaterials(
         this IServiceCollection services,
         string? targetName = null)
