@@ -47,11 +47,15 @@ internal static class GroundworkV2WorkflowExecutableStorageConventions
         return executable;
     }
 
-    public static CoordinationState DeserializeCoordination(IReadOnlyDictionary<string, object?> values)
+    public static CoordinationState DeserializeCoordination(
+        IReadOnlyDictionary<string, object?> values,
+        string expectedArtifactId)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedArtifactId);
         EnsureSchema(values, "workflow executable coordination");
         var state = DeserializeContent<CoordinationState>(values, "workflow executable coordination");
         ValidateCoordination(state);
+        EnsureString(values, ElsaRuntimeV2StorageManifest.IdField, expectedArtifactId);
         return state;
     }
 

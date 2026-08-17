@@ -48,7 +48,9 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
             var coordination = OpenCoordination().Read(key);
             if (coordination is null)
                 throw new InvalidDataException($"Workflow executable '{executable.Identity.ArtifactId}' has no current coordination row.");
-            _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(coordination.Values.Values);
+            _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+                coordination.Values.Values,
+                executable.Identity.ArtifactId);
             return;
         }
 
@@ -293,7 +295,9 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
             var coordination = unitOfWork.OpenSession(coordinationUnit).Read(key);
             if (executable is null || coordination is null)
                 return false;
-            var state = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(coordination.Values.Values);
+            var state = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+                coordination.Values.Values,
+                guard.ArtifactId);
             if (!Matches(state.DeletionGuard, guard) || !IsLive(state.DeletionGuard, now) ||
                 LiveLeases(state, now).Count != 0)
                 return false;
@@ -400,7 +404,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         if (OpenExecutable().Read(key) is null)
             return null;
         return (
-            GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(row.Values.Values),
+            GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(row.Values.Values, artifactId),
             RequiredVersion(row, artifactId));
     }
 
@@ -412,7 +416,9 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         if (winner is null || coordination is null)
             return false;
         _ = GroundworkV2WorkflowExecutableStorageConventions.Deserialize(winner.Values.Values);
-        _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(coordination.Values.Values);
+        _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+            coordination.Values.Values,
+            artifactId);
         return true;
     }
 

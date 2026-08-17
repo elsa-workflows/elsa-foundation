@@ -117,6 +117,13 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             new TestAccessContextAccessor(PersistenceAccessContext.Global));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             global.FindAsync(reference.SourceReferenceId).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            scoped.SaveAsync(Reference(
+                "ref-wrong-tenant",
+                "artifact-boundary",
+                WorkflowExecutableReferenceScope.TestRun) with
+            { TenantId = "tenant-b" }).AsTask());
+        Assert.Null(await scoped.FindAsync("ref-wrong-tenant"));
 
         var raw = source.Open(
             unit.Id.Value,
@@ -132,7 +139,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
     }
 
     [Fact]
-    public async Task Complete_payload_upsert_and_retirement_preserve_current_facts()
+    public async Task Create_only_save_refuses_replays_and_retirement_preserves_current_facts()
     {
         await using var runtime = NativeProviderRuntime.Create();
         using var connection = runtime.OpenConnection();
@@ -145,8 +152,9 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         var original = Reference("ref-update", "artifact-before", WorkflowExecutableReferenceScope.TestRun);
         var replacement = original with { ArtifactId = "artifact-after", SourceVersion = "2" };
         await store.SaveAsync(original);
-        await store.SaveAsync(replacement);
-        Assert.Equal("artifact-after", (await store.FindAsync(original.SourceReferenceId))!.ArtifactId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(original).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(replacement).AsTask());
+        Assert.Equal("artifact-before", (await store.FindAsync(original.SourceReferenceId))!.ArtifactId);
 
         var deletedAt = new DateTimeOffset(2026, 8, 17, 14, 0, 0, TimeSpan.Zero);
         Assert.True(await store.RetireAsync(original.SourceReferenceId, deletedAt, "done"));
@@ -172,7 +180,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         var connectionString = providerName == "sqlite"
             ? $"Data Source={sqlitePath}"
             : Environment.GetEnvironmentVariable($"GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING");
-        Skip.If(string.IsNullOrWhiteSpace(connectionString),
+        RequireOrSkip(string.IsNullOrWhiteSpace(connectionString),
             $"Set GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING to run the {providerName} provider proof.");
 
         try
@@ -199,10 +207,32 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             var store = new GroundworkV2WorkflowExecutableSourceReferenceStore(
                 new DirectSessionSource(connection, unit),
                 new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("matrix-scope"))));
-            var reference = Reference($"matrix-{providerName}", $"artifact-{providerName}", WorkflowExecutableReferenceScope.TestRun);
+            var reference = Reference($"matrix-{providerName}", $"artifact-{providerName}", WorkflowExecutableReferenceScope.TestRun) with
+            {
+                TenantId = "matrix-scope"
+            };
+            var live = Reference($"matrix-live-{providerName}", $"artifact-live-{providerName}", WorkflowExecutableReferenceScope.Published) with
+            {
+                TenantId = "matrix-scope"
+            };
             await store.SaveAsync(reference);
+            await store.SaveAsync(live);
             Assert.Equal(reference.SourceReferenceId, (await store.FindAsync(reference.SourceReferenceId))!.SourceReferenceId);
-            Assert.Single((await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery())).Items);
+            Assert.Equal(
+                [live.SourceReferenceId],
+                (await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(
+                    liveOnly: true,
+                    now: new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero))))
+                .Items.Select(item => item.SourceReferenceId));
+            Assert.Null(await new GroundworkV2WorkflowExecutableSourceReferenceStore(
+                new DirectSessionSource(connection, unit),
+                new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("matrix-other"))))
+                .FindAsync(reference.SourceReferenceId));
+            Assert.Equal(
+                [reference.SourceReferenceId],
+                await store.DeleteExpiredOrRetiredAsync(
+                    new WorkflowExecutableSourceReferenceCleanupBatch(1),
+                    new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero)));
         }
         finally
         {
@@ -242,6 +272,20 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
                 "node-1", "Input", "literal", System.Text.Json.JsonDocument.Parse("{\"x\":1}").RootElement)],
             TenantId: "tenant-a",
             ActivityPresentation: [new WorkflowExecutableActivityPresentationRecord("node-1", "Node")]);
+
+    private static void RequireOrSkip(bool unavailable, string message)
+    {
+        if (!unavailable)
+            return;
+        if (StringComparer.Ordinal.Equals(
+                Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX"),
+                "1"))
+        {
+            throw new InvalidOperationException($"Required Groundwork v2 native-provider evidence is unavailable: {message}");
+        }
+
+        Skip.If(true, message);
+    }
 
     private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {

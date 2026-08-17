@@ -74,7 +74,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
         {
             report = await TryCreateAsync(template, cancellationToken);
         }
-        catch (BatchWriteException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Providers may surface an exact create-only race as an exception rather than a
             // materialized outcome report. The unit of work has already been rolled back; reconcile
@@ -262,6 +262,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
         string templateHash,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var claimId = GroundworkV2ExecutableActivityTemplateStorageConventions.HashClaimId(templateHash);
         var entry = OpenClaim().Read(GroundworkRuntimeRowStore.Key(claimId));
         if (entry is null)
@@ -327,7 +328,10 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     private IUnitOfWork BeginAtomicUnitOfWork() => sessions.BeginUnitOfWork(
         Access,
         BatchWriteOptions.Exact,
-        [templateUnit.Id.Value, claimUnit.Id.Value],
+        [
+            ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+            ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind
+        ],
         targetName);
 
     private async ValueTask<BatchWriteReport> CommitAsync(
@@ -338,7 +342,16 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
         {
             var report = await unitOfWork.CommitWithOutcomesAsync(cancellationToken);
             if (!report.IsSuccessful)
-                unitOfWork.Rollback();
+            {
+                try
+                {
+                    unitOfWork.Rollback();
+                }
+                catch
+                {
+                    // Preserve the provider's attributed row outcomes.
+                }
+            }
             return report;
         }
         catch

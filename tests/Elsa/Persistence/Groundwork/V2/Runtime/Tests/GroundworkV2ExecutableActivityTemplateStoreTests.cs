@@ -394,7 +394,9 @@ public sealed class GroundworkV2ExecutableActivityTemplateStoreTests
         {
             LastUnitOfWorkOptions = options;
             LastUnitOfWorkLogicalIds = unitIds
-                .Select(id => units.Single(pair => StringComparer.Ordinal.Equals(pair.Value.Id.Value, id)).Key)
+                .Select(id => units.ContainsKey(id)
+                    ? id
+                    : units.Single(pair => StringComparer.Ordinal.Equals(pair.Value.Id.Value, id)).Key)
                 .ToArray();
             return connection.BeginUnitOfWork(access, options, unitIds.Select(Resolve).ToArray());
         }

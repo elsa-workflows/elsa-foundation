@@ -417,7 +417,20 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
                 },
                 null)).Values;
         Assert.Throws<InvalidDataException>(() =>
-            GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(malformedCoordination));
+            GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+                malformedCoordination,
+                "artifact-validation"));
+
+        var wrongCoordinationIdentity = new Dictionary<string, object?>(
+            GroundworkV2WorkflowExecutableStorageConventions.EmptyCoordinationValues("artifact-validation").Values,
+            StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.IdField] = "artifact-forged"
+        };
+        Assert.Throws<InvalidDataException>(() =>
+            GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+                wrongCoordinationIdentity,
+                "artifact-validation"));
     }
 
     private static WorkflowExecutable Executable(string artifactId, string artifactVersion)

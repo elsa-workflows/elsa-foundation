@@ -12,8 +12,8 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// <summary>Current-only Groundwork v2 source-reference store.</summary>
 /// <remarks>
 /// A source reference is a complete JSON sidecar around a small set of lookup projections. The adapter admits only
-/// one explicit persistence scope, uses identity reads for direct access, and performs every replacement or delete
-/// through provider optimistic concurrency. It has no document bridge, migration, or unconditional fallback path.
+/// one explicit persistence scope, uses identity reads for direct access, and keeps source-reference creation strict.
+/// Retirement and deletion use provider optimistic concurrency. There is no document bridge, migration, or fallback.
 /// </remarks>
 public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
 {
@@ -40,14 +40,20 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         CancellationToken cancellationToken = default)
     {
         GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Validate(reference);
+        EnsureTenant(reference);
         cancellationToken.ThrowIfCancellationRequested();
         var session = Open();
         var key = GroundworkRuntimeRowStore.Key(reference.SourceReferenceId);
-        var values = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(reference);
         var existing = session.Read(key);
-        var result = existing is null
-            ? session.Insert(values, WriteOptions.CreateOnly)
-            : UpdateExisting(session, values, existing, reference);
+        if (existing is not null)
+        {
+            _ = Deserialize(existing.Values.Values);
+            throw new InvalidOperationException(
+                $"Groundwork source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
+        }
+
+        var values = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(reference);
+        var result = session.Insert(values, WriteOptions.CreateOnly);
         if (!IsSaved(result.Status))
         {
             throw new InvalidOperationException(
@@ -67,7 +73,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         if (entry is null)
             return ValueTask.FromResult<WorkflowExecutableSourceReference?>(null);
 
-        var reference = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(entry.Values.Values);
+        var reference = Deserialize(entry.Values.Values);
         if (!StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId))
             throw new InvalidDataException("Groundwork source-reference row identity does not match its requested key.");
         return ValueTask.FromResult<WorkflowExecutableSourceReference?>(reference);
@@ -148,7 +154,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         if (existing is null)
             return false;
 
-        var reference = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(existing.Values.Values);
+        var reference = Deserialize(existing.Values.Values);
         if (!StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId))
             throw new InvalidDataException("Groundwork source-reference row identity does not match its requested key.");
         if (reference.DeletedAt is not null)
@@ -184,7 +190,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         if (existing is null)
             return ValueTask.FromResult(false);
 
-        var reference = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(existing.Values.Values);
+        var reference = Deserialize(existing.Values.Values);
         if (!StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId))
             throw new InvalidDataException("Groundwork source-reference row identity does not match its requested key.");
         var revision = existing.Version ?? throw new InvalidDataException(
@@ -297,8 +303,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             Projection.All,
             Paging.Keyset(limit)));
         cancellationToken.ThrowIfCancellationRequested();
-        return result.Rows.Select(
-            GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize).ToList();
+        return result.Rows.Select(Deserialize).ToList();
     }
 
     private RuntimeStorePage<WorkflowExecutableSourceReference> Page(
@@ -309,45 +314,43 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             throw new InvalidDataException("Groundwork source-reference query returned a continuation after an empty page.");
         return new RuntimeStorePage<WorkflowExecutableSourceReference>(
             query,
-            result.Rows.Select(GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize).ToArray(),
+            result.Rows.Select(Deserialize).ToArray(),
             result.NextContinuationToken);
     }
 
     private IStorageSession Open()
     {
-        var context = accessContextAccessor.Current;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork source-reference access requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
+        var context = AccessContext;
         return sessions.Open(
             unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
+            StorageAccess.Scoped(new StorageScope(context.Scope!.Value)),
             targetName);
     }
 
-    private static WriteOutcome UpdateExisting(
-        IStorageSession session,
-        StorageValues values,
-        StoredEntry existing,
-        WorkflowExecutableSourceReference reference)
+    private PersistenceAccessContext AccessContext
     {
-        var previous = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(existing.Values.Values);
-        if (!StringComparer.Ordinal.Equals(previous.SourceReferenceId, reference.SourceReferenceId))
-            throw new InvalidDataException("Groundwork source-reference row identity does not match its current content.");
-        if (previous.DeletedAt is not null &&
-            (reference.DeletedAt != previous.DeletedAt ||
-             !StringComparer.Ordinal.Equals(reference.DeletedReason, previous.DeletedReason)))
+        get
         {
-            throw new InvalidOperationException(
-                $"Groundwork source-reference retirement facts for '{reference.SourceReferenceId}' are immutable.");
+            var context = accessContextAccessor.Current;
+            if (context.Scope is null || context.AcrossScopes)
+            {
+                throw new InvalidOperationException(
+                    "Groundwork source-reference access requires one explicit persistence scope; global and across-scope access are refused.");
+            }
+
+            return context;
         }
-        var revision = existing.Version ?? throw new InvalidDataException(
-            $"Groundwork source-reference row '{reference.SourceReferenceId}' did not expose an optimistic revision.");
-        return ConditionalUpsert(session, values, revision);
     }
+
+    private WorkflowExecutableSourceReference Deserialize(IReadOnlyDictionary<string, object?> values)
+    {
+        var reference = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(values);
+        EnsureTenant(reference);
+        return reference;
+    }
+
+    private void EnsureTenant(WorkflowExecutableSourceReference reference) =>
+        AccessContext.EnsureTenantScope(reference.TenantId);
 
     private static WriteOutcome ConditionalUpsert(
         IStorageSession session,

@@ -135,7 +135,7 @@ internal static class GroundworkV2WorkflowExecutableSourceReferenceStorageConven
             actual = value switch
             {
                 DateTimeOffset timestamp => timestamp,
-                DateTime timestamp => new DateTimeOffset(timestamp),
+                DateTime timestamp => new DateTimeOffset(DateTime.SpecifyKind(timestamp, DateTimeKind.Utc)),
                 JsonElement { ValueKind: JsonValueKind.String } element =>
                     DateTimeOffset.Parse(element.GetString()!, CultureInfo.InvariantCulture),
                 string text => DateTimeOffset.Parse(text, CultureInfo.InvariantCulture),
