@@ -134,9 +134,9 @@
 **Purpose**: Publish only a green wave and verify the exact merged main state.
 
 - [x] T052 Push the organization branch, open a draft Wave 8 PR linked to #1374, comment the PR URL and exact evidence on #1374, and synchronize label/Project status to Review
-- [ ] T053 Wait for every required PR check and requested review to pass, reconcile concurrent main changes, rerun invalidated local evidence, and merge only on a clean gate
-- [ ] T054 Verify CI, HTTP workflow performance, maps, packages, code-quality/security, and Docker workflows on the exact merged main commit; fix forward or revert any red main gate
-- [ ] T055 Post final merged SHA, post-merge run URLs, evidence/report links, exact 23→0 owner and 23→0 program ratchet on #1374; close issue, set `status:done`, and move its Project item to Done only after exact-main is green
+- [x] T053 Wait for every required PR check and requested review to pass, reconcile concurrent main changes, rerun invalidated local evidence, and merge only on a clean gate
+- [x] T054 Verify CI, HTTP workflow performance, maps, packages, code-quality/security, and Docker workflows on the exact merged main commit; fix forward or revert any red main gate
+- [x] T055 Post final merged SHA, post-merge run URLs, evidence/report links, exact 23→0 owner and 23→0 program ratchet on #1374; close issue, set `status:done`, and move its Project item to Done only after exact-main is green
 
 ---
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-17
 
-**Status**: Draft
+**Status**: Implemented — merged by #1403 as `abc262aa50593cb037a27e0ac84dd2b1b78a9bd0`
 
 **Input**: Issue #1374 — migrate the complete 23-registration `Elsa.Workflows.Publishing.Api` owner slice from FastEndpoints to the program's consistent Minimal API authoring model while preserving the established REST contract.
 

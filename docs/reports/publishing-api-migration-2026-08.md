@@ -182,6 +182,33 @@ and schema lock were removed after shutdown.
   still called `.Api` the FastEndpoints shell. Both are corrected as comment-only changes, with the
   build green and the maps still describing the tree.
 
+## Merge record
+
+Wave 8 landed as squash commit `abc262aa50593cb037a27e0ac84dd2b1b78a9bd0` on `main` at
+2026-08-17T21:37:54Z, from reviewed PR head `68bff4365ac48e8863e20c6d6e764c711b92eb24`. The merge was
+gated on that exact head, so no later push could have substituted a different tree.
+
+All post-merge gates are green on the merged commit:
+
+| Gate | Result | Run |
+|---|---|---|
+| CI (`Build & test`, `Groundwork fast gates`) | success | [32072111180](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072111180) |
+| HTTP workflow performance | success | [32072110662](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072110662) |
+| Maps | success | [32072109869](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072109869) |
+| Packages | success | [32072109895](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072109895) |
+| Docker Images | success | [32072111925](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072111925) |
+| Code Quality: Push on main | success | [32072108016](https://github.com/elsa-workflows/elsa-foundation/actions/runs/32072108016) |
+
+No `main is red` issue was filed for this commit, and CI's `Alert on a red main` job skipped, which is
+its green path. The one open red-main report, #1323 (Integration nightly), predates this branch and is
+unrelated; #1335 carries its fix.
+
+Final ratchet: the Publishing owner moves 23 registrations to 0, and because Wave 9 had already
+landed, the program-wide first-party FastEndpoints surface moves 23 to 0 with it. Both are guard-held
+rather than asserted in prose: `Wave8PublishingMinimalApiCollectibilityTests` pins 23 routes and 23
+OpenAPI operations, and `FastEndpointsTransitionTests` requires an empty discovered surface and an
+empty transition-exception registry.
+
 Exact local gate commands:
 
 ```text
