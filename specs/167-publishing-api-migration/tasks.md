@@ -17,10 +17,10 @@
 - [x] T003 [P] Build the deterministic 23-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs`
 - [x] T004 [P] Build the real FastEndpoints historical host and deterministic publication/store/compiler/auth/test-run fixtures in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs`
 - [x] T005 Add a clean-content-guarded, self-contained capture runner and script in `tests/Elsa/Workflows/Publishing/Api/Tests/Capture/` and `tools/capture-publishing-before.sh`; pin branch-durable source-tree and build-input identities without relying on a local or squash-lost commit
-- [ ] T006 Capture and commit immutable HTTP, projected OpenAPI, raw OpenAPI, receipt, and initially empty approval artifacts under `tests/Elsa/Workflows/Publishing/Api/Tests/Baselines/`
-- [ ] T007 Validate fixture hashes, exact case/operation counts, runner/dependency identities, capture command/environment, ancestor-before-migration ordering, and clean-checkout reproducibility in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingBeforeBaselineTests.cs`
-- [ ] T008 Add exact mutation bites for receipt/source identity and HTTP/OpenAPI status, headers, body, content type, route, operation ID, tags, security, schemas, parameters, and response metadata in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingCompatibilityTests.cs`
-- [ ] T009 Recheck #1374/open PRs, run capture and baseline tests twice, prove fixtures reproduce byte-for-byte, and commit the complete baseline checkpoint before touching `src/Elsa/Workflows/Publishing/Api/`
+- [x] T006 Capture and commit immutable HTTP, projected OpenAPI, raw OpenAPI, receipt, and initially empty approval artifacts under `tests/Elsa/Workflows/Publishing/Api/Tests/Baselines/`
+- [x] T007 Validate fixture hashes, exact case/operation counts, runner/dependency identities, capture command/environment, ancestor-before-migration ordering, and clean-checkout reproducibility in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingBeforeBaselineTests.cs`
+- [x] T008 Add exact mutation bites for receipt/source identity and HTTP/OpenAPI status, headers, body, content type, route, operation ID, tags, security, schemas, parameters, and response metadata in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingCompatibilityTests.cs`
+- [x] T009 Recheck #1374/open PRs, run capture and baseline tests twice, prove fixtures reproduce byte-for-byte, and commit the complete baseline checkpoint before touching `src/Elsa/Workflows/Publishing/Api/`
 
 **Checkpoint**: The historical oracle is immutable, reproducible, complete for all 23 routes, and predates migration.
 

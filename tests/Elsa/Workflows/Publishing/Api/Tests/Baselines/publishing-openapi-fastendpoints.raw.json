@@ -1,0 +1,3671 @@
+{
+  "components": {
+    "schemas": {
+      "ActivityDependencyPathItem": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version",
+          "templateHash"
+        ],
+        "type": "object"
+      },
+      "ActivityDiagnostic": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDiagnosticLocation"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "remediation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "severity": {
+            "$ref": "#/components/schemas/ActivityDiagnosticSeverity"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ActivityDiagnosticSubject"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "ActivityDiagnosticLocation": {
+        "properties": {
+          "dependencyPath": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDependencyPathItem"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "jsonPointer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeOrigin": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityNodeOrigin"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "providerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ActivityDiagnosticSeverity": {
+        "type": "integer"
+      },
+      "ActivityDiagnosticSubject": {
+        "properties": {
+          "definitionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftTestRunCancellationView": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "capabilityAdvertised": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capabilityAdvertised",
+          "available",
+          "status",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftTestRunExpirationView": {
+        "properties": {
+          "evidenceExpiresAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "evidenceRetained": {
+            "type": "boolean"
+          },
+          "evidenceRetention": {
+            "type": "string"
+          },
+          "receiptExpiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "runExpiresAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "runStillActive": {
+            "type": "boolean"
+          },
+          "sourceReferenceExpired": {
+            "type": "boolean"
+          },
+          "sourceReferenceExpiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceReferenceRetained": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sourceReferenceExpiresAt",
+          "sourceReferenceExpired",
+          "sourceReferenceRetained",
+          "evidenceRetention",
+          "evidenceExpiresAt",
+          "evidenceRetained",
+          "runExpiresAt",
+          "runStillActive",
+          "receiptExpiresAt"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftTestRunFailureView": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "message",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftTestRunInput": {
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftTestRunView": {
+        "properties": {
+          "artifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cancellation": {
+            "$ref": "#/components/schemas/ActivityDraftTestRunCancellationView"
+          },
+          "commandDispatchStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "draftRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "expiration": {
+            "$ref": "#/components/schemas/ActivityDraftTestRunExpirationView"
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDraftTestRunFailureView"
+              }
+            ]
+          },
+          "outerActivityExecutionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceReferenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "testRunId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "workflowExecutionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "testRunId",
+          "draftId",
+          "draftRevision",
+          "artifactId",
+          "sourceReferenceId",
+          "workflowExecutionId",
+          "outerActivityExecutionId",
+          "status",
+          "commandDispatchStatus",
+          "reason",
+          "failure",
+          "expiration",
+          "cancellation",
+          "requestedAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ActivityNode": {
+        "properties": {
+          "activityVersionId": {
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ArgumentState"
+            },
+            "type": "array"
+          },
+          "intrinsic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthoredWorkflowIntrinsic"
+              }
+            ]
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/ArgumentState"
+            },
+            "type": "array"
+          },
+          "structure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityNodeStructure"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nodeId",
+          "activityVersionId",
+          "inputs",
+          "outputs"
+        ],
+        "type": "object"
+      },
+      "ActivityNodeOrigin": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ActivityNodeStructure": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "schemaVersion",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "ActivityPresentationRecord": {
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isEmpty": {
+            "type": "boolean"
+          },
+          "nodeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeId"
+        ],
+        "type": "object"
+      },
+      "ActivityPublicationCapabilityReadinessView": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "supportedSchemaVersions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "schemaVersion",
+          "status",
+          "supportedSchemaVersions"
+        ],
+        "type": "object"
+      },
+      "ActivityPublicationDependencyEvidenceView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "occurrenceId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version",
+          "templateHash",
+          "occurrenceId"
+        ],
+        "type": "object"
+      },
+      "ActivityPublicationOutcome": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "definitionVersionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceReferenceId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "templateId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "definitionVersionId",
+          "draftId",
+          "version",
+          "templateId",
+          "templateHash",
+          "sourceReferenceId",
+          "publishedAt"
+        ],
+        "type": "object"
+      },
+      "ActivityPublicationPreflightView": {
+        "properties": {
+          "definitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityPublicationDependencyEvidenceView"
+            },
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "diff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityVersionDiff"
+              }
+            ]
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "draftRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "hasBaseline": {
+            "type": "boolean"
+          },
+          "impactFirstChanges": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityVersionChange"
+            },
+            "type": "array"
+          },
+          "isPublishable": {
+            "type": "boolean"
+          },
+          "minimumVersion": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityPublicationCapabilityReadinessView"
+          },
+          "reviewToken": {
+            "type": "string"
+          },
+          "reviewedVersion": {
+            "type": "string"
+          },
+          "runtime": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityPublicationCapabilityReadinessView"
+            },
+            "type": "array"
+          },
+          "storage": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityPublicationCapabilityReadinessView"
+            },
+            "type": "array"
+          },
+          "validVersions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "draftId",
+          "draftRevision",
+          "definitionId",
+          "definitionHeadVersionId",
+          "hasBaseline",
+          "reviewToken",
+          "isPublishable",
+          "minimumVersion",
+          "validVersions",
+          "diff",
+          "impactFirstChanges",
+          "dependencies",
+          "provider",
+          "storage",
+          "runtime",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityPublicationReceiptView": {
+        "properties": {
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedDraftRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityPublicationOutcome"
+              }
+            ]
+          },
+          "requestedVersion": {
+            "type": "string"
+          },
+          "reviewToken": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "status",
+          "draftId",
+          "expectedDraftRevision",
+          "expectedDefinitionHeadVersionId",
+          "reviewToken",
+          "requestedVersion",
+          "outcome",
+          "errorCode",
+          "diagnostics",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionBump": {
+        "type": "integer"
+      },
+      "ActivityVersionChange": {
+        "properties": {
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "area": {
+            "$ref": "#/components/schemas/ActivityVersionChangeArea"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/ActivityVersionChangeImpact"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requiredBump": {
+            "$ref": "#/components/schemas/ActivityVersionBump"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ActivityVersionChangeSubject"
+          }
+        },
+        "required": [
+          "changeId",
+          "area",
+          "kind",
+          "subject",
+          "before",
+          "after",
+          "impact",
+          "requiredBump",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionChangeArea": {
+        "type": "integer"
+      },
+      "ActivityVersionChangeImpact": {
+        "type": "integer"
+      },
+      "ActivityVersionChangeSubject": {
+        "properties": {
+          "dependencyVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "memberKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "occurrenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ActivityVersionCompatibility": {
+        "type": "integer"
+      },
+      "ActivityVersionDiff": {
+        "properties": {
+          "behaviorChanged": {
+            "type": "boolean"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityVersionChange"
+            },
+            "type": "array"
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/ActivityVersionCompatibility"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ActivityVersionIdentity"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityVersionProviderDiff"
+          },
+          "requiredBump": {
+            "$ref": "#/components/schemas/ActivityVersionBump"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ActivityVersionDiffSummary"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ActivityVersionIdentity"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "compatibility",
+          "requiredBump",
+          "behaviorChanged",
+          "provider",
+          "summary",
+          "changes",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionDiffSummary": {
+        "properties": {
+          "additive": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "breaking": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "nonBehavioral": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "warnings": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "breaking",
+          "additive",
+          "nonBehavioral",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionIdentity": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "templateHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionProviderDiff": {
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "fromKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fromSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "fromKey",
+          "fromSchemaVersion",
+          "toKey",
+          "toSchemaVersion",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "ArgumentState": {
+        "properties": {
+          "autoEvaluate": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "conversion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthoredValueConversionRequest"
+              }
+            ]
+          },
+          "evaluatorType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isSensitive": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "storageDriverType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/ArgumentValue"
+          }
+        },
+        "required": [
+          "referenceKey",
+          "value",
+          "autoEvaluate",
+          "evaluatorType",
+          "storageDriverType",
+          "isSensitive"
+        ],
+        "type": "object"
+      },
+      "ArgumentValue": {
+        "properties": {
+          "expressionType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "value": {}
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "ArgumentView": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "typeName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "typeName"
+        ],
+        "type": "object"
+      },
+      "AuthoredValueConversionLimits": {
+        "properties": {
+          "maxCollectionItems": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "maxDepth": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "maxPayloadBytes": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AuthoredValueConversionMode": {
+        "default": 0,
+        "type": "integer"
+      },
+      "AuthoredValueConversionProfile": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "AuthoredValueConversionRequest": {
+        "properties": {
+          "limits": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthoredValueConversionLimits"
+              }
+            ]
+          },
+          "mode": {
+            "$ref": "#/components/schemas/AuthoredValueConversionMode"
+          },
+          "options": {},
+          "profile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AuthoredValueConversionProfile"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AuthoredWorkflowIntrinsic": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AuthoredWorkflowIntrinsicKind"
+          },
+          "valueType": {
+            "$ref": "#/components/schemas/TypeReference"
+          },
+          "variable": {
+            "$ref": "#/components/schemas/VariableReference"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "AuthoredWorkflowIntrinsicKind": {
+        "type": "integer"
+      },
+      "CollectionKind": {
+        "default": "Single",
+        "enum": [
+          "Single",
+          "Array",
+          "List",
+          "HashSet",
+          "Dictionary"
+        ]
+      },
+      "ConstructActivity": {
+        "properties": {
+          "activityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "activityId"
+        ],
+        "type": "object"
+      },
+      "ConstructableActivityView": {
+        "properties": {
+          "activityVersionId": {
+            "type": "string"
+          },
+          "consumerKey": {
+            "type": "string"
+          },
+          "consumerSchemaVersion": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "activityVersionId",
+          "definitionId",
+          "version",
+          "providerKey",
+          "providerSchemaVersion",
+          "consumerKey",
+          "consumerSchemaVersion"
+        ],
+        "type": "object"
+      },
+      "ConstructedActivityView": {
+        "properties": {
+          "activityVersionId": {
+            "type": "string"
+          },
+          "descriptorPayload": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "descriptorType": {
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ArgumentView"
+            },
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/ArgumentView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "activityVersionId",
+          "descriptorType",
+          "descriptorPayload",
+          "inputs",
+          "outputs"
+        ],
+        "type": "object"
+      },
+      "DesignMetadataRecord": {
+        "properties": {
+          "additionalProperties": {},
+          "height": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "width": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ]
+          },
+          "x": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "y": {
+            "format": "double",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "nodeId",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "GetPublicationSlot": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "slotName"
+        ],
+        "type": "object"
+      },
+      "GetWorkflowPublicationPolicy": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "IncidentStrategiesResponse": {
+        "properties": {
+          "defaultStrategy": {
+            "$ref": "#/components/schemas/IncidentStrategyReferenceView"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IncidentStrategyDescriptorView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "defaultStrategy"
+        ],
+        "type": "object"
+      },
+      "IncidentStrategyDescriptorView": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alias",
+          "version",
+          "displayName",
+          "description"
+        ],
+        "type": "object"
+      },
+      "IncidentStrategyReference": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alias",
+          "version"
+        ],
+        "type": "object"
+      },
+      "IncidentStrategyReferenceView": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alias",
+          "version"
+        ],
+        "type": "object"
+      },
+      "InputDefinition": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultSyntax": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultValue": {},
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isBrowsable": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isRequired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "isSerializable": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "default": 0,
+            "format": "float",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "propertyInfo": {},
+          "referenceKey": {
+            "type": "string"
+          },
+          "storageDriverType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/TypeReference"
+          },
+          "uiHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uiSpecifications": {}
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "storageDriverType",
+          "displayName",
+          "category",
+          "isNullable"
+        ],
+        "type": "object"
+      },
+      "JsonElement": {},
+      "ListConstructableActivities": {
+        "properties": {
+          "consumerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListPublicationSlots": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "OutputDefinition": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isBrowsable": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isRequired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "isSerializable": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "default": 0,
+            "format": "float",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "propertyInfo": {},
+          "referenceKey": {
+            "type": "string"
+          },
+          "sourceRepresentation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValueRepresentation"
+              }
+            ]
+          },
+          "storageDriverType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/TypeReference"
+          },
+          "uiHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uiSpecifications": {}
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "storageDriverType",
+          "displayName",
+          "category",
+          "isNullable"
+        ],
+        "type": "object"
+      },
+      "PreflightActivityDraftPublication": {
+        "properties": {
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedDraftRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedDraftRevision",
+          "expectedDefinitionHeadVersionId"
+        ],
+        "type": "object"
+      },
+      "PreflightWorkflowPublication": {
+        "properties": {
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationActionView"
+              }
+            ]
+          },
+          "expectedPublicationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "slotName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "PreflightWorkflowPublicationSnapshot": {
+        "properties": {
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationActionView"
+              }
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "expectedPublicationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/DesignMetadataRecord"
+            },
+            "type": "array"
+          },
+          "slotName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkflowDefinitionState"
+          }
+        },
+        "required": [
+          "definitionId",
+          "state",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "PublicationActionView": {
+        "type": "integer"
+      },
+      "PublicationFailure": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "PublicationPolicyDefaultActionView": {
+        "type": "integer"
+      },
+      "PublicationPolicySourceView": {
+        "type": "integer"
+      },
+      "PublicationPolicyView": {
+        "properties": {
+          "defaultAction": {
+            "$ref": "#/components/schemas/PublicationPolicyDefaultActionView"
+          },
+          "defaultSlotName": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/PublicationPolicySourceView"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "defaultAction",
+          "defaultSlotName",
+          "source",
+          "revision",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "PublicationPreflightView": {
+        "properties": {
+          "canActivate": {
+            "type": "boolean"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTriggerConflictView"
+            },
+            "type": "array"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "policySource": {
+            "$ref": "#/components/schemas/PublicationPolicySourceView"
+          },
+          "resolvedAction": {
+            "$ref": "#/components/schemas/PublicationActionView"
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "triggers": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTriggerChangeView"
+            },
+            "type": "array"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "slotName",
+          "resolvedAction",
+          "policySource",
+          "policyRevision",
+          "canActivate",
+          "triggers",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "PublicationSlotListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationSlotView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PublicationSlotView": {
+        "properties": {
+          "activePublicationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "publication": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationView"
+              }
+            ]
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "slotId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationStatusView"
+              }
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slotId",
+          "definitionId",
+          "slotName",
+          "activePublicationId",
+          "revision",
+          "updatedAt",
+          "status",
+          "publication"
+        ],
+        "type": "object"
+      },
+      "PublicationSnapshotPreflightView": {
+        "properties": {
+          "canActivate": {
+            "type": "boolean"
+          },
+          "candidateHash": {
+            "type": "string"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTriggerClaimView"
+            },
+            "type": "array"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTriggerConflictView"
+            },
+            "type": "array"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "policyRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "policySource": {
+            "$ref": "#/components/schemas/PublicationPolicySourceView"
+          },
+          "preflightToken": {
+            "type": "string"
+          },
+          "resolvedAction": {
+            "$ref": "#/components/schemas/PublicationActionView"
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "triggers": {
+            "items": {
+              "$ref": "#/components/schemas/PublicationTriggerChangeView"
+            },
+            "type": "array"
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "preflightToken",
+          "candidateHash",
+          "definitionId",
+          "versionId",
+          "slotName",
+          "resolvedAction",
+          "policySource",
+          "policyRevision",
+          "canActivate",
+          "claims",
+          "triggers",
+          "conflicts"
+        ],
+        "type": "object"
+      },
+      "PublicationStatusView": {
+        "type": "integer"
+      },
+      "PublicationTriggerCardinalityView": {
+        "type": "integer"
+      },
+      "PublicationTriggerChangeKindView": {
+        "type": "integer"
+      },
+      "PublicationTriggerChangeView": {
+        "properties": {
+          "cardinality": {
+            "$ref": "#/components/schemas/PublicationTriggerCardinalityView"
+          },
+          "change": {
+            "$ref": "#/components/schemas/PublicationTriggerChangeKindView"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "change",
+          "key",
+          "cardinality"
+        ],
+        "type": "object"
+      },
+      "PublicationTriggerClaimView": {
+        "properties": {
+          "cardinality": {
+            "$ref": "#/components/schemas/PublicationTriggerCardinalityView"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "cardinality"
+        ],
+        "type": "object"
+      },
+      "PublicationTriggerConflictView": {
+        "properties": {
+          "cardinality": {
+            "$ref": "#/components/schemas/PublicationTriggerCardinalityView"
+          },
+          "key": {
+            "type": "string"
+          },
+          "publicationId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "cardinality",
+          "publicationId",
+          "slotName"
+        ],
+        "type": "object"
+      },
+      "PublicationView": {
+        "properties": {
+          "activatedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "artifactId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "failure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationFailure"
+              }
+            ]
+          },
+          "publicationId": {
+            "type": "string"
+          },
+          "retiredAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "sourceReferenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/PublicationStatusView"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicationId",
+          "definitionId",
+          "versionId",
+          "artifactId",
+          "slotName",
+          "sourceReferenceId",
+          "status",
+          "createdAt",
+          "activatedAt",
+          "retiredAt",
+          "failure"
+        ],
+        "type": "object"
+      },
+      "PublishActivityDraft": {
+        "properties": {
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedDraftRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "reviewToken": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedDraftRevision",
+          "expectedDefinitionHeadVersionId",
+          "version",
+          "reviewToken",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "PublishWorkflowRequest": {
+        "properties": {
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicationActionView"
+              }
+            ]
+          },
+          "expectedPublicationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "preflightToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "slotName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "PublishedWorkflowView": {
+        "properties": {
+          "activatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "artifactHash": {
+            "type": "string"
+          },
+          "artifactId": {
+            "type": "string"
+          },
+          "artifactVersion": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "definitionVersionId": {
+            "type": "string"
+          },
+          "nodeCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "publicationId": {
+            "type": "string"
+          },
+          "retiredAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rootActivityId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          },
+          "sourceReferenceId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PublicationStatusView"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicationId",
+          "definitionId",
+          "versionId",
+          "definitionVersionId",
+          "artifactId",
+          "slotName",
+          "status",
+          "sourceReferenceId",
+          "createdAt",
+          "activatedAt",
+          "retiredAt",
+          "artifactVersion",
+          "artifactHash",
+          "rootActivityId",
+          "nodeCount"
+        ],
+        "type": "object"
+      },
+      "RestorePublicationSlotRequest": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "slotName"
+        ],
+        "type": "object"
+      },
+      "RunRuntimeRequirementPreflight": {
+        "properties": {
+          "artifactIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "artifactIds"
+        ],
+        "type": "object"
+      },
+      "RuntimeRequirementPreflightItemView": {
+        "properties": {
+          "affectedArtifactCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "consumerKey": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumerKey",
+          "schemaVersion",
+          "status",
+          "affectedArtifactCount"
+        ],
+        "type": "object"
+      },
+      "RuntimeRequirementPreflightView": {
+        "properties": {
+          "checkedArtifactCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "isReady": {
+            "type": "boolean"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/RuntimeRequirementPreflightItemView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checkedArtifactCount",
+          "isReady",
+          "requirements",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "SetWorkflowPublicationPolicy": {
+        "properties": {
+          "defaultAction": {
+            "$ref": "#/components/schemas/PublicationPolicyDefaultActionView"
+          },
+          "defaultSlotName": {
+            "default": "default",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "default": 0,
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "definitionId",
+          "defaultAction"
+        ],
+        "type": "object"
+      },
+      "StartActivityDraftTestRun": {
+        "properties": {
+          "correlationId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ActivityDraftTestRunInput"
+            },
+            "type": [
+              "null",
+              "object"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "StartWorkflowDraftTestRun": {
+        "properties": {
+          "acknowledgeUnavailableExpressionValidation": {
+            "default": false,
+            "type": "boolean"
+          },
+          "activityPresentation": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityPresentationRecord"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "artifactVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "snapshotId": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WorkflowDefinitionState"
+          }
+        },
+        "required": [
+          "definitionId",
+          "snapshotId",
+          "state"
+        ],
+        "type": "object"
+      },
+      "StartWorkflowTestRun": {
+        "properties": {
+          "acknowledgeUnavailableExpressionValidation": {
+            "default": false,
+            "type": "boolean"
+          },
+          "inputs": {
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "TypeReference": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "collectionKind": {
+            "$ref": "#/components/schemas/CollectionKind"
+          }
+        },
+        "required": [
+          "alias"
+        ],
+        "type": "object"
+      },
+      "UnpublishPublicationSlotRequest": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "slotName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "slotName"
+        ],
+        "type": "object"
+      },
+      "ValueConversionProfileReferenceView": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ValueConversionProfileView": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/ValueConversionProfileReferenceView"
+          },
+          "supportedSourceRepresentations": {
+            "items": {
+              "$ref": "#/components/schemas/ValueRepresentation"
+            },
+            "type": "array"
+          },
+          "supportedTargetAliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile",
+          "supportedSourceRepresentations",
+          "supportedTargetAliases"
+        ],
+        "type": "object"
+      },
+      "ValueConversionProfilesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ValueConversionProfileView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ValueRepresentation": {
+        "enum": [
+          "TypedValue",
+          "StructuredValue",
+          "TextValue",
+          "FormattedContent",
+          "BinaryContent",
+          "DurableReference",
+          "TransientResource"
+        ]
+      },
+      "VariableDefinition": {
+        "properties": {
+          "default": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ArgumentValue"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "storageDriverType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/TypeReference"
+          }
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "storageDriverType",
+          "default"
+        ],
+        "type": "object"
+      },
+      "VariableReference": {
+        "properties": {
+          "declaringScopeId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isWorkflowScope": {
+            "type": "boolean"
+          },
+          "referenceKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "referenceKey"
+        ],
+        "type": "object"
+      },
+      "WorkflowCheckpointCadenceOptions": {
+        "properties": {
+          "maxSegmentCheckpoints": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "mode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "WorkflowDefinitionState": {
+        "properties": {
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/InputDefinition"
+            },
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/OutputDefinition"
+            },
+            "type": "array"
+          },
+          "rootActivity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityNode"
+              }
+            ]
+          },
+          "strategyOptions": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowStrategyOptions"
+              }
+            ]
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/VariableDefinition"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "variables",
+          "rootActivity",
+          "inputs",
+          "outputs",
+          "strategyOptions"
+        ],
+        "type": "object"
+      },
+      "WorkflowStrategyOptions": {
+        "properties": {
+          "activationStrategyType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "checkpointCadence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkflowCheckpointCadenceOptions"
+              }
+            ]
+          },
+          "commitStrategyType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "incidentStrategy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IncidentStrategyReference"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "WorkflowTestRunView": {
+        "properties": {
+          "artifactId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "commandDispatchStatus": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "definitionVersionId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "testRunId": {
+            "type": "string"
+          },
+          "workflowExecutionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Elsa.Workflows.Publishing.BeforeCapture | v1",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.1",
+  "paths": {
+    "/design/activities/drafts/{draftId}/publication-preflight": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsPreflightActivityDraftPublicationEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightActivityDraftPublication"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPublicationPreflightView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/publish": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsPublishActivityDraftEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPublicationReceiptView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/publications/{idempotencyKey}": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsGetActivityPublicationReceiptEndpoint",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityPublicationReceiptView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activities": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsList",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListConstructableActivities"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListConstructableActivities"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConstructableActivityView"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activities/{activityId}/construct": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsConstruct",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstructActivity"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstructActivity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstructedActivityView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activity-drafts/{draftId}/test-runs": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsActivityDraftTestRunEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartActivityDraftTestRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunByIdempotencyKeyEndpoint",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activity-test-runs/{testRunId}": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunEndpoint",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/activity-test-runs/{testRunId}/cancel": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsCancelActivityDraftTestRunEndpoint",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDraftTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/incident-strategies": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsListIncidentStrategies",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentStrategiesResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/preflight": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsRuntimeRequirementPreflightEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRuntimeRequirementPreflight"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeRequirementPreflightView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/value-conversion/profiles": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsListValueConversionProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValueConversionProfilesResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/drafts/test-runs": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsTestRunsStartDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkflowDraftTestRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/preflight": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationSnapshotEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightWorkflowPublicationSnapshot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSnapshotPreflightView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{definitionId}/policy": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowPublicationPolicyEndpoint",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetWorkflowPublicationPolicy"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetWorkflowPublicationPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPolicyView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      },
+      "put": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsSetWorkflowPublicationPolicyEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWorkflowPublicationPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPolicyView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{definitionId}/slots": {
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsListPublicationSlotsEndpoint",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListPublicationSlots"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListPublicationSlots"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSlotListResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{definitionId}/slots/{slotName}": {
+      "delete": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsUnpublishPublicationSlotEndpoint",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpublishPublicationSlotRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpublishPublicationSlotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSlotView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      },
+      "get": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsGetPublicationSlotEndpoint",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetPublicationSlot"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetPublicationSlot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSlotView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{definitionId}/slots/{slotName}/restore": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsRestorePublicationSlotEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestorePublicationSlotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationSlotView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{versionId}/preflight": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightWorkflowPublication"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPreflightView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{versionId}/publish": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsPublishWorkflowEndpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedWorkflowView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    },
+    "/publishing/workflows/{versionId}/test-runs": {
+      "post": {
+        "operationId": "ElsaWorkflowsPublishingApiEndpointsTestRunsStart",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkflowTestRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTestRunView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Workflows.Publishing.BeforeCapture"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Elsa.Workflows.Publishing.BeforeCapture"
+    }
+  ]
+}
