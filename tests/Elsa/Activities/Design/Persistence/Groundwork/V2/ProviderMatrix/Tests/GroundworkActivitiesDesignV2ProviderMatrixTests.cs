@@ -206,6 +206,17 @@ public sealed class GroundworkActivitiesDesignV2ProviderMatrixTests
         Assert.Equal(2, accepted.Length);
         Assert.Equal(ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1, accepted[0].Paging.Limit);
         Assert.Equal(100, accepted[1].Paging.Limit);
+
+        var auditRecords = persistence.AuditSink.Snapshot();
+        Assert.Equal(3, auditRecords.Count(record =>
+            record.EventKind == GroundworkPrivilegedQueryAuditEventKind.Acquisition));
+        Assert.Equal(3, auditRecords.Count(record =>
+            record.EventKind == GroundworkPrivilegedQueryAuditEventKind.Outcome));
+        Assert.All(auditRecords, record =>
+        {
+            Assert.Equal(StorageAccessKind.PrivilegedAcrossScopes, record.AccessKind);
+            Assert.NotEqual(Guid.Empty, record.AcquisitionId);
+        });
     }
 
     private static string Content(string tenantId, string activityTypeKey) =>
@@ -225,15 +236,22 @@ public sealed class GroundworkActivitiesDesignV2ProviderMatrixTests
             .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
         private readonly List<QueryRequest> queryRequests = [];
         private SessionSource sessions = null!;
+        private GroundworkPrivilegedQueryAuditSink auditSink = null!;
 
         public MutableAccess Access { get; } = new(PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)));
         public GroundworkV2ActivityDesignStore Store { get; private set; } = null!;
+        public GroundworkPrivilegedQueryAuditSink AuditSink => auditSink;
         public IReadOnlyList<QueryRequest> QueryRequests => queryRequests;
 
         private ActivityDesignPersistence Initialize()
         {
             sessions = new SessionSource(connection, queryRequests);
-            Store = new GroundworkV2ActivityDesignStore(sessions, Access);
+            auditSink = new GroundworkPrivilegedQueryAuditSink();
+            var auditExecutor = new GroundworkPrivilegedQueryAuditExecutor(sessions, Access, auditSink);
+            Store = new GroundworkV2ActivityDesignStore(
+                sessions,
+                Access,
+                privilegedQueryAuditExecutor: auditExecutor);
             return this;
         }
 

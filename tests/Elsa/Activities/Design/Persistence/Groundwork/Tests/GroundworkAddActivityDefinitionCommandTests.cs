@@ -27,6 +27,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
             new DesignOperationKey("tenant-mismatch"), Definition("def-1"), Version("def-1", "ver-1", tenantId: "tenant-b")));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -37,6 +38,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => command.Execute(
             new DesignOperationKey("tenant-mismatch"), Version("def-1", "ver-1", tenantId: "tenant-b")));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -47,8 +49,12 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
             new DesignOperationKey("create-1"), Definition("def-1"), Version("def-1", "ver-1"));
         Assert.Equal("def-1", result.DefinitionId);
         Assert.Equal("ver-1", result.VersionId);
+        Assert.Equal("1.0.0", result.Version);
         Assert.Equal("Acme.Send", (await new GroundworkActivityDefinitionStore(harness.Store).GetAsync("def-1")).ActivityTypeKey);
-        Assert.Equal("def-1", (await CreateVersionStore(harness).GetAsync("ver-1")).DefinitionId);
+        var persistedVersion = await CreateVersionStore(harness).GetAsync("ver-1");
+        Assert.Equal("def-1", persistedVersion.DefinitionId);
+        Assert.Equal("Acme.SendActivity", persistedVersion.DescriptorType);
+        Assert.Equal(FixedNow, persistedVersion.LastModifiedAt);
     }
 
     [Fact]
@@ -59,8 +65,11 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         var first = await command.Execute(new DesignOperationKey("create-replay"), Definition("def-1"), Version("def-1", "ver-1"));
         var replay = await command.Execute(new DesignOperationKey("create-replay"), Definition("def-2"), Version("def-2", "ver-2"));
         Assert.Equal(first, replay);
+        Assert.Equal("def-1", replay.DefinitionId);
+        Assert.Equal("ver-1", replay.VersionId);
         Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
         Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -72,6 +81,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAsync<GroundworkDesignOperationConflictException>(() => command.Execute(
             new DesignOperationKey("create-conflict"), Definition("def-2", category: "Changed"), Version("def-2", "ver-2")));
         Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -82,6 +93,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await command.Execute(new DesignOperationKey("create-first"), Definition("def-1"), Version("def-1", "ver-1"));
         await Assert.ThrowsAsync<ArgumentException>(() => command.Execute(
             new DesignOperationKey("create-collision"), Definition("def-2"), Version("def-2", "ver-2")));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
     [Fact]
@@ -92,6 +105,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAnyAsync<Exception>(() => command.Execute(
             new DesignOperationKey("create-rejected"), Definition("def-1"), Version("def-1", "ver-1"), new CancellationToken(true)));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -100,7 +115,9 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         using var harness = ActivityDesignV2TestHarness.Create();
         var result = await CreateVersionCommand(harness).Execute(new DesignOperationKey("version-1"), Version("def-1", "ver-1"));
         Assert.Equal("ver-1", result.VersionId);
+        Assert.Equal("def-1", result.DefinitionId);
         Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -111,6 +128,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         var first = await command.Execute(new DesignOperationKey("version-replay"), Version("def-1", "ver-1"));
         var replay = await command.Execute(new DesignOperationKey("version-replay"), Version("def-1", "ver-2"));
         Assert.Equal(first, replay);
+        Assert.Equal("ver-1", replay.VersionId);
+        Assert.Equal("def-1", replay.DefinitionId);
         Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
@@ -122,6 +141,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await command.Execute(new DesignOperationKey("version-conflict"), Version("def-1", "ver-1"));
         await Assert.ThrowsAsync<GroundworkDesignOperationConflictException>(() => command.Execute(
             new DesignOperationKey("version-conflict"), Version("def-1", "ver-2", version: "2.0.0")));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
     [Fact]
@@ -132,6 +152,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await command.Execute(new DesignOperationKey("version-first"), Version("def-1", "ver-1"));
         await Assert.ThrowsAsync<ActivityDefinitionVersionConflictException>(() => command.Execute(
             new DesignOperationKey("version-collision"), Version("def-1", "ver-2")));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
     [Fact]
@@ -141,6 +162,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAnyAsync<Exception>(() => CreateVersionCommand(harness).Execute(
             new DesignOperationKey("version-rejected"), Version("def-1", "ver-1"), new CancellationToken(true)));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -152,6 +174,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateDefinitionCommand(harness).Execute(
             new DesignOperationKey("create-cancelled"), Definition("def-1"), Version("def-1", "ver-1"), cancellation.Token));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -163,6 +187,7 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateVersionCommand(harness).Execute(
             new DesignOperationKey("version-cancelled"), Version("def-1", "ver-1"), cancellation.Token));
         Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+        Assert.Empty(harness.Rows(ActivitiesDesignStorageManifest.DesignOperationDocumentKind));
     }
 
     [Fact]
@@ -173,6 +198,10 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         var first = await command.Execute(new DesignOperationKey("create-lost-acknowledgement"), Definition("def-1"), Version("def-1", "ver-1"));
         var replay = await command.Execute(new DesignOperationKey("create-lost-acknowledgement"), Definition("def-2"), Version("def-2", "ver-2"));
         Assert.Equal(first, replay);
+        Assert.Equal("def-1", replay.DefinitionId);
+        Assert.Equal("ver-1", replay.VersionId);
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
     [Fact]
@@ -183,6 +212,8 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         var first = await command.Execute(new DesignOperationKey("version-lost-acknowledgement"), Version("def-1", "ver-1"));
         var replay = await command.Execute(new DesignOperationKey("version-lost-acknowledgement"), Version("def-1", "ver-2"));
         Assert.Equal(first, replay);
+        Assert.Equal("ver-1", replay.VersionId);
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
     }
 
     [Fact]
@@ -192,8 +223,12 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         var definition = Definition("def-1");
         var version = Version("def-1", "ver-1");
         await CreateDefinitionCommand(harness).Execute(new DesignOperationKey("create-timestamps"), definition, version);
-        Assert.Equal(FixedNow, (await new GroundworkActivityDefinitionStore(harness.Store).GetAsync("def-1")).CreatedAt);
-        Assert.Equal(FixedNow, (await CreateVersionStore(harness).GetAsync("ver-1")).CreatedAt);
+        var createdDefinition = await new GroundworkActivityDefinitionStore(harness.Store).GetAsync("def-1");
+        var createdVersion = await CreateVersionStore(harness).GetAsync("ver-1");
+        Assert.Equal(FixedNow, createdDefinition.CreatedAt);
+        Assert.Equal(FixedNow, createdDefinition.LastModifiedAt);
+        Assert.Equal(FixedNow, createdVersion.CreatedAt);
+        Assert.Equal(FixedNow, createdVersion.LastModifiedAt);
     }
 
     [Fact]
@@ -202,7 +237,9 @@ public sealed class GroundworkAddActivityDefinitionCommandTests
         using var harness = ActivityDesignV2TestHarness.Create();
         var version = Version("def-1", "ver-1");
         await CreateVersionCommand(harness).Execute(new DesignOperationKey("version-timestamps"), version);
-        Assert.Equal(FixedNow, (await CreateVersionStore(harness).GetAsync("ver-1")).CreatedAt);
+        var persisted = await CreateVersionStore(harness).GetAsync("ver-1");
+        Assert.Equal(FixedNow, persisted.CreatedAt);
+        Assert.Equal(FixedNow, persisted.LastModifiedAt);
     }
 
     private static GroundworkAddActivityDefinitionCommand CreateDefinitionCommand(ActivityDesignV2TestHarness harness) =>

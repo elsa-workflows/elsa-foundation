@@ -28,7 +28,9 @@ public static class GroundworkActivitiesDesignStoreRegistration
         services.TryAddScoped(provider => new GroundworkV2ActivityDesignStore(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            targetName,
+            timeProvider: null,
+            privilegedQueryAuditExecutor: provider.GetRequiredService<GroundworkPrivilegedQueryAuditExecutor>()));
         services.TryAddScoped<IDesignAtomicWriter, GroundworkDesignAtomicWrite>();
 
         services.RemoveAll<IActivityDefinitionStore>();

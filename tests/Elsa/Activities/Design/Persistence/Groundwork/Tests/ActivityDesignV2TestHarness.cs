@@ -20,17 +20,20 @@ internal sealed class ActivityDesignV2TestHarness : IDisposable
         IStorageProviderConnection connection,
         MutableActivityDesignAccess access,
         GroundworkV2ActivityDesignStore store,
+        GroundworkPrivilegedQueryAuditSink auditSink,
         List<QueryRequest> queryRequests)
     {
         this.databasePath = databasePath;
         this.connection = connection;
         Access = access;
         Store = store;
+        AuditSink = auditSink;
         QueryRequests = queryRequests;
     }
 
     public MutableActivityDesignAccess Access { get; }
     public GroundworkV2ActivityDesignStore Store { get; }
+    public GroundworkPrivilegedQueryAuditSink AuditSink { get; }
     public List<QueryRequest> QueryRequests { get; }
     public IStorageProviderConnection Connection => connection;
 
@@ -47,7 +50,13 @@ internal sealed class ActivityDesignV2TestHarness : IDisposable
             PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
         var recordedQueries = queryRequests ?? [];
         var sessions = new DirectActivityDesignSessionSource(connection, units, recordedQueries);
-        return new(databasePath, connection, access, new GroundworkV2ActivityDesignStore(sessions, access), recordedQueries);
+        var auditSink = new GroundworkPrivilegedQueryAuditSink();
+        var auditExecutor = new GroundworkPrivilegedQueryAuditExecutor(sessions, access, auditSink);
+        var store = new GroundworkV2ActivityDesignStore(
+            sessions,
+            access,
+            privilegedQueryAuditExecutor: auditExecutor);
+        return new(databasePath, connection, access, store, auditSink, recordedQueries);
     }
 
     public async Task SaveAsync<TEntity>(

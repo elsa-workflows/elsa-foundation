@@ -152,6 +152,80 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
+    public void Definition_named_routes_have_one_matching_deterministic_index_each()
+    {
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+
+        AssertIndex(unit, "activity_definition_by_type_key",
+            ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(unit, "activity_definition_by_category",
+            ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(unit, "activity_definition_by_display_name",
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(unit, "activity_definition_by_description",
+            ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                ActivitiesDesignStorageManifest.EntityIdField],
+            ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder.Select(order => order.Field));
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField,
+                ActivitiesDesignStorageManifest.EntityIdField],
+            ActivitiesDesignStorageManifest.ActivityDefinitionCategoryOrder.Select(order => order.Field));
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField,
+                ActivitiesDesignStorageManifest.EntityIdField],
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder.Select(order => order.Field));
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField,
+                ActivitiesDesignStorageManifest.EntityIdField],
+            ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionOrder.Select(order => order.Field));
+    }
+
+    [Fact]
+    public void Management_projection_units_declare_current_page_and_retention_shapes()
+    {
+        var units = ActivitiesDesignStorageManifest.CreateUnits()
+            .Where(unit => unit.Id.Value is
+                ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind or
+                ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind or
+                ActivitiesDesignStorageManifest.ActivityVersionManagementProjectionDocumentKind)
+            .ToArray();
+
+        Assert.Equal(3, units.Length);
+        foreach (var unit in units)
+        {
+            Assert.Contains(unit.Indexes, index => index.Name == ActivitiesDesignStorageManifest.ManagementExpiredIndex);
+            Assert.Contains(unit.Indexes, index => index.Name.EndsWith("_identity_asc", StringComparison.Ordinal));
+            Assert.Contains(unit.Columns, column => column.Name == ActivitiesDesignStorageManifest.ManagementValidFromField);
+            Assert.Contains(unit.Columns, column => column.Name == ActivitiesDesignStorageManifest.ManagementValidToField);
+            Assert.Contains(unit.Columns, column => column.Name == ActivitiesDesignStorageManifest.ManagementVisibilityField);
+            Assert.Contains(unit.Columns, column => column.Name == ActivitiesDesignStorageManifest.ManagementSearchField);
+        }
+    }
+
+    [Fact]
+    public void Projection_widths_match_the_declared_query_contract()
+    {
+        var definition = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        var search = definition.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ManagementSearchField);
+        var typeKey = definition.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField);
+        var id = definition.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.IdField);
+
+        Assert.Equal(ActivitiesDesignStorageManifest.ManagementSearchMaximumLength, search.MaxLength);
+        Assert.Equal(256, typeKey.MaxLength);
+        Assert.Equal(ActivitiesDesignStorageManifest.MaximumIdLength, id.MaxLength);
+        Assert.True(search.MaxLength > typeKey.MaxLength);
+        Assert.True(id.MaxLength > typeKey.MaxLength);
+    }
+
+    [Fact]
     public void No_activity_unit_declares_a_by_collection_enumeration_route()
     {
         foreach (var unit in ActivitiesDesignStorageManifest.CreateUnits())

@@ -28,6 +28,9 @@ public sealed class GroundworkActivityManagementMutationProjectionTests
 
         var current = await harness.Reader.ReadDraftsAsync("definition-1", new(null, null, 0, 20));
         var projection = Assert.Single(current.Items);
+        Assert.Equal("draft-1", projection.DraftId);
+        Assert.Equal("definition-1", projection.DefinitionId);
+        Assert.Equal(ActivityDefinitionDraftStatus.Active, projection.Status);
         Assert.Equal(2, projection.Revision);
         Assert.Equal("Ready for review", projection.PresentationLabel);
         Assert.Equal(2, current.Snapshot.Sequence);
@@ -64,6 +67,8 @@ public sealed class GroundworkActivityManagementMutationProjectionTests
 
         var current = await harness.Reader.ReadDraftsAsync("definition-1", new(null, null, 0, 20));
         Assert.Equal("Initial", Assert.Single(current.Items).PresentationLabel);
+        Assert.Equal(1, current.TotalCount);
+        Assert.Equal(1, Assert.Single(current.Items).Revision);
         Assert.Equal(1, current.Snapshot.Sequence);
     }
 
@@ -86,6 +91,7 @@ public sealed class GroundworkActivityManagementMutationProjectionTests
         var currentDrafts = await harness.Reader.ReadDraftsAsync("definition-1", new(null, null, 0, 20));
         var definition = Assert.Single((await harness.Reader.ReadDefinitionsAsync(new(null, null, 0, 20))).Items);
         Assert.Equal(2, currentDrafts.Items.Count);
+        Assert.Equal(2, currentDrafts.TotalCount);
         Assert.Equal(1, Assert.Single(currentDrafts.Items, x => x.DraftId == "draft-1").Revision);
         Assert.Equal("Recovered local work", Assert.Single(currentDrafts.Items, x => x.DraftId == "draft-copy").PresentationLabel);
         Assert.Equal(2, definition.DraftCount);

@@ -18,17 +18,21 @@ internal sealed class TemporalActivityDesignV2TestHarness : IDisposable
         string databasePath,
         IStorageProviderConnection connection,
         TemporalActivityDesignAccess access,
-        GroundworkV2ActivityDesignStore store)
+        GroundworkV2ActivityDesignStore store,
+        GroundworkPrivilegedQueryAuditSink auditSink)
     {
         this.databasePath = databasePath;
         this.connection = connection;
         Access = access;
         Store = store;
+        AuditSink = auditSink;
     }
 
     public TemporalActivityDesignAccess Access { get; }
 
     public GroundworkV2ActivityDesignStore Store { get; }
+
+    public GroundworkPrivilegedQueryAuditSink AuditSink { get; }
 
     public GroundworkActivityDefinitionManagementProjectionStore Reader =>
         new(Store, Store, Access);
@@ -47,8 +51,13 @@ internal sealed class TemporalActivityDesignV2TestHarness : IDisposable
         var access = new TemporalActivityDesignAccess(
             PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
         var sessions = new TemporalActivityDesignSessionSource(connection, units);
-        var store = new GroundworkV2ActivityDesignStore(sessions, access);
-        var harness = new TemporalActivityDesignV2TestHarness(databasePath, connection, access, store);
+        var auditSink = new GroundworkPrivilegedQueryAuditSink();
+        var auditExecutor = new GroundworkPrivilegedQueryAuditExecutor(sessions, access, auditSink);
+        var store = new GroundworkV2ActivityDesignStore(
+            sessions,
+            access,
+            privilegedQueryAuditExecutor: auditExecutor);
+        var harness = new TemporalActivityDesignV2TestHarness(databasePath, connection, access, store, auditSink);
         harness.Writer = new GroundworkActivityManagementProjectionWriter(
             store,
             new ImmediateDistributedLockProvider(),

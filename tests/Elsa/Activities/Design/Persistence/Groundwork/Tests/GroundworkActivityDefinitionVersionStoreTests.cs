@@ -107,6 +107,35 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task ListByDefinitionIds_preserves_input_scope_and_deterministic_version_order()
+    {
+        using var harness = await SeededAsync(
+            [Definition("def1"), Definition("def2")],
+            Version("v2", "def1", "2.0.0"),
+            Version("v1", "def1", "1.0.0"),
+            Version("v3", "def2", "3.0.0"));
+        var result = await VersionStore(harness).ListByDefinitionIdsAsync(["def2", "def1", "def1"]);
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal(["v1", "v2", "v3"], result.Select(version => version.Id));
+        Assert.Equal(["def1", "def1", "def2"], result.Select(version => version.DefinitionId));
+        Assert.All(result, version => Assert.Equal("Json", version.SourceKind));
+    }
+
+    [Fact]
+    public async Task FindByDefinitionAndSortKey_returns_null_for_a_different_definition()
+    {
+        var version = Version("v1", "def1");
+        using var harness = await SeededAsync([Definition("def1"), Definition("def2")], version);
+        var result = await VersionStore(harness).FindByDefinitionAndSortKeyAsync(
+            "def2", version.SemVerSortKey);
+
+        Assert.Null(result);
+        Assert.Single(harness.QueryRequests);
+        Assert.Equal(1, harness.QueryRequests[0].Paging.Limit);
+    }
+
+    [Fact]
     public async Task Long_valid_prerelease_sort_keys_round_trip_and_remain_findable()
     {
         var version = Version("v-long", "def1", $"1.2.3-{new string('a', 80)}");

@@ -10,6 +10,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using Elsa.Primitives.Exceptions;
 using System.Collections.Concurrent;
 using Xunit;
 
@@ -39,6 +40,10 @@ public sealed class GroundworkReusableActivityStoreTests
     public async Task CreateDefinition_Commits_Definition_Authoring_Draft_And_Layout()
     {
         using var harness = await SeededAsync();
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind));
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind));
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind));
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind));
         Assert.Equal("definition-1", (await harness.Stores.FindAsync("definition-1"))!.DefinitionId);
         Assert.Equal("draft-1", (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!.Id);
         Assert.Equal("node-1", Assert.Single((await harness.Stores.FindDraftLayoutAsync("draft-1"))!.Records).NodeId);
@@ -195,9 +200,17 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.False(applied.AlreadyApplied);
         Assert.True(replay.AlreadyApplied);
         Assert.Equal(candidate.ReservedDefinition.Id, applied.Receipt.DefinitionId);
+        Assert.Equal(candidate.ReservedDefinition.ActivityTypeKey, applied.Receipt.ActivityTypeKey);
         Assert.Equal(candidate.ReservedDraft.Id, applied.Receipt.DraftId);
         Assert.NotNull(await harness.Stores.FindReceiptAsync(request.ReceiptId));
         Assert.Equal(ActivityForkCandidateStatus.Applied, (await harness.Stores.FindCandidateAsync(candidate.Id))!.Status);
+        Assert.Equal(candidate.ReservedDefinition.ActivityTypeKey,
+            (await new GroundworkActivityDefinitionStore(harness.Persistence.Store)
+                .GetAsync(candidate.ReservedDefinition.Id)).ActivityTypeKey);
+        Assert.Equal(candidate.ReservedDraft.Id,
+            (await ((IActivityDefinitionDraftStore)harness.Stores)
+                .FindAsync(candidate.ReservedDraft.Id))!.Id);
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind));
     }
 
     [Fact]
@@ -215,6 +228,8 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Null(await harness.Stores.FindReceiptAsync(ActivityForkReceiptIdentity.Compute(null, "actor-a", "operation-1")));
         Assert.Equal(ActivityForkCandidateStatus.Reserved, (await harness.Stores.FindCandidateAsync(candidate.Id))!.Status);
         Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(candidate.ReservedDraft.Id));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => new GroundworkActivityDefinitionStore(harness.Persistence.Store)
+            .GetAsync(candidate.ReservedDefinition.Id));
     }
 
     [Fact]
@@ -279,6 +294,9 @@ public sealed class GroundworkReusableActivityStoreTests
         var receipt = await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId);
         Assert.NotNull(receipt);
         Assert.Contains(receipt!.CandidateId, new[] { first.Id, second.Id });
+        Assert.Equal(
+            receipt.CandidateId == first.Id ? first.ReservedDefinition.Id : second.ReservedDefinition.Id,
+            receipt.DefinitionId);
     }
 
     [Fact]
@@ -296,6 +314,7 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal(1, pruned);
         Assert.Null(await harness.Stores.FindCandidateAsync(candidate.Id));
         Assert.NotNull(await harness.Stores.FindReceiptAsync(request.ReceiptId));
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind));
     }
 
     [Fact]
@@ -404,7 +423,7 @@ public sealed class GroundworkReusableActivityStoreTests
             Id = "authoring-parent", DefinitionId = "definition-parent",
             ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"), HeadVersionId = "version-parent"
         });
-        await harness.SaveAsync(Publication("publication-parent", "version-parent", "definition-parent", "1.0.0"));
+        await harness.SaveAsync(Publication("publication-parent", "version-parent", "definition-parent", "1.0.0", 1));
         await harness.SaveAsync(Publication("publication-child", "version-child", "definition-child", "2.0.0"));
         await harness.SaveAsync(new ActivityDefinitionVersionLayout
         {
@@ -425,9 +444,25 @@ public sealed class GroundworkReusableActivityStoreTests
             null, null, 0, 10));
 
         Assert.Equal("version-parent", publication!.DefinitionVersionId);
+        Assert.Equal(1, publication.DirectDependencyCount);
+        Assert.Equal(2, publication.ClosedTemplateCount);
+        Assert.Equal("runtime.graph", Assert.Single(publication.RuntimeRequirements).ConsumerKey);
         Assert.Equal("node-parent", Assert.Single(layout!.Records).NodeId);
         Assert.Equal("edge-1", Assert.Single(edges).Id);
+        Assert.Equal(ActivityDependencyConsistencyKind.DerivedProjection, page.Consistency.Kind);
         Assert.Equal("version-child", Assert.Single(page.Items).Dependency.VersionId);
+
+        var retired = await harness.Stores.ExecuteAsync(new ChangeActivityVersionLifecycleRequest(
+            "version-parent", ActivityDefinitionVersionLifecycle.Active,
+            ActivityDefinitionVersionLifecycle.Retired, "No longer selected", "tenant-a"));
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Retired, retired.Lifecycle);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(
+            new ChangeActivityVersionLifecycleRequest(
+                "version-parent", ActivityDefinitionVersionLifecycle.Active,
+                ActivityDefinitionVersionLifecycle.Revoked, "Stale administrator view", "tenant-a")));
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Retired,
+            (await ((IActivityDefinitionVersionPublicationStore)harness.Stores)
+                .FindAsync("version-parent"))!.Lifecycle);
     }
 
     [Fact]
@@ -453,6 +488,8 @@ public sealed class GroundworkReusableActivityStoreTests
             null, first.Watermark, first.NextOffset!.Value, 1));
 
         Assert.Equal(17, first.Consistency.AsOfSequence);
+        Assert.Equal(asOf, first.Consistency.AsOf);
+        Assert.Equal("rebuild-1", first.Consistency.RebuildId);
         Assert.Equal(["ActivityDraft", "WorkflowVersion"], first.Items.Concat(second.Items).Select(x => x.Owner.Kind));
         await projection.RebuildAsync(new("rebuild-2", 18, asOf.AddMinutes(1), items));
         await Assert.ThrowsAsync<ActivityDependencyWatermarkExpiredException>(() => projection.ReadAsync(new(
@@ -498,6 +535,9 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Null(await new GroundworkActivityDefinitionStore(harness.Persistence.Store).FindAsync(
             new Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter { Id = "definition-1" }));
         Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"));
+        Assert.Null(await harness.Persistence.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, "authoring-1"));
+        Assert.Single(harness.Persistence.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind));
         Assert.NotNull(await harness.Persistence.Store.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, "draft-layout-1"));
     }

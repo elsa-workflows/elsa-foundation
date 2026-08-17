@@ -1,7 +1,9 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Exceptions;
 using Groundwork.Kernel;
 using Groundwork.Store;
@@ -144,6 +146,76 @@ public sealed class GroundworkActivityDefinitionStoreTests
         var listed = await store.ListAsync(new ActivityDefinitionFilter { Category = "Mail" });
         Assert.Equal(["a1", "a2"], listed.Select(x => x.Id));
         Assert.Equal("a1", (await store.FindAsync(new ActivityDefinitionFilter { Category = "Mail" }))!.Id);
+    }
+
+    [Fact]
+    public async Task List_by_filter_returns_all_matching_definitions_in_deterministic_order()
+    {
+        using var harness = await SeededAsync(
+            Definition("a3", "Acme.Send", category: "Mail", search: "Third"),
+            Definition("a1", "Acme.Send", category: "Mail", search: "First"),
+            Definition("a2", "Acme.Send", category: "Mail", search: "Second"),
+            Definition("outside", "Acme.Wait", category: "Timing", search: "Outside"));
+        var store = new GroundworkActivityDefinitionStore(harness.Store);
+
+        var byCategory = await store.ListAsync(new ActivityDefinitionFilter { Category = "Mail" });
+        Assert.Equal(3, byCategory.Count);
+        Assert.Equal(["a1", "a2", "a3"], byCategory.Select(definition => definition.Id));
+        Assert.All(byCategory, definition => Assert.Equal("Mail", definition.Category));
+
+        var byTypeKeys = await store.ListAsync(new ActivityDefinitionFilter { ActivityTypeKeys = ["Acme.Send"] });
+        Assert.Equal(byCategory.Select(definition => definition.Id), byTypeKeys.Select(definition => definition.Id));
+    }
+
+    [Fact]
+    public async Task Tenant_agnostic_find_requires_explicit_privileged_across_scope_context()
+    {
+        using var harness = await SeededAsync(Definition("tenant-a-definition", "Acme.Send"));
+        var store = new GroundworkActivityDefinitionStore(harness.Store);
+        harness.Access.Current = PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync(new ActivityDefinitionFilter
+        {
+            Id = "tenant-a-definition",
+            TenantAgnostic = true
+        }));
+        Assert.Empty(harness.QueryRequests);
+        Assert.Empty(harness.AuditSink.Snapshot());
+
+        harness.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("activity-definition-global-only-test"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindAsync(new ActivityDefinitionFilter
+        {
+            Id = "tenant-a-definition",
+            TenantAgnostic = true
+        }));
+        Assert.Empty(harness.QueryRequests);
+        Assert.Empty(harness.AuditSink.Snapshot());
+
+        harness.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("activity-definition-tenant-agnostic-test"));
+        var result = await store.FindAsync(new ActivityDefinitionFilter
+        {
+            Id = "tenant-a-definition",
+            TenantAgnostic = true
+        });
+        Assert.NotNull(result);
+        Assert.Equal("tenant-a-definition", result!.Id);
+
+        var records = harness.AuditSink.Snapshot();
+        Assert.Equal(2, records.Count);
+        var acquisition = Assert.Single(records, record =>
+            record.EventKind == GroundworkPrivilegedQueryAuditEventKind.Acquisition);
+        var outcome = Assert.Single(records, record =>
+            record.EventKind == GroundworkPrivilegedQueryAuditEventKind.Outcome);
+        Assert.NotEqual(Guid.Empty, acquisition.AcquisitionId);
+        Assert.Equal(acquisition.AcquisitionId, outcome.AcquisitionId);
+        Assert.Equal(StorageAccessKind.PrivilegedAcrossScopes, acquisition.AccessKind);
+        Assert.Equal(StorageAccessKind.PrivilegedAcrossScopes, outcome.AccessKind);
+        Assert.Equal("elsa-activities-design", acquisition.AuditIdentity);
+        Assert.Equal("activity-definition-tenant-agnostic-test", acquisition.Purpose);
+        Assert.Equal(GroundworkPrivilegedQueryOutcome.Succeeded, outcome.Outcome);
+        Assert.Null(outcome.FailureType);
     }
 
     private static async Task<ActivityDesignV2TestHarness> SeededAsync(params ActivityDefinition[] definitions)

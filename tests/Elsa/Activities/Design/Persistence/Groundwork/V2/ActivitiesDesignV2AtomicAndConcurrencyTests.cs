@@ -36,6 +36,42 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
     }
 
     [Fact]
+    public void Privileged_global_context_cannot_be_promoted_to_cross_scope_access()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("activity-design-cross-scope-promotion-test"));
+
+        Assert.Throws<InvalidOperationException>(() => fixture.Store.Load(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "not-used",
+            acrossScopes: true));
+        Assert.Equal(0, fixture.Sessions.OpenCount);
+    }
+
+    [Fact]
+    public void Cross_scope_query_without_the_audit_executor_fails_before_provider_session_io()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("activity-design-missing-audit-executor-test"));
+        var storeWithoutExecutor = new GroundworkV2ActivityDesignStore(fixture.Sessions, fixture.Access);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => storeWithoutExecutor.Query(
+            new ActivityDesignQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
+                [],
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+                Take: 1),
+            acrossScopes: true));
+
+        Assert.Contains("audit executor", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, fixture.Sessions.OpenCount);
+        Assert.Empty(fixture.AuditSink.Snapshot());
+    }
+
+    [Fact]
     public void Named_routes_require_their_declared_predicate_and_operation_before_provider_execution()
     {
         using var fixture = ActivityDesignV2Fixture.Create();
@@ -353,7 +389,7 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
             "activity-1",
             acrossScopes: true));
 
-        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
             new PersistenceAccessPurpose("activity-design-test"));
         Assert.NotNull(fixture.Store.Load(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
@@ -384,7 +420,7 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
             [ActivitiesDesignStorageManifest.TenantIdField] = "tenant-a"
         }), WriteOptions.Unconditional);
 
-        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
             new PersistenceAccessPurpose("activity-design-cross-scope-test"));
         Assert.Throws<InvalidOperationException>(() => fixture.Store.Load(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
@@ -432,7 +468,7 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
                 [ActivitiesDesignStorageManifest.TenantIdField] = "tenant-a"
             }), WriteOptions.Unconditional);
 
-        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
             new PersistenceAccessPurpose("activity-design-cross-scope-first-or-default-test"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FirstOrDefaultAsync(
             new ActivityDesignQuery(
@@ -443,6 +479,44 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
                 [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
                 Take: 1),
             acrossScopes: true));
+    }
+
+    [Fact]
+    public async Task Cross_scope_identity_keeps_control_character_scope_separate_from_forged_payload_tenant()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var id = "control-identity-id";
+        await fixture.Store.SaveAsync(Save("tenant-a", id, "Acme.ScopeA"));
+
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        var controlCharacterScope = "tenant-\u001F-b";
+        fixture.Connection.OpenSession(
+                unit,
+                StorageAccess.Scoped(new StorageScope(controlCharacterScope)))
+            .Upsert(new StorageValues(new Dictionary<string, object?>
+            {
+                [ActivitiesDesignStorageManifest.IdField] = id,
+                [ActivitiesDesignStorageManifest.SchemaVersionField] = ActivitiesDesignStorageManifest.SchemaVersion,
+                [ActivitiesDesignStorageManifest.ContentField] = Content("tenant-a", "Acme.ForgedControlCharacterTenant"),
+                [ActivitiesDesignStorageManifest.RevisionField] = 1L,
+                [ActivitiesDesignStorageManifest.UpdatedAtField] = DateTimeOffset.UtcNow,
+                [ActivitiesDesignStorageManifest.ScopeField] = "tenant-a",
+                [ActivitiesDesignStorageManifest.TenantIdField] = "tenant-a"
+            }), WriteOptions.Unconditional);
+
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("activity-design-control-character-scope-test"));
+        var result = fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
+            [],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+            Take: 100), acrossScopes: true);
+
+        Assert.Equal(2, result.Documents.Count(document => document.Id == id));
+        Assert.Contains(result.Documents, document => document.ContentJson.Contains("Acme.ScopeA", StringComparison.Ordinal));
+        Assert.Contains(result.Documents, document => document.ContentJson.Contains("Acme.ForgedControlCharacterTenant", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -569,7 +643,8 @@ internal sealed class ActivityDesignV2Fixture : IDisposable
         IReadOnlyDictionary<string, StorageUnit> units,
         MutableActivityDesignAccess access,
         DirectActivityDesignSessionSource sessions,
-        GroundworkV2ActivityDesignStore store)
+        GroundworkV2ActivityDesignStore store,
+        GroundworkPrivilegedQueryAuditSink auditSink)
     {
         this.databasePath = databasePath;
         this.connection = connection;
@@ -577,11 +652,13 @@ internal sealed class ActivityDesignV2Fixture : IDisposable
         Access = access;
         Sessions = sessions;
         Store = store;
+        AuditSink = auditSink;
     }
 
     public MutableActivityDesignAccess Access { get; }
     public DirectActivityDesignSessionSource Sessions { get; }
     public GroundworkV2ActivityDesignStore Store { get; }
+    public GroundworkPrivilegedQueryAuditSink AuditSink { get; }
     public IStorageProviderConnection Connection => connection;
 
     public static ActivityDesignV2Fixture Create(ICollection<QueryRequest>? queryRequests = null)
@@ -596,8 +673,13 @@ internal sealed class ActivityDesignV2Fixture : IDisposable
         var access = new MutableActivityDesignAccess(
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var sessions = new DirectActivityDesignSessionSource(connection, units, queryRequests);
-        var store = new GroundworkV2ActivityDesignStore(sessions, access);
-        return new(databasePath, connection, units, access, sessions, store);
+        var auditSink = new GroundworkPrivilegedQueryAuditSink();
+        var auditExecutor = new GroundworkPrivilegedQueryAuditExecutor(sessions, access, auditSink);
+        var store = new GroundworkV2ActivityDesignStore(
+            sessions,
+            access,
+            privilegedQueryAuditExecutor: auditExecutor);
+        return new(databasePath, connection, units, access, sessions, store, auditSink);
     }
 
     public void Dispose()
@@ -618,8 +700,11 @@ internal sealed class DirectActivityDesignSessionSource(
     IReadOnlyDictionary<string, StorageUnit> units,
     ICollection<QueryRequest>? queryRequests = null) : IGroundworkStorageSessionSource
 {
+    public int OpenCount { get; private set; }
+
     public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
     {
+        OpenCount++;
         var session = connection.OpenSession(Unit(unitId), access);
         return queryRequests is null ? session : new RecordingActivityDesignSession(session, queryRequests);
     }

@@ -119,7 +119,8 @@ public sealed class GroundworkV2ActivityDesignStore(
     IGroundworkStorageSessionSource sessions,
     IPersistenceAccessContextAccessor accessContextAccessor,
     string? targetName = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    GroundworkPrivilegedQueryAuditExecutor? privilegedQueryAuditExecutor = null)
 {
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -235,6 +236,23 @@ public sealed class GroundworkV2ActivityDesignStore(
             throw new ArgumentOutOfRangeException(nameof(query), "Activity-design queries require a positive bounded page size.");
         if (query.Offset > 0 && query.ContinuationToken is not null)
             throw new ArgumentException("An activity-design query cannot combine an offset and a continuation token.", nameof(query));
+        if (acrossScopes)
+        {
+            if (privilegedQueryAuditExecutor is null)
+            {
+                throw new InvalidOperationException(
+                    "Activity-design cross-scope queries require the public-v2 privileged query audit executor.");
+            }
+
+            var context = accessContextAccessor.Current
+                ?? throw new InvalidOperationException("The current persistence access context is unavailable.");
+            if (context.AccessPolicy != PersistenceAccessPolicy.Privileged || !context.AcrossScopes)
+            {
+                throw new InvalidOperationException(
+                    "Activity-design cross-scope queries require an explicit privileged-across-scopes context.");
+            }
+        }
+
         var unit = sessions.Unit(query.DocumentKind, targetName);
         var selectedIndex = ResolveRouteIndex(unit, query.DocumentKind, query.Identity);
         ValidateRoutePredicate(query);
@@ -261,38 +279,54 @@ public sealed class GroundworkV2ActivityDesignStore(
             acceptedScan: query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery
                 ? SearchScanAcceptance
                 : null);
-        var session = Open(query.DocumentKind, acrossScopes);
-        if (ensureSearchCatalogBound && query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery)
-            EnsureSearchCatalogBound(session, unit, acrossScopes);
-        IReadOnlyList<ActivityDesignScopedDocument> documents;
-        long? totalCount;
-        string? nextContinuationToken;
         if (acrossScopes)
         {
-            var result = session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions(selectedIndex));
-            var rows = result.Rows
-                .Select(row => new ActivityDesignScopedDocument(row.Scope, ToDocument(query.DocumentKind, row.Values)))
-                .ToArray();
-            var duplicate = rows
-                .GroupBy(row => (row.Scope?.Value, row.Document.Id))
-                .FirstOrDefault(group => group.Skip(1).Any());
-            if (duplicate is not null)
-                throw new InvalidOperationException(
-                    $"Activity-design query '{query.Identity}' returned duplicate identity '{duplicate.Key.Id}' in storage scope '{duplicate.Key.Value ?? "<global>"}'.");
-            documents = rows;
-            totalCount = result.TotalCount;
-            nextContinuationToken = result.NextContinuationToken;
+            var executor = privilegedQueryAuditExecutor!;
+            return executor.Execute(
+                query.DocumentKind,
+                "elsa-activities-design",
+                session => ExecuteCrossScopeQuery(
+                    session,
+                    query,
+                    unit,
+                    request,
+                    selectedIndex,
+                    ensureSearchCatalogBound));
         }
-        else
-        {
-            var result = session.Query(request, unit.CreateQueryRenderOptions(selectedIndex));
-            documents = result.Rows
-                .Select(row => new ActivityDesignScopedDocument(session.Access.Scope, ToDocument(query.DocumentKind, row)))
-                .ToArray();
-            totalCount = result.TotalCount;
-            nextContinuationToken = result.NextContinuationToken;
-        }
-        return new ActivityDesignQueryExecutionResult(documents, totalCount ?? documents.Count, nextContinuationToken);
+
+        var ordinarySession = Open(query.DocumentKind, acrossScopes: false);
+        if (ensureSearchCatalogBound && query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery)
+            EnsureSearchCatalogBound(ordinarySession, unit);
+        var ordinaryResult = ordinarySession.Query(request, unit.CreateQueryRenderOptions(selectedIndex));
+        var documents = ordinaryResult.Rows
+            .Select(row => new ActivityDesignScopedDocument(ordinarySession.Access.Scope, ToDocument(query.DocumentKind, row)))
+            .ToArray();
+        var totalCount = ordinaryResult.TotalCount;
+        var nextContinuationToken = ordinaryResult.NextContinuationToken;
+        return new ActivityDesignQueryExecutionResult(documents, totalCount ?? documents.Length, nextContinuationToken);
+    }
+
+    private static ActivityDesignQueryExecutionResult ExecuteCrossScopeQuery(
+        IPrivilegedCrossScopeQuerySession session,
+        ActivityDesignQuery query,
+        StorageUnit unit,
+        QueryRequest request,
+        string? selectedIndex,
+        bool ensureSearchCatalogBound)
+    {
+        if (ensureSearchCatalogBound && query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery)
+            EnsureSearchCatalogBound(session, unit);
+        var result = session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions(selectedIndex));
+        var rows = result.Rows
+            .Select(row => new ActivityDesignScopedDocument(row.Scope, ToDocument(query.DocumentKind, row.Values)))
+            .ToArray();
+        var duplicate = rows
+            .GroupBy(row => (row.Scope?.Value, row.Document.Id))
+            .FirstOrDefault(group => group.Skip(1).Any());
+        if (duplicate is not null)
+            throw new InvalidOperationException(
+                $"Activity-design query '{query.Identity}' returned duplicate identity '{duplicate.Key.Id}' in storage scope '{duplicate.Key.Value ?? "<global>"}'.");
+        return new ActivityDesignQueryExecutionResult(rows, result.TotalCount ?? rows.Length, result.NextContinuationToken);
     }
 
     private static ActivityDesignQueryResult ToPublicResult(ActivityDesignQueryExecutionResult result) =>
@@ -336,8 +370,14 @@ public sealed class GroundworkV2ActivityDesignStore(
 
     internal IStorageSession Open(string documentKind, bool acrossScopes = false)
     {
+        if (acrossScopes)
+        {
+            throw new InvalidOperationException(
+                "Activity-design cross-scope sessions must be acquired through the public-v2 privileged query audit executor.");
+        }
+
         var context = accessContextAccessor.Current;
-        return sessions.Open(documentKind, ToAccess(documentKind, context, acrossScopes), targetName);
+        return sessions.Open(documentKind, ToAccess(documentKind, context), targetName);
     }
 
     private void EnsureSaveScope(ActivityDesignSaveRequest request)
@@ -573,7 +613,7 @@ public sealed class GroundworkV2ActivityDesignStore(
 
     private sealed record RoutePredicateRule(string Field, params ActivityDesignComparisonKind[] Operations);
 
-    private static void EnsureSearchCatalogBound(IStorageSession session, StorageUnit unit, bool acrossScopes)
+    private static void EnsureSearchCatalogBound(IStorageSession session, StorageUnit unit)
     {
         var table = new TableId(unit.Name);
         var id = Column(unit, table, ActivitiesDesignStorageManifest.IdField);
@@ -584,9 +624,26 @@ public sealed class GroundworkV2ActivityDesignStore(
             Projection.ColumnsOnly([id]),
             Paging.Keyset(ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1),
             acceptedScan: SearchScanAcceptance);
-        var result = acrossScopes
-            ? session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions()).Rows.Count
-            : session.Query(request, unit.CreateQueryRenderOptions()).Rows.Count;
+        var result = session.Query(request, unit.CreateQueryRenderOptions()).Rows.Count;
+        if (result > ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows)
+        {
+            throw new InvalidOperationException(
+                $"Activity-definition substring search is refused when the current scope contains more than {ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows} rows.");
+        }
+    }
+
+    private static void EnsureSearchCatalogBound(IPrivilegedCrossScopeQuerySession session, StorageUnit unit)
+    {
+        var table = new TableId(unit.Name);
+        var id = Column(unit, table, ActivitiesDesignStorageManifest.IdField);
+        var request = new QueryRequest(
+            table,
+            Predicate.AlwaysTrue.Instance,
+            [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly([id]),
+            Paging.Keyset(ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1),
+            acceptedScan: SearchScanAcceptance);
+        var result = session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions()).Rows.Count;
         if (result > ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows)
         {
             throw new InvalidOperationException(
@@ -653,13 +710,8 @@ public sealed class GroundworkV2ActivityDesignStore(
     {
         if (acrossScopes && !context.AcrossScopes)
         {
-            if (context.AccessPolicy != PersistenceAccessPolicy.Privileged || context.Scope is not null || context.Purpose is null)
-            {
-                throw new InvalidOperationException(
-                    "Activity-design cross-scope access requires an explicit privileged global context.");
-            }
-
-            context = PersistenceAccessContext.PrivilegedAcrossScopes(context.Purpose);
+            throw new InvalidOperationException(
+                "Activity-design cross-scope access requires an explicit privileged-across-scopes context.");
         }
 
         return GroundworkStorageAccessMapper.Map(

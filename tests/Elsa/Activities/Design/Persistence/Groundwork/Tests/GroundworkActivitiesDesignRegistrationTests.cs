@@ -13,6 +13,7 @@ using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Groundwork.Store;
+using Groundwork.Kernel;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
@@ -32,6 +33,67 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
             registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind);
         Assert.Contains(registry.Registrations, registration =>
             registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
+    }
+
+    [Fact]
+    public void Registration_publishes_every_current_v2_unit_with_scope_and_concurrency_declarations()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
+
+        var registry = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .ImplementationInstance as GroundworkStorageUnitRegistry;
+        Assert.NotNull(registry);
+        Assert.Equal(ActivitiesDesignStorageManifest.CreateUnits().Count, registry!.Registrations.Count);
+        Assert.Equal(
+            registry.Registrations.Count,
+            registry.Registrations.Select(registration => registration.Unit.Id.Value)
+                .Distinct(StringComparer.Ordinal).Count());
+        Assert.All(registry.Registrations, registration =>
+        {
+            Assert.Equal(ScopePolicy.Scoped, registration.Unit.Scope);
+            Assert.True(registration.Unit.Concurrency.IsOptimistic);
+            Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, registration.Unit.SchemaVersion);
+        });
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind);
+    }
+
+    [Fact]
+    public void Registration_exposes_one_scoped_factory_for_each_public_v2_alias()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
+
+        Assert.Equal(AliasContracts.Length, services.Count(descriptor => AliasContracts.Contains(descriptor.ServiceType)));
+        Assert.All(AliasContracts, serviceType =>
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            Assert.NotNull(descriptor.ImplementationFactory);
+        });
+    }
+
+    [Fact]
+    public void Registration_resolves_activity_adapters_with_the_shared_v2_audit_executor()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<GroundworkActivityDefinitionStore>(
+            scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+        Assert.IsType<GroundworkV2ActivityDesignStore>(
+            scope.ServiceProvider.GetRequiredService<GroundworkV2ActivityDesignStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<GroundworkPrivilegedQueryAuditExecutor>());
+        Assert.Same(
+            scope.ServiceProvider.GetRequiredService<GroundworkPrivilegedQueryAuditSink>(),
+            scope.ServiceProvider.GetRequiredService<IGroundworkPrivilegedQueryAuditSink>());
     }
 
     [Fact]

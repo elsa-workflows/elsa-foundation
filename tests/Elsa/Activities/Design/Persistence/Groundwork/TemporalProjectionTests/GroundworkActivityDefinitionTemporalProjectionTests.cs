@@ -29,12 +29,35 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, unit.SchemaVersion);
             Assert.Equal(PortableType.Int64, unit.Columns.Single(column =>
                 column.Name == ActivitiesDesignStorageManifest.RevisionField).Type);
+            Assert.Equal(
+                128,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ManagementValidFromField).MaxLength);
+            Assert.Equal(
+                128,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ManagementValidToField).MaxLength);
+            Assert.Equal(
+                PortableType.String,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ManagementSortField).Type);
             var suffix = unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind
                 ? "definitions"
                 : unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind
                     ? "drafts"
                     : "versions";
             Assert.Contains(unit.Indexes, index => index.Name == $"management_{suffix}_identity_asc");
+            Assert.Contains(unit.Indexes, index => index.Name == ActivitiesDesignStorageManifest.ManagementExpiredIndex);
+            Assert.Equal(
+                [ActivitiesDesignStorageManifest.ManagementSortField,
+                    ActivitiesDesignStorageManifest.ManagementValidFromField,
+                    ActivitiesDesignStorageManifest.EntityIdField],
+                unit.Indexes.Single(index => index.Name == $"management_{suffix}_identity_asc")
+                    .Columns.Select(column => column.Column));
+            Assert.Equal(
+                [ActivitiesDesignStorageManifest.ManagementValidToField,
+                    ActivitiesDesignStorageManifest.ManagementResourceIdField,
+                    ActivitiesDesignStorageManifest.ManagementValidFromField],
+                unit.Indexes.Single(index => index.Name == ActivitiesDesignStorageManifest.ManagementExpiredIndex)
+                    .Columns.Select(column => column.Column));
+            Assert.DoesNotContain(unit.Columns, column => column.Name == "internalValue");
         });
     }
 
@@ -56,8 +79,14 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
 
         Assert.Equal("Original display name", Assert.Single(originalPage.Items).DisplayName);
         Assert.Equal("Changed display name", Assert.Single(currentPage.Items).DisplayName);
+        Assert.Equal("definition-1", Assert.Single(originalPage.Items).DefinitionId);
+        Assert.Equal("definition-1", Assert.Single(currentPage.Items).DefinitionId);
+        Assert.Equal(1, Assert.Single(originalPage.Items).ValidFromSequence);
+        Assert.Equal(2, Assert.Single(currentPage.Items).ValidFromSequence);
+        Assert.Equal(long.MaxValue, Assert.Single(currentPage.Items).ValidToSequenceExclusive);
         Assert.Equal(firstSnapshot, originalPage.Snapshot);
         Assert.True(currentPage.Snapshot.Sequence > firstSnapshot.Sequence);
+        Assert.Equal(firstSnapshot.AsOf, originalPage.Snapshot.AsOf);
     }
 
     [Fact]
@@ -77,8 +106,11 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
         Assert.Empty(preWatermarkPage.Items);
         Assert.Equal(0, preWatermarkPage.TotalCount);
         Assert.Equal(0, preWatermarkPage.Snapshot.Sequence);
+        Assert.Equal(emptySnapshot.AsOf, preWatermarkPage.Snapshot.AsOf);
+        Assert.Null(preWatermarkPage.NextOffset);
         Assert.Equal("definition-first", Assert.Single(freshPage.Items).DefinitionId);
         Assert.Equal(1, freshPage.Snapshot.Sequence);
+        Assert.Equal(changedAt, freshPage.Snapshot.AsOf);
     }
 
     [Fact]
@@ -97,6 +129,9 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
 
         Assert.NotNull(found);
         Assert.Equal("Point lookup updated", found.DisplayName);
+        Assert.Equal("definition-point", found.DefinitionId);
+        Assert.Equal("tests.definition-point", found.ActivityTypeKey);
+        Assert.Equal("Safe summary", found.Description);
         Assert.Equal(2, found.ValidFromSequence);
         Assert.Equal(long.MaxValue, found.ValidToSequenceExclusive);
     }
@@ -134,11 +169,18 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             "tenant-a", null, 0, 2, "needle", ActivityContentAuthorityKind.Design));
 
         Assert.Equal(3, first.TotalCount);
+        Assert.True(first.Items.Count == 2);
+        Assert.Equal(2, first.NextOffset);
         Assert.Equal(["definition-0000", "definition-0001"], first.Items.Select(x => x.DefinitionId));
+        Assert.All(first.Items, item => Assert.Null(item.TenantId));
+        Assert.All(first.Items, item => Assert.Equal(ActivityContentAuthorityKind.Design, item.ContentAuthority.Kind));
         Assert.Equal("definition-0002", Assert.Single(second.Items).DefinitionId);
         Assert.Null(second.NextOffset);
         Assert.Equal(first.Snapshot, second.Snapshot);
         Assert.Equal(4, fresh.TotalCount);
+        Assert.True(fresh.Items.Count == 2);
+        Assert.Equal(2, fresh.NextOffset);
+        Assert.Equal(["definition-0000", "definition-0001"], fresh.Items.Select(x => x.DefinitionId));
         Assert.True(fresh.Snapshot.Sequence > first.Snapshot.Sequence);
     }
 
@@ -174,8 +216,10 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
 
         Assert.Equal("Existing", TemporalProjectionData.Deserialize<ActivityDefinition>(
             (await harness.Store.LoadAsync(saved.DocumentKind, saved.Id))!).DisplayName);
+        Assert.Equal(1, (await harness.Store.LoadAsync(saved.DocumentKind, saved.Id))!.Version);
         Assert.Equal(0, (await harness.Reader.GetCurrentSnapshotAsync()).Sequence);
         Assert.Null(await harness.Reader.FindDefinitionAsync("definition-atomic", null));
+        Assert.Empty((await harness.Reader.ReadDefinitionsAsync(new(null, null, 0, 20))).Items);
     }
 
     [Fact]
@@ -236,8 +280,12 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
         var projectedDefinition = Assert.Single(definitions.Items);
         Assert.Equal("version-1", projectedDefinition.Head!.DefinitionVersionId);
         Assert.Equal("version-2", projectedDefinition.Recommendation!.DefinitionVersionId);
+        Assert.Equal("provider-a", projectedDefinition.HeadProviderKey);
+        Assert.Equal("provider-b", projectedDefinition.RecommendationProviderKey);
         Assert.Equal("draft-alpha", Assert.Single(draftPage.Items).DraftId);
         Assert.Equal("version-2", Assert.Single(versionPage.Items).DefinitionVersionId);
+        Assert.Equal(ActivityDefinitionDraftStatus.Active, Assert.Single(draftPage.Items).Status);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Retired, Assert.Single(versionPage.Items).Lifecycle);
         Assert.Contains("ALPHA", Assert.Single(draftPage.Items, x => x.DraftId == "draft-alpha").SearchText);
         Assert.Equal(3, projectedDefinition.DraftCount);
         Assert.Equal(3, projectedDefinition.VersionCount);
@@ -276,6 +324,7 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
             harness.Reader.ReadDefinitionsAsync(new(null, firstSnapshot.Sequence, 0, 20)));
         Assert.Equal(firstSnapshot.Sequence, firstFailure.Sequence);
         Assert.Equal(firstFailure.Message, replayFailure.Message);
+        Assert.Equal(firstFailure.Sequence, replayFailure.Sequence);
         Assert.Equal("Second", Assert.Single((await harness.Reader.ReadDefinitionsAsync(new(null, null, 0, 20))).Items).DisplayName);
     }
 
