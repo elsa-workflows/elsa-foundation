@@ -1,6 +1,4 @@
-using Groundwork.Core.Indexing;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
+using Groundwork.Kernel;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
@@ -8,183 +6,139 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public sealed class ActivitiesDesignStorageManifestTests
 {
     [Fact]
-    public void Manifest_compiles_all_activity_design_units_to_scoped_physical_entity_tables()
+    public void Fresh_catalog_preserves_all_activity_design_units_as_scoped_optimistic_rows()
     {
-        var manifest = ActivitiesDesignStorageManifest.Create();
-        var resolution = PhysicalStorageResolver.Resolve(
-            manifest,
-            PhysicalNamePolicy.Identity,
-            ProviderPhysicalNameNormalizer.Identity);
+        var units = ActivitiesDesignStorageManifest.CreateUnits();
 
-        Assert.True(
-            resolution.IsValid,
-            string.Join(Environment.NewLine, resolution.Diagnostics.Select(diagnostic => diagnostic.Message)));
-        Assert.Equal(manifest.StorageUnits.Count, resolution.Definitions.Count);
-        Assert.All(manifest.StorageUnits, unit =>
+        Assert.Equal(21, units.Count);
+        Assert.Equal(units.Count, units.Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(units, unit =>
         {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-
-            Assert.Equal(StorageUnitProvisioningMode.Declared, storage.ProvisioningMode);
-            Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, table.Form);
+            Assert.Equal(ScopePolicy.Scoped, unit.Scope);
+            Assert.True(unit.Concurrency.IsOptimistic);
+            Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, unit.SchemaVersion);
+            Assert.Equal([ActivitiesDesignStorageManifest.IdField], unit.Key.Columns);
+            Assert.Equal(
+                PortableType.String,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.IdField).Type);
+            Assert.Equal(
+                PortableType.String,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.SchemaVersionField).Type);
+            Assert.Equal(
+                PortableType.Json,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ContentField).Type);
+            Assert.Equal(
+                PortableType.Int64,
+                unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.RevisionField).Type);
         });
     }
 
     [Fact]
-    public void Reusable_activity_routes_preserve_the_current_query_identities_and_physical_index_evidence()
+    public void Activity_design_units_compile_to_stable_physical_names()
     {
-        var manifest = ActivitiesDesignStorageManifest.Create();
+        var units = ActivitiesDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value);
 
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
-            (ActivitiesDesignStorageManifest.ByHeadVersionIndex, "list-by-head-version", ActivitiesDesignStorageManifest.HeadVersionIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDraftIndex, "list-by-draft", ActivitiesDesignStorageManifest.DraftIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDraftIndex, "list-by-draft", ActivitiesDesignStorageManifest.DraftIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDefinitionIndex, "list-by-definition", ActivitiesDesignStorageManifest.DefinitionIdField),
-            (ActivitiesDesignStorageManifest.ByDefinitionVersionIndex, "list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind,
-            (ActivitiesDesignStorageManifest.ByDefinitionVersionIndex, "list-by-definition-version", ActivitiesDesignStorageManifest.DefinitionVersionIdField));
-        AssertUnit(
-            manifest,
-            ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-            (ActivitiesDesignStorageManifest.ByOwnerVersionIndex, "list-by-owner-version", ActivitiesDesignStorageManifest.OwnerVersionIdField),
-            (ActivitiesDesignStorageManifest.ByDependencyVersionIndex, "list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField));
+        Assert.Equal("elsa_activity_definitions", units[ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind].Name);
+        Assert.Equal("elsa_activity_definition_versions", units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind].Name);
+        Assert.Equal("elsa_activity_management_definitions", units[ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind].Name);
+        Assert.Equal("elsa_activity_design_operations", units[ActivitiesDesignStorageManifest.DesignOperationDocumentKind].Name);
     }
 
     [Fact]
-    public void No_activity_unit_declares_a_by_collection_enumeration_route()
+    public void Reusable_activity_routes_preserve_the_current_index_evidence()
     {
-        foreach (var unit in ActivitiesDesignStorageManifest.Create().StorageUnits)
-        {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        var units = ActivitiesDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value);
 
-            Assert.DoesNotContain(storage.LogicalIndexes, index => index.Identity == "by-collection");
-            Assert.DoesNotContain(table.Indexes, index => index.LogicalName == "by-collection");
-            Assert.All(storage.BoundedQueries, query => Assert.NotEqual("list-all", query.Identity));
-        }
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind],
+            ActivitiesDesignStorageManifest.ByDefinitionIndex,
+            ActivitiesDesignStorageManifest.DefinitionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind],
+            ActivitiesDesignStorageManifest.ByHeadVersionIndex,
+            ActivitiesDesignStorageManifest.HeadVersionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind],
+            ActivitiesDesignStorageManifest.ByDefinitionIndex,
+            ActivitiesDesignStorageManifest.DefinitionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind],
+            ActivitiesDesignStorageManifest.ByDraftIndex,
+            ActivitiesDesignStorageManifest.DraftIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind],
+            ActivitiesDesignStorageManifest.ByDraftIndex,
+            ActivitiesDesignStorageManifest.DraftIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind],
+            ActivitiesDesignStorageManifest.ByDefinitionIndex,
+            ActivitiesDesignStorageManifest.DefinitionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind],
+            ActivitiesDesignStorageManifest.ByDefinitionVersionIndex,
+            ActivitiesDesignStorageManifest.DefinitionVersionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind],
+            ActivitiesDesignStorageManifest.ByDefinitionVersionIndex,
+            ActivitiesDesignStorageManifest.DefinitionVersionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind],
+            ActivitiesDesignStorageManifest.ByOwnerVersionIndex,
+            ActivitiesDesignStorageManifest.OwnerVersionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            units[ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind],
+            ActivitiesDesignStorageManifest.ByDependencyVersionIndex,
+            ActivitiesDesignStorageManifest.DependencyVersionIdField,
+            ActivitiesDesignStorageManifest.EntityIdField);
     }
 
     [Fact]
-    public void Authoring_state_list_by_definition_route_admits_equality_and_in()
+    public void No_activity_unit_declares_a_by_collection_enumeration_index()
     {
-        var manifest = ActivitiesDesignStorageManifest.Create();
-        var unit = manifest.StorageUnits.Single(unit =>
-            unit.Identity.Value == ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind);
-        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-        var query = Assert.Single(storage.BoundedQueries, candidate => candidate.Identity == "list-by-definition");
-
-        Assert.Contains(query.PredicateFields, field =>
-            field.Path == ActivitiesDesignStorageManifest.DefinitionIdField &&
-            field.Operations.Contains(PortableQueryOperation.Equal) &&
-            field.Operations.Contains(PortableQueryOperation.In));
+        foreach (var unit in ActivitiesDesignStorageManifest.CreateUnits())
+            Assert.DoesNotContain(unit.Indexes, index => index.Name == "by_collection");
     }
 
     [Fact]
-    public void Schema_version_remains_the_frozen_legacy_stamp()
+    public void Fork_receipt_is_append_only_in_the_clean_v2_unit_catalog()
+    {
+        var receipt = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind);
+
+        Assert.Equal([ActivitiesDesignStorageManifest.IdField], receipt.Key.Columns);
+        Assert.True(receipt.Concurrency.IsOptimistic);
+    }
+
+    [Fact]
+    public void Fork_candidate_retention_preserves_the_retention_and_identity_index_shape()
+    {
+        var candidate = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
+        AssertIndex(
+            candidate,
+            ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionIndex,
+            ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+    }
+
+    [Fact]
+    public void Schema_version_remains_the_frozen_activity_design_stamp()
     {
         Assert.Equal("1.0.0", ActivitiesDesignStorageManifest.SchemaVersion);
     }
 
-    [Fact]
-    public void Offset_routes_use_unique_bounded_identity_tuples_instead_of_the_wide_provider_comparison_key()
+    private static void AssertIndex(StorageUnit unit, string name, params string[] columns)
     {
-        var comparisonKey = new DocumentEnvelopeDefinition().IdComparisonKeyColumn;
-        foreach (var unit in ActivitiesDesignStorageManifest.Create().StorageUnits)
-        {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-            foreach (var route in storage.BoundedQueries.Where(route =>
-                         route.PagingSupport == QueryPagingSupport.Offset))
-            {
-                Assert.True(storage.LogicalIndexes.Single(index => index.Identity == route.IndexIdentity).IsUnique);
-                var physical = table.Indexes.Single(index => index.LogicalName == route.IndexIdentity);
-                Assert.True(physical.IsUnique);
-                Assert.DoesNotContain(physical.Columns, column =>
-                    column.ColumnLogicalName == comparisonKey);
-            }
-        }
-    }
-
-    [Fact]
-    public void Fork_candidate_retention_preserves_the_preview95_index_shape_and_routes_to_v2()
-    {
-        var unit = ActivitiesDesignStorageManifest.Create().StorageUnits.Single(x =>
-            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
-        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-        var legacyIdentity = ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionIndex;
-        var v2Identity = $"{legacyIdentity}-v2";
-        var legacyIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == legacyIdentity);
-        var v2Index = Assert.Single(storage.LogicalIndexes, index => index.Identity == v2Identity);
-        var legacyPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == legacyIdentity);
-        var v2PhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == v2Identity);
-        var query = Assert.Single(storage.BoundedQueries, candidate =>
-            candidate.Identity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery);
-
-        Assert.Equal(
-            [ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField],
-            legacyIndex.Fields.Select(field => field.Path));
-        Assert.Equal(
-            [
-                ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
-                ActivitiesDesignStorageManifest.EntityIdField
-            ],
-            v2Index.Fields.Select(field => field.Path));
-        Assert.DoesNotContain(legacyPhysicalIndex.Columns, column => column.ColumnLogicalName == "entity_id");
-        Assert.Equal("entity_id", v2PhysicalIndex.Columns.Last().ColumnLogicalName);
-        Assert.Equal(v2Identity, query.IndexIdentity);
-    }
-
-    private static void AssertUnit(
-        global::Groundwork.Core.Manifests.StorageManifest manifest,
-        string documentKind,
-        params (string Index, string Query, string Path)[] expectedRoutes)
-    {
-        var unit = manifest.StorageUnits.Single(unit => unit.Identity.Value == documentKind);
-        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-
-        foreach (var (indexIdentity, queryIdentity, path) in expectedRoutes)
-        {
-            var versionedIndexIdentity = $"{indexIdentity}-v2";
-            var legacyIndex = Assert.Single(storage.LogicalIndexes, index => index.Identity == indexIdentity);
-            var index = Assert.Single(storage.LogicalIndexes, index => index.Identity == versionedIndexIdentity);
-            Assert.Equal([path, ActivitiesDesignStorageManifest.EntityIdField], legacyIndex.Fields.Select(field => field.Path));
-            Assert.Equal([path, ActivitiesDesignStorageManifest.EntityIdField], index.Fields.Select(field => field.Path));
-            var query = Assert.Single(storage.BoundedQueries, query =>
-                query.Identity == queryIdentity && query.IndexIdentity == versionedIndexIdentity);
-            Assert.Equal(
-                [
-                    new BoundedQuerySortField(path, PhysicalSortDirection.Ascending),
-                    new BoundedQuerySortField(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
-                ],
-                query.SortFields);
-            var legacyPhysicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == indexIdentity);
-            var physicalIndex = Assert.Single(table.Indexes, index => index.LogicalName == versionedIndexIdentity);
-            Assert.False(legacyIndex.IsUnique);
-            Assert.False(legacyPhysicalIndex.IsUnique);
-            Assert.True(index.IsUnique);
-            Assert.True(physicalIndex.IsUnique);
-            Assert.Equal("entity_id", legacyPhysicalIndex.Columns.Last().ColumnLogicalName);
-            Assert.Equal("entity_id", physicalIndex.Columns.Last().ColumnLogicalName);
-        }
+        var index = Assert.Single(unit.Indexes, candidate => candidate.Name == name);
+        Assert.Equal(columns, index.Columns.Select(column => column.Column));
     }
 }
