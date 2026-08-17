@@ -1,6 +1,7 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -37,80 +38,79 @@ public static class GroundworkV2RuntimeRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
+        var target = BindRuntimeTarget(services, targetName);
 
         services.AddPersistenceCore();
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkV2WorkflowTestScopeStore));
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit, targetName);
-        services.RemoveAll<GroundworkV2RuntimeTarget>();
-        services.AddSingleton(new GroundworkV2RuntimeTarget(targetName));
+            services.AddGroundworkStorageUnit(unit, target);
 
-        RegisterExecutableStore(services, cacheOptions, targetName);
-        ReplaceScoped<GroundworkV2BookmarkStateStore>(services, Standard<GroundworkV2BookmarkStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        RegisterExecutableStore(services, cacheOptions, target);
+        ReplaceScoped<GroundworkV2BookmarkStateStore>(services, Standard<GroundworkV2BookmarkStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IBookmarkStateStore), typeof(IBookmarkStimulusIndex));
-        ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
-        ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowExecutableSourceReferenceStore), typeof(IWorkflowExecutableSourceReferenceReader), typeof(IWorkflowExecutableSourceReferenceWriter));
-        ReplaceScoped<GroundworkV2ActivityExecutionStateStore>(services, Standard<GroundworkV2ActivityExecutionStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2ActivityExecutionStateStore>(services, Standard<GroundworkV2ActivityExecutionStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IActivityExecutionStateStore));
-        ReplaceScoped<GroundworkV2ActivityExecutionInspectionStore>(services, Standard<GroundworkV2ActivityExecutionInspectionStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2ActivityExecutionInspectionStore>(services, Standard<GroundworkV2ActivityExecutionInspectionStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IActivityExecutionInspectionStore), typeof(IActivityExecutionInspectionWriter));
         ReplaceScoped<GroundworkV2ActivityExecutionHierarchyStore>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetService<IActivityExecutionHierarchyCursorCodec>(),
-                targetName),
+                target),
             typeof(IActivityExecutionHierarchyStore), typeof(IActivityExecutionHierarchyReader), typeof(IActivityExecutionHierarchyWriter));
-        ReplaceScoped<GroundworkV2WorkflowExecutionStateStore>(services, Standard<GroundworkV2WorkflowExecutionStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowExecutionStateStore>(services, Standard<GroundworkV2WorkflowExecutionStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowExecutionStateStore));
-        ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowAlterationStore));
-        ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTestScopeStore), typeof(IWorkflowTestScopeAdmissionStore));
-        ReplaceScoped<GroundworkV2WorkflowTestScopeCleanupStore>(services, Standard<GroundworkV2WorkflowTestScopeCleanupStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowTestScopeCleanupStore>(services, Standard<GroundworkV2WorkflowTestScopeCleanupStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTestScopeCleanupStore));
-        ReplaceScoped<GroundworkV2DurableValueStateStore>(services, Standard<GroundworkV2DurableValueStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2DurableValueStateStore>(services, Standard<GroundworkV2DurableValueStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IDurableValueStateStore));
-        ReplaceScoped<GroundworkV2SchedulerStateStore>(services, Standard<GroundworkV2SchedulerStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2SchedulerStateStore>(services, Standard<GroundworkV2SchedulerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(ISchedulerStateStore));
-        ReplaceScoped<GroundworkV2ExecutionLivenessStateStore>(services, Standard<GroundworkV2ExecutionLivenessStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2ExecutionLivenessStateStore>(services, Standard<GroundworkV2ExecutionLivenessStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutionLivenessStateStore));
-        ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, Standard<GroundworkV2RuntimeRecoveryScanner>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, Standard<GroundworkV2RuntimeRecoveryScanner>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimeRecoveryScanner));
-        ReplaceScoped<GroundworkV2WorkflowHoldStateStore>(services, Standard<GroundworkV2WorkflowHoldStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowHoldStateStore>(services, Standard<GroundworkV2WorkflowHoldStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowHoldStateStore));
-        ReplaceScoped<GroundworkV2IncidentStateStore>(services, Standard<GroundworkV2IncidentStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2IncidentStateStore>(services, Standard<GroundworkV2IncidentStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IIncidentStateStore));
         ReplaceScoped<GroundworkV2WorkflowRuntimeAttentionQuery>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 provider.GetService<TimeProvider>(),
-                targetName),
+                target),
             typeof(IWorkflowRuntimeAttentionQuery));
-        ReplaceScoped<GroundworkV2WorkflowDispatchStore>(services, Standard<GroundworkV2WorkflowDispatchStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowDispatchStore>(services, Standard<GroundworkV2WorkflowDispatchStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowDispatchStore), typeof(IWorkflowDispatchQueryStore), typeof(IWorkflowDispatchDeleteStore),
             typeof(IWorkflowDispatchRetentionRootStore), typeof(IWorkflowDispatchAdmissionStore), typeof(IWorkflowDispatchCancellationStore));
         ReplaceScoped<GroundworkV2RuntimeCheckpointWriter>(services, provider => new(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-                targetName,
+                target,
                 provider.GetService<TimeProvider>(),
                 provider.GetService<IWorkflowExecutableRootWriteLeaseManager>()),
             typeof(IRuntimeCheckpointCommitStore));
-        ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
             typeof(IRuntimePostCommitOutboxClaimStore), typeof(IRuntimePostCommitOutboxClaimCompletionStore),
             typeof(IWorkflowDispatchRedriveStore));
-        ReplaceScoped<GroundworkV2WorkflowSchedulerWorkQueue>(services, Standard<GroundworkV2WorkflowSchedulerWorkQueue>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowSchedulerWorkQueue>(services, Standard<GroundworkV2WorkflowSchedulerWorkQueue>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowSchedulerWorkQueue), typeof(IWorkflowSchedulerWorkClaimInspection));
-        ReplaceScoped<GroundworkV2WorkflowSchedulerPoisonStore>(services, Standard<GroundworkV2WorkflowSchedulerPoisonStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowSchedulerPoisonStore>(services, Standard<GroundworkV2WorkflowSchedulerPoisonStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowSchedulerPoisonStore));
-        ReplaceScoped<GroundworkV2DurableTimerStateStore>(services, Standard<GroundworkV2DurableTimerStateStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2DurableTimerStateStore>(services, Standard<GroundworkV2DurableTimerStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IDurableTimerStore));
-        ReplaceScoped<GroundworkV2WorkflowTriggerBindingStore>(services, Standard<GroundworkV2WorkflowTriggerBindingStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2WorkflowTriggerBindingStore>(services, Standard<GroundworkV2WorkflowTriggerBindingStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowTriggerBindingStore));
-        ReplaceScoped<GroundworkV2RecurringTriggerScheduleStore>(services, Standard<GroundworkV2RecurringTriggerScheduleStore>(targetName, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2RecurringTriggerScheduleStore>(services, Standard<GroundworkV2RecurringTriggerScheduleStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRecurringTriggerScheduleStore));
 
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2CheckpointDurabilityEvidence>());
@@ -125,6 +125,26 @@ public static class GroundworkV2RuntimeRegistration
         var copy = new WorkflowExecutableCacheOptions { Enabled = options.Enabled, Capacity = options.Capacity };
         copy.Validate();
         return copy;
+    }
+
+    private static string BindRuntimeTarget(IServiceCollection services, string? targetName)
+    {
+        var target = GroundworkTargetNames.Normalize(targetName);
+        var existing = services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkV2RuntimeTarget))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkV2RuntimeTarget>()
+            .SingleOrDefault();
+        if (existing is not null && !StringComparer.Ordinal.Equals(existing.Name, target))
+        {
+            throw new InvalidOperationException(
+                $"The Groundwork v2 runtime is already bound to '{existing.Name}' and cannot also bind to '{target}'. " +
+                "Elsa's unkeyed runtime contracts can use only one physical target.");
+        }
+
+        if (existing is null)
+            services.AddSingleton(new GroundworkV2RuntimeTarget(target));
+        return target;
     }
 
     private static void RegisterExecutableStore(

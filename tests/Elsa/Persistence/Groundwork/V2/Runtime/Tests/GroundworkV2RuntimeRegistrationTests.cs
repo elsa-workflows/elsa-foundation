@@ -100,6 +100,20 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     }
 
     [Fact]
+    public void Conflicting_runtime_targets_are_refused_during_composition()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkV2RuntimeStores(targetName: "runtime-a");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddGroundworkV2RuntimeStores(targetName: "runtime-b"));
+
+        Assert.Contains("runtime-a", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("runtime-b", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("one physical target", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Named_public_provider_composition_resolves_cache_modes_and_atomic_durability_evidence()
     {
         using var connection = new SqliteProviderFactory().Create("Data Source=:memory:");
