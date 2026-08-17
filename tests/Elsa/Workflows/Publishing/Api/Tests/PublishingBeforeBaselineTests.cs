@@ -34,10 +34,10 @@ public sealed class PublishingBeforeBaselineTests
         Assert.Equal(11, routes.Count(route => route.Action == "manage"));
         Assert.Equal(23, PublishingCompatibilityCases.Anonymous.Count);
         Assert.Equal(23, PublishingCompatibilityCases.Authenticated.Count);
-        Assert.Equal(7, PublishingCompatibilityCases.Binding.Count);
-        Assert.Equal(5, PublishingCompatibilityCases.Domain.Count);
+        Assert.Equal(10, PublishingCompatibilityCases.Binding.Count);
+        Assert.Equal(17, PublishingCompatibilityCases.Domain.Count);
         Assert.Single(PublishingCompatibilityCases.Cancellation);
-        Assert.Equal(59, PublishingCompatibilityCases.All.Count);
+        Assert.Equal(74, PublishingCompatibilityCases.All.Count);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class PublishingBeforeBaselineTests
     {
         var observations = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, HttpFileName));
 
-        Assert.Equal(59, observations.Length);
+        Assert.Equal(74, observations.Length);
         var anonymous = observations.Where(item => item.Case.EndsWith("|anonymous", StringComparison.Ordinal)).ToArray();
         var authenticated = observations.Where(item => item.Case.EndsWith("|trusted-success", StringComparison.Ordinal)).ToArray();
         Assert.Equal(23, anonymous.Length);
@@ -85,6 +85,9 @@ public sealed class PublishingBeforeBaselineTests
         AssertCase(observations, "WorkflowSnapshotPreflight|trusted-malformed-json", 400, "Completed");
         AssertCase(observations, "WorkflowPublish|trusted-null-body", 201, "Completed");
         AssertCase(observations, "ActivityDrafts.Publish|trusted-empty-body", 400, "Completed");
+        AssertCase(observations, "ActivityDrafts.Publish|trusted-missing-body", 415, "Completed");
+        AssertCase(observations, "ActivityDrafts.Publish|trusted-absent-content-type", 415, "Completed");
+        AssertCase(observations, "ActivityDrafts.Publish|trusted-null-json-body", 201, "Completed");
         AssertCase(observations, "ActivityDrafts.Preflight|trusted-wrong-content-type", 415, "Completed");
         AssertCase(observations, "WorkflowPublish|trusted-route-over-body", 201, "Completed");
         AssertCase(observations, "WorkflowTestRuns.StartDraft|trusted-reserved-drafts-selection", 200, "Completed");
@@ -94,6 +97,17 @@ public sealed class PublishingBeforeBaselineTests
         AssertCase(observations, "WorkflowPublish|trusted-domain-conflict", 409, "Completed");
         AssertCase(observations, "WorkflowPreflight|trusted-domain-validation", 400, "Completed");
         AssertCase(observations, "RuntimePreflight|trusted-domain-unavailable", 400, "Completed");
+        AssertCase(observations, "ActivityDrafts.Preflight|trusted-unprocessable", 422, "Completed");
+        AssertCase(observations, "WorkflowPublish|trusted-expression-errors", 422, "Completed");
+        AssertCase(observations, "WorkflowPublish|trusted-expression-unavailable", 503, "Completed");
+        AssertCase(observations, "WorkflowPublish|trusted-generic-500", 500, "Completed");
+        AssertCase(observations, "RuntimePreflight|trusted-generic-500", 500, "Completed");
+        AssertCase(observations, "ActivityPublications.GetReceipt|trusted-generic-500", 500, "Completed");
+        AssertCase(observations, "ActivityTestRuns.Get|trusted-generic-500", 500, "Completed");
+        AssertCase(observations, "PublicationSlots.Unpublish|trusted-slot-lifecycle", 200, "Completed");
+        AssertCase(observations, "PublicationSlots.Restore|trusted-slot-lifecycle", 200, "Completed");
+        AssertCase(observations, "ActivityTestRuns.GetByIdempotencyKey|trusted-test-run-lookup", 200, "Completed");
+        AssertCase(observations, "ActivityTestRuns.Cancel|trusted-test-run-cancellation", 202, "Completed");
         AssertCase(observations, "ActivityTestRuns.Get|trusted-cancellation", 0, "Faulted:System.OperationCanceledException");
     }
 
@@ -127,7 +141,7 @@ public sealed class PublishingBeforeBaselineTests
         var sourceCommit = root.GetProperty("sourceCommit").GetString()!;
 
         Assert.Equal(23, root.GetProperty("registrationCount").GetInt32());
-        Assert.Equal(59, root.GetProperty("caseCount").GetInt32());
+        Assert.Equal(74, root.GetProperty("caseCount").GetInt32());
         Assert.Equal(23, root.GetProperty("operationCount").GetInt32());
         Assert.Equal(Hash(Path.Join(BaselineDirectory, HttpFileName)), root.GetProperty("httpSha256").GetString());
         Assert.Equal(Hash(Path.Join(BaselineDirectory, OpenApiFileName)), root.GetProperty("openApiSha256").GetString());

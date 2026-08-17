@@ -2,7 +2,7 @@
   "capture": "real-fastendpoints-historical-worktree",
   "captureCommand": "PUBLISHING_BEFORE_COMMIT=cd9fa1743fb982ca60c33384762644b02fdd95ed bash tools/capture-publishing-before.sh",
   "captureDescription": "git worktree add --detach sourceCommit; execute only checked-in runner content",
-  "caseCount": 59,
+  "caseCount": 74,
   "categories": [
     "anonymous",
     "trusted-success",
@@ -10,7 +10,7 @@
     "domain",
     "cancellation"
   ],
-  "httpSha256": "9aea2ab28981d7863ff902165c079ea05004a356026ec9b1304e10a373de435e",
+  "httpSha256": "51e119b0623ad3f8dda731f94febee45cc509ec7f53e857511d24b5ee496303e",
   "initialApprovalsSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
   "openApiSha256": "ba42d7c95f52f968a0a3cad3f4837d5a53726cdb4d25386e6f4e8d047b8760b1",
   "operationCount": 23,
@@ -25,7 +25,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Capture/Elsa.Workflows.Publishing.BeforeCapture.csproj",
-      "sha256": "8e93c0a9f52079183eac972c9796034fa6a1b5691f88f95d738e80c2539a453c"
+      "sha256": "4ab37fcffdab7fd89d53c8934e05612a9197ddcbf549a2d030f2e57b49d8d812"
     },
     {
       "identity": "checked-in-commit",
@@ -35,12 +35,12 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs",
-      "sha256": "3a87df3c6ba9b3b8d9930e87acd3248d9229692409f4714f9aea62a71c5869ea"
+      "sha256": "e267e1e8114e1dd01a3ed48543fbdd7c29b6dac2a0d812ab309adc4fc1815350"
     },
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs",
-      "sha256": "e56bc55acc2444c312cddaabf3fac7f48d981174a6ec8aaf0e1472779aa86af8"
+      "sha256": "6a88e8a03e46121fbba8268fc926ce3dee846e25d8ab9f919ac5f1ffa9bd784e"
     },
     {
       "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
@@ -63,7 +63,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "a56080e3b6fc56b6be3cb697304ea98557bcacd655bf0d91dc2c99738b08f0ed",
+  "runnerFingerprint": "4aa31387c74a8975db0b93df7374cd2a8d17811b92880a492b6640be61c611b6",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "cd9fa1743fb982ca60c33384762644b02fdd95ed",
   "sourceRelationship": "ancestor-before-migration",
