@@ -213,6 +213,7 @@ public sealed class ShellReadinessTests
     [Fact]
     public async Task SuccessfulWarmupEmitsBoundedHierarchicalActivationTelemetry()
     {
+        using var testTrace = new Activity("elsa.test.shell-readiness").Start();
         using var telemetry = new ShellActivationTelemetryRecorder();
         await using var harness = WarmupHarness.Create();
         await harness.Warmup.StartAsync(CancellationToken.None);
@@ -223,6 +224,7 @@ public sealed class ShellReadinessTests
         await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
 
         telemetry.AssertAttempt(
+            testTrace.TraceId,
             ShellActivationTelemetry.SuccessOutcome,
             ShellActivationTelemetry.SuccessOutcome);
     }
@@ -230,6 +232,7 @@ public sealed class ShellReadinessTests
     [Fact]
     public async Task FailedWarmupEmitsReachedPhasesWithoutSensitiveDimensions()
     {
+        using var testTrace = new Activity("elsa.test.shell-readiness").Start();
         using var telemetry = new ShellActivationTelemetryRecorder();
         await using var harness = WarmupHarness.Create();
         harness.Gate.Failure = new InvalidOperationException("sensitive-test-detail");
@@ -241,8 +244,79 @@ public sealed class ShellReadinessTests
         await WaitForStatusAsync(harness.State, ShellReadinessStatus.Failed);
 
         telemetry.AssertAttempt(
+            testTrace.TraceId,
             ShellActivationTelemetry.FailedOutcome,
             ShellActivationTelemetry.FailedOutcome);
+    }
+
+    [Fact]
+    public void TelemetryRecorderSelectsOwnedTraceWhenForeignAttemptIsPartial()
+    {
+        var foreign = CreateTelemetryAttempt(includeFeatureDiscovery: false);
+        var owned = CreateTelemetryAttempt(includeFeatureDiscovery: true);
+
+        var selected = ShellActivationTelemetryRecorder.FindAttempt(
+            foreign.Activities.Concat(owned.Activities),
+            owned.TraceId,
+            ShellActivationTelemetry.SuccessOutcome,
+            ShellActivationTelemetry.SuccessOutcome);
+        var selectedMeasurements = ShellActivationTelemetryRecorder.FindMeasurements(
+            new[]
+            {
+                new ShellActivationTelemetryRecorder.Measurement(
+                    foreign.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.ShellActivationPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.OverallPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.FeatureDiscoveryPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)]),
+                new ShellActivationTelemetryRecorder.Measurement(
+                    owned.TraceId,
+                    1,
+                    [new(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.ShellActivationPhase),
+                        new(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome)])
+            },
+            owned.TraceId);
+
+        Assert.NotNull(selected);
+        Assert.Equal(owned.TraceId, selected.TraceId);
+        Assert.Equal(3, selectedMeasurements.Length);
+        Assert.All(selectedMeasurements, measurement => Assert.Equal(owned.TraceId, measurement.TraceId));
+
+        static (ActivityTraceId TraceId, Activity[] Activities) CreateTelemetryAttempt(bool includeFeatureDiscovery)
+        {
+            var previous = Activity.Current;
+            var overall = new Activity("elsa.shell.activation").Start();
+            overall.SetTag(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.OverallPhase);
+            overall.SetTag(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome);
+
+            var activities = new List<Activity> { overall };
+            if (includeFeatureDiscovery)
+            {
+                var featureDiscovery = new Activity("elsa.shell.activation").Start();
+                featureDiscovery.SetTag(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.FeatureDiscoveryPhase);
+                featureDiscovery.SetTag(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome);
+                featureDiscovery.Stop();
+                activities.Add(featureDiscovery);
+            }
+
+            var shellActivation = new Activity("elsa.shell.activation").Start();
+            shellActivation.SetTag(ShellActivationTelemetry.PhaseTag, ShellActivationTelemetry.ShellActivationPhase);
+            shellActivation.SetTag(ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.SuccessOutcome);
+            shellActivation.Stop();
+            overall.Stop();
+            Activity.Current = previous;
+            activities.Add(shellActivation);
+            return (overall.TraceId, activities.ToArray());
+        }
     }
 
     [Fact]
@@ -397,18 +471,16 @@ public sealed class ShellReadinessTests
                 }
             };
             _meterListener.SetMeasurementEventCallback<double>((_, value, tags, _) =>
-                _measurements.Enqueue(new Measurement(value, tags.ToArray())));
+                _measurements.Enqueue(new Measurement(Activity.Current?.TraceId ?? default, value, tags.ToArray())));
             _meterListener.Start();
         }
 
-        public void AssertAttempt(string overallOutcome, string shellActivationOutcome)
+        public void AssertAttempt(ActivityTraceId traceId, string overallOutcome, string shellActivationOutcome)
         {
-            var activities = _activities.ToArray();
-            var overall = activities.FirstOrDefault(candidate =>
-                HasTags(candidate, ShellActivationTelemetry.OverallPhase, overallOutcome)
-                && activities.Any(child => child.TraceId == candidate.TraceId
-                    && child.ParentSpanId == candidate.SpanId
-                    && HasTags(child, ShellActivationTelemetry.ShellActivationPhase, shellActivationOutcome)));
+            var activities = _activities
+                .Where(activity => activity.TraceId == traceId)
+                .ToArray();
+            var overall = FindAttempt(activities, traceId, overallOutcome, shellActivationOutcome);
             Assert.NotNull(overall);
             var childPhases = activities
                 .Where(activity => activity.TraceId == overall!.TraceId && activity.ParentSpanId == overall.SpanId)
@@ -428,16 +500,17 @@ public sealed class ShellReadinessTests
                     new[] { ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.PhaseTag },
                     activity.TagObjects.Select(tag => tag.Key).Order(StringComparer.Ordinal)));
 
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            var measurements = FindMeasurements(_measurements, traceId);
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.OverallPhase,
                 overallOutcome));
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.FeatureDiscoveryPhase,
                 ShellActivationTelemetry.SuccessOutcome));
-            Assert.Contains(_measurements, measurement => measurement.HasTags(
+            Assert.Contains(measurements, measurement => measurement.HasTags(
                 ShellActivationTelemetry.ShellActivationPhase,
                 shellActivationOutcome));
-            Assert.All(_measurements, measurement =>
+            Assert.All(measurements, measurement =>
             {
                 Assert.True(measurement.Value >= 0);
                 Assert.Equal(
@@ -447,6 +520,23 @@ public sealed class ShellReadinessTests
                     tag.Value?.ToString()?.Contains("sensitive-test-detail", StringComparison.Ordinal) == true);
             });
         }
+
+        internal static Activity? FindAttempt(
+            IEnumerable<Activity> activities,
+            ActivityTraceId traceId,
+            string overallOutcome,
+            string shellActivationOutcome)
+        {
+            var capturedActivities = activities.Where(activity => activity.TraceId == traceId).ToArray();
+            return capturedActivities.FirstOrDefault(candidate =>
+                HasTags(candidate, ShellActivationTelemetry.OverallPhase, overallOutcome)
+                && capturedActivities.Any(child => child.TraceId == candidate.TraceId
+                    && child.ParentSpanId == candidate.SpanId
+                    && HasTags(child, ShellActivationTelemetry.ShellActivationPhase, shellActivationOutcome)));
+        }
+
+        internal static Measurement[] FindMeasurements(IEnumerable<Measurement> measurements, ActivityTraceId traceId) =>
+            measurements.Where(measurement => measurement.TraceId == traceId).ToArray();
 
         public void Dispose()
         {
@@ -458,7 +548,7 @@ public sealed class ShellReadinessTests
             Equals(activity.GetTagItem(ShellActivationTelemetry.PhaseTag), phase)
             && Equals(activity.GetTagItem(ShellActivationTelemetry.OutcomeTag), outcome);
 
-        private sealed record Measurement(double Value, KeyValuePair<string, object?>[] Tags)
+        internal sealed record Measurement(ActivityTraceId TraceId, double Value, KeyValuePair<string, object?>[] Tags)
         {
             public bool HasTags(string phase, string outcome) =>
                 Equals(Tag(ShellActivationTelemetry.PhaseTag), phase)
