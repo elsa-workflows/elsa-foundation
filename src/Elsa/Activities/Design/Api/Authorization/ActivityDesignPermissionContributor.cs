@@ -9,6 +9,8 @@ public sealed class ActivityDesignPermissionContributor : IPermissionContributor
     public IEnumerable<Permission> Contribute() =>
     [
         new(ActivityDesignPermissions.Read, "Read activity designs", "Activity design", "Read activity catalogs and design metadata."),
-        new(ActivityDesignPermissions.Manage, "Manage activity designs", "Activity design", "Create and change activity definitions.")
+        new(ActivityDesignPermissions.Manage, "Manage activity designs", "Activity design", "Create and change activity definitions."),
+        new(ActivityDesignPermissions.AuthorProvider, "Author activity providers", "Activity design", "Author definitions for a specific activity provider."),
+        new(ActivityDesignPermissions.ReadProviderPayload, "Read activity provider payloads", "Activity design", "Read opaque payloads for a specific activity provider.")
     ];
 }

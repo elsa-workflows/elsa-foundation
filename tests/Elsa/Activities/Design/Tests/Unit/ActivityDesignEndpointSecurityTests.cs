@@ -1,205 +1,109 @@
 using Elsa.Activities.Design.Api;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Api.FastEndpoints.Constants;
-using Elsa.Mediator.Core.Contracts;
-using FastEndpoints;
+using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Activities.Design.Tests.Api.Support;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging.Abstractions;
-using System.Reflection;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Proves every Activities.Design.Api endpoint is permission-guarded by construction and never
-/// relaxes to anonymous — the Activities-side counterpart of the Workflows.Design.Api
-/// <c>DefinitionEndpointSecurityTests</c> (W29: with both suites, all 18 design endpoint files are
-/// pinned). The endpoints are <c>internal</c>, so they are resolved by name and built through
-/// FastEndpoints' <c>Factory.Create</c> via reflection — the same build path the framework uses —
-/// rather than adding a forbidden <c>InternalsVisibleTo</c> (constitution §2.23.3). Constructor
-/// dependencies (sender + typed logger) are supplied from the endpoint's own constructor signature,
-/// which also covers the <c>ListVersions</c> endpoint's <c>ILogger&lt;List&gt;</c> quirk.
+/// Proves every Activities Design Minimal API route owns exactly one catalog action and publishes
+/// the standard framework-neutral security, owner, and authoring metadata.
 /// </summary>
 public sealed class ActivityDesignEndpointSecurityTests
 {
-    private const string Root = "Elsa.Activities.Design.Api.Endpoints";
+    private const string OwnerId = "Elsa.Activities.Design.Api";
 
-    [Theory]
-    [InlineData("Availability.GetSettings")]
-    [InlineData("Availability.ListDiagnostics")]
-    [InlineData("Availability.SaveSettings")]
-    [InlineData("AuthoringCapabilities.Get")]
-    [InlineData("Catalog.List")]
-    [InlineData("Definitions.Add")]
-    [InlineData("Definitions.AddDraft")]
-    [InlineData("Definitions.PreviewFork")]
-    [InlineData("Forks.Apply")]
-    [InlineData("Forks.GetStatus")]
-    [InlineData("Definitions.Get")]
-    [InlineData("Definitions.List")]
-    [InlineData("Definitions.ListDrafts")]
-    [InlineData("Definitions.ListVersions")]
-    [InlineData("Definitions.Recommendation")]
-    [InlineData("Definitions.Picker")]
-    [InlineData("Definitions.Update")]
-    [InlineData("Drafts.Diff")]
-    [InlineData("Drafts.ApplyContractProposal")]
-    [InlineData("Drafts.ConflictCopy")]
-    [InlineData("Drafts.Discard")]
-    [InlineData("Drafts.Get")]
-    [InlineData("Drafts.MigrateProvider")]
-    [InlineData("Drafts.ProposeContract")]
-    [InlineData("Drafts.Replace")]
-    [InlineData("Drafts.UpdatePresentation")]
-    [InlineData("Drafts.Validate")]
-    [InlineData("Versions.Diff")]
-    [InlineData("Versions.Dependencies")]
-    [InlineData("Versions.Get")]
-    [InlineData("Versions.Restore")]
-    [InlineData("Versions.Retire")]
-    [InlineData("Versions.Revoke")]
-    public void Endpoint_requires_a_permission_and_is_not_anonymous(string relativeTypeName)
+    [Fact]
+    public void Every_mapped_route_requires_its_single_catalog_action_and_is_not_anonymous()
     {
-        var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
+        var endpoints = MapEndpoints();
 
-        var policyName = Assert.Single(definition.PreBuiltUserPolicies!.Distinct(StringComparer.Ordinal));
-        Assert.Contains(policyName,
-        new[]
+        Assert.Equal(ActivitiesDesignCompatibilityCases.Manifest.Count, endpoints.Count);
+        foreach (var route in ActivitiesDesignCompatibilityCases.Manifest)
         {
-            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignRead]),
-            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignManage])
-        });
-        Assert.Null(definition.AnonymousVerbs);
+            var endpoint = Find(endpoints, route);
+            var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+            var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
+            var descriptor = Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor);
+            var permission = route.Action switch
+            {
+                "read" => ActivityDesignPermissions.Read,
+                "manage" => ActivityDesignPermissions.Manage,
+                _ => throw new InvalidOperationException($"Unexpected manifest action '{route.Action}'.")
+            };
+
+            Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+            Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
+            Assert.Equal([PermissionKey.Normalize(permission)], descriptor.Permissions);
+            Assert.DoesNotContain(PermissionKey.Wildcard, descriptor.Permissions);
+            Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
+
+            var disposition = Assert.Single(endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>());
+            Assert.Equal(EndpointSecurityDispositionKind.Permission, disposition.Kind);
+            var dispositionPolicy = new PermissionPolicyCodec().Parse(disposition.Value!);
+            Assert.Equal(PermissionPolicyParseStatus.Valid, dispositionPolicy.Status);
+            Assert.Equal([PermissionKey.Normalize(permission)], dispositionPolicy.Descriptor!.Permissions);
+            Assert.Equal(OwnerId, Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()).OwnerId);
+            Assert.Equal(EndpointAuthoringModels.MinimalApi, Assert.IsType<EndpointAuthoringMetadata>(endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()).Model);
+        }
     }
 
     [Theory]
     [InlineData("Drafts.ProposeContract")]
     [InlineData("Drafts.ApplyContractProposal")]
-    public void Contract_proposal_endpoints_require_activity_design_manage(string relativeTypeName)
+    public void Contract_proposal_routes_require_activity_design_manage(string operation)
     {
-        var definition = ConfiguredDefinition($"{Root}.{relativeTypeName}");
+        var endpoint = Find(MapEndpoints(), ActivitiesDesignCompatibilityCases.Manifest.Single(route => route.Id == operation));
+        var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
 
-        Assert.Contains(
-            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignManage]),
-            definition.PreBuiltUserPolicies!);
-        Assert.Equal("POST", Assert.Single(definition.Verbs));
-        Assert.Null(definition.AnonymousVerbs);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+        Assert.Equal([PermissionKey.Normalize(ActivityDesignPermissions.Manage)], parsed.Descriptor!.Permissions);
+        Assert.Equal([HttpMethods.Post], endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods);
+        Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
     }
 
     [Fact]
-    public void The_inline_list_covers_every_endpoint_in_the_assembly()
+    public void Permission_contributor_catalogs_every_route_owned_action_once()
     {
-        // Guards the theory data itself: a newly added Activities.Design.Api endpoint must be added
-        // above (and thereby pinned as permission-guarded) before this suite goes green again.
-        var endpointTypes = typeof(ActivitiesDesignApiFeature).Assembly.GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false }
-                        && t.Namespace?.StartsWith(Root, StringComparison.Ordinal) == true
-                        && typeof(BaseEndpoint).IsAssignableFrom(t))
-            .Select(t => t.FullName![(Root.Length + 1)..])
-            .OrderBy(n => n, StringComparer.Ordinal);
+        var permissions = new ActivityDesignPermissionContributor().Contribute().ToArray();
 
-        string[] covered =
-        [
-            "Availability.GetSettings",
-            "Availability.ListDiagnostics",
-            "Availability.SaveSettings",
-            "AuthoringCapabilities.Get",
-            "Catalog.List",
-            "Definitions.Add",
-            "Definitions.AddDraft",
-            "Definitions.PreviewFork",
-            "Definitions.Get",
-            "Definitions.List",
-            "Definitions.ListDrafts",
-            "Definitions.ListVersions",
-            "Definitions.Recommendation",
-            "Definitions.Picker",
-            "Definitions.Update",
-            "Drafts.Diff",
-            "Drafts.ApplyContractProposal",
-            "Drafts.ConflictCopy",
-            "Drafts.Discard",
-            "Drafts.Get",
-            "Drafts.MigrateProvider",
-            "Drafts.ProposeContract",
-            "Drafts.Replace",
-            "Drafts.UpdatePresentation",
-            "Drafts.Validate",
-            "Forks.Apply",
-            "Forks.GetStatus",
-            "UpgradePlans.Apply",
-            "UpgradePlans.Create",
-            "UpgradePlans.Get",
-            "UpgradePlans.GetReceipt",
-            "UpgradePlans.Refresh",
-            "Versions.Diff",
-            "Versions.Dependencies",
-            "Versions.Get",
-            "Versions.Restore",
-            "Versions.Retire",
-            "Versions.Revoke"
-        ];
-
-        Assert.Equal(covered.OrderBy(n => n, StringComparer.Ordinal), endpointTypes);
+        Assert.Equal(
+            [
+                ActivityDesignPermissions.AuthorProvider,
+                ActivityDesignPermissions.ReadProviderPayload,
+                ActivityDesignPermissions.Manage,
+                ActivityDesignPermissions.Read
+            ],
+            permissions.Select(permission => permission.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(permissions.Length, permissions.Select(permission => permission.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(permissions, permission => permission.Key == PermissionKey.Wildcard);
     }
 
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
+    private static IReadOnlyList<RouteEndpoint> MapEndpoints()
     {
-        var endpointType = typeof(ActivitiesDesignApiFeature).Assembly.GetType(endpointTypeName, throwOnError: true)!;
-
-        // Supply each constructor dependency from the signature itself: the sender stub by contract,
-        // the logger by its declared generic argument (not the endpoint type — see ListVersions).
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(p => ResolveDependency(p.ParameterType))
-            .ToArray();
-
-        var create = typeof(Factory).GetMethods()
-            .Single(m => m.Name == nameof(Factory.Create)
-                         && m.IsGenericMethodDefinition
-                         && m.GetParameters() is [var first, var rest]
-                         && first.ParameterType == typeof(Action<DefaultHttpContext>)
-                         && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        Action<DefaultHttpContext> noopContext = _ => { };
-        var endpoint = (BaseEndpoint)create.Invoke(null, [noopContext, dependencies])!;
-
-        endpoint.Configure();
-        return endpoint.Definition;
+        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        ActivitiesDesignApi.MapActivitiesDesignApi(routes);
+        return routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
     }
 
-    private static object ResolveDependency(Type parameterType)
+    private static RouteEndpoint Find(IEnumerable<RouteEndpoint> endpoints, ActivityDesignRoute route) =>
+        Assert.Single(endpoints, endpoint =>
+            endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
+            new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) == route.Endpoint);
+
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
-        if (parameterType == typeof(IRequestSender))
-            return new StubRequestSender();
-        if (parameterType == typeof(ICommandSender))
-            return new StubCommandSender();
-        if (parameterType.IsGenericType && parameterType.GetGenericTypeDefinition() == typeof(Microsoft.Extensions.Logging.ILogger<>))
-        {
-            var nullLoggerType = typeof(NullLogger<>).MakeGenericType(parameterType.GetGenericArguments()[0]);
-            return (nullLoggerType.GetProperty("Instance")?.GetValue(null)
-                    ?? nullLoggerType.GetField("Instance")?.GetValue(null))!;
-        }
-
-        throw new InvalidOperationException($"Unexpected endpoint constructor dependency '{parameterType}'.");
-    }
-
-    private sealed class StubRequestSender : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
-            where T : notnull =>
-            throw new InvalidOperationException("Handler must not be invoked in a configuration-only test.");
-    }
-
-    private sealed class StubCommandSender : ICommandSender
-    {
-        public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default)
-            where T : notnull =>
-            throw new InvalidOperationException("Handler must not be invoked in a configuration-only test.");
-
-        public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("Handler must not be invoked in a configuration-only test.");
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

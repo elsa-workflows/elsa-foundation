@@ -1,5 +1,6 @@
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
@@ -37,7 +38,6 @@ public sealed class EndpointSecurityTests
 {
     private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
     [
-        ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints"),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
         ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints"),
         ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints")
@@ -174,6 +174,46 @@ public sealed class EndpointSecurityTests
         Assert.Equal(8, contributors.Select(contributor => contributor.OwnerId).Distinct(StringComparer.Ordinal).Count());
         Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Issues.Select(issue =>
             $"{issue.Code}: {issue.Permission}: {issue.Message}")));
+    }
+
+    [Fact]
+    public void Activities_design_minimal_api_declares_38_owned_secure_routes_with_one_catalog_action_each()
+    {
+        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(serviceProvider);
+        ActivitiesDesignApi.MapActivitiesDesignApi(routes);
+        var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+
+        Assert.Equal(38, endpoints.Length);
+        foreach (var endpoint in endpoints)
+        {
+            var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+            var policy = new PermissionPolicyCodec().Parse(authorization.Policy!);
+            var descriptor = Assert.IsType<PermissionPolicyDescriptor>(policy.Descriptor);
+            var permission = Assert.Single(descriptor.Permissions);
+
+            Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
+            Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
+            Assert.Contains(permission, new[]
+            {
+                PermissionKey.Normalize(ActivityDesignPermissions.Read),
+                PermissionKey.Normalize(ActivityDesignPermissions.Manage)
+            });
+            Assert.NotEqual(PermissionKey.Wildcard, permission);
+            Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
+            Assert.Equal(
+                "Elsa.Activities.Design.Api",
+                Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()).OwnerId);
+            Assert.Equal(
+                EndpointAuthoringModels.MinimalApi,
+                Assert.IsType<EndpointAuthoringMetadata>(endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()).Model);
+
+            var disposition = Assert.Single(endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>());
+            Assert.Equal(EndpointSecurityDispositionKind.Permission, disposition.Kind);
+            var dispositionPolicy = new PermissionPolicyCodec().Parse(disposition.Value!);
+            Assert.Equal(PermissionPolicyParseStatus.Valid, dispositionPolicy.Status);
+            Assert.Equal([permission], dispositionPolicy.Descriptor!.Permissions);
+        }
     }
 
     [Fact]
