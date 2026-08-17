@@ -71,7 +71,7 @@ public static class PublishingCompatibilityCases
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-expression-errors", "trusted-expression-errors", BodyFor(Find("WorkflowPublish"))),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-expression-unavailable", "trusted-expression-unavailable", BodyFor(Find("WorkflowPublish"))),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-generic-500", "trusted-generic-500", BodyFor(Find("WorkflowPublish"))),
-        Create(Find("WorkflowPreflight"), "WorkflowPreflight|trusted-generic-500", "trusted-generic-500", BodyFor(Find("WorkflowPreflight"))),
+        Create(Find("WorkflowPreflight"), "WorkflowPreflight|trusted-sender-failure-not-invoked", "trusted-generic-500", BodyFor(Find("WorkflowPreflight"))),
         Create(Find("RuntimePreflight"), "RuntimePreflight|trusted-generic-500", "trusted-generic-500", BodyFor(Find("RuntimePreflight"))),
         Create(Find("ActivityPublications.GetReceipt"), "ActivityPublications.GetReceipt|trusted-generic-500", "trusted-generic-500"),
         Create(Find("ActivityTestRuns.Get"), "ActivityTestRuns.Get|trusted-generic-500", "trusted-generic-500"),
