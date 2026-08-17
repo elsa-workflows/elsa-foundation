@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Elsa.Workflows.ArtifactPortability.Tests;
+namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// The one execution composition both sides of the round trip are built from.

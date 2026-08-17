@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Workflows.ArtifactPortability.Tests;
+namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// SC-B-003 / US3 scenario 5: a parent-with-child closure exported from a publish-capable engine is imported by a

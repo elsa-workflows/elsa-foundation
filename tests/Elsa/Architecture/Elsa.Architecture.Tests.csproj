@@ -86,6 +86,14 @@
     <!-- spec 151 SC-B-001/005: the runtime-only artifact composition guard composes the reconciliation feature and
          drives it on the shared execution harness. -->
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <!-- spec 151 SC-B-003: the export→import round trip (ArtifactExportImportRoundTripTests) composes a
+         publish-capable engine beside the runtime-only one. Design.Persistence.Core is the compiler's authored-state
+         store; Resumption is the sweep the dispatch outbox needs; DispatchWorkflow gives the parent a child to
+         dispatch. Permitted here because this project is not an Elsa.Workflows.Runtime.* production project. -->
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />

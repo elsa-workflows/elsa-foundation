@@ -25,7 +25,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
-namespace Elsa.Workflows.ArtifactPortability.Tests;
+namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// A publish-capable engine — a full execution engine <em>plus</em> the design stores an author writes into, the
