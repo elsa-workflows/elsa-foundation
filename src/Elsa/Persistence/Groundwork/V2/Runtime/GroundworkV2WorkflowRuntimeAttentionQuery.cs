@@ -206,9 +206,14 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQuery(
     private static WorkflowExecutionState? ReadExecution(IStorageSession session, string workflowExecutionId)
     {
         var entry = session.Read(GroundworkRuntimeRowStore.Key(workflowExecutionId));
-        return entry is null
-            ? null
-            : GroundworkV2WorkflowExecutionStorageConventions.Deserialize(entry.Values.Values);
+        if (entry is null)
+            return null;
+
+        var state = GroundworkV2WorkflowExecutionStorageConventions.Deserialize(entry.Values.Values);
+        if (!StringComparer.Ordinal.Equals(state.WorkflowExecutionId, workflowExecutionId))
+            throw new InvalidDataException(
+                "Groundwork runtime attention execution content does not match its requested identity.");
+        return state;
     }
 
     private static void Consider(

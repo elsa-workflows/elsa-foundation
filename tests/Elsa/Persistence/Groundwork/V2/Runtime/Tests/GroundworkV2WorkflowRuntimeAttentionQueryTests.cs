@@ -118,7 +118,7 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
     }
 
     [Fact]
-    public async Task Query_refuses_missing_or_global_scope_before_provider_io()
+    public async Task Query_refuses_missing_global_across_scope_or_mismatched_tenant_before_provider_io()
     {
         var before = source.OpenCount;
         var missingTenant = new GroundworkV2WorkflowRuntimeAttentionQuery(
@@ -133,6 +133,13 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
 
         var global = Query(PersistenceAccessContext.Global);
         await Assert.ThrowsAsync<InvalidOperationException>(() => global.QueryAsync(Request(5)).AsTask());
+
+        var acrossScopes = Query(PersistenceAccessContext.PrivilegedAcrossScopes(
+            new PersistenceAccessPurpose("runtime-attention-audit")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => acrossScopes.QueryAsync(Request(5)).AsTask());
+
+        var wrongTenant = Query(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-b")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => wrongTenant.QueryAsync(Request(5)).AsTask());
         Assert.Equal(before, source.OpenCount);
     }
 
