@@ -119,7 +119,7 @@ public sealed class GroundworkActivityUpgradePlanStore(GroundworkV2ActivityDesig
             receipt.ReceiptId,
             ActivitiesDesignStorageManifest.SchemaVersion,
             new ApplyReceiptDocument(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection, receipt),
-            JsonOptions);
+            JsonOptions) with { ExpectedVersion = 0 };
         try
         {
             await store.SaveAllAsync(

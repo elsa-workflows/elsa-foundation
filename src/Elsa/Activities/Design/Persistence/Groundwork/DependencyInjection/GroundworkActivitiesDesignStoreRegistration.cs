@@ -14,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 
-/// <summary>Registers the clean-break activity-design v2 stores against one public Groundwork target.</summary>
+/// <summary>Registers the public-v2 activity-design stores against one Groundwork target.</summary>
 public static class GroundworkActivitiesDesignStoreRegistration
 {
     public static IServiceCollection AddGroundworkActivitiesDesignStores(

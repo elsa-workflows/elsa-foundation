@@ -78,7 +78,7 @@ public sealed class GroundworkReusableActivityStores(
         var states = new List<ActivityDefinitionAuthoringState>();
         foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
         {
-            var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+            var documents = await ActivityDesignQueryPager.QueryAllAsync(
                 boundedStore,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ListByDefinitionQuery,
@@ -204,7 +204,7 @@ public sealed class GroundworkReusableActivityStores(
 
         var publicationDocuments = await TraverseAsync<ActivityDefinitionVersionPublication>(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-            ListByDefinitionQuery,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
             ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
             cancellationToken);
         var publications = publicationDocuments
@@ -215,7 +215,7 @@ public sealed class GroundworkReusableActivityStores(
 
         var edgeDocuments = await TraverseAsync<ActivityDependencyEdge>(
             ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-            ListByOwnerVersionQuery,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
             ActivitiesDesignStorageManifest.ByOwnerVersionDocumentOrder,
             cancellationToken);
         var fingerprint = Fingerprint(edgeDocuments, publicationDocuments);
@@ -1023,7 +1023,7 @@ public sealed class GroundworkReusableActivityStores(
         CancellationToken cancellationToken)
         where TEntity : Entity
     {
-        var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             kind,
             queryIdentity,
@@ -1039,7 +1039,7 @@ public sealed class GroundworkReusableActivityStores(
         string activityTypeKey,
         CancellationToken cancellationToken)
     {
-        var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
@@ -1070,7 +1070,7 @@ public sealed class GroundworkReusableActivityStores(
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
-        var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             kind,
             queryIdentity,

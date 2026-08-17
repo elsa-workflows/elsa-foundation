@@ -98,12 +98,26 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
     }
 
     [Fact]
-    public async Task Version_reads_use_compound_public_queries_and_empty_batches_do_no_io()
+    public async Task Version_reads_use_the_compound_named_routes_and_empty_batches_do_no_io()
     {
         using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
         var store = VersionStore(harness);
         Assert.NotNull(await store.FindByDefinitionAndSortKeyAsync("def1", Version("v1", "def1").SemVerSortKey));
         Assert.Empty(await store.ListByDefinitionIdsAsync([]));
+    }
+
+    [Fact]
+    public async Task Long_valid_prerelease_sort_keys_round_trip_and_remain_findable()
+    {
+        var version = Version("v-long", "def1", $"1.2.3-{new string('a', 80)}");
+        Assert.True(version.SemVerSortKey.Length > 64);
+        Assert.True(version.SemVerSortKey.Length <= 128);
+        using var harness = await SeededAsync([Definition("def1")], version);
+
+        var store = VersionStore(harness);
+        var found = await store.FindByDefinitionAndSortKeyAsync("def1", version.SemVerSortKey);
+        Assert.NotNull(found);
+        Assert.Equal(version.Version, found!.Version);
     }
 
     private static GroundworkActivityDefinitionVersionStore VersionStore(ActivityDesignV2TestHarness harness) =>

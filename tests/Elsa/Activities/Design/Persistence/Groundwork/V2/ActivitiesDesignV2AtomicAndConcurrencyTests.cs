@@ -1,6 +1,7 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;
+using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using System.Text.Json;
@@ -10,6 +11,104 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
 public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
 {
+    [Fact]
+    public void Public_query_rejects_pages_larger_than_the_provider_safe_bound()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        Assert.Throws<ArgumentOutOfRangeException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+            [],
+            [],
+            Take: ActivityDesignQueryPager.PageSize + 1)));
+    }
+
+    [Fact]
+    public void Public_query_rejects_an_undeclared_route_before_provider_execution()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "route-that-is-not-declared",
+            [],
+            [],
+            Take: 1)));
+    }
+
+    [Fact]
+    public void Named_routes_require_their_declared_predicate_and_operation_before_provider_execution()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+            [], [], Take: 1)));
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Contains(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, "Acme"))],
+            [], Take: 1)));
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField, "definition-1"))],
+            [], Take: 1)));
+    }
+
+    [Fact]
+    public void Search_route_requires_the_reviewed_cross_field_substring_shape()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField, "Acme"))],
+            [], Take: 1)));
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+            [], [], Take: 1)));
+    }
+
+    [Fact]
+    public async Task Public_query_uses_declared_field_types_and_bounds_before_provider_execution()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var timestamp = new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        Assert.Throws<ArgumentException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal("not-a-column", "value"))],
+            [],
+            Take: 1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.IdField,
+                new string('x', ActivitiesDesignStorageManifest.MaximumIdLength + 1)))],
+            [],
+            Take: 1)));
+
+        await fixture.Store.SaveAsync(Save("tenant-a", "typed-query", "Acme.Typed") with { UpdatedAt = timestamp });
+        var result = fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "point-read",
+            [
+                ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.IdField, "typed-query")),
+                ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.UpdatedAtField, timestamp))
+            ],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.UpdatedAtField)],
+            Take: 1));
+        Assert.Single(result.Documents);
+        Assert.Equal(timestamp, result.Documents[0].UpdatedAt);
+    }
+
     [Fact]
     public async Task Sqlite_query_materializes_declared_revision_and_supports_cas_mutation()
     {
@@ -60,6 +159,188 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
     }
 
     [Fact]
+    public async Task Public_query_keyset_pages_large_ordered_results_without_duplicates()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var expected = Enumerable.Range(0, 205)
+            .Select(index => $"activity-{index:D4}")
+            .ToArray();
+        var requests = expected
+            .Select(id => new ActivityDesignSaveRequest(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                id,
+                ActivitiesDesignStorageManifest.SchemaVersion,
+                Content("tenant-a", "Acme.Paged")))
+            .ToArray();
+
+        await fixture.Store.SaveAllAsync(
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+            requests);
+
+        var actual = new List<string>();
+        string? continuation = null;
+        do
+        {
+            var page = await fixture.Store.QueryAsync(new ActivityDesignQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                    "Acme.Paged"))],
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder,
+                Take: 37,
+                ContinuationToken: continuation));
+
+            actual.AddRange(page.Documents.Select(document => document.Id));
+            Assert.Equal(expected.Length, page.TotalCount);
+            continuation = page.NextContinuationToken;
+            if (continuation is not null)
+                Assert.NotEmpty(page.Documents);
+        }
+        while (continuation is not null);
+
+        Assert.Equal(expected, actual);
+        Assert.Equal(expected.Length, actual.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task Public_sqlite_search_round_trip_preserves_the_declared_near_limit_projection()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var searchText = new string('x', ActivitiesDesignStorageManifest.ManagementSearchMaximumLength);
+        await fixture.Store.SaveAsync(new ActivityDesignSaveRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "activity-long-search",
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            JsonSerializer.Serialize(new
+            {
+                tenantId = "tenant-a",
+                activityTypeKey = "Acme.LongSearch",
+                searchText
+            })));
+
+        var loaded = await fixture.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "activity-long-search");
+        Assert.NotNull(loaded);
+        Assert.Contains(searchText, loaded!.ContentJson, StringComparison.Ordinal);
+
+        var queried = await fixture.Store.QueryAsync(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Contains(
+                ActivitiesDesignStorageManifest.ManagementSearchField,
+                new string('x', 200)))],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+            Take: 10));
+        Assert.Equal("activity-long-search", Assert.Single(queried.Documents).Id);
+    }
+
+    [Fact]
+    public async Task Public_search_refuses_a_scope_over_the_enforced_catalog_scan_budget()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var requests = Enumerable.Range(0, ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1)
+            .Select(index => new ActivityDesignSaveRequest(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                $"activity-search-bound-{index:D5}",
+                ActivitiesDesignStorageManifest.SchemaVersion,
+                Content("tenant-a", "Acme.BoundedSearch")))
+            .ToArray();
+        await fixture.Store.SaveAllAsync(
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+            requests);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.QueryAsync(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Contains(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, "Bounded"))],
+            [], Take: 1)));
+    }
+
+    [Fact]
+    public async Task Public_search_enumeration_proves_the_catalog_once_then_uses_bounded_keyset_pages()
+    {
+        var requests = new List<QueryRequest>();
+        using var fixture = ActivityDesignV2Fixture.Create(requests);
+        await fixture.Store.SaveAllAsync(
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind),
+            Enumerable.Range(0, 205)
+                .Select(index => new ActivityDesignSaveRequest(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                    $"activity-search-page-{index:D3}",
+                    ActivitiesDesignStorageManifest.SchemaVersion,
+                    JsonSerializer.Serialize(new
+                    {
+                        collection = ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                        entity = new
+                        {
+                            id = $"activity-search-page-{index:D3}",
+                            tenantId = "tenant-a",
+                            activityTypeKey = "Acme.SearchPaged",
+                            category = "General",
+                            displayName = "SearchPaged",
+                            description = "SearchPaged"
+                        }
+                    })))
+                .ToArray());
+
+        var store = new Elsa.Activities.Design.Persistence.Groundwork.Services.GroundworkActivityDefinitionStore(fixture.Store);
+        var definitions = await store.ListAsync(new Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter
+        {
+            SearchTerm = "SearchPaged"
+        });
+
+        Assert.Equal(205, definitions.Count);
+        var accepted = requests.Where(request => request.AcceptedScan?.Allowed == true).ToArray();
+        // One 10,001-row cardinality proof plus three result pages; no page
+        // repeats the proof, and every search operation remains provider-bounded.
+        Assert.Equal(4, accepted.Length);
+        Assert.Equal(ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1, accepted[0].Paging.Limit);
+        Assert.All(accepted.Skip(1), request => Assert.InRange(request.Paging.Limit!.Value, 1, ActivityDesignQueryPager.PageSize));
+        Assert.All(accepted.Skip(1), request => Assert.Null(request.Paging.Offset));
+    }
+
+    [Fact]
+    public async Task Public_reads_round_trip_non_epoch_last_modified_timestamps_across_updates()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        var firstTimestamp = new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+        var secondTimestamp = firstTimestamp.AddMinutes(1);
+        var first = new ActivityDesignSaveRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "activity-timestamped",
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            Content("tenant-a", "Acme.Timestamped"),
+            UpdatedAt: firstTimestamp);
+        await fixture.Store.SaveAsync(first);
+
+        var created = await fixture.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            first.Id);
+        Assert.NotNull(created);
+        Assert.Equal(firstTimestamp, created!.UpdatedAt);
+
+        await fixture.Store.SaveAsync(first with
+        {
+            ContentJson = Content("tenant-a", "Acme.Timestamped.Updated"),
+            ExpectedVersion = created.Version,
+            UpdatedAt = secondTimestamp
+        });
+        var updated = await fixture.Store.QueryAsync(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                "Acme.Timestamped.Updated"))],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+            Take: 10));
+
+        Assert.Equal(secondTimestamp, Assert.Single(updated.Documents).UpdatedAt);
+    }
+
+    [Fact]
     public async Task Scoped_rows_are_isolated_and_cross_scope_reads_require_privileged_context()
     {
         using var fixture = ActivityDesignV2Fixture.Create();
@@ -78,6 +359,55 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             "activity-1",
             acrossScopes: true));
+    }
+
+    [Fact]
+    public async Task Cross_scope_point_reads_preserve_provider_scope_and_refuse_same_id_ambiguity()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        await fixture.Store.SaveAsync(Save("tenant-a", "same-id", "Acme.ScopeA"));
+
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        var forgedContent = Content("tenant-a", "Acme.ForgedTenantContent");
+        var otherScope = fixture.Connection.OpenSession(
+            unit,
+            StorageAccess.Scoped(new StorageScope("tenant-b")));
+        otherScope.Upsert(new StorageValues(new Dictionary<string, object?>
+        {
+            [ActivitiesDesignStorageManifest.IdField] = "same-id",
+            [ActivitiesDesignStorageManifest.SchemaVersionField] = ActivitiesDesignStorageManifest.SchemaVersion,
+            [ActivitiesDesignStorageManifest.ContentField] = forgedContent,
+            [ActivitiesDesignStorageManifest.RevisionField] = 1L,
+            [ActivitiesDesignStorageManifest.UpdatedAtField] = DateTimeOffset.UtcNow,
+            [ActivitiesDesignStorageManifest.ScopeField] = "tenant-a",
+            [ActivitiesDesignStorageManifest.TenantIdField] = "tenant-a"
+        }), WriteOptions.Unconditional);
+
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("activity-design-cross-scope-test"));
+        Assert.Throws<InvalidOperationException>(() => fixture.Store.Load(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            "same-id",
+            acrossScopes: true));
+
+        var first = fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
+            [],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+            Take: 1), acrossScopes: true);
+        Assert.Single(first.Documents);
+        Assert.NotNull(first.NextContinuationToken);
+        var second = fixture.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
+            [],
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+            Take: 1,
+            ContinuationToken: first.NextContinuationToken), acrossScopes: true);
+        Assert.Single(second.Documents);
+        Assert.NotEqual(first.Documents[0].ContentJson, second.Documents[0].ContentJson);
     }
 
     [Fact]
@@ -217,8 +547,9 @@ internal sealed class ActivityDesignV2Fixture : IDisposable
     public MutableActivityDesignAccess Access { get; }
     public DirectActivityDesignSessionSource Sessions { get; }
     public GroundworkV2ActivityDesignStore Store { get; }
+    public IStorageProviderConnection Connection => connection;
 
-    public static ActivityDesignV2Fixture Create()
+    public static ActivityDesignV2Fixture Create(ICollection<QueryRequest>? queryRequests = null)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-design-v2-{Guid.NewGuid():N}.db");
         var connection = new SqliteProviderFactory().Create($"Data Source={databasePath}");
@@ -229,7 +560,7 @@ internal sealed class ActivityDesignV2Fixture : IDisposable
 
         var access = new MutableActivityDesignAccess(
             PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-        var sessions = new DirectActivityDesignSessionSource(connection, units);
+        var sessions = new DirectActivityDesignSessionSource(connection, units, queryRequests);
         var store = new GroundworkV2ActivityDesignStore(sessions, access);
         return new(databasePath, connection, units, access, sessions, store);
     }
@@ -249,10 +580,14 @@ internal sealed class MutableActivityDesignAccess(PersistenceAccessContext curre
 
 internal sealed class DirectActivityDesignSessionSource(
     IStorageProviderConnection connection,
-    IReadOnlyDictionary<string, StorageUnit> units) : IGroundworkStorageSessionSource
+    IReadOnlyDictionary<string, StorageUnit> units,
+    ICollection<QueryRequest>? queryRequests = null) : IGroundworkStorageSessionSource
 {
-    public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-        connection.OpenSession(Unit(unitId), access);
+    public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
+    {
+        var session = connection.OpenSession(Unit(unitId), access);
+        return queryRequests is null ? session : new RecordingActivityDesignSession(session, queryRequests);
+    }
 
     public IUnitOfWork BeginUnitOfWork(
         StorageAccess access,
@@ -262,4 +597,31 @@ internal sealed class DirectActivityDesignSessionSource(
         connection.BeginUnitOfWork(access, options, unitIds.Select(id => Unit(id)).ToArray());
 
     public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+}
+
+internal sealed class RecordingActivityDesignSession(
+    IStorageSession inner,
+    ICollection<QueryRequest> requests) : IStorageSession, IPrivilegedCrossScopeQuerySession
+{
+    public StorageUnit Unit => inner.Unit;
+    public StorageAccess Access => inner.Access;
+    public StoredEntry? Read(StorageKey key) => inner.Read(key);
+    public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+    {
+        requests.Add(request);
+        return inner.Query(request, options);
+    }
+
+    public CrossScopeQueryResult QueryAcrossScopes(QueryRequest request, QueryRenderOptions? options = null)
+    {
+        requests.Add(request);
+        return ((IPrivilegedCrossScopeQuerySession)inner).QueryAcrossScopes(request, options);
+    }
+
+    public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+    public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+    public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+    public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+    public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+    public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
 }

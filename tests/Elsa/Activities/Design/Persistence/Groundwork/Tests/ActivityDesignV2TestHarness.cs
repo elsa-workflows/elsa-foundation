@@ -5,6 +5,7 @@ using Groundwork.Kernel;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Elsa.Locking.Core;
+using Groundwork.Query.Model;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
@@ -18,18 +19,22 @@ internal sealed class ActivityDesignV2TestHarness : IDisposable
         string databasePath,
         IStorageProviderConnection connection,
         MutableActivityDesignAccess access,
-        GroundworkV2ActivityDesignStore store)
+        GroundworkV2ActivityDesignStore store,
+        List<QueryRequest> queryRequests)
     {
         this.databasePath = databasePath;
         this.connection = connection;
         Access = access;
         Store = store;
+        QueryRequests = queryRequests;
     }
 
     public MutableActivityDesignAccess Access { get; }
     public GroundworkV2ActivityDesignStore Store { get; }
+    public List<QueryRequest> QueryRequests { get; }
+    public IStorageProviderConnection Connection => connection;
 
-    public static ActivityDesignV2TestHarness Create(string scope = "tenant-a")
+    public static ActivityDesignV2TestHarness Create(string scope = "tenant-a", List<QueryRequest>? queryRequests = null)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-activity-design-v2-tests-{Guid.NewGuid():N}.db");
         var connection = new SqliteProviderFactory().Create($"Data Source={databasePath}");
@@ -40,8 +45,9 @@ internal sealed class ActivityDesignV2TestHarness : IDisposable
 
         var access = new MutableActivityDesignAccess(
             PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
-        var sessions = new DirectActivityDesignSessionSource(connection, units);
-        return new(databasePath, connection, access, new GroundworkV2ActivityDesignStore(sessions, access));
+        var recordedQueries = queryRequests ?? [];
+        var sessions = new DirectActivityDesignSessionSource(connection, units, recordedQueries);
+        return new(databasePath, connection, access, new GroundworkV2ActivityDesignStore(sessions, access), recordedQueries);
     }
 
     public async Task SaveAsync<TEntity>(
@@ -64,10 +70,10 @@ internal sealed class ActivityDesignV2TestHarness : IDisposable
     public IReadOnlyList<ActivityDesignDocument> Rows(string documentKind, bool acrossScopes = false) =>
         Store.Query(new ActivityDesignQuery(
             documentKind,
-            "test-rows",
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
             [],
             [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
-            Take: 1000), acrossScopes).Documents;
+            Take: ActivityDesignQueryPager.PageSize), acrossScopes).Documents;
 
     public void Dispose()
     {
@@ -84,10 +90,14 @@ internal sealed class MutableActivityDesignAccess(PersistenceAccessContext curre
 
 internal sealed class DirectActivityDesignSessionSource(
     IStorageProviderConnection connection,
-    IReadOnlyDictionary<string, StorageUnit> units) : IGroundworkStorageSessionSource
+    IReadOnlyDictionary<string, StorageUnit> units,
+    ICollection<QueryRequest>? queryRequests = null) : IGroundworkStorageSessionSource
 {
-    public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-        connection.OpenSession(Unit(unitId), access);
+    public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
+    {
+        var session = connection.OpenSession(Unit(unitId), access);
+        return queryRequests is null ? session : new RecordingActivityDesignSession(session, queryRequests);
+    }
 
     public IUnitOfWork BeginUnitOfWork(
         StorageAccess access,
@@ -97,6 +107,33 @@ internal sealed class DirectActivityDesignSessionSource(
         connection.BeginUnitOfWork(access, options, unitIds.Select(id => Unit(id)).ToArray());
 
     public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+}
+
+internal sealed class RecordingActivityDesignSession(
+    IStorageSession inner,
+    ICollection<QueryRequest> requests) : IStorageSession, IPrivilegedCrossScopeQuerySession
+{
+    public StorageUnit Unit => inner.Unit;
+    public StorageAccess Access => inner.Access;
+    public StoredEntry? Read(StorageKey key) => inner.Read(key);
+    public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+    {
+        requests.Add(request);
+        return inner.Query(request, options);
+    }
+
+    public CrossScopeQueryResult QueryAcrossScopes(QueryRequest request, QueryRenderOptions? options = null)
+    {
+        requests.Add(request);
+        return ((IPrivilegedCrossScopeQuerySession)inner).QueryAcrossScopes(request, options);
+    }
+
+    public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+    public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+    public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+    public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+    public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+    public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
 }
 
 internal sealed class ImmediateDistributedLockProvider : IDistributedLockProvider

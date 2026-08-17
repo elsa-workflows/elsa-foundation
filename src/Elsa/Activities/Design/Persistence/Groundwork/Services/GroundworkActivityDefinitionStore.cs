@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
@@ -10,9 +11,36 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesignStore store) : IActivityDefinitionStore
 {
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
-        => Deserialize<ActivityDefinition>(await store.LoadAsync(
-            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, id, cancellationToken))
-           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
+    {
+        try
+        {
+            return Deserialize<ActivityDefinition>(await store.LoadAsync(
+                       ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, id, cancellationToken))
+                   ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
+        }
+        catch (DesignPersistenceException)
+        {
+            throw;
+        }
+        catch (JsonException exception)
+        {
+            throw new DesignPersistenceException(
+                DesignPersistenceDomain.Activity,
+                DesignPersistenceFailureKind.Serialization,
+                "load",
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                exception);
+        }
+        catch (IOException exception)
+        {
+            throw new DesignPersistenceException(
+                DesignPersistenceDomain.Activity,
+                DesignPersistenceFailureKind.Provider,
+                "load",
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                exception);
+        }
+    }
 
     public async Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
     {
@@ -28,7 +56,7 @@ public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesign
     {
         ArgumentNullException.ThrowIfNull(filter);
         var query = CreateQuery(filter);
-        var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             store,
             query.DocumentKind,
             query.Identity,
@@ -54,8 +82,11 @@ public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesign
             return byId;
 
         var document = await store.FirstOrDefaultAsync(
-            CreateQuery([ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
-                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))]),
+            CreateQuery(
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))],
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder),
             cancellationToken);
         return Deserialize<ActivityDefinition>(document);
     }
@@ -66,8 +97,11 @@ public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesign
     private async Task<ActivityDefinition?> FindByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken)
     {
         var document = await store.FirstOrDefaultAsync(
-            CreateQuery([ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
-                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))]),
+            CreateQuery(
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))],
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder),
             cancellationToken);
         return Deserialize<ActivityDefinition>(document);
     }
@@ -106,16 +140,51 @@ public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesign
                 ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionIdField, filter.SearchTerm)));
         }
 
-        return CreateQuery(clauses);
+        var (identity, order) = SelectRoute(filter);
+        return CreateQuery(clauses, identity, order);
     }
 
-    private static ActivityDesignQuery CreateQuery(IReadOnlyList<ActivityDesignQueryClause> clauses)
+    private static ActivityDesignQuery CreateQuery(
+        IReadOnlyList<ActivityDesignQueryClause> clauses,
+        string identity,
+        IReadOnlyList<ActivityDesignQueryOrder> order)
     {
         return new(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+            identity,
             clauses,
-            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+            order);
+    }
+
+    private static (string Identity, IReadOnlyList<ActivityDesignQueryOrder> Order) SelectRoute(ActivityDefinitionFilter filter)
+    {
+        // Route selection mirrors the public named-query contract: the most selective supplied
+        // identity chooses both the physical index admission and the deterministic tie-break order;
+        // remaining filters are residual predicates on that route.
+        if (filter.Id is not null)
+            return (ActivitiesDesignStorageManifest.FindActivityDefinitionByIdQuery,
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+        if (filter.Ids is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+        if (filter.ActivityTypeKey is not null || filter.ActivityTypeKeys is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder);
+        if (filter.Category is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCategoryOrder);
+        if (filter.DisplayName is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder);
+        if (filter.Description is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionOrder);
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+            return (ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+                [new(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+
+        return (ActivitiesDesignStorageManifest.ListAllActivityDefinitionsQuery,
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder);
     }
 
     private static T? Deserialize<T>(ActivityDesignDocument? document) where T : Elsa.Primitives.Entities.Entity

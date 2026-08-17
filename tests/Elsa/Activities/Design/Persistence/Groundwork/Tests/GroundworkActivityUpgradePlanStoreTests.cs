@@ -47,5 +47,16 @@ public sealed class GroundworkActivityUpgradePlanStoreTests
         Assert.Equal(receipt.PlanId, persistedReceipt.PlanId);
         Assert.Equal(receipt.Status, persistedReceipt.Status);
         Assert.Equal(receipt.Revision, persistedReceipt.Revision);
+
+        var duplicate = receipt with
+        {
+            Status = ActivityUpgradeApplyReceiptStatus.Rejected,
+            Revision = receipt.Revision + 1,
+            UpdatedAt = now.AddMinutes(1)
+        };
+        Assert.False(await store.TryCreateAsync(duplicate));
+        var authoritative = await ((IActivityUpgradeApplyReceiptStore)store).FindAsync(receipt.ReceiptId);
+        Assert.Equal(receipt.Status, authoritative!.Status);
+        Assert.Equal(receipt.Revision, authoritative.Revision);
     }
 }

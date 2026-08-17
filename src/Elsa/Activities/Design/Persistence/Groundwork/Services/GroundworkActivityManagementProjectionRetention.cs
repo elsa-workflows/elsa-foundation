@@ -44,7 +44,8 @@ public sealed class GroundworkActivityManagementProjectionRetention(
                      ActivitiesDesignStorageManifest.ActivityVersionManagementProjectionDocumentKind
                  })
         {
-            var offset = 0;
+            string? continuation = null;
+            var continuations = new HashSet<string>(StringComparer.Ordinal);
             while (true)
             {
                 var page = await boundedStore.QueryAsync(
@@ -59,14 +60,16 @@ public sealed class GroundworkActivityManagementProjectionRetention(
                             new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementResourceIdField),
                             new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
                         ],
-                        offset,
-                        500),
+                        Take: ActivityDesignQueryPager.PageSize,
+                        ContinuationToken: continuation),
                     cancellationToken);
                 operations.AddRange(page.Documents.Select(x => ActivityDesignWriteOperation.Delete(
                     new ActivityDesignDeleteRequest(kind, x.Id, x.Version))));
-                offset += page.Documents.Count;
-                if (offset >= page.TotalCount)
+                if (page.NextContinuationToken is null)
                     break;
+                if (page.Documents.Count == 0 || !continuations.Add(page.NextContinuationToken))
+                    throw new InvalidDataException("Activity-management retention continuation repeated or advanced an empty page.");
+                continuation = page.NextContinuationToken;
             }
         }
 

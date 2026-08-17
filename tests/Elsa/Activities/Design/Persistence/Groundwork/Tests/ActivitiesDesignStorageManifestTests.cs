@@ -6,7 +6,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public sealed class ActivitiesDesignStorageManifestTests
 {
     [Fact]
-    public void Fresh_catalog_preserves_all_activity_design_units_as_scoped_optimistic_rows()
+    public void Manifest_compiles_all_activity_design_units_to_scoped_physical_entity_tables()
     {
         var units = ActivitiesDesignStorageManifest.CreateUnits();
 
@@ -45,7 +45,7 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
-    public void Reusable_activity_routes_preserve_the_current_index_evidence()
+    public void Reusable_activity_routes_preserve_the_current_query_identities_and_physical_index_evidence()
     {
         var units = ActivitiesDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value);
 
@@ -102,7 +102,57 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
-    public void No_activity_unit_declares_a_by_collection_enumeration_index()
+    public void Version_routes_declare_the_composite_indexes_required_by_each_public_query_shape()
+    {
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
+        Assert.Equal(
+            128,
+            unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField).MaxLength);
+
+        AssertIndex(
+            unit,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField,
+            ActivitiesDesignStorageManifest.EntityIdField);
+        AssertIndex(
+            unit,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField);
+    }
+
+    [Fact]
+    public void Version_composite_index_keys_fit_the_sql_server_nonclustered_budget()
+    {
+        const int sqlServerMaxNonclusteredIndexKeyBytes = 1_700;
+        const int sqlServerUnicodeBytesPerCodeUnit = 2;
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
+
+        foreach (var index in unit.Indexes.Where(index =>
+                     index.Name is ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex or
+                         ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex))
+        {
+            var keyBytes = index.Columns
+                .Select(column => unit.Columns.Single(candidate => candidate.Name == column.Column))
+                .Where(column => column.Type == PortableType.String)
+                .Sum(column => column.MaxLength * sqlServerUnicodeBytesPerCodeUnit);
+            Assert.True(
+                keyBytes <= sqlServerMaxNonclusteredIndexKeyBytes,
+                $"Index '{index.Name}' declares {keyBytes} bytes, over SQL Server's {sqlServerMaxNonclusteredIndexKeyBytes}-byte limit.");
+        }
+
+        var definitionUnit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.ManagementSearchMaximumLength,
+            definitionUnit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ManagementSearchField).MaxLength);
+    }
+
+    [Fact]
+    public void No_activity_unit_declares_a_by_collection_enumeration_route()
     {
         foreach (var unit in ActivitiesDesignStorageManifest.CreateUnits())
             Assert.DoesNotContain(unit.Indexes, index => index.Name == "by_collection");
@@ -119,7 +169,7 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
-    public void Fork_candidate_retention_preserves_the_retention_and_identity_index_shape()
+    public void Fork_candidate_retention_preserves_the_preview95_index_shape_and_routes_to_v2()
     {
         var candidate = ActivitiesDesignStorageManifest.Require(
             ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
@@ -131,9 +181,41 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
-    public void Schema_version_remains_the_frozen_activity_design_stamp()
+    public void Schema_version_remains_the_frozen_legacy_stamp()
     {
         Assert.Equal("1.0.0", ActivitiesDesignStorageManifest.SchemaVersion);
+    }
+
+    [Fact]
+    public void Authoring_state_list_by_definition_route_admits_equality_and_in()
+    {
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind);
+        var index = Assert.Single(unit.Indexes, candidate => candidate.Name == ActivitiesDesignStorageManifest.ByDefinitionIndex);
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.DefinitionIdField, ActivitiesDesignStorageManifest.EntityIdField],
+            index.Columns.Select(column => column.Column));
+    }
+
+    [Fact]
+    public void Offset_routes_use_unique_bounded_identity_tuples_instead_of_the_wide_provider_comparison_key()
+    {
+        foreach (var unit in ActivitiesDesignStorageManifest.CreateUnits())
+        {
+            foreach (var index in unit.Indexes)
+            {
+                Assert.DoesNotContain("comparisonKey", index.Columns.Select(column => column.Column));
+
+                // The compound version lookup is an exact (definition, sort-key)
+                // point lookup and is intentionally not a paging route.  All
+                // ordered/paged indexes carry the entity id as their final
+                // deterministic tie-breaker.
+                if (index.Name is not (ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex
+                    or ActivitiesDesignStorageManifest.ManagementExpiredIndex))
+                    Assert.Contains(ActivitiesDesignStorageManifest.EntityIdField,
+                        index.Columns.Select(column => column.Column));
+            }
+        }
     }
 
     private static void AssertIndex(StorageUnit unit, string name, params string[] columns)

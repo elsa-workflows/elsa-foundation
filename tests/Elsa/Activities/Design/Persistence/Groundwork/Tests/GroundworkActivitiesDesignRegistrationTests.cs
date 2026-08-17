@@ -20,7 +20,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkActivitiesDesignRegistrationTests
 {
     [Fact]
-    public void Fork_receipt_and_candidate_units_remain_admitted_in_the_clean_v2_catalog()
+    public void Fork_receipt_is_append_only_and_candidate_retention_is_an_admitted_bounded_query()
     {
         var services = new ServiceCollection();
         services.AddGroundworkActivitiesDesignStores();
@@ -48,6 +48,9 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
         AssertImplementation<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>(services);
         AssertImplementation<IActivityDefinitionLookup, ActivityDefinitionLookup>(services);
         AssertImplementation<IDesignAtomicWriter, GroundworkDesignAtomicWrite>(services);
+
+        foreach (var contract in AliasContracts)
+            AssertAlias(services, contract);
 
         AssertScopedOnce<GroundworkReusableActivityStores>(services);
         AssertScopedOnce<GroundworkRecommendedActivityDefinitionPickerStore>(services);
@@ -115,6 +118,8 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
         AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
         AssertScopedOnce<GroundworkActivityDependencyProjection>(services);
         AssertScopedOnce<GroundworkActivityUpgradePlanStore>(services);
+        foreach (var contract in AliasContracts)
+            AssertAlias(services, contract);
     }
 
     private static void AssertImplementation<TContract, TImplementation>(IServiceCollection services)
@@ -134,6 +139,43 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
         var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
+
+    private static void AssertAlias(IServiceCollection services, Type serviceType)
+    {
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        Assert.NotNull(descriptor.ImplementationFactory);
+    }
+
+    private static readonly Type[] AliasContracts =
+    [
+        typeof(IActivityDefinitionAuthoringStore),
+        typeof(IActivityDefinitionDraftStore),
+        typeof(IActivityDefinitionVersionPublicationStore),
+        typeof(IRecommendedActivityDefinitionPickerStore),
+        typeof(IActivityDefinitionLayoutStore),
+        typeof(IActivityDraftValidationStore),
+        typeof(IActivityForkStore),
+        typeof(IActivityDirectDependencyStore),
+        typeof(ICreateActivityDefinitionCommand),
+        typeof(ISaveActivityForkCandidateCommand),
+        typeof(IPruneActivityForkCandidatesCommand),
+        typeof(IApplyActivityForkCandidateCommand),
+        typeof(IUpdateActivityDefinitionPresentationCommand),
+        typeof(ICreateActivityDraftCommand),
+        typeof(IUpdateActivityDraftPresentationCommand),
+        typeof(ICreateActivityDraftConflictCopyCommand),
+        typeof(IReplaceActivityDraftCommand),
+        typeof(IApplyActivityContractProposalCommand),
+        typeof(IDiscardActivityDraftCommand),
+        typeof(IStoreActivityDraftValidationCommand),
+        typeof(IChangeActivityVersionLifecycleCommand),
+        typeof(ISetActivityDefinitionRecommendationCommand),
+        typeof(IActivityDependencyProjectionStore),
+        typeof(IActivityDependencyProjectionRebuilder),
+        typeof(IActivityUpgradePlanStore),
+        typeof(IActivityUpgradeApplyReceiptStore)
+    ];
 
     private sealed class PriorStore : IActivityDefinitionStore
     {

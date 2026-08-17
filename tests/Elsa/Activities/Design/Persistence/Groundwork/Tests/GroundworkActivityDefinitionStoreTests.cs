@@ -3,6 +3,8 @@ using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
@@ -10,7 +12,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkActivityDefinitionStoreTests
 {
     [Fact]
-    public async Task Corrupt_payload_writes_surface_a_serialization_failure()
+    public async Task Provider_and_corrupt_payload_reads_surface_domain_scoped_failures()
     {
         using var harness = ActivityDesignV2TestHarness.Create();
         var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => harness.Store.SaveAsync(new ActivityDesignSaveRequest(
@@ -20,6 +22,23 @@ public sealed class GroundworkActivityDefinitionStoreTests
             "null")));
 
         Assert.Equal(DesignPersistenceFailureKind.Serialization, exception.FailureKind);
+
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        harness.Connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a"))).Upsert(
+            new StorageValues(new Dictionary<string, object?>
+            {
+                [ActivitiesDesignStorageManifest.IdField] = "corrupt-read",
+                [ActivitiesDesignStorageManifest.SchemaVersionField] = ActivitiesDesignStorageManifest.SchemaVersion,
+                [ActivitiesDesignStorageManifest.ContentField] = "{not-json",
+                [ActivitiesDesignStorageManifest.RevisionField] = 1L,
+                [ActivitiesDesignStorageManifest.UpdatedAtField] = DateTimeOffset.UtcNow
+            }),
+            WriteOptions.Unconditional);
+        var corrupt = await Assert.ThrowsAsync<DesignPersistenceException>(() =>
+            new GroundworkActivityDefinitionStore(harness.Store).GetAsync("corrupt-read"));
+        Assert.Equal(DesignPersistenceDomain.Activity, corrupt.Domain);
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, corrupt.FailureKind);
     }
 
     [Fact]
@@ -115,7 +134,7 @@ public sealed class GroundworkActivityDefinitionStoreTests
     }
 
     [Fact]
-    public async Task Definition_reads_use_bounded_public_queries_with_deterministic_order()
+    public async Task Definition_reads_use_the_selected_named_route_and_result_operation()
     {
         using var harness = await SeededAsync(
             Definition("a2", "Acme.Send", category: "Mail", search: "Send Email"),

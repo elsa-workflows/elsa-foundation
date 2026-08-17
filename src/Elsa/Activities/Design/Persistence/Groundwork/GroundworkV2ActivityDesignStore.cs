@@ -24,7 +24,8 @@ public sealed record ActivityDesignSaveRequest(
     string Id,
     string SchemaVersion,
     string ContentJson,
-    long? ExpectedVersion = null);
+    long? ExpectedVersion = null,
+    DateTimeOffset? UpdatedAt = null);
 
 public sealed record ActivityDesignDeleteRequest(string DocumentKind, string Id, long? ExpectedVersion = null);
 
@@ -89,14 +90,26 @@ public sealed record ActivityDesignQuery(
     IReadOnlyList<ActivityDesignQueryClause> Clauses,
     IReadOnlyList<ActivityDesignQueryOrder> Order,
     int Offset = 0,
-    int? Take = null)
+    int? Take = null,
+    string? ContinuationToken = null)
 {
     public ActivityDesignQuery Select(ActivityDesignQueryResultOperation _) => this;
 }
 
 public sealed record ActivityDesignQueryResult(
     IReadOnlyList<ActivityDesignDocument> Documents,
-    long TotalCount);
+    long TotalCount,
+    string? NextContinuationToken = null);
+
+// Cross-scope results retain the provider-owned scope until the public adapter has
+// completed ambiguity checks and structural de-duplication.  Tenant fields in the
+// document payload are caller-controlled content and are never used as an identity.
+internal sealed record ActivityDesignScopedDocument(StorageScope? Scope, ActivityDesignDocument Document);
+
+internal sealed record ActivityDesignQueryExecutionResult(
+    IReadOnlyList<ActivityDesignScopedDocument> Rows,
+    long TotalCount,
+    string? NextContinuationToken);
 
 /// <summary>
 /// Public-v2-only activity-design row adapter. It owns no provider connection and obtains every session and
@@ -105,22 +118,29 @@ public sealed record ActivityDesignQueryResult(
 public sealed class GroundworkV2ActivityDesignStore(
     IGroundworkStorageSessionSource sessions,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    string? targetName = null)
+    string? targetName = null,
+    TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
+
     public ActivityDesignDocument? Load(string documentKind, string id, bool acrossScopes = false)
     {
         if (acrossScopes)
         {
             // Groundwork's privileged access is query-only. Resolve a cross-scope point read
             // through the public query contract rather than attempting a privileged session read.
-            return Query(new ActivityDesignQuery(
+            var result = QueryScopedPage(new ActivityDesignQuery(
                 documentKind,
                 "point-read",
                 [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.IdField,
                     id))],
                 [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
-                Take: 1), acrossScopes: true).Documents.FirstOrDefault();
+                Take: 2), acrossScopes: true, ensureSearchCatalogBound: false);
+            if (result.Rows.Count > 1)
+                throw new InvalidOperationException(
+                    $"Activity-design point read for '{documentKind}/{id}' is ambiguous across storage scopes.");
+            return result.Rows.FirstOrDefault()?.Document;
         }
 
         var entry = Open(documentKind, acrossScopes).Read(Key(id));
@@ -196,45 +216,81 @@ public sealed class GroundworkV2ActivityDesignStore(
         CancellationToken cancellationToken = default) => SaveAllAsync(scope, operations, cancellationToken);
 
     public ActivityDesignQueryResult Query(ActivityDesignQuery query, bool acrossScopes = false)
+        => ToPublicResult(QueryScopedPage(query, acrossScopes, ensureSearchCatalogBound: true));
+
+    internal ActivityDesignQueryResult QueryPage(
+        ActivityDesignQuery query,
+        bool acrossScopes,
+        bool ensureSearchCatalogBound) =>
+        ToPublicResult(QueryScopedPage(query, acrossScopes, ensureSearchCatalogBound));
+
+    internal ActivityDesignQueryExecutionResult QueryScopedPage(
+        ActivityDesignQuery query,
+        bool acrossScopes,
+        bool ensureSearchCatalogBound)
     {
         ArgumentNullException.ThrowIfNull(query);
-        if (query.Offset < 0 || query.Take is null or <= 0)
+        ArgumentException.ThrowIfNullOrWhiteSpace(query.Identity);
+        if (query.Offset < 0 || query.Take is null or <= 0 || query.Take > ActivityDesignQueryPager.PageSize)
             throw new ArgumentOutOfRangeException(nameof(query), "Activity-design queries require a positive bounded page size.");
+        if (query.Offset > 0 && query.ContinuationToken is not null)
+            throw new ArgumentException("An activity-design query cannot combine an offset and a continuation token.", nameof(query));
         var unit = sessions.Unit(query.DocumentKind, targetName);
+        var selectedIndex = ResolveRouteIndex(unit, query.DocumentKind, query.Identity);
+        ValidateRoutePredicate(query);
         var table = new TableId(unit.Name);
         var order = query.Order.Count == 0
-            ? [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)]
+            ? RouteOrder(query.Identity)
             : query.Order.Any(item => StringComparer.Ordinal.Equals(item.Field, ActivitiesDesignStorageManifest.IdField))
                 ? query.Order
                 : query.Order.Append(new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)).ToArray();
+        var paging = query.ContinuationToken is { } continuation
+            ? Paging.Continuation(continuation, query.Take.Value)
+            : query.Offset == 0
+                ? Paging.Keyset(query.Take.Value)
+                : Paging.OffsetLimit(query.Offset, query.Take.Value);
         var request = new QueryRequest(
             table,
-            BuildPredicate(query, table),
-            [.. order.Select(item => new OrderTerm(Column(table, item.Field),
+            BuildPredicate(query, unit, table),
+            [.. order.Select(item => new OrderTerm(Column(unit, table, item.Field),
                 item.Descending ? OrderDirection.Descending : OrderDirection.Ascending,
                 NullOrder.Last))],
             Projection.All,
-            Paging.OffsetLimit(query.Offset, query.Take.Value),
-            ResultShape.TotalCount.Instance);
+            paging,
+            ResultShape.TotalCount.Instance,
+            acceptedScan: query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery
+                ? SearchScanAcceptance
+                : null);
         var session = Open(query.DocumentKind, acrossScopes);
-        IReadOnlyList<ActivityDesignDocument> documents;
+        if (ensureSearchCatalogBound && query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery)
+            EnsureSearchCatalogBound(session, unit, acrossScopes);
+        IReadOnlyList<ActivityDesignScopedDocument> documents;
         long? totalCount;
+        string? nextContinuationToken;
         if (acrossScopes)
         {
-            var result = session.QueryAcrossScopes(request);
-            documents = result.Rows.Select(row => ToDocument(query.DocumentKind, row.Values)).ToArray();
+            var result = session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions(selectedIndex));
+            documents = result.Rows
+                .Select(row => new ActivityDesignScopedDocument(row.Scope, ToDocument(query.DocumentKind, row.Values)))
+                .DistinctBy(row => (row.Scope?.Value, row.Document.Id))
+                .ToArray();
             totalCount = result.TotalCount;
+            nextContinuationToken = result.NextContinuationToken;
         }
         else
         {
-            var result = session.Query(request);
-            documents = result.Rows.Select(row => ToDocument(query.DocumentKind, row)).ToArray();
+            var result = session.Query(request, unit.CreateQueryRenderOptions(selectedIndex));
+            documents = result.Rows
+                .Select(row => new ActivityDesignScopedDocument(session.Access.Scope, ToDocument(query.DocumentKind, row)))
+                .ToArray();
             totalCount = result.TotalCount;
+            nextContinuationToken = result.NextContinuationToken;
         }
-        return new ActivityDesignQueryResult(
-            documents,
-            totalCount ?? documents.Count);
+        return new ActivityDesignQueryExecutionResult(documents, totalCount ?? documents.Count, nextContinuationToken);
     }
+
+    private static ActivityDesignQueryResult ToPublicResult(ActivityDesignQueryExecutionResult result) =>
+        new(result.Rows.Select(row => row.Document).ToArray(), result.TotalCount, result.NextContinuationToken);
 
     public Task<ActivityDesignQueryResult> QueryAsync(
         ActivityDesignQuery query,
@@ -265,7 +321,8 @@ public sealed class GroundworkV2ActivityDesignStore(
         return new ActivityDesignUnitOfWork(
             sessions.BeginUnitOfWork(ToAccess(unitIds[0], context), BatchWriteOptions.Exact, unitIds, targetName),
             unitIds.ToDictionary(unitId => unitId, unitId => sessions.Unit(unitId, targetName), StringComparer.Ordinal),
-            EnsureSaveScope);
+            EnsureSaveScope,
+            timeProvider);
     }
 
     internal IStorageSession Open(string documentKind, bool acrossScopes = false)
@@ -294,7 +351,7 @@ public sealed class GroundworkV2ActivityDesignStore(
         var id = StringValue(values, ActivitiesDesignStorageManifest.IdField);
         var schemaVersion = StringValue(values, ActivitiesDesignStorageManifest.SchemaVersionField);
         var content = JsonValue(values, ActivitiesDesignStorageManifest.ContentField);
-        var updatedAt = values.TryGetValue("updatedAt", out var timestamp) && timestamp is DateTimeOffset date
+        var updatedAt = values.TryGetValue(ActivitiesDesignStorageManifest.UpdatedAtField, out var timestamp) && timestamp is DateTimeOffset date
             ? date
             : DateTimeOffset.UnixEpoch;
         return new(kind, id, schemaVersion, content, LongValue(values, ActivitiesDesignStorageManifest.RevisionField) ?? entry.Version ?? 0, updatedAt);
@@ -305,21 +362,242 @@ public sealed class GroundworkV2ActivityDesignStore(
         var id = StringValue(values, ActivitiesDesignStorageManifest.IdField);
         var schemaVersion = StringValue(values, ActivitiesDesignStorageManifest.SchemaVersionField);
         return new(kind, id, schemaVersion, JsonValue(values, ActivitiesDesignStorageManifest.ContentField),
-            LongValue(values, ActivitiesDesignStorageManifest.RevisionField) ?? 0, DateTimeOffset.UnixEpoch);
+            LongValue(values, ActivitiesDesignStorageManifest.RevisionField) ?? 0,
+            values.TryGetValue(ActivitiesDesignStorageManifest.UpdatedAtField, out var updatedAt) && updatedAt is DateTimeOffset timestamp
+                ? timestamp
+                : DateTimeOffset.UnixEpoch);
     }
 
-    private static Predicate BuildPredicate(ActivityDesignQuery query, TableId table)
+    private static Predicate BuildPredicate(ActivityDesignQuery query, StorageUnit unit, TableId table)
     {
         var clauses = query.Clauses.Select(clause =>
             clause.Comparisons.Count == 1
-                ? BuildComparison(clause.Comparisons[0], table)
-                : new Predicate.Or(clause.Comparisons.Select(comparison => BuildComparison(comparison, table)))).ToArray();
+                ? BuildComparison(clause.Comparisons[0], unit, table)
+                : new Predicate.Or(clause.Comparisons.Select(comparison => BuildComparison(comparison, unit, table)))).ToArray();
         return clauses.Length == 0 ? Predicate.AlwaysTrue.Instance : new Predicate.And(clauses);
     }
 
-    private static Predicate BuildComparison(ActivityDesignQueryComparison comparison, TableId table)
+    private static IReadOnlyList<ActivityDesignQueryOrder> RouteOrder(string identity) => identity switch
     {
-        var column = Column(table, comparison.Field);
+        ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder,
+        ActivitiesDesignStorageManifest.ListAllActivityDefinitionsQuery or
+        ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder,
+        ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionCategoryOrder,
+        ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder,
+        ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionOrder,
+        ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery or
+            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery =>
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder,
+        _ => [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)]
+    };
+
+    private static string? ResolveRouteIndex(StorageUnit unit, string documentKind, string identity)
+    {
+        var index = (documentKind, identity) switch
+        {
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery) => "activity_definition_by_type_key",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery) => "activity_definition_by_category",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery) => "activity_definition_by_display_name",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery) => "activity_definition_by_description",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.FindActivityDefinitionByIdQuery or
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery) => null,
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ListAllActivityDefinitionsQuery) => "activity_definition_by_display_name",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery) => null,
+            (ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByIdQuery) => null,
+            (ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery) =>
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
+            (ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery) =>
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
+            (_, "list-by-definition") => ActivitiesDesignStorageManifest.ByDefinitionIndex,
+            (_, "list-by-head-version") => ActivitiesDesignStorageManifest.ByHeadVersionIndex,
+            (_, "list-by-draft") => ActivitiesDesignStorageManifest.ByDraftIndex,
+            (_, "list-by-definition-version") => ActivitiesDesignStorageManifest.ByDefinitionVersionIndex,
+            (_, "list-by-owner-version") => ActivitiesDesignStorageManifest.ByOwnerVersionIndex,
+            (_, "list-by-dependency-version") => ActivitiesDesignStorageManifest.ByDependencyVersionIndex,
+            (ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery) =>
+                ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionIndex,
+            (ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind,
+                ActivitiesDesignStorageManifest.ManagementDefinitionsQuery) => "management_definitions_identity_asc",
+            (ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind,
+                ActivitiesDesignStorageManifest.ManagementDraftsQuery) => "management_drafts_identity_asc",
+            (ActivitiesDesignStorageManifest.ActivityVersionManagementProjectionDocumentKind,
+                ActivitiesDesignStorageManifest.ManagementVersionsQuery) => "management_versions_identity_asc",
+            (ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind or
+                ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind or
+                ActivitiesDesignStorageManifest.ActivityVersionManagementProjectionDocumentKind,
+                ActivitiesDesignStorageManifest.ManagementExpiredQuery) => ActivitiesDesignStorageManifest.ManagementExpiredIndex,
+            (_, "point-read") or (_, "list-design-operations") or
+                (_, ActivitiesDesignStorageManifest.ListAllDocumentsQuery) or
+                (_, ActivitiesDesignStorageManifest.ManagementDefinitionCurrentQuery) or
+                (_, ActivitiesDesignStorageManifest.ManagementDraftCurrentQuery) or
+                (_, ActivitiesDesignStorageManifest.ManagementVersionCurrentQuery) => null,
+            _ => throw new ArgumentException(
+                $"Activity-design query identity '{identity}' is not declared for document kind '{documentKind}'.",
+                nameof(identity))
+        };
+
+        if (index is not null && unit.Indexes.All(candidate => !StringComparer.Ordinal.Equals(candidate.Name, index)))
+            throw new InvalidOperationException(
+                $"Activity-design query route '{identity}' selects undeclared index '{index}' on unit '{documentKind}'.");
+        return index;
+    }
+
+    private static void ValidateRoutePredicate(ActivityDesignQuery query)
+    {
+        var comparisons = query.Clauses.SelectMany(clause => clause.Comparisons).ToArray();
+        if (query.Identity == ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery)
+        {
+            var searchFields = new HashSet<string>(StringComparer.Ordinal)
+            {
+                ActivitiesDesignStorageManifest.ActivityDefinitionIdField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField,
+                ActivitiesDesignStorageManifest.ManagementSearchField
+            };
+            if (query.Clauses.Count != 1 || query.Clauses[0].Comparisons.Count == 0 ||
+                query.Clauses[0].Comparisons.Any(comparison =>
+                    comparison.Kind != ActivityDesignComparisonKind.Contains ||
+                    !searchFields.Contains(comparison.Field)))
+            {
+                throw new ArgumentException(
+                    $"Activity-design search route '{query.Identity}' requires one bounded OR clause of admitted substring predicates.",
+                    nameof(query));
+            }
+
+            return;
+        }
+
+        IReadOnlyList<RoutePredicateRule> rules = query.Identity switch
+        {
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField,
+                    ActivityDesignComparisonKind.Equal)],
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField,
+                    ActivityDesignComparisonKind.Equal)],
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField,
+                    ActivityDesignComparisonKind.Contains)],
+            ActivitiesDesignStorageManifest.FindActivityDefinitionByIdQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionIdField,
+                    ActivityDesignComparisonKind.Equal)],
+            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery =>
+            [
+                new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+                    ActivityDesignComparisonKind.Equal),
+                new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField,
+                    ActivityDesignComparisonKind.Equal)
+            ],
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery =>
+                query.Clauses.Count == 0
+                    ? []
+                    : [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+                        ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            _ when StringComparer.Ordinal.Equals(query.Identity, ActivitiesDesignStorageManifest.ManagementExpiredQuery) &&
+                   (query.DocumentKind is ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind or
+                       ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind or
+                       ActivitiesDesignStorageManifest.ActivityVersionManagementProjectionDocumentKind) =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ManagementValidToField,
+                    ActivityDesignComparisonKind.LessThanOrEqual)],
+            "point-read" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.IdField, ActivityDesignComparisonKind.Equal)],
+            "list-by-definition" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.DefinitionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            "list-by-head-version" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.HeadVersionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            "list-by-draft" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.DraftIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            "list-by-definition-version" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.DefinitionVersionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            "list-by-owner-version" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.OwnerVersionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            "list-by-dependency-version" =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.DependencyVersionIdField,
+                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+            ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery =>
+                [new RoutePredicateRule(ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
+                    ActivityDesignComparisonKind.LessThanOrEqual)],
+            _ => []
+        };
+
+        foreach (var rule in rules)
+        {
+            if (!comparisons.Any(comparison =>
+                    StringComparer.Ordinal.Equals(comparison.Field, rule.Field) &&
+                    rule.Operations.Contains(comparison.Kind)))
+            {
+                throw new ArgumentException(
+                    $"Activity-design query route '{query.Identity}' requires an admitted {string.Join("/", rule.Operations)} predicate on '{rule.Field}'.",
+                    nameof(query));
+            }
+        }
+    }
+
+    private sealed record RoutePredicateRule(string Field, params ActivityDesignComparisonKind[] Operations);
+
+    private static void EnsureSearchCatalogBound(IStorageSession session, StorageUnit unit, bool acrossScopes)
+    {
+        var table = new TableId(unit.Name);
+        var id = Column(unit, table, ActivitiesDesignStorageManifest.IdField);
+        var request = new QueryRequest(
+            table,
+            Predicate.AlwaysTrue.Instance,
+            [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly([id]),
+            Paging.Keyset(ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1),
+            acceptedScan: SearchScanAcceptance);
+        var result = acrossScopes
+            ? session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions()).Rows.Count
+            : session.Query(request, unit.CreateQueryRenderOptions()).Rows.Count;
+        if (result > ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows)
+        {
+            throw new InvalidOperationException(
+                $"Activity-definition substring search is refused when the current scope contains more than {ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows} rows.");
+        }
+    }
+
+    private static readonly ScanAcceptance SearchScanAcceptance = ScanAcceptance.Allow(
+        "GW-SCAN-ELSA-ACTIVITY-DESIGN-SUBSTRING",
+        $"The public search contract preserves cross-field substring matching. The query first admits a bounded catalog-cardinality probe of at most {ActivitiesDesignStorageManifest.MaximumActivityDefinitionSearchCatalogRows + 1} rows and refuses larger scopes; the result page is capped at 100 rows and uses a keyset cursor.",
+        "elsa-activities-design",
+        new DateTimeOffset(2027, 8, 16, 0, 0, 0, TimeSpan.Zero));
+
+    private static Predicate BuildComparison(ActivityDesignQueryComparison comparison, StorageUnit unit, TableId table)
+    {
+        var column = Column(unit, table, comparison.Field);
+        if (comparison.Value is string scalar)
+            ValidateLength(unit, comparison.Field, scalar);
+        foreach (var value in comparison.Values?.OfType<string>() ?? [])
+            ValidateLength(unit, comparison.Field, value);
         return comparison.Kind switch
         {
             ActivityDesignComparisonKind.Equal => new Predicate.Equal(column, QueryConstant.Of(column, comparison.Value)),
@@ -331,8 +609,33 @@ public sealed class GroundworkV2ActivityDesignStore(
         };
     }
 
-    private static ColumnRef Column(TableId table, string field) =>
-        new(table, field, QueryType.String, isNullable: true, maxLength: ActivitiesDesignStorageManifest.MaximumProjectionLength);
+    private static ColumnRef Column(StorageUnit unit, TableId table, string field)
+    {
+        var definition = unit.Columns.SingleOrDefault(column =>
+            StringComparer.Ordinal.Equals(column.Name, field))
+            ?? throw new InvalidOperationException(
+                $"Groundwork activity-design unit '{unit.Id.Value}' does not declare query column '{field}'.");
+        var type = definition.Type switch
+        {
+            PortableType.String => QueryType.String,
+            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
+            PortableType.Int32 => QueryType.Int32,
+            PortableType.Int64 => QueryType.Int64,
+            PortableType.Boolean => QueryType.Boolean,
+            _ => throw new InvalidOperationException(
+                $"Groundwork activity-design query column '{field}' has unsupported type '{definition.Type}'.")
+        };
+        return new ColumnRef(table, field, type, definition.IsNullable, definition.MaxLength);
+    }
+
+    private static void ValidateLength(StorageUnit unit, string field, string value)
+    {
+        var definition = unit.Columns.Single(column => StringComparer.Ordinal.Equals(column.Name, field));
+        if (definition.MaxLength is { } maxLength && value.Length > maxLength)
+            throw new ArgumentOutOfRangeException(
+                nameof(value),
+                $"Activity-design query value for '{field}' exceeds its declared maximum length of {maxLength}.");
+    }
 
     private StorageAccess ToAccess(
         string documentKind,
@@ -378,8 +681,10 @@ public sealed class GroundworkV2ActivityDesignStore(
 public sealed class ActivityDesignUnitOfWork(
     IUnitOfWork inner,
     IReadOnlyDictionary<string, StorageUnit> units,
-    Action<ActivityDesignSaveRequest>? validateSave = null) : IDisposable
+    Action<ActivityDesignSaveRequest>? validateSave = null,
+    TimeProvider? timeProvider = null) : IDisposable
 {
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
     private readonly Dictionary<(string DocumentKind, string Id), ActivityDesignDocument?> staged = [];
 
     public ActivityDesignDocument? Load(string documentKind, string id)
@@ -400,7 +705,7 @@ public sealed class ActivityDesignUnitOfWork(
         var currentVersion = request.ExpectedVersion is null
             ? Load(request.DocumentKind, request.Id)?.Version
             : null;
-        var values = GroundworkV2ActivityDesignProjection.Values(request, currentVersion);
+        var values = GroundworkV2ActivityDesignProjection.Values(request, currentVersion, timeProvider.GetUtcNow());
         var unit = units[request.DocumentKind];
         var options = request.ExpectedVersion switch
         {
@@ -483,7 +788,10 @@ public sealed class ActivityDesignUnitOfWork(
 
 internal static class GroundworkV2ActivityDesignProjection
 {
-    public static StorageValues Values(ActivityDesignSaveRequest request, long? currentVersion = null)
+    public static StorageValues Values(
+        ActivityDesignSaveRequest request,
+        long? currentVersion = null,
+        DateTimeOffset? updatedAt = null)
     {
         var projections = ActivityDesignProjection.Project(request.ContentJson);
         var values = new Dictionary<string, object?>(projections, StringComparer.Ordinal)
@@ -491,6 +799,7 @@ internal static class GroundworkV2ActivityDesignProjection
             [ActivitiesDesignStorageManifest.IdField] = request.Id,
             [ActivitiesDesignStorageManifest.SchemaVersionField] = request.SchemaVersion,
             [ActivitiesDesignStorageManifest.ContentField] = request.ContentJson,
+            [ActivitiesDesignStorageManifest.UpdatedAtField] = request.UpdatedAt ?? updatedAt ?? DateTimeOffset.UtcNow,
             [ActivitiesDesignStorageManifest.RevisionField] = request.ExpectedVersion is { } expectedVersion
                 ? checked(expectedVersion + 1)
                 : checked(currentVersion.GetValueOrDefault() + 1),
@@ -609,7 +918,9 @@ internal static class ActivityDesignProjection
 
 public static class ActivityDesignQueryPager
 {
-    public static async Task<IReadOnlyList<ActivityDesignDocument>> QueryAllOffsetAsync(
+    public const int PageSize = 100;
+
+    public static async Task<IReadOnlyList<ActivityDesignDocument>> QueryAllAsync(
         GroundworkV2ActivityDesignStore store,
         string documentKind,
         string identity,
@@ -618,18 +929,53 @@ public static class ActivityDesignQueryPager
         CancellationToken cancellationToken = default,
         bool acrossScopes = false)
     {
-        var results = new List<ActivityDesignDocument>();
-        var offset = 0;
+        var rows = await QueryAllScopedAsync(
+            store,
+            documentKind,
+            identity,
+            clauses,
+            order,
+            cancellationToken,
+            acrossScopes);
+        return rows.Select(row => row.Document).ToArray();
+    }
+
+    internal static Task<IReadOnlyList<ActivityDesignScopedDocument>> QueryAllScopedAsync(
+        GroundworkV2ActivityDesignStore store,
+        string documentKind,
+        string identity,
+        IReadOnlyList<ActivityDesignQueryClause> clauses,
+        IReadOnlyList<ActivityDesignQueryOrder> order,
+        CancellationToken cancellationToken = default,
+        bool acrossScopes = false)
+    {
+        var identities = new HashSet<(string? Scope, string Id)>();
+        var continuations = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        var scopedResults = new List<ActivityDesignScopedDocument>();
+        cancellationToken.ThrowIfCancellationRequested();
         while (true)
         {
-            var page = await store.QueryAsync(
-                new(documentKind, identity, clauses, order, offset, 100),
-                cancellationToken,
-                acrossScopes);
-            results.AddRange(page.Documents);
-            if (page.Documents.Count == 0 || offset + page.Documents.Count >= page.TotalCount)
-                return results;
-            offset += page.Documents.Count;
+            var page = store.QueryScopedPage(
+                new(documentKind, identity, clauses, order, Take: PageSize, ContinuationToken: continuation),
+                acrossScopes,
+                ensureSearchCatalogBound: continuation is null);
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var row in page.Rows)
+            {
+                // A cross-scope result's provider scope is intentionally not
+                // reconstructed from JSON tenant content. QueryPage has already
+                // preserved it for the structural identity check below.
+                if (identities.Add((acrossScopes ? row.Scope?.Value : null, row.Document.Id)))
+                    scopedResults.Add(row);
+            }
+            var next = page.NextContinuationToken;
+            if (next is null)
+                return Task.FromResult<IReadOnlyList<ActivityDesignScopedDocument>>(scopedResults);
+            if (page.Rows.Count == 0 || !continuations.Add(next))
+                return Task.FromException<IReadOnlyList<ActivityDesignScopedDocument>>(
+                    new InvalidDataException("Activity-design query continuation repeated or advanced an empty page."));
+            continuation = next;
         }
     }
 }
@@ -646,7 +992,8 @@ public static class GroundworkV2ActivityDesignDocumentWriter
         documentKind,
         entity.Id,
         schemaVersion,
-        JsonSerializer.Serialize(new GroundworkV2ActivityDesignDocument<TEntity>(collection, entity), jsonOptions));
+        JsonSerializer.Serialize(new GroundworkV2ActivityDesignDocument<TEntity>(collection, entity), jsonOptions),
+        UpdatedAt: entity.LastModifiedAt == default ? null : entity.LastModifiedAt);
 
     public static ActivityDesignSaveRequest ToTenantScopedSaveRequest<TEntity>(
         string documentKind,

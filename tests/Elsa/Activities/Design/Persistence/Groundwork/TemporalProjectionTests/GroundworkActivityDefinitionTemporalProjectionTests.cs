@@ -12,7 +12,7 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests;
 public sealed class GroundworkActivityDefinitionTemporalProjectionTests
 {
     [Fact]
-    public void Manifest_declares_scale_bearing_temporal_units_with_explicit_revision_and_indexes()
+    public void Manifest_declares_scale_bearing_physical_queries_for_every_temporal_projection()
     {
         var managementUnits = ActivitiesDesignStorageManifest.CreateUnits()
             .Where(unit => unit.Id.Value is
@@ -61,7 +61,7 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
     }
 
     [Fact]
-    public async Task Pre_watermark_snapshot_remains_a_valid_empty_view_before_the_first_write()
+    public async Task Pre_watermark_snapshot_remains_a_valid_empty_view_when_the_first_write_races()
     {
         using var harness = TemporalActivityDesignV2TestHarness.Create();
         var emptySnapshot = await harness.Reader.GetCurrentSnapshotAsync();
@@ -82,7 +82,7 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
     }
 
     [Fact]
-    public async Task Point_lookup_returns_the_current_definition_after_a_temporal_replacement()
+    public async Task Point_lookups_select_the_first_result_operation_declared_by_the_physical_route()
     {
         using var harness = TemporalActivityDesignV2TestHarness.Create();
         var changedAt = new DateTimeOffset(2026, 7, 17, 8, 45, 0, TimeSpan.Zero);
@@ -143,7 +143,7 @@ public sealed class GroundworkActivityDefinitionTemporalProjectionTests
     }
 
     [Fact]
-    public async Task Late_authoritative_conflict_rolls_back_projection_rows_and_watermark()
+    public async Task Late_projection_conflict_rolls_back_authoritative_rows_revisions_and_watermark()
     {
         using var harness = TemporalActivityDesignV2TestHarness.Create();
         var old = TemporalProjectionData.DefinitionEntity("definition-atomic", null, "Existing", DateTimeOffset.UtcNow);

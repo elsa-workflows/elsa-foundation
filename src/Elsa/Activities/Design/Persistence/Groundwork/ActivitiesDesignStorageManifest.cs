@@ -15,6 +15,7 @@ public static class ActivitiesDesignStorageManifest
     public const string SchemaVersionField = "schemaVersion";
     public const string ContentField = "content";
     public const string RevisionField = "revision";
+    public const string UpdatedAtField = "updatedAt";
     public const string ScopeField = "scope";
     public const string TenantIdField = "tenantId";
     public const string ByDefinitionIndex = "by_definition";
@@ -37,6 +38,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementSearchField = "searchText";
     public const int ManagementSequenceKeyLength = 20;
     public const int ManagementSearchMaximumLength = 4000;
+    public const int MaximumActivityDefinitionSearchCatalogRows = 10_000;
     public const string ManagementAuthorityField = "authorityKind";
     public const string ManagementProviderField = "providerKey";
     public const string ManagementHeadProviderField = "headProviderKey";
@@ -51,8 +53,11 @@ public static class ActivitiesDesignStorageManifest
     public const string ActivityDefinitionVersionIdField = IdField;
     public const string ActivityDefinitionVersionDefinitionIdField = DefinitionIdField;
     public const string ActivityDefinitionVersionSemVerSortKeyField = "semVerSortKey";
+    public const string ActivityDefinitionVersionByDefinitionIndex = "activity_definition_versions_by_definition";
+    public const string ActivityDefinitionVersionByDefinitionAndSortKeyIndex = "activity_definition_version_by_definition_and_sort_key";
 
     public const string FindActivityDefinitionByIdQuery = "find-activity-definition-by-id";
+    public const string ListAllActivityDefinitionsQuery = "list-all-activity-definitions";
     public const string ListActivityDefinitionsByIdQuery = "list-activity-definitions-by-id";
     public const string ListActivityDefinitionsByTypeKeyQuery = "list-activity-definitions-by-type-key";
     public const string ListActivityDefinitionsByCategoryQuery = "list-activity-definitions-by-category";
@@ -62,6 +67,7 @@ public static class ActivitiesDesignStorageManifest
     public const string FindActivityDefinitionVersionByIdQuery = "find-activity-definition-version-by-id";
     public const string ListActivityDefinitionVersionsByDefinitionQuery = "list-activity-definition-versions-by-definition";
     public const string FindActivityDefinitionVersionByDefinitionAndSortKeyQuery = "find-activity-definition-version-by-definition-and-sort-key";
+    public const string ListAllDocumentsQuery = "list-all-documents";
 
     public const string ActivityDefinitionDocumentKind = "activityDefinition";
     public const string ActivityDefinitionCollection = ActivityDefinitionDocumentKind;
@@ -113,6 +119,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementDraftsQuery = "management-drafts-identity-asc";
     public const string ManagementVersionsQuery = "management-versions-identity-asc";
     public const string ManagementExpiredQuery = "management-expired";
+    public const string ManagementExpiredIndex = "management_expired";
     public const string DesignOperationDocumentKind = "designOperation";
     public const string DesignOperationCollection = DesignOperationDocumentKind;
 
@@ -124,6 +131,10 @@ public static class ActivitiesDesignStorageManifest
         [new(ActivityDefinitionTypeKeyField), new(EntityIdField)];
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionCategoryOrder =>
         [new(ActivityDefinitionCategoryField), new(EntityIdField)];
+    public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionDisplayNameOrder =>
+        [new(ActivityDefinitionDisplayNameField), new(EntityIdField)];
+    public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionDescriptionOrder =>
+        [new(ActivityDefinitionDescriptionField), new(EntityIdField)];
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionVersionOrder =>
         [new(ActivityDefinitionVersionDefinitionIdField), new(ActivityDefinitionVersionSemVerSortKeyField), new(EntityIdField)];
 
@@ -139,18 +150,23 @@ public static class ActivitiesDesignStorageManifest
             .String(SchemaVersionField, 32, column => column.Required())
             .Json(ContentField, column => column.Required())
             .Int64(RevisionField, column => column.Required())
+            .Timestamp(UpdatedAtField, column => column.Required())
             .String(ScopeField, MaximumProjectionLength)
             .String(TenantIdField, 256)
             .Key(IdField)
             .OptimisticConcurrency();
         foreach (var field in ProjectionFields)
         {
-            if (field is IdField or SchemaVersionField or ContentField or RevisionField or ScopeField or TenantIdField)
+            if (field is IdField or SchemaVersionField or ContentField or RevisionField or UpdatedAtField or ScopeField or TenantIdField)
                 continue;
             declaration.String(field, ProjectionLength(field));
         }
         foreach (var index in IndexesFor(id))
-            declaration.Index(index.Name, index.Columns.ToArray());
+            declaration.Index(index.Name, configure =>
+            {
+                foreach (var column in index.Columns)
+                    configure.Column(column);
+            });
         return declaration.Scoped().Build() with { SchemaVersion = StorageSchemaVersion };
     }
 
@@ -161,8 +177,17 @@ public static class ActivitiesDesignStorageManifest
             Index("activity_definition_by_type_key", ActivityDefinitionTypeKeyField, IdField),
             Index("activity_definition_by_category", ActivityDefinitionCategoryField, IdField),
             Index("activity_definition_by_display_name", ActivityDefinitionDisplayNameField, IdField),
-            Index("activity_definition_by_description", ActivityDefinitionDescriptionField, IdField),
-            Index("activity_definition_by_search", ManagementSearchField, IdField)
+            Index("activity_definition_by_description", ActivityDefinitionDescriptionField, IdField)
+        ],
+        ActivityDefinitionVersionDocumentKind =>
+        [
+            Index(ActivityDefinitionVersionByDefinitionIndex,
+                ActivityDefinitionVersionDefinitionIdField,
+                ActivityDefinitionVersionSemVerSortKeyField,
+                ActivityDefinitionVersionIdField),
+            Index(ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
+                ActivityDefinitionVersionDefinitionIdField,
+                ActivityDefinitionVersionSemVerSortKeyField)
         ],
         ActivityDefinitionAuthoringStateDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField), Index(ByHeadVersionIndex, HeadVersionIdField, IdField)],
         ActivityDefinitionDraftDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField)],
@@ -171,9 +196,21 @@ public static class ActivitiesDesignStorageManifest
         ActivityDefinitionVersionLayoutDocumentKind => [Index(ByDefinitionVersionIndex, DefinitionVersionIdField, IdField)],
         ActivityDependencyEdgeDocumentKind => [Index(ByOwnerVersionIndex, OwnerVersionIdField, IdField), Index(ByDependencyVersionIndex, DependencyVersionIdField, IdField)],
         ActivityForkCandidateDocumentKind => [Index(ActivityForkCandidateRetentionIndex, ActivityForkCandidateRetentionField, IdField)],
-        ActivityDefinitionManagementProjectionDocumentKind => [Index("management_definitions_identity_asc", ManagementSortField, ManagementValidFromField, IdField)],
-        ActivityDraftManagementProjectionDocumentKind => [Index("management_drafts_identity_asc", ManagementSortField, ManagementValidFromField, IdField)],
-        ActivityVersionManagementProjectionDocumentKind => [Index("management_versions_identity_asc", ManagementSortField, ManagementValidFromField, IdField)],
+        ActivityDefinitionManagementProjectionDocumentKind =>
+        [
+            Index("management_definitions_identity_asc", ManagementSortField, ManagementValidFromField, IdField),
+            Index(ManagementExpiredIndex, ManagementValidToField, ManagementResourceIdField, ManagementValidFromField)
+        ],
+        ActivityDraftManagementProjectionDocumentKind =>
+        [
+            Index("management_drafts_identity_asc", ManagementSortField, ManagementValidFromField, IdField),
+            Index(ManagementExpiredIndex, ManagementValidToField, ManagementResourceIdField, ManagementValidFromField)
+        ],
+        ActivityVersionManagementProjectionDocumentKind =>
+        [
+            Index("management_versions_identity_asc", ManagementSortField, ManagementValidFromField, IdField),
+            Index(ManagementExpiredIndex, ManagementValidToField, ManagementResourceIdField, ManagementValidFromField)
+        ],
         _ => []
     };
 
@@ -219,8 +256,15 @@ public static class ActivitiesDesignStorageManifest
     {
         ActivityDefinitionTypeKeyField or ActivityDefinitionCategoryField or
             ActivityDefinitionDisplayNameField or ActivityDefinitionDescriptionField or
-            ManagementSearchField or ManagementProviderField or ManagementHeadProviderField or
+            ManagementProviderField or ManagementHeadProviderField or
             ManagementRecommendationProviderField => 256,
+        ManagementSearchField => ManagementSearchMaximumLength,
+        // The SemVer encoder emits an 11-code-unit core plus one code unit per
+        // prerelease identifier marker.  128 is deliberately large enough for
+        // long, valid prerelease identifiers while keeping the three-column
+        // (definitionId, sortKey, id) index within SQL Server's 1,700-byte key
+        // budget (256 + 128 + 450 UTF-16 code units = 1,668 bytes).
+        ActivityDefinitionVersionSemVerSortKeyField => 128,
         ManagementValidFromField or ManagementValidToField or ManagementVisibilityField or
             ManagementSortField or ManagementAuthorityField or ManagementDraftStatusField or
             ManagementVersionLifecycleField or ActivityForkCandidateRetentionField => 128,

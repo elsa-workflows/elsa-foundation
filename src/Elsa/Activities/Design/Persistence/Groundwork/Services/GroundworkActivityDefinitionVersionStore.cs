@@ -94,7 +94,7 @@ public sealed class GroundworkActivityDefinitionVersionStore(
                 new ActivityDesignQueryOrder(
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField),
                 new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)]);
-        var documents = await ActivityDesignQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             store,
             query.DocumentKind,
             query.Identity,

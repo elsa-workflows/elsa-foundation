@@ -10,6 +10,7 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using System.Collections.Concurrent;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
@@ -96,7 +97,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Definition_presentation_update_preserves_immutable_identity_and_authority()
+    public async Task UpdateDefinitionPresentation_Uses_Document_Cas_And_Preserves_Immutable_Identity_State()
     {
         using var harness = await SeededAsync();
         var updated = await harness.Stores.ExecuteAsync(new UpdateActivityDefinitionPresentationRequest(
@@ -111,6 +112,39 @@ public sealed class GroundworkReusableActivityStoreTests
         Assert.Equal("Acme.Sample", persisted.ActivityTypeKey);
         Assert.Equal(ActivityContentAuthorityKind.Design, authoring!.ContentAuthority.Kind);
         Assert.Equal("Finance", updated.Category);
+    }
+
+    [Fact]
+    public async Task UpdateDefinitionPresentation_Rejects_Source_Authority_Without_Writes()
+    {
+        using var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(ActivityContentAuthorityKind.ProviderSource));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(
+            new UpdateActivityDefinitionPresentationRequest(
+                "definition-1", "tenant-a", "Finance", "Updated", null,
+                new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero))));
+
+        Assert.Equal("Samples", (await new GroundworkActivityDefinitionStore(harness.Persistence.Store)
+            .GetAsync("definition-1")).Category);
+    }
+
+    [Fact]
+    public async Task UpdateDefinitionPresentation_Rejects_A_Concurrent_Document_Write_By_Cas()
+    {
+        using var harness = await SeededAsync();
+        var definition = await new GroundworkActivityDefinitionStore(harness.Persistence.Store).GetAsync("definition-1");
+        var current = await harness.Persistence.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, definition.Id);
+        var request = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            definition,
+            GroundworkActivitiesDesignJson.Options) with { ExpectedVersion = current!.Version };
+
+        await harness.Persistence.Store.SaveAsync(request);
+        await Assert.ThrowsAsync<ActivityDesignWriteConflictException>(() => harness.Persistence.Store.SaveAsync(request));
     }
 
     [Fact]
@@ -147,7 +181,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Fork_candidate_apply_is_idempotent_and_commits_reserved_identity()
+    public async Task Fork_candidate_apply_commits_exact_reserved_identity_receipt_and_management_projection_atomically()
     {
         using var harness = Harness.Create();
         var candidate = ForkCandidate();
@@ -167,7 +201,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Fork_candidate_collision_rejects_without_reserved_identity_writes()
+    public async Task Fork_candidate_collision_rejects_without_receipt_or_partial_reserved_identity_writes()
     {
         using var harness = Harness.Create();
         var candidate = ForkCandidate();
@@ -184,7 +218,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Fork_preview_replay_returns_the_first_reservation_and_changed_material_conflicts()
+    public async Task Fork_preview_retries_return_the_first_reservation_and_reject_changed_material()
     {
         using var harness = Harness.Create();
         var first = ForkCandidate();
@@ -205,7 +239,50 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Fork_candidate_retention_prunes_candidates_but_preserves_receipts()
+    public async Task Fork_receipt_replay_rejects_changed_candidate_binding_without_writes()
+    {
+        using var harness = Harness.Create();
+        var first = ForkCandidate();
+        await SaveForkSourceAsync(harness, first);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        var firstRequest = ForkApply(first, "operation-1");
+        await harness.Stores.ExecuteAsync(firstRequest);
+
+        var second = ForkCandidate("candidate-2", "target-definition-2", "target-draft-2");
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(second));
+        var conflict = ForkApply(second, "operation-1") with { ReceiptId = firstRequest.ReceiptId };
+
+        await Assert.ThrowsAsync<ActivityForkIdempotencyConflictException>(() => harness.Stores.ExecuteAsync(conflict));
+        Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(second.ReservedDraft.Id));
+        Assert.Equal(first.Id, (await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId))!.CandidateId);
+    }
+
+    [Fact]
+    public async Task Concurrent_fork_candidates_with_one_operation_identity_have_one_exact_winner()
+    {
+        using var harness = Harness.Create(new YieldingDistributedLockProvider());
+        var first = ForkCandidate();
+        var second = ForkCandidate("candidate-2", "target-definition-2", "target-draft-2", activityTypeKey: "Acme.Other");
+        await SaveForkSourceAsync(harness, first);
+        await SaveForkSourceAsync(harness, second);
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(first));
+        await harness.Stores.ExecuteAsync(new SaveActivityForkCandidateRequest(second));
+
+        var firstRequest = ForkApply(first, "shared-operation");
+        var secondRequest = ForkApply(second, "shared-operation") with { ReceiptId = firstRequest.ReceiptId };
+        var attempts = await Task.WhenAll(
+            CaptureAsync(() => harness.Stores.ExecuteAsync(firstRequest)),
+            CaptureAsync(() => harness.Stores.ExecuteAsync(secondRequest)));
+
+        Assert.Single(attempts, attempt => attempt.Result is not null);
+        Assert.Single(attempts, attempt => attempt.Exception is ActivityForkIdempotencyConflictException);
+        var receipt = await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId);
+        Assert.NotNull(receipt);
+        Assert.Contains(receipt!.CandidateId, new[] { first.Id, second.Id });
+    }
+
+    [Fact]
+    public async Task Fork_candidate_retention_prunes_bounded_candidates_but_preserves_append_only_receipt()
     {
         using var harness = Harness.Create();
         var candidate = ForkCandidate();
@@ -222,7 +299,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Replace_draft_uses_revision_cas_and_updates_layout_together()
+    public async Task Replace_Uses_Revision_Cas_And_Updates_Draft_And_Layout_Together()
     {
         using var harness = await SeededAsync();
         await harness.Stores.ExecuteAsync(new ReplaceActivityDraftRequest(
@@ -239,7 +316,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Contract_proposal_requires_exact_provider_fingerprint_and_preserves_layout()
+    public async Task ApplyContractProposal_Uses_Exact_Provider_Binding_And_Changes_Only_Contract_And_Revisions()
     {
         using var harness = await SeededAsync();
         var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
@@ -264,7 +341,61 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Publication_layout_edge_and_dependency_reads_round_trip()
+    public async Task ApplyContractProposal_Rejects_Stale_Manifest_Fingerprint_Without_Writes()
+    {
+        using var harness = await SeededAsync();
+        var before = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"))!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(
+            new ApplyActivityContractProposalRequest(
+                before.Id, before.TenantId, before.Revision,
+                before.State.Provider.ProviderKey,
+                before.State.Provider.SchemaVersion,
+                "sha256:stale", new("proposal", [], [], []))));
+
+        var persisted = (await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync(before.Id))!;
+        Assert.Equal(before.Revision, persisted.Revision);
+        Assert.Equal(before.State.Contract.ContractSchemaVersion, persisted.State.Contract.ContractSchemaVersion);
+        Assert.Equal(before.Revision, (await harness.Stores.FindDraftLayoutAsync(before.Id))!.Revision);
+    }
+
+    [Theory]
+    [InlineData(ActivityContentAuthorityKind.Design, "unexpected-head")]
+    [InlineData(ActivityContentAuthorityKind.ProviderSource, null)]
+    public async Task CreateDraft_Rejects_Stale_Head_Or_Provider_Authority_Without_Writes(
+        ActivityContentAuthorityKind authority,
+        string? expectedHead)
+    {
+        using var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(authority, headVersionId: "head"));
+        var request = new CreateActivityDraftRequest(
+            Draft("draft-2", "definition-1"),
+            DraftLayout("draft-layout-2", "draft-2"),
+            expectedHead);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(request));
+        Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-2"));
+        Assert.Null(await harness.Stores.FindDraftLayoutAsync("draft-2"));
+    }
+
+    [Fact]
+    public async Task Validation_Is_Pinned_To_The_Current_Draft_Revision()
+    {
+        using var harness = await SeededAsync();
+        await harness.Stores.ExecuteAsync(Validation(0));
+
+        await harness.Stores.ExecuteAsync(new ReplaceActivityDraftRequest(
+            "draft-1", 0, State("updated"), [LayoutRecord("node-2")]));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(Validation(0, "validation-stale")));
+
+        var stored = await ((IActivityDraftValidationStore)harness.Stores).FindAsync("draft-1", 0);
+        Assert.NotNull(stored);
+        Assert.Equal("activity.test", Assert.Single(stored!.Diagnostics).Code);
+        Assert.Null(await ((IActivityDraftValidationStore)harness.Stores).FindAsync("draft-1", 1));
+    }
+
+    [Fact]
+    public async Task Publication_Layout_Edge_Lifecycle_And_Dependency_Reads_RoundTrip()
     {
         using var harness = Harness.Create();
         await harness.SaveAsync(new ActivityDefinition { Id = "definition-parent", ActivityTypeKey = "Acme.Parent", Category = "Samples" });
@@ -300,7 +431,7 @@ public sealed class GroundworkReusableActivityStoreTests
     }
 
     [Fact]
-    public async Task Dependency_projection_rebuild_exposes_a_bound_watermark_and_expires_old_cursors()
+    public async Task Mixed_owner_dependency_projection_rebuilds_with_a_bound_watermark()
     {
         using var harness = Harness.Create();
         await harness.SaveAsync(Publication("publication-child", "version-child", "definition-child", "2.0.0"));
@@ -329,6 +460,48 @@ public sealed class GroundworkReusableActivityStoreTests
             null, first.Watermark, 0, 10)));
     }
 
+    [Fact]
+    public async Task Recommendation_move_picker_and_lifecycle_replacement_share_exact_groundwork_cas()
+    {
+        using var harness = Harness.Create();
+        await harness.Stores.ExecuteAsync(CreateRequest(headVersionId: "version-2", recommendedVersionId: "version-1"));
+        var first = Publication("publication-1", "version-1", "definition-1", "1.0.0");
+        var second = Publication("publication-2", "version-2", "definition-1", "2.0.0");
+        first.TenantId = second.TenantId = "tenant-a";
+        await harness.SaveAsync(first);
+        await harness.SaveAsync(second);
+
+        await harness.Stores.ExecuteAsync(new SetActivityDefinitionRecommendationRequest(
+            "definition-1", "tenant-a", "version-2", "version-1", "version-2",
+            ActivityDefinitionVersionLifecycle.Active,
+            new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero)));
+        await harness.Stores.ExecuteAsync(new ChangeActivityVersionLifecycleRequest(
+            "version-2", ActivityDefinitionVersionLifecycle.Active,
+            ActivityDefinitionVersionLifecycle.Retired, "Superseded", "tenant-a",
+            new("version-2", "version-2", ActivityRecommendationDisposition.Replace,
+                "version-1", ActivityDefinitionVersionLifecycle.Active)));
+
+        Assert.Equal("version-1", (await harness.Stores.FindAsync("definition-1"))!.RecommendedVersionId);
+        Assert.Equal(ActivityDefinitionVersionLifecycle.Retired,
+            (await ((IActivityDefinitionVersionPublicationStore)harness.Stores).FindAsync("version-2"))!.Lifecycle);
+    }
+
+    [Fact]
+    public async Task CreateDefinition_Late_Batch_Conflict_Rolls_Back_Earlier_Writes()
+    {
+        using var harness = Harness.Create();
+        await harness.SaveAsync(new ActivityDefinitionDraftLayout
+        {
+            Id = "draft-layout-1", DraftId = "unrelated-draft", Revision = 0, Records = []
+        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Stores.ExecuteAsync(CreateRequest()));
+        Assert.Null(await new GroundworkActivityDefinitionStore(harness.Persistence.Store).FindAsync(
+            new Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter { Id = "definition-1" }));
+        Assert.Null(await ((IActivityDefinitionDraftStore)harness.Stores).FindAsync("draft-1"));
+        Assert.NotNull(await harness.Persistence.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, "draft-layout-1"));
+    }
+
     private static async Task<TestHarness> SeededAsync()
     {
         var persistence = ActivityDesignV2TestHarness.Create();
@@ -348,7 +521,11 @@ public sealed class GroundworkReusableActivityStoreTests
             new GroundworkActivityManagementProjectionWriter(persistence.Store, locks, persistence.Store));
     }
 
-    private static CreateActivityDefinitionRequest CreateRequest(string? tenantId = "tenant-a")
+    private static CreateActivityDefinitionRequest CreateRequest(
+        ActivityContentAuthorityKind authority = ActivityContentAuthorityKind.Design,
+        string? headVersionId = null,
+        string? recommendedVersionId = null,
+        string? tenantId = "tenant-a")
     {
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return new(
@@ -360,7 +537,9 @@ public sealed class GroundworkReusableActivityStoreTests
             new ActivityDefinitionAuthoringState
             {
                 Id = "authoring-1", TenantId = tenantId, DefinitionId = "definition-1",
-                ContentAuthority = new(ActivityContentAuthorityKind.Design, "design"), CreatedAt = now, LastModifiedAt = now
+                ContentAuthority = new(authority, authority == ActivityContentAuthorityKind.Design ? "design" : "provider"),
+                HeadVersionId = headVersionId, RecommendedVersionId = recommendedVersionId,
+                CreatedAt = now, LastModifiedAt = now
             },
             new ActivityDefinitionDraft
             {
@@ -374,6 +553,44 @@ public sealed class GroundworkReusableActivityStoreTests
                 Records = [new("node-1", JsonElement.Parse("{}"))], CreatedAt = now, LastModifiedAt = now
             });
     }
+
+    private static ActivityDefinitionDraft Draft(string id, string definitionId) => new()
+    {
+        Id = id,
+        DefinitionId = definitionId,
+        TenantId = "tenant-a",
+        Revision = 0,
+        State = State("initial"),
+        CreatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        LastModifiedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
+    };
+
+    private static ActivityDefinitionDraftLayout DraftLayout(string id, string draftId) => new()
+    {
+        Id = id,
+        DraftId = draftId,
+        TenantId = "tenant-a",
+        Revision = 0,
+        Records = [LayoutRecord("node-2")],
+        CreatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        LastModifiedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
+    };
+
+    private static ActivityDraftValidationState Validation(long revision, string id = "validation-1") => new()
+    {
+        Id = id,
+        DraftId = "draft-1",
+        Revision = revision,
+        ValidatedAt = new DateTimeOffset(2026, 1, 1, 0, 1, 0, TimeSpan.Zero),
+        Diagnostics =
+        [
+            new ActivityDiagnostic(
+                "activity.test",
+                ActivityDiagnosticSeverity.Warning,
+                "Test diagnostic",
+                new ActivityDiagnosticSubject("Draft", "draft-1", Revision: revision))
+        ]
+    };
 
     private static ActivityDefinitionVersionPublication Publication(
         string id,
@@ -502,10 +719,10 @@ public sealed class GroundworkReusableActivityStoreTests
 
         public GroundworkReusableActivityStores Stores { get; }
 
-        public static Harness Create()
+        public static Harness Create(IDistributedLockProvider? lockProvider = null)
         {
             var persistence = ActivityDesignV2TestHarness.Create();
-            var locks = new ImmediateDistributedLockProvider();
+            var locks = lockProvider ?? new ImmediateDistributedLockProvider();
             return new(
                 persistence,
                 new GroundworkReusableActivityStores(
@@ -524,6 +741,7 @@ public sealed class GroundworkReusableActivityStoreTests
                 ActivityDefinitionAuthoringState => (ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection),
                 ActivityDefinitionDraft => (ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftCollection),
                 ActivityDefinitionDraftLayout => (ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionDraftLayoutCollection),
+                ActivityDraftValidationState => (ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind, ActivitiesDesignStorageManifest.ActivityDraftValidationCollection),
                 ActivityDefinitionVersionPublication => (ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection),
                 ActivityDefinitionVersionLayout => (ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionLayoutCollection),
                 ActivityDependencyEdge => (ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind, ActivitiesDesignStorageManifest.ActivityDependencyEdgeCollection),
@@ -540,5 +758,53 @@ public sealed class GroundworkReusableActivityStoreTests
     private sealed class FixedClock : ISystemClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
+    }
+
+    private static async Task<(ActivityForkApplyResult? Result, Exception? Exception)> CaptureAsync(
+        Func<Task<ActivityForkApplyResult>> operation)
+    {
+        try
+        {
+            return (await operation(), null);
+        }
+        catch (Exception exception)
+        {
+            return (null, exception);
+        }
+    }
+
+    private sealed class YieldingDistributedLockProvider : IDistributedLockProvider
+    {
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> locks = new(StringComparer.Ordinal);
+
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            var gate = locks.GetOrAdd(name, static _ => new(1, 1));
+            return gate.Wait(timeout ?? TimeSpan.Zero, cancellationToken) ? new Handle(gate) : null;
+        }
+
+        public async ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            var gate = locks.GetOrAdd(name, static _ => new(1, 1));
+            return await gate.WaitAsync(timeout ?? TimeSpan.Zero, cancellationToken) ? new Handle(gate) : null;
+        }
+
+        public async ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            var gate = locks.GetOrAdd(name, static _ => new(1, 1));
+            if (!await gate.WaitAsync(timeout ?? Timeout.InfiniteTimeSpan, cancellationToken))
+                throw new TimeoutException($"Timed out acquiring test lock '{name}'.");
+            return new Handle(gate);
+        }
+
+        private sealed class Handle(SemaphoreSlim gate) : IDistributedSynchronizationHandle
+        {
+            private SemaphoreSlim? held = gate;
+            public CancellationToken HandleLostToken => CancellationToken.None;
+            public void Dispose() => Interlocked.Exchange(ref held, null)?.Release();
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
     }
 }
