@@ -166,6 +166,21 @@ and schema lock were removed after shutdown.
   and translated to redacted legacy 500 responses while cancellation still propagates, with direct
   HTTP regression bites. Independent round 3 reports 0 Critical, 0 Required, and 0 Advisory findings
   after the report/checklist closeout recorded here.
+- Round 4 ran on the published PR. The `github-code-quality` analyzer raised one real defect and nine
+  advisory "generic catch clause" findings. The defect is fixed: `CollectibilityEndpointDataSource`
+  signalled the exchanged-out `CancellationTokenSource` without disposing it, and it is now cancelled
+  and disposed in a `finally`. The nine advisory findings are declined and answered in-thread on the
+  PR. That catch clause is the byte-pinned legacy 500 contract and the control that keeps
+  infrastructure detail out of the response body, and each suggested replacement would have stopped
+  catching the `IOException` and `NotSupportedException` that the round-2 bites inject to prove the
+  leak is closed, because both derive from `SystemException`. Narrowing the first-party catch surface
+  is a deliberate contract change and belongs with #1376.
+- Round 4 diff review also caught two `FastEndpoints` references this wave invalidated and no gate
+  covered. `WorkflowsPublishingFeature`'s remarks still explained the §2.11 composition boundary in
+  terms of the Api feature keeping a `FastEndpointsFeatureBase` base, which was true on `main` and
+  false once this wave moved that feature to `IWebShellFeature`; and `Elsa.Workflows.Publishing.Core`
+  still called `.Api` the FastEndpoints shell. Both are corrected as comment-only changes, with the
+  build green and the maps still describing the tree.
 
 Exact local gate commands:
 
