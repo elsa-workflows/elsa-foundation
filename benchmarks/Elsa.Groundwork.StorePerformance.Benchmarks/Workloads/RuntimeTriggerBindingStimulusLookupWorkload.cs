@@ -152,11 +152,11 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
 
         for (var publication = 0; publication < PublicationCount; publication++)
         {
-            var publicationId = PublicationId(logicalScope, publication);
-            var bindings = CreateBindings(logicalScope, publication, publicationId).ToArray();
-            await scope.TriggerBindings.PrepareActivationAsync(publicationId, bindings, cancellationToken);
+            var activationId = ActivationId(logicalScope, publication);
+            var bindings = CreateBindings(logicalScope, publication, activationId).ToArray();
+            await scope.TriggerBindings.PrepareActivationAsync(activationId, bindings, cancellationToken);
             bindingsByPublication.Add(
-                publicationId,
+                activationId,
                 bindings
                     .Select(binding => binding with { IsActive = publication != PublicationCount - 1 })
                     .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
@@ -165,12 +165,12 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         }
 
         // Exercise replacement without changing any of the 31 primary exact matches.
-        var replacedPublicationId = PublicationId(logicalScope, PublicationCount - 1);
-        await scope.TriggerBindings.ActivateAsync(replacedPublicationId, replacedPublicationId: null, cancellationToken);
+        var replacedActivationId = ActivationId(logicalScope, PublicationCount - 1);
+        await scope.TriggerBindings.ActivateAsync(replacedActivationId, replacedActivationId: null, cancellationToken);
         for (var publication = 0; publication < PublicationCount - 1; publication++)
         {
-            var replaced = publication == PublicationCount - 2 ? replacedPublicationId : null;
-            await scope.TriggerBindings.ActivateAsync(PublicationId(logicalScope, publication), replaced, cancellationToken);
+            var replaced = publication == PublicationCount - 2 ? replacedActivationId : null;
+            await scope.TriggerBindings.ActivateAsync(ActivationId(logicalScope, publication), replaced, cancellationToken);
         }
 
         for (var publication = 0; publication < PublicationCount; publication++)
@@ -194,7 +194,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         return new SeededScope(tenantId, bindingsByPublication, activeExact, activeType, references.OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal).ToArray());
     }
 
-    private static IEnumerable<WorkflowTriggerBinding> CreateBindings(string logicalScope, int publication, string publicationId)
+    private static IEnumerable<WorkflowTriggerBinding> CreateBindings(string logicalScope, int publication, string activationId)
     {
         for (var binding = 0; binding < BindingsPerPublication; binding++)
         {
@@ -239,7 +239,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
                 null,
                 new Dictionary<string, string>(StringComparer.Ordinal) { ["seed"] = Seed, ["scope"] = logicalScope },
                 FixedNowUtc.AddMinutes(-global - 1),
-                publicationId,
+                activationId,
                 $"slot-{binding:D4}",
                 TriggerCardinality.FanOut,
                 IsActive: false);
@@ -259,7 +259,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             FixedNowUtc.AddDays(-1),
             FixedNowUtc.AddHours(-1),
             WorkflowExecutableReferenceScope.Published,
-            ActivationId: PublicationId(logicalScope, publication),
+            ActivationId: ActivationId(logicalScope, publication),
             SlotId: $"slot-{publication:D4}",
             TenantId: tenantId);
 
@@ -344,21 +344,21 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         IReadOnlyDictionary<string, IReadOnlyList<WorkflowTriggerBinding>> expectedByPublication,
         CancellationToken cancellationToken)
     {
-        foreach (var (publicationId, expected) in expectedByPublication.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var (activationId, expected) in expectedByPublication.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             var results = new List<WorkflowTriggerBinding>();
             var seenTokens = new HashSet<string>(StringComparer.Ordinal);
             string? token = null;
             do
             {
-                var query = new WorkflowTriggerBindingPublicationPageQuery(publicationId, PageSize, token);
+                var query = new WorkflowTriggerBindingActivationPageQuery(activationId, PageSize, token);
                 var page = await store.ListByActivationAsync(query, cancellationToken);
-                RequireBindingPage(page, query, expected, results.Count, $"publication projection '{publicationId}'", seenTokens);
+                RequireBindingPage(page, query, expected, results.Count, $"publication projection '{activationId}'", seenTokens);
                 results.AddRange(page.Items);
                 token = page.NextContinuationToken;
             } while (token is not null);
 
-            RequireBindingSequence(results, expected, $"publication projection '{publicationId}'");
+            RequireBindingSequence(results, expected, $"publication projection '{activationId}'");
         }
     }
 
@@ -461,7 +461,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
     private static int Int(string name) => (int)Scenario.Parameters[name];
     private static string StimulusType(string logicalScope) => logicalScope == "primary" ? PrimaryStimulusType : SecondaryStimulusType;
     private static string StimulusHash(string logicalScope) => logicalScope == "primary" ? PrimaryStimulusHash : SecondaryStimulusHash;
-    private static string PublicationId(string logicalScope, int publication) => $"publication-{logicalScope}-{publication:D4}";
+    private static string ActivationId(string logicalScope, int publication) => $"publication-{logicalScope}-{publication:D4}";
     private static string ArtifactId(string logicalScope, int publication) => $"artifact-{logicalScope}-{publication:D4}";
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 

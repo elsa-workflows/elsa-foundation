@@ -114,7 +114,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
-            publicationId: $"publication-parent-{caseId}",
+            activationId: $"publication-parent-{caseId}",
             slotId: $"slot-parent-{caseId}");
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(parentExecutable);
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(parentReference);
@@ -215,7 +215,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
-            publicationId: $"publication-parent-{caseId}",
+            activationId: $"publication-parent-{caseId}",
             slotId: $"slot-parent-{caseId}");
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(parentExecutable);
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(parentReference);
@@ -615,7 +615,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
     private static WorkflowExecutableSourceReference NewSourceReference(
         string sourceReferenceId,
         WorkflowExecutableIdentity identity,
-        string publicationId,
+        string activationId,
         string slotId) =>
         new(
             SourceReferenceId: sourceReferenceId,
@@ -630,7 +630,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId);
 
     private static T AssertSingle<T>(IReadOnlyCollection<T> values) =>

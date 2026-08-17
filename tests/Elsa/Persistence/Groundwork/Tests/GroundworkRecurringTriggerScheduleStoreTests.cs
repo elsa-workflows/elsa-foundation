@@ -144,8 +144,8 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             GroundworkTestSerialization.Serializer,
             queries);
 
-        await store.ListByPublicationPageAsync(
-            new RecurringTriggerSchedulePublicationPageQuery("publication-1", limit: 17, continuationToken: "next"));
+        await store.ListByActivationPageAsync(
+            new RecurringTriggerScheduleActivationPageQuery("publication-1", limit: 17, continuationToken: "next"));
         await store.ListByArtifactPageAsync(
             new RecurringTriggerScheduleArtifactPageQuery("artifact-1", limit: 13, continuationToken: "artifact-next"));
 
@@ -195,12 +195,12 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         await store.PrepareActivationAsync(
             "publication-1",
             [
-                NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a"),
-                NewSchedule("artifact-1", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-1", slotId: "slot-a")
+                NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), activationId: "publication-1", slotId: "slot-a"),
+                NewSchedule("artifact-1", "node-b", TimeSpan.FromMinutes(2), activationId: "publication-1", slotId: "slot-a")
             ]);
         await store.PrepareActivationAsync(
             "publication-2",
-            [NewSchedule("artifact-1", "node-c", TimeSpan.FromMinutes(3), publicationId: "publication-2", slotId: "slot-b")]);
+            [NewSchedule("artifact-1", "node-c", TimeSpan.FromMinutes(3), activationId: "publication-2", slotId: "slot-b")]);
 
         var schedules = await store.ListByActivationAsync("publication-1");
 
@@ -213,7 +213,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
             schedules.Select(schedule => schedule.ScheduleId).OrderBy(x => x));
         Assert.All(schedules, schedule =>
         {
-            Assert.Equal("publication-1", schedule.PublicationId);
+            Assert.Equal("publication-1", schedule.ActivationId);
             Assert.False(schedule.IsActive);
         });
     }
@@ -328,7 +328,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 "artifact-1",
                 "node-a",
                 TimeSpan.FromMinutes(1),
-                publicationId: "publication-1",
+                activationId: "publication-1",
                 slotId: "slot-a")]);
 
         var projectionSave = Assert.Single(observingStore.StagedSaves.Where(request =>
@@ -354,12 +354,12 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
 
         await store.PrepareActivationAsync(
             "publication-1",
-            [NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), publicationId: "publication-1", slotId: "slot-a")]);
+            [NewSchedule("artifact-1", "node-a", TimeSpan.FromMinutes(1), activationId: "publication-1", slotId: "slot-a")]);
         await store.PrepareActivationAsync(
             "publication-2",
-            [NewSchedule("artifact-2", "node-b", TimeSpan.FromMinutes(2), publicationId: "publication-2", slotId: "slot-b")]);
+            [NewSchedule("artifact-2", "node-b", TimeSpan.FromMinutes(2), activationId: "publication-2", slotId: "slot-b")]);
 
-        await store.ActivateAsync("publication-1", replacedPublicationId: null);
+        await store.ActivateAsync("publication-1", replacedActivationId: null);
         var stagedBeforeReplacement = observingStore.StagedSaves.Count;
         await store.ActivateAsync("publication-2", "publication-1");
 
@@ -388,7 +388,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 "artifact-old",
                 "node-old",
                 TimeSpan.FromMinutes(1),
-                publicationId: "publication-old",
+                activationId: "publication-old",
                 slotId: "slot-a")]);
         await store.PrepareActivationAsync(
             "publication-a",
@@ -396,7 +396,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 "artifact-a",
                 "node-a",
                 TimeSpan.FromMinutes(1),
-                publicationId: "publication-a",
+                activationId: "publication-a",
                 slotId: "slot-a")]);
         await store.PrepareActivationAsync(
             "publication-b",
@@ -404,9 +404,9 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
                 "artifact-b",
                 "node-b",
                 TimeSpan.FromMinutes(1),
-                publicationId: "publication-b",
+                activationId: "publication-b",
                 slotId: "slot-a")]);
-        await store.ActivateAsync("publication-old", replacedPublicationId: null);
+        await store.ActivateAsync("publication-old", replacedActivationId: null);
         await store.ActivateAsync("publication-a", "publication-old");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -478,11 +478,11 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         string executableNodeId,
         TimeSpan nextOffset,
         string expression = "PT5M",
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null) => new(
-        ScheduleId: publicationId is null
+        ScheduleId: activationId is null
             ? RecurringTriggerSchedule.BuildId(artifactId, executableNodeId)
-            : RecurringTriggerSchedule.BuildId(publicationId, artifactId, executableNodeId),
+            : RecurringTriggerSchedule.BuildId(activationId, artifactId, executableNodeId),
         ArtifactId: artifactId,
         ExecutableNodeId: executableNodeId,
         StimulusType: "Timer",
@@ -491,7 +491,7 @@ public sealed class GroundworkRecurringTriggerScheduleStoreTests
         Expression: expression,
         NextOccurrence: Now + nextOffset,
         CreatedAt: Now,
-        PublicationId: publicationId,
+        ActivationId: activationId,
         SlotId: slotId);
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>

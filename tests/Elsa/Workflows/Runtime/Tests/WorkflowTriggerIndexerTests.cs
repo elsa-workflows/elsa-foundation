@@ -24,16 +24,16 @@ public sealed class WorkflowTriggerIndexerTests
 
         Assert.Empty((await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery("Event", "sha256:event:shared"))).Items);
-        var defaultBinding = Assert.Single(await store.ListAllByPublicationAsync("publication-default-v1"));
-        var blueBinding = Assert.Single(await store.ListAllByPublicationAsync("publication-blue"));
+        var defaultBinding = Assert.Single(await store.ListAllByActivationAsync("publication-default-v1"));
+        var blueBinding = Assert.Single(await store.ListAllByActivationAsync("publication-blue"));
         Assert.Equal("publication-default-v1", defaultBinding.ActivationId);
         Assert.Equal("slot-default", defaultBinding.SlotId);
         Assert.Equal("publication-blue", blueBinding.ActivationId);
         Assert.Equal("slot-blue", blueBinding.SlotId);
         Assert.NotEqual(defaultBinding.TriggerBindingId, blueBinding.TriggerBindingId);
 
-        await store.ActivateAsync("publication-default-v1", replacedPublicationId: null);
-        await store.ActivateAsync("publication-blue", replacedPublicationId: null);
+        await store.ActivateAsync("publication-default-v1", replacedActivationId: null);
+        await store.ActivateAsync("publication-blue", replacedActivationId: null);
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
@@ -43,7 +43,7 @@ public sealed class WorkflowTriggerIndexerTests
                 .Order(StringComparer.Ordinal));
 
         await indexer.PrepareActivationAsync(executable, "publication-default-v2", "slot-default");
-        await store.ActivateAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
+        await store.ActivateAsync("publication-default-v2", replacedActivationId: "publication-default-v1");
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],

@@ -52,7 +52,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ByTemplateIdIndex = "by-template-id";
     public const string BySourceReferenceIdIndex = "by-source-reference-id";
     public const string ByExecutionScopeIndex = "by-execution-scope";
-    public const string ByPublicationIndex = "by-publication";
+    public const string ByActivationIndex = "by-activation";
     public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
     public const string ByParentWorkflowExecutionIndex = "by-parent-workflow-execution";
     public const string ByChildWorkflowExecutionIndex = "by-child-workflow-execution";
@@ -105,7 +105,7 @@ public static class ElsaRuntimeStorageManifest
     public const string ExecutableActivityTemplateIdField = "template.templateId";
     public const string WorkflowExecutableSourceReferenceIdField = "reference.sourceReferenceId";
     public const string ExecutionScopeIdField = "executionScopeId";
-    public const string PublicationIdField = "activationId";
+    public const string ActivationIdField = "activationId";
     public const string ListAllQuery = "list-all";
     public const string ListByWorkflowExecutionQuery = "list-by-workflow-execution";
     public const string ListPendingSchedulerWorkflowExecutionsQuery = "list-pending-scheduler-workflow-executions";
@@ -497,10 +497,10 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowTriggerBindingById = "by-trigger-binding-id";
     public const string WorkflowTriggerBindingByArtifactAndId =
         "by-artifact-and-trigger-binding-id";
-    public const string WorkflowTriggerBindingByPublicationAndId =
-        "by-publication-and-trigger-binding-id";
+    public const string WorkflowTriggerBindingByActivationAndId =
+        "by-activation-and-trigger-binding-id";
 
-    /// <summary>Durable prepared/active marker for a publication-owned Runtime serving projection.</summary>
+    /// <summary>Durable prepared/active marker for an activation-owned Runtime serving projection.</summary>
     public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
 
     /// <summary>
@@ -524,8 +524,8 @@ public static class ElsaRuntimeStorageManifest
     /// <summary>Index used by <c>IWorkflowTriggerBindingStore.ListByArtifactAsync</c> and the republish replace path.</summary>
     public const string WorkflowTriggerBindingByArtifact = ByArtifactIndex;
 
-    /// <summary>Index used by publication projection prepare, activate, and delete operations.</summary>
-    public const string WorkflowTriggerBindingByPublication = ByPublicationIndex;
+    /// <summary>Index used by activation projection prepare, activate, and delete operations.</summary>
+    public const string WorkflowTriggerBindingByActivation = ByActivationIndex;
 
     public const string ListTriggerBindingsByStimulusQuery = "list-by-stimulus";
     public const string ListTriggerBindingsByStimulusAndTypeQuery = "list-by-stimulus-and-type";
@@ -536,8 +536,8 @@ public static class ElsaRuntimeStorageManifest
     // Durable recurring-trigger schedule store (W16). Each Timer/Cron start trigger in a published artifact
     // becomes one schedule document with no execution id, so the recurring-trigger pump can start a NEW
     // instance on each occurrence across process restarts. The by-next-occurrence route bounds the due-schedule
-    // sweep by the persisted cursor; the by-artifact index serves replace-on-republish and the by-publication
-    // index serves publication projection prepare/activate/delete.
+    // sweep by the persisted cursor; the by-artifact index serves replace-on-republish and the by-activation
+    // index serves activation projection prepare/activate/delete.
     public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
 
     /// <summary>Index used by the recurring-trigger pump's due-schedule sweep (constant partition).</summary>
@@ -546,11 +546,11 @@ public static class ElsaRuntimeStorageManifest
     /// <summary>Index used by the recurring-schedule replace-on-republish delete path.</summary>
     public const string RecurringTriggerScheduleByArtifact = ByArtifactIndex;
 
-    /// <summary>Nested path to the publication id inside the persisted recurring-schedule envelope.</summary>
-    public const string RecurringTriggerSchedulePublicationIdField = "schedule.publicationId";
+    /// <summary>Nested path to the activation id inside the persisted recurring-schedule envelope.</summary>
+    public const string RecurringTriggerScheduleActivationIdField = "schedule.activationId";
 
-    /// <summary>Index used by publication projection prepare, activate, and delete operations.</summary>
-    public const string RecurringTriggerScheduleByPublication = ByPublicationIndex;
+    /// <summary>Index used by activation projection prepare, activate, and delete operations.</summary>
+    public const string RecurringTriggerScheduleByActivation = ByActivationIndex;
 
     /// <summary>Nested path to the mutable recurring fire cursor inside the persisted recurring-schedule envelope.</summary>
     public const string RecurringTriggerScheduleNextOccurrenceField = "schedule.nextOccurrence";
@@ -561,8 +561,8 @@ public static class ElsaRuntimeStorageManifest
     public const string RecurringTriggerScheduleByNextOccurrence = "by-next-occurrence";
     public const string RecurringTriggerScheduleByActiveNextOccurrenceAndScheduleId =
         "by-active-next-occurrence-and-schedule-id";
-    public const string RecurringTriggerScheduleByPublicationAndScheduleId =
-        "by-publication-and-schedule-id";
+    public const string RecurringTriggerScheduleByActivationAndScheduleId =
+        "by-activation-and-schedule-id";
     public const string RecurringTriggerScheduleByArtifactAndScheduleId =
         "by-artifact-and-schedule-id";
 
@@ -1024,13 +1024,13 @@ public static class ElsaRuntimeStorageManifest
                     Boolean(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField),
                     Keyword(WorkflowTriggerBindingById, TriggerBindingIdField, isUnique: true),
                     Keyword(ByArtifactIndex, ArtifactIdField),
-                    Keyword(ByPublicationIndex, PublicationIdField)
+                    Keyword(ByActivationIndex, ActivationIdField)
                 ],
                 [
                     Query(ListTriggerBindingsByStimulusQuery, ByStimulusIndex),
                     Query(ListTriggerBindingsByStimulusTypeQuery, ByStimulusTypeIndex),
                     Query(ListTriggerBindingsByArtifactQuery, ByArtifactIndex),
-                    Query(ListTriggerBindingsByPublicationQuery, ByPublicationIndex)
+                    Query(ListTriggerBindingsByPublicationQuery, ByActivationIndex)
                 ]),
             Unit(
                 RecurringTriggerScheduleDocumentKind,
@@ -1038,7 +1038,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByArtifactIndex, ArtifactIdField),
-                    Keyword(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField),
+                    Keyword(ByActivationIndex, RecurringTriggerScheduleActivationIdField),
                     Keyword(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField),
                     Boolean(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField),
                     DateTime(RecurringTriggerScheduleByNextOccurrence, RecurringTriggerScheduleNextOccurrenceField)
@@ -1046,7 +1046,7 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex),
-                    Query(ListRecurringTriggerSchedulesByPublicationQuery, ByPublicationIndex),
+                    Query(ListRecurringTriggerSchedulesByPublicationQuery, ByActivationIndex),
                     Query(
                         ListDueRecurringTriggerSchedulesQuery,
                         RecurringTriggerScheduleByNextOccurrence,

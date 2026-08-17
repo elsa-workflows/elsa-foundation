@@ -272,7 +272,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// until <see cref="ActivatePublishedHttpTriggerAsync"/> switches authority.
     /// </summary>
     public async Task PreparePublishedHttpTriggerAsync(
-        string publicationId,
+        string activationId,
         string slotId,
         string artifactId,
         string path,
@@ -283,7 +283,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await SaveExecutableAsync(executable);
         await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
             new WorkflowExecutableSourceReference(
-                $"reference:{publicationId}",
+                $"reference:{activationId}",
                 artifactId,
                 "WorkflowDefinitionVersion",
                 executable.Identity.DefinitionVersionId,
@@ -294,10 +294,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
                 WorkflowExecutableReferenceScope.Published,
-                ActivationId: publicationId,
+                ActivationId: activationId,
                 SlotId: slotId));
         await Services.GetRequiredService<IWorkflowTriggerIndexer>()
-            .PrepareActivationAsync(executable, publicationId, slotId);
+            .PrepareActivationAsync(executable, activationId, slotId);
     }
 
     /// <summary>
@@ -305,19 +305,19 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// resolves the complete active binding set and atomically replaces the live route table.
     /// </summary>
     public async Task ActivatePublishedHttpTriggerAsync(
-        string publicationId,
-        string? replacedPublicationId,
+        string activationId,
+        string? replacedActivationId,
         string artifactId)
     {
         var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
-        await store.ActivateAsync(publicationId, replacedPublicationId);
-        var bindings = await store.ListAllByPublicationAsync(publicationId);
+        await store.ActivateAsync(activationId, replacedActivationId);
+        var bindings = await store.ListAllByActivationAsync(activationId);
         await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
     }
 
     /// <summary>Removes a prepared projection so a subsequent activation exercises the real missing-candidate failure.</summary>
-    public async Task RemovePreparedPublishedHttpTriggerAsync(string publicationId) =>
-        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByActivationAsync(publicationId);
+    public async Task RemovePreparedPublishedHttpTriggerAsync(string activationId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByActivationAsync(activationId);
 
     /// <summary>
     /// Retires an artifact-scoped start projection while retaining its executable and any waiting bookmarks. Used

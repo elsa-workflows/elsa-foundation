@@ -63,30 +63,30 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
         WorkflowExecutable executable,
-        string publicationId,
+        string activationId,
         string slotId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(executable);
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
 
         var bindings = _extractor.Evaluate(executable).Bindings
             .Select(binding => binding with
             {
                 TriggerBindingId = WorkflowTriggerBinding.BuildId(
-                    publicationId,
+                    activationId,
                     binding.ArtifactId,
                     binding.ExecutableNodeId,
                     binding.StimulusHash),
-                ActivationId = publicationId,
+                ActivationId = activationId,
                 SlotId = slotId,
                 IsActive = false
             })
             .ToArray();
 
         await ValidateAsync(executable.Identity.ArtifactId, bindings, cancellationToken);
-        await _store.PrepareActivationAsync(publicationId, bindings, cancellationToken);
+        await _store.PrepareActivationAsync(activationId, bindings, cancellationToken);
         return bindings;
     }
 

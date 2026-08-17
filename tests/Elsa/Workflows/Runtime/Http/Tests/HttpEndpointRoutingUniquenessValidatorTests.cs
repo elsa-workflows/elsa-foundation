@@ -25,13 +25,13 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
     {
         var current = PublicationBinding(
             artifactId: "artifact-current",
-            publicationId: "publication-current",
+            activationId: "publication-current",
             slotId: "slot-default",
             definitionId: "definition-1");
         await ActivateAsync(current);
         var replacement = PublicationBinding(
             artifactId: "artifact-replacement",
-            publicationId: "publication-replacement",
+            activationId: "publication-replacement",
             slotId: "slot-default",
             definitionId: "definition-1");
 
@@ -48,13 +48,13 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
     {
         var blue = PublicationBinding(
             artifactId: "artifact-shared",
-            publicationId: "publication-blue",
+            activationId: "publication-blue",
             slotId: "slot-blue",
             definitionId: "definition-1");
         await ActivateAsync(blue);
         var candidate = PublicationBinding(
             artifactId: "artifact-shared",
-            publicationId: "publication-default",
+            activationId: "publication-default",
             slotId: "slot-default",
             definitionId: "definition-1");
 
@@ -140,18 +140,18 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
     private async Task ActivateAsync(WorkflowTriggerBinding binding)
     {
         await _store.PrepareActivationAsync(binding.ActivationId!, [binding]);
-        await _store.ActivateAsync(binding.ActivationId!, replacedPublicationId: null);
+        await _store.ActivateAsync(binding.ActivationId!, replacedActivationId: null);
     }
 
     private static WorkflowTriggerBinding PublicationBinding(
         string artifactId,
-        string publicationId,
+        string activationId,
         string slotId,
         string definitionId) =>
         Bindings.HttpEndpoint(artifactId, "node-http", "orders/{id}", "GET", definitionId) with
         {
-            TriggerBindingId = $"{publicationId}:node-http:orders-get",
-            ActivationId = publicationId,
+            TriggerBindingId = $"{activationId}:node-http:orders-get",
+            ActivationId = activationId,
             SlotId = slotId
         };
 }

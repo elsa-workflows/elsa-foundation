@@ -351,7 +351,7 @@ public sealed class StimulusRouterTests
     private WorkflowTriggerBinding Binding(
         string artifactId,
         string nodeId,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null,
         string? correlationScope = null) =>
         new(
@@ -366,7 +366,7 @@ public sealed class StimulusRouterTests
             CorrelationScope: correlationScope,
             Metadata: new Dictionary<string, string>(),
             CreatedAt: _now,
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId);
 
     private BookmarkState Bookmark(string bookmarkId, string executionId, string? correlationId = null)

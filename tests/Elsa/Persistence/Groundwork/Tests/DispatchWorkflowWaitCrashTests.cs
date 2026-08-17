@@ -829,7 +829,7 @@ public sealed class DispatchWorkflowWaitCrashTests
     private static WorkflowExecutableSourceReference NewSourceReference(
         string sourceReferenceId,
         WorkflowExecutableIdentity identity,
-        string publicationId,
+        string activationId,
         string slotId) =>
         new(
             SourceReferenceId: sourceReferenceId,
@@ -844,7 +844,7 @@ public sealed class DispatchWorkflowWaitCrashTests
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId);
 
     private static ServiceProvider BuildProvider(

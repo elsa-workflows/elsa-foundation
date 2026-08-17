@@ -14,7 +14,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, WorkflowTriggerBinding> _bindings = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _preparedPublications = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
 
     public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
@@ -30,31 +30,31 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     }
 
     public ValueTask PrepareActivationAsync(
-        string publicationId,
+        string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentNullException.ThrowIfNull(bindings);
         cancellationToken.ThrowIfCancellationRequested();
-        ValidatePublicationBindings(publicationId, bindings);
+        ValidateActivationBindings(activationId, bindings);
 
         lock (_syncRoot)
         {
-            RemoveByPublication(publicationId);
+            RemoveByActivation(activationId);
             foreach (var binding in bindings)
             {
                 var prepared = binding with { IsActive = false };
                 _bindings[prepared.TriggerBindingId] = prepared;
             }
-            _preparedPublications.Add(publicationId);
+            _preparedActivations.Add(activationId);
         }
 
         return ValueTask.CompletedTask;
     }
 
     public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
-        WorkflowTriggerBindingPublicationPageQuery query,
+        WorkflowTriggerBindingActivationPageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -63,7 +63,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         lock (_syncRoot)
         {
             var matches = _bindings.Values
-                .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, query.PublicationId))
+                .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, query.ActivationId))
                 .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
                 .ToArray();
             return ValueTask.FromResult(CreatePage(query, matches));
@@ -71,37 +71,37 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
     }
 
     public ValueTask ActivateAsync(
-        string publicationId,
-        string? replacedPublicationId,
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        if (replacedPublicationId is not null)
-            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        if (replacedActivationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedActivationId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            if (!_preparedPublications.Contains(publicationId))
-                throw new InvalidOperationException($"Publication '{publicationId}' has no prepared trigger-binding projection.");
+            if (!_preparedActivations.Contains(activationId))
+                throw new InvalidOperationException($"Activation '{activationId}' has no prepared trigger-binding projection.");
 
-            SetPublicationActivity(publicationId, true);
-            if (replacedPublicationId is not null && !StringComparer.Ordinal.Equals(replacedPublicationId, publicationId))
-                SetPublicationActivity(replacedPublicationId, false);
+            SetActivationActive(activationId, true);
+            if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
+                SetActivationActive(replacedActivationId, false);
         }
 
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            RemoveByPublication(publicationId);
-            _preparedPublications.Remove(publicationId);
+            RemoveByActivation(activationId);
+            _preparedActivations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -183,16 +183,16 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
-    private static void ValidatePublicationBindings(
-        string publicationId,
+    private static void ValidateActivationBindings(
+        string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings)
     {
         foreach (var binding in bindings)
         {
             ArgumentNullException.ThrowIfNull(binding);
             WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
-            if (!StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
-                throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
+            if (!StringComparer.Ordinal.Equals(binding.ActivationId, activationId))
+                throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to activation '{activationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
         }
     }
@@ -214,18 +214,18 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         return new WorkflowTriggerBindingPage(query, page, matches.Count, nextContinuation);
     }
 
-    private void SetPublicationActivity(string publicationId, bool isActive)
+    private void SetActivationActive(string activationId, bool isActive)
     {
         foreach (var binding in _bindings.Values
-                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
+                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, activationId))
                      .ToArray())
             _bindings[binding.TriggerBindingId] = binding with { IsActive = isActive };
     }
 
-    private void RemoveByPublication(string publicationId)
+    private void RemoveByActivation(string activationId)
     {
         foreach (var bindingId in _bindings.Values
-                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
+                     .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, activationId))
                      .Select(binding => binding.TriggerBindingId)
                      .ToArray())
             _bindings.Remove(bindingId);
@@ -286,8 +286,8 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
                 $"exact\0{exact.StimulusType}\0{exact.StimulusHash}",
             WorkflowTriggerBindingTypePageQuery byType =>
                 $"type\0{byType.StimulusType}",
-            WorkflowTriggerBindingPublicationPageQuery byPublication =>
-                $"publication\0{byPublication.PublicationId}",
+            WorkflowTriggerBindingActivationPageQuery byActivation =>
+                $"activation\0{byActivation.ActivationId}",
             WorkflowTriggerBindingArtifactPageQuery byArtifact =>
                 $"artifact\0{byArtifact.ArtifactId}",
             _ => throw new ArgumentOutOfRangeException(nameof(query), query, "Unsupported trigger-binding page request.")

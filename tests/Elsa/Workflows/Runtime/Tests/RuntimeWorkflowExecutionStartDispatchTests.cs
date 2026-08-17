@@ -383,11 +383,11 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             [
                 Reference(
                     "ref-blue", "artifact-1", WorkflowExecutableReferenceScope.Published,
-                    publicationId: "publication-blue", slotId: "slot-blue"),
+                    activationId: "publication-blue", slotId: "slot-blue"),
                 Reference(
                     "ref-green", "artifact-1", WorkflowExecutableReferenceScope.Published,
                     definitionVersionId: "version-green", artifactVersion: "3.0.0",
-                    publicationId: "publication-green", slotId: "slot-green")
+                    activationId: "publication-green", slotId: "slot-green")
             ]);
 
         var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
@@ -410,11 +410,11 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
                 Reference(
                     "ref-blue", "artifact-1", WorkflowExecutableReferenceScope.Published,
                     definitionVersionId: "version-blue", artifactVersion: "2.0.0",
-                    publicationId: "publication-blue", slotId: "slot-blue"),
+                    activationId: "publication-blue", slotId: "slot-blue"),
                 Reference(
                     "ref-green", "artifact-1", WorkflowExecutableReferenceScope.Published,
                     definitionVersionId: "version-green", artifactVersion: "3.0.0",
-                    publicationId: "publication-green", slotId: "slot-green")
+                    activationId: "publication-green", slotId: "slot-green")
             ]);
 
         var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
@@ -673,7 +673,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         DateTimeOffset? expiresAt = null,
         string definitionVersionId = "version-1",
         string artifactVersion = "1.0.0",
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null) =>
         new(
             SourceReferenceId: sourceReferenceId,
@@ -688,7 +688,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             PublishedAt: scope == WorkflowExecutableReferenceScope.Published ? _now : null,
             Scope: scope,
             ExpiresAt: expiresAt,
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId);
 
     private static WorkflowExecutable NewExecutable(

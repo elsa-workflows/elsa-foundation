@@ -107,7 +107,7 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         var candidateBinding = PublicationBinding("publication-new", "artifact-new", "bar");
 
         await bindings.PrepareActivationAsync("publication-old", [oldBinding]);
-        await bindings.ActivateAsync("publication-old", replacedPublicationId: null);
+        await bindings.ActivateAsync("publication-old", replacedActivationId: null);
         await synchronizer.RefreshAsync();
         Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
 
@@ -219,7 +219,7 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     }
 
     private static Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding PublicationBinding(
-        string publicationId,
+        string activationId,
         string artifactId,
         string template)
     {
@@ -227,11 +227,11 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         return binding with
         {
             TriggerBindingId = Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding.BuildId(
-                publicationId,
+                activationId,
                 artifactId,
                 binding.ExecutableNodeId,
                 binding.StimulusHash),
-            ActivationId = publicationId,
+            ActivationId = activationId,
             SlotId = "slot-default",
             IsActive = false
         };

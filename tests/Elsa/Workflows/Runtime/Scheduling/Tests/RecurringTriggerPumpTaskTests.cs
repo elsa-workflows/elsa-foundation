@@ -170,15 +170,15 @@ public sealed class RecurringTriggerPumpTaskTests
         await store.PrepareActivationAsync("publication-new", [candidateSchedule]);
         Assert.Empty(await store.ListDueAsync(Now, 10));
 
-        await store.ActivateAsync("publication-old", replacedPublicationId: null);
-        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+        await store.ActivateAsync("publication-old", replacedActivationId: null);
+        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
 
         await store.ActivateAsync("publication-new", "publication-old");
-        Assert.Equal("publication-new", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+        Assert.Equal("publication-new", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
 
         // Compensation restores the retired projection and makes the failed candidate invisible again.
         await store.ActivateAsync("publication-old", "publication-new");
-        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
     }
 
     private (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
@@ -215,7 +215,7 @@ public sealed class RecurringTriggerPumpTaskTests
             CorrelationScope: null,
             Metadata: new Dictionary<string, string>(),
             CreatedAt: Now,
-            ActivationId: schedule.PublicationId,
+            ActivationId: schedule.ActivationId,
             SlotId: schedule.SlotId));
     }
 
@@ -234,11 +234,11 @@ public sealed class RecurringTriggerPumpTaskTests
         NextOccurrence: next,
         CreatedAt: Now);
 
-    private static RecurringTriggerSchedule PublicationSchedule(string id, string publicationId) =>
+    private static RecurringTriggerSchedule PublicationSchedule(string id, string activationId) =>
         Schedule(id, Now.AddMinutes(-1)) with
         {
-            ScheduleId = RecurringTriggerSchedule.BuildId(publicationId, "artifact-1", $"node-{id}"),
-            PublicationId = publicationId,
+            ScheduleId = RecurringTriggerSchedule.BuildId(activationId, "artifact-1", $"node-{id}"),
+            ActivationId = activationId,
             SlotId = "slot-default",
             IsActive = false
         };

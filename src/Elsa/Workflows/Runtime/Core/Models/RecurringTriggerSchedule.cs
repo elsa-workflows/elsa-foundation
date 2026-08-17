@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <remarks>
 /// <para>
 /// <b>Identity &amp; replacement.</b> Legacy artifact-scoped indexing derives <see cref="ScheduleId"/> from
-/// (artifactId, executableNodeId). Publication preparation additionally includes publication ID so explicit
+/// (artifactId, executableNodeId). Activation preparation additionally includes activation ID so explicit
 /// named slots may share an artifact without collapsing their independent schedule lifecycles.
 /// </para>
 /// <para>
@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="ScheduleId">Deterministic id built from (artifactId, executableNodeId).</param>
 /// <param name="ArtifactId">The published artifact that owns the trigger node; scopes replace-on-republish.</param>
 /// <param name="ExecutableNodeId">The trigger node that owns this schedule. Together with <see cref="ArtifactId"/>,
-/// <see cref="PublicationId"/>/<see cref="SlotId"/> and the stimulus identity it names the exact trigger binding a
+/// <see cref="ActivationId"/>/<see cref="SlotId"/> and the stimulus identity it names the exact trigger binding a
 /// fire starts through, so the pump never hash-broadcasts a recurring start to other artifacts (or other nodes)
 /// that authored the same interval/cron literal.</param>
 /// <param name="StimulusType">The start stimulus type the pump dispatches (e.g. Timer, Cron).</param>
@@ -49,7 +49,7 @@ public sealed record RecurringTriggerSchedule(
     string Expression,
     DateTimeOffset NextOccurrence,
     DateTimeOffset CreatedAt,
-    string? PublicationId = null,
+    string? ActivationId = null,
     string? SlotId = null,
     bool IsActive = true)
 {
@@ -65,11 +65,11 @@ public sealed record RecurringTriggerSchedule(
         return $"{Escape(artifactId)}:{Escape(executableNodeId)}";
     }
 
-    /// <summary>Builds a publication-scoped schedule id so named slots may share one artifact safely.</summary>
-    public static string BuildId(string publicationId, string artifactId, string executableNodeId)
+    /// <summary>Builds a activation-scoped schedule id so named slots may share one artifact safely.</summary>
+    public static string BuildId(string activationId, string artifactId, string executableNodeId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        return $"{Escape(publicationId)}:{BuildId(artifactId, executableNodeId)}";
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        return $"{Escape(activationId)}:{BuildId(artifactId, executableNodeId)}";
     }
 
     /// <summary>
@@ -83,11 +83,11 @@ public sealed record RecurringTriggerSchedule(
         return $"{BuildId(artifactId, executableNodeId)}:{Escape(stimulusHash)}";
     }
 
-    /// <summary>Publication-scoped, stimulus-hash-disambiguated schedule id (spec 117 fan-out).</summary>
-    public static string BuildFanOutId(string publicationId, string artifactId, string executableNodeId, string stimulusHash)
+    /// <summary>Activation-scoped, stimulus-hash-disambiguated schedule id (spec 117 fan-out).</summary>
+    public static string BuildFanOutId(string activationId, string artifactId, string executableNodeId, string stimulusHash)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        return $"{Escape(publicationId)}:{BuildFanOutId(artifactId, executableNodeId, stimulusHash)}";
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        return $"{Escape(activationId)}:{BuildFanOutId(artifactId, executableNodeId, stimulusHash)}";
     }
 
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");

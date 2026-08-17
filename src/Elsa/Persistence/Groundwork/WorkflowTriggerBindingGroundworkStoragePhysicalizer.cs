@@ -52,9 +52,9 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
             // Traversal indexes: the bounded sweeps behind these routes must see every binding, so the
             // index cannot omit the ones whose keyed columns have no value.
             MissingValueBehavior.IncludedAsNull);
-        var publicationAndId = OrderedLookupIndex(
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByPublicationAndId,
-            ElsaRuntimeStorageManifest.PublicationIdField);
+        var activationAndId = OrderedLookupIndex(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActivationAndId,
+            ElsaRuntimeStorageManifest.ActivationIdField);
         var artifactAndId = OrderedLookupIndex(
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifactAndId,
             ElsaRuntimeStorageManifest.ArtifactIdField);
@@ -109,8 +109,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                     ],
                     missingValueBehavior: MissingValueBehavior.IncludedAsNull),
                 OrderedLookupPhysicalIndex(
-                    publicationAndId,
-                    ElsaRuntimeStorageManifest.ByPublicationIndex,
+                    activationAndId,
+                    ElsaRuntimeStorageManifest.ByActivationIndex,
                     envelope),
                 OrderedLookupPhysicalIndex(
                     artifactAndId,
@@ -128,7 +128,7 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                 storage.ProvisioningMode,
                 PhysicalStoragePolicy.Explicit(augmentedDefinition),
                 storage.LogicalIndexes
-                    .Concat([stimulusAndType, stimulusTypeAndActive, publicationAndId, artifactAndId])
+                    .Concat([stimulusAndType, stimulusTypeAndActive, activationAndId, artifactAndId])
                     .ToArray(),
                 storage.BoundedQueries
                     .Where(query => query.Identity is not (
@@ -186,8 +186,8 @@ internal static class WorkflowTriggerBindingGroundworkStoragePhysicalizer
                             ]),
                         OrderedLookupQuery(
                             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-                            publicationAndId,
-                            ElsaRuntimeStorageManifest.PublicationIdField),
+                            activationAndId,
+                            ElsaRuntimeStorageManifest.ActivationIdField),
                         OrderedLookupQuery(
                             ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery,
                             artifactAndId,

@@ -969,8 +969,8 @@ public sealed class ElsaRuntimeStorageManifestTests
             unit,
             physical,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByPublicationAndId,
-            ElsaRuntimeStorageManifest.PublicationIdField);
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActivationAndId,
+            ElsaRuntimeStorageManifest.ActivationIdField);
         AssertOrderedTriggerLookup(
             unit,
             physical,

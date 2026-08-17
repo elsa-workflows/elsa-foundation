@@ -30,35 +30,35 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
         var defaultSchedule = Assert.Single(await store.ListByActivationAsync("publication-default-v1"));
         var blueSchedule = Assert.Single(await store.ListByActivationAsync("publication-blue"));
-        Assert.Equal("publication-default-v1", defaultSchedule.PublicationId);
+        Assert.Equal("publication-default-v1", defaultSchedule.ActivationId);
         Assert.Equal("slot-default", defaultSchedule.SlotId);
-        Assert.Equal("publication-blue", blueSchedule.PublicationId);
+        Assert.Equal("publication-blue", blueSchedule.ActivationId);
         Assert.Equal("slot-blue", blueSchedule.SlotId);
         Assert.NotEqual(defaultSchedule.ScheduleId, blueSchedule.ScheduleId);
 
-        await store.ActivateAsync("publication-default-v1", replacedPublicationId: null);
-        await store.ActivateAsync("publication-blue", replacedPublicationId: null);
+        await store.ActivateAsync("publication-default-v1", replacedActivationId: null);
+        await store.ActivateAsync("publication-blue", replacedActivationId: null);
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
             (await store.ListDueAsync(Now.AddMinutes(10), 10))
-                .Select(schedule => schedule.PublicationId)
+                .Select(schedule => schedule.ActivationId)
                 .Order(StringComparer.Ordinal));
 
         await indexer.PrepareActivationAsync(executable, "publication-default-v2", "slot-default");
-        await store.ActivateAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
+        await store.ActivateAsync("publication-default-v2", replacedActivationId: "publication-default-v1");
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],
             (await store.ListDueAsync(Now.AddMinutes(10), 10))
-                .Select(schedule => schedule.PublicationId)
+                .Select(schedule => schedule.ActivationId)
                 .Order(StringComparer.Ordinal));
 
         await store.DeleteByActivationAsync("publication-default-v1");
         await store.DeleteByActivationAsync("publication-default-v2");
 
         var survivingSchedule = Assert.Single(await store.ListDueAsync(Now.AddMinutes(10), 10));
-        Assert.Equal("publication-blue", survivingSchedule.PublicationId);
+        Assert.Equal("publication-blue", survivingSchedule.ActivationId);
         Assert.Equal("slot-blue", survivingSchedule.SlotId);
     }
 

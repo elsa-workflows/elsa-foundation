@@ -61,6 +61,10 @@ public class WorkflowsPublishingFeature : IShellFeature
         // outright when durable persistence is composed.
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
         services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
+        // Same reason: the executable hasher moved to the runtime layer (FR-B-010), so the compiler
+        // now depends on IWorkflowExecutableHasher, which only AddWorkflowRuntime() registers. A host
+        // composing publishing standalone must still be able to construct the compiler.
+        services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
         services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();

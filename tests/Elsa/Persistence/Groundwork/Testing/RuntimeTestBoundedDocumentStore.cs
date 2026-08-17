@@ -57,7 +57,7 @@ public sealed class RuntimeTestBoundedDocumentStore : IBoundedDocumentStore
             "list-by-execution-scope" =>
                 ElsaRuntimeStorageManifest.ExecutionScopeIdField,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery =>
-                ElsaRuntimeStorageManifest.PublicationIdField,
+                ElsaRuntimeStorageManifest.ActivationIdField,
             _ => throw new InvalidOperationException($"Undeclared Runtime test query '{query.QueryIdentity}'.")
         };
         var clause = query.Clauses.Count == 1

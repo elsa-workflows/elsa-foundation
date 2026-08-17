@@ -30,7 +30,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
     IBoundedDocumentStore? boundedStore = null)
-    : GroundworkPublicationProjectionStore<RecurringTriggerSchedule>(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, boundedStore), IRecurringTriggerScheduleStore
+    : GroundworkActivationProjectionStore<RecurringTriggerSchedule>(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, boundedStore), IRecurringTriggerScheduleStore
 {
     protected override string ProjectionKind => "recurringSchedules";
     protected override string ProjectionNoun => "recurring-schedule";
@@ -42,10 +42,10 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
 
     protected override object StoragePayload(RecurringTriggerSchedule item) => ToEnvelope(item);
 
-    protected override async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListAllByPublicationCoreAsync(
-        string publicationId,
+    protected override async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListAllByActivationCoreAsync(
+        string activationId,
         CancellationToken cancellationToken) =>
-        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(this, activationId, cancellationToken);
 
     public async ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -53,7 +53,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule.ScheduleId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Republish may rewrite the schedule, but it must not silently overwrite a concurrent publication or
+        // Republish may rewrite the schedule, but it must not silently overwrite a concurrent activation or
         // occurrence advance. Creation is expected-version zero; replacement uses the version actually read.
         var existing = await Store.LoadAsync(DocumentKind, schedule.ScheduleId, cancellationToken);
         var result = await SaveDocumentAsync(
@@ -81,19 +81,19 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     }
 
     public async ValueTask PrepareActivationAsync(
-        string publicationId,
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentNullException.ThrowIfNull(schedules);
-        ValidatePublicationSchedules(publicationId, schedules);
+        ValidateActivationSchedules(activationId, schedules);
 
-        await PreparePublicationCoreAsync(publicationId, schedules, cancellationToken);
+        await PrepareActivationCoreAsync(activationId, schedules, cancellationToken);
     }
 
-    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
-        RecurringTriggerSchedulePublicationPageQuery query,
+    public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(
+        RecurringTriggerScheduleActivationPageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -101,7 +101,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
             new DocumentQuery(
                 DocumentKind,
                 ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery,
-                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField, query.PublicationId)],
+                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleActivationIdField, query.ActivationId)],
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)],
                 take: query.Limit,
                 continuation: query.ContinuationToken),
@@ -139,26 +139,26 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
-        string publicationId,
+        string activationId,
         CancellationToken cancellationToken = default) =>
-        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(this, activationId, cancellationToken);
 
     public async ValueTask ActivateAsync(
-        string publicationId,
-        string? replacedPublicationId,
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        if (replacedPublicationId is not null)
-            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        if (replacedActivationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedActivationId);
 
-        await ActivatePublicationCoreAsync(publicationId, replacedPublicationId, cancellationToken);
+        await ActivateCoreAsync(activationId, replacedActivationId, cancellationToken);
     }
 
-    public async ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        await DeleteByPublicationCoreAsync(publicationId, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        await DeleteByActivationCoreAsync(activationId, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
@@ -253,15 +253,15 @@ public sealed class GroundworkRecurringTriggerScheduleStore(
     // without a nested index path, mirroring the other list-capable bridges.
     private sealed record RecurringTriggerScheduleEnvelope(string Collection, string ArtifactId, RecurringTriggerSchedule Schedule);
 
-    private static void ValidatePublicationSchedules(
-        string publicationId,
+    private static void ValidateActivationSchedules(
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules)
     {
         foreach (var schedule in schedules)
         {
             ArgumentNullException.ThrowIfNull(schedule);
-            if (!StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
-                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to publication '{publicationId}'.", nameof(schedules));
+            if (!StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
+                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to activation '{activationId}'.", nameof(schedules));
             ArgumentException.ThrowIfNullOrWhiteSpace(schedule.SlotId);
         }
     }

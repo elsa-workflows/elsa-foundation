@@ -22,8 +22,8 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
         Assert.Equal(
             RuntimeTriggerBindingStimulusLookupWorkload.PublicationCount * RuntimeTriggerBindingStimulusLookupWorkload.BindingsPerPublication,
             adapter.Secondary.Bindings.Bindings.Count);
-        Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PublicationCount, adapter.Primary.PublicationQueries.Select(query => query.PublicationId).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PublicationCount, adapter.Secondary.PublicationQueries.Select(query => query.PublicationId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PublicationCount, adapter.Primary.PublicationQueries.Select(query => query.ActivationId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PublicationCount, adapter.Secondary.PublicationQueries.Select(query => query.ActivationId).Distinct(StringComparer.Ordinal).Count());
         Assert.All(adapter.Primary.PublicationQueries, query => Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PageSize, query.Limit));
         Assert.All(adapter.Secondary.PublicationQueries, query => Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PageSize, query.Limit));
         Assert.True(adapter.Primary.SourcePageQueries.Count >= 5);
@@ -129,7 +129,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
     {
         public MemoryBindingStore Bindings { get; } = new(fault, isSecondary);
         public MemorySourceStore Sources { get; } = new(fault, isSecondary);
-        public IReadOnlyList<WorkflowTriggerBindingPublicationPageQuery> PublicationQueries => Bindings.PublicationQueries;
+        public IReadOnlyList<WorkflowTriggerBindingActivationPageQuery> PublicationQueries => Bindings.PublicationQueries;
         public IReadOnlyList<WorkflowExecutableSourceReferencePageQuery> SourcePageQueries => Sources.PageQueries;
     }
 
@@ -139,7 +139,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
         private readonly HashSet<string> _prepared = new(StringComparer.Ordinal);
         public MemoryBindingStore? Foreign { get; set; }
         public IReadOnlyCollection<WorkflowTriggerBinding> Bindings => _bindings.Values;
-        public List<WorkflowTriggerBindingPublicationPageQuery> PublicationQueries { get; } = [];
+        public List<WorkflowTriggerBindingActivationPageQuery> PublicationQueries { get; } = [];
 
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
         {
@@ -147,28 +147,28 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return new(binding);
         }
 
-        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
         {
             if (fault == TriggerBindingLookupFault.DiscardPreparation)
                 return ValueTask.CompletedTask;
-            foreach (var existing in _bindings.Values.Where(binding => binding.ActivationId == publicationId).Select(binding => binding.TriggerBindingId).ToArray())
+            foreach (var existing in _bindings.Values.Where(binding => binding.ActivationId == activationId).Select(binding => binding.TriggerBindingId).ToArray())
                 _bindings.Remove(existing);
             var prepared = fault == TriggerBindingLookupFault.DropPreparedBinding ? bindings.SkipLast(1) : bindings;
             foreach (var binding in prepared)
                 _bindings[binding.TriggerBindingId] = binding with { IsActive = false };
-            _prepared.Add(publicationId);
+            _prepared.Add(activationId);
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
-            if (!_prepared.Contains(publicationId))
+            if (!_prepared.Contains(activationId))
                 throw new InvalidOperationException("Publication was not prepared.");
             if (fault == TriggerBindingLookupFault.IgnoreActivation)
                 return ValueTask.CompletedTask;
-            SetActive(publicationId, true);
-            if (replacedPublicationId is not null && fault != TriggerBindingLookupFault.IgnoreReplacement)
-                SetActive(replacedPublicationId, false);
+            SetActive(activationId, true);
+            if (replacedActivationId is not null && fault != TriggerBindingLookupFault.IgnoreReplacement)
+                SetActive(replacedActivationId, false);
             return ValueTask.CompletedTask;
         }
 
@@ -178,12 +178,12 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
             new(Page(query, SelectForType(query)));
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default)
         {
             PublicationQueries.Add(query);
             var source = fault == TriggerBindingLookupFault.WrongPublicationProjection
                 ? _bindings.Values
-                : _bindings.Values.Where(binding => binding.ActivationId == query.PublicationId);
+                : _bindings.Values.Where(binding => binding.ActivationId == query.ActivationId);
             return new(Page(query, source));
         }
 
@@ -198,7 +198,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return new(ids.Length);
         }
 
-        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         private IEnumerable<WorkflowTriggerBinding> SelectForExact(WorkflowTriggerBindingPageQuery query)
         {
@@ -234,9 +234,9 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return new WorkflowTriggerBindingPage(query, items, fault == TriggerBindingLookupFault.FabricateTotalCount ? ordered.Count + 1 : ordered.Count, next);
         }
 
-        private void SetActive(string publicationId, bool active)
+        private void SetActive(string activationId, bool active)
         {
-            foreach (var binding in _bindings.Values.Where(binding => binding.ActivationId == publicationId).ToArray())
+            foreach (var binding in _bindings.Values.Where(binding => binding.ActivationId == activationId).ToArray())
                 _bindings[binding.TriggerBindingId] = binding with { IsActive = active };
         }
 

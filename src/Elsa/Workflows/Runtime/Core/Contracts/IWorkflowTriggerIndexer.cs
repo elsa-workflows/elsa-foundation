@@ -21,11 +21,11 @@ public interface IWorkflowTriggerIndexer
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Extracts and validates a publication-scoped projection, then persists it in prepared (non-serving) state.
+    /// Extracts and validates a activation-scoped projection, then persists it in prepared (non-serving) state.
     /// </summary>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
         WorkflowExecutable executable,
-        string publicationId,
+        string activationId,
         string slotId,
         CancellationToken cancellationToken = default) =>
         IndexAsync(executable, cancellationToken);

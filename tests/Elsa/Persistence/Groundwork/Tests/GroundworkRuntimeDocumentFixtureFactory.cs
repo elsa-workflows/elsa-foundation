@@ -765,7 +765,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         Expression: "PT5M",
         NextOccurrence: DateTimeOffset.UnixEpoch.AddMinutes(5),
         CreatedAt: DateTimeOffset.UnixEpoch,
-        PublicationId: "publication-1",
+        ActivationId: "publication-1",
         SlotId: "slot-default");
 
     private static RuntimeCheckpointCommit Commit()

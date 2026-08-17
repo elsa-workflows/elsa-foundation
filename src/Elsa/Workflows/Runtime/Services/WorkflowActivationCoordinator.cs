@@ -310,7 +310,7 @@ public sealed class WorkflowActivationCoordinator(
         // indexer chain prepared nothing. Reading back and re-preparing makes the empty projection explicit, so
         // a later activate/compensate has a projection to move rather than silently nothing. Carried over from
         // PublicationProjectionReconciler; the census's schedule double-write is collapsed by its own task.
-        var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(
+        var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(
             recurringScheduleStore,
             command.ActivationId,
             cancellationToken);
@@ -359,7 +359,7 @@ public sealed class WorkflowActivationCoordinator(
         if (_triggerObservers.Count == 0)
             return;
 
-        var bindings = await triggerBindingStore!.ListAllByPublicationAsync(activationId, cancellationToken);
+        var bindings = await triggerBindingStore!.ListAllByActivationAsync(activationId, cancellationToken);
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? fallbackArtifactId;
         // Authority can change while the artifact's extracted bindings stay identical (or empty), so consumers
         // must not apply their ordinary repeated-indexing skip to this notification.

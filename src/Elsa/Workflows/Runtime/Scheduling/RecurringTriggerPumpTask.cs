@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// start path intentionally fans an externally-sent stimulus out to every matching artifact — correct for events,
 /// but a recurring schedule is owned by exactly one trigger node: hash-broadcasting a fire would start every
 /// same-literal workflow on EVERY schedule's cadence (double-starts per cycle). The pump therefore resolves the
-/// binding the schedule owns — matching artifact, trigger node, and publication scope — and dispatches with that
+/// binding the schedule owns — matching artifact, trigger node, and activation scope — and dispatches with that
 /// binding pre-matched (<see cref="StimulusDispatchRequest.MatchedTriggerBindings"/>), so a fire starts only the
 /// workflow whose publish wrote the schedule. A fire whose owning binding no longer exists (index drift between
 /// republish steps) is dropped with a warning rather than broadcast.
@@ -244,8 +244,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
         }
     }
 
-    // The binding the schedule owns: same artifact, same trigger node, and same publication scope (named slots may
-    // share one artifact, so a publication-scoped schedule must not start through another slot's binding). The
+    // The binding the schedule owns: same artifact, same trigger node, and same activation scope (named slots may
+    // share one artifact, so a activation-scoped schedule must not start through another slot's binding). The
     // stimulus identity is already the query key. Normally exactly one binding survives the filter.
     private static async Task<IReadOnlyList<WorkflowTriggerBinding>> ResolveOwnedBindingsAsync(
         IWorkflowTriggerBindingStore bindingStore,
@@ -257,7 +257,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             .Where(binding =>
                 StringComparer.Ordinal.Equals(binding.ArtifactId, schedule.ArtifactId) &&
                 StringComparer.Ordinal.Equals(binding.ExecutableNodeId, schedule.ExecutableNodeId) &&
-                StringComparer.Ordinal.Equals(binding.ActivationId, schedule.PublicationId) &&
+                StringComparer.Ordinal.Equals(binding.ActivationId, schedule.ActivationId) &&
                 StringComparer.Ordinal.Equals(binding.SlotId, schedule.SlotId))
             .ToArray();
     }

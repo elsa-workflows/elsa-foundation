@@ -127,9 +127,9 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         }
 
         var first = await store.ListByActivationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
+            new WorkflowTriggerBindingActivationPageQuery("publication-a", limit: 2));
         var second = await store.ListByActivationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery(
+            new WorkflowTriggerBindingActivationPageQuery(
                 "publication-a",
                 limit: 2,
                 continuationToken: first.NextContinuationToken));
@@ -223,7 +223,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "publication-2",
             [PublicationBinding("publication-2", "artifact-2", "node-b", "slot-b")]);
 
-        await store.ActivateAsync("publication-1", replacedPublicationId: null);
+        await store.ActivateAsync("publication-1", replacedActivationId: null);
         var stagedBeforeReplacement = observingStore.StagedSaves.Count;
         await store.ActivateAsync("publication-2", "publication-1");
 
@@ -258,14 +258,14 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         await store.PrepareActivationAsync(
             "publication-b",
             [PublicationBinding("publication-b", "artifact-b", "node-b", "slot-a")]);
-        await store.ActivateAsync("publication-old", replacedPublicationId: null);
+        await store.ActivateAsync("publication-old", replacedActivationId: null);
         await store.ActivateAsync("publication-a", "publication-old");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.ActivateAsync("publication-b", "publication-old").AsTask());
 
-        Assert.True(Assert.Single(await store.ListAllByPublicationAsync("publication-a")).IsActive);
-        Assert.False(Assert.Single(await store.ListAllByPublicationAsync("publication-b")).IsActive);
+        Assert.True(Assert.Single(await store.ListAllByActivationAsync("publication-a")).IsActive);
+        Assert.False(Assert.Single(await store.ListAllByActivationAsync("publication-b")).IsActive);
     }
 
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
@@ -282,9 +282,9 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero));
 
-    private static WorkflowTriggerBinding PublicationBinding(string publicationId, string artifactId, string nodeId, string slotId) =>
+    private static WorkflowTriggerBinding PublicationBinding(string activationId, string artifactId, string nodeId, string slotId) =>
         new(
-            WorkflowTriggerBinding.BuildId(publicationId, artifactId, nodeId, "hash-order"),
+            WorkflowTriggerBinding.BuildId(activationId, artifactId, nodeId, "hash-order"),
             artifactId,
             $"definition-{artifactId}",
             "1.0.0",
@@ -295,7 +295,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
             "order-scope",
             new Dictionary<string, string> { ["slice"] = "w7" },
             new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero),
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId,
             IsActive: false);
 

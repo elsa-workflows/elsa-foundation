@@ -233,7 +233,7 @@ public sealed class RuntimeTransitionContractTests
                     "publication-prepare-trigger",
                     [Binding("publication-prepare-trigger", "artifact-second", "node-second")]).AsTask()));
             Assert.Single(triggerPrepareOutcomes.Where(outcome => outcome));
-            Assert.Single(await firstTriggerStore.ListAllByPublicationAsync("publication-prepare-trigger"));
+            Assert.Single(await firstTriggerStore.ListAllByActivationAsync("publication-prepare-trigger"));
 
             var firstScheduleStore = new GroundworkRecurringTriggerScheduleStore(
                 firstClient.DocumentStore,
@@ -332,11 +332,11 @@ public sealed class RuntimeTransitionContractTests
             metadata: new Dictionary<string, string> { ["value"] = value });
 
     private static WorkflowTriggerBinding Binding(
-        string publicationId,
+        string activationId,
         string artifactId,
         string nodeId) =>
         new(
-            WorkflowTriggerBinding.BuildId(publicationId, artifactId, nodeId, "hash-transition"),
+            WorkflowTriggerBinding.BuildId(activationId, artifactId, nodeId, "hash-transition"),
             artifactId,
             $"definition-{artifactId}",
             "1.0.0",
@@ -347,16 +347,16 @@ public sealed class RuntimeTransitionContractTests
             CorrelationScope: null,
             new Dictionary<string, string>(),
             Now,
-            ActivationId: publicationId,
+            ActivationId: activationId,
             SlotId: "slot-a",
             IsActive: false);
 
     private static RecurringTriggerSchedule Schedule(
-        string publicationId,
+        string activationId,
         string artifactId,
         string nodeId) =>
         new(
-            RecurringTriggerSchedule.BuildId(publicationId, artifactId, nodeId),
+            RecurringTriggerSchedule.BuildId(activationId, artifactId, nodeId),
             artifactId,
             nodeId,
             "Timer",
@@ -365,7 +365,7 @@ public sealed class RuntimeTransitionContractTests
             "PT5M",
             Now.AddMinutes(5),
             Now,
-            PublicationId: publicationId,
+            ActivationId: activationId,
             SlotId: "slot-a",
             IsActive: false);
 
@@ -373,30 +373,30 @@ public sealed class RuntimeTransitionContractTests
         IWorkflowTriggerBindingStore triggerStore,
         IRecurringTriggerScheduleStore scheduleStore)
     {
-        foreach (var publicationId in new[] { "publication-old", "publication-a", "publication-b" })
+        foreach (var activationId in new[] { "publication-old", "publication-a", "publication-b" })
         {
-            var artifactId = publicationId.Replace("publication-", "artifact-", StringComparison.Ordinal);
-            var nodeId = publicationId.Replace("publication-", "node-", StringComparison.Ordinal);
+            var artifactId = activationId.Replace("publication-", "artifact-", StringComparison.Ordinal);
+            var nodeId = activationId.Replace("publication-", "node-", StringComparison.Ordinal);
             await triggerStore.PrepareActivationAsync(
-                publicationId,
-                [Binding(publicationId, artifactId, nodeId)]);
+                activationId,
+                [Binding(activationId, artifactId, nodeId)]);
             await scheduleStore.PrepareActivationAsync(
-                publicationId,
-                [Schedule(publicationId, artifactId, nodeId)]);
+                activationId,
+                [Schedule(activationId, artifactId, nodeId)]);
         }
 
-        await triggerStore.ActivateAsync("publication-old", replacedPublicationId: null);
-        await scheduleStore.ActivateAsync("publication-old", replacedPublicationId: null);
+        await triggerStore.ActivateAsync("publication-old", replacedActivationId: null);
+        await scheduleStore.ActivateAsync("publication-old", replacedActivationId: null);
     }
 
     private static async Task<string> FindActiveTriggerPublicationAsync(
         IWorkflowTriggerBindingStore store)
     {
         var active = new List<string>();
-        foreach (var publicationId in new[] { "publication-a", "publication-b" })
+        foreach (var activationId in new[] { "publication-a", "publication-b" })
         {
-            if (Assert.Single(await store.ListAllByPublicationAsync(publicationId)).IsActive)
-                active.Add(publicationId);
+            if (Assert.Single(await store.ListAllByActivationAsync(activationId)).IsActive)
+                active.Add(activationId);
         }
 
         return Assert.Single(active);
@@ -406,10 +406,10 @@ public sealed class RuntimeTransitionContractTests
         IRecurringTriggerScheduleStore store)
     {
         var active = new List<string>();
-        foreach (var publicationId in new[] { "publication-a", "publication-b" })
+        foreach (var activationId in new[] { "publication-a", "publication-b" })
         {
-            if (Assert.Single(await store.ListByActivationAsync(publicationId)).IsActive)
-                active.Add(publicationId);
+            if (Assert.Single(await store.ListByActivationAsync(activationId)).IsActive)
+                active.Add(activationId);
         }
 
         return Assert.Single(active);

@@ -115,9 +115,9 @@ public sealed class PublishedHttpTriggerPublicationSlotEndToEndTests : IAsyncLif
         Assert.Equal("old/callback", HttpEndpointHostFixture.DeserializeRequest(captured).Path);
     }
 
-    private Task PrepareAsync(string publicationId, string slotId, string artifactId, string path) =>
+    private Task PrepareAsync(string activationId, string slotId, string artifactId, string path) =>
         _fixture.PreparePublishedHttpTriggerAsync(
-            publicationId,
+            activationId,
             slotId,
             artifactId,
             path,

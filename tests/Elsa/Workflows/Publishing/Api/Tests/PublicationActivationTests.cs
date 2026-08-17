@@ -347,7 +347,7 @@ public sealed class PublicationActivationTests
         public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowTriggerBindingPage(query, [], 0, null));
 
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>

@@ -30,19 +30,19 @@ public interface IRecurringTriggerScheduleStore
     /// <summary>Upserts a schedule (keyed by <see cref="RecurringTriggerSchedule.ScheduleId"/>) and returns the stored schedule.</summary>
     ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically replaces one publication's prepared schedules without exposing them to the pump.</summary>
+    /// <summary>Atomically replaces one activation's prepared schedules without exposing them to the pump.</summary>
     ValueTask PrepareActivationAsync(
-        string publicationId,
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped preparation."));
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support activation-scoped preparation."));
 
-    /// <summary>Returns one finite, ordered page of prepared or active schedules owned by a publication.</summary>
-    ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
-        RecurringTriggerSchedulePublicationPageQuery query,
+    /// <summary>Returns one finite, ordered page of prepared or active schedules owned by an activation.</summary>
+    ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(
+        RecurringTriggerScheduleActivationPageQuery query,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<RuntimeStorePage<RecurringTriggerSchedule>>(
-            new NotSupportedException("This recurring-schedule store does not support publication-scoped pages."));
+            new NotSupportedException("This recurring-schedule store does not support activation-scoped pages."));
 
     /// <summary>Returns one finite, ordered page of schedules owned by an artifact.</summary>
     ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(
@@ -51,22 +51,22 @@ public interface IRecurringTriggerScheduleStore
         ValueTask.FromException<RuntimeStorePage<RecurringTriggerSchedule>>(
             new NotSupportedException("This recurring-schedule store does not support artifact-scoped pages."));
 
-    /// <summary>Legacy complete traversal for publication-oriented commands.</summary>
+    /// <summary>Legacy complete traversal for activation-oriented commands.</summary>
     async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
-        string publicationId,
+        string activationId,
         CancellationToken cancellationToken = default) =>
-        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(this, activationId, cancellationToken);
 
-    /// <summary>Activates one publication and deactivates only the explicitly replaced publication.</summary>
+    /// <summary>Activates one activation and deactivates only the explicitly replaced activation.</summary>
     ValueTask ActivateAsync(
-        string publicationId,
-        string? replacedPublicationId,
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped activation."));
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support activation-scoped activation."));
 
-    /// <summary>Deletes schedules owned by one publication without affecting another publication of the artifact.</summary>
-    ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped deletion."));
+    /// <summary>Deletes schedules owned by one activation without affecting another activation of the artifact.</summary>
+    ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support activation-scoped deletion."));
 
     /// <summary>Returns due schedules (NextOccurrence &lt;= <paramref name="asOf"/>), ordered by next occurrence then id, capped by <paramref name="limit"/>.</summary>
     ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default);

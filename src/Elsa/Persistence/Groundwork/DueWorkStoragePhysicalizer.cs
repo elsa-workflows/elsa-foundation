@@ -209,13 +209,13 @@ internal static class DueWorkStoragePhysicalizer
         AddRoute(
             AddRoute(
                 unit,
-                ElsaRuntimeStorageManifest.RecurringTriggerScheduleByPublicationAndScheduleId,
+                ElsaRuntimeStorageManifest.RecurringTriggerScheduleByActivationAndScheduleId,
                 [
-                    new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField),
+                    new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerScheduleActivationIdField),
                     new IndexField(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)
                 ],
                 [
-                    ElsaRuntimeStorageManifest.ByPublicationIndex,
+                    ElsaRuntimeStorageManifest.ByActivationIndex,
                     ElsaRuntimeStorageManifest.ByRecurringScheduleIdIndex
                 ],
                 [],
@@ -223,7 +223,7 @@ internal static class DueWorkStoragePhysicalizer
                 new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
                 [
                     new BoundedQueryPredicateField(
-                        ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField,
+                        ElsaRuntimeStorageManifest.RecurringTriggerScheduleActivationIdField,
                         new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
                 ],
                 [

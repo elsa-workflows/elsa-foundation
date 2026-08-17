@@ -17,7 +17,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     IDocumentStore store,
     IGroundworkRuntimeDocumentSerializer serializer,
     IBoundedDocumentStore? boundedStore = null)
-    : GroundworkPublicationProjectionStore<WorkflowTriggerBinding>(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
+    : GroundworkActivationProjectionStore<WorkflowTriggerBinding>(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
 {
     protected override string ProjectionKind => "triggerBindings";
     protected override string ProjectionNoun => "trigger-binding";
@@ -29,10 +29,10 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
 
     protected override object StoragePayload(WorkflowTriggerBinding item) => item;
 
-    protected override async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListAllByPublicationCoreAsync(
-        string publicationId,
+    protected override async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListAllByActivationCoreAsync(
+        string activationId,
         CancellationToken cancellationToken) =>
-        await this.ListAllByPublicationAsync(publicationId, cancellationToken);
+        await this.ListAllByActivationAsync(activationId, cancellationToken);
     private readonly IBoundedDocumentStore? _queries = boundedStore ?? store as IBoundedDocumentStore;
 
     private IBoundedDocumentStore Queries => _queries ?? throw new InvalidOperationException(
@@ -74,45 +74,45 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     }
 
     public async ValueTask PrepareActivationAsync(
-        string publicationId,
+        string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentNullException.ThrowIfNull(bindings);
-        ValidatePublicationBindings(publicationId, bindings);
+        ValidateActivationBindings(activationId, bindings);
 
-        await PreparePublicationCoreAsync(publicationId, bindings, cancellationToken);
+        await PrepareActivationCoreAsync(activationId, bindings, cancellationToken);
     }
 
     public async ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
-        WorkflowTriggerBindingPublicationPageQuery query,
+        WorkflowTriggerBindingActivationPageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         return await QueryBindingsPageAsync(
             query,
             ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-            [Equal(ElsaRuntimeStorageManifest.PublicationIdField, query.PublicationId)],
+            [Equal(ElsaRuntimeStorageManifest.ActivationIdField, query.ActivationId)],
             cancellationToken);
     }
 
     public async ValueTask ActivateAsync(
-        string publicationId,
-        string? replacedPublicationId,
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        if (replacedPublicationId is not null)
-            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        if (replacedActivationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedActivationId);
 
-        await ActivatePublicationCoreAsync(publicationId, replacedPublicationId, cancellationToken);
+        await ActivateCoreAsync(activationId, replacedActivationId, cancellationToken);
     }
 
-    public async ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        await DeleteByPublicationCoreAsync(publicationId, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        await DeleteByActivationCoreAsync(activationId, cancellationToken);
     }
 
     public async ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -229,16 +229,16 @@ public sealed class GroundworkWorkflowTriggerBindingStore(
     private static DocumentQueryClause Equal(string fieldPath, string value) =>
         DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value));
 
-    private static void ValidatePublicationBindings(
-        string publicationId,
+    private static void ValidateActivationBindings(
+        string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings)
     {
         foreach (var binding in bindings)
         {
             ArgumentNullException.ThrowIfNull(binding);
             WorkflowTriggerBinding.ValidateId(binding.TriggerBindingId);
-            if (!StringComparer.Ordinal.Equals(binding.ActivationId, publicationId))
-                throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to publication '{publicationId}'.", nameof(bindings));
+            if (!StringComparer.Ordinal.Equals(binding.ActivationId, activationId))
+                throw new ArgumentException($"Binding '{binding.TriggerBindingId}' does not belong to activation '{activationId}'.", nameof(bindings));
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
         }
     }

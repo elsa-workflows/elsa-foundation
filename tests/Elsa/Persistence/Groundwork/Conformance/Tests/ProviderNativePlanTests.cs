@@ -942,7 +942,7 @@ public sealed class ProviderNativePlanTests
             Documents(
                 ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
                 ElsaRuntimeStorageManifest.PageRecurringTriggerSchedulesByPublicationQuery,
-                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerSchedulePublicationIdField, "publication-id")],
+                [Equal(ElsaRuntimeStorageManifest.RecurringTriggerScheduleActivationIdField, "publication-id")],
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.RecurringTriggerScheduleIdField)]),
             Documents(
                 ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
@@ -978,7 +978,7 @@ public sealed class ProviderNativePlanTests
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
                 ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery,
-                [Equal(ElsaRuntimeStorageManifest.PublicationIdField, "publication-id")],
+                [Equal(ElsaRuntimeStorageManifest.ActivationIdField, "publication-id")],
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.TriggerBindingIdField)]),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,

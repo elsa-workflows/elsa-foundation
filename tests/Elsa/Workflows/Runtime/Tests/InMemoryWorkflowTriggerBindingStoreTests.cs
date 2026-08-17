@@ -253,9 +253,9 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("artifact-b", "node", stimulusHash: "sha256:b") with { ActivationId = "publication-a", SlotId = "default" });
 
         var first = await store.ListByActivationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("publication-a", limit: 2));
+            new WorkflowTriggerBindingActivationPageQuery("publication-a", limit: 2));
         var second = await store.ListByActivationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery(
+            new WorkflowTriggerBindingActivationPageQuery(
                 "publication-a",
                 limit: 2,
                 continuationToken: first.NextContinuationToken));
@@ -288,7 +288,7 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
             });
         }
 
-        var publication = await store.ListAllByPublicationAsync("publication-shared");
+        var publication = await store.ListAllByActivationAsync("publication-shared");
         var artifact = await store.ListAllByArtifactAsync("artifact-shared");
 
         Assert.Equal(WorkflowTriggerBindingPageQuery.MaximumLimit + 1, publication.Count);

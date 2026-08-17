@@ -637,7 +637,7 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
-            string publicationId,
+            string activationId,
             string slotId,
             CancellationToken cancellationToken = default)
         {
@@ -646,7 +646,7 @@ public sealed class WorkflowActivationCoordinatorTests
 
             var artifactId = executable.Identity.ArtifactId;
             var binding = new WorkflowTriggerBinding(
-                WorkflowTriggerBinding.BuildId(publicationId, artifactId, "node-start", "hash-1"),
+                WorkflowTriggerBinding.BuildId(activationId, artifactId, "node-start", "hash-1"),
                 artifactId,
                 executable.Identity.DefinitionId,
                 executable.Identity.ArtifactVersion,
@@ -657,9 +657,9 @@ public sealed class WorkflowActivationCoordinatorTests
                 null,
                 new Dictionary<string, string>(),
                 Now,
-                publicationId,
+                activationId,
                 slotId);
-            await bindingStore.PrepareActivationAsync(publicationId, [binding], cancellationToken);
+            await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
             return [binding];
         }
     }
@@ -713,28 +713,28 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(binding, cancellationToken);
 
-        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"prepare:{publicationId}");
-            Throw($"prepare:{publicationId}");
-            return inner.PrepareActivationAsync(publicationId, bindings, cancellationToken);
+            Calls.Add($"prepare:{activationId}");
+            Throw($"prepare:{activationId}");
+            return inner.PrepareActivationAsync(activationId, bindings, cancellationToken);
         }
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingPublicationPageQuery query, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default) =>
             inner.ListByActivationAsync(query, cancellationToken);
 
-        public ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"activate:{publicationId}->{replacedPublicationId}");
-            Throw($"activate:{publicationId}");
-            return inner.ActivateAsync(publicationId, replacedPublicationId, cancellationToken);
+            Calls.Add($"activate:{activationId}->{replacedActivationId}");
+            Throw($"activate:{activationId}");
+            return inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
         }
 
-        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"delete:{publicationId}");
-            Throw($"delete:{publicationId}");
-            return inner.DeleteByActivationAsync(publicationId, cancellationToken);
+            Calls.Add($"delete:{activationId}");
+            Throw($"delete:{activationId}");
+            return inner.DeleteByActivationAsync(activationId, cancellationToken);
         }
 
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
@@ -764,31 +764,31 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(schedule, cancellationToken);
 
-        public ValueTask PrepareActivationAsync(string publicationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"prepare:{publicationId}");
-            Throw($"prepare:{publicationId}");
-            return inner.PrepareActivationAsync(publicationId, schedules, cancellationToken);
+            Calls.Add($"prepare:{activationId}");
+            Throw($"prepare:{activationId}");
+            return inner.PrepareActivationAsync(activationId, schedules, cancellationToken);
         }
 
-        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(RecurringTriggerSchedulePublicationPageQuery query, CancellationToken cancellationToken = default) =>
-            inner.ListByPublicationPageAsync(query, cancellationToken);
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListByActivationPageAsync(query, cancellationToken);
 
         public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
             inner.ListByArtifactPageAsync(query, cancellationToken);
 
-        public ValueTask ActivateAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"activate:{publicationId}->{replacedPublicationId}");
-            Throw($"activate:{publicationId}");
-            return inner.ActivateAsync(publicationId, replacedPublicationId, cancellationToken);
+            Calls.Add($"activate:{activationId}->{replacedActivationId}");
+            Throw($"activate:{activationId}");
+            return inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
         }
 
-        public ValueTask DeleteByActivationAsync(string publicationId, CancellationToken cancellationToken = default)
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"delete:{publicationId}");
-            Throw($"delete:{publicationId}");
-            return inner.DeleteByActivationAsync(publicationId, cancellationToken);
+            Calls.Add($"delete:{activationId}");
+            Throw($"delete:{activationId}");
+            return inner.DeleteByActivationAsync(activationId, cancellationToken);
         }
 
         public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>
