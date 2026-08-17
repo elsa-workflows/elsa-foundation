@@ -101,6 +101,7 @@ public sealed class PublishingBeforeBaselineTests
         AssertCase(observations, "WorkflowPublish|trusted-expression-errors", 422, "Completed");
         AssertCase(observations, "WorkflowPublish|trusted-expression-unavailable", 503, "Completed");
         AssertCase(observations, "WorkflowPublish|trusted-generic-500", 500, "Completed");
+        AssertCase(observations, "WorkflowPreflight|trusted-sender-failure-not-invoked", 200, "Completed");
         AssertCase(observations, "RuntimePreflight|trusted-generic-500", 500, "Completed");
         AssertCase(observations, "ActivityPublications.GetReceipt|trusted-generic-500", 500, "Completed");
         AssertCase(observations, "ActivityTestRuns.Get|trusted-generic-500", 500, "Completed");

@@ -1057,7 +1057,7 @@
   {
     "binding": "route=;body=json",
     "body": "{\n  \u0022canActivate\u0022: true,\n  \u0022conflicts\u0022: [],\n  \u0022definitionId\u0022: \u0022capture-definition\u0022,\n  \u0022policyRevision\u0022: null,\n  \u0022policySource\u0022: \u0022request\u0022,\n  \u0022resolvedAction\u0022: \u0022replace\u0022,\n  \u0022slotName\u0022: \u0022default\u0022,\n  \u0022triggers\u0022: [],\n  \u0022versionId\u0022: \u0022version-route\u0022\n}",
-    "case": "WorkflowPreflight|trusted-generic-500",
+    "case": "WorkflowPreflight|trusted-sender-failure-not-invoked",
     "contentType": "application/json",
     "endpoint": "POST /publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/preflight",
     "headers": {

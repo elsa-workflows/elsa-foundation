@@ -10,7 +10,7 @@
     "domain",
     "cancellation"
   ],
-  "httpSha256": "51e119b0623ad3f8dda731f94febee45cc509ec7f53e857511d24b5ee496303e",
+  "httpSha256": "1a6182737dfac07dbd2681558155be31b36ccddd38fa505a613402a937962e7d",
   "initialApprovalsSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
   "openApiSha256": "ba42d7c95f52f968a0a3cad3f4837d5a53726cdb4d25386e6f4e8d047b8760b1",
   "operationCount": 23,
@@ -35,7 +35,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs",
-      "sha256": "e267e1e8114e1dd01a3ed48543fbdd7c29b6dac2a0d812ab309adc4fc1815350"
+      "sha256": "7d3a273ecaf1b4d8b1ec567d7ae93ae9f20c55dbe69800a34ee34e2c5706ec41"
     },
     {
       "identity": "checked-in-commit",
@@ -63,7 +63,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "4aa31387c74a8975db0b93df7374cd2a8d17811b92880a492b6640be61c611b6",
+  "runnerFingerprint": "12eef0c1cb94c2d167add51b221b3b80615f57b5aab46e520b88ef3469a47eef",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "cd9fa1743fb982ca60c33384762644b02fdd95ed",
   "sourceRelationship": "ancestor-before-migration",
