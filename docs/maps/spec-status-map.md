@@ -202,5 +202,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [161-agent-api-minimal-migration](../../specs/161-agent-api-minimal-migration/spec.md) | Wave 4 Agent REST and SSE API Migration | Implementation and control-room integration gates complete; independent final review pending | - | 15 | 0 | - |
 | [162-opentelemetry-api-migration](../../specs/162-opentelemetry-api-migration/spec.md) | OpenTelemetry API Minimal API Migration | Draft | - | 10 | 0 | retained |
 | [163-wave6-workflows-design-review](../../specs/163-wave6-workflows-design-review/spec.md) | Wave 6 Workflows Design API Review Corrections | Implementation | - | 20 | 0 | retained |
-| [164-runtime-api-minimal-migration](../../specs/164-runtime-api-minimal-migration/spec.md) | Runtime API Minimal API Migration | Draft | - | 11 | 3 | retained, out of scope |
+| [164-runtime-api-minimal-migration](../../specs/164-runtime-api-minimal-migration/spec.md) | Runtime API Minimal API Migration | Draft | - | 13 | 1 | retained, out of scope |
 | [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | Implemented — merged by #1394 as `efe280446cafc998cbeb305bf235527eafd30b19` | - | 39 | 0 | retained, out of scope |
