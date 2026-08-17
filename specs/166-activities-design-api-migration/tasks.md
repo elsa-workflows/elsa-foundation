@@ -126,7 +126,7 @@ or feature code until that checkpoint is committed.
 - [x] T046 Run the full `tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`, full `Elsa.Server.slnx` build, changed-file formatter, map freshness, `git diff --check`, public API compatibility, and final transition count; resolve every branch-introduced failure/warning
 - [x] T047 Recheck issue comments/open PRs, perform root diff/self-review against `origin/main`, verify all 38 removals and no lost test objectives, and commit the final implementation with a clean worktree
 - [x] T048 Obtain an independent five-axis review of correctness/security, contract evidence, architecture/API compatibility, code quality/DRY/style, and unloadability/dependency cleanup; record each review round and outcome on #1373
-- [ ] T049 Address every Critical/Required review finding, add mutation/regression bites, rerun affected/full gates, update the report/checklist, and repeat independent review until the gate is clean
+- [x] T049 Address every Critical/Required review finding, add mutation/regression bites, rerun affected/full gates, update the report/checklist, and repeat independent review until the gate is clean
 
 ---
 

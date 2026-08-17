@@ -182,16 +182,23 @@ that old run as if it had executed against later program waves.
   was introduced by the final Wave 7 corrections.
 - Workbench rebuild: 0 errors; 17 existing repository warnings (package-pruning advisories and one
   pre-existing Workbench style warning).
-- Public contract compatibility is included in the 41-test immutable compatibility subset and the
-  606-test owner suite.
+- Public contract compatibility is included in the 69-test immutable compatibility/behavior subset
+  and the 618-test owner suite.
 - PowerShell parser, changed-C# formatter, generated-map freshness, and `git diff --check`: green.
 
 Independent review round 1 reported no Critical findings, one Required malformed typed-query parity
 defect, and two advisories. The Required finding is closed by the receipt-pinned historical supplement,
 exact before/after replay, complete typed-query call-site regression, and shared fail-closed binder. The
 unused Wave 9 test helper advisory is also removed; the intentionally historical Wave 9 receipt scope
-remains documented rather than being represented as current-HEAD execution evidence. Final totals and
-the round-2 outcome are recorded after the repeated release gate.
+remains documented rather than being represented as current-HEAD execution evidence.
+
+Independent review round 2 examined exact clean commit
+`8c442d846911ec9a61f4e1578524849a364f439a`. Its product/code gate was clean: 0 Critical findings,
+0 product/code Required findings, and 1 accepted advisory for the intentionally historical Wave 9
+receipt scope. The reviewer reran the complete Activities Design suite (618/618), the focused immutable
+contract/baseline/behavior suite (35/35), and the Architecture security/collectibility/transition suite
+(105/105); map freshness, `git diff --check`, and the clean-worktree check also passed. Its sole release
+bookkeeping requirement was to record these final totals and close T049, which this update completes.
 
 ## Risks, rollback, and follow-up
 
