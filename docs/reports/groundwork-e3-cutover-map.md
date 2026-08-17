@@ -71,3 +71,16 @@ The accepted generic contract carries a named audit purpose, injects/projects th
 queries, refuses scope-less point reads, preserves ordinary scoped isolation, and advertises or
 refuses the capability honestly. Those invariants remain required in Elsa's shared-runtime tests; the
 API prerequisite itself no longer blocks that wave.
+
+## Accepted-scan inventory
+
+The current source tree contains one reviewed `ScanAcceptance` and one matching assembly opt-in:
+
+| Acceptance | Route | Bound | Owner / expiry | Review decision |
+|---|---|---|---|---|
+| `GW-SCAN-ELSA-SECRETS-SUBSTRING` | Secrets list search over normalized name or display name with portable `Contains` semantics | The public request caps each page at 250 rows; the acceptance is attached only when `Search` is present | `elsa-secrets` / 2027-08-16 UTC | Accepted. Portable case-insensitive substring matching has no index shape shared by SQLite, PostgreSQL, SQL Server, and MongoDB. Exact type/store/scope/status predicates remain provider-side and unsearched list requests carry no acceptance. |
+
+Source: [`GroundworkSecretRepository`](../../src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs)
+and its assembly-level [`GwAllowAcceptedScans`](../../src/Elsa/Secrets/Persistence/Groundwork/AcceptedScans.cs).
+Every additional marker must add a separately reviewed row here; the final #269 closure scan must
+match this inventory exactly.
