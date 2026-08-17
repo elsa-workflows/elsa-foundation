@@ -1,3 +1,4 @@
+using CShells.Features;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Providers;
 using Groundwork.Kernel;
@@ -11,6 +12,79 @@ namespace Elsa.Persistence.Groundwork.V2.Providers.Tests;
 
 public sealed class GroundworkProviderRegistrationTests
 {
+    [Theory]
+    [InlineData(typeof(GroundworkSqliteProviderFeature), "GroundworkProviderSqlite")]
+    [InlineData(typeof(GroundworkPostgreSqlProviderFeature), "GroundworkProviderPostgreSql")]
+    [InlineData(typeof(GroundworkSqlServerProviderFeature), "GroundworkProviderSqlServer")]
+    [InlineData(typeof(GroundworkMongoDbProviderFeature), "GroundworkProviderMongoDb")]
+    public void Provider_shell_features_expose_the_complete_clean_break_provider_set(
+        Type featureType,
+        string expectedName)
+    {
+        var feature = Assert.IsAssignableFrom<IShellFeature>(Activator.CreateInstance(featureType));
+        featureType.GetProperty("Target")!.SetValue(feature, "runtime");
+        var metadata = Assert.Single(
+            featureType.GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false)
+                .Cast<ShellFeatureAttribute>());
+        var services = new ServiceCollection();
+
+        feature.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(expectedName, metadata.Name);
+        Assert.True(featureType.IsPublic);
+        Assert.False(featureType.IsSealed);
+        Assert.Null(provider.GetService<IStorageProviderConnection>());
+        Assert.NotNull(provider.GetRequiredKeyedService<IStorageProviderConnection>("runtime"));
+        Assert.Contains(
+            featureType.GetProperties(),
+            property => property.Name == "ConnectionString"
+                        && property.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "ManifestSettingAttribute"));
+        Assert.Contains(
+            featureType.GetProperties(),
+            property => property.Name == "Target"
+                        && property.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "ManifestSettingAttribute"));
+    }
+
+    [Fact]
+    public void Sqlite_shell_feature_defaults_to_the_local_default_target()
+    {
+        var services = new ServiceCollection();
+
+        new GroundworkSqliteProviderFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Same(
+            provider.GetRequiredService<IStorageProviderConnection>(),
+            provider.GetRequiredKeyedService<IStorageProviderConnection>("default"));
+        Assert.Equal("Data Source=elsa-groundwork.db", GroundworkSqliteProviderFeature.DefaultConnectionString);
+    }
+
+    [Fact]
+    public void Sqlite_shell_feature_threads_the_configured_connection_string()
+    {
+        var path = TemporaryDatabasePath();
+        try
+        {
+            var feature = new GroundworkSqliteProviderFeature
+            {
+                ConnectionString = $"Data Source={path}",
+                Target = "runtime"
+            };
+            var services = new ServiceCollection();
+
+            feature.ConfigureServices(services);
+            using var provider = services.BuildServiceProvider();
+            provider.GetRequiredKeyedService<IStorageProviderConnection>("runtime").Schema.Apply(ProviderCompositionUnit());
+
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
+
     [Fact]
     public void Composition_assembly_references_only_the_public_v2_groundwork_surface()
     {

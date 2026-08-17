@@ -1,3 +1,4 @@
+using CShells.Features;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Core;
@@ -14,6 +15,42 @@ namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
 public sealed class GroundworkV2RuntimeRegistrationTests
 {
+    [Fact]
+    public void Runtime_shell_feature_exposes_and_threads_the_clean_break_contract()
+    {
+        var defaults = new GroundworkWorkflowRuntimeFeature();
+        var feature = new GroundworkWorkflowRuntimeFeature
+        {
+            Target = "runtime",
+            CacheWorkflowExecutables = false,
+            WorkflowExecutableCacheCapacity = 41
+        };
+        var metadata = Assert.Single(
+            typeof(GroundworkWorkflowRuntimeFeature)
+                .GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false)
+                .Cast<ShellFeatureAttribute>());
+        var services = new ServiceCollection();
+
+        feature.ConfigureServices(services);
+
+        Assert.Equal("GroundworkWorkflowRuntime", metadata.Name);
+        Assert.False(typeof(GroundworkWorkflowRuntimeFeature).IsSealed);
+        Assert.Contains("WorkflowsRuntimeResumption", metadata.DependsOn.Select(dependency => dependency?.ToString()));
+        Assert.True(defaults.CacheWorkflowExecutables);
+        Assert.Equal(WorkflowExecutableCacheOptions.DefaultCapacity, defaults.WorkflowExecutableCacheCapacity);
+        var options = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableCacheOptions));
+        var configured = Assert.IsType<WorkflowExecutableCacheOptions>(options.ImplementationInstance);
+        Assert.False(configured.Enabled);
+        Assert.Equal(41, configured.Capacity);
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.All(registry.Registrations, registration => Assert.Equal("runtime", registration.TargetName));
+        Assert.Contains(
+            typeof(GroundworkWorkflowRuntimeFeature).GetProperties(),
+            property => property.Name == nameof(GroundworkWorkflowRuntimeFeature.Target)
+                        && property.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "ManifestSettingAttribute"));
+    }
+
     [Fact]
     public void Aggregate_registration_declares_the_complete_manifest_and_replaces_every_runtime_boundary()
     {
