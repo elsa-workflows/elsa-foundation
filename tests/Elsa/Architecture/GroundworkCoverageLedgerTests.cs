@@ -458,6 +458,46 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Checked_in_v2_consumer_restores_Groundwork_from_Feedz()
+    {
+        var config = XDocument.Load(Path.Combine(
+            RepoRoot,
+            "tests",
+            "Elsa",
+            "Diagnostics",
+            "Persistence",
+            "Groundwork",
+            "V2",
+            "Consumer",
+            "NuGet.Config"));
+        var sources = config.Descendants()
+            .Where(element => element.Name.LocalName == "packageSources")
+            .Elements()
+            .Where(element => element.Name.LocalName == "add")
+            .ToDictionary(
+                element => element.Attribute("key")!.Value,
+                element => element.Attribute("value")!.Value,
+                StringComparer.Ordinal);
+        var mappings = config.Descendants()
+            .Where(element => element.Name.LocalName == "packageSource")
+            .ToDictionary(
+                element => element.Attribute("key")!.Value,
+                element => element.Elements()
+                    .Where(child => child.Name.LocalName == "package")
+                    .Select(child => child.Attribute("pattern")!.Value)
+                    .ToArray(),
+                StringComparer.Ordinal);
+
+        Assert.Equal(
+            "https://f.feedz.io/valence-works/groundwork/nuget/index.json",
+            sources["groundwork-feedz"]);
+        Assert.Equal(["Groundwork.*"], mappings["groundwork-feedz"]);
+        Assert.DoesNotContain(sources.Values, source =>
+            source.StartsWith("./", StringComparison.Ordinal) ||
+            source.StartsWith("../", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Json_schema_rejects_properties_that_are_not_declared()
     {
         var ledger = ReadLedger();

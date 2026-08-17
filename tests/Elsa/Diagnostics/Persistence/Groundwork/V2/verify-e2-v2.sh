@@ -29,8 +29,26 @@ trap 'rm -rf "$package_cache" "$build_root"' EXIT
 external_root="$build_root/consumer"
 mkdir -p "$external_root/feed"
 cp "$consumer_root/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj" "$external_root/"
-cp "$consumer_root/NuGet.Config" "$consumer_root/Program.cs" "$external_root/"
+cp "$consumer_root/Program.cs" "$external_root/"
 cp "$feed"/Groundwork.*.nupkg "$external_root/feed/"
+cat >"$external_root/NuGet.Config" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="groundwork-local" value="./feed" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="groundwork-local">
+      <package pattern="Groundwork.*" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>
+EOF
 
 isolation_args=(
   -p:ImportDirectoryBuildProps=false
