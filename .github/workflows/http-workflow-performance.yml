@@ -79,7 +79,7 @@ jobs:
           rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db*
           dotnet tool run groundwork -- apply \
             --manifest-assembly src/Apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-            --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
+            --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
             --provider sqlite \
             --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
             --output json \
