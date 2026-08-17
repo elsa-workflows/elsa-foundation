@@ -120,6 +120,99 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  groundwork-v2-native-provider-matrix:
+    name: Groundwork v2 native provider matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Start transactional native databases
+        run: |
+          docker run --detach --name groundwork-v2-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-postgresql pg_isready -U postgres > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
+
+          sqlserver_ephemeral="$(openssl rand -hex 20)A1!"
+          echo "::add-mask::$sqlserver_ephemeral"
+          docker run --detach --name groundwork-v2-sqlserver --publish 1433:1433 \
+            --env ACCEPT_EULA=Y --env MSSQL_SA_PASSWORD="$sqlserver_ephemeral" \
+            mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "$sqlserver_ephemeral" -C -Q 'select 1' > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-sqlserver
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING=Server=127.0.0.1,1433;User Id=sa;Password=$sqlserver_ephemeral;TrustServerCertificate=True;Encrypt=False;Initial Catalog=master" >> "$GITHUB_ENV"
+
+          docker run --detach --name groundwork-v2-mongodb --publish 27017:27017 mongo:7.0.24 \
+            mongod --replSet groundworkv2 --bind_ip_all
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-mongodb
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec groundwork-v2-mongodb mongosh --quiet --eval \
+            "rs.initiate({_id:'groundworkv2',members:[{_id:0,host:'127.0.0.1:27017'}]})"
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'rs.status().myState' | grep -q 1; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-mongodb
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Restore workflow test-scope native proof
+        run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      - name: Test workflow test-scope on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_runtime?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
+          -c Release --no-restore
+          --filter FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests
+          -p:WarningsNotAsErrors=NU1603
+
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:
@@ -196,6 +289,7 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
+      - groundwork-v2-native-provider-matrix
       - groundwork-fast
     if: ${{ failure() && github.event_name == 'push' }}
     permissions:
