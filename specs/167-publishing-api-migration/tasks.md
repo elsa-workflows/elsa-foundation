@@ -12,11 +12,11 @@
 
 **Purpose**: Freeze a reproducible, bite-proof oracle from the real FastEndpoints owner before production changes.
 
-- [ ] T001 Recheck issue #1374 comments, open PRs, red-main gate issues, and exact base health; record any competing claim or inherited failure on #1374 before writing code
-- [ ] T002 Add exact 23 method/template/action/request/response/success inventory and one-to-one registration assertions in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingBeforeBaselineTests.cs` and `specs/167-publishing-api-migration/contracts/publishing-route-manifest.md`
-- [ ] T003 [P] Build the deterministic 23-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs`
-- [ ] T004 [P] Build the real FastEndpoints historical host and deterministic publication/store/compiler/auth/test-run fixtures in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs`
-- [ ] T005 Add a clean-content-guarded, self-contained capture runner and script in `tests/Elsa/Workflows/Publishing/Api/Tests/Capture/` and `tools/capture-publishing-before.sh`; pin branch-durable source-tree and build-input identities without relying on a local or squash-lost commit
+- [x] T001 Recheck issue #1374 comments, open PRs, red-main gate issues, and exact base health; record any competing claim or inherited failure on #1374 before writing code
+- [x] T002 Add exact 23 method/template/action/request/response/success inventory and one-to-one registration assertions in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingBeforeBaselineTests.cs` and `specs/167-publishing-api-migration/contracts/publishing-route-manifest.md`
+- [x] T003 [P] Build the deterministic 23-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs`
+- [x] T004 [P] Build the real FastEndpoints historical host and deterministic publication/store/compiler/auth/test-run fixtures in `tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs`
+- [x] T005 Add a clean-content-guarded, self-contained capture runner and script in `tests/Elsa/Workflows/Publishing/Api/Tests/Capture/` and `tools/capture-publishing-before.sh`; pin branch-durable source-tree and build-input identities without relying on a local or squash-lost commit
 - [ ] T006 Capture and commit immutable HTTP, projected OpenAPI, raw OpenAPI, receipt, and initially empty approval artifacts under `tests/Elsa/Workflows/Publishing/Api/Tests/Baselines/`
 - [ ] T007 Validate fixture hashes, exact case/operation counts, runner/dependency identities, capture command/environment, ancestor-before-migration ordering, and clean-checkout reproducibility in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingBeforeBaselineTests.cs`
 - [ ] T008 Add exact mutation bites for receipt/source identity and HTTP/OpenAPI status, headers, body, content type, route, operation ID, tags, security, schemas, parameters, and response metadata in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingCompatibilityTests.cs`
