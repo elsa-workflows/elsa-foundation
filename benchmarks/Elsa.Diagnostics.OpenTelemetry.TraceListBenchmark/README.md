@@ -14,7 +14,9 @@ dotnet restore benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark/Elsa
 dotnet run -c Release --project benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark --no-restore -- --warmups 5 --samples 30 --traces 1000 --seed 2682026
 ```
 
-Restore must resolve the exact `0.1.0-preview.1` v2 Groundwork packages used by the adapter. The repository `NuGet.config` maps `Groundwork.*` to the Groundwork preview source; for an isolated local package directory, use an equivalent NuGet config whose `Groundwork Preview` source points at that directory (for example, the #284 feed used during development was `/tmp/groundwork-v2-284-feed.1gmkLr`).
+Restore must resolve the exact `0.2.0-preview.1` v2 Groundwork packages used by the adapter from the
+Valence Works Feedz source configured by the repository `NuGet.config`. NuGet.org and local package
+directories are not accepted release evidence.
 
 The command prints a canonical input fingerprint (including the filter and every seeded batch), expected result count, ordered trace-ID digest, mean/p50/p95/p99, raw samples, and the target/oracle p95 ratio. Keep the complete stdout: the v1/v2 comparison report also emits frozen source/package provenance and OS/runtime/architecture/CPU-count details. No latency numbers are committed here because they are machine-dependent. A full endpoint measurement still requires an Elsa host-level TestServer or deployment run using the same seeded databases.
 

@@ -54,7 +54,8 @@ public sealed class GroundworkUserStore(
                 GroundworkIdentityRowComparison.Equal,
                 ScopedLookupKey(tenantId, email)!,
                 IdentityV2StorageManifest.IdField,
-                Take: AmbiguousEmailTake),
+                Take: AmbiguousEmailTake,
+                ExpectedIndex: IdentityV2StorageManifest.UserByNormalizedEmailIndex),
             cancellationToken);
         return ValueTask.FromResult(matches.Count == 1 ? Map(matches[0]) : null);
     }

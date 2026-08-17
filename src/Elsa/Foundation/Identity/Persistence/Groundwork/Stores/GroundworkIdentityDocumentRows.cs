@@ -1,5 +1,5 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -39,7 +39,9 @@ internal static class GroundworkIdentityDocumentRows
         IdentityRoleDocument value => Values(
             (IdentityStorageManifest.NormalizedRoleNameKeyField, value.NormalizedRoleNameKey),
             (IdentityStorageManifest.TenantIdField, value.TenantId)),
-        IdentityClaimMappingDocument value => Values((IdentityStorageManifest.ProviderLookupKeyField, value.ProviderLookupKey)),
+        IdentityClaimMappingDocument value => Values(
+            (IdentityStorageManifest.ProviderLookupKeyField, value.ProviderLookupKey),
+            (IdentityStorageManifest.ClaimMappingOrderField, value.Rule.Order)),
         IdentityUserClaimDocument value => Values(
             (IdentityStorageManifest.UserLookupKeyField, value.UserLookupKey),
             (IdentityStorageManifest.ClaimKeyField, value.ClaimKey)),

@@ -1,8 +1,8 @@
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Microsoft.AspNetCore.Identity;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
-using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
@@ -51,8 +51,8 @@ public sealed class IamNormalizedLookupWorkload
             ["find-user-by-normalized-name"] = 1,
             ["find-user-by-normalized-email"] = 2,
             ["find-role-by-normalized-name"] = 1,
-            ["list-user-roles"] = 500,
-            ["list-role-users"] = 500
+            ["list-user-roles"] = 512,
+            ["list-role-users"] = 512
         };
 
     public static IamNormalizedLookupInputDefinition InputDefinition { get; } = new(Seed, 1, 1, 16, 1, 1, 0, OperationSequence);
@@ -102,7 +102,8 @@ public sealed class IamNormalizedLookupWorkload
         observableResults["current-update-display-name"] = current.DisplayName ?? string.Empty;
         operations.Add("accept-current-revision-update");
         stale.DisplayName = "Ada Stale";
-        if ((await adapter.UpdateUserAsync(stale, cancellationToken)).Succeeded) throw new InvalidOperationException("Identity workload accepted a stale revision update.");
+        if ((await adapter.UpdateUserAsync(stale, cancellationToken)).Succeeded)
+            throw new InvalidOperationException("Identity workload accepted a stale revision update.");
         observableResults["stale-revision-update"] = "rejected";
         operations.Add("reject-stale-revision-update");
 
@@ -133,22 +134,22 @@ public sealed class IamNormalizedLookupWorkload
         string normalizedUserName,
         string email,
         string normalizedEmail) => new()
-    {
-        Id = id,
-        TenantId = TenantId,
-        UserName = userName,
-        NormalizedUserName = normalizedUserName,
-        Email = email,
-        NormalizedEmail = normalizedEmail,
-        DisplayName = "Ada Lovelace",
-        EmailConfirmed = true,
-        PhoneNumber = "+31000000001",
-        PhoneNumberConfirmed = true,
-        LockoutEnabled = true,
-        TwoFactorEnabled = true,
-        SecurityStamp = "security-ada-v1",
-        ConcurrencyStamp = "revision-ada-v1"
-    };
+        {
+            Id = id,
+            TenantId = TenantId,
+            UserName = userName,
+            NormalizedUserName = normalizedUserName,
+            Email = email,
+            NormalizedEmail = normalizedEmail,
+            DisplayName = "Ada Lovelace",
+            EmailConfirmed = true,
+            PhoneNumber = "+31000000001",
+            PhoneNumberConfirmed = true,
+            LockoutEnabled = true,
+            TwoFactorEnabled = true,
+            SecurityStamp = "security-ada-v1",
+            ConcurrencyStamp = "revision-ada-v1"
+        };
 
     public static IdentityRole CreateRole(string id, string name, string normalizedName) => new()
     {

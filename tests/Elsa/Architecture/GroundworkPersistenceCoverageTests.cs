@@ -13,7 +13,7 @@ public sealed class GroundworkPersistenceCoverageTests
 
         var findings = Reconcile(ledger, inventory);
 
-        Assert.Empty(findings);
+        Assert.True(findings.Count == 0, string.Join(Environment.NewLine, findings));
     }
 
     [Fact]
@@ -556,6 +556,35 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
+    public void Scanner_ignores_storage_unit_lookup_method_signatures()
+    {
+        using var fixture = ScannerFixture.Create();
+        fixture.WriteRuntimeGroundworkSource(
+            "Nested/StorageSessionSource.cs",
+            "public StorageUnit Unit(string unitId, string? targetName = null) => Resolve(unitId, targetName);");
+
+        var inventory = new GroundworkPersistenceInventoryScanner(fixture.Root).Scan();
+
+        Assert.DoesNotContain(
+            inventory.ManifestStorageUnits,
+            unit => unit.StorageUnit.Equals("string unitId", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scanner_discovers_known_scoped_and_global_manifest_helpers()
+    {
+        using var fixture = ScannerFixture.Create();
+        fixture.WriteRuntimeGroundworkSource(
+            "Nested/ScopedStorageManifest.cs",
+            "public const string ScopedDocumentKind = \"scoped\"; public const string GlobalDocumentKind = \"global\"; public static object Create() => new[] { Scoped(ScopedDocumentKind, \"scoped\"), Global(GlobalDocumentKind, \"global\") }; ");
+
+        var inventory = new GroundworkPersistenceInventoryScanner(fixture.Root).Scan();
+
+        Assert.Contains(ManifestUnit("runtime", "ScopedDocumentKind"), inventory.ManifestStorageUnits);
+        Assert.Contains(ManifestUnit("runtime", "GlobalDocumentKind"), inventory.ManifestStorageUnits);
+    }
+
+    [Fact]
     public void Scanner_fails_closed_when_a_manifest_declaration_shape_cannot_be_parsed()
     {
         using var fixture = ScannerFixture.Create();
@@ -574,6 +603,7 @@ public sealed class GroundworkPersistenceCoverageTests
     [Theory]
     [InlineData("Unit(\"untracked\", \"Untracked\", [], [])")]
     [InlineData("new StorageUnitIdentity(\"untracked\")")]
+    [InlineData("StorageUnit.Declare(\"untracked\", \"Untracked\")")]
     public void Scanner_fails_closed_on_literal_storage_unit_identities(string declaration)
     {
         using var fixture = ScannerFixture.Create();
@@ -585,6 +615,23 @@ public sealed class GroundworkPersistenceCoverageTests
             () => new GroundworkPersistenceInventoryScanner(fixture.Root).Scan());
 
         Assert.Contains("manifest declaration", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("could not be parsed safely", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("unitId")]
+    public void Scanner_fails_closed_on_a_variable_storage_unit_identity_outside_a_manifest_named_file(string variable)
+    {
+        using var fixture = ScannerFixture.Create();
+        fixture.WriteRuntimeGroundworkSource(
+            "Nested/RuntimeStorageSchema.cs",
+            $"private static StorageUnit Create(string {variable}) => StorageUnit.Declare({variable}, \"Untracked\");");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new GroundworkPersistenceInventoryScanner(fixture.Root).Scan());
+
+        Assert.Contains(variable, exception.Message, StringComparison.Ordinal);
         Assert.Contains("could not be parsed safely", exception.Message, StringComparison.Ordinal);
     }
 

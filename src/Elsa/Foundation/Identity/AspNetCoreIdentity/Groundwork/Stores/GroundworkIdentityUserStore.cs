@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
@@ -7,6 +6,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Identity;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 
@@ -35,7 +35,7 @@ public sealed partial class GroundworkIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int SingleResultTake = 1;
     private const int AmbiguousEmailTake = 2;
-    private const int MaxRelationshipMaterialization = 100_000;
+    private const int MaxRelationshipMaterialization = IdentityStorageManifest.MaxAggregateRelationshipEntries;
     private const int LockoutTransitionMaxAttempts = 5;
 
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
@@ -408,7 +408,8 @@ public sealed partial class GroundworkIdentityUserStore(
                 comparison.Value,
                 IdentityV2StorageManifest.IdField,
                 Take: take,
-                IncludeVersions: includeVersions),
+                IncludeVersions: includeVersions,
+                ExpectedIndex: IdentityV2StorageManifest.IndexForQuery(queryIdentity)),
             cancellationToken);
 
     private async Task EnsureUserExistsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)

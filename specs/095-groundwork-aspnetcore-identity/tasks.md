@@ -10,9 +10,15 @@ description: "Dependency-ordered implementation tasks for authoritative Groundwo
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 
-**Tests**: Required and red-first. Capture the intended failing behavior before implementing each story. Preserve every current test objective; no EF test is deleted in #644.
+**Tests**: Required and red-first. Capture the intended failing behavior before implementing each story.
+The clean-break #269 direction supersedes the earlier migration-era preservation wording: valid behavior
+must have an exact public-v2 replacement in `AspNetCoreIdentityV2AcceptanceCatalog`, while v1 shape,
+unconditional-upsert, migration, and compatibility objectives are intentionally retired rather than
+carried forward.
 
-**Organization**: Tasks are grouped by user story and seven ratcheted delivery boundaries. The EF implementation stays behavior/schema/dependency-frozen and separately selectable for #646; compile-preserving moves/refactors require an identical complete oracle digest, and #647 owns final deletion.
+**Organization**: Tasks are grouped by user story and seven ratcheted delivery boundaries. The EF
+implementation remains a source-only frozen oracle until the clean-break boundary removes it atomically;
+it is not a runtime fallback or migration path.
 
 ## Format: `[ID] [P?] [Story] Description`
 

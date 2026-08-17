@@ -1,8 +1,8 @@
-using Elsa.Diagnostics.StructuredLogs.Core.Models;
-using Elsa.Diagnostics.StructuredLogs.Core.Options;
+using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
-using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;

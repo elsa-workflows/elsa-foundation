@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text.Json;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
@@ -12,6 +10,8 @@ using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Groundwork.Testing;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
 
@@ -386,12 +386,13 @@ public sealed class AspNetCoreIdentityReconciliationTests
     {
         using var source = new ControlledSessionSource(mode);
         var write = UserWrite($"uncertain-{mode}");
-        var atomicWrite = AtomicWrite(source, reconciliationTimeout: TimeSpan.FromMilliseconds(50));
+        var atomicWrite = AtomicWrite(source, reconciliationTimeout: TimeSpan.FromSeconds(5));
 
         var exception = await Assert.ThrowsAsync<GroundworkIdentityUncertainCommitException>(() =>
             atomicWrite.SaveAsync(write, CancellationToken.None).AsTask());
 
         Assert.Contains("uncertain commit outcome", exception.Message, StringComparison.Ordinal);
+        Assert.True(source.State.CommitAcknowledgementLost);
         Assert.NotNull(source.Read(write.UnitId, write.Id));
     }
 

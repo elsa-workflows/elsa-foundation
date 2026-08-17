@@ -1,8 +1,37 @@
 # Quickstart: Groundwork ASP.NET Core Identity Validation
 
-This guide is the executable evidence path for #644. The current candidate targets Groundwork `0.0.1-preview.60`, Docker is available for non-SQLite providers, and the repository-local tool manifest is restored at the same version as the packages.
+## Current clean-break v2 path
 
-> **Evidence status:** Preview.60 provider evidence is accepted for committed candidate `211ab4816b41c153d795c93fc3f72c872ecb4875` (tree `35b19f8b4f37dc4e80dffae8046aa7fb59b306e1`) under immutable generation `1d58175a573d490644823b9242c53fdaf6dd95e8f8378c8db686d8c06f176ba7`. The dated preview.55-preview.59 material below remains historical provenance only. The checked-in EF contract baseline is non-executed; live EF/Groundwork equality and timing remain owned by #646.
+The current candidate targets Groundwork `0.2.0-preview.1`, restored only from the Valence Works
+Feedz feed. It deliberately provides no v1 migration, alias, dual-write, fallback, or compatibility
+path. The executable provider acceptance surface is:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj --filter FullyQualifiedName~AspNetCoreIdentityV2ProviderMatrixTests
+```
+
+SQLite runs locally. With `CI=true`, the same public-v2 scenario provisions PostgreSQL, SQL Server,
+and a transactional MongoDB replica set. It executes the restored 25-objective catalog, all 15
+advertised framework capabilities, native tenant/concurrency behavior, and process restart. Package
+provenance must show only `https://f.feedz.io/valence-works/groundwork/nuget/index.json`.
+
+The current native-plan acceptance is timing-free and runs separately:
+
+```bash
+GW_EXPLAIN_ARTIFACT_DIR="$PWD/TestResults/iam-native-plans" \
+  dotnet test tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj \
+  --filter FullyQualifiedName~Public_iam_routes_use_declared_indexes_at_acceptance_scale
+```
+
+It creates exactly 600,000 physical SQLite rows (100,000 in each of six scale-bearing tables),
+executes the exact ten public IAM routes, and retains eleven optimizer-selected plan artifacts. The
+eleventh execution is the normalized-role lookup required before the role-to-users route. CI uploads
+the raw native index-use evidence as `iam-native-query-plans` and fails if no artifacts are produced.
+
+Everything below this note records earlier #644 evidence. Commands naming deleted v1 conformance
+types or packages are immutable historical provenance and are not current validation instructions.
+
+> **Historical evidence status:** Preview.60 provider evidence was accepted for committed candidate `211ab4816b41c153d795c93fc3f72c872ecb4875` (tree `35b19f8b4f37dc4e80dffae8046aa7fb59b306e1`) under immutable generation `1d58175a573d490644823b9242c53fdaf6dd95e8f8378c8db686d8c06f176ba7`. It is retained as provenance, not as current clean-break evidence. The checked-in EF contract baseline remains non-executed; live comparison and timing remain separately owned.
 
 ## 1. Establish The Exact Baseline
 

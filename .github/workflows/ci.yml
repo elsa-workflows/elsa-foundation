@@ -107,7 +107,18 @@ jobs:
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       - name: Test (fast unit tests, no containers)
+        env:
+          GW_EXPLAIN_ARTIFACT_DIR: ${{ github.workspace }}/TestResults/iam-native-plans
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+
+      - name: Upload IAM native query plans
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-native-query-plans
+          path: TestResults/iam-native-plans/**/*.txt
+          if-no-files-found: error
+          retention-days: 14
 
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
@@ -168,11 +179,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # The EF surface ratchet inspects project.assets.json for every repository project, not only
-      # the architecture test dependency graph. Restore the full solution so the gate fails closed
-      # on real missing assets instead of a deliberately partial restore.
-      - name: Restore repository graph for architecture ratchets
-        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+      # The EF surface ratchet inspects project.assets.json for every repository project, including
+      # deliberately out-of-solution frozen-oracle projects. Use the fail-closed discovery driver;
+      # a solution restore is not proof that every repository project was restored.
+      - name: Restore every repository project for architecture ratchets
+        run: bash tools/architecture/restore-zero-ef-certification.sh --force-evaluate --receipt artifacts/zero-ef/restore-receipt.json
 
       - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603

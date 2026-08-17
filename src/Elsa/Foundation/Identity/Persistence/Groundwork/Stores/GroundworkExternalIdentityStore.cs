@@ -14,10 +14,8 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 public sealed class GroundworkExternalIdentityStore(
     GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore
+    GroundworkIdentityAuthorityRelationshipCoordinator? relationshipCoordinator = null) : IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
 {
-    private const int MaxRelationshipMaterialization = 100_000;
-
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
         relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
 
@@ -46,16 +44,39 @@ public sealed class GroundworkExternalIdentityStore(
     public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = rows.Query(
+        var result = rows.QueryWithTotalCount(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.UserLookupKeyField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityDocumentId.From(tenantId, userId),
                 IdentityV2StorageManifest.IdField,
-                Take: MaxRelationshipMaterialization),
+                Take: IdentityStorageManifest.MaxAggregateRelationshipEntries,
+                ExpectedIndex: IdentityV2StorageManifest.LoginByUserIndex),
             cancellationToken);
-        return ValueTask.FromResult<IReadOnlyList<ExternalIdentityRecord>>(documents.Select(Map).ToArray());
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedExternalIdentityStore>(result.TotalCount);
+        return ValueTask.FromResult<IReadOnlyList<ExternalIdentityRecord>>(result.Rows.Select(Map).ToArray());
+    }
+
+    public ValueTask<IamPage<ExternalIdentityRecord>> ListForUserPageAsync(
+        string tenantId,
+        string userId,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var result = rows.QueryWithTotalCount(
+            IdentityStorageManifest.ExternalLoginDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.UserLookupKeyField,
+                GroundworkIdentityRowComparison.Equal,
+                IdentityDocumentId.From(tenantId, userId),
+                IdentityV2StorageManifest.IdField,
+                Take: request.Take,
+                Skip: request.Skip,
+                ExpectedIndex: IdentityV2StorageManifest.LoginByUserIndex),
+            cancellationToken);
+        return ValueTask.FromResult(new IamPage<ExternalIdentityRecord>(result.Rows.Select(Map).ToArray(), result.TotalCount));
     }
 
     public async ValueTask SaveAsync(ExternalIdentityRecord externalIdentity, CancellationToken cancellationToken = default)
@@ -76,6 +97,18 @@ public sealed class GroundworkExternalIdentityStore(
     {
         if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
             return GroundworkIamRevisionMapper.InvalidRevision();
+
+        // The relationship coordinator must load both owners before it can stage an atomic rebind.
+        // Preserve the revision contract's missing-login result before that owner validation runs.
+        if (expectedVersion is > 0 &&
+            await FindBySubjectWithRevisionAsync(
+                externalIdentity.TenantId,
+                externalIdentity.Provider,
+                externalIdentity.ProviderSubject,
+                cancellationToken) is null)
+        {
+            return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
+        }
 
         var result = await SaveCoreAsync(externalIdentity, expectedVersion, enforceExpectedVersion: true, cancellationToken);
         return GroundworkIamRevisionMapper.ToResult(result);

@@ -1,52 +1,19 @@
-using System.Diagnostics;
-using System.Text.Json;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
-using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.DbContext;
-using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.OpenTelemetry.Services;
 using Elsa.Diagnostics.Persistence.Draining;
-using Elsa.Persistence.EFCore.Contracts;
-using Elsa.Persistence.EFCore.Sqlite;
-using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Hosting.Services;
 using Groundwork.Sqlite;
 using Groundwork.Store;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
+using System.Text.Json;
 
-if (args.Contains("--v1-v2", StringComparer.Ordinal))
-{
-    await CompareGroundworkVersionsAsync(args);
-    return;
-}
+if (!args.Contains("--v1-v2", StringComparer.Ordinal))
+    throw new ArgumentException("Use --v1-v2 with --v1-child <path> to compare the frozen Groundwork v1 adapter with Groundwork v2.");
 
-var options = BenchmarkOptions.Parse(args);
-var corpus = TraceCorpus.Create(options.Seed, options.TraceCount);
-
-Console.WriteLine("Trace-list latency benchmark");
-Console.WriteLine($"scope=provider-route (the Elsa trace provider call; HTTP transport/JSON are excluded)");
-Console.WriteLine($"seed={options.Seed} traces={corpus.TraceCount} services={TraceCorpus.ServiceCount} expected={corpus.ExpectedMatches} warmups={options.Warmups} samples={options.Samples}");
-Console.WriteLine($"input-sha256={corpus.Fingerprint}");
-Console.WriteLine("oracle=EF Core OpenTelemetry store on file-backed SQLite; target=Groundwork v2 ordinary units on file-backed SQLite");
-
-var oracle = await RunAsync("ef-core-v1-oracle", CreateEfStoreAsync, corpus, options);
-var target = await RunAsync("groundwork-v2-target", CreateGroundworkStoreAsync, corpus, options);
-var ratio = target.Statistics.P95Milliseconds / oracle.Statistics.P95Milliseconds;
-var report = new BenchmarkReport(
-    "otel-trace-list-provider-route-v1",
-    DateTimeOffset.UtcNow,
-    options,
-    corpus.Fingerprint,
-    oracle,
-    target,
-    ratio);
-
-Console.WriteLine(JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+await CompareGroundworkVersionsAsync(args);
 
 static async Task<Measurement> RunAsync(
     string name,
@@ -159,25 +126,6 @@ static string Validate(
     return resultDigest;
 }
 
-static async Task<StoreHandle> CreateEfStoreAsync(TraceCorpus corpus)
-{
-    var databasePath = NewDatabasePath("ef");
-    var host = SqliteEfContextFactory.Create(databasePath);
-    var options = OptionsFor(corpus);
-    var store = new EfCoreOpenTelemetryStore(host, options, new OpenTelemetrySourceRegistry(options));
-    store.StartDraining();
-    foreach (var batch in corpus.Batches)
-        await store.WriteAsync(batch);
-    await store.CompleteDrainingAsync();
-
-    return new StoreHandle(store, async () =>
-    {
-        await store.DisposeAsync();
-        host.Dispose();
-        DeleteDatabase(databasePath);
-    });
-}
-
 static async Task<StoreHandle> CreateGroundworkStoreAsync(TraceCorpus corpus)
 {
     var databasePath = NewDatabasePath("groundwork");
@@ -241,52 +189,6 @@ internal sealed class NullCollectorConfigurationProvider : ICollectorConfigurati
             "OTEL_EXPORTER_OTLP_ENDPOINT",
             "OTEL_EXPORTER_OTLP_PROTOCOL",
             new Dictionary<string, string>()));
-}
-
-internal sealed class SqliteEfContextFactory : IDbContextFactory<OpenTelemetryDbContext>, IDisposable
-{
-    private readonly SqliteConnection rootConnection;
-    private readonly string connectionString;
-    private readonly ServiceProvider services;
-
-    private SqliteEfContextFactory(SqliteConnection rootConnection, string connectionString, ServiceProvider services)
-    {
-        this.rootConnection = rootConnection;
-        this.connectionString = connectionString;
-        this.services = services;
-    }
-
-    public static SqliteEfContextFactory Create(string databasePath)
-    {
-        var connectionString = $"Data Source={databasePath}";
-        var rootConnection = new SqliteConnection(connectionString);
-        rootConnection.Open();
-        var services = new ServiceCollection()
-            .AddSingleton<ISystemClock, SystemClock>()
-            .AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>()
-            .BuildServiceProvider();
-        var factory = new SqliteEfContextFactory(rootConnection, connectionString, services);
-        using var context = factory.CreateDbContext();
-        context.Database.EnsureCreated();
-        return factory;
-    }
-
-    public OpenTelemetryDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<OpenTelemetryDbContext>()
-            .UseSqlite(connectionString)
-            .Options;
-        return new OpenTelemetryDbContext(options, services);
-    }
-
-    public Task<OpenTelemetryDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(CreateDbContext());
-
-    public void Dispose()
-    {
-        services.Dispose();
-        rootConnection.Dispose();
-    }
 }
 
 internal sealed record BenchmarkOptions(int Warmups, int Samples, int Seed, int TraceCount)
@@ -442,8 +344,8 @@ internal sealed record BenchmarkProvenance(
     public static BenchmarkProvenance Current { get; } = new(
         "e30c2d291a34d3c5e986a9339af9722748572cac",
         "0.0.1-preview.114",
-        "cd72976ba3cf80f054d504df61be64c6633e57b8",
-        "0.1.0-preview.1",
+        "aac398c2789fefd38c4640121cce24318989f031",
+        "0.2.0-preview.1",
         System.Runtime.InteropServices.RuntimeInformation.OSDescription,
         System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
         System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),

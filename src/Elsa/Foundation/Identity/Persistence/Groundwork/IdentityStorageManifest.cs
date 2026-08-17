@@ -7,7 +7,8 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 /// </summary>
 public static class IdentityStorageManifest
 {
-    public const int MaxAggregateRelationshipEntries = 512;
+    public const int MaxMaterializedListEntries = 512;
+    public const int MaxAggregateRelationshipEntries = MaxMaterializedListEntries;
     public const string SchemaVersion = "1.0.6";
     public const int ProjectedLookupColumnLength = 400;
     public const int SqlServerStorageScopeKeyBytes = 256;
@@ -44,6 +45,7 @@ public static class IdentityStorageManifest
     public const string UserLookupKeyField = "userLookupKey";
     public const string RoleLookupKeyField = "roleLookupKey";
     public const string ProviderLookupKeyField = "providerLookupKey";
+    public const string ClaimMappingOrderField = "claimOrder";
     public const string ClaimKeyField = "claimKey";
     public const string TenantIdField = "tenantId";
     public const string MutationReceiptExpiresAtField = "expiresAt";

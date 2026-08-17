@@ -31,7 +31,7 @@ public static class SecretsGroundworkStorageSchema
             .String(StoreNameLookupKeyField, 64, column => column.Required())
             .String(ScopeLookupKeyField, 64)
             .String(StatusField, 32, column => column.Required())
-            .Boolean(HasNonExpiringActiveVersionField, column => column.Required().Default(false))
+            .Boolean(HasNonExpiringActiveVersionField, column => column.Required())
             .Timestamp(MaxActiveVersionExpiresAtField)
             .Json(PayloadField, column => column.Required())
             .Key(TenantIdField, NormalizedNameField)

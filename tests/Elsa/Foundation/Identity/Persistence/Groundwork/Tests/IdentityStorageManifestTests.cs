@@ -1,6 +1,6 @@
-using System.Text;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Groundwork.Kernel;
+using System.Text;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
@@ -80,6 +80,29 @@ public sealed class IdentityStorageManifestTests
         var unit = IdentityV2StorageManifest.Require(IdentityStorageManifest.IdentityMutationReceiptDocumentKind);
         Assert.Equal(PortableType.DateTimeOffset, Column(unit, IdentityStorageManifest.MutationReceiptExpiresAtField).Type);
         AssertIndexed(unit, IdentityStorageManifest.MutationReceiptExpiresAtField);
+    }
+
+    [Theory]
+    [InlineData(IdentityStorageManifest.FindUserByNormalizedNameQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindUserByNormalizedEmailQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindRoleByNormalizedNameQuery, IdentityStorageManifest.IdentityRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRolesByTenantQuery, IdentityStorageManifest.IdentityRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserClaimsQuery, IdentityStorageManifest.UserClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindUsersByClaimQuery, IdentityStorageManifest.UserClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRoleClaimsQuery, IdentityStorageManifest.RoleClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserRolesQuery, IdentityStorageManifest.UserRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRoleUsersQuery, IdentityStorageManifest.UserRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserLoginsQuery, IdentityStorageManifest.ExternalLoginDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListClaimMappingsByProviderQuery, IdentityStorageManifest.IdentityClaimMappingDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListExpiredMutationReceiptsQuery, IdentityStorageManifest.IdentityMutationReceiptDocumentKind)]
+    public void Every_scale_bearing_query_names_an_index_from_its_declared_unit(
+        string queryIdentity,
+        string unitId)
+    {
+        var expectedIndex = IdentityV2StorageManifest.IndexForQuery(queryIdentity);
+        var unit = IdentityV2StorageManifest.Require(unitId);
+
+        Assert.Contains(unit.Indexes, index => index.Name == expectedIndex);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ connection-string environment variables are present.
 
 ```sh
 NUGET_PACKAGES=/tmp/otel-nuget dotnet test \
-  tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/\
+  tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/\
   Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj \
   --no-restore -c Release
 ```
@@ -19,7 +19,7 @@ The live matrix uses `GROUNDWORK_V2_SQLITE_CONNECTION_STRING`,
 `GROUNDWORK_V2_MONGODB_CONNECTION_STRING`. CI must provide all four (or provision the declared
 Testcontainers fixtures); a local run skips only providers whose variables are absent.
 
-The verification recorded for this revision restores Groundwork `0.1.0-preview.1` from the public
+The verification recorded for this revision restores Groundwork `0.2.0-preview.1` from the public
 Valence Works Feedz source. Falling back to the v1 provider packages is not supported.
 
 The tests prove the trace list's declared `AggregationQuery.SourcePredicate` behavior with repeated

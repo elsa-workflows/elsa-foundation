@@ -1,8 +1,8 @@
+using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
+using Groundwork.Store;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
-using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -144,7 +144,8 @@ public sealed class GroundworkIdentityAtomicWrite
                         now,
                         IdentityStorageManifest.MutationReceiptExpiresAtField,
                         Take: CleanupBatchSize,
-                        IncludeVersions: true),
+                        IncludeVersions: true,
+                        ExpectedIndex: IdentityV2StorageManifest.MutationReceiptByExpiryIndex),
                     cancellationToken),
                 cancellationToken);
         foreach (var row in expired.Take(CleanupBatchSize))

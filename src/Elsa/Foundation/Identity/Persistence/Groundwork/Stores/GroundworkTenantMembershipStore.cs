@@ -48,6 +48,14 @@ public sealed class GroundworkTenantMembershipStore(
         if (!GroundworkIamRevisionMapper.TryExpectedVersion(expectedRevision, out var expectedVersion))
             return GroundworkIamRevisionMapper.InvalidRevision();
 
+        // The relationship coordinator requires the owner user before staging. A revision-aware
+        // update of an absent membership is NotFound even when that owner is also absent.
+        if (expectedVersion is > 0 &&
+            await FindWithRevisionAsync(membership.TenantId, membership.UserId, cancellationToken) is null)
+        {
+            return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
+        }
+
         var result = await SaveCoreAsync(membership, expectedVersion, enforceExpectedVersion: true, cancellationToken);
         return GroundworkIamRevisionMapper.ToResult(result);
     }

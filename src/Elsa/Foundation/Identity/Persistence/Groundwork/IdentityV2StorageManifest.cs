@@ -12,6 +12,18 @@ public static class IdentityV2StorageManifest
     public const string IdField = "id";
     public const string SchemaVersionField = "schemaVersion";
     public const string ContentField = "content";
+    public const string UserByNormalizedNameIndex = "identity_user_by_normalized_name";
+    public const string UserByNormalizedEmailIndex = "identity_user_by_normalized_email";
+    public const string RoleByNormalizedNameIndex = "identity_role_by_normalized_name";
+    public const string RoleByTenantIndex = "identity_role_by_tenant";
+    public const string ClaimMappingByProviderIndex = "identity_claim_mapping_by_provider";
+    public const string UserClaimByUserIndex = "identity_user_claim_by_user";
+    public const string UserClaimByClaimIndex = "identity_user_claim_by_claim";
+    public const string RoleClaimByRoleIndex = "identity_role_claim_by_role";
+    public const string LoginByUserIndex = "identity_login_by_user";
+    public const string UserRoleByUserIndex = "identity_user_role_by_user";
+    public const string UserRoleByRoleIndex = "identity_user_role_by_role";
+    public const string MutationReceiptByExpiryIndex = "identity_mutation_receipt_by_expiry";
 
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
@@ -23,8 +35,8 @@ public static class IdentityV2StorageManifest
                 Lookup(IdentityStorageManifest.NormalizedEmailKeyField, nullable: true)
             ],
             [
-                Index("identity_user_by_normalized_name", IdentityStorageManifest.NormalizedUserNameKeyField),
-                Index("identity_user_by_normalized_email", IdentityStorageManifest.NormalizedEmailKeyField)
+                Index(UserByNormalizedNameIndex, IdentityStorageManifest.NormalizedUserNameKeyField),
+                Index(UserByNormalizedEmailIndex, IdentityStorageManifest.NormalizedEmailKeyField)
             ]),
         Scoped(
             IdentityStorageManifest.IdentityRoleDocumentKind,
@@ -34,16 +46,23 @@ public static class IdentityV2StorageManifest
                 Tenant()
             ],
             [
-                Index("identity_role_by_normalized_name", IdentityStorageManifest.NormalizedRoleNameKeyField),
-                Index("identity_role_by_tenant", IdentityStorageManifest.TenantIdField)
+                Index(RoleByNormalizedNameIndex, IdentityStorageManifest.NormalizedRoleNameKeyField),
+                Index(RoleByTenantIndex, IdentityStorageManifest.TenantIdField)
             ]),
         Scoped(IdentityStorageManifest.IdentityApplicationDocumentKind, "identity_applications"),
         Scoped(IdentityStorageManifest.IdentityCredentialDocumentKind, "identity_credentials"),
         Scoped(
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             "identity_claim_mappings",
-            [Lookup(IdentityStorageManifest.ProviderLookupKeyField)],
-            [Index("identity_claim_mapping_by_provider", IdentityStorageManifest.ProviderLookupKeyField)]),
+            [
+                Lookup(IdentityStorageManifest.ProviderLookupKeyField),
+                Integer(IdentityStorageManifest.ClaimMappingOrderField)
+            ],
+            [Index(
+                ClaimMappingByProviderIndex,
+                IdentityStorageManifest.ProviderLookupKeyField,
+                IdentityStorageManifest.ClaimMappingOrderField,
+                IdField)]),
         Scoped(IdentityStorageManifest.IdentityProviderConfigurationDocumentKind, "identity_provider_configurations"),
         Global(IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind, "identity_global_provider_configurations"),
         Scoped(
@@ -51,26 +70,26 @@ public static class IdentityV2StorageManifest
             "identity_user_claims",
             [Lookup(IdentityStorageManifest.UserLookupKeyField), Lookup(IdentityStorageManifest.ClaimKeyField)],
             [
-                Index("identity_user_claim_by_user", IdentityStorageManifest.UserLookupKeyField),
-                Index("identity_user_claim_by_claim", IdentityStorageManifest.ClaimKeyField)
+                Index(UserClaimByUserIndex, IdentityStorageManifest.UserLookupKeyField),
+                Index(UserClaimByClaimIndex, IdentityStorageManifest.ClaimKeyField)
             ]),
         Scoped(
             IdentityStorageManifest.RoleClaimDocumentKind,
             "identity_role_claims",
             [Lookup(IdentityStorageManifest.RoleLookupKeyField)],
-            [Index("identity_role_claim_by_role", IdentityStorageManifest.RoleLookupKeyField)]),
+            [Index(RoleClaimByRoleIndex, IdentityStorageManifest.RoleLookupKeyField)]),
         Scoped(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             "identity_external_logins",
             [Lookup(IdentityStorageManifest.UserLookupKeyField)],
-            [Index("identity_login_by_user", IdentityStorageManifest.UserLookupKeyField)]),
+            [Index(LoginByUserIndex, IdentityStorageManifest.UserLookupKeyField)]),
         Scoped(
             IdentityStorageManifest.UserRoleDocumentKind,
             "identity_user_roles",
             [Lookup(IdentityStorageManifest.UserLookupKeyField), Lookup(IdentityStorageManifest.RoleLookupKeyField)],
             [
-                Index("identity_user_role_by_user", IdentityStorageManifest.UserLookupKeyField),
-                Index("identity_user_role_by_role", IdentityStorageManifest.RoleLookupKeyField)
+                Index(UserRoleByUserIndex, IdentityStorageManifest.UserLookupKeyField),
+                Index(UserRoleByRoleIndex, IdentityStorageManifest.RoleLookupKeyField)
             ]),
         Scoped(IdentityStorageManifest.UserTokenDocumentKind, "identity_user_tokens"),
         Scoped(IdentityStorageManifest.IdentityTenantMembershipDocumentKind, "identity_tenant_memberships"),
@@ -81,8 +100,25 @@ public static class IdentityV2StorageManifest
             IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
             "identity_mutation_receipts",
             [Timestamp(IdentityStorageManifest.MutationReceiptExpiresAtField)],
-            [Index("identity_mutation_receipt_by_expiry", IdentityStorageManifest.MutationReceiptExpiresAtField)])
+            [Index(MutationReceiptByExpiryIndex, IdentityStorageManifest.MutationReceiptExpiresAtField)])
     ];
+
+    public static string IndexForQuery(string queryIdentity) => queryIdentity switch
+    {
+        IdentityStorageManifest.FindUserByNormalizedNameQuery => UserByNormalizedNameIndex,
+        IdentityStorageManifest.FindUserByNormalizedEmailQuery => UserByNormalizedEmailIndex,
+        IdentityStorageManifest.FindRoleByNormalizedNameQuery => RoleByNormalizedNameIndex,
+        IdentityStorageManifest.ListRolesByTenantQuery => RoleByTenantIndex,
+        IdentityStorageManifest.ListUserClaimsQuery => UserClaimByUserIndex,
+        IdentityStorageManifest.FindUsersByClaimQuery => UserClaimByClaimIndex,
+        IdentityStorageManifest.ListRoleClaimsQuery => RoleClaimByRoleIndex,
+        IdentityStorageManifest.ListUserRolesQuery => UserRoleByUserIndex,
+        IdentityStorageManifest.ListRoleUsersQuery => UserRoleByRoleIndex,
+        IdentityStorageManifest.ListUserLoginsQuery => LoginByUserIndex,
+        IdentityStorageManifest.ListClaimMappingsByProviderQuery => ClaimMappingByProviderIndex,
+        IdentityStorageManifest.ListExpiredMutationReceiptsQuery => MutationReceiptByExpiryIndex,
+        _ => throw new ArgumentException($"Identity query '{queryIdentity}' has no declared v2 index.", nameof(queryIdentity))
+    };
 
     public static StorageUnit Require(string unitId) =>
         CreateUnits().Single(unit => unit.Id.Value == unitId);
@@ -140,6 +176,18 @@ public static class IdentityV2StorageManifest
                             definition.Required();
                     });
             }
+            else if (column.Type == PortableType.Int32)
+            {
+                declaration.Int32(
+                    column.Name,
+                    definition =>
+                    {
+                        if (column.Nullable)
+                            definition.Nullable();
+                        else
+                            definition.Required();
+                    });
+            }
             else
             {
                 throw new InvalidOperationException(
@@ -149,7 +197,7 @@ public static class IdentityV2StorageManifest
 
         declaration.Key(IdField).OptimisticConcurrency();
         foreach (var index in indexes ?? [])
-            declaration.Index(index.Name, index.Column);
+            declaration.Index(index.Name, [.. index.Columns]);
         if (scope == ScopePolicy.Scoped)
             declaration.Scoped();
         return declaration.Build();
@@ -164,8 +212,11 @@ public static class IdentityV2StorageManifest
     private static ColumnSpec Timestamp(string name) =>
         new(name, PortableType.DateTimeOffset, null, false);
 
-    private static IndexSpec Index(string name, string column) => new(name, column);
+    private static ColumnSpec Integer(string name) =>
+        new(name, PortableType.Int32, null, false);
+
+    private static IndexSpec Index(string name, params string[] columns) => new(name, columns);
 
     private sealed record ColumnSpec(string Name, PortableType Type, int? MaximumLength, bool Nullable);
-    private sealed record IndexSpec(string Name, string Column);
+    private sealed record IndexSpec(string Name, IReadOnlyList<string> Columns);
 }

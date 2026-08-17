@@ -218,6 +218,8 @@ public sealed class IdentityProcessProbeRunner
 {
     public const string HelperDirectoryName = "IdentityProcessProbe";
     public const string HelperAssemblyName = "Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.dll";
+    public static TimeSpan DefaultTimeout { get; } = TimeSpan.FromSeconds(60);
+    private static TimeSpan CleanupTimeout { get; } = TimeSpan.FromSeconds(10);
 
     public async Task<IdentityProcessProbeResult> RunAsync(
         string providerKey,
@@ -225,8 +227,13 @@ public sealed class IdentityProcessProbeRunner
         IdentityProcessProbeOperation operation,
         IdentityProcessProbeUser user,
         IdentityProcessProbeState state,
+        TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
+        var effectiveTimeout = timeout ?? DefaultTimeout;
+        if (effectiveTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        cancellationToken.ThrowIfCancellationRequested();
         var helperPath = Path.Combine(AppContext.BaseDirectory, HelperDirectoryName, HelperAssemblyName);
         if (!File.Exists(helperPath))
             throw new FileNotFoundException("The copied Identity process-probe helper artifact was not found.", helperPath);
@@ -256,28 +263,30 @@ public sealed class IdentityProcessProbeRunner
         if (!process.Start())
             throw new InvalidOperationException("The Identity process-probe helper could not be started.");
 
-        string standardOutput;
-        string standardError;
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stderrTask = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        using var timeoutSource = new CancellationTokenSource(effectiveTimeout);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
         try
         {
-            var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-            var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
-            await process.StandardInput.WriteAsync(IdentityProcessProbeProtocol.SerializeCommand(command).AsMemory(), cancellationToken);
-            await process.StandardInput.FlushAsync(cancellationToken);
+            await process.StandardInput.WriteAsync(IdentityProcessProbeProtocol.SerializeCommand(command).AsMemory(), linkedSource.Token);
+            await process.StandardInput.FlushAsync(linkedSource.Token);
             process.StandardInput.Close();
-            await process.WaitForExitAsync(cancellationToken);
-            standardOutput = await stdout;
-            standardError = await stderr;
+            await process.WaitForExitAsync(linkedSource.Token);
+        }
+        catch (OperationCanceledException) when (linkedSource.IsCancellationRequested)
+        {
+            await KillAndReapAsync(process, stdoutTask, stderrTask);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"The Identity process-probe helper exceeded its {effectiveTimeout.TotalSeconds:F0}-second timeout.");
         }
         catch
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
-            }
+            await KillAndReapAsync(process, stdoutTask, stderrTask);
             throw;
         }
+        var standardOutput = await stdoutTask;
+        var standardError = await stderrTask;
         if (process.ExitCode != 0)
         {
             var error = IdentityProcessProbeProtocol.DeserializeError(standardError.Trim());
@@ -295,6 +304,40 @@ public sealed class IdentityProcessProbeRunner
             throw new InvalidOperationException("The Identity process-probe result did not match the launched request.");
         }
         return result;
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+        }
+    }
+
+    private static async Task KillAndReapAsync(
+        Process process,
+        Task<string> stdoutTask,
+        Task<string> stderrTask)
+    {
+        KillProcessTree(process);
+        try
+        {
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(CleanupTimeout);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
+        {
+        }
+        try
+        {
+            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(CleanupTimeout);
+        }
+        catch (TimeoutException)
+        {
+        }
     }
 }
 

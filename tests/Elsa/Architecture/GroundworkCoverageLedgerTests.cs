@@ -10,7 +10,9 @@ public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.103";
-    private const string CurrentPackageGroundworkVersion = "0.0.1-preview.131";
+    private const string CurrentLegacyGroundworkVersion = "0.0.1-preview.131";
+    private const string CurrentV2GroundworkVersion = "0.2.0-preview.1";
+    private const string FrozenV1BenchmarkGroundworkVersion = "0.0.1-preview.114";
     private const string Prior88GroundworkVersion = "0.0.1-preview.88";
     private const string Prior86GroundworkVersion = "0.0.1-preview.86";
     private const string Prior81GroundworkVersion = "0.0.1-preview.81";
@@ -390,15 +392,69 @@ public sealed class GroundworkCoverageLedgerTests
         var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
             .Descendants("PackageVersion")
             .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork.", StringComparison.Ordinal) == true)
-            .Select(element => element.Attribute("Version")?.Value)
-            .OfType<string>()
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+            .ToDictionary(
+                element => element.Attribute("Include")!.Value,
+                element => element.Attribute("Version")!.Value,
+                StringComparer.Ordinal);
         var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
         var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
-        Assert.Equal(CurrentPackageGroundworkVersion, Assert.Single(packageVersions));
-        Assert.Equal(CurrentPackageGroundworkVersion, toolVersion);
+        Assert.Equal(
+            new[] { "Groundwork.Core", "Groundwork.Documents", "Groundwork.MongoDb", "Groundwork.PostgreSql", "Groundwork.SqlServer", "Groundwork.Sqlite" },
+            packageVersions.Where(pair => pair.Value == CurrentLegacyGroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            new[] { "Groundwork.Kernel", "Groundwork.Query.Model", "Groundwork.Store" },
+            packageVersions.Where(pair => pair.Value == CurrentV2GroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
+        Assert.All(
+            packageVersions,
+            pair => Assert.Contains(pair.Value, new[] { CurrentLegacyGroundworkVersion, CurrentV2GroundworkVersion }));
+        Assert.Equal(CurrentLegacyGroundworkVersion, toolVersion);
+    }
+
+    [Fact]
+    public void Explicit_Groundwork_package_and_documentation_versions_match_the_reviewed_release()
+    {
+        var findings = new List<string>();
+        foreach (var project in Directory.EnumerateFiles(RepoRoot, "*.csproj", SearchOption.AllDirectories)
+                     .Where(path => !IsGeneratedPath(path)))
+        {
+            var relativePath = Path.GetRelativePath(RepoRoot, project).Replace(Path.DirectorySeparatorChar, '/');
+            var document = XDocument.Load(project);
+            foreach (var reference in document.Descendants().Where(element =>
+                         element.Name.LocalName == "PackageReference" &&
+                         element.Attribute("Include")?.Value.StartsWith("Groundwork.", StringComparison.Ordinal) == true))
+            {
+                var version = reference.Attribute("VersionOverride")?.Value ?? reference.Attribute("Version")?.Value;
+                if (version is null || version.StartsWith("$(", StringComparison.Ordinal))
+                    continue;
+
+                var expected = relativePath ==
+                    "benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child/Elsa.Diagnostics.OpenTelemetry.TraceListV1Child.csproj"
+                    ? FrozenV1BenchmarkGroundworkVersion
+                    : CurrentV2GroundworkVersion;
+                if (!string.Equals(version, expected, StringComparison.Ordinal))
+                    findings.Add($"{relativePath}: explicit {reference.Attribute("Include")!.Value} version is '{version}', expected '{expected}'.");
+            }
+
+            foreach (var versionProperty in document.Descendants().Where(element =>
+                         element.Name.LocalName == "GroundworkVersion" &&
+                         !element.Value.StartsWith("$(", StringComparison.Ordinal)))
+            {
+                if (!string.Equals(versionProperty.Value, CurrentV2GroundworkVersion, StringComparison.Ordinal))
+                    findings.Add($"{relativePath}: GroundworkVersion is '{versionProperty.Value}', expected '{CurrentV2GroundworkVersion}'.");
+            }
+        }
+
+        var retiredV2Version = "0" + ".1.0-preview.1";
+        string[] textExtensions = [".cs", ".csproj", ".json", ".md", ".props", ".ps1", ".sh", ".targets", ".yml", ".yaml"];
+        foreach (var file in Directory.EnumerateFiles(RepoRoot, "*", SearchOption.AllDirectories)
+                     .Where(path => !IsGeneratedPath(path) && textExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)))
+        {
+            if (File.ReadAllText(file).Contains(retiredV2Version, StringComparison.Ordinal))
+                findings.Add($"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: still names retired v2 package '{retiredV2Version}'.");
+        }
+
+        Assert.True(findings.Count == 0, string.Join(Environment.NewLine, findings.Order(StringComparer.Ordinal)));
     }
 
     [Fact]
@@ -1362,6 +1418,15 @@ public sealed class GroundworkCoverageLedgerTests
 
     private static void AssertExactFindings(IReadOnlyCollection<string> actual, params string[] expected) =>
         Assert.Equal(expected.Order(StringComparer.Ordinal), actual.Order(StringComparer.Ordinal));
+
+    private static bool IsGeneratedPath(string path)
+    {
+        var relativePath = Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
+        return relativePath.StartsWith(".git/", StringComparison.Ordinal) ||
+               relativePath.StartsWith("artifacts/", StringComparison.Ordinal) ||
+               relativePath.Contains("/bin/", StringComparison.Ordinal) ||
+               relativePath.Contains("/obj/", StringComparison.Ordinal);
+    }
 
     private static string LedgerPath => Path.Combine(
         RepoRoot,

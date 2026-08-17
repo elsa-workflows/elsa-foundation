@@ -40,6 +40,25 @@ public sealed class GroundworkIdentityRowStore(
         string unitId,
         GroundworkIdentityRowQuery query,
         CancellationToken cancellationToken = default)
+        => QueryCore(unitId, query, includeTotalCount: false, cancellationToken).Rows;
+
+    public GroundworkIdentityRowQueryResult QueryWithTotalCount(
+        string unitId,
+        GroundworkIdentityRowQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = QueryCore(unitId, query, includeTotalCount: true, cancellationToken);
+        return new(
+            result.Rows,
+            result.TotalCount ?? throw new InvalidDataException(
+                $"Identity unit '{unitId}' did not return the requested filtered total count."));
+    }
+
+    private QueryCoreResult QueryCore(
+        string unitId,
+        GroundworkIdentityRowQuery query,
+        bool includeTotalCount,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
@@ -72,12 +91,13 @@ public sealed class GroundworkIdentityRowStore(
             order.Add(new OrderTerm(idColumn, OrderDirection.Ascending, NullOrder.Last));
         }
 
-        var result = plan.Session.Query(new QueryRequest(
-            table,
-            where,
-            [.. order],
-            Projection.All,
-            Paging.Keyset(query.Take)));
+        var paging = query.Skip == 0
+            ? Paging.Keyset(query.Take)
+            : Paging.OffsetLimit(query.Skip, query.Take);
+        var request = includeTotalCount
+            ? new QueryRequest(table, where, [.. order], Projection.All, paging, ResultShape.TotalCount.Instance)
+            : new QueryRequest(table, where, [.. order], Projection.All, paging);
+        var result = plan.Session.Query(request, plan.Unit.CreateQueryRenderOptions(query.ExpectedIndex));
 
         var rows = new List<GroundworkIdentityRow>(result.Rows.Count);
         foreach (var row in result.Rows)
@@ -100,7 +120,7 @@ public sealed class GroundworkIdentityRowStore(
             }
         }
 
-        return rows;
+        return new(rows, result.TotalCount);
     }
 
     public GroundworkIdentityWriteResult Save(
@@ -121,6 +141,19 @@ public sealed class GroundworkIdentityRowStore(
                 .ConditionalUpsert(values, WriteOptions.IfVersion(write.Condition.ExpectedVersion!.Value)),
             _ => throw new ArgumentOutOfRangeException(nameof(write.Condition.Kind))
         };
+
+        // A positive revision is an update contract, not an insert contract. Providers commonly
+        // report a missing conditional-upsert target as a generic concurrency conflict; normalize
+        // that provider detail only after a follow-up read, so a concurrent insert cannot be
+        // mistaken for NotFound.
+        if (write.Condition.Kind == GroundworkIdentityRowWriteConditionKind.ExpectedVersion &&
+            write.Condition.ExpectedVersion is > 0 &&
+            outcome.Status == WriteOutcomeStatus.ConcurrencyConflict &&
+            session.Read(Key(write.Id)) is null)
+        {
+            return GroundworkIdentityWriteResult.NotFound();
+        }
+
         return GroundworkIdentityWriteResult.From(outcome);
     }
 
@@ -353,6 +386,10 @@ public sealed class GroundworkIdentityRowStore(
     private static void ValidateIdentity(string value, string parameterName) => ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
 
     private sealed record AccessPlan(StorageUnit Unit, StorageAccess Access, IStorageSession Session);
+
+    private sealed record QueryCoreResult(
+        IReadOnlyList<GroundworkIdentityRow> Rows,
+        long? TotalCount);
 }
 
 public sealed record GroundworkIdentityRow(
@@ -379,7 +416,13 @@ public sealed record GroundworkIdentityRowQuery(
     string OrderColumn,
     bool Descending = false,
     int Take = 100,
-    bool IncludeVersions = false);
+    bool IncludeVersions = false,
+    int Skip = 0,
+    string? ExpectedIndex = null);
+
+public sealed record GroundworkIdentityRowQueryResult(
+    IReadOnlyList<GroundworkIdentityRow> Rows,
+    long TotalCount);
 
 public enum GroundworkIdentityRowWriteConditionKind
 {

@@ -11,30 +11,53 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// </summary>
 public sealed class GroundworkClaimMappingStore(
     GroundworkIdentityRowStore rows,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IClaimMappingStore, IRevisionAwareClaimMappingStore
+    IPersistenceAccessContextAccessor accessContextAccessor) : IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
 {
-    private const int MaxMaterialization = 100_000;
-
     public ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(
         string tenantId,
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = rows.Query(
+        var result = rows.QueryWithTotalCount(
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.ProviderLookupKeyField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityDocumentId.From(tenantId, provider),
-                IdentityV2StorageManifest.IdField,
-                Take: MaxMaterialization),
+                IdentityStorageManifest.ClaimMappingOrderField,
+                Take: IdentityStorageManifest.MaxMaterializedListEntries,
+                ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
             cancellationToken);
-        return ValueTask.FromResult<IReadOnlyList<ClaimMappingRule>>(documents
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.TotalCount);
+        return ValueTask.FromResult<IReadOnlyList<ClaimMappingRule>>(result.Rows
             .Select(Map)
-            .OrderBy(rule => rule.Order)
-            .ThenBy(rule => rule.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray());
+    }
+
+    public ValueTask<IamPage<ClaimMappingRule>> ListForProviderPageAsync(
+        string tenantId,
+        string provider,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var result = rows.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.ProviderLookupKeyField,
+                GroundworkIdentityRowComparison.Equal,
+                IdentityDocumentId.From(tenantId, provider),
+                IdentityStorageManifest.ClaimMappingOrderField,
+                Take: request.Take,
+                Skip: request.Skip,
+                ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
+            cancellationToken);
+        return ValueTask.FromResult(new IamPage<ClaimMappingRule>(
+            result.Rows
+                .Select(Map)
+                .ToArray(),
+            result.TotalCount));
     }
 
     public async ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default)
@@ -91,7 +114,8 @@ public sealed class GroundworkClaimMappingStore(
                 expectedVersion,
                 new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
-                    [IdentityStorageManifest.ProviderLookupKeyField] = document.ProviderLookupKey
+                    [IdentityStorageManifest.ProviderLookupKeyField] = document.ProviderLookupKey,
+                    [IdentityStorageManifest.ClaimMappingOrderField] = rule.Order
                 }),
             cancellationToken));
     }

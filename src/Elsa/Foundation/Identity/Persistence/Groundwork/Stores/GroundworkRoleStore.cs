@@ -12,10 +12,8 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 public sealed class GroundworkRoleStore(
     GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleStore, IRevisionAwareRoleStore
+    GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
 {
-    private const int MaxRelationshipMaterialization = 100_000;
-
     private readonly GroundworkIdentityAuthorityAggregateCoordinator _aggregates =
         aggregateCoordinator ?? GroundworkIdentityAuthorityAggregateCoordinator.ForRows(rows);
 
@@ -44,16 +42,38 @@ public sealed class GroundworkRoleStore(
     public ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var documents = rows.Query(
+        var result = rows.QueryWithTotalCount(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.TenantIdField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityCompositeDocumentId.Normalize(tenantId),
                 IdentityV2StorageManifest.IdField,
-                Take: MaxRelationshipMaterialization),
+                Take: IdentityStorageManifest.MaxMaterializedListEntries,
+                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
             cancellationToken);
-        return ValueTask.FromResult<IReadOnlyList<RoleRecord>>(documents.Select(Map).ToArray());
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedRoleStore>(result.TotalCount);
+        return ValueTask.FromResult<IReadOnlyList<RoleRecord>>(result.Rows.Select(Map).ToArray());
+    }
+
+    public ValueTask<IamPage<RoleRecord>> ListPageAsync(
+        string tenantId,
+        IamPageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        accessContextAccessor.EnsureCurrentScope(tenantId);
+        var result = rows.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                IdentityCompositeDocumentId.Normalize(tenantId),
+                IdentityV2StorageManifest.IdField,
+                Take: request.Take,
+                Skip: request.Skip,
+                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
+            cancellationToken);
+        return ValueTask.FromResult(new IamPage<RoleRecord>(result.Rows.Select(Map).ToArray(), result.TotalCount));
     }
 
     public async ValueTask SaveAsync(RoleRecord role, CancellationToken cancellationToken = default)

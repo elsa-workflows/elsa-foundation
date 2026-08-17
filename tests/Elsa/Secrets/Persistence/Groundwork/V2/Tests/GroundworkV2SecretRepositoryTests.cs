@@ -174,15 +174,15 @@ public sealed class GroundworkV2SecretRepositoryTests
         string? scope = null,
         DateTimeOffset? expiresAt = null,
         IList<SecretVersion>? versions = null) => new()
-    {
-        TenantId = tenantId,
-        Name = name,
-        DisplayName = displayName ?? name,
-        TypeName = SecretTypeNames.Text,
-        StoreName = storeName,
-        Scope = scope,
-        Versions = versions ?? [Version(value, expiresAt)]
-    };
+        {
+            TenantId = tenantId,
+            Name = name,
+            DisplayName = displayName ?? name,
+            TypeName = SecretTypeNames.Text,
+            StoreName = storeName,
+            Scope = scope,
+            Versions = versions ?? [Version(value, expiresAt)]
+        };
 
     private static SecretVersion Version(string value, DateTimeOffset? expiresAt = null, int version = 1) => new()
     {

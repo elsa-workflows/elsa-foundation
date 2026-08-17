@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../.." && pwd)"
 consumer_root="$repo_root/tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer"
 feed="${GROUNDWORK_E2_V2_PACKAGES:-$repo_root/artifacts/packages}"
-groundwork_version="${GROUNDWORK_E2_V2_VERSION:-0.1.0-preview.1}"
+groundwork_version="${GROUNDWORK_E2_V2_VERSION:-0.2.0-preview.1}"
 test -d "$feed" || {
   echo "Missing packed Groundwork packages at '$feed'. Set GROUNDWORK_E2_V2_PACKAGES or pack Groundwork first." >&2
   exit 1

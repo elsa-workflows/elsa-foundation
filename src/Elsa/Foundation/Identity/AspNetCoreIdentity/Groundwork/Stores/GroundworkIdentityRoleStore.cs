@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Security.Claims;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
@@ -7,6 +5,8 @@ using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 
@@ -17,7 +17,7 @@ public sealed class GroundworkIdentityRoleStore(
     GroundworkIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null) : IRoleClaimStore<IdentityRole>
 {
     private const int SingleResultTake = 1;
-    private const int MaxRelationshipMaterialization = 100_000;
+    private const int MaxRelationshipMaterialization = IdentityStorageManifest.MaxAggregateRelationshipEntries;
 
     private readonly GroundworkIdentityAuthorityRelationshipCoordinator _relationships =
         relationshipCoordinator ?? GroundworkIdentityAuthorityRelationshipCoordinator.ForRows(rows);
@@ -205,7 +205,8 @@ public sealed class GroundworkIdentityRoleStore(
                 comparison.Value,
                 IdentityV2StorageManifest.IdField,
                 Take: take,
-                IncludeVersions: includeVersions),
+                IncludeVersions: includeVersions,
+                ExpectedIndex: IdentityV2StorageManifest.IndexForQuery(queryIdentity)),
             cancellationToken);
 
     private static IdentityRole MapRole(GroundworkIdentityRow envelope)

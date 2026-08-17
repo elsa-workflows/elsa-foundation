@@ -23,19 +23,28 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         @"\b(?:var|(?:System\s*\.\s*)?Type)\s+(?<variable>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*typeof\s*\(\s*(?<type>(?:global::)?(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*;",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex UnitHelperStorageUnitPattern = new(
-        @"\bUnit\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<unit>[A-Za-z0-9_]+DocumentKind)\b",
+        @"\b(?:Unit|Scoped|Global)\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<unit>[A-Za-z0-9_]+DocumentKind)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex StorageUnitIdentityPattern = new(
         @"\bStorageUnitIdentity\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<unit>[A-Za-z0-9_]+DocumentKind)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex StorageUnitDeclarePattern = new(
+        @"\bStorageUnit\s*\.\s*Declare\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<unit>[A-Za-z0-9_]*UnitId)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex DocumentKindDeclarationPattern = new(
         @"\b(?:const\s+string|static\s+readonly\s+string)\s+(?<unit>[A-Za-z0-9_]+DocumentKind)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex UnitIdDeclarationPattern = new(
+        @"\b(?:const\s+string|static\s+readonly\s+string)\s+(?<unit>[A-Za-z0-9_]*UnitId)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex DocumentKindInvocationPattern = new(
         @"\b(?<factory>[A-Za-z_][A-Za-z0-9_]*)\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?<unit>[A-Za-z0-9_]+DocumentKind)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex PotentialStorageUnitDeclarationPattern = new(
         @"\b(?<factory>Unit|StorageUnitIdentity)\s*\(\s*(?<argument>[^,\)\r\n]+)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PotentialStorageUnitDeclarePattern = new(
+        @"\bStorageUnit\s*\.\s*Declare\s*\(\s*(?<argument>[^,\)\r\n]+)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly IReadOnlyDictionary<string, string[]> RegistrationStorageUnits =
@@ -96,11 +105,11 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
                 "IdentityGlobalProviderConfigurationDocumentKind"
             ],
             ["ITenantMembershipStore"] = ["IdentityTenantMembershipDocumentKind"],
-            ["ISecretRepository"] = ["SecretDocumentKind"],
-            ["IRevisionAwareSecretRepository"] = ["SecretDocumentKind"],
-            ["IPagedSecretRepository"] = ["SecretDocumentKind"],
-            ["IExecutionPlacementStore"] = ["ExecutionPlacementDocumentKind"],
-            ["IExecutionCommandTransport"] = ["ExecutionCommandTransportDocumentKind", "ExecutionCommandStreamHeadDocumentKind"]
+            ["ISecretRepository"] = ["UnitId"],
+            ["IRevisionAwareSecretRepository"] = ["UnitId"],
+            ["IPagedSecretRepository"] = ["UnitId"],
+            ["IExecutionPlacementStore"] = ["PlacementUnitId"],
+            ["IExecutionCommandTransport"] = ["CommandTransportUnitId", "CommandStreamHeadUnitId"]
         };
 
     private static readonly string[] ContractSources =
@@ -169,27 +178,42 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
         foreach (var file in files)
         {
             var source = File.ReadAllText(file);
+            var isManifestSource = Path.GetFileNameWithoutExtension(file)
+                .Contains("Manifest", StringComparison.Ordinal);
             foreach (var unit in UnitHelperStorageUnitPattern.Matches(source)
                          .Concat(StorageUnitIdentityPattern.Matches(source))
+                         .Concat(StorageUnitDeclarePattern.Matches(source))
                          .Select(match => match.Groups["unit"].Value))
             {
                 discoveredUnits.Add(unit);
             }
 
-            var isManifestSource = Regex.IsMatch(
-                source,
-                @"\b(?:StorageManifest|StorageUnit)\b",
-                RegexOptions.CultureInvariant);
+            foreach (Match declaration in PotentialStorageUnitDeclarePattern.Matches(source))
+            {
+                var argument = declaration.Groups["argument"].Value.Trim();
+                var isHelperImplementation = isManifestSource && argument == "id";
+                var isRecognizedIdentity = Regex.IsMatch(
+                    argument,
+                    @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?:[A-Za-z_][A-Za-z0-9_]*UnitId|UnitId)$",
+                    RegexOptions.CultureInvariant);
+                if (isHelperImplementation || isRecognizedIdentity)
+                    continue;
+
+                throw UnparseableManifestDeclaration(file, argument);
+            }
+
             if (!isManifestSource)
                 continue;
 
             declaredUnits.AddRange(DocumentKindDeclarationPattern.Matches(source)
                 .Select(match => (match.Groups["unit"].Value, file)));
+            declaredUnits.AddRange(UnitIdDeclarationPattern.Matches(source)
+                .Select(match => (match.Groups["unit"].Value, file)));
 
             foreach (Match invocation in DocumentKindInvocationPattern.Matches(source))
             {
                 var factory = invocation.Groups["factory"].Value;
-                if (factory is "Unit" or "StorageUnitIdentity")
+                if (factory is "Unit" or "Scoped" or "Global" or "StorageUnitIdentity")
                     continue;
 
                 throw UnparseableManifestDeclaration(file, invocation.Groups["unit"].Value);
@@ -199,11 +223,11 @@ internal sealed class GroundworkPersistenceInventoryScanner(string repositoryRoo
             {
                 var factory = declaration.Groups["factory"].Value;
                 var argument = declaration.Groups["argument"].Value.Trim();
-                var isHelperSignature = factory == "Unit" && argument.StartsWith("string documentKind", StringComparison.Ordinal);
+                var isHelperSignature = factory == "Unit" && argument.StartsWith("string ", StringComparison.Ordinal);
                 var isHelperImplementation = factory == "StorageUnitIdentity" && argument == "documentKind";
                 var isRecognizedIdentity = Regex.IsMatch(
                     argument,
-                    @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*DocumentKind$",
+                    @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)*[A-Za-z_][A-Za-z0-9_]*(?:DocumentKind|UnitId)$|^UnitId$",
                     RegexOptions.CultureInvariant);
                 if (isHelperSignature || isHelperImplementation || isRecognizedIdentity)
                     continue;

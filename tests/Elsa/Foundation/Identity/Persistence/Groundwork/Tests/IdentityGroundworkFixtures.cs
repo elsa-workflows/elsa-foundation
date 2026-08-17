@@ -1,5 +1,5 @@
-using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
@@ -12,9 +12,8 @@ using Groundwork.Testing;
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
 /// <summary>
-/// Deterministic identity records used by both the store behavior tests and the golden-fixture tests.
-/// Fixed ids and <see cref="DateTimeOffset.UnixEpoch"/> timestamps keep the serialized shape stable so the
-/// golden fixtures never drift on incidental values.
+/// Deterministic identity records used by the public-v2 store behavior tests.
+/// Fixed ids and <see cref="DateTimeOffset.UnixEpoch"/> timestamps keep assertions stable.
 /// </summary>
 internal static class IdentityGroundworkFixtures
 {

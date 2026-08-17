@@ -20,10 +20,14 @@ internal sealed class AspNetCoreIdentityGroundworkAcceptanceFixture : IAsyncDisp
 
     public IReadOnlyCollection<ServiceDescriptor> ServiceDescriptors { get; }
 
-    public static AspNetCoreIdentityGroundworkAcceptanceFixture Create()
+    public static AspNetCoreIdentityGroundworkAcceptanceFixture Create(
+        IStorageProviderConnection? providerConnection = null)
     {
         var services = new ServiceCollection();
-        var persistence = new AspNetCoreIdentityTestPersistence();
+        var persistence = providerConnection is null
+            ? new AspNetCoreIdentityTestPersistence()
+            : new AspNetCoreIdentityTestPersistence(
+                new NonDisposingStorageProviderConnection(providerConnection));
 
         services.AddLogging();
         services.AddSingleton<IStorageProviderConnection>(persistence.Connection);
