@@ -3,18 +3,13 @@ set -euo pipefail
 
 repo_root=$(git rev-parse --show-toplevel)
 source_commit=${RUNTIME_BEFORE_COMMIT:?RUNTIME_BEFORE_COMMIT must pin the pre-migration FastEndpoints source commit}
-capture_runner_commit=${RUNTIME_CAPTURE_RUNNER_COMMIT:?RUNTIME_CAPTURE_RUNNER_COMMIT must pin the committed historical capture runner}
 git -C "$repo_root" cat-file -e "$source_commit^{commit}"
-git -C "$repo_root" cat-file -e "$capture_runner_commit^{commit}"
-test "$source_commit" != "$capture_runner_commit"
-git -C "$repo_root" merge-base --is-ancestor "$source_commit" "$capture_runner_commit" || {
-    echo "capture runner must descend from the pinned historical source" >&2
+git -C "$repo_root" merge-base --is-ancestor "$source_commit" HEAD || {
+    echo "the pinned historical source must be an ancestor of the current checkout" >&2
     exit 1
 }
-git -C "$repo_root" merge-base --is-ancestor "$capture_runner_commit" HEAD || {
-    echo "capture runner must be reachable from the current branch" >&2
-    exit 1
-}
+capture_runner_identity=checked-in-commit
+runner_tree=$(git -C "$repo_root" rev-parse HEAD^{tree})
 worktree_dir=$(mktemp -d "${TMPDIR:-/tmp}/elsa-runtime-before.XXXXXX")
 output_dir=${1:-"$repo_root/tests/Elsa/Workflows/Runtime/Api/Tests/Baselines"}
 trap 'git -C "$repo_root" worktree remove --force "$worktree_dir" >/dev/null 2>&1 || true' EXIT
@@ -24,18 +19,63 @@ test -f "$worktree_dir/src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature
 rg -q 'FastEndpointsFeatureBase' "$worktree_dir/src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs"
 test "$(git -C "$worktree_dir" ls-files 'src/Elsa/Workflows/Runtime/Api/Endpoints' | wc -l | tr -d ' ')" -ge 12
 mkdir -p "$worktree_dir/tools/compatibility"
-cp -R "$repo_root/tools/compatibility/RuntimeFastEndpointsCapture" "$worktree_dir/tools/compatibility/"
-mkdir -p "$worktree_dir/tests/Elsa/Api/Compatibility/Testing/OpenApi"
-cp "$repo_root/tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs" \
-    "$worktree_dir/tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs"
-test -f "$worktree_dir/tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs"
+copy_committed_blob() {
+    local path=$1
+    local destination=$2
+    local blob
+    blob=$(git -C "$repo_root" rev-parse "$runner_tree:$path")
+    git -C "$repo_root" cat-file -e "$blob"
+    mkdir -p "$(dirname "$destination")"
+    git -C "$repo_root" cat-file blob "$blob" > "$destination"
+}
+
+copy_committed_blob \
+    tools/compatibility/capture-runtime-before.sh \
+    "$worktree_dir/tools/compatibility/capture-runtime-before.sh"
+copy_committed_blob \
+    tools/compatibility/RuntimeFastEndpointsCapture/Program.cs \
+    "$worktree_dir/tools/compatibility/RuntimeFastEndpointsCapture/Program.cs"
+copy_committed_blob \
+    tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj \
+    "$worktree_dir/tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj"
+copy_committed_blob \
+    tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs \
+    "$worktree_dir/tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs"
+
+copy_source_blob() {
+    local path=$1
+    local destination="$worktree_dir/$path"
+    local blob
+    blob=$(git -C "$repo_root" rev-parse "$source_commit:$path")
+    git -C "$repo_root" cat-file -e "$blob"
+    mkdir -p "$(dirname "$destination")"
+    git -C "$repo_root" cat-file blob "$blob" > "$destination"
+}
+
+for source_dependency in \
+    tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs \
+    tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs \
+    tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs; do
+    copy_source_blob "$source_dependency"
+done
+
+for dependency in \
+    tools/compatibility/capture-runtime-before.sh \
+    tools/compatibility/RuntimeFastEndpointsCapture/Program.cs \
+    tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj \
+    tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs \
+    tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs \
+    tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs \
+    tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs; do
+    test -f "$worktree_dir/$dependency"
+done
 
 RUNTIME_BEFORE_COMMIT=$(git -C "$worktree_dir" rev-parse HEAD) \
-RUNTIME_CAPTURE_RUNNER_COMMIT="$capture_runner_commit" \
+RUNTIME_CAPTURE_RUNNER_IDENTITY="$capture_runner_identity" \
 dotnet run --project "$worktree_dir/tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj" \
     -- "$worktree_dir" "$output_dir"
 
-printf 'sourceCommit=%s\nrunnerCommit=%s\nhttpSha256=%s\nopenApiSha256=%s\n' \
-    "$source_commit" "$capture_runner_commit" \
+printf 'sourceCommit=%s\nrunnerIdentity=%s\nhttpSha256=%s\nopenApiSha256=%s\n' \
+    "$source_commit" "$capture_runner_identity" \
     "$(shasum -a 256 "$output_dir/runtime-http-fastendpoints.json" | cut -d ' ' -f 1)" \
     "$(shasum -a 256 "$output_dir/runtime-openapi-fastendpoints.json" | cut -d ' ' -f 1)"

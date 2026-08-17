@@ -35,9 +35,11 @@ var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);
 
 await using var host = await StartHostAsync();
-var runnerCommit = Environment.GetEnvironmentVariable("RUNTIME_CAPTURE_RUNNER_COMMIT");
-if (string.IsNullOrWhiteSpace(runnerCommit) || runnerCommit.Length != 40 || runnerCommit.Any(character => !Uri.IsHexDigit(character)))
-    throw new InvalidOperationException("RUNTIME_CAPTURE_RUNNER_COMMIT must pin the 40-character historical, branch-reachable capture runner commit.");
+var sourceCommit = Environment.GetEnvironmentVariable("RUNTIME_BEFORE_COMMIT")
+                   ?? throw new InvalidOperationException("RUNTIME_BEFORE_COMMIT must pin the historical source commit.");
+var runnerIdentity = Environment.GetEnvironmentVariable("RUNTIME_CAPTURE_RUNNER_IDENTITY")
+                     ?? throw new InvalidOperationException("RUNTIME_CAPTURE_RUNNER_IDENTITY must identify the checked-in runner.");
+var runnerDependencies = RunnerDependencies(args[0], sourceCommit, runnerIdentity);
 
 var observations = (await Task.WhenAll(Cases().Select(testCase => CaptureAsync(host.Client, testCase)))).ToArray();
 var openApi = HistoricalOpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
@@ -47,16 +49,41 @@ File.WriteAllText(Path.Join(outputDirectory, "runtime-openapi-fastendpoints.json
 var receipt = new
 {
     capture = "real-fastendpoints-historical-worktree",
-    sourceCommit = Environment.GetEnvironmentVariable("RUNTIME_BEFORE_COMMIT") ?? "unknown",
-    runnerCommit,
+    sourceCommit,
+    runnerIdentity,
+    captureCommand = $"RUNTIME_BEFORE_COMMIT={sourceCommit} bash tools/compatibility/capture-runtime-before.sh",
     registrationCount = 24,
     caseCount = observations.Length,
     operationCount = openApi.Operations.Count,
     categories = new[] { "all-routes", "anonymous-401", "authenticated-success", "binding-failure", "content-type", "problem-details", "paging-filtering", "concurrency", "alteration-statuses" },
+    runnerFingerprint = Fingerprint(runnerDependencies),
+    runnerDependencies,
     httpSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "runtime-http-fastendpoints.json")))).ToLowerInvariant(),
     openApiSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Join(outputDirectory, "runtime-openapi-fastendpoints.json")))).ToLowerInvariant()
 };
 File.WriteAllText(Path.Join(outputDirectory, "runtime-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
+
+static IReadOnlyList<RunnerDependency> RunnerDependencies(string sourceRoot, string sourceCommit, string runnerIdentity) =>
+[
+    "tools/compatibility/capture-runtime-before.sh",
+    "tools/compatibility/RuntimeFastEndpointsCapture/Program.cs",
+    "tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj",
+    "tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+    "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+    "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+    "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
+].Select(path => new RunnerDependency(
+    path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
+        ? runnerIdentity
+        : $"source-commit:{sourceCommit}",
+    path,
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(sourceRoot, path)))).ToLowerInvariant()))
+    .ToArray();
+
+static string Fingerprint(IEnumerable<RunnerDependency> dependencies) =>
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        Encoding.UTF8.GetBytes(string.Join("\n", dependencies.Select(dependency =>
+            $"{dependency.Identity}|{dependency.Path}|{dependency.Sha256}")) + "\n"))).ToLowerInvariant();
 
 static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
 {
@@ -234,6 +261,8 @@ internal sealed class CaptureHost(IHost host) : IAsyncDisposable
         host.Dispose();
     }
 }
+
+sealed record RunnerDependency(string Identity, string Path, string Sha256);
 
 internal sealed class CaptureAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
