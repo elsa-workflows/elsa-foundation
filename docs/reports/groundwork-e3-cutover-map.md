@@ -38,7 +38,8 @@ package IDs intentionally remain unchanged.
    public query AST; the 28 v1 bounded-query declarations disappear. The public v2 manifest and the
    checkpoint, bookmark, durable-value, durable-timer, trigger-binding, run-health, liveness,
    activity-execution, scheduler-state, incident-state, and workflow-hold verticals are complete;
-   the remaining runtime stores and shipping composition still use v1.
+   the scheduler-poison vertical is also complete. The remaining runtime stores and shipping
+   composition still use v1.
 4. **Design and publishing dependants.** Migrate Activities Design, Workflows Design, Elsa3 reusable
    activity import, and Workflows Publishing in that order. Preserve their atomic commands and
    projection/query behavior against the shared v2 runtime from step 3.

@@ -60,7 +60,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = [],
             ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
-            ["schedulerPoison"] = ["by_workflow_execution"],
+            ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
             ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
             ["workflowAlterationJob"] = ["alteration_job_checkpoint", "alteration_jobs_counts", "by_claimable_at", "by_plan_and_capture_ordinal", "by_plan_and_claimable_at", "by_plan_status_and_claimable_at", "checkpointCommitId", "status"],
@@ -157,6 +157,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             PortableType.DateTimeOffset,
             null,
             nullable: false);
+        var schedulerPoison = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerPoisonDocumentKind);
+        AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemIdField, PortableType.String, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemProjectionLength);
+        AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.SchedulerPoisonFirstFailedAtField, PortableType.DateTimeOffset, null);
+        AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.SchedulerPoisonLastFailedAtField, PortableType.DateTimeOffset, null);
+        AssertIndex(schedulerPoison, "by_workflow_execution_and_failure_window", [
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+            ElsaRuntimeV2StorageManifest.SchedulerPoisonFirstFailedAtField,
+            ElsaRuntimeV2StorageManifest.SchedulerPoisonLastFailedAtField,
+            ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemIdField], included: true);
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind),
             ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyField,
