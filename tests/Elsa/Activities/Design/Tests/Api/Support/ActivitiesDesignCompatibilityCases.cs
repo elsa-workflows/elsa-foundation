@@ -1,6 +1,6 @@
-using System.Text;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
+using System.Text;
 
 namespace Elsa.Activities.Design.Tests.Api.Support;
 
@@ -91,6 +91,8 @@ public static class ActivitiesDesignCompatibilityCases
         Anonymous.Concat(Authenticated).Concat(HistoricalDefects).Concat(Binding).Concat(Domain).Concat(Cancellation).ToArray();
 
     private static ActivityDesignRoute Find(string id) => Manifest.Single(route => route.Id == id);
+
+    public static string? RequestBodyFor(string id) => BodyFor(Find(id));
 
     private static ActivityDesignRoute Route(string id, string method, string path, string action, int success, string? query = null)
     {

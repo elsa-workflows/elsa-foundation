@@ -1,8 +1,3 @@
-using System.Collections;
-using System.Reflection;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using CShells.FastEndpoints.Contracts;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Commands;
@@ -24,6 +19,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections;
+using System.Reflection;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 
 namespace Elsa.Activities.Design.Tests.Api.Support;
 
@@ -126,9 +126,19 @@ internal sealed class CaptureAuthenticationHandler(
 
 internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
 {
+    public object? LastRequest { get; private set; }
+    public CancellationToken LastCancellationToken { get; private set; }
+    public CancellationToken RequestAbortedAtDispatch { get; private set; }
+    public OperationCanceledException? LastCancellationException { get; private set; }
+
     public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
     {
+        LastRequest = request;
+        LastCancellationToken = cancellationToken;
+        RequestAbortedAtDispatch = contextAccessor.HttpContext?.RequestAborted ?? default;
         var scenario = contextAccessor.HttpContext?.Request.Headers[ActivitiesDesignCompatibilityCases.IdentityHeader].ToString();
+        if (scenario == "trusted-unexpected-failure")
+            throw new InvalidOperationException("capture-secret-internal-details");
         if (scenario == "trusted-domain-not-found")
             throw new EntityNotFoundException("The deterministic capture entity was not found.");
         if (scenario == "trusted-domain-conflict")
@@ -136,7 +146,10 @@ internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor)
         if (scenario == "trusted-domain-failure")
             throw new ActivityAuthoringException(422, "capture.domain-failure", "Capture domain failure", "The deterministic capture domain failure was requested.");
         if (scenario == "trusted-cancellation")
-            throw new OperationCanceledException("The deterministic capture request was canceled.", cancellationToken);
+        {
+            LastCancellationException = new OperationCanceledException("The deterministic capture request was canceled.", cancellationToken);
+            throw LastCancellationException;
+        }
 
         return Task.FromResult((T)CaptureResponseFactory.Create(typeof(T)));
     }
@@ -144,9 +157,18 @@ internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor)
 
 internal sealed class CaptureCommandSender(IHttpContextAccessor contextAccessor) : ICommandSender
 {
+    public object? LastCommand { get; private set; }
+    public CancellationToken LastCancellationToken { get; private set; }
+    public CancellationToken RequestAbortedAtDispatch { get; private set; }
+
     public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
     {
+        LastCommand = command;
+        LastCancellationToken = cancellationToken;
+        RequestAbortedAtDispatch = contextAccessor.HttpContext?.RequestAborted ?? default;
         var scenario = contextAccessor.HttpContext?.Request.Headers[ActivitiesDesignCompatibilityCases.IdentityHeader].ToString();
+        if (scenario == "trusted-unexpected-failure")
+            throw new InvalidOperationException("capture-secret-internal-details");
         if (scenario == "trusted-domain-not-found")
             throw new EntityNotFoundException("The deterministic capture entity was not found.");
         if (scenario == "trusted-domain-conflict")
@@ -161,7 +183,13 @@ internal sealed class CaptureCommandSender(IHttpContextAccessor contextAccessor)
 
     public Task Send(Elsa.Mediator.Core.Contracts.ICommand command, CancellationToken cancellationToken = default)
     {
+        LastCommand = command;
+        LastCancellationToken = cancellationToken;
+        RequestAbortedAtDispatch = contextAccessor.HttpContext?.RequestAborted ?? default;
         var scenario = contextAccessor.HttpContext?.Request.Headers[ActivitiesDesignCompatibilityCases.IdentityHeader].ToString();
+        if (scenario == "trusted-unexpected-failure")
+            return Task.FromException(new InvalidOperationException("capture-secret-internal-details"));
+
         return scenario switch
         {
             "trusted-domain-not-found" => Task.FromException(new EntityNotFoundException("The deterministic capture entity was not found.")),

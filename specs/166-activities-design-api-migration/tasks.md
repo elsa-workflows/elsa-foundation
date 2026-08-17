@@ -52,9 +52,9 @@ or feature code until that checkpoint is committed.
 
 ### Tests first
 
-- [ ] T016 [US1] Add the post-migration host, exact 38-operation manifest, stable names/tags/owner/authoring/security/request/response assertions, and frozen replay entry point in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractTests.cs`; verify it fails before the mapper exists
-- [ ] T017 [P] [US1] Add route-over-body precedence and route-ID JSON-omission cases for all 19 mutating request shapes plus `/definitions/picker` precedence in `tests/Elsa/Activities/Design/Tests/Api/ActivityDefinitionAuthoringApiTests.cs`
-- [ ] T018 [P] [US1] Add exact seven `201 + Location`, discard `204`, ordinary `200`, authoring ProblemDetails, legacy mediator error, 5xx sanitization, and same-instance cancellation cases in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignMinimalApiBehaviorTests.cs`
+- [x] T016 [US1] Add the post-migration host, exact 38-operation manifest, stable names/tags/owner/authoring/security/request/response assertions, and frozen replay entry point in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractTests.cs`; verify it fails before the mapper exists
+- [x] T017 [P] [US1] Add route-over-body precedence and route-ID JSON-omission cases for all 19 mutating request shapes plus `/definitions/picker` precedence in `tests/Elsa/Activities/Design/Tests/Api/ActivityDefinitionAuthoringApiTests.cs`
+- [x] T018 [P] [US1] Add exact seven `201 + Location`, discard `204`, ordinary `200`, authoring ProblemDetails, legacy mediator error, 5xx sanitization, and same-instance cancellation cases in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignMinimalApiBehaviorTests.cs`
 
 ### Implementation
 

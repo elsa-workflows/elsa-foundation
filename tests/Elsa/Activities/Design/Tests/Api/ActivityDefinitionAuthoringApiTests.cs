@@ -1,14 +1,19 @@
-using System.Reflection;
-using System.Text.Json;
+using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Tests.Api.Support;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Api;
@@ -54,6 +59,111 @@ public sealed class ActivityDefinitionAuthoringApiTests
         { "UpgradePlans.GetReceipt", "GET", "design/activities/upgrade-plans/{planId}/receipts/{receiptId}" },
         { "UpgradePlans.Refresh", "POST", "design/activities/upgrade-plans/{planId}/refresh" }
     };
+
+    public static TheoryData<string, string> MutatingRouteShapes => new()
+    {
+        { "Definitions.PreviewFork", nameof(PreviewReusableActivityFork.DefinitionId) },
+        { "Forks.Apply", nameof(ApplyReusableActivityFork.CandidateId) },
+        { "Definitions.AddDraft", nameof(CreateReusableActivityDraft.DefinitionId) },
+        { "Definitions.Update", nameof(UpdateReusableActivityDefinition.DefinitionId) },
+        { "Drafts.Replace", nameof(ReplaceReusableActivityDraft.DraftId) },
+        { "Drafts.UpdatePresentation", nameof(UpdateReusableActivityDraftPresentation.DraftId) },
+        { "Drafts.ConflictCopy", nameof(CreateReusableActivityDraftConflictCopy.DraftId) },
+        { "Drafts.Discard", nameof(DiscardReusableActivityDraft.DraftId) },
+        { "Drafts.Validate", nameof(ValidateReusableActivityDraft.DraftId) },
+        { "Drafts.MigrateProvider", nameof(MigrateReusableActivityDraft.DraftId) },
+        { "Drafts.ProposeContract", nameof(ProposeReusableActivityContract.DraftId) },
+        { "Drafts.ApplyContractProposal", nameof(ApplyReusableActivityContractProposal.DraftId) },
+        { "Versions.Retire", nameof(RetireReusableActivityVersion.VersionId) },
+        { "Versions.Restore", nameof(RestoreReusableActivityVersion.VersionId) },
+        { "Versions.Revoke", nameof(RevokeReusableActivityVersion.VersionId) },
+        { "Definitions.Recommendation", nameof(SetRecommendedReusableActivityVersion.DefinitionId) },
+        { "Drafts.Diff", nameof(PreviewActivityDraftDiff.DraftId) },
+        { "UpgradePlans.Apply", nameof(ApplyActivityUpgradePlan.PlanId) },
+        { "UpgradePlans.Refresh", nameof(RefreshActivityUpgradePlan.PlanId) }
+    };
+
+    [Theory]
+    [MemberData(nameof(MutatingRouteShapes))]
+    public async Task Route_values_override_conflicting_json_identifiers_for_every_mutating_shape(
+        string routeId,
+        string identifierProperty)
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = Elsa.Activities.Design.Tests.Api.Support.ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == routeId);
+        const string routeValue = "route-identifier";
+        var requestPath = route.RequestPath.Replace(
+            route.RequestPath.Split('/').Single(segment => segment is "definition-route" or "draft-route" or "candidate-route" or "version-route" or "plan-route"),
+            routeValue,
+            StringComparison.Ordinal);
+        using var request = new HttpRequestMessage(new HttpMethod(route.Endpoint.Method.Value), requestPath)
+        {
+            Content = new StringContent(RouteBody(routeId, identifierProperty, includeIdentifier: true), Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.InRange((int)response.StatusCode, 200, 499);
+        var message = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        Assert.NotNull(message);
+        var property = message!.GetType().GetProperty(identifierProperty);
+        Assert.NotNull(property);
+        Assert.Equal(routeValue, property!.GetValue(message));
+    }
+
+    [Theory]
+    [MemberData(nameof(MutatingRouteShapes))]
+    public async Task Route_values_bind_when_json_omits_the_identifier_for_every_mutating_shape(
+        string routeId,
+        string identifierProperty)
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        var route = Elsa.Activities.Design.Tests.Api.Support.ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == routeId);
+        const string routeValue = "route-identifier";
+        var requestPath = route.RequestPath.Replace(
+            route.RequestPath.Split('/').Single(segment => segment is "definition-route" or "draft-route" or "candidate-route" or "version-route" or "plan-route"),
+            routeValue,
+            StringComparison.Ordinal);
+        using var request = new HttpRequestMessage(new HttpMethod(route.Endpoint.Method.Value), requestPath)
+        {
+            Content = new StringContent(RouteBody(routeId, identifierProperty, includeIdentifier: false), Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.InRange((int)response.StatusCode, 200, 499);
+        var message = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        Assert.NotNull(message);
+        var property = message!.GetType().GetProperty(identifierProperty);
+        Assert.NotNull(property);
+        Assert.Equal(routeValue, property!.GetValue(message));
+    }
+
+    [Fact]
+    public async Task Definitions_picker_wins_over_the_definition_identifier_route()
+    {
+        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/design/activities/definitions/picker");
+        request.Headers.TryAddWithoutValidation(ActivitiesDesignCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsType<ListRecommendedActivityDefinitions>(host.RequestSender.LastRequest);
+    }
+
+    private static string RouteBody(string routeId, string identifierProperty, bool includeIdentifier)
+    {
+        var body = JsonNode.Parse(ActivitiesDesignCompatibilityCases.RequestBodyFor(routeId) ?? "{}")!.AsObject();
+        var jsonProperty = JsonNamingPolicy.CamelCase.ConvertName(identifierProperty);
+        if (includeIdentifier)
+            body[jsonProperty] = "body-identifier";
+        else
+            body.Remove(jsonProperty);
+        return body.ToJsonString();
+    }
 
     [Fact]
     public void Activity_design_capability_advertises_management_authoring_picker_and_recommendation_relations()
@@ -496,7 +606,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         Action<DefaultHttpContext> configureContext,
         CapturingMediatorSender? sender = null)
     {
-        var endpointType = typeof(CreateReusableActivityDefinition).Assembly.GetType(endpointTypeName, throwOnError: true)!;
+        var endpointType = typeof(ActivitiesDesignApiFeature).Assembly.GetType(endpointTypeName, throwOnError: true)!;
         var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Single()
             .GetParameters()
@@ -514,8 +624,10 @@ public sealed class ActivityDefinitionAuthoringApiTests
 
     private static object ResolveDependency(Type type, CapturingMediatorSender? sender)
     {
-        if (type == typeof(IRequestSender)) return sender is null ? new StubRequestSender() : sender;
-        if (type == typeof(ICommandSender)) return sender is null ? new StubCommandSender() : sender;
+        if (type == typeof(IRequestSender))
+            return sender is null ? new StubRequestSender() : sender;
+        if (type == typeof(ICommandSender))
+            return sender is null ? new StubCommandSender() : sender;
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Microsoft.Extensions.Logging.ILogger<>))
         {
             var loggerType = typeof(NullLogger<>).MakeGenericType(type.GetGenericArguments()[0]);
