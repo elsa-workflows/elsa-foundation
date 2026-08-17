@@ -310,8 +310,7 @@ public sealed class DomainManagementApiCompositionTests
             "Elsa.Activities.Design.Api.Endpoints.Catalog.List",
             "Elsa.Activities.Design.Api.Endpoints.Availability.ListDiagnostics",
             "Elsa.Activities.Design.Api.Endpoints.AuthoringCapabilities.Get",
-            "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
-            "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowExecutablesEndpoint"
+            "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint"
         ];
 
         public HttpClient Client { get; } = client;
@@ -373,6 +372,7 @@ public sealed class DomainManagementApiCompositionTests
             // builder with the representative FastEndpoints registrations below.
             ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
             WorkflowsDesignApi.MapWorkflowsDesignApi(app);
+            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
             if (includeExpressions)
                 ExpressionsApi.MapExpressionsApi(app);
             app.Use(async (context, next) =>

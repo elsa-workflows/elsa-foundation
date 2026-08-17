@@ -320,6 +320,41 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         Assert.False(RunnerDependenciesMatch(receipt.GetProperty("sourceCommit").GetString()!, mutated));
     }
 
+    [Fact]
+    public void Runtime_capture_rejects_a_mutated_worktree_script_before_capture_side_effects()
+    {
+        var worktree = Path.Join(Path.GetTempPath(), $"elsa-runtime-capture-mutation-{Guid.NewGuid():N}");
+        var output = Path.Join(Path.GetTempPath(), $"elsa-runtime-capture-output-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Equal(0, RunGit(["worktree", "add", "--detach", worktree, CurrentHead()]));
+            var scriptPath = Path.Join(worktree, "tools", "compatibility", "capture-runtime-before.sh");
+            File.AppendAllText(scriptPath, "\n# mutation bite\n");
+
+            var startInfo = new ProcessStartInfo("bash", ["tools/compatibility/capture-runtime-before.sh", output])
+            {
+                WorkingDirectory = worktree,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(startInfo)!;
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            Assert.NotEqual(0, process.ExitCode);
+            Assert.Contains("differs from its committed HEAD blob", standardError, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(output));
+        }
+        finally
+        {
+            RunGit(["worktree", "remove", "--force", worktree]);
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
+    }
+
     private static string Hash(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
@@ -379,6 +414,23 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
         return process.ExitCode == 0;
+    }
+
+    private static int RunGit(IReadOnlyList<string> arguments)
+    {
+        var startInfo = new ProcessStartInfo("git", arguments)
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        process.StandardOutput.ReadToEnd();
+        process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return process.ExitCode;
     }
 
     private static bool IsAncestor(string ancestor, string descendant)

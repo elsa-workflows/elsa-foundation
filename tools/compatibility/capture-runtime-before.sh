@@ -2,6 +2,26 @@
 set -euo pipefail
 
 repo_root=$(git rev-parse --show-toplevel)
+script_path=${BASH_SOURCE[0]}
+if [[ "$script_path" != /* ]]; then
+    script_path="$PWD/$script_path"
+fi
+script_path=$(cd "$(dirname "$script_path")" && pwd -P)/$(basename "$script_path")
+case "$script_path" in
+    "$repo_root"/*) script_relative_path=${script_path#"$repo_root"/} ;;
+    *)
+        echo "capture script must execute from the repository checkout" >&2
+        exit 1
+        ;;
+esac
+if [[ "$script_relative_path" != "tools/compatibility/capture-runtime-before.sh" ]]; then
+    echo "capture script path is not the checked-in Runtime capture script" >&2
+    exit 1
+fi
+if ! cmp -s "$script_path" <(git -C "$repo_root" show "HEAD:$script_relative_path"); then
+    echo "capture script differs from its committed HEAD blob; refusing capture" >&2
+    exit 1
+fi
 source_commit=${RUNTIME_BEFORE_COMMIT:?RUNTIME_BEFORE_COMMIT must pin the pre-migration FastEndpoints source commit}
 git -C "$repo_root" cat-file -e "$source_commit^{commit}"
 git -C "$repo_root" merge-base --is-ancestor "$source_commit" HEAD || {
