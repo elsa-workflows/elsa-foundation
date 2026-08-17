@@ -55,7 +55,9 @@ var receipt = new
     categories = new[] { "anonymous", "trusted-success", "historical-defect", "binding", "domain", "cancellation" },
     volatileFields = new[] { "response-json.traceId" }
 };
-File.WriteAllText(Path.Join(outputDirectory, "activities-design-before-capture-receipt.json"), CompatibilityJson.Serialize(receipt));
+File.WriteAllText(
+    Path.Join(outputDirectory, "activities-design-before-capture-receipt.json"),
+    CompatibilityJson.Serialize(receipt) + Environment.NewLine);
 
 static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
 {
