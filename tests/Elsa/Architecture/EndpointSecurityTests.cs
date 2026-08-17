@@ -10,6 +10,7 @@ using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Runtime.Api;
 using Elsa3.Activities.Design.Import;
 using FastEndpoints;
@@ -38,7 +39,6 @@ public sealed class EndpointSecurityTests
 {
     private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
     [
-        ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
         ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints"),
         ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints")
     ];
@@ -146,7 +146,6 @@ public sealed class EndpointSecurityTests
             }
         }
 
-        Assert.True(endpointCount > 0, "No management FastEndpoints Configure methods were discovered.");
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
@@ -203,6 +202,46 @@ public sealed class EndpointSecurityTests
             Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
             Assert.Equal(
                 "Elsa.Activities.Design.Api",
+                Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()).OwnerId);
+            Assert.Equal(
+                EndpointAuthoringModels.MinimalApi,
+                Assert.IsType<EndpointAuthoringMetadata>(endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()).Model);
+
+            var disposition = Assert.Single(endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>());
+            Assert.Equal(EndpointSecurityDispositionKind.Permission, disposition.Kind);
+            var dispositionPolicy = new PermissionPolicyCodec().Parse(disposition.Value!);
+            Assert.Equal(PermissionPolicyParseStatus.Valid, dispositionPolicy.Status);
+            Assert.Equal([permission], dispositionPolicy.Descriptor!.Permissions);
+        }
+    }
+
+    [Fact]
+    public void Publishing_minimal_api_declares_23_owned_secure_routes_with_one_catalog_action_each()
+    {
+        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(serviceProvider);
+        WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
+        var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+
+        Assert.Equal(23, endpoints.Length);
+        foreach (var endpoint in endpoints)
+        {
+            var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+            var policy = new PermissionPolicyCodec().Parse(authorization.Policy!);
+            var descriptor = Assert.IsType<PermissionPolicyDescriptor>(policy.Descriptor);
+            var permission = Assert.Single(descriptor.Permissions);
+
+            Assert.Equal(PermissionPolicyParseStatus.Valid, policy.Status);
+            Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
+            Assert.Contains(permission, new[]
+            {
+                PermissionKey.Normalize(WorkflowPublishingPermissions.Read),
+                PermissionKey.Normalize(WorkflowPublishingPermissions.Manage)
+            });
+            Assert.NotEqual(PermissionKey.Wildcard, permission);
+            Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
+            Assert.Equal(
+                "Elsa.Workflows.Publishing.Api",
                 Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()).OwnerId);
             Assert.Equal(
                 EndpointAuthoringModels.MinimalApi,

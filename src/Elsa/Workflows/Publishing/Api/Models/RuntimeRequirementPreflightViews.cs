@@ -13,29 +13,3 @@ public sealed record RuntimeRequirementPreflightItemView(
     string SchemaVersion,
     string Status,
     int AffectedArtifactCount);
-
-internal sealed record RuntimeArtifactPreflight(
-    string ArtifactId,
-    bool IsRetained,
-    bool IsAvailable,
-    IReadOnlyList<RuntimeCapabilityPreflight> Capabilities);
-
-internal sealed record RuntimeCapabilityPreflight(
-    RuntimeCapabilityKind Kind,
-    string Key,
-    string? SchemaVersion,
-    RuntimeCapabilityStatus Status,
-    IReadOnlyList<string> SupportedSchemaVersions);
-
-internal enum RuntimeCapabilityKind
-{
-    ActivityConsumer,
-    DurableValueStorageDriver
-}
-
-internal enum RuntimeCapabilityStatus
-{
-    Available,
-    Missing,
-    UnsupportedSchema
-}

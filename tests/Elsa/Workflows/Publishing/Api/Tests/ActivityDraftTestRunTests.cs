@@ -1,9 +1,3 @@
-using Elsa.Workflows.Publishing.Api.Models;
-using Elsa.Workflows.Publishing.Api.Services;
-using Elsa.Workflows.Publishing.Services;
-using System.Collections.Concurrent;
-using System.Reflection;
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
@@ -25,18 +19,21 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Contracts;
+using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Publishing.Core.Contracts;
-using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Publishing.Persistence.Groundwork;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using FastEndpoints;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Scoping;
@@ -44,10 +41,14 @@ using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using System.Collections.Concurrent;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -90,25 +91,14 @@ public sealed class ActivityDraftTestRunTests
 
     private static void AssertEndpoint(string typeName, string verb, string route)
     {
-        var endpointType = typeof(StartActivityDraftTestRun).Assembly.GetType(
-            $"Elsa.Workflows.Publishing.Api.Endpoints.{typeName}",
-            throwOnError: true)!;
-        var loggerType = typeof(NullLogger<>).MakeGenericType(endpointType);
-        var logger = loggerType.GetProperty("Instance")?.GetValue(null)
-                     ?? loggerType.GetField("Instance")!.GetValue(null)!;
-        var endpoint = (BaseEndpoint)typeof(Factory).GetMethods()
-            .Single(x => x.Name == nameof(Factory.Create) && x.IsGenericMethodDefinition &&
-                         x.GetParameters() is [var first, var second] &&
-                         first.ParameterType == typeof(Action<DefaultHttpContext>) && second.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType)
-            .Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), new object[] { new Sender(), logger }])!;
-        endpoint.Configure();
+        var endpoint = PublishingMinimalApiTestSurface.Named(typeName);
 
-        Assert.Equal(verb, Assert.Single(endpoint.Definition.Verbs));
-        Assert.Equal(route, Assert.Single(endpoint.Definition.Routes));
+        Assert.Equal(verb, Assert.Single(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods));
+        Assert.Equal(route, endpoint.RoutePattern.RawText?.TrimStart('/'));
     }
 
     [Fact]
+    [Obsolete]
     public async Task Draft_test_run_denies_a_foreign_exact_draft_before_compilation_without_disclosure()
     {
         var documents = new InMemoryDocumentStore(CombinedStorageManifest());
@@ -132,6 +122,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Same_tenant_local_draft_and_key_create_distinct_cross_tenant_runs()
     {
         var manifest = CombinedStorageManifest();
@@ -160,6 +151,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Same_global_draft_and_key_create_tenant_owned_runs_for_each_caller()
     {
         var manifest = CombinedStorageManifest();
@@ -203,6 +195,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Foreign_caller_cannot_learn_a_receipt_loaded_from_the_operation_scope()
     {
         var authorization = new MutableAuthorizationContext("tenant-a");
@@ -227,6 +220,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Test_run_rejects_unbounded_request_identity_material()
     {
         var authoring = AuthoringState.Create();
@@ -277,6 +271,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Full_host_distinguishes_validation_and_runtime_dispatch_rejection()
     {
         var authoring = AuthoringState.Create();
@@ -313,6 +308,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Tri_state_inputs_reject_contradictions_and_accept_explicit_json_null()
     {
         var authoring = AuthoringState.Create();
@@ -355,6 +351,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Full_host_cancellation_is_idempotent_and_reconciles_to_terminal()
     {
         var authoring = AuthoringState.Create();
@@ -384,6 +381,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Ambiguous_acknowledgement_reconciles_the_original_run_after_the_draft_is_removed()
     {
         var authoring = AuthoringState.Create();
@@ -410,6 +408,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Preparing_receipt_rejects_safely_when_the_exact_draft_disappears_before_materialization()
     {
         var authoring = AuthoringState.Create();
@@ -431,6 +430,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Full_host_rejects_rebinding_an_idempotency_key_to_a_different_request()
     {
         var authoring = AuthoringState.Create();
@@ -459,6 +459,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Policy_denied_cancellation_is_projected_and_persisted_as_unavailable()
     {
         var authoring = AuthoringState.Create();
@@ -484,6 +485,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Full_host_fault_records_wait_for_intervention_without_disclosing_provider_payload()
     {
         var authoring = AuthoringState.Create();
@@ -512,6 +514,7 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    [Obsolete]
     public async Task Groundwork_sqlite_graph_run_suspends_restarts_in_runtime_only_host_then_reopens_status()
     {
         var clock = new FakeTimeProvider(new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
@@ -584,7 +587,7 @@ public sealed class ActivityDraftTestRunTests
                     state => state.ExecutionSequence,
                     StringComparer.Ordinal);
                 Assert.Single((await generation1.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(first.WorkflowExecutionId))
-                    .Where(IsBoundaryInput));
+, IsBoundaryInput);
 
                 var artifactId = Assert.IsType<string>(first.ArtifactId);
                 var sourceReferenceId = Assert.IsType<string>(first.SourceReferenceId);
@@ -636,11 +639,11 @@ public sealed class ActivityDraftTestRunTests
                     Assert.Equal(committedExecutionSequences[state.Execution.ActivityExecutionId], state.ExecutionSequence));
 
                 var durableValues = await generation2.GetRequiredService<IDurableValueStateStore>().ListAllDurableValueStatesAsync(first.WorkflowExecutionId);
-                Assert.Single(durableValues.Where(IsBoundaryInput));
-                var output = Assert.Single(durableValues.Where(IsBoundaryOutput));
+                Assert.Single(durableValues, IsBoundaryInput);
+                var output = Assert.Single(durableValues, IsBoundaryOutput);
                 Assert.Equal("completed", output.InlineValue?.GetString());
 
-                var outer = Assert.Single(resumedExecutions.Where(x => x.ParentActivityExecutionId is null));
+                var outer = Assert.Single(resumedExecutions, x => x.ParentActivityExecutionId is null);
                 outerActivityExecutionId = outer.Execution.ActivityExecutionId;
                 var hierarchy = await generation2.GetRequiredService<ActivityExecutionHierarchyReader>().ReadAsync(
                     first.WorkflowExecutionId,
@@ -758,6 +761,7 @@ public sealed class ActivityDraftTestRunTests
     private static async Task<WorkflowExecutionStatus?> StatusAsync(ServiceProvider provider, string workflowExecutionId) =>
         (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId))?.Status;
 
+    [Obsolete]
     private static ServiceProvider BuildProvider(
         IDocumentStore documents,
         TimeProvider clock,
@@ -842,6 +846,7 @@ public sealed class ActivityDraftTestRunTests
             registration.ImplementationType
             ?? throw new InvalidOperationException("The service registration has no implementation."));
 
+    [Obsolete]
     private static ServiceProvider BuildRuntimeOnlyProvider(
         IDocumentStore documents,
         TimeProvider clock,

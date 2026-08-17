@@ -1,17 +1,14 @@
-using Elsa.Workflows.Publishing.Api.Handlers;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Capabilities;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Authorization;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -21,14 +18,14 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
     [Fact]
     public void Endpoint_has_pinned_route_and_publishing_read_permission()
     {
-        var definition = ConfiguredDefinition("Elsa.Workflows.Publishing.Api.Endpoints.ListIncidentStrategies");
+        var endpoint = PublishingMinimalApiTestSurface.Named("ListIncidentStrategies");
 
-        Assert.Contains("publishing/incident-strategies", definition.Routes);
-        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
-        Assert.All(
-            definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowPublishingRead]), policy));
-        Assert.Null(definition.AnonymousVerbs);
+        Assert.Equal("publishing/incident-strategies", endpoint.RoutePattern.RawText?.TrimStart('/'));
+        var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+        Assert.Equal(PermissionKey.Normalize(PermissionNames.WorkflowPublishingRead),
+            Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
     }
 
     [Fact]
@@ -77,40 +74,6 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
 
     private static IncidentStrategyDescriptor Descriptor(string alias, string version, string displayName, string? description) =>
         new(new IncidentStrategyReference(alias, version), displayName, description);
-
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
-    {
-        var endpointType = typeof(WorkflowsPublishingApiFeature).Assembly.GetType(endpointTypeName, throwOnError: true)!;
-        var dependencies = endpointType
-            .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(parameter => ResolveDependency(parameter.ParameterType))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create)
-                              && method.IsGenericMethodDefinition
-                              && method.GetParameters() is [var first, var rest]
-                              && first.ParameterType == typeof(DefaultHttpContext)
-                              && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
-        var endpoint = (BaseEndpoint)create.Invoke(null, [new DefaultHttpContext { RequestServices = serviceProvider }, dependencies])!;
-        endpoint.Configure();
-        return endpoint.Definition;
-    }
-
-    private static object ResolveDependency(Type type) =>
-        type.IsInterface
-            ? DispatchProxy.Create(type, typeof(NoopProxy))
-            : RuntimeHelpers.GetUninitializedObject(type);
-
-    private class NoopProxy : DispatchProxy
-    {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            throw new InvalidOperationException("A configuration-only endpoint test must not invoke dependencies.");
-    }
 
     private sealed class StubCatalog(
         IReadOnlyCollection<IncidentStrategyDescriptor> descriptors,

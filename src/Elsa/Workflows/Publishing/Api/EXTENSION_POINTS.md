@@ -58,8 +58,10 @@ feature. A replacement must supply the same tenant/scope facts the activity-draf
 
 ## HTTP endpoint surface
 
-The endpoint surface is documented in the [module README](README.md#http-endpoint-surface). Endpoint
-authorization and configuration compose through [FastEndpoints extension points](../../../Api/FastEndpoints/EXTENSION_POINTS.md).
+The endpoint surface is documented in the [module README](README.md#http-endpoint-surface). The public
+`WorkflowsPublishingApi.MapWorkflowsPublishingApi` mapper contributes standard ASP.NET Core endpoints;
+authorization is expressed through Foundation Identity permission policies and endpoint metadata. Hosts may
+apply ordinary route-group conventions such as API-prefixing, CORS, rate limiting, filters, and OpenAPI.
 
 ## Persistence-provider notes
 

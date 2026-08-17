@@ -1,13 +1,9 @@
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using System.Net;
 using System.Net.Http.Json;
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Requests;
-using FastEndpoints;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -15,7 +11,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// <summary>
 /// Verifies that the literal <c>workflows/drafts/test-runs</c> route is selected deterministically
 /// over the parameterized <c>workflows/{versionId}/test-runs</c> route. Both endpoints are hosted
-/// through FastEndpoints (exactly as in production) so the test exercises the real route matcher.
+/// through the production Minimal API mapper so the test exercises the real route matcher.
 /// </summary>
 [Collection(nameof(WorkflowDraftTestRunRoutingTests))]
 public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
@@ -23,39 +19,21 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
     private const string DraftPath = "/publishing/workflows/drafts/test-runs";
 
     private readonly RecordingRequestSender _sender = new();
-    private WebApplication _app = null!;
+    private PublishingMinimalApiHost _host = null!;
     private HttpClient _client = null!;
 
     public async Task InitializeAsync()
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Logging.ClearProviders();
-        builder.Services.AddSingleton<IRequestSender>(_sender);
-        builder.Services.AddFastEndpoints(o =>
-        {
-            o.Assemblies = [typeof(StartWorkflowTestRun).Assembly];
-            // This narrowly scoped route-selection host needs only the two test-run endpoints. Keeping discovery
-            // explicit prevents unrelated management endpoints in the same feature assembly from pulling their
-            // production services into a matcher-only test.
-            o.Filter = type => type.Name is "Start" or "StartDraft" &&
-                               type.Namespace == "Elsa.Workflows.Publishing.Api.Endpoints.TestRuns";
-        });
-
-        _app = builder.Build();
-        // This test exercises route matching only; relax endpoint security the FastEndpoints way
-        // instead of composing authentication.
-        _app.UseFastEndpoints(c => c.Endpoints.Configurator = ep => ep.AllowAnonymous());
-        await _app.StartAsync();
-
-        _client = new HttpClient { BaseAddress = new Uri(_app.Urls.First()) };
+        _host = await PublishingMinimalApiHost.StartAsync(_ => _sender);
+        _client = _host.Client;
+        _client.DefaultRequestHeaders.TryAddWithoutValidation(
+            PublishingCompatibilityCases.IdentityHeader,
+            "trusted");
     }
 
     public async Task DisposeAsync()
     {
-        _client.Dispose();
-        await _app.StopAsync();
-        await _app.DisposeAsync();
+        await _host.DisposeAsync();
     }
 
     [Fact]

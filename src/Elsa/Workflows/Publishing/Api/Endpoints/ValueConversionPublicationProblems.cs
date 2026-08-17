@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Services;
 using Microsoft.AspNetCore.Http;
 

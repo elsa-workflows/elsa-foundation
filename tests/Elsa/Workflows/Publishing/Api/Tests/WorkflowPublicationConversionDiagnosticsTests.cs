@@ -1,19 +1,18 @@
-using Elsa.Workflows.Publishing.Exceptions;
-using Elsa.Workflows.Publishing.Services;
-using System.Reflection;
-using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Exceptions;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -94,12 +93,10 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
     [Fact]
     public async Task Publish_endpoint_returns_problem_json_for_an_auto_numeric_narrowing_rejection()
     {
-        var conversion = AutoNarrowingRejection();
-        var endpoint = PublishEndpoint(new ExceptionSender(Wrap(conversion)));
+        await using var host = await PublishHost(new ExceptionSender(Wrap(AutoNarrowingRejection())));
+        using var response = await PublishAsync(host);
 
-        await InvokePublishAsync(endpoint);
-
-        var problem = await AssertConversionProblemAsync(endpoint);
+        var problem = await AssertConversionProblemAsync(response);
         var diagnostic = problem.GetProperty("diagnostics")[0];
         Assert.Equal("consumer", diagnostic.GetProperty("subject").GetProperty("id").GetString());
         Assert.Equal("value", diagnostic.GetProperty("location").GetProperty("referenceKey").GetString());
@@ -123,11 +120,10 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
             new ValueTypeDescriptor("Int32"),
             ValueConversionMode.None,
             binding: new ValueConversionBindingContext("mapper", "target", ValueConversionBindingKind.Output)));
-        var endpoint = PublishEndpoint(new ExceptionSender(Wrap(conversion)));
+        await using var host = await PublishHost(new ExceptionSender(Wrap(conversion)));
+        using var response = await PublishAsync(host);
 
-        await InvokePublishAsync(endpoint);
-
-        var problem = await AssertConversionProblemAsync(endpoint);
+        var problem = await AssertConversionProblemAsync(response);
         var diagnostic = problem.GetProperty("diagnostics")[0];
         Assert.Equal("mapper", diagnostic.GetProperty("subject").GetProperty("id").GetString());
         Assert.Equal("target", diagnostic.GetProperty("location").GetProperty("referenceKey").GetString());
@@ -148,11 +144,10 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
             ValueConversionMode.Profile,
             new ValueConversionProfileReference("partner.json", "8"),
             binding: new ValueConversionBindingContext("importer", "payload", ValueConversionBindingKind.Input)));
-        var endpoint = PublishEndpoint(new ExceptionSender(Wrap(conversion)));
+        await using var host = await PublishHost(new ExceptionSender(Wrap(conversion)));
+        using var response = await PublishAsync(host);
 
-        await InvokePublishAsync(endpoint);
-
-        var problem = await AssertConversionProblemAsync(endpoint);
+        var problem = await AssertConversionProblemAsync(response);
         var diagnostic = problem.GetProperty("diagnostics")[0];
         var metadata = diagnostic.GetProperty("metadata");
         Assert.Equal("ProfileNotAvailable", metadata.GetProperty("reasonCode").GetString());
@@ -177,13 +172,12 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
             ExpressionDraftValidationState.Errors,
             [diagnostic],
             "expression-syntax"));
-        var endpoint = PublishEndpoint(new ExceptionSender(rejection));
+        await using var host = await PublishHost(new ExceptionSender(rejection));
+        using var response = await PublishAsync(host);
 
-        await InvokePublishAsync(endpoint);
-
-        Assert.Equal(StatusCodes.Status422UnprocessableEntity, endpoint.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
-        var body = await BodyAsync(endpoint);
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(body);
         var problem = document.RootElement;
         Assert.Equal("errors", problem.GetProperty("validationState").GetString());
@@ -205,33 +199,33 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
         var publishConversion = AutoNarrowingRejection();
         var preflightConversion = AutoNarrowingRejection();
 
-        var publish = PublishEndpoint(new ExceptionSender(Wrap(publishConversion)));
-        await InvokePublishAsync(publish);
-        var publishBody = await BodyAsync(publish);
+        await using var publish = await PublishHost(new ExceptionSender(Wrap(publishConversion)));
+        using var publishResponse = await PublishAsync(publish);
+        var publishBody = await publishResponse.Content.ReadAsStringAsync();
 
-        var preflight = PreflightEndpoint(new ThrowingCompiler(Wrap(preflightConversion)));
-        await InvokePreflightAsync(preflight);
-        var preflightBody = await BodyAsync(preflight);
+        await using var preflight = await PublishingMinimalApiScenarioHost.StartAsync(
+            compiler: new ThrowingCompiler(Wrap(preflightConversion)));
+        using var preflightResponse = await SendPreflightAsync(preflight);
+        var preflightBody = await preflightResponse.Content.ReadAsStringAsync();
 
-        Assert.Equal(StatusCodes.Status400BadRequest, publish.HttpContext.Response.StatusCode);
-        Assert.Equal(StatusCodes.Status400BadRequest, preflight.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", preflight.HttpContext.Response.ContentType);
+        Assert.Equal(HttpStatusCode.BadRequest, publishResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, preflightResponse.StatusCode);
+        Assert.Equal("application/problem+json", preflightResponse.Content.Headers.ContentType?.MediaType);
         Assert.Equal(Normalize(publishBody), Normalize(preflightBody));
     }
 
     [Fact]
     public async Task Non_conversion_compilation_failures_still_use_the_plain_400_path()
     {
-        var endpoint = PublishEndpoint(new ExceptionSender(new WorkflowExecutableCompilationException(
-            "definition-1", VersionId, "Activity node 'a' declares input 'x' more than once.", new ArgumentException("dup"))));
+        var exception = new WorkflowExecutableCompilationException(
+            "definition-1", VersionId, "Activity node 'a' declares input 'x' more than once.", new ArgumentException("dup"));
+        await using var host = await PublishHost(new ExceptionSender(exception));
+        using var response = await PublishAsync(host);
 
-        // A non-conversion ArgumentException must keep flowing through ThrowError (which signals FastEndpoints'
-        // plain 400) instead of being rewritten as the VF-COER-001 problem+json payload.
-        var failure = await Assert.ThrowsAsync<ValidationFailureException>(() => InvokePublishAsync(endpoint));
-
-        Assert.Contains("declares input 'x' more than once", failure.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("VF-COER-001", failure.Message, StringComparison.Ordinal);
-        Assert.NotEqual("application/problem+json", endpoint.HttpContext.Response.ContentType);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("declares input 'x' more than once", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("VF-COER-001", body, StringComparison.Ordinal);
     }
 
     private static ValueConversionPublicationException AutoNarrowingRejection() =>
@@ -295,11 +289,11 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
     private static WorkflowExecutableCompilationException Wrap(ValueConversionPublicationException conversion) =>
         new("definition-1", VersionId, conversion.Message, conversion);
 
-    private static async Task<JsonElement> AssertConversionProblemAsync(BaseEndpoint endpoint)
+    private static async Task<JsonElement> AssertConversionProblemAsync(HttpResponseMessage response)
     {
-        Assert.Equal(StatusCodes.Status400BadRequest, endpoint.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
-        using var document = JsonDocument.Parse(await BodyAsync(endpoint));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = document.RootElement.Clone();
         Assert.Equal("VF-COER-001", root.GetProperty("errorCode").GetString());
         Assert.Equal("https://elsa.dev/problems/VF-COER-001", root.GetProperty("type").GetString());
@@ -309,72 +303,43 @@ public sealed class WorkflowPublicationConversionDiagnosticsTests
         return root;
     }
 
+    private static async Task<PublishingMinimalApiHost> PublishHost(IRequestSender sender) =>
+        await PublishingMinimalApiHost.StartAsync(_ => sender);
+
+    private static async Task<HttpResponseMessage> PublishAsync(PublishingMinimalApiHost host)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/publishing/workflows/workflow-version-1/publish")
+        {
+            Content = Json("{\"versionId\":\"body-version\"}")
+        };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        return await host.Client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendPreflightAsync(PublishingMinimalApiScenarioHost host)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/publishing/workflows/workflow-version-1/preflight")
+        {
+            Content = Json("{\"versionId\":\"body-version\"}")
+        };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        return await host.Client.SendAsync(request);
+    }
+
+    private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
+
     private static string Normalize(string body)
     {
         using var document = JsonDocument.Parse(body);
-        // The trace identifier is per-request; strip it so the payload comparison is deterministic.
         var map = document.RootElement.EnumerateObject()
-            .Where(property => property.Name != "traceId")
+            .Where(property => property.Name is not ("traceId" or "instance"))
             .ToDictionary(property => property.Name, property => property.Value.GetRawText(), StringComparer.Ordinal);
         return JsonSerializer.Serialize(map);
     }
-
-    private static BaseEndpoint PublishEndpoint(IRequestSender sender) =>
-        CreateEndpoint(
-            "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint",
-            [sender, NullLoggerFor("PublishWorkflowEndpoint")]);
-
-    private static BaseEndpoint PreflightEndpoint(IWorkflowExecutableCompiler compiler) =>
-        CreateEndpoint(
-            "Elsa.Workflows.Publishing.Api.Endpoints.PreflightWorkflowPublicationEndpoint",
-            [
-                compiler,
-                RuntimeHelpers_UninitializedPreflightReader(),
-                TimeProvider.System,
-                NullLoggerFor("PreflightWorkflowPublicationEndpoint")
-            ]);
-
-    private static Task InvokePublishAsync(BaseEndpoint endpoint) =>
-        InvokeHandleAsync(endpoint, new PublishWorkflowRequest(VersionId));
-
-    private static Task InvokePreflightAsync(BaseEndpoint endpoint) =>
-        InvokeHandleAsync(endpoint, new Elsa.Workflows.Publishing.Api.Requests.PreflightWorkflowPublication(VersionId));
-
-    private static BaseEndpoint CreateEndpoint(string typeName, object[] dependencies)
-    {
-        var endpointType = typeof(PublishWorkflowRequest).Assembly.GetType(typeName, throwOnError: true)!;
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var second] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) && second.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        Action<DefaultHttpContext> configure = context => context.Response.Body = new MemoryStream();
-        return (BaseEndpoint)create.Invoke(null, [configure, dependencies])!;
-    }
-
-    private static Task InvokeHandleAsync<TRequest>(BaseEndpoint endpoint, TRequest request) =>
-        (Task)endpoint.GetType().GetMethod("HandleAsync", [typeof(TRequest), typeof(CancellationToken)])!
-            .Invoke(endpoint, [request, CancellationToken.None])!;
-
-    private static async Task<string> BodyAsync(BaseEndpoint endpoint)
-    {
-        endpoint.HttpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(endpoint.HttpContext.Response.Body, leaveOpen: true);
-        return await reader.ReadToEndAsync();
-    }
-
-    private static object NullLoggerFor(string endpointTypeName)
-    {
-        var endpointType = typeof(PublishWorkflowRequest).Assembly
-            .GetType($"Elsa.Workflows.Publishing.Api.Endpoints.{endpointTypeName}", throwOnError: true)!;
-        var loggerType = typeof(NullLogger<>).MakeGenericType(endpointType);
-        return loggerType.GetProperty(nameof(NullLogger<object>.Instance))?.GetValue(null)
-               ?? loggerType.GetField(nameof(NullLogger<object>.Instance))!.GetValue(null)!;
-    }
-
-    private static WorkflowPublicationPreflightReader RuntimeHelpers_UninitializedPreflightReader() =>
-        (WorkflowPublicationPreflightReader)System.Runtime.CompilerServices.RuntimeHelpers
-            .GetUninitializedObject(typeof(WorkflowPublicationPreflightReader));
 
     private sealed class ExceptionSender(Exception exception) : IRequestSender
     {

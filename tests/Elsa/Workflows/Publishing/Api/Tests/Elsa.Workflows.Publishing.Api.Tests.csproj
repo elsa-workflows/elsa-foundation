@@ -16,6 +16,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -27,6 +30,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
+    <!-- Retained only for the historical FastEndpoints oracle and coexistence canary. Production Publishing API no longer references it. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
@@ -53,9 +59,17 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Capture/**/*" />
+    <EmbeddedResource Remove="Capture/**/*" />
+    <None Remove="Capture/**/*" />
+    <None Update="Baselines/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>
