@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Collections.Concurrent;
-using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -9,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
+using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
@@ -17,6 +15,9 @@ using Groundwork.Core.Transactions;
 using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
@@ -160,8 +161,8 @@ public sealed class GroundworkReusableActivityStoreTests
             CaptureAsync(() => harness.Stores.ExecuteAsync(firstRequest)),
             CaptureAsync(() => harness.Stores.ExecuteAsync(secondRequest)));
 
-        Assert.Single(attempts.Where(x => x.Result is not null));
-        Assert.Single(attempts.Where(x => x.Exception is ActivityForkIdempotencyConflictException));
+        Assert.Single(attempts, x => x.Result is not null);
+        Assert.Single(attempts, x => x.Exception is ActivityForkIdempotencyConflictException);
         var receipt = await harness.Stores.FindReceiptAsync(firstRequest.ReceiptId);
         Assert.NotNull(receipt);
         Assert.Equal(
@@ -496,7 +497,7 @@ public sealed class GroundworkReusableActivityStoreTests
             "version-2",
             ActivityDefinitionVersionLifecycle.Active,
             DateTimeOffset.UtcNow));
-        var picker = await harness.Stores.ReadAsync(null, 0, 25);
+        var picker = await harness.Picker.ReadAsync(null, 0, 25);
         await harness.Stores.ExecuteAsync(new ChangeActivityVersionLifecycleRequest(
             "version-2",
             ActivityDefinitionVersionLifecycle.Active,
@@ -669,24 +670,24 @@ public sealed class GroundworkReusableActivityStoreTests
         string definitionId,
         string version,
         int directDependencies) => new()
-    {
-        Id = id,
-        DefinitionVersionId = versionId,
-        DefinitionId = definitionId,
-        Version = version,
-        ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
-        SourceDraftId = $"draft-{versionId}",
-        Contract = Contract(),
-        Provider = Provider(),
-        TemplateId = $"template-{versionId}",
-        TemplateHash = $"hash-{versionId}",
-        SourceReferenceId = $"source-{versionId}",
-        ProviderFingerprint = "provider-fingerprint",
-        DirectDependencyCount = directDependencies,
-        ClosedTemplateCount = directDependencies + 1,
-        RuntimeRequirements = [new ActivityRuntimeRequirementDeclaration("runtime.graph", "1")],
-        PublishedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
-    };
+        {
+            Id = id,
+            DefinitionVersionId = versionId,
+            DefinitionId = definitionId,
+            Version = version,
+            ResolutionKind = ActivityDefinitionVersionResolutionKind.ReusableTemplateBoundary,
+            SourceDraftId = $"draft-{versionId}",
+            Contract = Contract(),
+            Provider = Provider(),
+            TemplateId = $"template-{versionId}",
+            TemplateHash = $"hash-{versionId}",
+            SourceReferenceId = $"source-{versionId}",
+            ProviderFingerprint = "provider-fingerprint",
+            DirectDependencyCount = directDependencies,
+            ClosedTemplateCount = directDependencies + 1,
+            RuntimeRequirements = [new ActivityRuntimeRequirementDeclaration("runtime.graph", "1")],
+            PublishedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)
+        };
 
     private static ActivityDefinitionDraftState State(string label) =>
         new(Contract(), Provider(), new Dictionary<string, string> { ["label"] = label });
@@ -868,15 +869,19 @@ public sealed class GroundworkReusableActivityStoreTests
 
     private static JsonElement Json(string value) => JsonDocument.Parse(value).RootElement.Clone();
 
-    private sealed class Harness(InMemoryDocumentStore documents, GroundworkReusableActivityStores stores)
+    private sealed class Harness(
+        InMemoryDocumentStore documents,
+        GroundworkReusableActivityStores stores,
+        IRecommendedActivityDefinitionPickerStore picker)
     {
         public InMemoryDocumentStore Documents { get; } = documents;
         public GroundworkReusableActivityStores Stores { get; } = stores;
+        public IRecommendedActivityDefinitionPickerStore Picker { get; } = picker;
 
         public static Harness Create(IDistributedLockProvider? lockProvider = null)
         {
             var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-            return new Harness(documents, new GroundworkReusableActivityStores(
+            var stores = new GroundworkReusableActivityStores(
                 documents,
                 new FakeClock(),
                 lockProvider ?? new ImmediateDistributedLockProvider(),
@@ -884,7 +889,15 @@ public sealed class GroundworkReusableActivityStoreTests
                 new GroundworkActivityManagementProjectionWriter(
                     documents,
                     new ImmediateDistributedLockProvider(),
-                    documents)));
+                    documents));
+            var projections = new GroundworkActivityDefinitionManagementProjectionStore(
+                documents,
+                new ActivityDesignTestBoundedDocumentStore(documents),
+                new TestPersistenceAccessContextAccessor(PersistenceAccessContext.Global));
+            return new Harness(
+                documents,
+                stores,
+                new GroundworkRecommendedActivityDefinitionPickerStore(projections, stores));
         }
 
         public Task SaveAsync<TEntity>(TEntity entity) where TEntity : Entity
@@ -926,6 +939,12 @@ public sealed class GroundworkReusableActivityStoreTests
         }
     }
 
+    private sealed class TestPersistenceAccessContextAccessor(PersistenceAccessContext current)
+        : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
+
     private sealed class FakeClock : ISystemClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
@@ -947,7 +966,7 @@ public sealed class GroundworkReusableActivityStoreTests
         public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(request, cancellationToken);
 
-        #pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
+#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
         public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);
 
@@ -959,7 +978,7 @@ public sealed class GroundworkReusableActivityStoreTests
 
         public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
             inner.AnyAsync(query, cancellationToken);
-        #pragma warning restore GW0004
+#pragma warning restore GW0004
 
         public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryAsync(query, cancellationToken);

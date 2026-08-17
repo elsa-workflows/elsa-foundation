@@ -96,17 +96,6 @@ public static class WorkflowsRuntimeApi
         // using a stable framework MethodInfo prevents API Explorer from rooting this
         // owner assembly through a handler MethodInfo.
         builder.WithMetadata(description);
-        builder.Finally(static endpointBuilder =>
-        {
-            for (var index = endpointBuilder.Metadata.Count - 1; index >= 0; index--)
-            {
-                if (endpointBuilder.Metadata[index] is System.Runtime.CompilerServices.AsyncStateMachineAttribute
-                    or System.Diagnostics.DebuggerStepThroughAttribute)
-                {
-                    endpointBuilder.Metadata.RemoveAt(index);
-                }
-            }
-        });
         builder.RequireStableOpenApi();
     }
 

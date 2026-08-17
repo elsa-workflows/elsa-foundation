@@ -1,0 +1,70 @@
+[
+  {
+    "binding": "query=availability=invalid;typed-parse=invalid",
+    "body": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022availability\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/catalog\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "Catalog.List|trusted-invalid-enum",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "GET /design/activities/catalog",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022availability\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/catalog\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "availability=invalid",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022availability\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [ActivityCatalogAvailability] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/catalog\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=limit=invalid;typed-parse=invalid",
+    "body": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/definitions\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "Definitions.List|trusted-invalid-int",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "GET /design/activities/definitions",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/definitions\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "limit=invalid",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/definitions\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=limit=invalid;typed-parse=invalid",
+    "body": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "Versions.Dependencies|trusted-invalid-nullable-int",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "GET /design/activities/versions/{param}/dependencies",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "limit=invalid",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022limit\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Int32] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  },
+  {
+    "binding": "query=transitive=invalid;typed-parse=invalid",
+    "body": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022transitive\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "case": "Versions.Dependencies|trusted-invalid-bool",
+    "contentType": "application/problem\u002Bjson",
+    "endpoint": "GET /design/activities/versions/{param}/dependencies",
+    "headers": {
+      "content-type": "application/problem\u002Bjson"
+    },
+    "json": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022transitive\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "pagingFiltering": "transitive=invalid",
+    "problemDetails": "{\n  \u0022detail\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022,\n  \u0022errors\u0022: [\n    {\n      \u0022name\u0022: \u0022transitive\u0022,\n      \u0022reason\u0022: \u0022Value [invalid] is not valid for a [Boolean] property!\u0022\n    }\n  ],\n  \u0022instance\u0022: \u0022/design/activities/versions/version-route/dependencies\u0022,\n  \u0022status\u0022: 400,\n  \u0022title\u0022: \u0022Bad Request\u0022,\n  \u0022traceId\u0022: \u0022\\u003Cvolatile-trace-id\\u003E\u0022,\n  \u0022type\u0022: \u0022https://www.rfc-editor.org/rfc/rfc7231#section-6.5.1\u0022\n}",
+    "status": "400",
+    "statusCode": 400,
+    "streaming": "",
+    "terminalState": "Completed"
+  }
+]

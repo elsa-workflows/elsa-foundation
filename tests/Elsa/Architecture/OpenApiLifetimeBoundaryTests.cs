@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,46 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed class OpenApiLifetimeBoundaryTests
 {
+    [Fact]
+    public void Activities_design_native_openapi_metadata_uses_only_stable_contract_types()
+    {
+        var implementationAssembly = typeof(ActivitiesDesignApi).Assembly;
+        var builder = WebApplication.CreateBuilder();
+        using var app = builder.Build();
+
+        ActivitiesDesignApi.MapActivitiesDesignApi(app);
+
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(dataSource => dataSource.Endpoints)
+            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Activities.Design.Api")
+            .ToArray();
+
+        Assert.Equal(38, endpoints.Length);
+        Assert.All(endpoints, endpoint =>
+        {
+            var marker = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
+            Assert.Equal(OpenApiLifetimeClassification.SharedContract, marker.Classification);
+            Assert.Equal("Elsa.Activities.Design.Api", marker.Owner);
+
+            var acceptedTypes = endpoint.Metadata
+                .GetOrderedMetadata<IAcceptsMetadata>()
+                .Select(metadata => metadata.RequestType)
+                .Where(type => type is not null)
+                .Cast<Type>();
+            var responseTypes = endpoint.Metadata
+                .GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Select(metadata => metadata.Type)
+                .Where(type => type is not null)
+                .Cast<Type>();
+
+            Assert.All(acceptedTypes.Concat(responseTypes), type =>
+            {
+                Assert.NotSame(implementationAssembly, type.Assembly);
+                Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly.");
+            });
+        });
+    }
+
     [Fact]
     public void Accepted_metadata_gets_one_immutable_value_only_marker()
     {
@@ -93,6 +134,22 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Empty(conventions.OrdinaryConventions);
         var builder = Endpoint("GET /safe", EndpointOwnershipMetadata.Host("Elsa.Tests"));
         conventions.FinalConventions.Single()(builder);
+        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+    }
+
+    [Fact]
+    public void Stable_openapi_convention_removes_compiler_only_handler_metadata_before_validation()
+    {
+        var conventions = new RecordingConventionBuilder();
+        conventions.RequireStableOpenApi();
+        var builder = Endpoint("PUT /async", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
+        builder.Metadata.Add(new System.Runtime.CompilerServices.AsyncStateMachineAttribute(CreateCollectibleType("AsyncHandlerStateMachine")));
+        builder.Metadata.Add(new System.Diagnostics.DebuggerStepThroughAttribute());
+
+        conventions.FinalConventions.Single()(builder);
+
+        Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
+        Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
         Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
     }
 

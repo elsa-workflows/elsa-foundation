@@ -53,9 +53,11 @@ server and fresh SQLite schema. The durable receipt at
 commit `1302806c9377b40f9bc10f04d12f206b137744a3` as informational provenance, the tested `src` tree
 `40c65c6ac72b7477755fe514a4351cffa41a5241`, every solution/build/package/tool Git object, and canonical composite
 digest `d672a0767b60dcf3a8adde95293a17c7dc326061a19e7a272b3f9cbb2eb0cbc4`. The commit itself is never resolved;
-the receipt test compares the durable tested source tree and current committed production/build objects directly.
-Subsequent changes are evidence/tests/tools/docs/maps only; no
-production Runtime tree or build input changed, so this exact E2E evidence remains valid and was not rerun.
+the receipt test verifies the historical record's object shapes, uniqueness, result counts, and composite digest
+without requiring every later repository change to reproduce the old whole-`src` tree. At the Wave 9 gate,
+subsequent changes were evidence/tests/tools/docs/maps only and no production Runtime tree or build input had changed.
+Later program waves keep this receipt as historical evidence rather than rewriting it to claim an E2E run that did
+not occur.
 
 The capture records actual route values and deserialized request values through a capture-only response diagnostic that is removed from the frozen response headers. It exercises query filters, paging, diagnostics, executables, dispatches, activity inspection, value evidence, incidents, and alteration routes. In particular, FE observed 415 for body requests with absent/non-JSON content type and 400 ProblemDetails for empty JSON; the Minimal reader preserves those dispositions.
 

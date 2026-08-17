@@ -66,6 +66,16 @@ public sealed class ActivityUpgradeGroundworkTests
         Assert.Equal(result.Status, receipt.Result.Status);
         Assert.Equal(result.AppliedAt, receipt.Result.AppliedAt);
         Assert.Equal(result.Drafts, receipt.Result.Drafts);
+        Assert.Equal(
+            harness.Plan.PlanId,
+            (await harness.LoadDocumentJsonAsync(
+                ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
+                harness.Plan.PlanId)).GetProperty("entity").GetProperty("id").GetString());
+        Assert.Equal(
+            receipt.ReceiptId,
+            (await harness.LoadDocumentJsonAsync(
+                ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
+                receipt.ReceiptId)).GetProperty("entity").GetProperty("id").GetString());
         var projection = await harness.LoadProjectionAsync();
         Assert.Equal(2, projection.Sequence);
         Assert.All(projection.Items, x => Assert.Equal("new", x.Dependency.VersionId));
@@ -542,6 +552,12 @@ public sealed class ActivityUpgradeGroundworkTests
             return JsonSerializer.Deserialize<ApplyReceiptDocument>(
                 envelope!.ContentJson,
                 GroundworkActivitiesDesignJson.Options)!.Receipt;
+        }
+
+        public async Task<JsonElement> LoadDocumentJsonAsync(string documentKind, string id)
+        {
+            var envelope = await documents.LoadAsync(documentKind, id);
+            return JsonDocument.Parse(envelope!.ContentJson).RootElement.Clone();
         }
 
         public IActivityUpgradePlanApplier CreatePublicApplier()

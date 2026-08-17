@@ -16,7 +16,7 @@ Groundwork provider catalog for activity-design persistence replacement contract
 | `IActivityDefinitionAuthoringStore` | `GroundworkReusableActivityStores` |
 | `IActivityDefinitionDraftStore` | `GroundworkReusableActivityStores` |
 | `IActivityDefinitionVersionPublicationStore` | `GroundworkReusableActivityStores` |
-| `IRecommendedActivityDefinitionPickerStore` | `GroundworkReusableActivityStores` |
+| `IRecommendedActivityDefinitionPickerStore` | `GroundworkRecommendedActivityDefinitionPickerStore` |
 | `IActivityDefinitionLayoutStore` | `GroundworkReusableActivityStores` |
 | `IActivityDraftValidationStore` | `GroundworkReusableActivityStores` |
 | `IActivityForkStore` | `GroundworkReusableActivityStores` |
@@ -97,7 +97,8 @@ It:
 
 - swaps every replacement contract in the table above to its Groundwork implementation
   (`RemoveAll<T>()` then `AddScoped<T, …>()`), with the reusable-activity ports resolving to the shared
-  `GroundworkReusableActivityStores` aggregate;
+  `GroundworkReusableActivityStores` aggregate, except for the recommendation picker, which reads the
+  stable management projection through `GroundworkRecommendedActivityDefinitionPickerStore`;
 - contributes `ActivitiesDesignGroundworkStorageManifestSource` and the shared
   `GroundworkDesignAtomicWriteStorageManifestSource` as `IGroundworkStorageManifestSource` enumerables;
 - registers the `IDesignAtomicWriter` specialization seam with `TryAddScoped`;

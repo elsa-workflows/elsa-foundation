@@ -1,4 +1,3 @@
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 
 namespace Elsa.Activities.Design.Api.Authorization;
@@ -9,7 +8,9 @@ public sealed class ActivityDesignPermissionContributor : IPermissionContributor
 
     public IEnumerable<Permission> Contribute() =>
     [
-        new(PermissionNames.ActivityDesignRead, "Read activity designs", "Activity design", "Read activity catalogs and design metadata."),
-        new(PermissionNames.ActivityDesignManage, "Manage activity designs", "Activity design", "Create and change activity definitions.")
+        new(ActivityDesignPermissions.Read, "Read activity designs", "Activity design", "Read activity catalogs and design metadata."),
+        new(ActivityDesignPermissions.Manage, "Manage activity designs", "Activity design", "Create and change activity definitions."),
+        new(ActivityDesignPermissions.AuthorProvider, "Author activity providers", "Activity design", "Author definitions for a specific activity provider."),
+        new(ActivityDesignPermissions.ReadProviderPayload, "Read activity provider payloads", "Activity design", "Read opaque payloads for a specific activity provider.")
     ];
 }
