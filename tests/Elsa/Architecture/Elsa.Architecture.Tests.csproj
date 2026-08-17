@@ -9,6 +9,8 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\endpoint-manifest.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\runtime-e2e-build-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\fastendpoints-transition-exceptions.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave1-http-fastendpoints.json"
@@ -28,6 +30,18 @@
     <None Include="Baselines\wave4-agent-sse-error-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-before-capture-receipt.json"
+          Link="Baselines\wave9-runtime-before-capture-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-fastendpoints.json"
+          Link="Baselines\wave9-runtime-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-approved-differences.json"
+          Link="Baselines\wave9-runtime-openapi-approved-differences.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-http-fastendpoints.json"
+          Link="Baselines\wave9-runtime-http-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -83,6 +97,7 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Core\Elsa.Workflows.Runtime.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />

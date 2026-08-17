@@ -39,7 +39,6 @@ public sealed class EndpointSecurityTests
     [
         ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints"),
         ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
-        ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints"),
         ("Elsa 3 Import", "src/Elsa3/Activities/Design/Import/Endpoints"),
         ("BPMN Interchange", "src/Elsa/Activities/Bpmn/Interchange/Endpoints")
     ];

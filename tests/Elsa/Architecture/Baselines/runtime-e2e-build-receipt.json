@@ -1,0 +1,18 @@
+{
+  "e2e": "runtime-get-write",
+  "testedExecutableSourceCommit": "1302806c9377b40f9bc10f04d12f206b137744a3",
+  "testedSourceTree": "40c65c6ac72b7477755fe514a4351cffa41a5241",
+  "currentSourceTree": "40c65c6ac72b7477755fe514a4351cffa41a5241",
+  "buildInputs": [
+    { "path": "Elsa.Server.slnx", "gitObject": "280abfa0bba77061d5deed6fb621cb8e560b5cd1" },
+    { "path": "Directory.Build.props", "gitObject": "b9ce10e8eb9fa6ca0b687449fbfc2328128742cf" },
+    { "path": "Directory.Packages.props", "gitObject": "fed839da2fce60316c70ba7defed23be11437550" },
+    { "path": "NuGet.config", "gitObject": "f7a89b3fb63cf569e2aae37ce8637f0b8903386a" },
+    { "path": ".config/dotnet-tools.json", "gitObject": "92c2670e732f4beb3770397ddbc14bb9d5e70ab3" }
+  ],
+  "compositeSha256": "d672a0767b60dcf3a8adde95293a17c7dc326061a19e7a272b3f9cbb2eb0cbc4",
+  "results": {
+    "Test-RuntimeGets.ps1": "20/20",
+    "Test-RuntimeWrites.ps1": "10/10"
+  }
+}

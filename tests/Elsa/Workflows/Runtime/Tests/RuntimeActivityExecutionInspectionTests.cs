@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Runtime.Api.Endpoints;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -9,9 +8,6 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -332,93 +328,6 @@ public sealed class RuntimeActivityExecutionInspectionTests
 
         Assert.Equal(status, projection.Status);
         Assert.Equal(status.ToString(), view.Status);
-    }
-
-    [Fact]
-    public async Task GetActivityExecutionEndpoint_Returns_Ok_When_Projection_Exists()
-    {
-        var view = ActivityExecutionInspectionView.From(Projection("wf-1", "ae-1", "authored-a", sequence: 1));
-        var endpoint = CreateEndpoint(new StubRequestSender((_, _) => Task.FromResult(new GetActivityExecutionResponse(view))));
-
-        await endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
-
-        Assert.Equal(StatusCodes.Status200OK, endpoint.HttpContext.Response.StatusCode);
-    }
-
-    [Fact]
-    public async Task GetActivityExecutionEndpoint_Returns_NotFound_When_Projection_Is_Missing()
-    {
-        var endpoint = CreateEndpoint(new StubRequestSender((_, _) => Task.FromResult(new GetActivityExecutionResponse(null))));
-
-        await endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-missing"), CancellationToken.None);
-
-        Assert.Equal(StatusCodes.Status404NotFound, endpoint.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
-        Assert.Contains("\"errorCode\":\"activity.execution.not-found\"", await ResponseBodyAsync(endpoint), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GetActivityExecutionEndpoint_Returns_Rfc7807_BadRequest_For_Invalid_Request()
-    {
-        var endpoint = CreateEndpoint(new StubRequestSender((_, _) => throw new ArgumentException("Invalid activity execution lookup.")));
-
-        await endpoint.HandleAsync(new GetActivityExecution("", "ae-1"), CancellationToken.None);
-
-        Assert.Equal(StatusCodes.Status400BadRequest, endpoint.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
-        Assert.Contains("\"errorCode\":\"activity.request.invalid\"", await ResponseBodyAsync(endpoint), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GetActivityExecutionEndpoint_Returns_Rfc7807_InternalServerError_For_Unexpected_Failure()
-    {
-        var endpoint = CreateEndpoint(new StubRequestSender((_, _) => throw new InvalidOperationException("Storage failure.")));
-
-        await endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None);
-
-        Assert.Equal(StatusCodes.Status500InternalServerError, endpoint.HttpContext.Response.StatusCode);
-        Assert.Equal("application/problem+json", endpoint.HttpContext.Response.ContentType);
-        var body = await ResponseBodyAsync(endpoint);
-        Assert.Contains("\"errorCode\":\"activity.operation.failed\"", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("Storage failure", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GetActivityExecutionEndpoint_Rethrows_Cancellation()
-    {
-        var endpoint = CreateEndpoint(new StubRequestSender((_, _) => throw new OperationCanceledException()));
-
-        await Assert.ThrowsAsync<OperationCanceledException>(() => endpoint.HandleAsync(new GetActivityExecution("wf-1", "ae-1"), CancellationToken.None));
-    }
-
-    private static GetActivityExecutionEndpoint CreateEndpoint(IRequestSender requestSender) =>
-        Factory.Create<GetActivityExecutionEndpoint>(
-            context =>
-            {
-                context.Response.Body = new MemoryStream();
-                context.Request.Path = "/runtime/workflows/instances/wf-1/activity-executions/ae-1";
-                context.TraceIdentifier = "trace-runtime-inspection";
-            },
-            requestSender,
-            NullLogger<GetActivityExecutionEndpoint>.Instance);
-
-    private static async Task<string> ResponseBodyAsync(BaseEndpoint endpoint)
-    {
-        endpoint.HttpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(endpoint.HttpContext.Response.Body, leaveOpen: true);
-        return await reader.ReadToEndAsync();
-    }
-
-    private sealed class StubRequestSender(Func<GetActivityExecution, CancellationToken, Task<GetActivityExecutionResponse>> send) : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
-            where T : notnull
-        {
-            if (request is GetActivityExecution getActivityExecution && typeof(T) == typeof(GetActivityExecutionResponse))
-                return (Task<T>)(object)send(getActivityExecution, cancellationToken);
-
-            throw new InvalidOperationException($"Unexpected request type '{request.GetType()}'.");
-        }
     }
 
     private static ActivityExecutionInspectionProjection Projection(

@@ -1,8 +1,8 @@
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Expressions.Core.Models;
-using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 

@@ -1,37 +1,13 @@
-using System.Text.Json;
+using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
-using Elsa.Primitives.Diagnostics;
+using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
 
-/// <summary>RFC 7807 response used by Runtime-owned activity execution inspection endpoints.</summary>
-public sealed record ActivityExecutionProblemDetailsView(
-    string Type,
-    string Title,
-    int Status,
-    string Detail,
-    string Instance,
-    string ErrorCode,
-    string TraceId,
-    IReadOnlyList<ActivityExecutionProblemDiagnosticView> Diagnostics,
-    ActivityExecutionCursorProblemView? Cursor);
-
-public sealed record ActivityExecutionCursorProblemView(
-    string CursorClass,
-    string BoundaryBinding,
-    string QueryBinding,
-    string AccessBinding,
-    bool Recoverable,
-    string RecoveryAction);
-
-/// <summary>Safe diagnostic extension point. Inspection request failures currently return an empty list.</summary>
-public sealed record ActivityExecutionProblemDiagnosticView(string Code, string Message, string Severity);
-
 internal static class ActivityExecutionProblemDetails
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     public static Task NotFoundAsync(HttpContext context, CancellationToken cancellationToken) =>
         WriteAsync(
             context,
@@ -138,7 +114,7 @@ internal static class ActivityExecutionProblemDetails
                     cursor.RecoveryAction));
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
-        await JsonSerializer.SerializeAsync(context.Response.Body, response, JsonOptions, cancellationToken);
+        await JsonSerializer.SerializeAsync(context.Response.Body, response, WorkflowsRuntimeJsonContext.Default.ActivityExecutionProblemDetailsView, cancellationToken);
     }
 
     private static Task WriteAsync(

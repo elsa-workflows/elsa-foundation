@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Elsa.Workflows.Runtime.Api.Core</AssemblyName>
+    <RootNamespace>Elsa.Workflows.Runtime.Api</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Models\**\*.cs"
+             Exclude="..\Models\ActivityExecutionProblemDetails.cs"
+             Link="Models\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Requests\**\*.cs"
+             Exclude="..\Requests\GetActivityExecutionValuePayload.cs;..\Requests\ListWorkflowInstances.cs"
+             Link="Requests\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Commands\**\*.cs"
+             Link="Commands\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+  </ItemGroup>
+
+</Project>
