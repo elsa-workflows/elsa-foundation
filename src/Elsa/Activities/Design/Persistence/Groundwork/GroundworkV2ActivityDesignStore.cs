@@ -270,10 +270,16 @@ public sealed class GroundworkV2ActivityDesignStore(
         if (acrossScopes)
         {
             var result = session.QueryAcrossScopes(request, unit.CreateQueryRenderOptions(selectedIndex));
-            documents = result.Rows
+            var rows = result.Rows
                 .Select(row => new ActivityDesignScopedDocument(row.Scope, ToDocument(query.DocumentKind, row.Values)))
-                .DistinctBy(row => (row.Scope?.Value, row.Document.Id))
                 .ToArray();
+            var duplicate = rows
+                .GroupBy(row => (row.Scope?.Value, row.Document.Id))
+                .FirstOrDefault(group => group.Skip(1).Any());
+            if (duplicate is not null)
+                throw new InvalidOperationException(
+                    $"Activity-design query '{query.Identity}' returned duplicate identity '{duplicate.Key.Id}' in storage scope '{duplicate.Key.Value ?? "<global>"}'.");
+            documents = rows;
             totalCount = result.TotalCount;
             nextContinuationToken = result.NextContinuationToken;
         }
@@ -307,7 +313,10 @@ public sealed class GroundworkV2ActivityDesignStore(
         bool acrossScopes = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = Query(query with { Take = 1 }, acrossScopes);
+        var result = Query(query with { Take = acrossScopes ? 2 : 1 }, acrossScopes);
+        if (acrossScopes && result.Documents.Count > 1)
+            throw new InvalidOperationException(
+                $"Activity-design point query '{query.Identity}' is ambiguous across storage scopes.");
         return Task.FromResult(result.Documents.FirstOrDefault());
     }
 
@@ -966,8 +975,10 @@ public static class ActivityDesignQueryPager
                 // A cross-scope result's provider scope is intentionally not
                 // reconstructed from JSON tenant content. QueryPage has already
                 // preserved it for the structural identity check below.
-                if (identities.Add((acrossScopes ? row.Scope?.Value : null, row.Document.Id)))
-                    scopedResults.Add(row);
+                if (!identities.Add((acrossScopes ? row.Scope?.Value : null, row.Document.Id)))
+                    throw new InvalidDataException(
+                        $"Activity-design query returned duplicate identity '{row.Document.Id}' in storage scope '{row.Scope?.Value ?? "<global>"}'.");
+                scopedResults.Add(row);
             }
             var next = page.NextContinuationToken;
             if (next is null)

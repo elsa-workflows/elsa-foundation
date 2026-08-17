@@ -411,6 +411,41 @@ public sealed class ActivitiesDesignV2AtomicAndConcurrencyTests
     }
 
     [Fact]
+    public async Task Cross_scope_first_or_default_refuses_same_id_ambiguity()
+    {
+        using var fixture = ActivityDesignV2Fixture.Create();
+        await fixture.Store.SaveAsync(Save("tenant-a", "first-or-default-id", "Acme.ScopeA"));
+
+        var unit = ActivitiesDesignStorageManifest.Require(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        fixture.Connection.OpenSession(
+                unit,
+                StorageAccess.Scoped(new StorageScope("tenant-b")))
+            .Upsert(new StorageValues(new Dictionary<string, object?>
+            {
+                [ActivitiesDesignStorageManifest.IdField] = "first-or-default-id",
+                [ActivitiesDesignStorageManifest.SchemaVersionField] = ActivitiesDesignStorageManifest.SchemaVersion,
+                [ActivitiesDesignStorageManifest.ContentField] = Content("tenant-a", "Acme.ForgedTenantContent"),
+                [ActivitiesDesignStorageManifest.RevisionField] = 1L,
+                [ActivitiesDesignStorageManifest.UpdatedAtField] = DateTimeOffset.UtcNow,
+                [ActivitiesDesignStorageManifest.ScopeField] = "tenant-a",
+                [ActivitiesDesignStorageManifest.TenantIdField] = "tenant-a"
+            }), WriteOptions.Unconditional);
+
+        fixture.Access.Current = PersistenceAccessContext.PrivilegedGlobal(
+            new PersistenceAccessPurpose("activity-design-cross-scope-first-or-default-test"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FirstOrDefaultAsync(
+            new ActivityDesignQuery(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                "point-read",
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.IdField, "first-or-default-id"))],
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)],
+                Take: 1),
+            acrossScopes: true));
+    }
+
+    [Fact]
     public async Task Exact_unit_of_work_reads_its_own_staged_save_and_delete()
     {
         using var fixture = ActivityDesignV2Fixture.Create();
