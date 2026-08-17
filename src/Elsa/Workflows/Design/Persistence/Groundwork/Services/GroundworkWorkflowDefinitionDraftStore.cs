@@ -4,88 +4,49 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
-/// <summary>
-/// Groundwork (document) implementation of <see cref="IWorkflowDefinitionDraftStore"/>, the document-store
-/// implementation of the draft-store contract. Like the version store, the draft is a rich
-/// aggregate: its authored <c>WorkflowDefinitionState</c> is serialized via <see cref="IPayloadSerializer"/>
-/// and the EF shadow / navigation members are excluded from the document.
-/// </summary>
-public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinitionDraftStore
+public sealed class GroundworkWorkflowDefinitionDraftStore(
+    GroundworkDesignStorage storage,
+    IPayloadSerializer payloadSerializer,
+    IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowDefinitionDraftStore
 {
-    private readonly GroundworkWorkflowDefinitionDraftDocumentStore _documents;
+    private readonly GroundworkWorkflowDefinitionDraftDocumentStore documents =
+        new(storage, GroundworkDesignDocumentSerialization.Create(payloadSerializer), accessContextAccessor);
 
-    public GroundworkWorkflowDefinitionDraftStore(
-        IDocumentStore store,
-        IBoundedDocumentStore boundedStore,
-        IPayloadSerializer payloadSerializer,
-        IPersistenceAccessContextAccessor accessContextAccessor)
-    {
-        _documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
-            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-            accessContextAccessor,
-            boundedStore);
-    }
+    public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default) =>
+        (await documents.FindByIdAsync(draftId, cancellationToken))?.Entity;
 
-    public GroundworkWorkflowDefinitionDraftStore(
-        IDocumentStore store,
-        IPayloadSerializer payloadSerializer,
-        IPersistenceAccessContextAccessor accessContextAccessor)
-        : this(
-            store,
-            store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-                "Workflow-definition draft queries require an admitted bounded document-store runtime."),
-            payloadSerializer,
-            accessContextAccessor)
-    {
-    }
+    public async Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(
+        string workflowDefinitionId,
+        CancellationToken cancellationToken = default) =>
+        (await documents.FindByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken))?.Entity;
 
-    public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
-    {
-        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
-        return document?.Entity;
-    }
+    public async Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(
+        string workflowDefinitionId,
+        CancellationToken cancellationToken = default) =>
+        (await documents.ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken))
+        .Select(x => x.Entity)
+        .ToArray();
 
-    public async Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-    {
-        var document = await _documents.FindByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken);
-        return document?.Entity;
-    }
-
-    public async Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
-    {
-        var documents = await _documents.ListByWorkflowDefinitionIdAsync(workflowDefinitionId, cancellationToken);
-        return documents.Select(x => x.Entity).ToArray();
-    }
-
-    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
-    {
-        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
-        return document?.Layout.ToArray() ?? [];
-    }
+    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(
+        string draftId,
+        CancellationToken cancellationToken = default) =>
+        (await documents.FindByIdAsync(draftId, cancellationToken))?.Layout.ToArray() ?? [];
 
     public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(
         string draftId,
+        CancellationToken cancellationToken = default) =>
+        (await documents.FindByIdAsync(draftId, cancellationToken))?.ActivityPresentation.ToArray() ?? [];
+
+    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(
+        string draftId,
         CancellationToken cancellationToken = default)
     {
-        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
-        return document?.ActivityPresentation.ToArray() ?? [];
-    }
-
-    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
-    {
-        // One document load feeds both the draft entity and its layout — the document already carries
-        // both, so this avoids re-loading and re-deserializing the same draft document a second time.
-        var document = await _documents.FindByIdAsync(draftId, cancellationToken);
+        var document = await documents.FindByIdAsync(draftId, cancellationToken);
         return document is null
             ? null
-            : new DraftWithLayout(
-                document.Entity,
-                document.Layout.ToArray(),
-                document.ActivityPresentation.ToArray());
+            : new DraftWithLayout(document.Entity, document.Layout.ToArray(), document.ActivityPresentation.ToArray());
     }
 }

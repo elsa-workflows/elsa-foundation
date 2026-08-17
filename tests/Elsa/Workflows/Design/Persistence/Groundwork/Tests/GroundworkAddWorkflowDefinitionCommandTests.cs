@@ -1,6 +1,7 @@
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
@@ -8,6 +9,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -21,13 +24,23 @@ public class GroundworkAddWorkflowDefinitionCommandTests
 {
     private static readonly FakePayloadSerializer Payloads = new();
 
+    private static GroundworkDesignStorage Storage(
+        IGroundworkStorageSessionSource source,
+        IPersistenceAccessContextAccessor? access = null) =>
+        new(source, access ?? GroundworkTestAccess.DefaultAccessContextAccessor);
+
+    private static GroundworkDesignAtomicWrite Atomic(
+        IGroundworkStorageSessionSource source,
+        IPersistenceAccessContextAccessor? access = null) =>
+        new(Storage(source, access));
+
     [Fact]
     public async Task Mismatched_draft_tenant_rejects_the_complete_batch_before_staging()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var store = new DesignGroundworkTestPersistence();
         var command = new GroundworkAddWorkflowDefinitionCommand(
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store, GroundworkTestAccess.AccessContext("tenant-a")),
+            Atomic(store, GroundworkTestAccess.AccessContext("tenant-a")),
             Payloads,
             new FakeSystemClock(),
             GroundworkTestAccess.AccessContext("tenant-a"));
@@ -51,10 +64,10 @@ public class GroundworkAddWorkflowDefinitionCommandTests
     [Fact]
     public async Task Add_version_rejects_a_definition_outside_the_current_tenant_before_staging()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var store = new DesignGroundworkTestPersistence();
         var seed = new GroundworkAddWorkflowDefinitionCommand(
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store, GroundworkTestAccess.AccessContext("tenant-b")),
+            Atomic(store, GroundworkTestAccess.AccessContext("tenant-b")),
             Payloads,
             new FakeSystemClock(),
             GroundworkTestAccess.AccessContext("tenant-b"));
@@ -70,13 +83,13 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             },
             [],
             CancellationToken.None);
-        var definitions = new GroundworkWorkflowDefinitionStore(store);
+        var definitions = new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor);
         var command = new GroundworkAddWorkflowDefinitionVersionCommand(
-            new GroundworkDesignAtomicWrite(store),
+            Atomic(store),
             Payloads,
             new WorkflowDefinitionVersionFactory(new SequentialIdentityGenerator()),
             definitions,
-            new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads),
+            new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads, GroundworkTestAccess.DefaultAccessContextAccessor),
             new ImmediateLockProvider(),
             new FakeSystemClock(),
             GroundworkTestAccess.AccessContext("tenant-a"));
@@ -92,11 +105,11 @@ public class GroundworkAddWorkflowDefinitionCommandTests
     [Fact]
     public async Task Add_version_replays_the_authoritative_identity_and_rejects_changed_state()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var atomicWrite = new GroundworkDesignAtomicWrite(store);
-        var definitions = new GroundworkWorkflowDefinitionStore(store);
+        using var store = new DesignGroundworkTestPersistence();
+        var atomicWrite = Atomic(store);
+        var definitions = new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor);
         var seed = new GroundworkAddWorkflowDefinitionCommand(
-            store,
+            Storage(store),
             atomicWrite,
             Payloads,
             new FakeSystemClock(),
@@ -117,7 +130,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             Payloads,
             new WorkflowDefinitionVersionFactory(new SequentialIdentityGenerator()),
             definitions,
-            new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads),
+            new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads, GroundworkTestAccess.DefaultAccessContextAccessor),
             new ImmediateLockProvider(),
             new FakeSystemClock(),
             GroundworkTestAccess.DefaultAccessContextAccessor);
@@ -148,12 +161,12 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         // stale latest-version read, a concurrent publish with a distinct operation key had already
         // persisted "2.0.0" — the in-lock existence guard must reject rather than silently persist
         // a duplicate computed version.
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var atomicWrite = new GroundworkDesignAtomicWrite(store);
-        var definitions = new GroundworkWorkflowDefinitionStore(store);
-        var versions = new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads);
+        using var store = new DesignGroundworkTestPersistence();
+        var atomicWrite = Atomic(store);
+        var definitions = new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor);
+        var versions = new GroundworkWorkflowDefinitionVersionStore(store, definitions, Payloads, GroundworkTestAccess.DefaultAccessContextAccessor);
         var seed = new GroundworkAddWorkflowDefinitionCommand(
-            store,
+            Storage(store),
             atomicWrite,
             Payloads,
             new FakeSystemClock(),
@@ -254,10 +267,10 @@ public class GroundworkAddWorkflowDefinitionCommandTests
     [Fact]
     public async Task Persists_definition_and_draft_readable_through_the_ports()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var store = new DesignGroundworkTestPersistence();
         var command = new GroundworkAddWorkflowDefinitionCommand(
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store),
+            Atomic(store),
             Payloads,
             new FakeSystemClock(),
             GroundworkTestAccess.DefaultAccessContextAccessor);
@@ -278,9 +291,9 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             layout,
             CancellationToken.None);
 
-        var definitionStore = new GroundworkWorkflowDefinitionStore(store);
+        var definitionStore = new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor);
         var draftStore = new GroundworkWorkflowDefinitionDraftStore(
-            store,
+            Storage(store),
             Payloads,
             GroundworkTestAccess.DefaultAccessContextAccessor);
 
@@ -300,10 +313,10 @@ public class GroundworkAddWorkflowDefinitionCommandTests
     [Fact]
     public async Task Exact_replay_returns_the_first_authoritative_ids_without_restaging()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var store = new DesignGroundworkTestPersistence();
         var command = new GroundworkAddWorkflowDefinitionCommand(
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store),
+            Atomic(store),
             Payloads,
             new FakeSystemClock(),
             GroundworkTestAccess.DefaultAccessContextAccessor);
@@ -328,16 +341,16 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         Assert.Equal("def-first", replay.DefinitionId);
         Assert.Equal("draft-first", replay.DraftId);
         Assert.Equal(savesAfterFirstAttempt, store.SaveCount);
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(store).FindByIdAsync("def-retry"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor).FindByIdAsync("def-retry"));
     }
 
     [Fact]
     public async Task Reusing_the_key_for_changed_material_conflicts_without_mutation()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var store = new DesignGroundworkTestPersistence();
         var command = new GroundworkAddWorkflowDefinitionCommand(
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store),
+            Atomic(store),
             Payloads,
             new FakeSystemClock(),
             GroundworkTestAccess.DefaultAccessContextAccessor);
@@ -360,7 +373,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
                 CancellationToken.None));
 
         Assert.Equal(savesAfterFirstAttempt, store.SaveCount);
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(store).FindByIdAsync("def-retry"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(store, GroundworkTestAccess.DefaultAccessContextAccessor).FindByIdAsync("def-retry"));
     }
 
     private static WorkflowDefinition Definition(string id, string name) =>

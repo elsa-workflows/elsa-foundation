@@ -1,8 +1,8 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
@@ -13,13 +13,13 @@ using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkPromoteDraftToVersionCommand(
     IDistributedLockProvider lockProvider,
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IInlineEventPublisher inlineEventPublisher,
@@ -48,7 +48,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var normalizedRequestedVersion = requestedVersion?.Trim();
 
         var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
+            storage,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
@@ -138,17 +138,11 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
                         WorkflowsDesignStorageManifest.SchemaVersion,
                         versionLayout,
-                        GroundworkDesignJson.Options,
+                        GroundworkDesignDocumentSerialization.Create(payloadSerializer),
                         accessContextAccessor.Current,
                         persistenceDomain: DesignPersistenceDomain.Workflow) with
                     { ExpectedVersion = 0 };
-                    var versionSaveResult = await context.SaveAsync(versionSave, token);
-                    if (versionSaveResult.Status == DocumentStoreWriteStatus.ConcurrencyConflict)
-                    {
-                        throw new WorkflowDefinitionVersionConflictException(
-                            draft.WorkflowDefinitionId,
-                            assessment.ResolvedVersion!);
-                    }
+                    await context.SaveAsync(versionSave, token);
                     await context.SaveAsync(layoutSave, token);
                     return new PromoteDraftResult(
                         draft.Id,
@@ -174,6 +168,20 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         catch (GroundworkDesignOperationConflictException exception)
         {
             throw new WorkflowPromotionOperationConflictException(exception.Message, exception);
+        }
+        catch (GroundworkDesignOperationRejectedException)
+        {
+            // A final version identity CreateOnly race is an observable version conflict,
+            // even when the public-v2 provider reports it as an unsuccessful batch outcome.
+            throw new WorkflowDefinitionVersionConflictException(
+                draftId,
+                normalizedRequestedVersion ?? "automatic");
+        }
+        catch (DesignPersistenceException exception) when (exception.InnerException is BatchWriteException)
+        {
+            throw new WorkflowDefinitionVersionConflictException(
+                draftId,
+                normalizedRequestedVersion ?? "automatic");
         }
         finally
         {

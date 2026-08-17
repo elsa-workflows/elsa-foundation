@@ -1,8 +1,8 @@
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -79,7 +79,16 @@ public sealed class GroundworkAddWorkflowDefinitionVersionCommand(
             cancellationToken: cancellationToken,
             beforeAttempt: async token =>
             {
-                var definition = await definitionStore.GetAsync(definitionId, token);
+                WorkflowDefinition definition;
+                try
+                {
+                    definition = await definitionStore.GetAsync(definitionId, token);
+                }
+                catch (EntityNotFoundException exception) when (accessContextAccessor.Current.Scope is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"Workflow definition '{definitionId}' is not available in the current persistence scope.", exception);
+                }
                 accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
                 var lastVersion = await versionStore.FindLatestVersionAsync(definitionId, token);
                 var nextVersion = WorkflowVersionNumbering.NextMajor(lastVersion?.Version);
