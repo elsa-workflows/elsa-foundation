@@ -341,7 +341,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
         foreach (var change in stateChanges.ActivityExecutionInspections)
         {
-            RequireOperation(change, RuntimeStateChangeOperation.Upsert, "activity execution inspection");
+            RequireOperation(change, RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete, "activity execution inspection");
             RequireId(change.StateId, change.State.ActivityExecutionId, "activity execution inspection");
             RequireWorkflow(change.State.WorkflowExecutionId, commit.WorkflowExecutionId, "activity execution inspection");
             RequireMatchingScope(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId, "activity execution inspection");
@@ -663,37 +663,47 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
         public void ApplyInspectionsAndHierarchy()
         {
-            ApplyMany(
-                ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
-                commit.StateChanges.ActivityExecutionInspections,
-                ProjectInspection);
             foreach (var change in commit.StateChanges.ActivityExecutionInspections)
             {
+                var inspectionPhysicalId = GroundworkV2ActivityExecutionInspectionStorageConventions.PhysicalId(
+                    change.State.WorkflowExecutionId,
+                    change.State.ActivityExecutionId);
                 if (change.Operation == RuntimeStateChangeOperation.Delete)
                 {
-                    StageDelete(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind, change.StateId);
+                    StageDelete(
+                        ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
+                        inspectionPhysicalId);
+                    StageDelete(
+                        ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
+                        GroundworkV2ActivityExecutionHierarchyStorageConventions.PhysicalId(
+                            change.State.WorkflowExecutionId,
+                            change.State.ActivityExecutionId));
                     continue;
                 }
 
+                StageValues(
+                    ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
+                    GroundworkV2ActivityExecutionInspectionStorageConventions.Values(change.State),
+                    change.Operation);
+
                 var effectiveScope = EffectiveExecutionScope(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId);
                 if (string.IsNullOrWhiteSpace(effectiveScope))
+                {
+                    StageDelete(
+                        ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
+                        GroundworkV2ActivityExecutionHierarchyStorageConventions.PhysicalId(
+                            change.State.WorkflowExecutionId,
+                            change.State.ActivityExecutionId));
                     continue;
+                }
                 var hierarchy = ActivityExecutionHierarchyProjector.FromInspection(
                     string.IsNullOrWhiteSpace(change.State.ExecutionScopeId)
                         ? change.State with { ExecutionScopeId = effectiveScope }
                         : change.State);
-                StageUpsert(
+                StageValues(
                     ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
-                    change.StateId,
-                    hierarchy,
-                    new Dictionary<string, object?>(StringComparer.Ordinal)
-                    {
-                        [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = hierarchy.WorkflowExecutionId,
-                        [ElsaRuntimeV2StorageManifest.ExecutionScopeIdField] = hierarchy.ExecutionScopeId,
-                        [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyIsScopeRootField] = StringComparer.Ordinal.Equals(hierarchy.ExecutionScopeId, hierarchy.ActivityExecutionId),
-                        [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyExecutionSequenceField] = hierarchy.ExecutionSequence,
-                        [ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyActivityExecutionIdField] = hierarchy.ActivityExecutionId
-                    });
+                    GroundworkV2ActivityExecutionHierarchyStorageConventions.Values(hierarchy),
+                    change.Operation);
             }
         }
 
@@ -1166,15 +1176,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 change.Operation);
         }
 
-        private void ApplyMany<TState>(
-            string unitId,
-            IReadOnlyCollection<RuntimeStateChange<TState>> changes,
-            Func<TState, IReadOnlyDictionary<string, object?>> projection)
-        {
-            foreach (var change in changes)
-                Apply(unitId, change, projection);
-        }
-
         private void StageCleanupDelete(string unitId, string id, string workflowExecutionId)
         {
             var entry = Open(unitId).Read(GroundworkRuntimeRowStore.Key(id));
@@ -1301,15 +1302,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
         private static string? EffectiveExecutionScope(string? stateScope, string? provenanceScope) =>
             string.IsNullOrWhiteSpace(stateScope) ? provenanceScope : stateScope;
-
-        private static IReadOnlyDictionary<string, object?> ProjectInspection(ActivityExecutionInspectionProjection state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryExecutionSequenceField] = state.ExecutionSequence,
-                [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryScheduledAtField] = state.ScheduledAt,
-                [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField] = state.ActivityExecutionId
-            };
 
         private static void ValidateSchedulerClaim(
             IReadOnlyDictionary<string, object?> values,

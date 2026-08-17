@@ -1,10 +1,10 @@
-using System.Globalization;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using System.Globalization;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -153,9 +153,6 @@ public sealed class GroundworkActivityExecutionHierarchyStore(
         var records = await ListWorkflowAsync(workflowExecutionId, cancellationToken);
         return ActivityExecutionHierarchyProjector.FindAttemptNavigation(records, activityExecutionId);
     }
-
-    public ValueTask<ActivityExecutionLayout?> FindLayoutAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<ActivityExecutionLayout?>(null);
 
     private async ValueTask<long> ReadCurrentWatermarkAsync(
         string workflowExecutionId,

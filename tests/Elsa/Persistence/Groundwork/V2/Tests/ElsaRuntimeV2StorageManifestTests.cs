@@ -58,7 +58,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["incidentState"] = ["by_status_created_at_workflow_and_incident", "by_workflow_execution", "by_workflow_execution_and_incident_id", "by_workflow_execution_and_status_and_incident_id"],
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
-            ["publicationProjectionState"] = [],
+            ["publicationProjectionState"] = ["by_projection_kind_and_artifact_id"],
             ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
@@ -93,6 +93,18 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
         AssertIndex(triggerBindings, "by_stimulus_and_type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
+
+        var publicationProjectionState = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
+        AssertIndex(
+            publicationProjectionState,
+            "by_projection_kind_and_artifact_id",
+            [
+                ElsaRuntimeV2StorageManifest.PublicationProjectionKindField,
+                ElsaRuntimeV2StorageManifest.PublicationProjectionArtifactIdField,
+                ElsaRuntimeV2StorageManifest.IdField
+            ],
+            included: true);
         Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
@@ -290,6 +302,11 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField
+            ],
+            [ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind] =
+            [
+                ElsaRuntimeV2StorageManifest.PublicationProjectionKindField,
+                ElsaRuntimeV2StorageManifest.PublicationProjectionArtifactIdField
             ],
             [ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind] =
             [
