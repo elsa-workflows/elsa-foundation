@@ -159,9 +159,16 @@ docs/maps/* (regenerated), EXTENSION_POINTS.md files per research D9
 
 ### Behaviour change (2) — §2.23.4 recorded decision: one logical version may no longer be claimed by two payloads
 
-**Found by running, not by reading, during US4 (T094–T096) on 2026-08-17.** Recorded because §2.23.4
-treats "the refactor resolved a bug the tests silently relied on" as an architect decision, never a
-solo one, and because a pre-existing test had to change to accommodate it.
+**Approved by Joey, 2026-08-17**, after the finding was surfaced: *"Lets go for this safer model and
+assume the prior logic was not safe enough. As long as we record this decision, a reviewer could
+revise this choice."* Found by running, not by reading, during US4 (T094–T096). Recorded because
+§2.23.4 treats "the refactor resolved a bug the tests silently relied on" as an architect decision,
+never a solo one, and because a pre-existing test had to change to accommodate it.
+
+**The choice, stated plainly so it can be reversed as a unit:** the prior permissiveness is treated as
+*not safe enough*, not as a capability being withdrawn. A reviewer who disagrees should reverse the
+rule itself (drop T094's two collision gates), not soften the diagnostic — a half-enforced version
+identity is worse than either end, because latest-wins would order some collisions and not others.
 
 **The behaviour before.** The importer had no version gate. A mount could re-point a definition at
 **different content under an unchanged `ArtifactVersion`** and the runtime would happily activate it —
@@ -184,8 +191,8 @@ proves a superseding import re-projects the schedule instead of leaving the old 
 fixture's illegal premise moved. This is a fixture correction, not a weakening, and no test was
 removed.
 
-**Reviewer's eye wanted on one thing.** Anyone relying on "overwrite the mount, keep the version"
-as a deployment idiom now gets a rejection instead of a silent re-point. That is the intended
-outcome — a content change without a version change is exactly what the broken-source diagnostic is
-for — but it is a behaviour an operator could have depended on, and it is the kind of thing better
-surfaced now than discovered in a rollout.
+**The operator-visible consequence, accepted knowingly.** Anyone relying on "overwrite the mount, keep
+the version" as a deployment idiom now gets a rejection instead of a silent re-point. That is the
+intended outcome — a content change without a version change is exactly what the broken-source
+diagnostic is for — and it was weighed against the alternative before being accepted. It will show up
+again in the real-host run against `Elsa.Foundation.Host`; that is expected, not a regression.
