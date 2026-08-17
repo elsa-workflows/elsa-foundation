@@ -40,6 +40,23 @@ copy_committed_blob \
 copy_committed_blob \
     tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs \
     "$worktree_dir/tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs"
+copy_source_blob() {
+    local path=$1
+    local destination="$worktree_dir/$path"
+    local blob
+    blob=$(git -C "$repo_root" rev-parse "$source_commit:$path")
+    git -C "$repo_root" cat-file -e "$blob"
+    mkdir -p "$(dirname "$destination")"
+    git -C "$repo_root" cat-file blob "$blob" > "$destination"
+}
+
+for source_dependency in \
+    tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs \
+    tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs \
+    tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs; do
+    copy_source_blob "$source_dependency"
+done
+
 for dependency in \
     tools/compatibility/capture-workflows-design-before.sh \
     tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs \
