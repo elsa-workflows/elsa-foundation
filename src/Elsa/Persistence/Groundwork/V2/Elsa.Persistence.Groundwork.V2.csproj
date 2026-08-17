@@ -19,4 +19,11 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Provider-specific composition lives in its own dependency-closed project. -->
+    <Compile Remove="Providers/**/*" />
+    <EmbeddedResource Remove="Providers/**/*" />
+    <None Remove="Providers/**/*" />
+  </ItemGroup>
+
 </Project>

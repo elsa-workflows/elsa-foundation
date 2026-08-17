@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>0.0.1-local</Version>
+    <Description>Public Elsa composition extensions for Groundwork v2 provider connections.</Description>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.MongoDb" Version="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.PostgreSql" Version="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" Version="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.SqlServer" Version="0.2.0-preview.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Persistence.Groundwork.V2.csproj" />
+  </ItemGroup>
+
+</Project>

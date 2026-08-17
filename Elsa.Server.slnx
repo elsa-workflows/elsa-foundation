@@ -204,6 +204,9 @@
     <Project Path="src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Persistence/Groundwork/V2/Providers/">
+    <Project Path="src/Elsa/Persistence/Groundwork/V2/Providers/Elsa.Persistence.Groundwork.V2.Providers.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Persistence/Groundwork/MongoDb/">
     <Project Path="src/Elsa/Persistence/Groundwork/MongoDb/Elsa.Persistence.Groundwork.MongoDb.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj" />
@@ -507,6 +510,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/V2/Providers/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/V2/Providers/Tests/Elsa.Persistence.Groundwork.V2.Providers.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/V2/Runtime/">
     <Project Path="tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj" />
