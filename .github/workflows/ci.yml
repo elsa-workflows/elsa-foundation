@@ -198,10 +198,10 @@ jobs:
             sleep 1
           done
 
-      - name: Restore workflow test-scope native proof
+      - name: Restore Groundwork v2 runtime native proofs
         run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
 
-      - name: Test workflow test-scope on every native provider
+      - name: Test current Groundwork v2 runtime families on every native provider
         env:
           GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
           GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
@@ -210,7 +210,7 @@ jobs:
           dotnet test
           tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
           -c Release --no-restore
-          --filter FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests
+          --filter 'FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests'
           -p:WarningsNotAsErrors=NU1603
 
   # Feature 094 container-free ratchets. The whole architecture project runs so a

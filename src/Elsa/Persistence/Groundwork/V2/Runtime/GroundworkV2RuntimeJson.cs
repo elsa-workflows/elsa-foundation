@@ -1,5 +1,7 @@
+using Elsa.Workflows.Runtime.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Persistence.Groundwork.Runtime;
 
@@ -17,7 +19,21 @@ internal static class GroundworkV2RuntimeJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(typeInfo =>
+        {
+            if (typeInfo.Type != typeof(WorkflowExecutable))
+                return;
+
+            typeInfo.Properties.Remove(typeInfo.Properties.Single(property =>
+                StringComparer.OrdinalIgnoreCase.Equals(property.Name, nameof(WorkflowExecutable.Nodes))));
+            typeInfo.Properties.Remove(typeInfo.Properties.Single(property =>
+                StringComparer.OrdinalIgnoreCase.Equals(property.Name, nameof(WorkflowExecutable.NodesById))));
+        });
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            TypeInfoResolver = resolver
+        };
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }
