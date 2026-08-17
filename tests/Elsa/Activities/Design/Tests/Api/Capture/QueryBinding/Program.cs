@@ -17,7 +17,7 @@ foreach (var testCase in ActivitiesDesignQueryBindingCases.All)
     observations.Add(NormalizeVolatileFields(await HttpEvidenceCapture.CaptureAsync(host.Client, testCase)));
 
 var evidencePath = Path.Join(outputDirectory, "activities-design-query-binding-fastendpoints.json");
-File.WriteAllText(evidencePath, CompatibilityJson.Serialize(observations));
+File.WriteAllText(evidencePath, CompatibilityJson.Serialize(observations) + Environment.NewLine);
 
 var dependencies = RunnerDependencies(sourceRoot, sourceCommit);
 var receipt = new
