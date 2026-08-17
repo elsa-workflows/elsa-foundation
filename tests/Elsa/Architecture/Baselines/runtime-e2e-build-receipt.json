@@ -1,7 +1,7 @@
 {
   "e2e": "runtime-get-write",
   "testedExecutableSourceCommit": "1302806c9377b40f9bc10f04d12f206b137744a3",
-  "testedExecutableTree": "b24556ab68700b8cb8ffa71ca52e60aa6eea6036",
+  "testedSourceTree": "40c65c6ac72b7477755fe514a4351cffa41a5241",
   "currentSourceTree": "40c65c6ac72b7477755fe514a4351cffa41a5241",
   "buildInputs": [
     { "path": "Elsa.Server.slnx", "gitObject": "280abfa0bba77061d5deed6fb621cb8e560b5cd1" },

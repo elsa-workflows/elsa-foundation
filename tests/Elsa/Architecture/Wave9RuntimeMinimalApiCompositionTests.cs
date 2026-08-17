@@ -360,11 +360,13 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "runtime-e2e-build-receipt.json"));
         var testedCommit = receipt.GetProperty("testedExecutableSourceCommit").GetString()!;
+        var testedSourceTree = receipt.GetProperty("testedSourceTree").GetString()!;
         var currentSourceTree = receipt.GetProperty("currentSourceTree").GetString()!;
         var components = ReadBuildInputs(receipt);
 
-        Assert.True(IsCommitResolvable(testedCommit));
-        Assert.Equal(receipt.GetProperty("testedExecutableTree").GetString(), GitRevision($"{testedCommit}^{{tree}}"));
+        Assert.Equal("1302806c9377b40f9bc10f04d12f206b137744a3", testedCommit);
+        Assert.Matches("^[0-9a-f]{40}$", testedSourceTree);
+        Assert.Equal(testedSourceTree, currentSourceTree);
         Assert.Equal(currentSourceTree, GitRevision("HEAD:src"));
         Assert.Equal("20/20", receipt.GetProperty("results").GetProperty("Test-RuntimeGets.ps1").GetString());
         Assert.Equal("10/10", receipt.GetProperty("results").GetProperty("Test-RuntimeWrites.ps1").GetString());

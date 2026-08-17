@@ -50,10 +50,11 @@ pwsh -NoProfile -File ./e2e-tests/write-endpoints/Test-RuntimeWrites.ps1
 Results: `Test-RuntimeGets.ps1` passed 20/20 and `Test-RuntimeWrites.ps1` passed 10/10 against the rebuilt
 server and fresh SQLite schema. The durable receipt at
 `tests/Elsa/Architecture/Baselines/runtime-e2e-build-receipt.json` records the full tested executable source
-commit `1302806c9377b40f9bc10f04d12f206b137744a3`, its tree, the matching current `src` tree, every solution/build/
-package/tool Git object, and canonical composite digest `d672a0767b60dcf3a8adde95293a17c7dc326061a19e7a272b3f9cbb2eb0cbc4`.
-The executable commit is not required to remain an ancestor after squash: the receipt test verifies the current
-committed production/build objects match it. Subsequent changes are evidence/tests/tools/docs/maps only; no
+commit `1302806c9377b40f9bc10f04d12f206b137744a3` as informational provenance, the tested `src` tree
+`40c65c6ac72b7477755fe514a4351cffa41a5241`, every solution/build/package/tool Git object, and canonical composite
+digest `d672a0767b60dcf3a8adde95293a17c7dc326061a19e7a272b3f9cbb2eb0cbc4`. The commit itself is never resolved;
+the receipt test compares the durable tested source tree and current committed production/build objects directly.
+Subsequent changes are evidence/tests/tools/docs/maps only; no
 production Runtime tree or build input changed, so this exact E2E evidence remains valid and was not rerun.
 
 The capture records actual route values and deserialized request values through a capture-only response diagnostic that is removed from the frozen response headers. It exercises query filters, paging, diagnostics, executables, dispatches, activity inspection, value evidence, incidents, and alteration routes. In particular, FE observed 415 for body requests with absent/non-JSON content type and 400 ProblemDetails for empty JSON; the Minimal reader preserves those dispositions.
