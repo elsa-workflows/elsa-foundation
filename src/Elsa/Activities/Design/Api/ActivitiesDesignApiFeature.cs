@@ -1,24 +1,27 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Activities.Design.Api.Capabilities;
+using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Contracts;
+using Elsa.Activities.Design.Api.Handlers;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Activities.Design.Api.Services;
-using Elsa.Activities.Design.Api.Contracts;
-using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Core.Stores;
-using Elsa.Activities.Design.Api.Commands;
-using Elsa.Activities.Design.Api.Handlers;
-using Elsa.Api.FastEndpoints;
-using Elsa.Mediator.Core.Extensions;
+using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Mediator.Core.Extensions;
+using Elsa.Platform.PackageManifest.Generator.Hints;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Elsa.Api.Capabilities.Extensions;
-using Elsa.Activities.Design.Api.Capabilities;
-using Elsa.Activities.Design.Api.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
 
 namespace Elsa.Activities.Design.Api;
 
@@ -34,7 +37,7 @@ namespace Elsa.Activities.Design.Api;
     Description = "Contains endpoints to manage data in the Activities Design Domain",
     DependsOn = new object[] { "ApiCapabilities", "Expressions" }
 )]
-public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
+public class ActivitiesDesignApiFeature : IWebShellFeature
 {
     private static readonly string ProcessDependencyCursorSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
@@ -45,13 +48,12 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
     public TimeSpan ForkReservationLifetime { get; set; } = TimeSpan.FromMinutes(15);
     public TimeSpan ForkReservationRetention { get; set; } = TimeSpan.FromDays(1);
 
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         var assembly = GetType().Assembly;
 
         services.AddHttpContextAccessor();
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
         services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
@@ -121,7 +123,11 @@ public class ActivitiesDesignApiFeature : FastEndpointsFeatureBase
         services.AddRequestHandlersFrom(assembly);
         services.AddApiCapability(ActivityDesignApiCapabilities.StaticDeclaration);
         services.AddPermissionContributor<ActivityDesignPermissionContributor>();
+        services.ConfigureHttpJsonOptions(options => ActivitiesDesignJsonOptions.Configure(options.SerializerOptions));
     }
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        ActivitiesDesignApi.MapActivitiesDesignApi(endpoints);
 
     private static void ApplyFeatureOptions(ActivityAvailabilityOptions? source, ActivityAvailabilityOptions target)
     {

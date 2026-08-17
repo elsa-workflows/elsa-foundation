@@ -68,8 +68,25 @@ public static class EndpointConventionBuilderExtensions
         where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.Finally(OpenApiLifetimeValidator.ValidateAndMark);
+        builder.Finally(RemoveCompilerMetadataAndValidate);
         return builder;
+    }
+
+    private static void RemoveCompilerMetadataAndValidate(EndpointBuilder builder)
+    {
+        // RequestDelegateFactory copies handler attributes into endpoint metadata. Compiler-only
+        // attributes are not part of the HTTP/OpenAPI contract, but AsyncStateMachineAttribute
+        // references the handler's generated implementation type and would pin a collectible owner.
+        for (var index = builder.Metadata.Count - 1; index >= 0; index--)
+        {
+            if (builder.Metadata[index] is System.Runtime.CompilerServices.AsyncStateMachineAttribute
+                or System.Diagnostics.DebuggerStepThroughAttribute)
+            {
+                builder.Metadata.RemoveAt(index);
+            }
+        }
+
+        OpenApiLifetimeValidator.ValidateAndMark(builder);
     }
 
     /// <summary>

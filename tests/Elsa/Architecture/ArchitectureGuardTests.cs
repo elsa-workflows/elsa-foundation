@@ -1035,7 +1035,13 @@ public sealed class ArchitectureGuardTests
         }
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests"), "*.csproj", SearchOption.AllDirectories))
-            yield return ProjectInfo.From(RepoRoot, file);
+        {
+            var project = ProjectInfo.From(RepoRoot, file);
+            if (IsHistoricalEvidenceCaptureProject(project))
+                continue;
+
+            yield return project;
+        }
     }
 
     // The extension-builder feature writes runtime-generated scratch projects under guid-named
@@ -1043,6 +1049,12 @@ public sealed class ArchitectureGuardTests
     // domain-tree convention checks so generated artifacts are not enshrined in the slnx.
     private static bool IsGeneratedScratchProject(ProjectInfo project) =>
         project.RelativePath.Contains("/extension-builder/projects/", StringComparison.Ordinal);
+
+    // Baseline-first migrations retain an executable capture harness beside their immutable fixtures.
+    // These historical oracle projects are intentionally absent from the product solution and domain tree.
+    private static bool IsHistoricalEvidenceCaptureProject(ProjectInfo project) =>
+        project.Name.EndsWith(".BeforeCapture", StringComparison.Ordinal) &&
+        project.RelativePath.Contains("/Capture/", StringComparison.Ordinal);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {

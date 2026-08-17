@@ -5,7 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -14,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Api\Core\Elsa.Activities.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
@@ -40,6 +47,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\tests\Elsa\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,6 +55,10 @@
     <Compile Remove="ClrFixture/**/*" />
     <EmbeddedResource Remove="ClrFixture/**/*" />
     <None Remove="ClrFixture/**/*" />
+    <Compile Remove="Api/Capture/**/*" />
+    <EmbeddedResource Remove="Api/Capture/**/*" />
+    <None Remove="Api/Capture/**/*" />
+    <None Update="Api/Baselines/*.json" Link="Baselines/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

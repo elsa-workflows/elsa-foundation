@@ -1,10 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Constants;
+using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
@@ -16,6 +13,9 @@ using Groundwork.Core.PhysicalStorage;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
@@ -36,7 +36,6 @@ public sealed class GroundworkReusableActivityStores(
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
     IActivityDefinitionVersionPublicationStore,
-    IRecommendedActivityDefinitionPickerStore,
     IActivityDefinitionLayoutStore,
     IActivityDraftValidationStore,
     IActivityForkStore,
@@ -139,66 +138,6 @@ public sealed class GroundworkReusableActivityStores(
         .Select(x => x.Entity)
         .OrderBy(x => x.Version, StringComparer.Ordinal)
         .ToArray();
-
-    public async Task<RecommendedActivityDefinitionPickerPage> ReadAsync(
-        string? tenantId,
-        int offset,
-        int limit,
-        CancellationToken cancellationToken = default)
-    {
-        if (offset < 0)
-            throw new ArgumentOutOfRangeException(nameof(offset));
-        if (limit is < 1 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(limit));
-
-        var items = new List<RecommendedActivityDefinitionPickerItem>(limit);
-        var sourceOffset = offset;
-        long totalCount = offset;
-        while (items.Count < limit)
-        {
-            var result = await boundedStore.QueryAsync(
-                new DocumentQuery(
-                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
-                    ListByDefinitionQuery,
-                    [],
-                    ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
-                    sourceOffset,
-                    Math.Min(100, Math.Max(limit * 2, 20))),
-                cancellationToken);
-            totalCount = result.TotalCount;
-            if (result.Documents.Count == 0)
-                break;
-
-            foreach (var envelope in result.Documents)
-            {
-                sourceOffset++;
-                var authoring = Deserialize<ActivityDefinitionAuthoringState>(
-                    envelope,
-                    ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind).Entity;
-                if (!IsVisible(authoring.TenantId, tenantId) || authoring.RecommendedVersionId is null)
-                    continue;
-                var publication = await ((IActivityDefinitionVersionPublicationStore)this).FindAsync(authoring.RecommendedVersionId, cancellationToken);
-                if (publication is null ||
-                    publication.Lifecycle != ActivityDefinitionVersionLifecycle.Active ||
-                    !StringComparer.Ordinal.Equals(publication.DefinitionId, authoring.DefinitionId) ||
-                    !StringComparer.Ordinal.Equals(publication.TenantId, authoring.TenantId))
-                    continue;
-                var definition = await LoadAsync<ActivityDefinition>(
-                    ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-                    authoring.DefinitionId,
-                    cancellationToken);
-                if (definition is null ||
-                    !StringComparer.Ordinal.Equals(definition.Entity.TenantId, authoring.TenantId) ||
-                    !IsVisible(definition.Entity.TenantId, tenantId))
-                    continue;
-                items.Add(new(definition.Entity, publication));
-                if (items.Count == limit)
-                    break;
-            }
-        }
-
-        return new(items, sourceOffset < totalCount ? sourceOffset : null);
-    }
 
     public async Task<ActivityForkCandidate?> FindCandidateAsync(
         string candidateId,
@@ -1313,7 +1252,8 @@ public sealed class GroundworkReusableActivityStores(
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            if (!adjacency.TryGetValue(current.VersionId, out var candidates)) continue;
+            if (!adjacency.TryGetValue(current.VersionId, out var candidates))
+                continue;
             foreach (var edge in candidates)
             {
                 var next = query.Direction == ActivityDependencyDirection.Outbound ? edge.DependencyVersionId : edge.OwnerVersionId;

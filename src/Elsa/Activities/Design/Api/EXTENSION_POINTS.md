@@ -2,6 +2,14 @@
 
 `ActivitiesDesignApiFeature` is the host-independent composition root for the supported Activity Design management-client routes documented in [README.md](README.md). It does not depend on `Elsa.Workbench`.
 
+## Endpoint composition
+
+`ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` is the public, framework-neutral composition seam. It maps the complete owner surface as standard ASP.NET Core endpoints; hosts should compose the feature or call that mapper, not discover endpoint classes or introduce a parallel Elsa endpoint builder.
+
+The feature registers owner-local source-generated JSON metadata and dynamic API Explorer refresh. API request/response contracts come from `Elsa.Activities.Design.Api.Core`; implementation handlers, providers, stores, authorization adapters, and compiler-generated delegate state remain outside endpoint/OpenAPI metadata so a removed feature generation can be collected.
+
+The owner contributes `activity-design.read`, `activity-design.manage`, `activity-design.author-provider`, and `activity-design.read-provider-payload` to the Foundation Identity catalog. Route metadata uses only the read/manage action appropriate to the operation. The author-provider and provider-payload actions remain inner resource decisions through the authorization context seams below; permission implication and wildcard grants remain evaluator-owned.
+
 ## Replacement contracts
 
 | Contract | Default | Purpose |

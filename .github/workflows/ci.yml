@@ -85,10 +85,15 @@ jobs:
         # Run the fast unit tests only. Any test project that references
         # Testcontainers spins up Docker containers, so exclude those by reference --
         # this is self-maintaining (new Testcontainers projects are auto-excluded) and
-        # provably starts no containers. Every other test project is kept.
+        # provably starts no containers. Historical BeforeCapture executables are evidence
+        # projects rather than product-solution projects, so a solution filter must omit them
+        # as well; MSBuild rejects a filter that names a project absent from the solution.
         run: |
           keep=()
           while IFS= read -r p; do
+            case "$p" in
+              */Capture/*.BeforeCapture.csproj) continue ;;
+            esac
             grep -q "Testcontainers" "$p" || keep+=("$p")
           done < <(find tests -name '*.csproj' | sort)
           projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
@@ -96,7 +101,7 @@ jobs:
           echo "Kept ${#keep[@]} test project(s) in the container-free filter."
 
       - name: Restore
-        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
         run: dotnet tool restore

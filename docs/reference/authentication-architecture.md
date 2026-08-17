@@ -308,10 +308,12 @@ scheme, so an unauthenticated API call is rejected with `401`. A host-chosen `De
 wins if you want to override.
 
 **The `ApiSecurity.AllowAnonymous` kill-switch is Development-only.** Setting it disables endpoint
-security for a shell — but this is honored **only when the host environment is `Development`**. Outside
-Development the flag is **ignored** (the shell stays secure) and a prominent warning is logged naming
-the shell and telling you to remove it. This is a locked product decision: there is no auth off-switch
-in production. (Enforced in `ApiSecurityFastEndpointsConfigurator`.)
+security for the remaining FastEndpoints surface in a shell — but this is honored **only when the host
+environment is `Development`**. Outside Development the flag is **ignored** (the shell stays secure) and
+a prominent warning is logged naming the shell and telling you to remove it. This is a locked product
+decision: there is no auth off-switch in production. Transitional FastEndpoints routes enforce the flag
+through `ApiSecurityFastEndpointsConfigurator`; migrated Minimal API routes use their standard ASP.NET Core
+authorization metadata and Foundation Identity policies and are not governed by that configurator.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before

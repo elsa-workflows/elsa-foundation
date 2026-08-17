@@ -10,9 +10,11 @@ activity-design persistence provider.
 
 - **Store and command adapters** — Groundwork implementations of the activity-design read ports and
   commands (`GroundworkActivityDefinitionStore`, `GroundworkActivityDefinitionManagementProjectionStore`,
-  `GroundworkActivityDependencyProjection`, `GroundworkActivityUpgradePlanStore`, and the
+  `GroundworkActivityDependencyProjection`, `GroundworkActivityUpgradePlanStore`, the
   `GroundworkReusableActivityStores` aggregate that backs the reusable-activity authoring, draft,
-  publication, layout, fork, dependency, and recommendation ports). See
+  publication, layout, fork, and dependency ports, and
+  `GroundworkRecommendedActivityDefinitionPickerStore`, which reads recommendation pages from the stable
+  management projection). See
   [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) for the full replacement-contract table.
 - **Storage manifest** — `ActivitiesDesignGroundworkStorageManifestSource` declares the physical shape
   (projected columns, indexes, bounded scale-bearing queries, and width limits). The enum-kind members
