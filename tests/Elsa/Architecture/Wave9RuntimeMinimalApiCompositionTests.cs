@@ -30,6 +30,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Claims;
@@ -266,6 +267,165 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         Assert.Equal(CompatibilityFacet.Status, delta.Facet);
         Assert.False(result.IsCompatible);
     }
+
+    [Fact]
+    public void Runtime_historical_capture_receipt_pins_reachable_raw_blob_dependencies()
+    {
+        var receiptPath = Path.Join(BaselineDirectory, "wave9-runtime-before-capture-receipt.json");
+        var httpPath = Path.Join(BaselineDirectory, "wave9-runtime-http-fastendpoints.json");
+        var openApiPath = Path.Join(BaselineDirectory, "wave9-runtime-openapi-fastendpoints.json");
+        var receipt = BaselineFile.Load<JsonElement>(receiptPath);
+
+        Assert.Equal("67ba4b3b9bec3a6c2aac0d6d332099baf723e802", receipt.GetProperty("sourceCommit").GetString());
+        Assert.Equal("checked-in-commit", receipt.GetProperty("runnerIdentity").GetString());
+        Assert.False(receipt.TryGetProperty("runnerCommit", out _));
+        Assert.Equal(
+            "RUNTIME_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 bash tools/compatibility/capture-runtime-before.sh",
+            receipt.GetProperty("captureCommand").GetString());
+        Assert.Equal(Hash(httpPath), receipt.GetProperty("httpSha256").GetString());
+        Assert.Equal(Hash(openApiPath), receipt.GetProperty("openApiSha256").GetString());
+
+        var dependencies = ReadRunnerDependencies(receipt);
+        Assert.Equal(
+            new[]
+            {
+                "tools/compatibility/capture-runtime-before.sh",
+                "tools/compatibility/RuntimeFastEndpointsCapture/Program.cs",
+                "tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj",
+                "tools/compatibility/RuntimeFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+                "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+                "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+                "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs"
+            },
+            dependencies.Select(dependency => dependency.Path).ToArray());
+        Assert.All(dependencies, dependency => Assert.Matches("^[0-9a-f]{64}$", dependency.Sha256));
+
+        var sourceCommit = receipt.GetProperty("sourceCommit").GetString()!;
+        Assert.True(IsCommitResolvable(sourceCommit));
+        Assert.True(IsAncestor(sourceCommit, CurrentHead()));
+        Assert.Equal(receipt.GetProperty("runnerFingerprint").GetString(), RunnerFingerprint(dependencies));
+        Assert.True(RunnerDependenciesMatch(sourceCommit, dependencies));
+    }
+
+    [Fact]
+    public void Runtime_historical_capture_receipt_rejects_a_mutated_runner_dependency_hash()
+    {
+        var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "wave9-runtime-before-capture-receipt.json"));
+        var dependencies = ReadRunnerDependencies(receipt);
+        var mutated = dependencies.Select((dependency, index) => index == 0
+            ? dependency with { Sha256 = new string('0', 64) }
+            : dependency).ToArray();
+
+        Assert.True(RunnerDependenciesMatch(receipt.GetProperty("sourceCommit").GetString()!, dependencies));
+        Assert.False(RunnerDependenciesMatch(receipt.GetProperty("sourceCommit").GetString()!, mutated));
+    }
+
+    private static string Hash(string path) =>
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+
+    private static RunnerDependencySnapshot[] ReadRunnerDependencies(JsonElement receipt) =>
+        receipt.GetProperty("runnerDependencies").EnumerateArray()
+            .Select(dependency => new RunnerDependencySnapshot(
+                dependency.GetProperty("identity").GetString()!,
+                dependency.GetProperty("path").GetString()!,
+                dependency.GetProperty("sha256").GetString()!))
+            .ToArray();
+
+    private static string RunnerFingerprint(IEnumerable<RunnerDependencySnapshot> dependencies) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Join("\n", dependencies.Select(dependency =>
+                $"{dependency.Identity}|{dependency.Path}|{dependency.Sha256}")) + "\n"))).ToLowerInvariant();
+
+    private static bool RunnerDependenciesMatch(string sourceCommit, IEnumerable<RunnerDependencySnapshot> dependencies) =>
+        dependencies.All(dependency =>
+        {
+            var expectedIdentity = dependency.Path.StartsWith("tools/compatibility/", StringComparison.Ordinal)
+                ? "checked-in-commit"
+                : $"source-commit:{sourceCommit}";
+            var expectedHash = dependency.Identity == "checked-in-commit"
+                ? GitBlobHash(CurrentHead(), dependency.Path)
+                : GitBlobHash(sourceCommit, dependency.Path);
+            return dependency.Identity == expectedIdentity && dependency.Sha256 == expectedHash;
+        });
+
+    private static string GitBlobHash(string commit, string path)
+    {
+        var startInfo = new ProcessStartInfo("git", ["show", $"{commit}:{path}"])
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        using var contents = new MemoryStream();
+        process.StandardOutput.BaseStream.CopyTo(contents);
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
+        return Convert.ToHexString(SHA256.HashData(contents.ToArray())).ToLowerInvariant();
+    }
+
+    private static bool IsCommitResolvable(string commit)
+    {
+        var startInfo = new ProcessStartInfo("git", ["cat-file", "-e", $"{commit}^{{commit}}"])
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
+        return process.ExitCode == 0;
+    }
+
+    private static bool IsAncestor(string ancestor, string descendant)
+    {
+        var startInfo = new ProcessStartInfo("git", ["merge-base", "--is-ancestor", ancestor, descendant])
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+        Assert.True(process.ExitCode is 0 or 1, process.StandardError.ReadToEnd());
+        return process.ExitCode == 0;
+    }
+
+    private static string CurrentHead()
+    {
+        var startInfo = new ProcessStartInfo("git", ["rev-parse", "HEAD"])
+        {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = Process.Start(startInfo)!;
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
+        return output.Trim();
+    }
+
+    private static string RepositoryRoot
+    {
+        get
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                directory = directory.Parent;
+
+            return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
+        }
+    }
+
+    private sealed record RunnerDependencySnapshot(string Identity, string Path, string Sha256);
 
     [Fact]
     public async Task Runtime_minimal_host_replays_every_frozen_http_case_against_the_mapped_routes()
