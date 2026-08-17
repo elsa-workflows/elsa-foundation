@@ -2,7 +2,6 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa3.Activities.Design.Import;
@@ -15,8 +14,9 @@ using Elsa3.Mapping;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
-using Groundwork.Core.Manifests;
-using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Groundwork.Kernel;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -66,13 +66,11 @@ public sealed class ReusableActivityImportRegistrationTests
     public void Groundwork_provider_feature_builds_and_resolves_every_owned_registration()
     {
         var services = new ServiceCollection();
-        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        services.AddSingleton<IDocumentStore>(store);
-        services.AddSingleton<IBoundedDocumentStore>(store);
+        using var harness = ReusableActivityImportV2TestHarness.Create();
+        services.AddSingleton(harness.Store);
         services.AddSingleton<IPayloadSerializer>(
             new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
-        services.AddSingleton<IPersistenceAccessContextAccessor>(
-            GroundworkTestAccess.AccessContext("tenant-a"));
+        services.AddSingleton<IPersistenceAccessContextAccessor>(harness.Access);
         services.AddSingleton<IDistributedLockProvider, ImmediateLockProvider>();
 
         new Elsa3ImportActivitiesGroundworkFeature().ConfigureServices(services);
@@ -88,14 +86,13 @@ public sealed class ReusableActivityImportRegistrationTests
         Assert.IsType<GroundworkReusableActivityImportCommand>(
             scope.ServiceProvider.GetRequiredService<IReusableActivityImportCommand>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<GroundworkActivityManagementProjectionWriter>());
-        Assert.NotNull(scope.ServiceProvider.GetServices<Elsa.Persistence.Groundwork.Composition.IGroundworkStorageManifestSource>()
-            .Single(x => x is Elsa3ImportGroundworkStorageManifestSource));
+        Assert.Equal(3, scope.ServiceProvider.GetRequiredService<GroundworkStorageUnitRegistry>().Registrations.Count);
     }
 
     [Fact]
     public void Import_storage_manifest_declares_collections_receipts_and_definition_bindings_append_only()
     {
-        var units = Elsa3ImportStorageManifest.Create().StorageUnits;
+        var units = Elsa3ImportStorageManifest.CreateUnits();
 
         Assert.Equal(
             [
@@ -103,8 +100,8 @@ public sealed class ReusableActivityImportRegistrationTests
                 Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
                 Elsa3ImportStorageManifest.ReceiptDocumentKind
             ],
-            units.Select(x => x.Identity.Value).Order(StringComparer.Ordinal));
-        Assert.All(units, unit => Assert.Equal(LifecyclePolicy.AppendOnly, unit.Lifecycle));
+            units.Select(x => x.Id.Value).Order(StringComparer.Ordinal));
+        Assert.All(units, unit => Assert.Equal(ScopePolicy.Scoped, unit.Scope));
     }
 
     [Fact]

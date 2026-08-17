@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Models;
@@ -9,7 +9,7 @@ using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 using Elsa3.Activities.Design.Import.Services;
-using Groundwork.Documents.Store;
+using Elsa3.Activities.Design.Import.Persistence.Groundwork;
 using Xunit;
 
 namespace Elsa3.Mapping.Tests;
@@ -123,28 +123,33 @@ public sealed class ReusableActivityCollectionApplyTests
         var plan = await analyzer.AnalyzeAsync(collection);
         var selection = plan.Items.Where(x => x.SourceVersionId is "a-v1" or "b-v1").ToArray();
         var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, selection);
-        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var command = Command(store);
+        using var harness = ReusableActivityImportV2TestHarness.Create();
+        var command = Command(harness);
 
         var first = await command.CommitAsync(mutation);
         var second = await command.CommitAsync(mutation);
 
         Assert.False(first.NoOp);
         Assert.True(second.NoOp);
-        Assert.Equal(2, store.Snapshot("activityDefinition" ).Count);
-        Assert.Equal(2, store.Snapshot("activityDefinitionVersion").Count);
-        Assert.Equal(2, store.Snapshot("workflowDefinition").Count);
-        Assert.Equal(2, store.Snapshot("workflowDefinitionVersion").Count);
+        Assert.Equal(2, harness.Snapshot("activityDefinition").Count);
+        Assert.Equal(2, harness.Snapshot("activityDefinitionVersion").Count);
+        Assert.Equal(2, harness.Snapshot("workflowDefinition").Count);
+        Assert.Equal(2, harness.Snapshot("workflowDefinitionVersion").Count);
 
-        var conflictingStore = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        using var conflictingHarness = ReusableActivityImportV2TestHarness.Create();
         var conflicting = mutation.Activities[0].Definition.Id;
-        await conflictingStore.SaveAsync(new SaveDocumentRequest("activityDefinition", conflicting, "1.0.0", "{\"different\":true}", 0));
-        var conflictingCommand = Command(conflictingStore);
+        await conflictingHarness.Store.SaveAsync(new(
+            "activityDefinition",
+            conflicting,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            "{\"different\":true}",
+            ExpectedVersion: 0));
+        var conflictingCommand = Command(conflictingHarness);
 
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () => await conflictingCommand.CommitAsync(mutation));
-        Assert.Empty(conflictingStore.Snapshot("activityDefinitionVersion"));
-        Assert.Empty(conflictingStore.Snapshot("workflowDefinition"));
-        Assert.Empty(conflictingStore.Snapshot("workflowDefinitionVersion"));
+        Assert.Empty(conflictingHarness.Snapshot("activityDefinitionVersion"));
+        Assert.Empty(conflictingHarness.Snapshot("workflowDefinition"));
+        Assert.Empty(conflictingHarness.Snapshot("workflowDefinitionVersion"));
     }
 
     [Fact]
@@ -156,16 +161,16 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var mutation = await ReusableActivityImportFixtures.Materializer().MaterializeAsync(collection, plan, plan.Items);
-        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var command = Command(store);
+        using var harness = ReusableActivityImportV2TestHarness.Create();
+        var command = Command(harness);
 
         await command.CommitAsync(mutation);
 
-        Assert.Single(store.Snapshot("activityDefinition"));
-        Assert.Equal(2, store.Snapshot("activityDefinitionVersion").Count);
-        Assert.Single(store.Snapshot("activityDefinitionAuthoringState"));
-        Assert.Single(store.Snapshot("workflowDefinition"));
-        Assert.Equal(2, store.Snapshot("workflowDefinitionVersion").Count);
+        Assert.Single(harness.Snapshot("activityDefinition"));
+        Assert.Equal(2, harness.Snapshot("activityDefinitionVersion").Count);
+        Assert.Single(harness.Snapshot("activityDefinitionAuthoringState"));
+        Assert.Single(harness.Snapshot("workflowDefinition"));
+        Assert.Equal(2, harness.Snapshot("workflowDefinitionVersion").Count);
     }
 
     [Fact]
@@ -194,12 +199,15 @@ public sealed class ReusableActivityCollectionApplyTests
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
-    private static GroundworkReusableActivityImportCommand Command(InMemoryDocumentStore store) =>
+    private static GroundworkReusableActivityImportCommand Command(
+        ReusableActivityImportV2TestHarness harness) =>
         new(
-            store,
+            harness.Store,
+            harness.WorkflowStorage,
+            harness.Sessions,
             Serializer(),
-            new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), store),
-            GroundworkTestAccess.DefaultAccessContextAccessor);
+            new GroundworkActivityManagementProjectionWriter(harness.Store, new ImmediateLockProvider(), harness.Store),
+            harness.Access);
 
     private sealed class ImmediateLockProvider : IDistributedLockProvider
     {

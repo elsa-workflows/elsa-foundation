@@ -2,28 +2,32 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Kernel;
+using Groundwork.Store;
 
 namespace Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 
 /// <summary>
 /// The only durable Elsa 3 selected-closure adapter. Every Activity Design and Workflow Design
-/// document is preflighted before one cross-kind SaveAllAsync call. Identical documents are skipped,
+/// document is preflighted before one exact public-v2 unit of work. Identical documents are skipped,
 /// which makes a reviewed plan safe to reapply; identity/content collisions fail before any write.
 /// </summary>
 public sealed class GroundworkReusableActivityImportCommand(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
+    GroundworkDesignStorage workflowStorage,
+    IGroundworkStorageSessionSource sessions,
     IPayloadSerializer payloadSerializer,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
     IPersistenceAccessContextAccessor accessContextAccessor,
@@ -60,24 +64,24 @@ public sealed class GroundworkReusableActivityImportCommand(
                 return new(true, prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported });
         }
 
-        List<SaveDocumentRequest> candidates;
+        List<ImportSaveCandidate> candidates;
         try
         {
             candidates = [];
             foreach (var activity in mutation.Activities)
             {
-                candidates.Add(ToSave(ActivityDefinitionKind, ActivityDefinitionCollection, ActivitySchema, activity.Definition, PlainJson));
-                candidates.Add(ToSave(ActivityVersionKind, ActivityVersionCollection, ActivitySchema, activity.Version, ActivityVersionJson()));
-                candidates.Add(ToSave(ActivityAuthoringKind, ActivityAuthoringCollection, ActivitySchema, activity.AuthoringState, PlainJson));
+                candidates.Add(ToActivitySave(ActivityDefinitionKind, ActivityDefinitionCollection, ActivitySchema, activity.Definition, PlainJson));
+                candidates.Add(ToActivitySave(ActivityVersionKind, ActivityVersionCollection, ActivitySchema, activity.Version, ActivityVersionJson()));
+                candidates.Add(ToActivitySave(ActivityAuthoringKind, ActivityAuthoringCollection, ActivitySchema, activity.AuthoringState, PlainJson));
             }
             foreach (var workflow in mutation.Workflows)
             {
-                candidates.Add(ToSave(WorkflowDefinitionKind, WorkflowDefinitionCollection, WorkflowSchema, workflow.Definition, PlainJson));
-                candidates.Add(ToSave(WorkflowVersionKind, WorkflowVersionCollection, WorkflowSchema, workflow.Version, WorkflowVersionJson()));
+                candidates.Add(ToWorkflowSave(WorkflowDefinitionKind, WorkflowDefinitionCollection, WorkflowSchema, workflow.Definition, WorkflowVersionJson()));
+                candidates.Add(ToWorkflowSave(WorkflowVersionKind, WorkflowVersionCollection, WorkflowSchema, workflow.Version, WorkflowVersionJson()));
             }
             foreach (var binding in BuildDefinitionBindings(mutation))
             {
-                candidates.Add(ToSave(
+                candidates.Add(ToActivitySave(
                     Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
                     Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
                     Elsa3ImportStorageManifest.SchemaVersion,
@@ -109,7 +113,7 @@ public sealed class GroundworkReusableActivityImportCommand(
             .Where(x => x.DocumentKind == Elsa3ImportStorageManifest.DefinitionBindingDocumentKind)
             .Select(x => ReadCandidate<DefinitionImportBinding>(x, PlainJson))
             .ToDictionary(x => (x.TargetDocumentKind, x.TargetDefinitionId));
-        var pending = new List<SaveDocumentRequest>();
+        var pending = new List<ImportSaveCandidate>();
         var created = new HashSet<(string Kind, string Id)>();
         var persistedActivityDefinitions = new Dictionary<string, ActivityDefinition>(StringComparer.Ordinal);
         var changedAuthoring = new Dictionary<string, ActivityDefinitionAuthoringState>(StringComparer.Ordinal);
@@ -176,7 +180,7 @@ public sealed class GroundworkReusableActivityImportCommand(
         if (mutation.AccessScope is not null)
         {
             receipt = BuildReceipt(mutation, created);
-            pending.Add(GroundworkReusableActivityImportOperationStore.SaveReceipt(receipt));
+            pending.Add(ToCandidate(GroundworkReusableActivityImportOperationStore.SaveReceipt(receipt), CandidateDomain.Activity));
         }
 
         if (pending.Count == 0)
@@ -198,17 +202,7 @@ public sealed class GroundworkReusableActivityImportCommand(
         {
             if (projectionDefinitionIds.Length == 0)
             {
-                await store.SaveAllAsync(
-                    DocumentCommitScope.Of(
-                        ActivityDefinitionKind,
-                        ActivityVersionKind,
-                        ActivityAuthoringKind,
-                        WorkflowDefinitionKind,
-                        WorkflowVersionKind,
-                        Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
-                        Elsa3ImportStorageManifest.ReceiptDocumentKind),
-                    pending,
-                    cancellationToken);
+                await CommitExactAsync(pending, [], cancellationToken);
                 return new(false, receipt);
             }
 
@@ -230,21 +224,10 @@ public sealed class GroundworkReusableActivityImportCommand(
                     [],
                     []),
                 cancellationToken);
-            await managementProjection.CommitAsync(
-                [
-                    ActivityDefinitionKind,
-                    ActivityVersionKind,
-                    ActivityAuthoringKind,
-                    WorkflowDefinitionKind,
-                    WorkflowVersionKind,
-                    Elsa3ImportStorageManifest.DefinitionBindingDocumentKind,
-                    Elsa3ImportStorageManifest.ReceiptDocumentKind
-                ],
-                pending,
-                cancellationToken);
+            await CommitExactAsync(pending, managementProjection.Requests, cancellationToken);
             return new(false, receipt);
         }
-        catch (DocumentAtomicWriteException exception) when (mutation.AccessScope is not null)
+        catch (ActivityDesignWriteConflictException exception) when (mutation.AccessScope is not null)
         {
             var reconciled = await FindReceiptAsync(mutation, cancellationToken);
             if (reconciled is not null)
@@ -338,11 +321,11 @@ public sealed class GroundworkReusableActivityImportCommand(
         return bindings;
     }
 
-    private static IReadOnlyList<SaveDocumentRequest> Coalesce(
-        IEnumerable<SaveDocumentRequest> candidates,
+    private static IReadOnlyList<ImportSaveCandidate> Coalesce(
+        IEnumerable<ImportSaveCandidate> candidates,
         bool useDomainException)
     {
-        var result = new List<SaveDocumentRequest>();
+        var result = new List<ImportSaveCandidate>();
         foreach (var group in candidates.GroupBy(x => (x.DocumentKind, x.Id)))
         {
             var first = group.First();
@@ -355,30 +338,65 @@ public sealed class GroundworkReusableActivityImportCommand(
         return result.OrderBy(x => x.DocumentKind, StringComparer.Ordinal).ThenBy(x => x.Id, StringComparer.Ordinal).ToArray();
     }
 
-    private SaveDocumentRequest ToSave<TEntity>(
+    private ImportSaveCandidate ToActivitySave<TEntity>(
         string kind,
         string collection,
         string schema,
         TEntity entity,
         JsonSerializerOptions options)
         where TEntity : TenantEntity =>
-        GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+        ToCandidate(GroundworkV2ActivityDesignDocumentWriter.ToTenantScopedSaveRequest(
             kind,
             collection,
             schema,
             entity,
             options,
-            accessContextAccessor.Current);
+            accessContextAccessor.Current), CandidateDomain.Activity);
+
+    private ImportSaveCandidate ToWorkflowSave<TEntity>(
+        string kind,
+        string collection,
+        string schema,
+        TEntity entity,
+        JsonSerializerOptions options)
+        where TEntity : TenantEntity
+    {
+        accessContextAccessor.Current.EnsureTenantScope(entity.TenantId);
+        var values = GroundworkDesignStorage.Values(kind, entity, options, collection);
+        return new(
+            kind,
+            entity.Id,
+            schema,
+            JsonValue(values.Values[WorkflowsDesignStorageManifest.ContentField]),
+            CandidateDomain.Workflow,
+            WorkflowValues: values,
+            UpdatedAt: entity.LastModifiedAt == default ? null : entity.LastModifiedAt);
+    }
+
+    private static ImportSaveCandidate ToCandidate(ActivityDesignSaveRequest request, CandidateDomain domain) =>
+        new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, domain,
+            ExpectedVersion: request.ExpectedVersion, UpdatedAt: request.UpdatedAt);
+
+    private static string JsonValue(object? value) => value switch
+    {
+        JsonElement element => element.GetRawText(),
+        JsonDocument document => document.RootElement.GetRawText(),
+        string text => text,
+        _ => throw new InvalidDataException("Groundwork document content is not JSON.")
+    };
 
     private static TEntity ReadEntity<TEntity>(
-        DocumentEnvelope envelope,
+        ImportDocument envelope,
         JsonSerializerOptions options)
         where TEntity : Entity
     {
         try
         {
-            return JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, options)?.Entity
-                   ?? throw new JsonException("Groundwork document is empty.");
+            return envelope.Domain == CandidateDomain.Workflow
+                ? JsonSerializer.Deserialize<GroundworkDesignDocument<TEntity>>(envelope.ContentJson, options)?.Entity
+                  ?? throw new JsonException("Groundwork workflow document is empty.")
+                : JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<TEntity>>(envelope.ContentJson, options)?.Entity
+                  ?? throw new JsonException("Groundwork activity document is empty.");
         }
         catch (Exception exception)
         {
@@ -390,8 +408,8 @@ public sealed class GroundworkReusableActivityImportCommand(
     }
 
     private static ActivityDefinition EnsureReusableDefinitionCompatible(
-        DocumentEnvelope existing,
-        SaveDocumentRequest candidate,
+        ImportDocument existing,
+        ImportSaveCandidate candidate,
         bool useDomainException)
     {
         var current = ReadEntity<ActivityDefinition>(existing, PlainJson);
@@ -410,8 +428,8 @@ public sealed class GroundworkReusableActivityImportCommand(
     }
 
     private static WorkflowDefinition EnsureWorkflowDefinitionCompatible(
-        DocumentEnvelope existing,
-        SaveDocumentRequest candidate,
+        ImportDocument existing,
+        ImportSaveCandidate candidate,
         bool useDomainException)
     {
         var current = ReadEntity<WorkflowDefinition>(existing, PlainJson);
@@ -462,14 +480,17 @@ public sealed class GroundworkReusableActivityImportCommand(
     }
 
     private static TEntity ReadCandidate<TEntity>(
-        SaveDocumentRequest candidate,
+        ImportSaveCandidate candidate,
         JsonSerializerOptions options)
         where TEntity : Entity
     {
         try
         {
-            return JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(candidate.ContentJson, options)?.Entity
-                   ?? throw new JsonException("Groundwork candidate document is empty.");
+            return candidate.Domain == CandidateDomain.Workflow
+                ? JsonSerializer.Deserialize<GroundworkDesignDocument<TEntity>>(candidate.ContentJson, options)?.Entity
+                  ?? throw new JsonException("Groundwork workflow candidate document is empty.")
+                : JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<TEntity>>(candidate.ContentJson, options)?.Entity
+                  ?? throw new JsonException("Groundwork activity candidate document is empty.");
         }
         catch (Exception exception)
         {
@@ -481,9 +502,9 @@ public sealed class GroundworkReusableActivityImportCommand(
     }
 
     private async ValueTask<AuthoringUpdate?> ResolveAuthoringUpdateAsync(
-        DocumentEnvelope existing,
-        SaveDocumentRequest candidate,
-        IReadOnlyDictionary<string, SaveDocumentRequest> activityVersionCandidates,
+        ImportDocument existing,
+        ImportSaveCandidate candidate,
+        IReadOnlyDictionary<string, ImportSaveCandidate> activityVersionCandidates,
         CancellationToken cancellationToken)
     {
         var current = ReadEntity<ActivityDefinitionAuthoringState>(existing, PlainJson);
@@ -510,7 +531,7 @@ public sealed class GroundworkReusableActivityImportCommand(
             ? next.LastModifiedAt
             : current.LastModifiedAt;
         return new(
-            ToSave(ActivityAuthoringKind, ActivityAuthoringCollection, ActivitySchema, current, PlainJson)
+            ToActivitySave(ActivityAuthoringKind, ActivityAuthoringCollection, ActivitySchema, current, PlainJson)
                 with { ExpectedVersion = existing.Version },
             current);
     }
@@ -518,8 +539,8 @@ public sealed class GroundworkReusableActivityImportCommand(
     private async ValueTask<int> CompareActivityVersionsAsync(
         string currentVersionId,
         string nextVersionId,
-        SaveDocumentRequest nextAuthoring,
-        IReadOnlyDictionary<string, SaveDocumentRequest> activityVersionCandidates,
+        ImportSaveCandidate nextAuthoring,
+        IReadOnlyDictionary<string, ImportSaveCandidate> activityVersionCandidates,
         CancellationToken cancellationToken)
     {
         var currentEnvelope = await LoadAsync(ActivityVersionKind, currentVersionId, cancellationToken)
@@ -540,15 +561,9 @@ public sealed class GroundworkReusableActivityImportCommand(
         return StringComparer.Ordinal.Compare(current.SemVerSortKey, next.SemVerSortKey);
     }
 
-    private JsonSerializerOptions ActivityVersionJson() => GroundworkDocumentSerialization.Create(
-        payloadSerializer,
-        [nameof(Entity.RowNumber), "LegacyDescriptorType", "DescriptorPayloadSource", "InputsSource", "OutputsSource", "DesignFacetsSource", "Definition"],
-        [typeof(IEnumerable<InputDefinition>), typeof(IEnumerable<OutputDefinition>), typeof(IEnumerable<ActivityDesignFacet>)]);
+    private JsonSerializerOptions ActivityVersionJson() => GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
 
-    private JsonSerializerOptions WorkflowVersionJson() => GroundworkDocumentSerialization.Create(
-        payloadSerializer,
-        [nameof(Entity.RowNumber), "StateSource", "Definition", "WorkflowDefinition"],
-        [typeof(WorkflowDefinitionState)]);
+    private JsonSerializerOptions WorkflowVersionJson() => GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
     private static bool JsonEquals(string left, string right)
     {
@@ -577,7 +592,14 @@ public sealed class GroundworkReusableActivityImportCommand(
         var envelope = await LoadAsync(Elsa3ImportStorageManifest.ReceiptDocumentKind, receiptId, cancellationToken);
         if (envelope is null)
             return null;
-        var receipt = GroundworkReusableActivityImportOperationStore.ReadReceipt(envelope);
+        var receipt = GroundworkReusableActivityImportOperationStore.ReadReceipt(
+            new ActivityDesignDocument(
+                envelope.DocumentKind,
+                envelope.Id,
+                envelope.SchemaVersion,
+                envelope.ContentJson,
+                envelope.Version,
+                envelope.UpdatedAt));
         var expectedFingerprint = ReusableActivityImportOperationService.SelectionFingerprint(
             mutation.CollectionId,
             mutation.PlanId,
@@ -641,14 +663,33 @@ public sealed class GroundworkReusableActivityImportCommand(
             ? ReusableActivityImportResourceDisposition.Created
             : ReusableActivityImportResourceDisposition.Reused;
 
-    private async ValueTask<DocumentEnvelope?> LoadAsync(
+    private async ValueTask<ImportDocument?> LoadAsync(
         string kind,
         string id,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await store.LoadAsync(kind, id, cancellationToken);
+            if (IsWorkflowKind(kind))
+            {
+                var entry = workflowStorage.Read(kind, id);
+                if (entry is null)
+                    return null;
+                var content = entry.Entry.Values.Values[WorkflowsDesignStorageManifest.ContentField];
+                return new(
+                    kind,
+                    id,
+                    StringValue(entry.Entry.Values.Values, WorkflowsDesignStorageManifest.SchemaVersionField),
+                    JsonValue(content),
+                    CandidateDomain.Workflow,
+                    entry.Entry.Version ?? 0);
+            }
+
+            var activity = await store.LoadAsync(kind, id, cancellationToken);
+            return activity is null
+                ? null
+                : new(activity.DocumentKind, activity.Id, activity.SchemaVersion, activity.ContentJson,
+                    CandidateDomain.Activity, activity.Version, activity.UpdatedAt);
         }
         catch (OperationCanceledException)
         {
@@ -659,6 +700,114 @@ public sealed class GroundworkReusableActivityImportCommand(
             throw new ReusableActivityImportPersistenceException("load", $"{kind}/{id}", exception);
         }
     }
+
+    private async Task CommitExactAsync(
+        IReadOnlyList<ImportSaveCandidate> pending,
+        IReadOnlyList<ActivityDesignSaveRequest> projectionRequests,
+        CancellationToken cancellationToken)
+    {
+        var allUnitIds = pending.Select(x => x.DocumentKind)
+            .Concat(projectionRequests.Select(x => x.DocumentKind))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (allUnitIds.Length == 0)
+            return;
+
+        var current = accessContextAccessor.Current ?? throw new InvalidOperationException(
+            "Elsa 3 import persistence access context is missing.");
+        var units = allUnitIds.Select(unitId => sessions.Unit(unitId)).ToArray();
+        var accesses = units
+            .Select(unit => GroundworkStorageAccessMapper.Map(current, unit.Scope, "elsa3-reusable-activity-import"))
+            .Distinct()
+            .ToArray();
+        if (accesses.Length != 1)
+            throw new InvalidOperationException(
+                "Elsa 3 import atomic writes must use one exact persistence access context.");
+
+        using var inner = sessions.BeginUnitOfWork(accesses[0], BatchWriteOptions.Exact, allUnitIds);
+        var activityUnits = units
+            .Where(unit => !IsWorkflowKind(unit.Id.Value))
+            .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
+        var workflowUnits = units
+            .Where(unit => IsWorkflowKind(unit.Id.Value))
+            .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
+        var activityUow = new ActivityDesignUnitOfWork(inner, activityUnits);
+        var workflowUow = new GroundworkDesignStorage.DesignUnitOfWork(inner, workflowUnits);
+        try
+        {
+            foreach (var candidate in pending)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (candidate.Domain == CandidateDomain.Workflow)
+                {
+                    workflowUow.Stage(
+                        candidate.DocumentKind,
+                        candidate.WorkflowValues ?? throw new InvalidDataException(
+                            $"Workflow candidate '{candidate.DocumentKind}/{candidate.Id}' has no public-v2 values."),
+                        WriteOptionsFor(candidate.ExpectedVersion));
+                }
+                else
+                {
+                    activityUow.StageSave(new ActivityDesignSaveRequest(
+                        candidate.DocumentKind,
+                        candidate.Id,
+                        candidate.SchemaVersion,
+                        candidate.ContentJson,
+                        candidate.ExpectedVersion,
+                        candidate.UpdatedAt));
+                }
+            }
+
+            foreach (var request in projectionRequests)
+                activityUow.StageSave(request);
+
+            BatchWriteReport report;
+            try
+            {
+                report = await inner.CommitWithOutcomesAsync(cancellationToken);
+            }
+            catch (BatchWriteException exception)
+            {
+                throw new ActivityDesignWriteConflictException(exception.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                try { inner.Rollback(); } catch { }
+                throw;
+            }
+            catch (Exception exception)
+            {
+                try { inner.Rollback(); } catch { }
+                throw new ReusableActivityImportPersistenceException(
+                    "atomic apply", "cross-domain", exception);
+            }
+
+            if (!report.IsSuccessful)
+                throw new ActivityDesignWriteConflictException(
+                    $"Groundwork rejected the Elsa 3 import batch with {report.Failed} failed row outcomes.");
+        }
+        catch
+        {
+            try { inner.Rollback(); } catch { }
+            throw;
+        }
+    }
+
+    private static WriteOptions WriteOptionsFor(long? expectedVersion) => expectedVersion switch
+    {
+        null => WriteOptions.Unconditional,
+        0 => WriteOptions.CreateOnly,
+        var version => WriteOptions.IfVersion(version.Value)
+    };
+
+    private static bool IsWorkflowKind(string kind) => kind is
+        WorkflowDefinitionKind or
+        WorkflowVersionKind;
+
+    private static string StringValue(IReadOnlyDictionary<string, object?> values, string field) =>
+        values.TryGetValue(field, out var value) && value is string text
+            ? text
+            : throw new InvalidDataException($"Groundwork workflow row is missing '{field}'.");
 
     private void EnsureCurrentScope(ReusableActivityImportAccessScope accessScope)
     {
@@ -696,7 +845,32 @@ public sealed class GroundworkReusableActivityImportCommand(
         public string SourceDefinitionId { get; init; } = null!;
     }
 
+    private enum CandidateDomain
+    {
+        Activity,
+        Workflow
+    }
+
+    private sealed record ImportSaveCandidate(
+        string DocumentKind,
+        string Id,
+        string SchemaVersion,
+        string ContentJson,
+        CandidateDomain Domain,
+        long? ExpectedVersion = null,
+        DateTimeOffset? UpdatedAt = null,
+        StorageValues? WorkflowValues = null);
+
+    private sealed record ImportDocument(
+        string DocumentKind,
+        string Id,
+        string SchemaVersion,
+        string ContentJson,
+        CandidateDomain Domain,
+        long Version,
+        DateTimeOffset UpdatedAt = default);
+
     private sealed record AuthoringUpdate(
-        SaveDocumentRequest Request,
+        ImportSaveCandidate Request,
         ActivityDefinitionAuthoringState Authoring);
 }

@@ -59,10 +59,10 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.Groundwork",
             "Elsa.Persistence.Core",
-            "Elsa.Persistence.Groundwork.Composition",
-            "Elsa.Persistence.Groundwork.Querying",
+            "Elsa.Persistence.Groundwork.V2",
             "Elsa.Serialization.Core",
             "Elsa.Workflows.Design.Persistence.Core",
+            "Elsa.Workflows.Design.Persistence.Groundwork",
             "Elsa3.Activities.Design.Import");
 
     [Fact]

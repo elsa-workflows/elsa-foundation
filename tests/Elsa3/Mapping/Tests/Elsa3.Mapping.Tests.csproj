@@ -9,11 +9,12 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Groundwork.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\Elsa\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa3\Activities\Design\Import\Persistence\Groundwork\Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />

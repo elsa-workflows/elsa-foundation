@@ -3,7 +3,9 @@
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
   </ItemGroup>
 
   <ItemGroup>
@@ -11,10 +13,10 @@
     <ProjectReference Include="..\..\..\..\..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\Elsa\Persistence\Groundwork\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\Elsa\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
 </Project>
