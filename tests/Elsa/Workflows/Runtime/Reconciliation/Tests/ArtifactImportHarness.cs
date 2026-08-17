@@ -69,4 +69,31 @@ internal static class ArtifactImportHarness
     public static async Task<WorkflowActivationSlot?> FindSlotAsync(WorkflowExecutionHarness harness, string definitionId) =>
         await harness.Services.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync(definitionId, WorkflowArtifactReconciler.DefaultSlotName);
+
+    /// <summary>
+    /// The source reference one activation id resolves to — live or retired. Retirement is the assertion subject in
+    /// the supersession and compensation tests, so this deliberately does not filter on <c>DeletedAt</c>.
+    /// </summary>
+    public static async Task<WorkflowExecutableSourceReference?> FindReferenceAsync(
+        WorkflowExecutionHarness harness,
+        string activationId) =>
+        await harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .FindAsync(WorkflowActivationReferenceIdentity.Create(activationId));
+
+    /// <summary>Every source reference in the store, for duplicate-record assertions.</summary>
+    public static async Task<IReadOnlyList<WorkflowExecutableSourceReference>> ListAllReferencesAsync(
+        WorkflowExecutionHarness harness) =>
+        (await harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(limit: RuntimeStorePageRequest.MaximumLimit)))
+        .Items;
+
+    /// <summary>
+    /// The <b>serving</b> trigger bindings a stimulus resolves to. <c>ListByStimulus</c> returns active rows only, so
+    /// an empty result for a superseded version's stimulus is proof its projection stopped serving.
+    /// </summary>
+    public static async Task<IReadOnlyList<WorkflowTriggerBinding>> ListServingBindingsAsync(
+        WorkflowExecutionHarness harness,
+        string stimulusHash) =>
+        await harness.Services.GetRequiredService<IWorkflowTriggerBindingStore>()
+            .ListAllByStimulusAsync(ArtifactClosureFixture.TriggerStimulusType, stimulusHash);
 }

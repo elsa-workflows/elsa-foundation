@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Contracts;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -51,6 +52,7 @@ public sealed class WorkflowArtifactReconciler(
     IEnumerable<IActivityActivationStrategy> activationStrategies,
     IWorkflowTriggerBindingExtractor triggerBindingExtractor,
     IWorkflowActivationAuthority activationAuthority,
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowActivationCoordinator activationCoordinator,
     TimeProvider timeProvider,
     ILogger<WorkflowArtifactReconciler> logger) : IWorkflowArtifactReconciler
@@ -162,6 +164,16 @@ public sealed class WorkflowArtifactReconciler(
             return;
         }
 
+        // Gate 2 (continued) — every member's ArtifactVersion must be orderable, and no two members may claim one
+        // logical (DefinitionId, ArtifactVersion) with different content. Both are envelope-self facts like the
+        // planner's, but they live here beside the other per-member gates rather than in the planner, which owns
+        // the dependency graph alone.
+        if (TryFindVersionFault(plan.Members) is { } versionFault)
+        {
+            RejectUnit(entries, source, file, plan.Members, versionFault.Kind, versionFault.Diagnostic);
+            return;
+        }
+
         // Gate 2a — recompute every member's canonical content hash BEFORE anything persists. The executable
         // store is create-only and dedups by a content-addressed id, so persisting an unverified payload under a
         // claimed id would let a corrupted file *become* that id's content on a fresh engine, permanently.
@@ -264,6 +276,52 @@ public sealed class WorkflowArtifactReconciler(
 
         var activationId = BuildActivationId(source.SourceId, identity);
         var slot = await activationAuthority.FindAsync(identity.DefinitionId, DefaultSlotName, cancellationToken);
+
+        // Steps 4 and 5 — idempotency and latest-wins supersession, both answered from the activation the slot
+        // already serves. This is the one place the importer consults engine state to decide, which is why it sits
+        // on this side of the planner's envelope-only line.
+        var active = await FindActiveReferenceAsync(slot, cancellationToken);
+        if (active is not null && TryResolveSupersession(identity, active) is { } supersession)
+        {
+            // A None kind is the verdict's "not a rejection" arm: importable, deliberately not activated.
+            if (supersession.Kind == WorkflowArtifactRejectionKind.None)
+            {
+                logger.LogInformation(
+                    "Imported artifact '{ArtifactId}' was skipped for definition '{DefinitionId}': {Diagnostic}",
+                    identity.ArtifactId,
+                    identity.DefinitionId,
+                    supersession.Diagnostic);
+                // Deliberately NOT recorded as unresolved: the definition is live on an equal-or-newer activation,
+                // so a dependent that dispatches into it is not dispatching into nothing. The skipped artifact
+                // itself stays in the store as an unreferenced content-addressed blob — reclaimable by reference
+                // GC, and already there for the pass that does activate it.
+                return WorkflowArtifactImportEntry.Skipped(
+                    file.Origin,
+                    source.SourceId,
+                    identity.ArtifactId,
+                    identity.DefinitionId,
+                    identity.ArtifactVersion,
+                    WorkflowArtifactSkipReason.OlderVersion,
+                    supersession.Diagnostic);
+            }
+
+            logger.LogError(
+                "Imported artifact '{ArtifactId}' was rejected for definition '{DefinitionId}' ({Kind}): {Diagnostic}",
+                identity.ArtifactId,
+                identity.DefinitionId,
+                supersession.Kind,
+                supersession.Diagnostic);
+            unresolved.Add(identity.ArtifactId);
+            return WorkflowArtifactImportEntry.Rejected(
+                file.Origin,
+                source.SourceId,
+                identity.ArtifactId,
+                identity.DefinitionId,
+                identity.ArtifactVersion,
+                supersession.Kind,
+                supersession.Diagnostic);
+        }
+
         var command = new WorkflowActivationCommand(
             member,
             MintSourceReference(source, file.TenantId, identity, activationId),
@@ -350,6 +408,169 @@ public sealed class WorkflowArtifactReconciler(
                     result.Diagnostic ?? $"the activation sequence failed at step {result.FailedStep}.");
         }
     }
+
+    /// <summary>
+    /// The live source reference the definition's slot currently serves, or <see langword="null"/> when nothing is
+    /// activated, the reference is gone, or it has been retired.
+    /// </summary>
+    /// <remarks>
+    /// A retired reference deliberately reads as "nothing active". It means the last activation attempt was
+    /// compensated (<c>"activation-failed"</c>) or superseded, so the version it carries is not a serving version
+    /// and must not be able to hold a repair pass back — which is exactly the crashed-half-import case whose
+    /// recovery unit is the next pass.
+    /// </remarks>
+    private async ValueTask<WorkflowExecutableSourceReference?> FindActiveReferenceAsync(
+        WorkflowActivationSlot? slot,
+        CancellationToken cancellationToken)
+    {
+        if (slot?.ActiveActivationId is not { } activeActivationId)
+            return null;
+
+        var reference = await sourceReferenceStore.FindAsync(
+            WorkflowActivationReferenceIdentity.Create(activeActivationId),
+            cancellationToken);
+
+        return reference is { DeletedAt: null } ? reference : null;
+    }
+
+    /// <summary>
+    /// Latest-wins (FR-B-007). Returns <see langword="null"/> when the candidate should be handed to the
+    /// coordinator, a <c>None</c>-kind verdict when it must be skipped as not-newer, and a rejection kind when the
+    /// two sides claim one logical version with different content.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The active version is read, never stored.</b> It comes off the minted source reference the active
+    /// activation resolves to, which already carries <c>ArtifactVersion</c> — so latest-wins introduces no state of
+    /// its own and cannot drift from what is actually serving.
+    /// </para>
+    /// <para>
+    /// Ordering is <see cref="SemVer.ToSortKey"/> plus an ordinal compare: byte-for-byte the comparator the
+    /// design-side <c>WorkflowsVersionReconciler</c> and the design version store use, so a design engine and a
+    /// runtime engine given the same two versions always pick the same winner. Build metadata is outside the sort
+    /// key, which is what makes <c>1.0.0+a</c> and <c>1.0.0+b</c> the <em>same</em> logical version — and therefore
+    /// a broken source when their content differs.
+    /// </para>
+    /// <para>
+    /// An active version this runtime cannot parse is <b>not</b> treated as a block. It cannot come from this
+    /// importer (gate 2b refuses unorderable versions before anything is written), so it belongs to another
+    /// activation source — and a foreign-owned slot is refused by the coordinator's ownership rule, which produces
+    /// a diagnostic naming the owner instead of a silent skip.
+    /// </para>
+    /// </remarks>
+    private (WorkflowArtifactRejectionKind Kind, string Diagnostic)? TryResolveSupersession(
+        WorkflowExecutableIdentity candidate,
+        WorkflowExecutableSourceReference active)
+    {
+        if (!SemVer.TryParse(candidate.ArtifactVersion, out var candidateVersion))
+            return null; // Unreachable: gate 2b already refused the unit. Defensive only.
+
+        if (!SemVer.TryParse(active.ArtifactVersion, out var activeVersion))
+        {
+            logger.LogWarning(
+                "Definition '{DefinitionId}' serves activation '{ActivationId}' at version '{ActiveVersion}', which is not a "
+                + "semantic version; latest-wins cannot order artifact '{ArtifactId}' against it, so the activation authority decides.",
+                candidate.DefinitionId,
+                active.ActivationId,
+                active.ArtifactVersion,
+                candidate.ArtifactId);
+            return null;
+        }
+
+        var comparison = string.CompareOrdinal(candidateVersion.ToSortKey(), activeVersion.ToSortKey());
+
+        if (comparison > 0)
+            return null; // Newer: supersede.
+
+        if (comparison < 0)
+            return (
+                WorkflowArtifactRejectionKind.None,
+                $"definition '{candidate.DefinitionId}' already serves version '{active.ArtifactVersion}' "
+                + $"(artifact '{active.ArtifactId}'), which sorts above this artifact's '{candidate.ArtifactVersion}'. "
+                + "Activation never moves backward onto an older artifact.");
+
+        // Equal logical version. Same content is the idempotent no-op the coordinator already answers; different
+        // content is a broken source.
+        if (StringComparer.Ordinal.Equals(active.ArtifactId, candidate.ArtifactId))
+            return null;
+
+        return (
+            WorkflowArtifactRejectionKind.VersionHashMismatch,
+            DescribeVersionHashMismatch(
+                candidate.DefinitionId,
+                active.ArtifactVersion,
+                active.ArtifactId,
+                candidate.ArtifactVersion,
+                candidate.ArtifactId,
+                candidate.ArtifactHash));
+    }
+
+    /// <summary>
+    /// Gate 2b: every member must declare an orderable <c>ArtifactVersion</c>, and one logical
+    /// <c>(DefinitionId, ArtifactVersion)</c> must not be claimed twice with different content.
+    /// </summary>
+    /// <remarks>
+    /// Orderability is a hard import requirement rather than a warning because latest-wins is the only thing
+    /// standing between a redeploy and an activation moving backward: an unorderable version cannot be compared to
+    /// what is serving, so admitting one would mean either refusing every later import for that definition or
+    /// activating blind. Refusing at the door names the problem where it can be fixed — in the exporter.
+    /// </remarks>
+    private static (WorkflowArtifactRejectionKind Kind, string Diagnostic)? TryFindVersionFault(
+        IReadOnlyList<WorkflowExecutable> members)
+    {
+        var claimed = new Dictionary<(string DefinitionId, string SortKey), WorkflowExecutableIdentity>();
+
+        foreach (var member in members)
+        {
+            var identity = member.Identity;
+
+            if (!SemVer.TryParse(identity.ArtifactVersion, out var version))
+                return (
+                    WorkflowArtifactRejectionKind.UnorderableVersion,
+                    $"artifact '{identity.ArtifactId}' of definition '{identity.DefinitionId}' declares version "
+                    + $"'{identity.ArtifactVersion}', which is not a semantic version. Latest-wins supersession orders "
+                    + "activations by SemVer precedence, so an unorderable version cannot be imported.");
+
+            var key = (identity.DefinitionId, version.ToSortKey());
+            if (!claimed.TryGetValue(key, out var incumbent))
+            {
+                claimed.Add(key, identity);
+                continue;
+            }
+
+            if (!StringComparer.Ordinal.Equals(incumbent.ArtifactId, identity.ArtifactId))
+                return (
+                    WorkflowArtifactRejectionKind.VersionHashMismatch,
+                    DescribeVersionHashMismatch(
+                        identity.DefinitionId,
+                        incumbent.ArtifactVersion,
+                        incumbent.ArtifactId,
+                        identity.ArtifactVersion,
+                        identity.ArtifactId,
+                        identity.ArtifactHash,
+                        incumbent.ArtifactHash));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The broken-source message, shaped after the design side's <c>ActivityVersionHashMismatchException</c> so the
+    /// two reconcilers describe the same breakage the same way.
+    /// </summary>
+    private static string DescribeVersionHashMismatch(
+        string definitionId,
+        string persistedVersion,
+        string persistedArtifactId,
+        string incomingVersion,
+        string incomingArtifactId,
+        string incomingHash,
+        string? persistedHash = null) =>
+        $"workflow definition '{definitionId}' already claims version {persistedVersion} through artifact "
+        + $"'{persistedArtifactId}'{(persistedHash is null ? string.Empty : $" (hash '{persistedHash}')")}, but the same logical version "
+        + $"({incomingVersion}) is claimed by artifact '{incomingArtifactId}' with hash '{incomingHash}'. "
+        + "Same logical identity must imply same content — build metadata is ignored when matching versions. "
+        + "The source is broken: fix the exporting projection or bump the artifact version.";
 
     /// <summary>
     /// Mints the live source reference for one imported artifact.

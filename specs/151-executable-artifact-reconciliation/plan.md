@@ -156,3 +156,36 @@ docs/maps/* (regenerated), EXTENSION_POINTS.md files per research D9
 ## Next step
 
 `/speckit.tasks` — generate dependency-ordered tasks from this plan. Suggested task clusters: (1) checker + hasher extractions + wrapper + classification fix; (2) neutral activation authority + shared coordinator (absorbing PublicationActivator's sequence; publishing slot store deleted, baselines updated) + explicit ownership conflict rules + closing the censused back doors (remove the IndexAsync fallback/path, route pump deletes, collapse the schedule double-write); (3) envelope + closure factory + Published-scope enforcement; (4) reconciliation projects + import pipeline + startup task; (5) export target seam + endpoint + capability; (6) composition/architecture tests + EXTENSION_POINTS + maps + workbench wiring.
+
+### Behaviour change (2) — §2.23.4 recorded decision: one logical version may no longer be claimed by two payloads
+
+**Found by running, not by reading, during US4 (T094–T096) on 2026-08-17.** Recorded because §2.23.4
+treats "the refactor resolved a bug the tests silently relied on" as an architect decision, never a
+solo one, and because a pre-existing test had to change to accommodate it.
+
+**The behaviour before.** The importer had no version gate. A mount could re-point a definition at
+**different content under an unchanged `ArtifactVersion`** and the runtime would happily activate it —
+serving state moved, and nothing recorded that two distinct content-addressed artifacts had both
+claimed to be version `1.0.0` of the same definition.
+
+**Why FR-B-007 forbids it.** Latest-wins orders activations by SemVer sort key. If one logical version
+can denote two payloads, the ordering is not a function: whether a mount supersedes or is skipped
+becomes a question of arrival order, not of version. So the pin is not merely stricter, it is what
+makes latest-wins well-defined. T094 rejects the collision at both sites — store-side (candidate
+versus the active reference) and envelope-side (two members of one closure claiming the same
+`(DefinitionId, sortkey)` with different artifact ids).
+
+**The test this changed.** `ImportedRecurringTriggerEndToEndTests.A_superseding_import_re_projects_the_schedule_instead_of_leaving_the_old_one_firing`
+(added by T071a) mounted two *different* timer payloads, both at the default `1.0.0`, and asserted the
+second superseded the first. Under the new rule that is the broken-source case, and the suite went
+85/1 — **the failure is how the behaviour change was discovered.** The fix gives the superseding build
+`1.1.0`, which is what a real new build carries. **The test's assertions are unchanged**: it still
+proves a superseding import re-projects the schedule instead of leaving the old one firing. Only the
+fixture's illegal premise moved. This is a fixture correction, not a weakening, and no test was
+removed.
+
+**Reviewer's eye wanted on one thing.** Anyone relying on "overwrite the mount, keep the version"
+as a deployment idiom now gets a rejection instead of a silent re-point. That is the intended
+outcome — a content change without a version change is exactly what the broken-source diagnostic is
+for — but it is a behaviour an operator could have depended on, and it is the kind of thing better
+surfaced now than discovered in a rollout.

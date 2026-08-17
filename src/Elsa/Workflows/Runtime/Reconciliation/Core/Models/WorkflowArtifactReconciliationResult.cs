@@ -68,6 +68,18 @@ public enum WorkflowArtifactRejectionKind
     /// <summary>The trigger surface recomputed from the payload disagrees with the surface the envelope carries.</summary>
     TriggerSurfaceMismatch,
 
+    /// <summary>
+    /// A member's <c>ArtifactVersion</c> is not a semantic version, so latest-wins supersession cannot order it
+    /// against whatever the definition already serves (FR-B-007).
+    /// </summary>
+    UnorderableVersion,
+
+    /// <summary>
+    /// The same logical <c>(DefinitionId, ArtifactVersion)</c> is claimed by two different content-addressed
+    /// artifacts — a broken source, since same logical identity must imply same content.
+    /// </summary>
+    VersionHashMismatch,
+
     /// <summary>This runtime cannot satisfy a declared requirement or is missing an activity type the artifact uses.</summary>
     UnmetRequirement,
 

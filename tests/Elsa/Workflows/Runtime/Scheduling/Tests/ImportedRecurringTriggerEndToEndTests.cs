@@ -135,9 +135,10 @@ public sealed class ImportedRecurringTriggerEndToEndTests : IDisposable
         Assert.Equal(WorkflowArtifactImportOutcome.Imported, first.Outcome);
 
         // A new build of the same definition, mounted over the old one: same node, different authored interval,
-        // therefore a different content-addressed artifact and a different stimulus identity.
+        // therefore a different content-addressed artifact and a different stimulus identity — and a bumped
+        // version, without which latest-wins refuses it as one logical version claimed by two payloads.
         File.Delete(Path.Combine(_mount, "nightly.json"));
-        var superseding = MountTimerArtifact(harness, "PT9M", "nightly-v2.json");
+        var superseding = MountTimerArtifact(harness, "PT9M", "nightly-v2.json", "1.1.0");
         var second = Assert.Single((await ReconcileAsync(harness)).Entries);
 
         Assert.Equal(WorkflowArtifactImportOutcome.Imported, second.Outcome);
@@ -197,10 +198,18 @@ public sealed class ImportedRecurringTriggerEndToEndTests : IDisposable
         await pump.ExecuteAsync(CancellationToken.None);
     }
 
-    private WorkflowExecutable MountTimerArtifact(WorkflowExecutionHarness harness, string interval, string fileName)
+    /// <param name="artifactVersion">
+    /// A new build of a definition must carry a new version: latest-wins (FR-B-007) orders activations by SemVer,
+    /// and re-using one version for two different payloads is the broken-source case the importer refuses outright.
+    /// </param>
+    private WorkflowExecutable MountTimerArtifact(
+        WorkflowExecutionHarness harness,
+        string interval,
+        string fileName,
+        string artifactVersion = "1.0.0")
     {
         var node = ArtifactClosureFixture.ClrTriggerNode(TriggerNodeId, Timer.ActivityType, nameof(Timer.Interval), interval);
-        var executable = ArtifactClosureFixture.Executable(node, DefinitionId);
+        var executable = ArtifactClosureFixture.Executable(node, DefinitionId, artifactVersion);
         ArtifactClosureFixture.Mount(harness.Services, _mount, fileName, ArtifactClosureFixture.Closure(executable));
         return executable;
     }
