@@ -960,7 +960,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     continue;
                 }
 
-                var existing = Deserialize<WorkflowDispatchRecord>(entry.Values.Values);
+                var existing = GroundworkV2WorkflowDispatchStorageConventions.Deserialize(entry.Values.Values);
                 WorkflowDispatchLifecycle.ValidateTransition(existing, change.State);
                 if (WorkflowDispatchLifecycle.RecordsEqual(existing, change.State))
                     continue;
@@ -978,7 +978,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 if (entry is null)
                     throw new InvalidOperationException($"Workflow dispatch '{request.DispatchId}' was not found for parent cancellation.");
 
-                var existing = Deserialize<WorkflowDispatchRecord>(entry.Values.Values);
+                var existing = GroundworkV2WorkflowDispatchStorageConventions.Deserialize(entry.Values.Values);
                 if (!StringComparer.Ordinal.Equals(existing.ParentActivityExecutionId, request.ParentActivityExecutionId) ||
                     !StringComparer.Ordinal.Equals(existing.ChildWorkflowExecutionId, request.ChildWorkflowExecutionId))
                 {
@@ -1016,7 +1016,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 var candidate = change.State;
                 if (staged.TryGetValue(change.StateId, out var duplicate))
                 {
-                    if (!PendingOutboxItemsEquivalent(duplicate, candidate))
+                    if (!GroundworkV2PostCommitOutboxStorageConventions.PendingItemsEquivalent(duplicate, candidate))
                         throw new InvalidOperationException(
                             $"Post-commit outbox item '{change.StateId}' occurs more than once with conflicting intent.");
                     continue;
@@ -1041,7 +1041,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     throw new InvalidOperationException(
                         $"Groundwork physical outbox identity collision detected for '{candidate.OutboxItemId}'.");
                 }
-                if (PendingOutboxItemsEquivalent(existing, candidate))
+                if (GroundworkV2PostCommitOutboxStorageConventions.PendingItemsEquivalent(existing, candidate))
                     continue;
                 throw new InvalidOperationException(
                     $"Post-commit outbox item '{change.StateId}' already exists with conflicting intent or delivery state.");
@@ -1360,38 +1360,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 return token;
             return state.ExecutionLease?.FencingToken ?? 0;
         }
-
-        private static bool PendingOutboxItemsEquivalent(
-            RuntimePostCommitOutboxItem left,
-            RuntimePostCommitOutboxItem right) =>
-            left.Status == RuntimePostCommitOutboxStatus.Pending &&
-            right.Status == RuntimePostCommitOutboxStatus.Pending &&
-            StringComparer.Ordinal.Equals(left.Intent.IntentId, right.Intent.IntentId) &&
-            StringComparer.Ordinal.Equals(left.Intent.WorkflowExecutionId, right.Intent.WorkflowExecutionId) &&
-            StringComparer.Ordinal.Equals(left.Intent.Kind, right.Intent.Kind) &&
-            StringComparer.Ordinal.Equals(left.Intent.ActivityExecutionId, right.Intent.ActivityExecutionId) &&
-            StringComparer.Ordinal.Equals(left.Intent.IdempotencyKey, right.Intent.IdempotencyKey) &&
-            StringComparer.Ordinal.Equals(left.Intent.DependsOnWaitRegistrationId, right.Intent.DependsOnWaitRegistrationId) &&
-            left.Intent.WaitFailurePolicy == right.Intent.WaitFailurePolicy &&
-            PayloadEquals(left.Intent.Payload, right.Intent.Payload) &&
-            MetadataEquals(left.Intent.Metadata, right.Intent.Metadata) &&
-            left.RecordedAt == right.RecordedAt &&
-            left.AvailableAt == right.AvailableAt &&
-            left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
-            left.DeliveryFencingToken == right.DeliveryFencingToken &&
-            left.DeliveryVisibleAfter == right.DeliveryVisibleAfter &&
-            left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
-            MetadataEquals(left.Metadata, right.Metadata);
-
-        private static bool PayloadEquals(JsonElement? left, JsonElement? right) =>
-            left.HasValue == right.HasValue &&
-            (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
-
-        private static bool MetadataEquals(
-            IReadOnlyDictionary<string, string> left,
-            IReadOnlyDictionary<string, string> right) =>
-            left.Count == right.Count &&
-            left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
 
         private static string? ReadOptionalString(IReadOnlyDictionary<string, object?> values, string field) =>
             values.TryGetValue(field, out var raw)

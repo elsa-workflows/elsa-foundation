@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -11,6 +9,8 @@ using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
@@ -154,6 +154,25 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             "owner-a", Now, TimeSpan.FromMinutes(1), 10)));
         Assert.Equal("null-available", claim.OutboxItemId);
+    }
+
+    [Fact]
+    public async Task Current_rows_refuse_missing_outbox_eligibility_projections()
+    {
+        await using var fixture = SqliteFixture.Create();
+        var item = PendingWithoutAvailability("missing-eligibility", "workflow-a");
+        var values = GroundworkV2PostCommitOutboxStorageConventions.Values(item).Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = null;
+        values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = null;
+        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
+        var session = fixture.Connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")));
+        Assert.Equal(
+            WriteOutcomeStatus.Inserted,
+            session.Insert(new StorageValues(values), WriteOptions.CreateOnly).Status);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            fixture.Store("tenant-a").FindAsync(item.OutboxItemId).AsTask());
     }
 
     [Fact]
@@ -315,6 +334,32 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
                 invalid)).AsTask());
 
         Assert.Equal(WorkflowDispatchStatus.Pending, fixture.ReadDispatch(dispatch.DispatchId).Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await store.FindAsync(item.OutboxItemId))!.Status);
+    }
+
+    [Fact]
+    public async Task Atomic_completion_refuses_dispatch_projection_drift()
+    {
+        await using var fixture = SqliteFixture.Create();
+        var dispatch = PendingDispatchRecord("parent-projection", "activity-projection", WorkflowDispatchMode.FireAndForget);
+        fixture.SeedDispatchWithTestScopeProjection(dispatch, "forged-scope");
+        var store = fixture.Store("tenant-a");
+        var item = PendingDispatch("start-projection", dispatch);
+        await store.SavePendingAsync(item);
+        var claim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "owner-a", Now, TimeSpan.FromMinutes(1), 1)));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.CompleteClaimAsync(
+            new RuntimePostCommitOutboxClaimCompletion(
+                claim,
+                new RuntimePostCommitOutboxDeliveryResult(
+                    item.OutboxItemId,
+                    RuntimePostCommitOutboxStatus.FailedRetryable,
+                    Now.AddSeconds(1),
+                    "child-start-failure"),
+                dispatch.TransitionToDispatchFailed(Now.AddSeconds(1)))).AsTask());
+
+        Assert.Equal(WorkflowDispatchStatus.Pending, fixture.ReadDispatchContent(dispatch.DispatchId).Status);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await store.FindAsync(item.OutboxItemId))!.Status);
     }
 
@@ -645,21 +690,20 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         public void SeedDispatch(WorkflowDispatchRecord record)
         {
             var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
-            var values = GroundworkRuntimeRowStore.Values(
-                record.DispatchId,
-                ElsaRuntimeV2StorageManifest.SchemaVersion,
-                Serialize(record),
-                new Dictionary<string, object?>(StringComparer.Ordinal)
-                {
-                    [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                    [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = record.ParentWorkflowExecutionId,
-                    [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = record.ChildWorkflowExecutionId,
-                    [ElsaRuntimeV2StorageManifest.StatusField] = record.Status.ToString(),
-                    [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = record.CreatedAt,
-                    [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = record.DispatchId
-                });
             Assert.Equal(WriteOutcomeStatus.Inserted, connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")))
-                .Insert(values, WriteOptions.CreateOnly).Status);
+                .Insert(GroundworkV2WorkflowDispatchStorageConventions.Values(record), WriteOptions.CreateOnly).Status);
+        }
+
+        public void SeedDispatchWithTestScopeProjection(WorkflowDispatchRecord record, string testScopeId)
+        {
+            var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
+            var values = GroundworkV2WorkflowDispatchStorageConventions.Values(record).Values
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            values[ElsaRuntimeV2StorageManifest.TestScopeIdField] = testScopeId;
+            Assert.Equal(
+                WriteOutcomeStatus.Inserted,
+                connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")))
+                    .Insert(new StorageValues(values), WriteOptions.CreateOnly).Status);
         }
 
         public void SeedExecution(WorkflowExecutionState state)
@@ -677,7 +721,18 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         {
             var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
             var entry = connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")))
-                .Read(GroundworkRuntimeRowStore.Key(dispatchId));
+                .Read(GroundworkRuntimeRowStore.Key(
+                    GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(dispatchId)));
+            Assert.NotNull(entry);
+            return GroundworkV2WorkflowDispatchStorageConventions.Deserialize(entry!.Values.Values);
+        }
+
+        public WorkflowDispatchRecord ReadDispatchContent(string dispatchId)
+        {
+            var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
+            var entry = connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")))
+                .Read(GroundworkRuntimeRowStore.Key(
+                    GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(dispatchId)));
             Assert.NotNull(entry);
             return Deserialize<WorkflowDispatchRecord>(entry!.Values.Values);
         }

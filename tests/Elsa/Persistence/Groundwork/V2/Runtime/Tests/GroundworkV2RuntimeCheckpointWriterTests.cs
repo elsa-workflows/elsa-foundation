@@ -354,6 +354,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.StatusField] = pending.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.TestScopeIdField] = null,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = pending.CreatedAt,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = pending.DispatchId
             });
@@ -369,6 +370,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.StatusField] = started.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.TestScopeIdField] = null,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = started.CreatedAt,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = started.DispatchId
             },
@@ -406,6 +408,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = item.Intent.WorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField] = (int)item.Status,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = DateTimeOffset.MinValue,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = DateTimeOffset.MinValue,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField] = item.RecordedAt,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField] = item.OutboxItemId,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField] = item.Intent.Kind
@@ -418,6 +422,63 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
         await NewWriter(source).CommitAsync(NewCommit("outbox-equivalent") with { StateChanges = changes }, Immediate());
         Assert.NotNull(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "outbox-equivalent", "tenant-a"));
         Assert.Equal(1, source.Find(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, item.OutboxItemId, "tenant-a")!.Version);
+    }
+
+    [Fact]
+    public async Task Duplicate_pending_outbox_intent_with_different_recorded_time_is_rejected()
+    {
+        var source = new MemorySource();
+        var now = DateTimeOffset.UtcNow;
+        var firstIntent = new RuntimePostCommitIntent(
+            "intent-time",
+            "workflow-1",
+            "test.intent",
+            now,
+            null,
+            "idempotency-time",
+            null);
+        var conflictingIntent = new RuntimePostCommitIntent(
+            "intent-time",
+            "workflow-1",
+            "test.intent",
+            now.AddSeconds(1),
+            null,
+            "idempotency-time",
+            null);
+        var first = new RuntimePostCommitOutboxItem(
+            "outbox-time",
+            firstIntent,
+            RuntimePostCommitOutboxStatus.Pending,
+            now,
+            null);
+        var conflicting = new RuntimePostCommitOutboxItem(
+            "outbox-time",
+            conflictingIntent,
+            RuntimePostCommitOutboxStatus.Pending,
+            now,
+            null);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            postCommitOutbox:
+            [
+                new RuntimeStateChange<RuntimePostCommitOutboxItem>(
+                    first.OutboxItemId,
+                    RuntimeStateChangeOperation.Upsert,
+                    first,
+                    new Dictionary<string, string>()),
+                new RuntimeStateChange<RuntimePostCommitOutboxItem>(
+                    conflicting.OutboxItemId,
+                    RuntimeStateChangeOperation.Upsert,
+                    conflicting,
+                    new Dictionary<string, string>())
+            ]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source)
+                .CommitAsync(NewCommit("outbox-time-conflict") with { StateChanges = changes }, Immediate())
+                .AsTask());
+        Assert.Contains("conflicting intent", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -671,6 +732,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = pending.ParentWorkflowExecutionId,
             [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = pending.ChildWorkflowExecutionId,
             [ElsaRuntimeV2StorageManifest.StatusField] = pending.Status.ToString(),
+            [ElsaRuntimeV2StorageManifest.TestScopeIdField] = null,
             [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = pending.CreatedAt,
             [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = pending.DispatchId
         });
@@ -683,6 +745,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = started.ParentWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = started.ChildWorkflowExecutionId,
                 [ElsaRuntimeV2StorageManifest.StatusField] = started.Status.ToString(),
+                [ElsaRuntimeV2StorageManifest.TestScopeIdField] = null,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = started.CreatedAt,
                 [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = started.DispatchId
             }, version: 2);

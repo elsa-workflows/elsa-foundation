@@ -39,7 +39,10 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         unit = sessions.Unit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, targetName);
     }
 
-    public bool SupportsClaimTransitions => true;
+    public bool SupportsClaimTransitions =>
+        sessions is IGroundworkStorageCapabilitySource capabilitySource &&
+        capabilitySource.Capabilities(targetName).Any(capability =>
+            capability.Id.Equals(BatchWriteCapabilities.CompareAndDelete));
 
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(
         RuntimeSchedulerWorkItem workItem,
@@ -393,11 +396,18 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             return ValueTask.FromResult(RuntimeSchedulerWorkClaimTransitionResult.Stale);
         }
 
-        var result = session.Delete(key, WriteOptions.IfVersion(Revision(existing)));
+        var result = session.CompareAndDelete(
+            key,
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = consumed.WorkflowExecutionId,
+                [ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField] = consumed.ClaimOwnerId,
+                [ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField] = consumed.FencingToken
+            });
         return ValueTask.FromResult(result.Status switch
         {
             WriteOutcomeStatus.Deleted => RuntimeSchedulerWorkClaimTransitionResult.Applied(),
-            WriteOutcomeStatus.NotFound or WriteOutcomeStatus.ConcurrencyConflict =>
+            WriteOutcomeStatus.NotFound or WriteOutcomeStatus.ComparisonMismatch or WriteOutcomeStatus.ConcurrencyConflict =>
                 RuntimeSchedulerWorkClaimTransitionResult.Stale,
             _ => throw new InvalidOperationException(
                 $"Groundwork scheduler-work claim consumption failed with status '{result.Status}'.")

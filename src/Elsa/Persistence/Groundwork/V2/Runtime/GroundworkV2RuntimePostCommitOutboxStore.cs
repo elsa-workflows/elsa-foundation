@@ -57,12 +57,13 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
         var session = OpenOutbox();
-        var key = GroundworkRuntimeRowStore.Key(PhysicalId(item.OutboxItemId));
+        var key = GroundworkRuntimeRowStore.Key(
+            GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(item.OutboxItemId));
         var existing = session.Read(key);
         if (existing is not null)
         {
             var current = ReadOutbox(existing, item.OutboxItemId);
-            if (PendingEquivalent(current, item))
+            if (GroundworkV2PostCommitOutboxStorageConventions.PendingItemsEquivalent(current, item))
                 return ValueTask.CompletedTask;
             throw new InvalidOperationException(
                 $"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
@@ -82,7 +83,9 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         var winner = session.Read(key)
                      ?? throw new InvalidOperationException(
                          $"Post-commit outbox item '{item.OutboxItemId}' conflicted during creation but could not be reloaded.");
-        if (!PendingEquivalent(ReadOutbox(winner, item.OutboxItemId), item))
+        if (!GroundworkV2PostCommitOutboxStorageConventions.PendingItemsEquivalent(
+                ReadOutbox(winner, item.OutboxItemId),
+                item))
         {
             throw new InvalidOperationException(
                 $"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
@@ -97,7 +100,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenOutbox().Read(GroundworkRuntimeRowStore.Key(PhysicalId(outboxItemId)));
+        var entry = OpenOutbox().Read(GroundworkRuntimeRowStore.Key(
+            GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(outboxItemId)));
         return ValueTask.FromResult(entry is null ? null : ReadOutbox(entry, outboxItemId));
     }
 
@@ -122,7 +126,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         cancellationToken.ThrowIfCancellationRequested();
 
         var session = OpenOutbox();
-        var entry = session.Read(GroundworkRuntimeRowStore.Key(PhysicalId(result.OutboxItemId)))
+        var entry = session.Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(result.OutboxItemId)))
                     ?? throw new InvalidOperationException(
                         $"Post-commit outbox item '{result.OutboxItemId}' was not found.");
         var existing = ReadOutbox(entry, result.OutboxItemId);
@@ -140,7 +145,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         DateTimeOffset? availableAt = status == RuntimePostCommitOutboxStatus.FailedRetryable
             ? result.RecordedAt.Add(existing.RetryPolicy.Delay ?? TimeSpan.Zero)
             : null;
-        var updated = Copy(
+        var updated = WithDeliveryState(
             existing,
             status,
             availableAt,
@@ -185,7 +190,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             if (claims.Count == request.Limit)
                 break;
 
-            var entry = session.Read(GroundworkRuntimeRowStore.Key(PhysicalId(candidate.OutboxItemId)));
+            var entry = session.Read(GroundworkRuntimeRowStore.Key(
+                GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(candidate.OutboxItemId)));
             if (entry is null)
                 continue;
             var current = ReadOutbox(entry, candidate.OutboxItemId);
@@ -218,7 +224,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         cancellationToken.ThrowIfCancellationRequested();
 
         var session = OpenOutbox();
-        var entry = session.Read(GroundworkRuntimeRowStore.Key(PhysicalId(claim.OutboxItemId)));
+        var entry = session.Read(GroundworkRuntimeRowStore.Key(
+            GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(claim.OutboxItemId)));
         if (entry is null)
             throw new InvalidOperationException($"Post-commit outbox item '{claim.OutboxItemId}' was not found.");
         var current = ReadOutbox(entry, claim.OutboxItemId);
@@ -227,7 +234,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         if (write.Status == WriteOutcomeStatus.ConcurrencyConflict)
         {
             // Re-run the shared transition against the current row to preserve the public stale-claim exception.
-            var latest = session.Read(GroundworkRuntimeRowStore.Key(PhysicalId(claim.OutboxItemId)));
+            var latest = session.Read(GroundworkRuntimeRowStore.Key(
+                GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(claim.OutboxItemId)));
             if (latest is not null)
                 _ = RuntimePostCommitOutboxClaimTransitions.Complete(ReadOutbox(latest, claim.OutboxItemId), claim, result);
             throw new InvalidOperationException(
@@ -260,7 +268,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         var dispatches = unitOfWork.OpenSession(dispatchUnit);
         var executions = unitOfWork.OpenSession(executionUnit);
 
-        var entry = outbox.Read(GroundworkRuntimeRowStore.Key(PhysicalId(completion.Claim.OutboxItemId)))
+        var entry = outbox.Read(GroundworkRuntimeRowStore.Key(
+                        GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(completion.Claim.OutboxItemId)))
                     ?? throw new InvalidOperationException(
                         $"Post-commit outbox item '{completion.Claim.OutboxItemId}' was not found.");
         var current = ReadOutbox(entry, completion.Claim.OutboxItemId);
@@ -274,7 +283,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         var admissionWins = false;
         if (completion.WorkflowDispatch is { } projectedDispatch)
         {
-            var dispatchEntry = dispatches.Read(GroundworkRuntimeRowStore.Key(projectedDispatch.DispatchId))
+            var dispatchEntry = dispatches.Read(GroundworkRuntimeRowStore.Key(
+                                    GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(projectedDispatch.DispatchId)))
                                ?? throw new InvalidOperationException(
                                    $"Workflow dispatch '{projectedDispatch.DispatchId}' was not found in the atomic completion unit of work.");
             var existingDispatch = ReadDispatch(dispatchEntry, projectedDispatch.DispatchId);
@@ -333,7 +343,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             StageUpsert(
                 unitOfWork,
                 dispatchUnit,
-                DispatchValues(winningDispatch),
+                GroundworkV2WorkflowDispatchStorageConventions.Values(winningDispatch),
                 winningDispatchVersion!.Value);
         }
 
@@ -362,7 +372,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             ]);
         var outbox = unitOfWork.OpenSession(outboxUnit);
         var dispatches = unitOfWork.OpenSession(dispatchUnit);
-        var dispatchEntry = dispatches.Read(GroundworkRuntimeRowStore.Key(request.DispatchId));
+        var dispatchEntry = dispatches.Read(GroundworkRuntimeRowStore.Key(
+            GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(request.DispatchId)));
         var dispatch = dispatchEntry is null ? null : ReadDispatch(dispatchEntry, request.DispatchId);
         if (dispatch is not null)
             accessContextAccessor.Current.EnsureTenantScope(dispatch.TenantId);
@@ -370,7 +381,8 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
         var deadLetterEntry = deadLetterId is null
             ? null
-            : outbox.Read(GroundworkRuntimeRowStore.Key(PhysicalId(deadLetterId)));
+            : outbox.Read(GroundworkRuntimeRowStore.Key(
+                GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(deadLetterId)));
         var deadLetter = deadLetterEntry is null ? null : ReadOutbox(deadLetterEntry, deadLetterId!);
         var transition = WorkflowDispatchRedriveTransitions.Evaluate(request, dispatch, deadLetter);
         if (!transition.HasMutation)
@@ -385,7 +397,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         StageUpsert(
             unitOfWork,
             dispatchUnit,
-            DispatchValues(transition.WorkflowDispatch!),
+            GroundworkV2WorkflowDispatchStorageConventions.Values(transition.WorkflowDispatch!),
             dispatchEntry!.Version ?? throw new InvalidDataException(
                 $"Workflow dispatch '{request.DispatchId}' did not expose an optimistic revision."));
         await unitOfWork.CommitAsync(cancellationToken);
@@ -479,11 +491,14 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
     {
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit follow-up items can be staged.");
-        var key = GroundworkRuntimeRowStore.Key(PhysicalId(item.OutboxItemId));
+        var key = GroundworkRuntimeRowStore.Key(
+            GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(item.OutboxItemId));
         var existing = session.Read(key);
         if (existing is not null)
         {
-            if (PendingEquivalent(ReadOutbox(existing, item.OutboxItemId), item))
+            if (GroundworkV2PostCommitOutboxStorageConventions.PendingItemsEquivalent(
+                    ReadOutbox(existing, item.OutboxItemId),
+                    item))
                 return;
             throw new InvalidOperationException(
                 $"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
@@ -550,13 +565,12 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
 
     private static WorkflowDispatchRecord ReadDispatch(StoredEntry entry, string requestedId)
     {
-        var record = Deserialize<WorkflowDispatchRecord>(entry.Values.Values);
+        var record = GroundworkV2WorkflowDispatchStorageConventions.Deserialize(entry.Values.Values);
         if (!StringComparer.Ordinal.Equals(record.DispatchId, requestedId))
         {
             throw new InvalidOperationException(
                 $"Groundwork physical workflow-dispatch identity collision detected for '{requestedId}'.");
         }
-        EnsureDispatchProjections(entry.Values.Values, record);
         return record;
     }
 
@@ -566,35 +580,6 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         if (!StringComparer.Ordinal.Equals(state.WorkflowExecutionId, requestedId))
             throw new InvalidDataException("Groundwork workflow-execution row identity does not match its key.");
         return state;
-    }
-
-    private static StorageValues DispatchValues(WorkflowDispatchRecord record) =>
-        GroundworkRuntimeRowStore.Values(
-            record.DispatchId,
-            ElsaRuntimeV2StorageManifest.SchemaVersion,
-            GroundworkV2RuntimeJson.Serialize(record),
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
-                [ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField] = record.ParentWorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField] = record.ChildWorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.StatusField] = record.Status.ToString(),
-                [ElsaRuntimeV2StorageManifest.TestScopeIdField] = record.TestScope?.ScopeId,
-                [ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField] = record.CreatedAt,
-                [ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField] = record.DispatchId
-            });
-
-    private static void EnsureDispatchProjections(
-        IReadOnlyDictionary<string, object?> values,
-        WorkflowDispatchRecord record)
-    {
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.IdField, record.DispatchId);
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.CollectionField, ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField, record.ParentWorkflowExecutionId);
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField, record.ChildWorkflowExecutionId);
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.StatusField, record.Status.ToString());
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.WorkflowDispatchCreatedAtField, record.CreatedAt);
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField, record.DispatchId);
     }
 
     private static T Deserialize<T>(IReadOnlyDictionary<string, object?> values)
@@ -612,18 +597,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                ?? throw new InvalidDataException($"Groundwork runtime row could not deserialize as {typeof(T).Name}.");
     }
 
-    private static bool PendingEquivalent(RuntimePostCommitOutboxItem left, RuntimePostCommitOutboxItem right) =>
-        left.Status == RuntimePostCommitOutboxStatus.Pending &&
-        right.Status == RuntimePostCommitOutboxStatus.Pending &&
-        StringComparer.Ordinal.Equals(GroundworkV2RuntimeJson.Serialize(left.Intent), GroundworkV2RuntimeJson.Serialize(right.Intent)) &&
-        left.RecordedAt == right.RecordedAt &&
-        left.AvailableAt == right.AvailableAt &&
-        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
-        left.DeliveryFencingToken == right.DeliveryFencingToken &&
-        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
-        MetadataEquals(left.Metadata, right.Metadata);
-
-    private static RuntimePostCommitOutboxItem Copy(
+    private static RuntimePostCommitOutboxItem WithDeliveryState(
         RuntimePostCommitOutboxItem item,
         RuntimePostCommitOutboxStatus status,
         DateTimeOffset? availableAt,
@@ -659,12 +633,6 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : status;
 
-    private static bool MetadataEquals(
-        IReadOnlyDictionary<string, string> left,
-        IReadOnlyDictionary<string, string> right) =>
-        left.Count == right.Count &&
-        left.All(entry => right.TryGetValue(entry.Key, out var value) && StringComparer.Ordinal.Equals(entry.Value, value));
-
     private static WriteOutcome ConditionalUpsert(
         IStorageSession session,
         StorageValues values,
@@ -683,9 +651,6 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
 
     private static bool IsSaved(WriteOutcomeStatus status) =>
         status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
-
-    private static string PhysicalId(string outboxItemId) =>
-        GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(outboxItemId);
 
     private static Predicate Equal(ColumnRef column, string value) =>
         new Predicate.Equal(column, QueryConstant.Of(column, value));
@@ -707,41 +672,6 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                 $"Groundwork post-commit outbox query column '{name}' has unsupported type '{definition.Type}'.")
         };
         return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static void EnsureProjection(
-        IReadOnlyDictionary<string, object?> values,
-        string field,
-        string expected)
-    {
-        var actual = values.TryGetValue(field, out var value)
-            ? value switch
-            {
-                string text => text,
-                JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-                _ => null
-            }
-            : null;
-        if (!StringComparer.Ordinal.Equals(actual, expected))
-            throw new InvalidDataException($"Groundwork workflow-dispatch row projection '{field}' does not match its current content.");
-    }
-
-    private static void EnsureProjection(
-        IReadOnlyDictionary<string, object?> values,
-        string field,
-        DateTimeOffset expected)
-    {
-        var actual = values.TryGetValue(field, out var value)
-            ? value switch
-            {
-                DateTimeOffset timestamp => timestamp,
-                JsonElement { ValueKind: JsonValueKind.String } element when DateTimeOffset.TryParse(element.GetString(), out var timestamp) => timestamp,
-                string text when DateTimeOffset.TryParse(text, out var timestamp) => timestamp,
-                _ => default
-            }
-            : default;
-        if (actual != expected)
-            throw new InvalidDataException($"Groundwork workflow-dispatch row projection '{field}' does not match its current content.");
     }
 
     private enum CandidateSelection

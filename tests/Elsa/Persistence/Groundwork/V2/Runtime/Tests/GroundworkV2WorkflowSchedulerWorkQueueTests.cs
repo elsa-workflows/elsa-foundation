@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -8,6 +7,7 @@ using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
@@ -136,6 +136,46 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
     }
 
     [Fact]
+    public async Task Sqlite_consumption_survives_a_renewal_between_read_and_atomic_delete()
+    {
+        await using var runtime = NativeProviderRuntime.Create();
+        using var connection = runtime.OpenConnection();
+        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+        connection.Schema.Apply(unit);
+        var accessor = ScopedAccessor();
+        IWorkflowSchedulerWorkQueue queue = new GroundworkV2WorkflowSchedulerWorkQueue(
+            new DirectSessionSource(connection),
+            accessor);
+        await queue.EnqueueAsync(Item("wf-race", "work-1", 1));
+        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await queue.ClaimAsync(
+            new RuntimeSchedulerWorkClaimRequest("wf-race", "owner-a", Now, TimeSpan.FromSeconds(10))));
+        RuntimeSchedulerWorkClaim? renewed = null;
+        var consumingQueue = new GroundworkV2WorkflowSchedulerWorkQueue(
+            new DirectSessionSource(
+                connection,
+                beforeFencedDelete: () =>
+                {
+                    var renewal = queue.RenewClaimAsync(
+                            claim,
+                            Now.AddSeconds(2),
+                            TimeSpan.FromMinutes(1))
+                        .AsTask()
+                        .GetAwaiter()
+                        .GetResult();
+                    renewed = Assert.IsType<RuntimeSchedulerWorkClaim>(renewal.Claim);
+                }),
+            accessor);
+
+        var result = await consumingQueue.ConsumeClaimedAsync(ConsumedSchedulerWorkItem.FromClaim(claim));
+
+        Assert.NotNull(renewed);
+        Assert.Equal(claim.FencingToken, renewed!.FencingToken);
+        Assert.True(renewed.Revision > claim.Revision);
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded, result.Status);
+        Assert.Empty((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wf-race"))).Items);
+    }
+
+    [Fact]
     public async Task Global_and_across_scope_access_fail_closed_before_provider_reads()
     {
         var source = new RecordingSource();
@@ -149,6 +189,20 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => global.ListAsync(new RuntimeSchedulerWorkQuery("wf")).AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => across.ListAsync(new RuntimeSchedulerWorkQuery("wf")).AsTask());
         Assert.Equal(0, source.OpenCount);
+    }
+
+    [Fact]
+    public void Claim_transitions_require_evidenced_atomic_compare_and_delete()
+    {
+        var unsupported = new GroundworkV2WorkflowSchedulerWorkQueue(
+            new RecordingSource(),
+            ScopedAccessor());
+        var supported = new GroundworkV2WorkflowSchedulerWorkQueue(
+            new RecordingSource([BatchWriteCapabilities.CompareAndDeleteDescriptor]),
+            ScopedAccessor());
+
+        Assert.False(unsupported.SupportsClaimTransitions);
+        Assert.True(supported.SupportsClaimTransitions);
     }
 
     [Fact]
@@ -534,12 +588,14 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
 
     private sealed class DirectSessionSource(
         IStorageProviderConnection connection,
-        ICollection<QueryRequest>? queryRequests = null) : IGroundworkStorageSessionSource
+        ICollection<QueryRequest>? queryRequests = null,
+        Action? beforeFencedDelete = null) : IGroundworkStorageSessionSource
     {
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
             new RecordingSession(
                 connection.OpenSession(ElsaRuntimeV2StorageManifest.Require(unitId), access),
-                queryRequests);
+                queryRequests,
+                beforeFencedDelete);
 
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
             connection.BeginUnitOfWork(access, options, unitIds.Select(ElsaRuntimeV2StorageManifest.Require).ToArray());
@@ -549,8 +605,11 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
 
     private sealed class RecordingSession(
         IStorageSession inner,
-        ICollection<QueryRequest>? queryRequests) : IStorageSession, IConcurrencyStorageSession
+        ICollection<QueryRequest>? queryRequests,
+        Action? beforeFencedDelete) : IStorageSession, IConcurrencyStorageSession, ICompareAndDeleteStorageSession
     {
+        private Action? beforeFencedDelete = beforeFencedDelete;
+
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
         public StoredEntry? Read(StorageKey key) => inner.Read(key);
@@ -565,14 +624,33 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
         public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
         public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
         public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null)
+        {
+            BeforeFencedDelete();
+            return inner.Delete(key, options);
+        }
+
+        public WriteOutcome CompareAndDelete(
+            StorageKey key,
+            IReadOnlyDictionary<string, object?> expectedValues,
+            WriteOptions? options = null)
+        {
+            BeforeFencedDelete();
+            return ((ICompareAndDeleteStorageSession)inner).CompareAndDelete(key, expectedValues, options);
+        }
+
         public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
 
         public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) =>
             ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
+
+        private void BeforeFencedDelete() => Interlocked.Exchange(ref beforeFencedDelete, null)?.Invoke();
     }
 
-    private sealed class RecordingSource : IGroundworkStorageSessionSource
+    private sealed class RecordingSource(
+        IReadOnlyList<CapabilityDescriptor>? capabilities = null) :
+        IGroundworkStorageSessionSource,
+        IGroundworkStorageCapabilitySource
     {
         public int OpenCount { get; private set; }
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
@@ -583,6 +661,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
 
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => throw new NotSupportedException();
         public StorageUnit Unit(string unitId, string? targetName = null) => ElsaRuntimeV2StorageManifest.Require(unitId);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => capabilities ?? [];
     }
 
     private sealed class NativeProviderRuntime(string path) : IAsyncDisposable

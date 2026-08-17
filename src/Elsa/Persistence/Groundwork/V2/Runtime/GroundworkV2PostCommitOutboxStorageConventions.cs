@@ -113,6 +113,25 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
             : DeliverableAt(item);
     }
 
+    public static bool PendingItemsEquivalent(
+        RuntimePostCommitOutboxItem left,
+        RuntimePostCommitOutboxItem right) =>
+        left.Status == RuntimePostCommitOutboxStatus.Pending &&
+        right.Status == RuntimePostCommitOutboxStatus.Pending &&
+        StringComparer.Ordinal.Equals(left.OutboxItemId, right.OutboxItemId) &&
+        IntentsEquivalent(left.Intent, right.Intent) &&
+        left.RecordedAt == right.RecordedAt &&
+        left.AvailableAt == right.AvailableAt &&
+        left.DeliveryAttemptCount == right.DeliveryAttemptCount &&
+        StringComparer.Ordinal.Equals(left.DeliveringOwnerId, right.DeliveringOwnerId) &&
+        left.DeliveryStartedAt == right.DeliveryStartedAt &&
+        left.DeliveredAt == right.DeliveredAt &&
+        StringComparer.Ordinal.Equals(left.LastFailureMessage, right.LastFailureMessage) &&
+        left.DeliveryFencingToken == right.DeliveryFencingToken &&
+        left.DeliveryVisibleAfter == right.DeliveryVisibleAfter &&
+        left.RetryPolicy.IsEquivalentTo(right.RetryPolicy) &&
+        MetadataEquals(left.Metadata, right.Metadata);
+
     private static void ValidateItem(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -120,6 +139,29 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
         ArgumentException.ThrowIfNullOrWhiteSpace(item.Intent.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(item.Intent.Kind);
     }
+
+    private static bool IntentsEquivalent(RuntimePostCommitIntent left, RuntimePostCommitIntent right) =>
+        StringComparer.Ordinal.Equals(left.IntentId, right.IntentId) &&
+        StringComparer.Ordinal.Equals(left.WorkflowExecutionId, right.WorkflowExecutionId) &&
+        StringComparer.Ordinal.Equals(left.Kind, right.Kind) &&
+        left.RecordedAt == right.RecordedAt &&
+        StringComparer.Ordinal.Equals(left.ActivityExecutionId, right.ActivityExecutionId) &&
+        StringComparer.Ordinal.Equals(left.IdempotencyKey, right.IdempotencyKey) &&
+        StringComparer.Ordinal.Equals(left.DependsOnWaitRegistrationId, right.DependsOnWaitRegistrationId) &&
+        left.WaitFailurePolicy == right.WaitFailurePolicy &&
+        PayloadEquals(left.Payload, right.Payload) &&
+        MetadataEquals(left.Metadata, right.Metadata);
+
+    private static bool PayloadEquals(JsonElement? left, JsonElement? right) =>
+        left.HasValue == right.HasValue &&
+        (!left.HasValue || StringComparer.Ordinal.Equals(left.Value.GetRawText(), right!.Value.GetRawText()));
+
+    private static bool MetadataEquals(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right) =>
+        left.Count == right.Count &&
+        left.All(entry => right.TryGetValue(entry.Key, out var value) &&
+                          StringComparer.Ordinal.Equals(entry.Value, value));
 
     private static void EnsureProjection(
         IReadOnlyDictionary<string, object?> values,
@@ -170,11 +212,6 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
         else
             throw new InvalidDataException($"Groundwork post-commit outbox row projection '{field}' is not a timestamp.");
 
-        // An older v2 writer omitted the nullable eligibility projections when AvailableAt was null. Treat that
-        // physical omission as the same immediate-eligibility value while all new writes use MinValue explicitly;
-        // this keeps replay reads deterministic without introducing a second storage path.
-        if (actual is null && expected == DateTimeOffset.MinValue)
-            return;
         if (actual != expected)
             throw new InvalidDataException($"Groundwork post-commit outbox row projection '{field}' does not match its current content.");
     }

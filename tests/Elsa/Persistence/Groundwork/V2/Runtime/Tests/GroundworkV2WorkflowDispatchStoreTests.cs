@@ -78,8 +78,13 @@ public sealed class GroundworkV2WorkflowDispatchStoreTests
             afterDispatchId: first.Last().DispatchId));
         Assert.Equal(ordered.Skip(2).Take(2).Select(record => record.DispatchId), second.Select(record => record.DispatchId));
 
-        Assert.Equal(records[0].DispatchId, (await store.QueryAsync(
-            new WorkflowDispatchQuery(childWorkflowExecutionId: records[0].ChildWorkflowExecutionId))).Single().DispatchId);
+        var child = (await store.QueryAsync(
+            new WorkflowDispatchQuery(childWorkflowExecutionId: records[0].ChildWorkflowExecutionId))).Single();
+        Assert.Equal(records[0].DispatchId, child.DispatchId);
+        Assert.Empty(await store.QueryAsync(new WorkflowDispatchQuery(
+            childWorkflowExecutionId: child.ChildWorkflowExecutionId,
+            afterCreatedAt: child.CreatedAt,
+            afterDispatchId: child.DispatchId)));
     }
 
     [Fact]
