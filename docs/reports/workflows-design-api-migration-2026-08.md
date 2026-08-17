@@ -79,7 +79,7 @@ Publishing 23, Runtime 24).
 
 ## E2E evidence
 
-On commit `45ab1fa825f238ef2b553750623141c4c74e9ed7`, the Workbench was rebuilt with `--no-restore`,
+On commit `a76f34d12121ab5b3c6a025d224bddab92226b5d`, the Workbench was rebuilt with `--no-restore`,
 the existing SQLite files were moved to a recoverable temporary directory, and the schema was applied to a
 fresh `src/Apps/Elsa.Workbench/elsa-groundwork.db` using the documented reference composition command. The
 server ran from that exact executable at `http://localhost:5095`.
@@ -104,7 +104,7 @@ the Workbench executable or production source exercised above.
 - Full solution build: `dotnet build Elsa.Server.slnx --no-restore` passed with 0 errors (218 repository warnings only).
 - Maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by `... -- check` passed; generated snapshots and `docs/maps/manifest.json` are included.
 - Format/import verification: focused verification passes for all changed production, test, architecture, comparer, and OpenAPI projector files. The broad project verification still reports inherited charset/import diagnostics in untouched base files; these are recorded as an advisory baseline issue rather than normalized into this migration.
-- E2E: the rebuilt Workbench at final executable commit `45ab1fa825f238ef2b553750623141c4c74e9ed7`, with a fresh SQLite DB, passed `Test-WorkflowVersionOverride.ps1` 5/5 and `Test-DesignWorkflowGets.ps1` 8/8 against `http://localhost:5095`; commands and results are recorded above.
+- E2E: the rebuilt Workbench at final executable commit `a76f34d12121ab5b3c6a025d224bddab92226b5d`, with a fresh SQLite DB, passed `Test-WorkflowVersionOverride.ps1` 5/5 and `Test-DesignWorkflowGets.ps1` 8/8 against `http://localhost:5095`; commands and results are recorded above.
 - Final review: issue comments/open PRs were rechecked before commit; the final diff is checked for whitespace, exact 27-route removal, production FastEndpoints references, and map/spec consistency.
 
 ## Risks
