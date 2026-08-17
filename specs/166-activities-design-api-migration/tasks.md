@@ -110,8 +110,8 @@ or feature code until that checkpoint is committed.
 **Purpose**: Validate real Workbench composition, persistence, authoring, publication, execution, and upgrade workflows.
 
 - [x] T039 Add a focused persisted upgrade-plan create/get/apply/receipt/refresh and exact version-pinning journey in `e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1` and document it in `e2e-tests/reusable-activities/README.md`
-- [ ] T040 Rebuild Workbench from current source, recreate the SQLite database/schema from scratch, and run `e2e-tests/get-endpoints/Test-DesignActivityGets.ps1` plus `e2e-tests/write-endpoints/Test-DesignActivityWrites.ps1`; record exact SHA/environment/counts in `docs/reports/activities-design-api-migration-2026-08.md`
-- [ ] T041 Run the reusable author/publish/execute, nesting, pinning, draft test-run, outcome-limit, sequence, and new upgrade-plan scripts under `e2e-tests/reusable-activities/`; record exact SHA/environment/counts and reconcile stale-test versus product defects in `docs/reports/activities-design-api-migration-2026-08.md`
+- [x] T040 Rebuild Workbench from current source, recreate the SQLite database/schema from scratch, and run `e2e-tests/get-endpoints/Test-DesignActivityGets.ps1` plus `e2e-tests/write-endpoints/Test-DesignActivityWrites.ps1`; record exact SHA/environment/counts in `docs/reports/activities-design-api-migration-2026-08.md`
+- [x] T041 Run the reusable author/publish/execute, nesting, pinning, draft test-run, outcome-limit, sequence, and new upgrade-plan scripts under `e2e-tests/reusable-activities/`; record exact SHA/environment/counts and reconcile stale-test versus product defects in `docs/reports/activities-design-api-migration-2026-08.md`
 
 ---
 
@@ -119,12 +119,12 @@ or feature code until that checkpoint is committed.
 
 **Purpose**: Make the evidence reviewable and close every repository gate before publication.
 
-- [ ] T042 Reconcile ADR `docs/adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md`, owner README/extension points, and canonical docs so they describe the final standard mapper, shared authorization, stable contract lifetime, and coexistence state without duplicating glossary facts
-- [ ] T043 Write `docs/reports/activities-design-api-migration-2026-08.md` with before receipt/hashes, exact 38 manifest/removal, route-by-route HTTP/OpenAPI disposition, approvals, permissions, semantic tests, unload weak references, E2E, commands/results, warnings, risks, rollback, and follow-up decisions
-- [ ] T044 Regenerate all generated maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, review findings, explicitly stage every changed map including `docs/maps/manifest.json`, and prove `-- check` is green
-- [ ] T045 Run the complete Activities Design test project and targeted compatibility/security/collectibility/transition/host-composition suites; record exact commands and totals in the report
-- [ ] T046 Run the full `tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`, full `Elsa.Server.slnx` build, changed-file formatter, map freshness, `git diff --check`, public API compatibility, and final transition count; resolve every branch-introduced failure/warning
-- [ ] T047 Recheck issue comments/open PRs, perform root diff/self-review against `origin/main`, verify all 38 removals and no lost test objectives, and commit the final implementation with a clean worktree
+- [x] T042 Reconcile ADR `docs/adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md`, owner README/extension points, and canonical docs so they describe the final standard mapper, shared authorization, stable contract lifetime, and coexistence state without duplicating glossary facts
+- [x] T043 Write `docs/reports/activities-design-api-migration-2026-08.md` with before receipt/hashes, exact 38 manifest/removal, route-by-route HTTP/OpenAPI disposition, approvals, permissions, semantic tests, unload weak references, E2E, commands/results, warnings, risks, rollback, and follow-up decisions
+- [x] T044 Regenerate all generated maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, review findings, explicitly stage every changed map including `docs/maps/manifest.json`, and prove `-- check` is green
+- [x] T045 Run the complete Activities Design test project and targeted compatibility/security/collectibility/transition/host-composition suites; record exact commands and totals in the report
+- [x] T046 Run the full `tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj`, full `Elsa.Server.slnx` build, changed-file formatter, map freshness, `git diff --check`, public API compatibility, and final transition count; resolve every branch-introduced failure/warning
+- [x] T047 Recheck issue comments/open PRs, perform root diff/self-review against `origin/main`, verify all 38 removals and no lost test objectives, and commit the final implementation with a clean worktree
 - [ ] T048 Obtain an independent five-axis review of correctness/security, contract evidence, architecture/API compatibility, code quality/DRY/style, and unloadability/dependency cleanup; record each review round and outcome on #1373
 - [ ] T049 Address every Critical/Required review finding, add mutation/regression bites, rerun affected/full gates, update the report/checklist, and repeat independent review until the gate is clean
 

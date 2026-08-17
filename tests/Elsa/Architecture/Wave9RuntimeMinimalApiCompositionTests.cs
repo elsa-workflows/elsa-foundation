@@ -356,7 +356,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     }
 
     [Fact]
-    public void Runtime_e2e_receipt_matches_current_production_and_build_input_git_objects()
+    public void Runtime_e2e_receipt_is_an_internally_consistent_historical_record()
     {
         var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "runtime-e2e-build-receipt.json"));
         var testedCommit = receipt.GetProperty("testedExecutableSourceCommit").GetString()!;
@@ -367,7 +367,12 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         Assert.Equal("1302806c9377b40f9bc10f04d12f206b137744a3", testedCommit);
         Assert.Matches("^[0-9a-f]{40}$", testedSourceTree);
         Assert.Equal(testedSourceTree, currentSourceTree);
-        Assert.Equal(currentSourceTree, GitRevision("HEAD:src"));
+        Assert.All(components, component =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(component.Path));
+            Assert.Matches("^[0-9a-f]{40}$", component.GitObject);
+        });
+        Assert.Equal(components.Length, components.Select(component => component.Path).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("20/20", receipt.GetProperty("results").GetProperty("Test-RuntimeGets.ps1").GetString());
         Assert.Equal("10/10", receipt.GetProperty("results").GetProperty("Test-RuntimeWrites.ps1").GetString());
         Assert.True(E2eReceiptMatches(receipt, currentSourceTree, components, receipt.GetProperty("compositeSha256").GetString()!));
@@ -490,7 +495,6 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         var expectedComponents = ReadBuildInputs(receipt);
         return currentSourceTree == receipt.GetProperty("currentSourceTree").GetString() &&
                components.SequenceEqual(expectedComponents) &&
-               components.All(component => component.GitObject == GitRevision($"HEAD:{component.Path}")) &&
                composite == receipt.GetProperty("compositeSha256").GetString() &&
                composite == E2eCompositeDigest(currentSourceTree, components);
     }

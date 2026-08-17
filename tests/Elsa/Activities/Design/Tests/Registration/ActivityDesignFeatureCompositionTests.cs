@@ -38,6 +38,8 @@ using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Registration;
 
+#pragma warning disable CS0618 // Compatibility tests intentionally resolve and replace the obsolete host contracts.
+
 /// <summary>
 /// Provider-neutral conversion (T070) of the §2.23.1 feature-composition rows that lived in the
 /// EF-referencing <c>FeatureRegistrationTests</c>. Every feature exercised here — the runtime,
@@ -493,3 +495,5 @@ public sealed class ActivityDesignFeatureCompositionTests
     {
     }
 }
+
+#pragma warning restore CS0618

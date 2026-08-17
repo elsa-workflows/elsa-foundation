@@ -204,3 +204,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [163-wave6-workflows-design-review](../../specs/163-wave6-workflows-design-review/spec.md) | Wave 6 Workflows Design API Review Corrections | Implementation | - | 20 | 0 | retained |
 | [164-runtime-api-minimal-migration](../../specs/164-runtime-api-minimal-migration/spec.md) | Runtime API Minimal API Migration | Draft | - | 14 | 0 | retained, out of scope |
 | [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | Implemented — merged by #1394 as `efe280446cafc998cbeb305bf235527eafd30b19` | - | 39 | 0 | retained, out of scope |
+| [166-activities-design-api-migration](../../specs/166-activities-design-api-migration/spec.md) | Activities Design API Minimal API Migration | Draft | - | 47 | 6 | retained, out of scope |
