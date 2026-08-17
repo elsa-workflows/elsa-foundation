@@ -55,7 +55,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["durableValueState"] = ["by_workflow_execution", "by_workflow_execution_and_durable_value_id"],
             ["executableActivityTemplate"] = ["by_collection", "by_collection_and_document_id", "by_template_hash"],
             ["executableActivityTemplateHashClaim"] = [],
-            ["incidentState"] = ["by_status_created_at_workflow_and_incident", "by_workflow_execution"],
+            ["incidentState"] = ["by_status_created_at_workflow_and_incident", "by_workflow_execution", "by_workflow_execution_and_incident_id", "by_workflow_execution_and_status_and_incident_id"],
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = [],
@@ -86,6 +86,10 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertIndex(timers, "by_claim_order", ["claimOrderKey"], included: true);
         AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
         AssertIndex(timers, "by_workflow_execution_and_timer_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+
+        var incidents = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind);
+        AssertIndex(incidents, "by_workflow_execution_and_incident_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.IncidentIdField], included: true);
+        AssertIndex(incidents, "by_workflow_execution_and_status_and_incident_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.StatusField, ElsaRuntimeV2StorageManifest.IncidentIdField], included: true);
 
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
         AssertIndex(triggerBindings, "by_stimulus_and_type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);

@@ -1464,7 +1464,12 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 Immediate()).AsTask());
 
         Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
-        Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind, incident.IncidentId, "tenant-a"));
+        Assert.Null(source.Find(
+            ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind,
+            GroundworkV2IncidentStateStorageConventions.PhysicalId(
+                incident.WorkflowExecutionId,
+                incident.IncidentId),
+            "tenant-a"));
         Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.WorkflowRunHealthStateDocumentKind, workflow.WorkflowExecutionId, "tenant-a"));
         Assert.Null(source.Find(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, "health-rollback", "tenant-a"));
     }

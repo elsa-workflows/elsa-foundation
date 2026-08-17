@@ -763,37 +763,35 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         {
             foreach (var change in commit.StateChanges.Incidents)
             {
+                var physicalId = GroundworkV2IncidentStateStorageConventions.PhysicalId(
+                    change.State.WorkflowExecutionId,
+                    change.State.IncidentId);
                 var entry = Open(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind)
-                    .Read(GroundworkRuntimeRowStore.Key(change.StateId));
+                    .Read(GroundworkRuntimeRowStore.Key(physicalId));
                 if (entry is null &&
                     change.Operation is RuntimeStateChangeOperation.Append or RuntimeStateChangeOperation.Upsert)
-                {
                     newIncidentIds.Add(change.StateId);
-                }
                 if (change.Operation == RuntimeStateChangeOperation.Append)
                 {
-                    Stage(
+                    StageValues(
                         ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind,
-                        change.StateId,
-                        change.State,
-                        ProjectIncident(change.State),
+                        GroundworkV2IncidentStateStorageConventions.Values(change.State),
                         RuntimeStateChangeOperation.Append);
                     continue;
                 }
 
                 var existing = entry is null
                     ? null
-                    : Deserialize<IncidentState>(entry.Values.Values);
+                    : GroundworkV2IncidentStateStorageConventions.Deserialize(entry.Values.Values);
                 IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, change.State);
-                StageUpsert(
+                StageValues(
                     ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind,
-                    change.StateId,
-                    change.State,
-                    ProjectIncident,
+                    GroundworkV2IncidentStateStorageConventions.Values(change.State),
+                    RuntimeStateChangeOperation.Upsert,
                     entry is null
                         ? WriteOptions.CreateOnly
                         : WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
-                            $"Incident '{change.StateId}' did not expose a provider revision.")));
+                            $"Incident '{change.State.IncidentId}' did not expose a provider revision.")));
             }
         }
 
@@ -1311,15 +1309,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryExecutionSequenceField] = state.ExecutionSequence,
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryScheduledAtField] = state.ScheduledAt,
                 [ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionSummaryActivityExecutionIdField] = state.ActivityExecutionId
-            };
-
-        private static IReadOnlyDictionary<string, object?> ProjectIncident(IncidentState state) =>
-            new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField] = state.WorkflowExecutionId,
-                [ElsaRuntimeV2StorageManifest.StatusField] = state.Status.ToString(),
-                [ElsaRuntimeV2StorageManifest.CreatedAtField] = state.CreatedAt,
-                [ElsaRuntimeV2StorageManifest.IncidentIdField] = state.IncidentId
             };
 
         private static void ValidateSchedulerClaim(
