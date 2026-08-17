@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using CShells.FastEndpoints.Contracts;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
@@ -68,7 +69,13 @@ public sealed class ActivitiesDesignCompatibilityHost(IHost host) : IAsyncDispos
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapFastEndpoints(config => config.Security.PermissionsClaimType = IdentityClaimTypes.Permission);
+                        endpoints.MapFastEndpoints(config =>
+                        {
+                            using var scope = endpoints.ServiceProvider.CreateScope();
+                            foreach (var configurator in scope.ServiceProvider.GetServices<IFastEndpointsConfigurator>())
+                                configurator.Configure(config);
+                            config.Security.PermissionsClaimType = IdentityClaimTypes.Permission;
+                        });
                         endpoints.MapOpenApi();
                     });
                 });

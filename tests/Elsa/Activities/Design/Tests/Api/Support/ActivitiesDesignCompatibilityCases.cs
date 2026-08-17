@@ -79,7 +79,7 @@ public static class ActivitiesDesignCompatibilityCases
 
     public static IReadOnlyList<HttpCompatibilityCase> Domain { get; } =
     [
-        Create(Find("Definitions.Get"), "Definitions.Get|trusted-domain-not-found", "trusted-domain-not-found"),
+        Create(Find("Availability.GetSettings"), "Availability.GetSettings|trusted-domain-not-found", "trusted-domain-not-found"),
         Create(Find("Drafts.Validate"), "Drafts.Validate|trusted-domain-conflict", "trusted-domain-conflict", "{}"),
         Create(Find("UpgradePlans.Apply"), "UpgradePlans.Apply|trusted-domain-failure", "trusted-domain-failure", "{}")
     ];
@@ -121,7 +121,7 @@ public static class ActivitiesDesignCompatibilityCases
             PagingFiltering = QueryDescription(route.RequestPath)
         };
 
-    private static string BodyFor(ActivityDesignRoute route) => route.Id switch
+    private static string? BodyFor(ActivityDesignRoute route) => route.Id switch
     {
         "Availability.SaveSettings" => "{\"scope\":\"host-default\",\"mode\":\"AllExcept\",\"rules\":{\"activityTypes\":[],\"sets\":[]}}",
         "Definitions.Add" => "{\"category\":\"Capture\",\"displayName\":\"Capture activity\",\"description\":\"capture\",\"provider\":{\"providerKey\":\"capture-provider\",\"schemaVersion\":\"1\",\"payload\":{\"opaque\":true}},\"contract\":{\"contractSchemaVersion\":\"1\",\"inputs\":[],\"outputs\":[],\"outcomes\":[]},\"layout\":[]}",
@@ -145,7 +145,7 @@ public static class ActivitiesDesignCompatibilityCases
         "UpgradePlans.Create" => "{\"replacements\":[],\"roots\":[],\"includeTransitiveDependents\":true,\"createDraftsForPublishedDependents\":false}",
         "UpgradePlans.Apply" => "{\"planId\":\"body-plan\",\"stageId\":\"capture-stage\",\"idempotencyKey\":\"capture-apply\"}",
         "UpgradePlans.Refresh" => "{\"planId\":\"body-plan\",\"publications\":[]}",
-        _ when route.Endpoint.Method.Value.Equals("GET", StringComparison.OrdinalIgnoreCase) => string.Empty,
+        _ when route.Endpoint.Method.Value.Equals("GET", StringComparison.OrdinalIgnoreCase) => null,
         _ => "{}"
     };
 
