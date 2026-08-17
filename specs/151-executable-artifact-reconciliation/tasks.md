@@ -210,7 +210,15 @@ T071 pinned US1 scenario 2 with a test-owned `IActivityTriggerStimulusProvider` 
 
 **Nothing in `src/` registers a default `IDistributedLockProvider`.** `Elsa.Locking.FileSystem` is the only implementation, and the `Tasks` feature *consumes* rather than provides it. The reconciler's `[SingleNodeTask]` startup task requires one, so **any shell composing `JsonWorkflowArtifactReconciliation` without a locking feature fails at DI validation** — not at run time with a diagnostic naming what is missing.
 
-This is the same shape as the regression the hasher extraction caused: a service that must come from a composition the feature does not itself arm. It is arguably correct that a distributed lock has no in-memory default (a fake one on a multi-node deployment would be actively dangerous), but the failure mode should be a named diagnostic rather than a DI validation error. **Decide before a real shell composition hits it** — options are a documented `DependsOn`, a startup precondition check with a clear message, or an explicit single-process default that a multi-node host must replace. The design-side reconcilers have the same dependency, so whatever is decided should apply to both.
+**RESOLVED 2026-08-16 (Joey): change nothing mechanical; the gap was documentation.** `WorkflowsVersionReconcilerStartupTask` was checked and takes `IDistributedLockProvider` as a **required** dependency too, handling only a null *lock handle* (could not acquire → log and return). So the artifact reconciler already matches the established pattern — there was no inconsistency, only an undocumented requirement.
+
+The current behaviour is the correct one and stays:
+- **Required, not optional.** Optional-plus-throw would buy a nicer message at the cost of the type lying about its contract, for a failure that already cannot reach production.
+- **Fails at container validation** — loud, at boot, un-shippable. The DI error already names both the missing type and the consumer.
+- **No in-memory default, ever.** That is the one genuinely dangerous option: it satisfies DI, behaves perfectly on one node, and silently permits two nodes to reconcile the same mount concurrently — precisely what `[SingleNodeTask]` exists to prevent. **Absence of a default is the safety property.**
+- **Not a `DependsOn`**, because that would pin one provider choice; `FileSystem` suits a single host, a multi-node deployment needs a genuinely distributed provider.
+
+Fixed by documenting the requirement and its rationale on `JsonWorkflowArtifactReconciliationFeature`, so a composer learns it while reading the feature rather than on first boot.
 
 ## Recurring supersession deactivates rather than deletes (recorded 2026-08-16)
 

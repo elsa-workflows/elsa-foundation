@@ -24,6 +24,17 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// activate anything — correctly: an imported timer- or HTTP-started workflow with no trigger projection is a
 /// definition that is live and can never fire, which is worse than a loud refusal at boot.
 /// </para>
+/// <para>
+/// <b>A locking feature must also be composed.</b> The reconcile pass is a <c>[SingleNodeTask]</c> guarded by
+/// <c>IDistributedLockProvider</c>, and <b>no default is registered anywhere in the framework — deliberately</b>.
+/// A process-local stand-in would satisfy DI, behave perfectly on one node, and then silently let two nodes
+/// reconcile the same mount concurrently, which is the exact condition the single-node guard exists to prevent.
+/// Absence of a default is the safety property, not an oversight: composing without a locking feature fails at
+/// container validation, at boot, and cannot be shipped past. Compose any <c>Elsa.Locking.*</c> provider —
+/// <c>Elsa.Locking.FileSystem</c> is sufficient for a single host; a multi-node deployment needs a genuinely
+/// distributed one. This is not expressed as a <c>DependsOn</c> because that would pin one provider choice, and
+/// the design-side reconcilers carry the identical requirement the same way.
+/// </para>
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
