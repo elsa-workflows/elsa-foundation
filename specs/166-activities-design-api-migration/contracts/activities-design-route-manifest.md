@@ -4,6 +4,12 @@ The owner prefix is `/design/activities`. The frozen baseline owns the final wir
 reviewed logical inventory is fixed at 38 and must remain one-to-one through migration. `R` means
 `activity-design.read`; `M` means `activity-design.manage`.
 
+This table is the baseline source-of-truth inventory. The before tests bind every row to one discovered
+FastEndpoints registration and reject additions, omissions, duplicate method/template pairs, or a picker/identifier
+overlap. The capture corpus has one anonymous challenge and one authenticated case for every row; 37 historical
+routes reach their documented success status, while `Forks.GetStatus` records its real route-only DTO binding
+failure for an explicit reviewed correction. The captured OpenAPI projection consumes one operation for every row.
+
 | Identity | Method | Relative route | Action | Success |
 |---|---|---|---|---|
 | Availability.GetSettings | GET | `/availability/settings` | R | 200 |
@@ -54,3 +60,11 @@ reviewed logical inventory is fixed at 38 and must remain one-to-one through mig
 - Transition completion removes these exact 38 first-party FastEndpoints registrations and no others.
 - Route values override body identifiers for every mutating request shape and remain absent from JSON schemas.
 - `/definitions/picker` remains unambiguous beside `/definitions/{definitionId}`.
+
+## Before-capture identity
+
+The immutable receipt and fixture set are committed under
+`tests/Elsa/Activities/Design/Tests/Api/Baselines/` by the clean-content-guarded runner in
+`tools/capture-activities-design-before.sh`. The receipt records the 38 registrations, 38 consumed operations,
+the complete corpus count, branch-durable source tree, runner/dependency hashes, projected and raw OpenAPI hashes,
+and an empty approval artifact. It intentionally records no runner commit identity that could be lost by a squash.

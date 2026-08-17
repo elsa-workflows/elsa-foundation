@@ -15,7 +15,7 @@ or feature code until that checkpoint is committed.
 
 **Purpose**: Freeze a reproducible, bite-proof oracle from the real FastEndpoints owner before production changes.
 
-- [ ] T001 Recheck issue #1373 comments, open PRs, red-main gate issues, and exact base health; record any competing claim or inherited failure on #1373 before writing code
+- [x] T001 Recheck issue #1373 comments, open PRs, red-main gate issues, and exact base health; record any competing claim or inherited failure on #1373 before writing code
 - [ ] T002 Add the exact 38 method/template/action/success inventory and one-to-one registration assertions in `tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiBeforeBaselineTests.cs` and `specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md`
 - [ ] T003 [P] Build the deterministic 38-route anonymous plus authenticated success/binding/domain/cancellation corpus in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityCases.cs`
 - [ ] T004 [P] Build the real FastEndpoints historical host and deterministic provider/store/auth fixtures in `tests/Elsa/Activities/Design/Tests/Api/Support/ActivitiesDesignCompatibilityHost.cs`
