@@ -51,6 +51,9 @@ public static class PublishingCompatibilityCases
         Create(Find("WorkflowSnapshotPreflight"), "WorkflowSnapshotPreflight|trusted-malformed-json", "trusted-binding", "{"),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-null-body", "trusted-binding", "null"),
         Create(Find("ActivityDrafts.Publish"), "ActivityDrafts.Publish|trusted-empty-body", "trusted-binding", string.Empty),
+        Create(Find("ActivityDrafts.Publish"), "ActivityDrafts.Publish|trusted-missing-body", "trusted-binding"),
+        Create(Find("ActivityDrafts.Publish"), "ActivityDrafts.Publish|trusted-absent-content-type", "trusted-binding", "{}", contentType: null),
+        Create(Find("ActivityDrafts.Publish"), "ActivityDrafts.Publish|trusted-null-json-body", "trusted-binding", "null"),
         Create(Find("ActivityDrafts.Preflight"), "ActivityDrafts.Preflight|trusted-wrong-content-type", "trusted-binding", "{}", "text/plain"),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-route-over-body", "trusted-binding", "{\"versionId\":\"body-version\",\"reviewToken\":\"review\"}"),
         Create(Find("WorkflowTestRuns.StartDraft"), "WorkflowTestRuns.StartDraft|trusted-reserved-drafts-selection", "trusted-success", BodyFor(Find("WorkflowTestRuns.StartDraft"))),
@@ -63,7 +66,19 @@ public static class PublishingCompatibilityCases
         Create(Find("WorkflowPolicy.Set"), "WorkflowPolicy.Set|trusted-domain-conflict", "trusted-domain-conflict", "{}"),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-domain-conflict", "trusted-domain-conflict", BodyFor(Find("WorkflowPublish"))),
         Create(Find("WorkflowPreflight"), "WorkflowPreflight|trusted-domain-validation", "trusted-domain-validation", "{\"action\":999}"),
-        Create(Find("RuntimePreflight"), "RuntimePreflight|trusted-domain-unavailable", "trusted-domain-unavailable", BodyFor(Find("RuntimePreflight")))
+        Create(Find("RuntimePreflight"), "RuntimePreflight|trusted-domain-unavailable", "trusted-domain-unavailable", BodyFor(Find("RuntimePreflight"))),
+        Create(Find("ActivityDrafts.Preflight"), "ActivityDrafts.Preflight|trusted-unprocessable", "trusted-unprocessable", BodyFor(Find("ActivityDrafts.Preflight"))),
+        Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-expression-errors", "trusted-expression-errors", BodyFor(Find("WorkflowPublish"))),
+        Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-expression-unavailable", "trusted-expression-unavailable", BodyFor(Find("WorkflowPublish"))),
+        Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-generic-500", "trusted-generic-500", BodyFor(Find("WorkflowPublish"))),
+        Create(Find("WorkflowPreflight"), "WorkflowPreflight|trusted-generic-500", "trusted-generic-500", BodyFor(Find("WorkflowPreflight"))),
+        Create(Find("RuntimePreflight"), "RuntimePreflight|trusted-generic-500", "trusted-generic-500", BodyFor(Find("RuntimePreflight"))),
+        Create(Find("ActivityPublications.GetReceipt"), "ActivityPublications.GetReceipt|trusted-generic-500", "trusted-generic-500"),
+        Create(Find("ActivityTestRuns.Get"), "ActivityTestRuns.Get|trusted-generic-500", "trusted-generic-500"),
+        Create(Find("PublicationSlots.Unpublish"), "PublicationSlots.Unpublish|trusted-slot-lifecycle", "trusted-slot-lifecycle", BodyFor(Find("PublicationSlots.Unpublish"))),
+        Create(Find("PublicationSlots.Restore"), "PublicationSlots.Restore|trusted-slot-lifecycle", "trusted-slot-lifecycle", BodyFor(Find("PublicationSlots.Restore"))),
+        Create(Find("ActivityTestRuns.GetByIdempotencyKey"), "ActivityTestRuns.GetByIdempotencyKey|trusted-test-run-lookup", "trusted-test-run-lookup"),
+        Create(Find("ActivityTestRuns.Cancel"), "ActivityTestRuns.Cancel|trusted-test-run-cancellation", "trusted-test-run-cancellation")
     ];
 
     public static IReadOnlyList<HttpCompatibilityCase> Cancellation { get; } =
@@ -82,7 +97,7 @@ public static class PublishingCompatibilityCases
         string caseName,
         string? identity = null,
         string? body = null,
-        string contentType = "application/json",
+        string? contentType = "application/json",
         string? requestPath = null) =>
         new(route.Endpoint, caseName, () =>
         {
@@ -90,7 +105,11 @@ public static class PublishingCompatibilityCases
             if (identity is not null)
                 request.Headers.TryAddWithoutValidation(IdentityHeader, identity);
             if (body is not null)
-                request.Content = new StringContent(body, Encoding.UTF8, contentType);
+            {
+                request.Content = contentType is null
+                    ? new ByteArrayContent(Encoding.UTF8.GetBytes(body))
+                    : new StringContent(body, Encoding.UTF8, contentType);
+            }
             return request;
         })
         {

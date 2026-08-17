@@ -6,6 +6,7 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api;
@@ -13,6 +14,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -180,6 +182,24 @@ internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor)
             throw new PublicationPolicyResolutionException("invalid_host_policy", "The deterministic publication validation failure was requested.");
         if (scenario == "trusted-domain-unavailable")
             throw new RuntimeRequirementPreflightRequestException("The deterministic runtime requirement provider is unavailable.");
+        if (scenario == "trusted-unprocessable")
+            throw new ActivityPublicationRejectedException(
+                "activity.publication.invalid",
+                "The deterministic activity validation failure was requested.",
+                [],
+                isConflict: false);
+        if (scenario == "trusted-expression-errors")
+            throw new ExpressionPublicationValidationException(new(
+                ExpressionDraftValidationState.Errors,
+                [],
+                "expression-validation-errors"));
+        if (scenario == "trusted-expression-unavailable")
+            throw new ExpressionPublicationValidationException(new(
+                ExpressionDraftValidationState.Unavailable,
+                [],
+                "expression-validation-unavailable"));
+        if (scenario == "trusted-generic-500")
+            throw new InvalidOperationException("The deterministic unexpected failure was requested.");
 
         if (typeof(T) == typeof(PublishedWorkflowView))
         {
