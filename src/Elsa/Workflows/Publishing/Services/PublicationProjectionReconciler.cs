@@ -28,6 +28,19 @@ public sealed class PublicationProjectionReconciler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(candidate);
+
+        // Same fail-fast rule the activation coordinator applies, for the same reason: a recurring store with no
+        // preparer means the recurring projection is never written, while ActivateAsync below still activates it.
+        // Unchecked, that degrades silently on the RestoreAsync compensation path -- a workflow's timers stop
+        // firing after a failed unpublish, with nothing reported. The two are registered together by
+        // WorkflowsRuntimeRecurringTriggers; this refuses the composition that pulled them apart.
+        if (recurringScheduleStore is not null && recurringSchedulePreparer is null)
+            throw new InvalidOperationException(
+                $"Publication '{candidate.PublicationId}' cannot prepare its serving projections: an " +
+                "IRecurringTriggerScheduleStore is composed with no IRecurringTriggerScheduleProjectionPreparer, " +
+                "so the recurring projection would never be prepared while activation would still activate it. " +
+                "Compose the WorkflowsRuntimeRecurringTriggers feature, which registers both, or register a preparer.");
+
         var executable = await executableStore.FindAsync(candidate.ArtifactId, cancellationToken)
             ?? throw new InvalidOperationException($"Executable artifact '{candidate.ArtifactId}' was not found for publication '{candidate.PublicationId}'.");
 

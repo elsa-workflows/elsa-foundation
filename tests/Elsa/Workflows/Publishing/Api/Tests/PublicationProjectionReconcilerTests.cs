@@ -222,7 +222,10 @@ public sealed class PublicationProjectionReconcilerTests
         public ServingProjectionObserver Observer { get; } = observer;
         public PublicationProjectionReconciler Reconciler { get; } = reconciler;
 
-        public static async Task<Fixture> CreateAsync(DateTimeOffset now, bool failFirstPreparation = false)
+        public static async Task<Fixture> CreateAsync(
+            DateTimeOffset now,
+            bool failFirstPreparation = false,
+            bool composeSchedulePreparer = true)
         {
             var executableStore = new InMemoryWorkflowExecutableStore();
             var executable = Executable(now);
@@ -230,7 +233,8 @@ public sealed class PublicationProjectionReconcilerTests
             var intentStore = new InMemoryPublicationProjectionIntentStore();
             var bindingStore = new InMemoryWorkflowTriggerBindingStore();
             var scheduleStore = new CountingRecurringScheduleStore();
-            var indexer = new RecordingProjectionIndexer(bindingStore, scheduleStore, now, failFirstPreparation);
+            var indexer = new RecordingProjectionIndexer(bindingStore, now, failFirstPreparation);
+            var schedulePreparer = new RecordingRecurringSchedulePreparer(scheduleStore, now);
             var observer = new ServingProjectionObserver(bindingStore);
             var reconciler = new PublicationProjectionReconciler(
                 intentStore,
@@ -239,7 +243,8 @@ public sealed class PublicationProjectionReconcilerTests
                 bindingStore,
                 new FixedTimeProvider(now),
                 scheduleStore,
-                [observer]);
+                [observer],
+                composeSchedulePreparer ? schedulePreparer : null);
             var publication = new PublicationRecord(
                 PublicationId: "publication-1",
                 SlotId: WorkflowActivationSlotIdentity.Create("definition-1", "default"),
@@ -291,9 +296,27 @@ public sealed class PublicationProjectionReconcilerTests
         public void Clear() => VisiblePublicationsByNotification.Clear();
     }
 
+    [Fact]
+    public async Task A_recurring_store_without_a_preparer_is_refused_before_the_first_write()
+    {
+        // T044b retired the decorator that made IWorkflowTriggerIndexer silently own the recurring projection.
+        // A composition that keeps the store but loses the preparer would otherwise prepare nothing while
+        // ActivateAsync still activates -- and on the RestoreAsync compensation path that means a workflow's
+        // timers stop firing after a failed unpublish, reported nowhere. The activation coordinator refuses the
+        // same composition for the same reason; this is that guard on the publishing side.
+        var fixture = await Fixture.CreateAsync(_now, composeSchedulePreparer: false);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await fixture.Reconciler.PrepareAsync(fixture.Publication));
+
+        Assert.Contains("IRecurringTriggerScheduleProjectionPreparer", exception.Message, StringComparison.Ordinal);
+        // Refused before the first write, not midway through one.
+        Assert.Equal(0, fixture.Indexer.PrepareCallCount);
+        Assert.Equal(0, fixture.ScheduleStore.PrepareActivationCalls);
+    }
+
     private sealed class RecordingProjectionIndexer(
         IWorkflowTriggerBindingStore bindingStore,
-        IRecurringTriggerScheduleStore scheduleStore,
         DateTimeOffset now,
         bool failFirstPreparation) : IWorkflowTriggerIndexer
     {
@@ -328,8 +351,36 @@ public sealed class PublicationProjectionReconcilerTests
                 ActivationId: publicationId,
                 SlotId: slotId,
                 IsActive: false);
+            await bindingStore.PrepareActivationAsync(publicationId, [binding], cancellationToken);
+            return [binding];
+        }
+    }
+
+    /// <summary>
+    /// Prepares the recurring projection, which the indexer above deliberately no longer does.
+    /// </summary>
+    /// <remarks>
+    /// This stub used to be part of <see cref="RecordingProjectionIndexer"/>, reproducing inside a test double the
+    /// decorator T044b retired from production. That is precisely what hid the defect: the reconciler stopped
+    /// preparing the recurring projection while still activating it, and this fixture kept preparing it anyway, so
+    /// the suite passed identically before and after the production fix. Keeping the two obligations in separate
+    /// doubles is what lets the composition guard and the ordering be asserted at all.
+    /// </remarks>
+    private sealed class RecordingRecurringSchedulePreparer(
+        IRecurringTriggerScheduleStore scheduleStore,
+        DateTimeOffset now) : IRecurringTriggerScheduleProjectionPreparer
+    {
+        public int PrepareCallCount { get; private set; }
+
+        public async ValueTask PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default)
+        {
+            PrepareCallCount++;
             var schedule = new RecurringTriggerSchedule(
-                RecurringTriggerSchedule.BuildId(publicationId, executable.Identity.ArtifactId, "node-root"),
+                RecurringTriggerSchedule.BuildId(activationId, executable.Identity.ArtifactId, "node-root"),
                 executable.Identity.ArtifactId,
                 "node-root",
                 "Event",
@@ -338,12 +389,10 @@ public sealed class PublicationProjectionReconcilerTests
                 "PT1H",
                 now.AddHours(1),
                 now,
-                ActivationId: publicationId,
+                ActivationId: activationId,
                 SlotId: slotId,
                 IsActive: false);
-            await bindingStore.PrepareActivationAsync(publicationId, [binding], cancellationToken);
-            await scheduleStore.PrepareActivationAsync(publicationId, [schedule], cancellationToken);
-            return [binding];
+            await scheduleStore.PrepareActivationAsync(activationId, [schedule], cancellationToken);
         }
     }
 
