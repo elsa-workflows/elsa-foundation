@@ -1,7 +1,7 @@
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Capabilities;

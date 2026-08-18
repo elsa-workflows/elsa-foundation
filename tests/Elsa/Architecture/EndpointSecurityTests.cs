@@ -5,7 +5,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
 using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api;

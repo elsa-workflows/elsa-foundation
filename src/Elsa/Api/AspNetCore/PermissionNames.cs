@@ -1,12 +1,20 @@
-﻿namespace Elsa.Api.FastEndpoints.Constants;
+namespace Elsa.Api.AspNetCore;
 
+/// <summary>
+/// The shared endpoint security convention's permission catalog.
+/// </summary>
+/// <remarks>
+/// These names live with the shared endpoint security convention so custom hosts and identity
+/// providers can grant them without referencing an individual domain API implementation. They were
+/// previously housed in the first-party FastEndpoints project, which made a convention that is
+/// authoring-model-neutral look FastEndpoints-specific; retiring that project moved them here,
+/// beside the endpoint ownership, authoring, and security-disposition metadata they compose with.
+/// </remarks>
 public static class PermissionNames
 {
     public const string All = "*";
 
-    // Supported management-client APIs use action-scoped permissions. These names live with the
-    // shared endpoint security convention so custom hosts and identity providers can grant them
-    // without referencing an individual domain API implementation.
+    // Supported management-client APIs use action-scoped permissions.
     public const string WorkflowDesignRead = "workflow-design.read";
     public const string WorkflowDesignManage = "workflow-design.manage";
     public const string ActivityDesignRead = "activity-design.read";

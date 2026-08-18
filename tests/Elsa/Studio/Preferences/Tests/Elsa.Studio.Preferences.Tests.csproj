@@ -24,7 +24,6 @@
     <ProjectReference Include="../../../../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
     <ProjectReference Include="../../../../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
     <ProjectReference Include="../../../../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="../../../../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="../../../../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="../../../Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>

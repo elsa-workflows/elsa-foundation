@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;

@@ -11,7 +11,6 @@
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj"
                       Condition="Exists('../../../../../../../src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj')" />

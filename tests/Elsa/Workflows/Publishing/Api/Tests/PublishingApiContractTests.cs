@@ -113,8 +113,8 @@ public sealed class PublishingApiContractTests
             Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
             Assert.Equal(
                 PermissionKey.Normalize(route.Action == "read"
-                    ? Elsa.Api.FastEndpoints.Constants.PermissionNames.WorkflowPublishingRead
-                    : Elsa.Api.FastEndpoints.Constants.PermissionNames.WorkflowPublishingManage),
+                    ? Elsa.Api.AspNetCore.PermissionNames.WorkflowPublishingRead
+                    : Elsa.Api.AspNetCore.PermissionNames.WorkflowPublishingManage),
                 Assert.Single(descriptor.Permissions));
             Assert.NotEqual(PermissionKey.Wildcard, descriptor.Permissions[0]);
 
