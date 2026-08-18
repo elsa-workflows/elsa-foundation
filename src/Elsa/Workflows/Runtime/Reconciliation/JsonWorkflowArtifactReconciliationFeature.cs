@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Options;
 using Elsa.Workflows.Runtime.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Reconciliation;
 
@@ -56,7 +57,9 @@ public class JsonWorkflowArtifactReconciliationFeature : WorkflowsArtifactReconc
         base.ConfigureServices(services);
 
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(Options));
-        services.AddScoped<IWorkflowArtifactClosureReader, JsonWorkflowArtifactClosureReader>();
+        // TryAdd for the reader (§2.6.2: single implementation, first-wins per ADR 0033) — plain Add for the
+        // source, which is a fan-in contribution: several mounts legitimately contribute several sources.
+        services.TryAddScoped<IWorkflowArtifactClosureReader, JsonWorkflowArtifactClosureReader>();
         services.AddScoped<IWorkflowArtifactReconciliationSource, JsonWorkflowArtifactReconciliationSource>();
     }
 

@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Reconciliation.Options;
 using Elsa.Workflows.Runtime.Reconciliation.Services;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Reconciliation;
 
@@ -50,7 +51,11 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
 
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
-        services.AddScoped<IWorkflowArtifactReconciler, WorkflowArtifactReconciler>();
+        // TryAdd, not Add: the reconciler is a single-implementation contract, so §2.6.2 forbids letting a host's
+        // replacement be decided by registration order. First-wins (ADR 0033) is the convention the three runtime
+        // replacement contracts already use, so a host registers its own BEFORE composing the feature — the same
+        // gesture everywhere, rather than "before" here and "after" there.
+        services.TryAddScoped<IWorkflowArtifactReconciler, WorkflowArtifactReconciler>();
         services.AddScoped<IStartupTask, WorkflowArtifactReconcilerStartupTask>();
     }
 }

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Primitives.Models;
@@ -16,7 +16,7 @@ namespace Elsa.Activities.Scheduling.Tests;
 
 /// <summary>
 /// Sample-workflow coverage for the Timer/Cron recurring start triggers (W16). It wires the real publish-time
-/// providers, schedule indexer, in-memory schedule store, and the recurring-trigger pump end to end: publishing
+/// providers, schedule-projection preparer, in-memory schedule store, and the recurring-trigger pump end to end: publishing
 /// a workflow whose start trigger is a <see cref="Timer"/> (or <see cref="Cron"/>) writes a recurring schedule,
 /// and a pump sweep after the first occurrence dispatches a start-only stimulus through the router — the exact
 /// path a host runs, minus the provider-neutral persistence swap.
@@ -32,13 +32,12 @@ public sealed class RecurringTriggerSampleWorkflowTests
         var store = new InMemoryRecurringTriggerScheduleStore();
         var calculator = new RecurringScheduleCalculator();
         var clock = new FixedClock(Now);
-        var indexer = new RecurringTriggerScheduleIndexer(
-            new NoopInner(),
+        var preparer = new RecurringTriggerScheduleProjectionPreparer(
             [new TimerRecurringScheduleProvider()],
-            store, calculator, clock, NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+            store, calculator, clock, NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
         // Activate a workflow that starts on a 5-minute timer.
-        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
+        await PrepareAndActivateAsync(preparer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
 
         // Before the first occurrence nothing is due.
         var bindingStore = await BindingStoreAsync("artifact-timer", TimerStimulus.StimulusType, TimerStimulus.Hash("PT5M"), "activation-1");
@@ -62,13 +61,12 @@ public sealed class RecurringTriggerSampleWorkflowTests
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         var calculator = new RecurringScheduleCalculator();
-        var indexer = new RecurringTriggerScheduleIndexer(
-            new NoopInner(),
+        var preparer = new RecurringTriggerScheduleProjectionPreparer(
             [new CronRecurringScheduleProvider()],
-            store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+            store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
         // Every hour on the hour; activated at 12:00 the first occurrence is 13:00.
-        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-cron", CronNode("0 * * * *")), "activation-1");
+        await PrepareAndActivateAsync(preparer, store, Workflow("artifact-cron", CronNode("0 * * * *")), "activation-1");
 
         var bindingStore = await BindingStoreAsync("artifact-cron", CronStimulus.StimulusType, CronStimulus.Hash("0 * * * *"), "activation-1");
         var router = new RecordingRouter();
@@ -86,14 +84,13 @@ public sealed class RecurringTriggerSampleWorkflowTests
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
         var calculator = new RecurringScheduleCalculator();
-        var indexer = new RecurringTriggerScheduleIndexer(
-            new NoopInner(),
+        var preparer = new RecurringTriggerScheduleProjectionPreparer(
             [new TimerRecurringScheduleProvider()],
-            store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+            store, calculator, new FixedClock(Now), NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
-        await PrepareAndActivateAsync(indexer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
+        await PrepareAndActivateAsync(preparer, store, Workflow("artifact-timer", TimerNode("PT5M")), "activation-1");
         await PrepareAndActivateAsync(
-            indexer, store, Workflow("artifact-timer", TimerNode("PT9M")), "activation-2", replacedActivationId: "activation-1");
+            preparer, store, Workflow("artifact-timer", TimerNode("PT9M")), "activation-2", replacedActivationId: "activation-1");
 
         // Only the re-activated schedule serves; supersession is activation-scoped, never an artifact-wide wipe.
         var schedule = Assert.Single(await store.ListDueAsync(Now.AddHours(1), 10));
@@ -116,13 +113,13 @@ public sealed class RecurringTriggerSampleWorkflowTests
     /// coordinator performs around the slot CAS. Preparation alone leaves the schedule invisible to the pump.
     /// </summary>
     private static async Task PrepareAndActivateAsync(
-        RecurringTriggerScheduleIndexer indexer,
+        RecurringTriggerScheduleProjectionPreparer preparer,
         IRecurringTriggerScheduleStore store,
         WorkflowExecutable executable,
         string activationId,
         string? replacedActivationId = null)
     {
-        await indexer.PrepareActivationAsync(executable, activationId, SlotId);
+        await preparer.PrepareActivationAsync(executable, activationId, SlotId);
         await store.ActivateAsync(activationId, replacedActivationId);
     }
 
@@ -195,16 +192,6 @@ public sealed class RecurringTriggerSampleWorkflowTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Literal,
             literal: ValueEnvelope.Inline(type, value, ValueProtectionPolicy.InstanceInline));
-    }
-
-    private sealed class NoopInner : IWorkflowTriggerIndexer
-    {
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
-            WorkflowExecutable executable,
-            string activationId,
-            string slotId,
-            CancellationToken cancellationToken = default) =>
-            new(Array.Empty<WorkflowTriggerBinding>());
     }
 
     private sealed class RecordingRouter : IStimulusRouter

@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Runtime.Scheduling.Tests;
 /// <para>
 /// This is the projection the 2026-08-14 re-review added on the explicit grounds that binding-store-only
 /// activation would import timer/cron workflows that never fire. Everything around it was already covered, but
-/// only in halves: <c>RecurringTriggerScheduleIndexerTests</c> proves the indexer writes a prepared row,
+/// only in halves: <c>RecurringTriggerScheduleProjectionPreparerTests</c> proves the preparer writes a prepared row,
 /// <c>RecurringTriggerPumpTaskTests</c> proves the pump fires a hand-seeded one, and
 /// <c>RecurringTriggerSampleWorkflowTests</c> joins them through a recording router that never starts anything.
 /// None of them starts from a mounted closure, and none of them observes a workflow run.
@@ -176,6 +176,90 @@ public sealed class ImportedRecurringTriggerEndToEndTests : IDisposable
         Assert.Equal(superseding.Identity.ArtifactId, run.WorkflowState!.PinnedExecutable.ArtifactId);
     }
 
+    [Fact]
+    public async Task A_host_that_replaces_the_trigger_indexer_still_gets_its_recurring_schedule()
+    {
+        // T044b. IWorkflowTriggerIndexer is published as a REPLACEMENT contract, so a host is invited to swap in
+        // its own. While the recurring projection's preparation rode along inside a decorator over that contract,
+        // doing so silently disarmed it: the schedule was never prepared, and the loss surfaced only when the
+        // coordinator activated the projection — after the slot CAS — so the import failed in compensation.
+        // The replacement below is what an implementer writes from the extension-point catalog: it satisfies the
+        // whole contract and knows nothing about recurring schedules.
+        var replacement = new HostReplacementTriggerIndexer();
+        await using var harness = BuildHarness(services =>
+            services.AddScoped<IWorkflowTriggerIndexer>(sp =>
+            {
+                replacement.Bind(
+                    sp.GetRequiredService<IWorkflowTriggerBindingExtractor>(),
+                    sp.GetRequiredService<IWorkflowTriggerBindingStore>());
+                return replacement;
+            }));
+        var executable = MountTimerArtifact(harness, Interval, "nightly.json");
+
+        var entry = Assert.Single((await ReconcileAsync(harness)).Entries);
+
+        // The import succeeded at all — this is the assertion that used to fail, in compensation.
+        Assert.Equal(WorkflowArtifactImportOutcome.Imported, entry.Outcome);
+        Assert.True(replacement.Called, "the host's indexer, not the framework default, wrote the trigger projection");
+
+        // And the recurring projection is serving, not merely prepared.
+        var schedule = Assert.Single(await ScheduleStore(harness).ListByActivationAsync(entry.ActivationId!));
+        Assert.True(schedule.IsActive);
+        Assert.Equal(executable.Identity.ArtifactId, schedule.ArtifactId);
+        Assert.Equal(Origin.AddMinutes(5), schedule.NextOccurrence);
+
+        // Which is only worth anything if the timer actually fires the imported workflow.
+        _clock.Advance(TimeSpan.FromMinutes(6));
+        await SweepAsync(harness);
+
+        var run = await harness.ReadRunAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        Assert.Equal(executable.Identity.ArtifactId, run.WorkflowState!.PinnedExecutable.ArtifactId);
+    }
+
+    /// <summary>
+    /// A third-party <see cref="IWorkflowTriggerIndexer"/>: the whole contract, implemented from what the
+    /// extension-point catalog documents, with no knowledge of recurring schedules.
+    /// </summary>
+    private sealed class HostReplacementTriggerIndexer : IWorkflowTriggerIndexer
+    {
+        private IWorkflowTriggerBindingExtractor? _extractor;
+        private IWorkflowTriggerBindingStore? _store;
+
+        public bool Called { get; private set; }
+
+        public void Bind(IWorkflowTriggerBindingExtractor extractor, IWorkflowTriggerBindingStore store)
+        {
+            _extractor = extractor;
+            _store = store;
+        }
+
+        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default)
+        {
+            Called = true;
+            var bindings = _extractor!.Evaluate(executable).Bindings
+                .Select(binding => binding with
+                {
+                    TriggerBindingId = WorkflowTriggerBinding.BuildId(
+                        activationId,
+                        binding.ArtifactId,
+                        binding.ExecutableNodeId,
+                        binding.StimulusHash),
+                    ActivationId = activationId,
+                    SlotId = slotId,
+                    IsActive = false
+                })
+                .ToArray();
+
+            await _store!.PrepareActivationAsync(activationId, bindings, cancellationToken);
+            return bindings;
+        }
+    }
+
     /// <summary>
     /// Runs one real pump sweep against the composed engine, on the test clock.
     /// </summary>
@@ -227,7 +311,7 @@ public sealed class ImportedRecurringTriggerEndToEndTests : IDisposable
     private static IWorkflowTriggerBindingStore BindingStore(WorkflowExecutionHarness harness) =>
         harness.Services.GetRequiredService<IWorkflowTriggerBindingStore>();
 
-    private WorkflowExecutionHarness BuildHarness() =>
+    private WorkflowExecutionHarness BuildHarness(Action<IServiceCollection>? hostOverrides = null) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
             .WithFeature(services => new WorkflowsRuntimeRecurringTriggersFeature().ConfigureServices(services))
@@ -249,6 +333,8 @@ public sealed class ImportedRecurringTriggerEndToEndTests : IDisposable
                 // features seed: the schedule's first occurrence is anchored at activation time, so the clock must
                 // already be the test's before the import runs.
                 services.AddSingleton<TimeProvider>(_clock);
+                // Last, so a host override genuinely replaces what the composed features registered.
+                hostOverrides?.Invoke(services);
             })
             .Build(Enumerable.Range(1, 32).Select(index => $"activity-execution-{index}").ToArray());
 }

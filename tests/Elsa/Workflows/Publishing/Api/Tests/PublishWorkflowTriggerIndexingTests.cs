@@ -280,7 +280,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", eventName)]));
         var triggerActivity = TriggerActivityVersion();
         var extractor = new WorkflowTriggerBindingExtractor([provider]);
-        return Handler(workflowVersion, triggerActivity, extractor, IndexerChain(extractor));
+        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore), SchedulePreparer());
     }
 
     private PublishWorkflowRequestHandler Handler(string activityType, params IActivityTriggerStimulusProvider[] providers)
@@ -288,23 +288,22 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node"));
         var triggerActivity = TriggerActivityVersion(activityType);
         var extractor = new WorkflowTriggerBindingExtractor(providers);
-        return Handler(workflowVersion, triggerActivity, extractor, IndexerChain(extractor));
+        return Handler(workflowVersion, triggerActivity, extractor, new WorkflowTriggerIndexer(extractor, _bindingStore), SchedulePreparer());
     }
 
     /// <summary>
-    /// The indexer chain a host composing the recurring store gets: the trigger indexer wrapped by the recurring
-    /// decorator, here with no recurring providers. The wrapper is not optional decoration — it is the sole owner
-    /// of the recurring projection's preparation (FR-B-006 writer census, finding 3), and the store refuses to
-    /// activate an activation whose recurring projection was never prepared, even when it is empty.
+    /// The recurring projection's preparer, which a host composing the recurring store gets beside the trigger
+    /// indexer (T044b) — here with no recurring providers. It is not optional: it is the sole owner of that
+    /// projection's preparation (FR-B-006 writer census, finding 3), and the store refuses to activate an
+    /// activation whose recurring projection was never prepared, even when it is empty.
     /// </summary>
-    private IWorkflowTriggerIndexer IndexerChain(IWorkflowTriggerBindingExtractor extractor) =>
-        new RecurringTriggerScheduleIndexer(
-            new WorkflowTriggerIndexer(extractor, _bindingStore),
+    private IRecurringTriggerScheduleProjectionPreparer SchedulePreparer() =>
+        new RecurringTriggerScheduleProjectionPreparer(
             [],
             _scheduleStore,
             new RecurringScheduleCalculator(),
             TimeProvider.System,
-            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+            NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
     private PublishWorkflowRequestHandler FirstPartyHandler(
         FirstPartyScenario scenario,
@@ -315,14 +314,13 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var triggerActivity = FirstPartyActivityVersion(scenario, legacyActionCatalog);
         var extractor = new WorkflowTriggerBindingExtractor([scenario.TriggerProvider]);
         IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
-        indexer = new RecurringTriggerScheduleIndexer(
-            indexer,
+        var preparer = new RecurringTriggerScheduleProjectionPreparer(
             scenario.ScheduleProviders,
             _scheduleStore,
             new RecurringScheduleCalculator(),
             TimeProvider.System,
-            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
-        return Handler(workflowVersion, triggerActivity, extractor, indexer, scenario.ClrType);
+            NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
+        return Handler(workflowVersion, triggerActivity, extractor, indexer, preparer, scenario.ClrType);
     }
 
     private WorkflowExecutableCompiler FirstPartyCompiler(
@@ -347,6 +345,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         ActivityDefinitionVersion triggerActivity,
         IWorkflowTriggerBindingExtractor extractor,
         IWorkflowTriggerIndexer indexer,
+        IRecurringTriggerScheduleProjectionPreparer schedulePreparer,
         Type? clrType = null)
     {
         // Publishing requests activation through the shared coordinator; it no longer owns the sequence.
@@ -357,7 +356,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             TimeProvider.System,
             indexer,
             _bindingStore,
-            _scheduleStore);
+            _scheduleStore,
+            schedulePreparer);
         var activator = new PublicationActivator(coordinator, _publicationStore, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),

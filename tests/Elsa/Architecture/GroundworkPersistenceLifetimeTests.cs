@@ -142,7 +142,7 @@ public sealed class GroundworkPersistenceLifetimeTests
         new("src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs", "IWorkflowTriggerIndexValidator"),
         new("src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs", "IWorkflowExecutableReferenceGarbageCollector"),
         new("src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs", "IRuntimeResumptionService"),
-        new("src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs", "IWorkflowTriggerIndexer"),
+        new("src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs", "IRecurringTriggerScheduleProjectionPreparer"),
         new("src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs", "IDurableTimerScheduler")
     ];
 

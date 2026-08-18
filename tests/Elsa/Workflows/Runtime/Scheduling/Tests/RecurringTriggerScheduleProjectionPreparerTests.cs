@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Scheduling.Tests;
 
-public sealed class RecurringTriggerScheduleIndexerTests
+public sealed class RecurringTriggerScheduleProjectionPreparerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -18,14 +18,13 @@ public sealed class RecurringTriggerScheduleIndexerTests
     public async Task PublicationScopedSchedulesReplaceAndRemoveOneAuthorityWithoutTouchingAnother()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
-        var indexer = CreateIndexer(
-            new FakeInner(),
+        var preparer = CreatePreparer(
             store,
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-shared", "PT5M"));
         var executable = Executable("artifact-shared", TriggerNode("node-timer", "Elsa.Timer"));
 
-        await indexer.PrepareActivationAsync(executable, "publication-default-v1", "slot-default");
-        await indexer.PrepareActivationAsync(executable, "publication-blue", "slot-blue");
+        await preparer.PrepareActivationAsync(executable, "publication-default-v1", "slot-default");
+        await preparer.PrepareActivationAsync(executable, "publication-blue", "slot-blue");
 
         Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
         var defaultSchedule = Assert.Single(await store.ListByActivationAsync("publication-default-v1"));
@@ -45,7 +44,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
                 .Select(schedule => schedule.ActivationId)
                 .Order(StringComparer.Ordinal));
 
-        await indexer.PrepareActivationAsync(executable, "publication-default-v2", "slot-default");
+        await preparer.PrepareActivationAsync(executable, "publication-default-v2", "slot-default");
         await store.ActivateAsync("publication-default-v2", replacedActivationId: "publication-default-v1");
 
         Assert.Equal(
@@ -63,23 +62,30 @@ public sealed class RecurringTriggerScheduleIndexerTests
     }
 
     [Fact]
-    public void The_decorator_no_longer_carries_an_artifact_scoped_write_path()
+    public void The_preparer_no_longer_carries_an_artifact_scoped_write_path()
     {
         // T041/T045: the removed IndexAsync path deleted every schedule of the artifact and wrote rows born
         // active, bypassing prepare/activate. The contract half of this assertion lives in
         // Elsa.Workflows.Runtime.Tests' WorkflowTriggerIndexerContractTests.
-        Assert.Null(typeof(RecurringTriggerScheduleIndexer).GetMethod("IndexAsync"));
+        Assert.Null(typeof(RecurringTriggerScheduleProjectionPreparer).GetMethod("IndexAsync"));
     }
 
     [Fact]
-    public async Task PrepareActivation_MaterializesEverySchedule_BeforeInnerAndTheProjectionWrite()
+    public void The_preparer_is_not_a_trigger_indexer()
+    {
+        // T044b. It used to be one — a decorator wearing IWorkflowTriggerIndexer's contract, which made that
+        // replacement contract silently own this projection as well. Replacing the indexer must no longer be
+        // able to disarm the recurring projection, and the type system now says so.
+        Assert.False(typeof(IWorkflowTriggerIndexer).IsAssignableFrom(typeof(RecurringTriggerScheduleProjectionPreparer)));
+    }
+
+    [Fact]
+    public async Task PrepareActivation_MaterializesEverySchedule_BeforeTheProjectionWrite()
     {
         var events = new List<string>();
-        var inner = new FakeInner(() => events.Add("inner"));
         var store = new RecordingScheduleStore(events);
         var calculator = new RecordingCalculator(events);
-        var indexer = CreateIndexer(
-            inner,
+        var preparer = CreatePreparer(
             store,
             calculator,
             new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"),
@@ -88,20 +94,20 @@ public sealed class RecurringTriggerScheduleIndexerTests
         var root = PlainNode("root", "Elsa.Sequence",
             TriggerNode("timer", "Elsa.Timer"),
             TriggerNode("cron", "Elsa.Cron"));
-        await indexer.PrepareActivationAsync(Executable("artifact-1", root), "activation-1", "slot-default");
+        await preparer.PrepareActivationAsync(Executable("artifact-1", root), "activation-1", "slot-default");
 
         // ONE owned write for the whole recurring projection, and no artifact-wide delete before it: the removed
         // IndexAsync path emitted "delete" + a save per row instead (FR-B-006 writer census, findings 1 and 3).
-        Assert.Equal(["calculate:Cron", "calculate:Interval", "inner", "prepare:activation-1:2"], events);
+        Assert.Equal(["calculate:Cron", "calculate:Interval", "prepare:activation-1:2"], events);
     }
 
     [Fact]
     public async Task PrepareActivation_IgnoresNonTriggerNodes()
     {
         var store = new InMemoryRecurringTriggerScheduleStore();
-        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+        var preparer = CreatePreparer(store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
 
-        await indexer.PrepareActivationAsync(
+        await preparer.PrepareActivationAsync(
             Executable("artifact-1", PlainNode("node-1", "Elsa.Timer")),
             "activation-1",
             "slot-default");
@@ -117,9 +123,9 @@ public sealed class RecurringTriggerScheduleIndexerTests
         var store = new InMemoryRecurringTriggerScheduleStore();
         await store.SaveAsync(new RecurringTriggerSchedule(
             RecurringTriggerSchedule.BuildId("artifact-1", "old-node"), "artifact-1", "old-node", "Timer", "old", RecurringScheduleKind.Interval, "PT9M", Now, Now));
-        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+        var preparer = CreatePreparer(store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
 
-        await indexer.PrepareActivationAsync(
+        await preparer.PrepareActivationAsync(
             Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")),
             "activation-1",
             "slot-default");
@@ -134,21 +140,16 @@ public sealed class RecurringTriggerScheduleIndexerTests
     }
 
     [Fact]
-    public async Task PrepareActivation_ExhaustedCron_FailsBeforeInnerAndPreservesSeededBindingsAndSchedules()
+    public async Task PrepareActivation_ExhaustedCron_FailsBeforeMutationAndPreservesSeededSchedules()
     {
-        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
-        var priorBinding = Binding("artifact-1", "old-node", "old-hash");
-        await bindingStore.SaveAsync(priorBinding);
-        var replacementBinding = Binding("artifact-1", "node-1", "new-hash");
-        var inner = new StoreBackedInner(bindingStore, replacementBinding);
         var scheduleStore = new InMemoryRecurringTriggerScheduleStore();
         var priorSchedule = Schedule("artifact-1", "old-node", "old-hash");
         await scheduleStore.SaveAsync(priorSchedule);
-        var indexer = CreateIndexer(inner, scheduleStore,
+        var preparer = CreatePreparer(scheduleStore,
             new FakeScheduleProvider("Elsa.Cron", "Cron", "hash-cron", "0 0 30 2 *", RecurringScheduleKind.Cron, "test.cron"));
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron")),
                 "activation-1",
                 "slot-default"));
@@ -157,19 +158,16 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Equal("node-1", exception.ExecutableNodeId);
         Assert.Equal(["test.cron"], exception.ProviderIds);
         Assert.Contains("0 0 30 2 *", exception.Message, StringComparison.Ordinal);
-        Assert.False(inner.Called);
-        Assert.Equal([priorBinding], await bindingStore.ListAllByArtifactAsync("artifact-1"));
         Assert.Equal(priorSchedule, await scheduleStore.FindAsync(priorSchedule.ScheduleId));
     }
 
     [Fact]
-    public async Task PrepareActivation_InvalidLaterNode_FailsBeforeInnerAndPreservesPriorSchedule()
+    public async Task PrepareActivation_InvalidLaterNode_FailsBeforeMutationAndPreservesPriorSchedule()
     {
-        var inner = new FakeInner();
         var store = new InMemoryRecurringTriggerScheduleStore();
         var priorSchedule = Schedule("artifact-1", "old-node", "old-hash");
         await store.SaveAsync(priorSchedule);
-        var indexer = CreateIndexer(inner, store,
+        var preparer = CreatePreparer(store,
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash", "PT5M"),
             new FakeScheduleProvider("Elsa.Cron", "Cron", "cron-hash", "not-a-cron", RecurringScheduleKind.Cron, "test.cron"));
         var root = PlainNode("root", "Elsa.Sequence",
@@ -177,12 +175,11 @@ public sealed class RecurringTriggerScheduleIndexerTests
             TriggerNode("valid-first", "Elsa.Timer"));
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(Executable("artifact-1", root), "activation-1", "slot-default"));
+            await preparer.PrepareActivationAsync(Executable("artifact-1", root), "activation-1", "slot-default"));
 
         Assert.Equal(["test.cron"], exception.ProviderIds);
         Assert.Contains("not-a-cron", exception.Message, StringComparison.Ordinal);
         Assert.IsType<FormatException>(exception.InnerException);
-        Assert.False(inner.Called);
         Assert.Equal(priorSchedule, await store.FindAsync(priorSchedule.ScheduleId));
         Assert.Null(await store.FindAsync(RecurringTriggerSchedule.BuildId("activation-1", "artifact-1", "valid-first")));
     }
@@ -193,10 +190,10 @@ public sealed class RecurringTriggerScheduleIndexerTests
         const string expression = "descriptor-expression";
         var expected = new ArgumentException($"Recurring expression '{expression}' is invalid.");
         var provider = new ThrowingScheduleProvider("Elsa.Cron", "test.cron", expected);
-        var indexer = CreateIndexer(new FakeInner(), new InMemoryRecurringTriggerScheduleStore(), provider);
+        var preparer = CreatePreparer(new InMemoryRecurringTriggerScheduleStore(), provider);
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron")),
                 "activation-1",
                 "slot-default"));
@@ -212,14 +209,13 @@ public sealed class RecurringTriggerScheduleIndexerTests
         const string expression = "calculator-expression";
         var expected = new InvalidOperationException("calculator failed");
         var provider = new FakeScheduleProvider("Elsa.Cron", "Cron", "cron-hash", expression, RecurringScheduleKind.Cron, "test.cron");
-        var indexer = CreateIndexer(
-            new FakeInner(),
+        var preparer = CreatePreparer(
             new InMemoryRecurringTriggerScheduleStore(),
             new ThrowingCalculator(expected),
             provider);
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron")),
                 "activation-1",
                 "slot-default"));
@@ -236,14 +232,13 @@ public sealed class RecurringTriggerScheduleIndexerTests
     public async Task PrepareActivation_ClaimingProviderWithInvalidIdentity_FailsBeforeScheduleCalculationOrMutation(string? providerId)
     {
         var events = new List<string>();
-        var inner = new FakeInner(() => events.Add("inner"));
         var store = new RecordingScheduleStore(events);
         var calculator = new RecordingCalculator(events);
         var provider = new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash", "PT5M", providerId: providerId);
-        var indexer = CreateIndexer(inner, store, calculator, provider);
+        var preparer = CreatePreparer(store, calculator, provider);
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")),
                 "activation-1",
                 "slot-default"));
@@ -255,25 +250,22 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Empty(exception.ProviderIds);
         Assert.Contains("provider id", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(events);
-        Assert.False(inner.Called);
     }
 
     [Fact]
     public async Task PrepareActivation_MultipleProvidersRecognizeSameNode_FailsBeforeScheduleCalculationOrMutation()
     {
         var events = new List<string>();
-        var inner = new FakeInner(() => events.Add("inner"));
         var store = new RecordingScheduleStore(events);
         var calculator = new RecordingCalculator(events);
-        var indexer = CreateIndexer(
-            inner,
+        var preparer = CreatePreparer(
             store,
             calculator,
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash-1", "PT5M", providerId: "test.timer.1"),
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash-2", "PT10M", providerId: "test.timer.2"));
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")),
                 "activation-1",
                 "slot-default"));
@@ -281,7 +273,6 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Equal("ProviderRecognition", exception.Facet);
         Assert.Equal(["test.timer.1", "test.timer.2"], exception.ProviderIds);
         Assert.Empty(events);
-        Assert.False(inner.Called);
     }
 
     [Theory]
@@ -292,13 +283,12 @@ public sealed class RecurringTriggerScheduleIndexerTests
     {
         var expected = new InvalidOperationException("descriptor failed");
         var events = new List<string>();
-        var inner = new FakeInner(() => events.Add("inner"));
         var store = new RecordingScheduleStore(events);
         var provider = new ThrowingScheduleProvider("Elsa.Cron", providerId, expected);
-        var indexer = CreateIndexer(inner, store, provider);
+        var preparer = CreatePreparer(store, provider);
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
-            await indexer.PrepareActivationAsync(
+            await preparer.PrepareActivationAsync(
                 Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron")),
                 "activation-1",
                 "slot-default"));
@@ -311,71 +301,40 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Contains("provider id", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Same(expected, exception.InnerException);
         Assert.Empty(events);
-        Assert.False(inner.Called);
-    }
-
-    [Fact]
-    public async Task PrepareActivation_InnerFailure_LeavesSchedulesUnchanged()
-    {
-        var expected = new InvalidOperationException("inner failed");
-        var inner = new FakeInner(exception: expected);
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        var priorSchedule = Schedule("artifact-1", "old-node", "old-hash");
-        await store.SaveAsync(priorSchedule);
-        var indexer = CreateIndexer(inner, store,
-            new FakeScheduleProvider("Elsa.Timer", "Timer", "new-hash", "PT5M"));
-
-        var actual = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await indexer.PrepareActivationAsync(
-                Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")),
-                "activation-1",
-                "slot-default"));
-
-        Assert.Same(expected, actual);
-        Assert.Equal(priorSchedule, await store.FindAsync(priorSchedule.ScheduleId));
-        Assert.Null(await store.FindAsync(RecurringTriggerSchedule.BuildId("activation-1", "artifact-1", "node-1")));
     }
 
     [Fact]
     public async Task PrepareActivation_WithNoProviders_StillPreparesAnExplicitEmptyProjection()
     {
-        // The decorator is the SINGLE owner of the recurring projection's preparation (FR-B-006 writer census,
+        // The preparer is the SINGLE owner of the recurring projection's preparation (FR-B-006 writer census,
         // finding 3). It therefore prepares even with nothing to materialize, so no caller has to read the
         // projection back and re-prepare it just to make "no schedules" explicit.
         var events = new List<string>();
-        var inner = new FakeInner(() => events.Add("inner"));
         var store = new RecordingScheduleStore(events);
-        var indexer = new RecurringTriggerScheduleIndexer(
-            inner, [], store, new RecurringScheduleCalculator(), new FixedClock(Now),
-            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+        var preparer = new RecurringTriggerScheduleProjectionPreparer(
+            [], store, new RecurringScheduleCalculator(), new FixedClock(Now),
+            NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
-        await indexer.PrepareActivationAsync(
+        await preparer.PrepareActivationAsync(
             Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")),
             "activation-1",
             "slot-default");
 
-        Assert.True(inner.Called);
-        Assert.Equal(["inner", "prepare:activation-1:0"], events);
+        Assert.Equal(["prepare:activation-1:0"], events);
         Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
     }
 
-    private static RecurringTriggerScheduleIndexer CreateIndexer(
-        IWorkflowTriggerIndexer inner,
+    private static RecurringTriggerScheduleProjectionPreparer CreatePreparer(
         IRecurringTriggerScheduleStore store,
         params IRecurringTriggerScheduleProvider[] providers) =>
-        CreateIndexer(inner, store, new RecurringScheduleCalculator(), providers);
+        CreatePreparer(store, new RecurringScheduleCalculator(), providers);
 
-    private static RecurringTriggerScheduleIndexer CreateIndexer(
-        IWorkflowTriggerIndexer inner,
+    private static RecurringTriggerScheduleProjectionPreparer CreatePreparer(
         IRecurringTriggerScheduleStore store,
         IRecurringScheduleCalculator calculator,
         params IRecurringTriggerScheduleProvider[] providers) =>
-        new(inner, providers, store, calculator, new FixedClock(Now),
-            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
-
-    private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusHash) =>
-        new(WorkflowTriggerBinding.BuildId(artifactId, nodeId, stimulusHash), artifactId, "definition-1", "1.0.0", "sha256:v1",
-            nodeId, "Cron", stimulusHash, null, new Dictionary<string, string>(), Now);
+        new(providers, store, calculator, new FixedClock(Now),
+            NullLogger<RecurringTriggerScheduleProjectionPreparer>.Instance);
 
     private static RecurringTriggerSchedule Schedule(string artifactId, string nodeId, string stimulusHash) =>
         new(RecurringTriggerSchedule.BuildId(artifactId, nodeId), artifactId, nodeId, "Cron", stimulusHash,
@@ -408,40 +367,6 @@ public sealed class RecurringTriggerScheduleIndexerTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: metadata,
             childSlots: children.Length == 0 ? [] : [new ExecutableChildSlot("Body", children)]);
-    }
-
-    private sealed class FakeInner(Action? onCalled = null, Exception? exception = null) : IWorkflowTriggerIndexer
-    {
-        public bool Called { get; private set; }
-
-        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
-            WorkflowExecutable executable,
-            string activationId,
-            string slotId,
-            CancellationToken cancellationToken = default)
-        {
-            Called = true;
-            onCalled?.Invoke();
-            if (exception is not null)
-                return ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(exception);
-            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(Array.Empty<WorkflowTriggerBinding>());
-        }
-    }
-
-    private sealed class StoreBackedInner(IWorkflowTriggerBindingStore store, WorkflowTriggerBinding replacement) : IWorkflowTriggerIndexer
-    {
-        public bool Called { get; private set; }
-
-        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
-            WorkflowExecutable executable,
-            string activationId,
-            string slotId,
-            CancellationToken cancellationToken = default)
-        {
-            Called = true;
-            await store.PrepareActivationAsync(activationId, [replacement with { ActivationId = activationId, SlotId = slotId, IsActive = false }], cancellationToken);
-            return [replacement];
-        }
     }
 
     private sealed class RecordingCalculator(List<string> events) : IRecurringScheduleCalculator

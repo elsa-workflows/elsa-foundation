@@ -41,6 +41,23 @@ public sealed class WorkflowsArtifactReconciliationFeatureRegistrationTests
     }
 
     [Fact]
+    public void A_host_registered_reconciler_survives_the_feature()
+    {
+        // §2.6.2: a single-implementation contract must not be settled by silent last-write-wins. TryAdd makes
+        // replacement FIRST-wins (ADR 0033) — the same gesture as the runtime's IRuntimeRequirementChecker,
+        // IWorkflowExecutableHasher and IWorkflowActivationAuthority — so a host registers its own before
+        // composing the feature. Under the previous plain AddScoped this contract was the lone inverse, and an
+        // implementer following the established pattern silently got the default.
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowArtifactReconciler, HostReconciler>();
+
+        new TestArtifactReconciliationFeature().ConfigureServices(services);
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IWorkflowArtifactReconciler));
+        Assert.Equal(typeof(HostReconciler), descriptor.ImplementationType);
+    }
+
+    [Fact]
     public void Base_feature_registers_a_resolvable_startup_task()
     {
         using var provider = Build(new TestArtifactReconciliationFeature());
@@ -142,6 +159,12 @@ public sealed class WorkflowsArtifactReconciliationFeatureRegistrationTests
     }
 
     private sealed class TestArtifactReconciliationFeature : WorkflowsArtifactReconciliationFeature;
+
+    private sealed class HostReconciler : IWorkflowArtifactReconciler
+    {
+        public ValueTask<Core.Models.WorkflowArtifactReconciliationResult> ReconcileAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
 
     private sealed class StubSource(string id) : IWorkflowArtifactReconciliationSource
     {

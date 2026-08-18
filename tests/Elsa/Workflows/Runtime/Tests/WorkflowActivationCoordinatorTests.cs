@@ -55,9 +55,9 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         // FR-B-006 writer census, finding 3. The schedule projection used to be written twice per activation:
         // once by the indexer chain's recurring decorator, then again by a read-back-then-re-prepare the
-        // coordinator inherited from PublicationProjectionReconciler. The indexer chain owns both preparations
-        // now, so each projection has exactly one write and the coordinator never reads a projection it is about
-        // to write.
+        // coordinator inherited from PublicationProjectionReconciler. One contract owns each preparation now
+        // (T044b), so each projection has exactly one write and the coordinator never reads a projection it is
+        // about to write.
         var harness = new Harness();
 
         await harness.ActivateAsync("activation-1", "artifact-1");
@@ -274,6 +274,10 @@ public sealed class WorkflowActivationCoordinatorTests
         // The slot never flipped, so there is no authority compensation to do.
         Assert.Null(await harness.Authority.FindAsync("definition-1", "default"));
         Assert.Contains("delete:activation-1", harness.Bindings.Calls);
+        // The recurring projection was already prepared when the indexer failed (the preparer runs first), so
+        // compensation must take it back out too — otherwise a failed activation leaves a live-looking schedule.
+        Assert.Contains("prepare:activation-1", harness.Schedules.Calls);
+        Assert.Contains("delete:activation-1", harness.Schedules.Calls);
         var reference = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1"));
         Assert.Equal("activation-failed", reference!.DeletedReason);
     }
@@ -430,6 +434,45 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Activating_with_a_recurring_store_but_no_preparer_throws_before_any_write()
+    {
+        // T044b. A recurring store with nobody to prepare its projection used to fail at step 4 — the store
+        // refuses to activate an unprepared projection — which is AFTER the slot CAS, so the activation landed
+        // in compensation. The composition is refused up front instead.
+        var harness = new Harness();
+        var coordinator = harness.CreateWithoutSchedulePreparer();
+
+        var exception = await Assert.ThrowsAsync<WorkflowActivationException>(
+            async () => await coordinator.ActivateAsync(harness.Command("activation-1", "artifact-1")));
+
+        Assert.Contains("IRecurringTriggerScheduleProjectionPreparer", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(harness.References.Calls);
+        Assert.Empty(harness.Lease.Leases);
+        Assert.Empty(harness.Bindings.Calls);
+        Assert.Empty(harness.Schedules.Calls);
+        Assert.Null(await harness.Authority.FindAsync("definition-1", "default"));
+    }
+
+    [Fact]
+    public async Task The_recurring_projection_is_prepared_before_the_trigger_projection()
+    {
+        // The ordering the retired decorator provided from the inside, now provided by the coordinator: every
+        // recurrence is materialized and validated before a single binding is written, so an invalid or
+        // exhausted recurrence fails the activation with the trigger projection untouched.
+        var harness = new Harness();
+        harness.SchedulePreparer.Failure = new InvalidOperationException("recurring expression is exhausted");
+
+        var result = await harness.ActivateAsync("activation-1", "artifact-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(WorkflowActivationStep.ProjectionPreparation, result.FailedStep);
+        Assert.Contains("recurring expression is exhausted", result.Diagnostic!, StringComparison.Ordinal);
+        Assert.DoesNotContain(harness.Bindings.Calls, call => call.StartsWith("prepare", StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Schedules.Calls, call => call.StartsWith("prepare", StringComparison.Ordinal));
+        Assert.Null(await harness.Authority.FindAsync("definition-1", "default"));
+    }
+
+    [Fact]
     public async Task An_infrastructure_fault_from_the_lease_manager_is_wrapped_in_a_domain_exception()
     {
         var harness = new Harness();
@@ -479,7 +522,8 @@ public sealed class WorkflowActivationCoordinatorTests
         {
             Bindings = new(new InMemoryWorkflowTriggerBindingStore());
             Schedules = new(new InMemoryRecurringTriggerScheduleStore());
-            Indexer = new(Bindings, Schedules);
+            Indexer = new(Bindings);
+            SchedulePreparer = new(Schedules);
             Coordinator = new WorkflowActivationCoordinator(
                 Authority,
                 References,
@@ -488,6 +532,7 @@ public sealed class WorkflowActivationCoordinatorTests
                 Indexer,
                 Bindings,
                 Schedules,
+                SchedulePreparer,
                 [Observer]);
         }
 
@@ -496,12 +541,17 @@ public sealed class WorkflowActivationCoordinatorTests
         public RecordingBindingStore Bindings { get; }
         public RecordingScheduleStore Schedules { get; }
         public RecordingTriggerIndexer Indexer { get; }
+        public RecordingSchedulePreparer SchedulePreparer { get; }
         public RecordingObserver Observer { get; } = new();
         public FakeRootWriteLeaseManager Lease { get; } = new();
         public WorkflowActivationCoordinator Coordinator { get; }
 
         public WorkflowActivationCoordinator CreateWithoutTriggerSpine() =>
             new(Authority, References, Lease, new FixedTimeProvider(Now));
+
+        /// <summary>The trigger spine composed, the recurring store composed, its preparer missing.</summary>
+        public WorkflowActivationCoordinator CreateWithoutSchedulePreparer() =>
+            new(Authority, References, Lease, new FixedTimeProvider(Now), Indexer, Bindings, Schedules);
 
         public void ResetCalls()
         {
@@ -659,15 +709,12 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     /// <summary>
-    /// Stands in for the real indexer chain: extracts one binding and prepares it, or fails on demand. Like the
-    /// production chain it also prepares the recurring projection — <c>RecurringTriggerScheduleIndexer</c>
-    /// decorates the indexer and prepares that projection in the same call, unconditionally, so the coordinator
-    /// writes neither projection itself (FR-B-006 writer census, finding 3). Preparing is not cosmetic: the store
-    /// refuses to activate an activation that has no prepared projection.
+    /// Stands in for the real indexer: extracts one binding and prepares it, or fails on demand. It prepares the
+    /// trigger projection and <b>nothing else</b> — which is the whole of what <see cref="IWorkflowTriggerIndexer"/>
+    /// advertises. Before T044b this stub also had to prepare the recurring projection, because the recurring
+    /// decorator wore the indexer's contract; that hidden obligation is exactly what the split removed.
     /// </summary>
-    private sealed class RecordingTriggerIndexer(
-        IWorkflowTriggerBindingStore bindingStore,
-        IRecurringTriggerScheduleStore scheduleStore) : IWorkflowTriggerIndexer
+    private sealed class RecordingTriggerIndexer(IWorkflowTriggerBindingStore bindingStore) : IWorkflowTriggerIndexer
     {
         public Exception? Failure { get; set; }
 
@@ -696,8 +743,30 @@ public sealed class WorkflowActivationCoordinatorTests
                 activationId,
                 slotId);
             await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
-            await scheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
             return [binding];
+        }
+    }
+
+    /// <summary>
+    /// Stands in for <c>RecurringTriggerScheduleProjectionPreparer</c>: the coordinator's own collaborator for the
+    /// recurring projection, prepared unconditionally (an explicit empty projection when nothing recurs), because
+    /// the store refuses to activate an activation that has no prepared projection.
+    /// </summary>
+    private sealed class RecordingSchedulePreparer(IRecurringTriggerScheduleStore scheduleStore)
+        : IRecurringTriggerScheduleProjectionPreparer
+    {
+        public Exception? Failure { get; set; }
+
+        public async ValueTask PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null)
+                throw Failure;
+
+            await scheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
         }
     }
 

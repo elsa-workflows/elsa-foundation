@@ -18,14 +18,14 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// workflow instance on a schedule (W16), the counterpart to the durable-timer pump that resumes existing
 /// instances. It registers the in-memory <see cref="IRecurringTriggerScheduleStore"/> default (swapped for a
 /// restart-surviving store by a durable persistence provider), the <see cref="IRecurringScheduleCalculator"/>,
-/// the background <see cref="RecurringTriggerPumpTask"/>, and decorates the publish-time
-/// <see cref="IWorkflowTriggerIndexer"/> so publishing a workflow with a Timer/Cron trigger also writes its
-/// recurring schedule.
+/// the background <see cref="RecurringTriggerPumpTask"/>, and the
+/// <see cref="IRecurringTriggerScheduleProjectionPreparer"/> the activation coordinator calls so activating a
+/// workflow with a Timer/Cron trigger also writes its recurring schedule.
 /// </summary>
 /// <remarks>
-/// Depends on <c>WorkflowsRuntimeTriggers</c> for the trigger indexer it decorates and the
-/// <see cref="IStimulusRouter"/> the pump starts instances through, and on the Tasks feature for the pump's
-/// recurring-task lifecycle. Compose alongside a durable runtime persistence provider (e.g. the Groundwork
+/// Depends on <c>WorkflowsRuntimeTriggers</c> for the trigger serving spine the activation coordinator requires
+/// and the <see cref="IStimulusRouter"/> the pump starts instances through, and on the Tasks feature for the
+/// pump's recurring-task lifecycle. Compose alongside a durable runtime persistence provider (e.g. the Groundwork
 /// feature) to make recurring schedules survive a restart; without one the pump still runs but schedules live
 /// only in memory until the workflow is republished.
 /// </remarks>
@@ -69,18 +69,18 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
         services.TryAddSingleton<IRecurringTriggerScheduleStore, InMemoryRecurringTriggerScheduleStore>();
         services.TryAddSingleton<IRecurringScheduleCalculator, RecurringScheduleCalculator>();
 
-        // Decorate the publish-time trigger indexer so publishing a Timer/Cron trigger also writes its schedule.
-        // The inner WorkflowTriggerIndexer is registered by the WorkflowsRuntimeTriggers dependency; construct it
-        // explicitly and wrap it, so the trigger core stays unaware of scheduling. This scoped registration lands
-        // after the dependency's scoped default, so it wins as the resolved IWorkflowTriggerIndexer without
-        // capturing the scoped trigger and recurring-schedule stores.
-        services.AddScoped<IWorkflowTriggerIndexer>(sp => new RecurringTriggerScheduleIndexer(
-            ActivatorUtilities.CreateInstance<WorkflowTriggerIndexer>(sp),
+        // The activation-time writer of the recurring projection. It is a collaborator the activation coordinator
+        // calls in its own right, beside IWorkflowTriggerIndexer — NOT a decorator over it (T044b). Wrapping the
+        // indexer used to make that replacement contract silently own this projection too, so a host swapping in
+        // its own indexer lost recurring preparation and only found out at the activate step, after the slot CAS.
+        // TryAdd per §2.6.2: this is a replacement contract, first-wins, so a host registering its own preparer
+        // before this feature keeps it rather than being silently overwritten.
+        services.TryAddScoped<IRecurringTriggerScheduleProjectionPreparer>(sp => new RecurringTriggerScheduleProjectionPreparer(
             sp.GetServices<IRecurringTriggerScheduleProvider>(),
             sp.GetRequiredService<IRecurringTriggerScheduleStore>(),
             sp.GetRequiredService<IRecurringScheduleCalculator>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<RecurringTriggerScheduleIndexer>>()));
+            sp.GetRequiredService<ILogger<RecurringTriggerScheduleProjectionPreparer>>()));
 
         services.AddSingleton<IRecurringTask>(sp => new RecurringTriggerPumpTask(
             sp.GetRequiredService<IPersistenceScopeRunner>(),

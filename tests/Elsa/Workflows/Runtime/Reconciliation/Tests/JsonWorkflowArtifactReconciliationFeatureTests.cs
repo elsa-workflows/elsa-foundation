@@ -60,6 +60,21 @@ public sealed class JsonWorkflowArtifactReconciliationFeatureTests
     }
 
     [Fact]
+    public void A_host_registered_closure_reader_survives_the_feature()
+    {
+        // §2.6.2 first-wins (ADR 0033). This feature calls base.ConfigureServices and then registers, so under a
+        // plain AddScoped its replacement mechanism was "register AFTER the base call" — the exact inverse of the
+        // runtime replacement contracts, and a trap for anyone following the established pattern.
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowArtifactClosureReader, HostClosureReader>();
+
+        CreateFeature(options => options.FolderPath = "/mnt/artifacts").ConfigureServices(services);
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IWorkflowArtifactClosureReader));
+        Assert.Equal(typeof(HostClosureReader), descriptor.ImplementationType);
+    }
+
+    [Fact]
     public void Registers_the_reconciler_from_the_base_feature()
     {
         using var provider = WorkflowsArtifactReconciliationFeatureRegistrationTests.Build(
@@ -159,5 +174,13 @@ public sealed class JsonWorkflowArtifactReconciliationFeatureTests
         };
         configure(feature.Options);
         return feature;
+    }
+
+    private sealed class HostClosureReader : IWorkflowArtifactClosureReader
+    {
+        public Elsa.Workflows.Runtime.Core.Models.WorkflowArtifactClosure Read(
+            string filePath,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

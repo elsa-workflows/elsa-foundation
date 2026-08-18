@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,10 +27,12 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
             d.ServiceType == typeof(IRecurringTask) &&
             d.ImplementationFactory is not null &&
             d.Lifetime == ServiceLifetime.Singleton);
-        // The decorator lands as an additional IWorkflowTriggerIndexer registration (factory-built).
+        // The recurring projection's own preparer, registered against its own contract (T044b) — never as an
+        // IWorkflowTriggerIndexer, whose replacement must not be able to disarm this projection.
         Assert.Contains(services, d =>
-            d.ServiceType == typeof(IWorkflowTriggerIndexer) &&
+            d.ServiceType == typeof(IRecurringTriggerScheduleProjectionPreparer) &&
             d.Lifetime == ServiceLifetime.Scoped);
+        Assert.DoesNotContain(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexer));
     }
 
     [Fact]
@@ -52,12 +55,12 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
     }
 
     [Fact]
-    public void DecoratesTriggerIndexer_WhenTriggerCoreComposed()
+    public void LeavesTheTriggerIndexerAlone_WhenTriggerCoreComposed()
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger<>));
 
-        // Stand in for the WorkflowsRuntimeTriggers dependency: the inner indexer and its collaborators.
+        // Stand in for the WorkflowsRuntimeTriggers dependency: the indexer and its collaborators.
         services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.AddSingleton<IWorkflowTriggerBindingExtractor>(
             new WorkflowTriggerBindingExtractor(Array.Empty<IActivityTriggerStimulusProvider>()));
@@ -67,10 +70,37 @@ public sealed class WorkflowsRuntimeRecurringTriggersFeatureTests
 
         var provider = services.BuildServiceProvider();
 
-        // The resolved indexer is the scheduling decorator, wrapping the trigger core's indexer.
-        Assert.IsType<RecurringTriggerScheduleIndexer>(provider.GetRequiredService<IWorkflowTriggerIndexer>());
+        // T044b: composing recurring triggers no longer rewrites what IWorkflowTriggerIndexer resolves to — the
+        // recurring projection arrives as its own collaborator beside it.
+        Assert.IsType<WorkflowTriggerIndexer>(provider.GetRequiredService<IWorkflowTriggerIndexer>());
+        Assert.IsType<RecurringTriggerScheduleProjectionPreparer>(
+            provider.GetRequiredService<IRecurringTriggerScheduleProjectionPreparer>());
         provider.GetRequiredService<IRecurringTriggerScheduleStore>();
         provider.GetRequiredService<IRecurringScheduleCalculator>();
+    }
+
+    [Fact]
+    public void DefersToAHostRegisteredPreparer()
+    {
+        // §2.6.2 first-wins: the preparer is a replacement contract, so a host that registered its own before
+        // this feature keeps it rather than being silently overwritten.
+        var services = new ServiceCollection();
+        services.AddScoped<IRecurringTriggerScheduleProjectionPreparer, HostPreparer>();
+
+        new WorkflowsRuntimeRecurringTriggersFeature().ConfigureServices(services);
+
+        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IRecurringTriggerScheduleProjectionPreparer));
+        Assert.Equal(typeof(HostPreparer), descriptor.ImplementationType);
+    }
+
+    private sealed class HostPreparer : IRecurringTriggerScheduleProjectionPreparer
+    {
+        public ValueTask PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
     }
 
     [Fact]

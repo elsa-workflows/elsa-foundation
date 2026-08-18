@@ -7,57 +7,57 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
-/// Decorates the activation-scoped <see cref="IWorkflowTriggerIndexer"/> to also populate the recurring-trigger
-/// schedule store (W16). When an activation is prepared, this decorator first materializes the complete
-/// recurring schedule set from the pinned executable — walking its nodes, asking each
+/// Default <see cref="IRecurringTriggerScheduleProjectionPreparer"/> (W16). It materializes the complete recurring
+/// schedule set from the pinned executable — walking its nodes, asking each
 /// <see cref="IRecurringTriggerScheduleProvider"/> to describe the Timer/Cron trigger nodes, and seeding each
 /// schedule's initial <see cref="RecurringTriggerSchedule.NextOccurrence"/> through the
-/// <see cref="IRecurringScheduleCalculator"/>.
+/// <see cref="IRecurringScheduleCalculator"/> — then writes it as the candidate activation's prepared
+/// (non-serving) projection.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Materializing here — rather than in the runtime core or the activation coordinator — keeps the
-/// recurring-trigger feature self-contained: it composes over the existing indexer service without modifying the
-/// coordinator or the trigger core. All schedule calculation finishes before the inner indexer runs, so invalid
-/// or exhausted recurring starts fail before bindings or schedules mutate.
+/// This was a decorator over <see cref="IWorkflowTriggerIndexer"/> until spec 151's T044b. Wrapping the indexer
+/// kept the recurring feature self-contained, but at the cost of making a <b>replacement</b> contract silently own
+/// a projection it does not advertise: a host substituting its own indexer lost recurring preparation, and found
+/// out only when the coordinator activated the projection — after the slot CAS. It is now a collaborator the
+/// coordinator calls in its own right, so neither contract can disarm the other.
 /// </para>
 /// <para>
-/// Both projections are written in prepared (non-serving) state under the coordinator's activation id, and this
-/// decorator is the <b>single</b> writer of the recurring projection's preparation (FR-B-006). It therefore
-/// prepares even when no <see cref="IRecurringTriggerScheduleProvider"/> is composed: the resulting empty
-/// projection is explicit, so a later activate or compensate has a projection to move rather than silently
-/// nothing, and no caller has to read the projection back and re-prepare it.
+/// The coordinator invokes it <b>before</b> the indexer, preserving the decorator's ordering guarantee: all
+/// schedule calculation finishes before any binding is written, so an invalid or exhausted recurring start fails
+/// with neither projection mutated.
+/// </para>
+/// <para>
+/// It is the <b>single</b> writer of the recurring projection's preparation (FR-B-006) and therefore prepares even
+/// when no <see cref="IRecurringTriggerScheduleProvider"/> is composed: the resulting empty projection is
+/// explicit, so a later activate or compensate has a projection to move rather than silently nothing.
 /// </para>
 /// <para>
 /// Only nodes the compiler marked as start-triggers are considered, exactly as the trigger extractor does, so a
 /// Timer/Cron activity used mid-flow (not as a trigger) never produces a phantom schedule.
 /// </para>
 /// </remarks>
-public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
+public sealed class RecurringTriggerScheduleProjectionPreparer : IRecurringTriggerScheduleProjectionPreparer
 {
-    private readonly IWorkflowTriggerIndexer _inner;
     private readonly IReadOnlyList<IRecurringTriggerScheduleProvider> _providers;
     private readonly IRecurringTriggerScheduleStore _store;
     private readonly IRecurringScheduleCalculator _calculator;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<RecurringTriggerScheduleIndexer> _logger;
+    private readonly ILogger<RecurringTriggerScheduleProjectionPreparer> _logger;
 
-    public RecurringTriggerScheduleIndexer(
-        IWorkflowTriggerIndexer inner,
+    public RecurringTriggerScheduleProjectionPreparer(
         IEnumerable<IRecurringTriggerScheduleProvider> providers,
         IRecurringTriggerScheduleStore store,
         IRecurringScheduleCalculator calculator,
         TimeProvider timeProvider,
-        ILogger<RecurringTriggerScheduleIndexer> logger)
+        ILogger<RecurringTriggerScheduleProjectionPreparer> logger)
     {
-        ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(providers);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(calculator);
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _inner = inner;
         _providers = providers.ToArray();
         _store = store;
         _calculator = calculator;
@@ -65,7 +65,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         _logger = logger;
     }
 
-    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
+    public async ValueTask PrepareActivationAsync(
         WorkflowExecutable executable,
         string activationId,
         string slotId,
@@ -76,11 +76,9 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
 
         // With no providers composed the materialized set is empty, and the empty projection is still prepared
-        // deliberately: it is this decorator's single owned write of the recurring projection.
+        // deliberately: it is this preparer's single owned write of the recurring projection.
         var schedules = MaterializeSchedules(executable, _timeProvider.GetUtcNow(), activationId, slotId);
-        var bindings = await _inner.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
         await _store.PrepareActivationAsync(activationId, schedules, cancellationToken);
-        return bindings;
     }
 
     private IReadOnlyCollection<RecurringTriggerSchedule> MaterializeSchedules(
@@ -92,7 +90,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         var artifactId = executable.Identity.ArtifactId;
         var schedules = new List<RecurringTriggerSchedule>();
 
-        // Fully materialize every provider-owned recurring projection before either index is mutated.
+        // Fully materialize every provider-owned recurring projection before the projection is mutated.
         foreach (var node in Flatten(executable.RootActivity))
         {
             if (!IsTrigger(node))

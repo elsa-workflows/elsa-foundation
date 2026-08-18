@@ -31,6 +31,7 @@ public sealed class WorkflowActivationCoordinator(
     IWorkflowTriggerIndexer? triggerIndexer = null,
     IWorkflowTriggerBindingStore? triggerBindingStore = null,
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
+    IRecurringTriggerScheduleProjectionPreparer? recurringSchedulePreparer = null,
     IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
     ILogger<WorkflowActivationCoordinator>? logger = null) : IWorkflowActivationCoordinator
 {
@@ -75,6 +76,20 @@ public sealed class WorkflowActivationCoordinator(
                 command.ActivationId,
                 "Workflow activation requires the trigger serving spine (IWorkflowTriggerIndexer and IWorkflowTriggerBindingStore). " +
                 "Compose the WorkflowsRuntimeTriggers feature before activating.");
+
+        // Same rule, one projection over: a recurring store with no preparer means the recurring projection is
+        // never written, and the store refuses to activate an unprepared projection. Left unchecked that surfaces
+        // at step 4 — AFTER the slot CAS — so the activation lands in compensation instead of failing fast. The
+        // two are registered together by WorkflowsRuntimeRecurringTriggers; this refuses the composition that
+        // pulled them apart, before the first write.
+        if (recurringScheduleStore is not null && recurringSchedulePreparer is null)
+            throw new WorkflowActivationException(
+                definitionId,
+                command.SlotName,
+                command.ActivationId,
+                "Workflow activation found an IRecurringTriggerScheduleStore with no IRecurringTriggerScheduleProjectionPreparer. " +
+                "The recurring projection would never be prepared and the activation would fail after the slot transition. " +
+                "Compose the WorkflowsRuntimeRecurringTriggers feature, which registers both, or register a preparer.");
 
         var noOp = await TryResolveSameArtifactNoOpAsync(command, identity.ArtifactId, cancellationToken);
         if (noOp is not null)
@@ -301,18 +316,31 @@ public sealed class WorkflowActivationCoordinator(
     /// census, finding 3).
     /// </summary>
     /// <remarks>
-    /// The indexer chain owns both writes: <see cref="IWorkflowTriggerIndexer"/> prepares the trigger bindings and
-    /// its recurring decorator prepares the recurring schedules — the latter unconditionally, so an engine that
-    /// composes the recurring store with no recurring providers still gets an explicit empty projection. The
-    /// read-back-then-re-prepare this replaced (inherited from <c>PublicationProjectionReconciler</c>) wrote the
-    /// schedule projection a second time and, worse, made the recurring projection's durability depend on a
-    /// separate delivery record from the one that governed the write that actually produced it.
+    /// <para>
+    /// One contract per projection, each called here in its own right (T044b): <see cref="IWorkflowTriggerIndexer"/>
+    /// prepares the trigger bindings and <see cref="IRecurringTriggerScheduleProjectionPreparer"/> prepares the
+    /// recurring schedules — the latter unconditionally, so an engine that composes the recurring store with no
+    /// recurring providers still gets an explicit empty projection. The read-back-then-re-prepare this replaced
+    /// (inherited from <c>PublicationProjectionReconciler</c>) wrote the schedule projection a second time and,
+    /// worse, made the recurring projection's durability depend on a separate delivery record from the one that
+    /// governed the write that actually produced it.
+    /// </para>
+    /// <para>
+    /// The recurring preparer runs <b>first</b>, which is the ordering the retired decorator provided from the
+    /// inside: it materializes and validates every recurrence before writing, so an invalid or exhausted
+    /// recurrence fails the activation with neither projection mutated.
+    /// </para>
     /// </remarks>
-    private ValueTask PrepareProjectionsAsync(
+    private async ValueTask PrepareProjectionsAsync(
         WorkflowActivationCommand command,
         string slotId,
-        CancellationToken cancellationToken) =>
-        AsVoid(triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        if (recurringSchedulePreparer is not null)
+            await recurringSchedulePreparer.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+
+        await triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+    }
 
     private async ValueTask ActivateProjectionsAsync(
         string activationId,
@@ -549,8 +577,6 @@ public sealed class WorkflowActivationCoordinator(
             failures.Add($"{label} failed: {SafeMessage(exception)}");
         }
     }
-
-    private static async ValueTask AsVoid<T>(ValueTask<T> operation) => _ = await operation;
 
     private static bool NotRequestedCancellation(Exception exception, CancellationToken cancellationToken) =>
         exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested;
