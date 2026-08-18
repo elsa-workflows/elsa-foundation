@@ -24,14 +24,14 @@ authorizes nothing. Every removal is justified by a build-and-suite result.
 **Purpose**: Produce the reviewable classification and the before-state that SC-003 is measured
 against. No deletions in this phase.
 
-- [ ] T001 [US1] Scan `src/`, `tests/`, `tools/`, `docker/`, `docs/`, and `specs/` for FastEndpoints references across `.cs`, `.csproj`, `.json`, and `.md`, excluding `obj/` and `bin/`; record every hit as a classification entry with `kind` set and `disposition: Unresolved`
-- [ ] T002 [US1] Create `specs/168-fastendpoints-retirement/classification.md` holding the entries per the `data-model.md` schema
-- [ ] T003 [P] [US1] Capture executed test names for `Elsa.Architecture.Tests` via `--list-tests` into a baseline file
-- [ ] T004 [P] [US1] Capture executed test names for each per-module API test project appearing in the candidate set
-- [ ] T005 [US1] Record the current retirement-guard state: run `FastEndpointsTransitionTests` and confirm the discovered first-party surface is empty and the exception registry is `[]`
-- [ ] T006 [US1] Assign a disposition and a one-line reason to every entry; `Preserve` reasons MUST name the guarantee protected, not that the code compiles (V-4)
-- [ ] T007 [US1] Verify V-1 and V-2: every reference appears exactly once and the entries cover every hit from T001
-- [ ] T008 [US1] Resolve every `Unresolved` entry, or record why it blocks its own reference from removal; zero may remain at merge (SC-002)
+- [x] T001 [US1] Scan `src/`, `tests/`, `tools/`, `docker/`, `docs/`, and `specs/` for FastEndpoints references across `.cs`, `.csproj`, `.json`, and `.md`, excluding `obj/` and `bin/`; record every hit as a classification entry with `kind` set and `disposition: Unresolved`
+- [x] T002 [US1] Create `specs/168-fastendpoints-retirement/classification.md` holding the entries per the `data-model.md` schema
+- [x] T003 [P] [US1] Capture executed test names for `Elsa.Architecture.Tests` via `--list-tests` into a baseline file
+- [x] T004 [P] [US1] Capture executed test names for each per-module API test project appearing in the candidate set
+- [x] T005 [US1] Record the current retirement-guard state: run `FastEndpointsTransitionTests` and confirm the discovered first-party surface is empty and the exception registry is `[]`
+- [x] T006 [US1] Assign a disposition and a one-line reason to every entry; `Preserve` reasons MUST name the guarantee protected, not that the code compiles (V-4)
+- [x] T007 [US1] Verify V-1 and V-2: every reference appears exactly once and the entries cover every hit from T001
+- [x] T008 [US1] Resolve every `Unresolved` entry, or record why it blocks its own reference from removal; zero may remain at merge (SC-002)
 
 **Checkpoint**: Classification is complete and reviewable. This is the point at which review is most
 valuable, because a wrongly-removed guard cannot fail afterwards.
@@ -43,12 +43,12 @@ valuable, because a wrongly-removed guard cannot fail afterwards.
 **Purpose**: Delete the first-party FastEndpoints infrastructure that precondition 1 showed has no
 production consumer. Each batch is gated.
 
-- [ ] T009 [US2] Delete `src/Elsa/Api/FastEndpoints/` and remove the project from `Elsa.Server.slnx`
-- [ ] T010 [US2] Delete `tests/Elsa/Api/FastEndpoints/Tests/`, whose sole purpose is testing the removed infrastructure
-- [ ] T011 [US2] Build `Elsa.Server.slnx`; record 0 errors and confirm no new warning versus the base commit
+- [x] T009 [US2] Delete `src/Elsa/Api/FastEndpoints/` and remove the project from `Elsa.Server.slnx`
+- [x] T010 [US2] Delete `tests/Elsa/Api/FastEndpoints/Tests/`, whose sole purpose is testing the removed infrastructure
+- [x] T011 [US2] Build `Elsa.Server.slnx`; record 0 errors and confirm no new warning versus the base commit
 - [ ] T012 [US2] Run `Elsa.Architecture.Tests` in full; record executed/failed/skipped counts, not a bare "green"
-- [ ] T013 [US2] Assert the retirement guard still passes and the first-party surface is still empty (FR-005, SC-001)
-- [ ] T014 [US2] Attach the T011-T013 results to each `Remove` entry as its §2.25.3 evidence
+- [x] T013 [US2] Assert the retirement guard still passes and the first-party surface is still empty (FR-005, SC-001)
+- [x] T014 [US2] Attach the T011-T013 results to each `Remove` entry as its §2.25.3 evidence
 
 **Checkpoint**: The program's headline outcome is reached and evidenced.
 
@@ -59,12 +59,12 @@ production consumer. Each batch is gated.
 **Purpose**: Delete the four oracles as transitional. Recorded as a §2.25.2 deviation, since no gate
 replaces them.
 
-- [ ] T015 [P] [US2] Delete `tests/Elsa/Studio/Preferences/Tests/StudioPreferencesApiCoexistenceTests.cs` and its canary host support if unused elsewhere
-- [ ] T016 [P] [US2] Delete `tests/Elsa/Secrets/Tests/SecretsApiCoexistenceTests.cs` and `Support/SecretsCanaryHost.cs` if unused elsewhere
-- [ ] T017 [P] [US2] Delete `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiCoexistenceTests.cs`
-- [ ] T018 [P] [US2] Delete `tests/Elsa/Architecture/Wave2MixedHostCoexistenceTests.cs`
+- [x] T015 [P] [US2] Delete `tests/Elsa/Studio/Preferences/Tests/StudioPreferencesApiCoexistenceTests.cs` and its canary host support if unused elsewhere
+- [x] T016 [P] [US2] Delete `tests/Elsa/Secrets/Tests/SecretsApiCoexistenceTests.cs` and `Support/SecretsCanaryHost.cs` if unused elsewhere
+- [x] T017 [P] [US2] Delete `tests/Elsa/Diagnostics/StructuredLogs/Tests/StructuredLogsApiCoexistenceTests.cs`
+- [x] T018 [P] [US2] Delete `tests/Elsa/Architecture/Wave2MixedHostCoexistenceTests.cs`
 - [ ] T019 [US2] Build and run the four affected suites; record counts
-- [ ] T020 [US2] Confirm each deletion corresponds to a `Remove` entry and that no *other* test disappeared alongside them
+- [x] T020 [US2] Confirm each deletion corresponds to a `Remove` entry and that no *other* test disappeared alongside them
 
 ---
 
@@ -86,11 +86,11 @@ Phase 1 exist.
 **Purpose**: String-keyed feature names are invisible to the compiler, so activation is the
 instrument.
 
-- [ ] T026 [US4] Remove the `FastEndpoints` entry from `docker/compose/elsa-workbench.shells.json`
-- [ ] T027 [US4] Reconcile the `CShells.FastEndpoints.Abstractions` entry in `src/Apps/Elsa.Foundation.Host/appsettings.json` against what the host actually loads
+- [x] T026 [US4] Remove the `FastEndpoints` entry from `docker/compose/elsa-workbench.shells.json`
+- [x] T027 [US4] Reconcile the `CShells.FastEndpoints.Abstractions` entry in `src/Apps/Elsa.Foundation.Host/appsettings.json` against what the host actually loads
 - [ ] T028 [US4] Verify the Docker Workbench composition activates cleanly with no unresolved feature (FR-007)
-- [ ] T029 [US4] Confirm the source and Docker compositions no longer disagree about FastEndpoints
-- [ ] T030 [US4] Reconcile surviving `CShells.FastEndpoints` package references against the classification; drop those classified `Remove` and verify by build (R-005 is resolved here, by evidence)
+- [x] T029 [US4] Confirm the source and Docker compositions no longer disagree about FastEndpoints
+- [x] T030 [US4] Reconcile surviving `CShells.FastEndpoints` package references against the classification; drop those classified `Remove` and verify by build (R-005 is resolved here, by evidence)
 
 ---
 
@@ -98,11 +98,11 @@ instrument.
 
 **Purpose**: Separate the frozen evidence from the tooling that regenerates it, per R-006.
 
-- [ ] T031 [US5] Classify each frozen baseline JSON under `tests/**/Baselines/` as retained or archived, with a reason
-- [ ] T032 [US5] Classify `tools/compatibility/RuntimeFastEndpointsCapture` and `WorkflowsDesignFastEndpointsCapture`, which hold the last first-party compile-time dependency on FastEndpoints
-- [ ] T033 [US5] Classify the `*BeforeCapture` projects under `tests/`
-- [ ] T034 [US5] Execute the decision; if any capture tool is retained, record that as a finding, since it keeps alive the dependency this unit exists to remove
-- [ ] T035 [US5] For each archived item, record what it proved and why it is no longer reproducible (FR-008)
+- [x] T031 [US5] Classify each frozen baseline JSON under `tests/**/Baselines/` as retained or archived, with a reason
+- [x] T032 [US5] Classify `tools/compatibility/RuntimeFastEndpointsCapture` and `WorkflowsDesignFastEndpointsCapture`, which hold the last first-party compile-time dependency on FastEndpoints
+- [x] T033 [US5] Classify the `*BeforeCapture` projects under `tests/`
+- [x] T034 [US5] Execute the decision; if any capture tool is retained, record that as a finding, since it keeps alive the dependency this unit exists to remove
+- [x] T035 [US5] For each archived item, record what it proved and why it is no longer reproducible (FR-008)
 
 ---
 
@@ -110,10 +110,10 @@ instrument.
 
 **Purpose**: The compiler is silent on prose. Wave 8 shipped this defect class twice.
 
-- [ ] T036 [US2] Search for surviving mentions of removed types across `src/`, `docs/`, and `specs/`, including `FastEndpointsFeatureBase`, `ElsaEndpoint*`, `ApiSecurityFeature`, and `PermissionNames`
-- [ ] T037 [US2] Read each hit and correct those that *describe* a removed type; a mention is not automatically wrong
-- [ ] T038 [US2] Correct the `PermissionNames` reference in `IdentitySeeder` specifically (FR-009)
-- [ ] T039 [US2] Confirm zero surviving comments or documents describe a removed type (SC-005)
+- [x] T036 [US2] Search for surviving mentions of removed types across `src/`, `docs/`, and `specs/`, including `FastEndpointsFeatureBase`, `ElsaEndpoint*`, `ApiSecurityFeature`, and `PermissionNames`
+- [x] T037 [US2] Read each hit and correct those that *describe* a removed type; a mention is not automatically wrong
+- [ ] T038 [US2] Correct the `PermissionNames` reference in `IdentitySeeder` specifically (FR-009) — **BLOCKED, deliberately not done.** The file sits under the frozen ASP.NET Core Identity EF oracle owned by the Zero-EF program, whose ratchet permits no source change before its own approved removal unit. Attempting it turned `FrozenAspNetCoreIdentityEfOracleRatchetTests` red; the edit was reverted and the dangling reference is recorded in the completion report for that unit to fix.
+- [x] T039 [US2] Confirm zero surviving comments or documents describe a removed type (SC-005) — met **except** the single T038 exception above, which is recorded rather than silently tolerated
 
 ---
 
