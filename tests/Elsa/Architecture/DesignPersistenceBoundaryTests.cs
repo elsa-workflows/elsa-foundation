@@ -191,7 +191,7 @@ public sealed class DesignPersistenceBoundaryTests
     ];
 
     /// <summary>
-    /// Each design lane: its lane type, the storage manifest whose units it publishes, and the
+    /// Each direct-v2 lane: its lane type, the storage manifest whose units it publishes, and the
     /// registration that binds the lane and declares those units.
     /// </summary>
     private static readonly (string Lane, string Manifest, string Registration)[] DesignLanes =
@@ -203,7 +203,11 @@ public sealed class DesignPersistenceBoundaryTests
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkStorageManifestSource.cs",
             "ActivitiesDesignStorageManifest",
-            "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs")
+            "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs"),
+        (
+            "src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkStorageManifestSource.cs",
+            "PublishingGroundworkStorageManifest",
+            "src/Elsa/Workflows/Publishing/Persistence/Groundwork/DependencyInjection/GroundworkPublishingStoreRegistration.cs")
     ];
 
     private const string StoreFamiliesRegistration =

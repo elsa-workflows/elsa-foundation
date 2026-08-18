@@ -1,8 +1,7 @@
-using System.Globalization;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
@@ -11,74 +10,89 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 /// only one publisher can win even when multiple server replicas validate the same token concurrently.
 /// </summary>
 public sealed class GroundworkPublicationSnapshotReviewStore(
-    IDocumentStore store,
+    GroundworkPublishingStorage storage,
     PublishingGroundworkDocumentSerializer serializer,
-    IPersistenceAccessContextAccessor accessContextAccessor,
-    IBoundedDocumentStore? boundedStore = null)
-    : GroundworkPublishingStore(
-        store,
-        serializer,
-        PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind,
-        boundedStore),
+    IPersistenceAccessContextAccessor accessContextAccessor)
+    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind),
         IPublicationSnapshotReviewStore
 {
-    public async ValueTask<bool> TryAddAsync(PublicationSnapshotReview review, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryAddAsync(PublicationSnapshotReview review, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(review);
+        cancellationToken.ThrowIfCancellationRequested();
         accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
-        var result = await SaveAsync(review.PreflightToken, review, 0, cancellationToken);
-        return result.Status == DocumentStoreWriteStatus.Saved;
+        return ValueTask.FromResult(Save(review.PreflightToken, review, null, Projections(review)));
     }
 
-    public async ValueTask<PublicationSnapshotReview?> FindAsync(
+    public ValueTask<PublicationSnapshotReview?> FindAsync(
         string preflightToken,
         CancellationToken cancellationToken = default)
     {
-        var review = (await LoadAsync<PublicationSnapshotReview>(preflightToken, cancellationToken))?.Document;
+        cancellationToken.ThrowIfCancellationRequested();
+        var review = Load<PublicationSnapshotReview>(preflightToken)?.Document;
         if (review is not null)
             accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
-        return review;
+        return ValueTask.FromResult(review);
     }
 
-    public async ValueTask<bool> TryConsumeAsync(string preflightToken, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryConsumeAsync(string preflightToken, CancellationToken cancellationToken = default)
     {
-        var loaded = await LoadAsync<PublicationSnapshotReview>(preflightToken, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var loaded = Load<PublicationSnapshotReview>(preflightToken);
         if (loaded is null)
-            return false;
+            return ValueTask.FromResult(false);
         accessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
-        var result = await Store.DeleteAsync(
-            new DeleteDocumentRequest(DocumentKind, preflightToken, loaded.Value.Envelope.Version),
-            cancellationToken);
-        return result.Status == DocumentStoreWriteStatus.Deleted;
+        return ValueTask.FromResult(Delete(preflightToken, loaded.Value.Entry.Version));
     }
 
-    public async ValueTask<int> DeleteExpiredAsync(
+    public ValueTask<int> DeleteExpiredAsync(
         DateTimeOffset expiresAtOrBefore,
         int maxCount,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                DocumentKind,
-                PublishingGroundworkStorageManifest.DeleteExpiredQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
-                    PublishingGroundworkStorageManifest.ExpiresAtField,
-                    expiresAtOrBefore.ToString("O", CultureInfo.InvariantCulture)))],
-                [new DocumentQueryOrder(PublishingGroundworkStorageManifest.ExpiresAtField)],
-                take: maxCount),
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var expired = Storage.Query(
+            UnitId,
+            Storage.AtOrBefore(UnitId, PublishingGroundworkStorageManifest.ExpiresAtField, expiresAtOrBefore),
+            [
+                Storage.Order(UnitId, PublishingGroundworkStorageManifest.ExpiresAtField),
+                Storage.Order(UnitId, PublishingGroundworkStorageManifest.IdField)
+            ],
+            PublishingGroundworkStorageManifest.SnapshotReviewByExpiryIndex,
+            maxCount,
             cancellationToken);
+
         var deleted = 0;
-        foreach (var envelope in result.Documents)
+        foreach (var row in expired)
         {
-            var review = Serializer.Deserialize<PublicationSnapshotReview>(envelope);
-            accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
-            var deletion = await Store.DeleteAsync(
-                new DeleteDocumentRequest(DocumentKind, envelope.Id, envelope.Version),
-                cancellationToken);
-            if (deletion.Status == DocumentStoreWriteStatus.Deleted)
+            cancellationToken.ThrowIfCancellationRequested();
+            var token = Text(row.Values.Values, PublishingGroundworkStorageManifest.IdField);
+            if (token is null)
+                continue;
+            // Re-read to take the row under the version the delete will assert. A sweep races ordinary
+            // consumption, and losing that race must skip the row rather than delete a newer one.
+            var loaded = Load<PublicationSnapshotReview>(token);
+            if (loaded is null)
+                continue;
+            accessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
+            if (Delete(token, loaded.Value.Entry.Version))
                 deleted++;
         }
-        return deleted;
+
+        return ValueTask.FromResult(deleted);
     }
+
+    private bool Delete(string id, long? version) =>
+        Storage.Delete(
+            UnitId,
+            id,
+            version is null ? WriteOptions.Unconditional : WriteOptions.IfVersion(version.Value)).Succeeded;
+
+    private static IReadOnlyDictionary<string, object?> Projections(PublicationSnapshotReview review) =>
+        new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [PublishingGroundworkStorageManifest.ExpiresAtField] = review.ExpiresAt
+        };
 }

@@ -1,56 +1,70 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkPublicationRecordStore(
-    IDocumentStore store,
-    PublishingGroundworkDocumentSerializer serializer,
-    IBoundedDocumentStore queries)
-    : GroundworkPublishingStore(
-        store,
-        serializer,
-        PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
-        queries ?? throw new ArgumentNullException(nameof(queries))), IPublicationRecordStore
+    GroundworkPublishingStorage storage,
+    PublishingGroundworkDocumentSerializer serializer)
+    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.PublicationRecordDocumentKind),
+        IPublicationRecordStore
 {
-    public async ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
+    public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);
-        var loaded = await LoadAsync<RecordDocument>(publication.PublicationId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var loaded = Load<RecordDocument>(publication.PublicationId);
         if (loaded is not null)
         {
             if (loaded.Value.Document.Publication != publication)
                 throw new InvalidOperationException($"Publication '{publication.PublicationId}' already exists.");
-            return;
+            return ValueTask.CompletedTask;
         }
-        var result = await SaveAsync(publication.PublicationId, new RecordDocument(publication.SlotId, publication), 0, cancellationToken);
-        if (result.Status != DocumentStoreWriteStatus.Saved)
+
+        if (!Save(publication.PublicationId, new RecordDocument(publication.SlotId, publication), null, Projections(publication.SlotId)))
             throw new InvalidOperationException($"Publication '{publication.PublicationId}' was created concurrently.");
+        return ValueTask.CompletedTask;
     }
 
-    public async ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) =>
-        (await LoadAsync<RecordDocument>(publicationId, cancellationToken))?.Document.Publication;
-
-    public async ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default)
+    public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default)
     {
-        var docs = await QueryAsync<RecordDocument>(
-            PublishingGroundworkStorageManifest.ListBySlotQuery,
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(Load<RecordDocument>(publicationId)?.Document.Publication);
+    }
+
+    public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var docs = QueryBy<RecordDocument>(
             PublishingGroundworkStorageManifest.SlotIdField,
             slotId,
-            cancellationToken);
-        return docs.Select(x => x.Publication).OrderBy(x => x.CreatedAt).ThenBy(x => x.PublicationId, StringComparer.Ordinal).ToArray();
+            PublishingGroundworkStorageManifest.RecordBySlotIndex);
+        return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>(
+            docs.Select(x => x.Publication)
+                .OrderBy(x => x.CreatedAt)
+                .ThenBy(x => x.PublicationId, StringComparer.Ordinal)
+                .ToArray());
     }
 
-    public async ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default)
     {
-        var loaded = await LoadAsync<RecordDocument>(publication.PublicationId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var loaded = Load<RecordDocument>(publication.PublicationId);
         if (loaded is null || loaded.Value.Document.Publication.Status != expectedStatus)
-            return false;
+            return ValueTask.FromResult(false);
         EnsureSameIdentity(loaded.Value.Document.Publication, publication);
-        var result = await SaveAsync(publication.PublicationId, new RecordDocument(publication.SlotId, publication), loaded.Value.Envelope.Version, cancellationToken);
-        return result.Status == DocumentStoreWriteStatus.Saved;
+        return ValueTask.FromResult(Save(
+            publication.PublicationId,
+            new RecordDocument(publication.SlotId, publication),
+            loaded.Value.Entry.Version,
+            Projections(publication.SlotId)));
     }
+
+    private static IReadOnlyDictionary<string, object?> Projections(string slotId) =>
+        new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [PublishingGroundworkStorageManifest.SlotIdField] = slotId
+        };
 
     private static void EnsureSameIdentity(PublicationRecord current, PublicationRecord next)
     {

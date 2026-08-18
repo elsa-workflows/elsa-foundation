@@ -1,54 +1,84 @@
-using Groundwork.Documents.Store;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
-public abstract class GroundworkPublishingStore
+/// <summary>
+/// Row mapping shared by the publishing stores. Each document keeps its aggregate in the JSON payload
+/// column and repeats only the values its routes index as first-class columns, so a route reads a column
+/// rather than reaching into the payload.
+/// </summary>
+public abstract class GroundworkPublishingStore(
+    GroundworkPublishingStorage storage,
+    PublishingGroundworkDocumentSerializer serializer,
+    string unitId)
 {
-    private readonly IBoundedDocumentStore? _queries;
+    protected GroundworkPublishingStorage Storage { get; } = storage ?? throw new ArgumentNullException(nameof(storage));
 
-    protected GroundworkPublishingStore(
-        IDocumentStore store,
-        PublishingGroundworkDocumentSerializer serializer,
-        string documentKind,
-        IBoundedDocumentStore? queries = null)
+    protected PublishingGroundworkDocumentSerializer Serializer { get; } =
+        serializer ?? throw new ArgumentNullException(nameof(serializer));
+
+    protected string UnitId { get; } = !string.IsNullOrWhiteSpace(unitId)
+        ? unitId
+        : throw new ArgumentException("A publishing unit id is required.", nameof(unitId));
+
+    protected (StoredEntry Entry, T Document)? Load<T>(string id)
     {
-        Store = store ?? throw new ArgumentNullException(nameof(store));
-        Serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-        ArgumentException.ThrowIfNullOrWhiteSpace(documentKind);
-        DocumentKind = documentKind;
-        _queries = queries;
+        var entry = Storage.Read(UnitId, id);
+        return entry is null ? null : (entry, Read<T>(entry));
     }
 
-    protected IDocumentStore Store { get; }
-    protected PublishingGroundworkDocumentSerializer Serializer { get; }
-    protected string DocumentKind { get; }
-    protected IBoundedDocumentStore BoundedStore => _queries ?? throw new InvalidOperationException(
-        $"Publishing store '{DocumentKind}' requires a certified bounded document-query runtime.");
-
-    protected async ValueTask<(DocumentEnvelope Envelope, T Document)?> LoadAsync<T>(string id, CancellationToken cancellationToken)
+    protected T Read<T>(StoredEntry entry)
     {
-        var envelope = await Store.LoadAsync(DocumentKind, id, cancellationToken);
-        return envelope is null ? null : (envelope, Serializer.Deserialize<T>(envelope));
+        var values = entry.Values.Values;
+        return Serializer.Deserialize<T>(
+            UnitId,
+            Text(values, PublishingGroundworkStorageManifest.IdField) ?? "",
+            Text(values, PublishingGroundworkStorageManifest.SchemaVersionField)
+                ?? throw new InvalidOperationException($"Publishing document '{UnitId}' has no schema version."),
+            Text(values, PublishingGroundworkStorageManifest.ContentField)
+                ?? throw new InvalidOperationException($"Publishing document '{UnitId}' has no payload."));
     }
 
-    protected Task<DocumentStoreWriteResult> SaveAsync<T>(string id, T document, long? expectedVersion, CancellationToken cancellationToken)
+    /// <summary>Builds the row for <paramref name="document"/>, with its route columns projected alongside.</summary>
+    protected StorageValues Values<T>(string id, T document, IReadOnlyDictionary<string, object?>? projections = null)
     {
-        var (schemaVersion, content) = Serializer.Serialize(DocumentKind, document);
-        return Store.SaveAsync(new SaveDocumentRequest(DocumentKind, id, schemaVersion, content, expectedVersion), cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        var (schemaVersion, content) = Serializer.Serialize(UnitId, document);
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [PublishingGroundworkStorageManifest.IdField] = id,
+            [PublishingGroundworkStorageManifest.SchemaVersionField] = schemaVersion,
+            [PublishingGroundworkStorageManifest.ContentField] = content
+        };
+        if (projections is not null)
+            foreach (var projection in projections)
+                values[projection.Key] = projection.Value;
+        return new StorageValues(values);
     }
 
-    protected async ValueTask<IReadOnlyCollection<T>> QueryAsync<T>(
-        string queryIdentity,
-        string fieldPath,
-        string value,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Writes the row under the version the caller read, or as a create when it read nothing. A lost race
+    /// returns false rather than throwing, because every publishing caller resolves the conflict itself —
+    /// by re-reading the winner and reporting it — instead of surfacing a provider exception.
+    /// </summary>
+    protected bool Save<T>(string id, T document, long? expectedVersion, IReadOnlyDictionary<string, object?>? projections = null)
     {
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                DocumentKind,
-                queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))]),
-            cancellationToken);
-        return result.Documents.Select(Serializer.Deserialize<T>).ToArray();
+        var options = expectedVersion is null ? WriteOptions.CreateOnly : WriteOptions.IfVersion(expectedVersion.Value);
+        return Storage.ConditionalUpsert(UnitId, Values(id, document, projections), options).Succeeded;
     }
+
+    protected IReadOnlyList<T> QueryBy<T>(string field, string value, string index)
+    {
+        var rows = Storage.Query(
+            UnitId,
+            Storage.Equal(UnitId, field, value),
+            [Storage.Order(UnitId, field), Storage.Order(UnitId, PublishingGroundworkStorageManifest.IdField)],
+            index);
+        return rows.Select(Read<T>).ToArray();
+    }
+
+    protected static string? Text(IReadOnlyDictionary<string, object?> values, string field) =>
+        values.GetValueOrDefault(field) as string;
 }
