@@ -1,4 +1,4 @@
-using Elsa.Persistence.Groundwork.Exceptions;
+﻿using Elsa.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -98,7 +98,7 @@ public sealed class GroundworkWorkflowActivationAuthority(
                     WorkflowActivationConflict.RevisionMismatch,
                     "The activation slot revision changed; another writer moved it first.");
 
-            if (!IsOwnedBy(current, request.Source))
+            if (!IsClaimableBy(current, request.Source, request.OwnershipIntent))
                 return Conflict(
                     current,
                     WorkflowActivationConflict.ForeignSource,
@@ -200,8 +200,9 @@ public sealed class GroundworkWorkflowActivationAuthority(
         }
 
         // Returned unconditionally, matching the in-memory authority: the coordinator decides whether the
-        // replaced id is worth retiring (it skips the no-op case where it equals the incoming activation).
-        return new WorkflowActivationTransition(true, next, current.ActiveActivationId);
+        // replaced id is worth retiring (it skips the no-op case where it equals the incoming activation). The
+        // displaced owner rides along for the same reason — compensation has to restore it, not just the id.
+        return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
     }
 
     private async ValueTask<bool> IsLiveInAnotherSlotAsync(
@@ -240,6 +241,17 @@ public sealed class GroundworkWorkflowActivationAuthority(
     /// </summary>
     private static bool IsOwnedBy(WorkflowActivationSlot slot, WorkflowActivationSource source) =>
         slot.ActiveActivationId is null || slot.Source is null || slot.Source.IsSameOwnerAs(source);
+
+    /// <summary>
+    /// Activation's claim rule: ownership, or an explicit takeover intent that overrides it (T118). Mirrors the
+    /// in-memory authority exactly — the intent is honoured for any requesting source, so the durable ledger, like
+    /// the in-memory one, never learns which callers exist.
+    /// </summary>
+    private static bool IsClaimableBy(
+        WorkflowActivationSlot slot,
+        WorkflowActivationSource source,
+        WorkflowActivationOwnershipIntent intent) =>
+        intent == WorkflowActivationOwnershipIntent.TakeOver || IsOwnedBy(slot, source);
 
     private static WorkflowActivationTransition Conflict(
         WorkflowActivationSlot slot,

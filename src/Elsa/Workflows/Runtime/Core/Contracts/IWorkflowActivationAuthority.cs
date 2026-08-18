@@ -40,11 +40,20 @@ public interface IWorkflowActivationAuthority
     /// CAS transition making <c>request.ActivationId</c> the live activation.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Enforces the FR-B-006 conflict rules: a revision mismatch yields
     /// <see cref="WorkflowActivationConflict.RevisionMismatch"/>; a request from a source that does
     /// not own the definition yields <see cref="WorkflowActivationConflict.ForeignSource"/> with a
     /// diagnostic naming the owning source. Ownership is read from the slot's
     /// <see cref="WorkflowActivationSource"/> field only — never inferred from id prefixes.
+    /// </para>
+    /// <para>
+    /// The one exception is a request carrying
+    /// <see cref="WorkflowActivationOwnershipIntent.TakeOver"/>, which claims a foreign-owned slot and becomes its
+    /// owner (T118). The rule is <b>generic</b>: the authority honours the declared intent and never inspects
+    /// which source declared it, so "publishing outranks reconciliation" is a fact about who passes the intent,
+    /// not a fact the runtime knows.
+    /// </para>
     /// </remarks>
     ValueTask<WorkflowActivationTransition> TryActivateAsync(
         WorkflowActivationSlotRequest request,

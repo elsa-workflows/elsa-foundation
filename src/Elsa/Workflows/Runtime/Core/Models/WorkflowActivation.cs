@@ -78,6 +78,39 @@ public static class WorkflowActivationSlotIdentity
     }
 }
 
+/// <summary>
+/// Whether an activation request is entitled to claim a slot a <b>different</b> source owns.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The authority decides ownership from the slot's <see cref="WorkflowActivationSource"/> and from this intent
+/// alone. It deliberately knows <b>nothing</b> about which sources exist: a rule of the shape
+/// <c>if (source.Kind == "publishing")</c> inside the runtime would invert §E2.2 and make the activation ledger
+/// responsible for knowing its callers. The caller declares the intent because only the caller knows whether it
+/// is acting on an explicit operator command; the authority honours it generically.
+/// </para>
+/// <para>
+/// Adopted for T118 (Joey, 2026-08-17, amending FR-B-006): publishing is an explicit operator command and passes
+/// <see cref="TakeOver"/>; the artifact reconciler is a boot-time declarative import and never does. That
+/// asymmetry — and only that asymmetry — is what makes "explicit wins, and the next shell reload does not quietly
+/// revert it" expressible without the runtime naming either party.
+/// </para>
+/// </remarks>
+public enum WorkflowActivationOwnershipIntent
+{
+    /// <summary>
+    /// The default. A slot owned by a different source is refused with
+    /// <see cref="WorkflowActivationConflict.ForeignSource"/>.
+    /// </summary>
+    RespectExistingOwner,
+
+    /// <summary>
+    /// The caller claims the slot even when a different source owns it, and becomes its new owner. Reserved for
+    /// requests that carry an explicit operator decision.
+    /// </summary>
+    TakeOver
+}
+
 /// <summary>Why a slot transition was refused.</summary>
 public enum WorkflowActivationConflict
 {
@@ -88,25 +121,38 @@ public enum WorkflowActivationConflict
     RevisionMismatch,
 
     /// <summary>
-    /// A different activation source owns this definition. Ownership transfer is an explicit operator
-    /// action and is out of scope for v1, so this is a loud rejection, never a silent takeover.
+    /// A different activation source owns this definition, and the request did not carry
+    /// <see cref="WorkflowActivationOwnershipIntent.TakeOver"/>. A loud rejection, never a silent takeover.
     /// </summary>
     ForeignSource
 }
 
 /// <summary>Outcome of a CAS-guarded slot transition.</summary>
+/// <param name="ReplacedSource">
+/// The source that owned the slot before this transition, or <see langword="null"/> when it was unowned. Only a
+/// takeover can make this differ from the requesting source, and the coordinator's compensation needs it: putting
+/// a displaced activation back means restoring its <b>owner</b> too, or a rolled-back takeover would leave the
+/// predecessor serving under the claimant's name — invisible until the next pass was wrongly refused.
+/// </param>
 public sealed record WorkflowActivationTransition(
     bool Succeeded,
     WorkflowActivationSlot Slot,
     string? ReplacedActivationId = null,
     WorkflowActivationConflict Conflict = WorkflowActivationConflict.None,
-    string? Diagnostic = null);
+    string? Diagnostic = null,
+    WorkflowActivationSource? ReplacedSource = null);
 
 /// <summary>A request to make one activation live for a definition's slot.</summary>
+/// <param name="OwnershipIntent">
+/// Whether this request may claim a slot a different source owns. Defaults to
+/// <see cref="WorkflowActivationOwnershipIntent.RespectExistingOwner"/>, so a takeover is always something a
+/// caller states rather than something it can fall into.
+/// </param>
 public sealed record WorkflowActivationSlotRequest(
     string WorkflowDefinitionId,
     string SlotName,
     string ActivationId,
     WorkflowActivationSource Source,
     long ExpectedRevision,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    WorkflowActivationOwnershipIntent OwnershipIntent = WorkflowActivationOwnershipIntent.RespectExistingOwner);

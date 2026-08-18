@@ -219,6 +219,39 @@ public sealed class GroundworkWorkflowActivationAuthorityTests
         Assert.True(moved.Succeeded);
     }
 
+    /// <summary>
+    /// T118 parity: an explicit takeover claims a foreign-owned slot on the durable ledger too, re-owning the one
+    /// slot rather than adding a second.
+    /// </summary>
+    /// <remarks>
+    /// Parity matters here more than usual. If only the in-memory authority honoured the intent, an operator's
+    /// publish over an imported definition would succeed in every test and fail on every real deployment.
+    /// </remarks>
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task An_explicit_takeover_claims_a_foreign_owned_slot_and_becomes_the_owner(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        var authority = NewAuthority(fixture);
+        var owned = await authority.TryActivateAsync(Request("activation-1", WorkflowActivationSource.Publishing));
+
+        var takeover = await authority.TryActivateAsync(Request(
+            "activation-2",
+            Importer,
+            owned.Slot.Revision,
+            intent: WorkflowActivationOwnershipIntent.TakeOver));
+
+        Assert.True(takeover.Succeeded);
+        Assert.Equal("activation-1", takeover.ReplacedActivationId);
+        Assert.Equal(WorkflowActivationSource.PublishingKind, takeover.ReplacedSource!.Kind);
+
+        var slot = Assert.Single(await authority.ListByDefinitionAsync("definition-1"));
+        Assert.Equal("activation-2", slot.ActiveActivationId);
+        Assert.Equal(WorkflowActivationSource.ArtifactReconciliationKind, slot.Source!.Kind);
+        Assert.Equal("prod-drop", slot.Source.SourceId);
+    }
+
     private static IWorkflowActivationAuthority NewAuthority(GroundworkDocumentStoreFixture fixture) =>
         new GroundworkWorkflowActivationAuthority(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
@@ -226,6 +259,7 @@ public sealed class GroundworkWorkflowActivationAuthorityTests
         string activationId,
         WorkflowActivationSource source,
         long expectedRevision = 0,
-        string slotName = "default") =>
-        new("definition-1", slotName, activationId, source, expectedRevision, Now);
+        string slotName = "default",
+        WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
+        new("definition-1", slotName, activationId, source, expectedRevision, Now, intent);
 }

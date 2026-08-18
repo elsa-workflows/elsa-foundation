@@ -127,13 +127,19 @@ public enum WorkflowActivationStep
 /// </param>
 /// <param name="Source">The explicit ownership descriptor for this activation.</param>
 /// <param name="ExpectedRevision">The slot revision the caller read; the CAS guard for concurrent writers.</param>
+/// <param name="OwnershipIntent">
+/// Whether this request may claim a slot a <b>different</b> source owns (T118, amending FR-B-006). The caller
+/// declares it because only the caller knows whether an explicit operator decision is behind the request; the
+/// runtime honours it generically and never asks who the caller is.
+/// </param>
 public sealed record WorkflowActivationCommand(
     WorkflowExecutable Executable,
     WorkflowExecutableSourceReference Reference,
     string SlotName,
     string ActivationId,
     WorkflowActivationSource Source,
-    long ExpectedRevision);
+    long ExpectedRevision,
+    WorkflowActivationOwnershipIntent OwnershipIntent = WorkflowActivationOwnershipIntent.RespectExistingOwner);
 
 /// <summary>One request to retract whatever activation a definition's slot currently serves.</summary>
 /// <remarks>

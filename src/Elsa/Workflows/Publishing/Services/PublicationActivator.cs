@@ -33,6 +33,25 @@ public sealed class PublicationActivator(
     /// <summary>The activation source every publish-pipeline request is owned by.</summary>
     public static WorkflowActivationSource Source => WorkflowActivationSource.Publishing;
 
+    /// <summary>
+    /// Every publish is an explicit operator command, so it claims the slot even when another activation source
+    /// owns the definition (T118, amending FR-B-006).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is where "explicit wins" lives — and it lives here on purpose.</b> The runtime honours the intent
+    /// generically and never learns that publishing exists; what makes publishing outrank a boot-time declarative
+    /// import is that publishing, and only publishing, declares the intent. A human ran a publish command, and
+    /// this is the only layer that knows it.
+    /// </para>
+    /// <para>
+    /// The asymmetry's other half is the artifact reconciler's, not this type's: it never declares the intent, so
+    /// a later shell reload cannot quietly revert the operator's publish. Handing control back to a mount is an
+    /// unpublish, which clears ownership and makes the slot claimable again.
+    /// </para>
+    /// </remarks>
+    public const WorkflowActivationOwnershipIntent OwnershipIntent = WorkflowActivationOwnershipIntent.TakeOver;
+
     public async ValueTask<PublicationActivationResult> ActivateAsync(
         PublicationActivationRequest request,
         CancellationToken cancellationToken = default)
@@ -56,7 +75,8 @@ public sealed class PublicationActivator(
                     candidate.SlotName,
                     candidate.PublicationId,
                     Source,
-                    candidate.ExpectedSlotRevision),
+                    candidate.ExpectedSlotRevision,
+                    OwnershipIntent),
                 cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -189,8 +209,21 @@ public sealed class PublicationActivator(
             StringComparer.Ordinal.Equals(replacedId, candidate.PublicationId))
             return;
 
-        var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
-            ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
+        // A missing record is an ANSWER, not a fault: the displaced activation was not published by us. Before
+        // T118 that could only happen on a corrupted journal, so throwing was defensible; a takeover displaces a
+        // foreign source's activation as a matter of course, and there is nothing of publishing's to retire.
+        // (The runtime still retires the displaced activation's source reference — that is the coordinator's job,
+        // and it happens for every predecessor regardless of who owned it.)
+        var replaced = await publicationStore.FindAsync(replacedId, cancellationToken);
+        if (replaced is null)
+        {
+            logger?.LogDebug(
+                "Publication {PublicationId} displaced activation {ReplacedActivationId}, which has no publication record: it was activated by another source and there is nothing to retire in this journal",
+                candidate.PublicationId,
+                replacedId);
+            return;
+        }
+
         var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
         await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
     }

@@ -26,7 +26,26 @@ public enum WorkflowArtifactSkipReason
     /// The slot already serves an artifact whose <c>ArtifactVersion</c> sorts at or above the candidate's, so
     /// activating would move the definition <em>backward</em> (FR-B-007 latest-wins).
     /// </summary>
-    OlderVersion
+    OlderVersion,
+
+    /// <summary>
+    /// A <em>different</em> activation source owns the definition's default slot, and reconciliation never
+    /// reclaims a slot it does not own (T118, amending FR-B-006).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The permanent half of "explicit wins": an operator's publish may take an import-owned slot, and the next
+    /// shell reload must not quietly revert it. Reconciliation runs at boot and reload rather than continuously,
+    /// so it is a seed, not an enforcer — re-asserting here would be a worse failure than not activating.
+    /// </para>
+    /// <para>
+    /// <b>Loud on purpose.</b> While another source owns the slot, replacing the mounted artifact does nothing for
+    /// that definition, and a silent skip leaves a mount that looks configured, looks healthy and serves nothing.
+    /// The entry's diagnostic names the owning source, and the startup task surfaces it at boot beside the
+    /// rejections. Unpublishing is the documented way to hand control back to the mount.
+    /// </para>
+    /// </remarks>
+    ForeignSlotOwner
 }
 
 /// <summary>
@@ -195,4 +214,16 @@ public sealed record WorkflowArtifactReconciliationResult(IReadOnlyList<Workflow
 
     public IEnumerable<WorkflowArtifactImportEntry> Rejections =>
         Entries.Where(entry => entry.Outcome == WorkflowArtifactImportOutcome.Rejected);
+
+    /// <summary>
+    /// Artifacts that were not activated because a different activation source owns their definition's slot.
+    /// </summary>
+    /// <remarks>
+    /// Exposed beside <see cref="Rejections"/> rather than folded into it because it is not a rejection — nothing
+    /// is wrong with the artifact, and the closure unit imported fine. It nonetheless has to reach the operator
+    /// at boot for the same reason a rejection does: the mount is being ignored for that definition, and nothing
+    /// else on the engine says so (T118).
+    /// </remarks>
+    public IEnumerable<WorkflowArtifactImportEntry> OwnershipSkips =>
+        Entries.Where(entry => entry.SkipReason == WorkflowArtifactSkipReason.ForeignSlotOwner);
 }

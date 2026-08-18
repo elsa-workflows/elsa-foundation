@@ -63,5 +63,16 @@ public sealed class WorkflowArtifactReconcilerStartupTask(
                 rejection.Origin,
                 rejection.RejectionKind,
                 rejection.Diagnostic);
+
+        // T118. An ownership skip is not a rejection — the artifact imported cleanly — but it is the one non-
+        // rejection outcome an operator MUST be told about at boot: the mount is being ignored for that
+        // definition, and every other surface looks healthy. Left to the pass result alone it would be a silent
+        // skip, which is exactly the failure the rule was approved with a diagnostic attached to avoid.
+        foreach (var skip in result.OwnershipSkips)
+            logger.LogWarning(
+                "Workflow artifact '{ArtifactId}' from '{Origin}' was imported but NOT activated: {Diagnostic}",
+                skip.ArtifactId,
+                skip.Origin,
+                skip.Diagnostic);
     }
 }

@@ -382,7 +382,11 @@ public sealed class WorkflowActivationCoordinator(
                     command.ActivationId,
                     command.Source,
                     command.ExpectedRevision,
-                    timeProvider.GetUtcNow()),
+                    timeProvider.GetUtcNow(),
+                    // Passed through verbatim. The coordinator neither adds nor removes takeover intent: the
+                    // caller is the only party that knows whether an explicit operator decision is behind the
+                    // request, and inferring it here would put the rule back inside the runtime (T118).
+                    command.OwnershipIntent),
                 cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -707,17 +711,21 @@ public sealed class WorkflowActivationCoordinator(
     {
         var definitionId = command.Executable.Identity.DefinitionId;
         // The CAS presents the POST-flip revision: we are undoing our own transition, not racing a third writer.
-        // Ownership is safe to assert with the candidate's source because a foreign-owned slot could not have
-        // been flipped in the first place.
+        //
+        // The predecessor is restored under ITS OWN source, with an explicit takeover so the restore is not
+        // refused by the ownership we just installed. Asserting the candidate's source here instead would leave a
+        // rolled-back takeover (T118) serving the predecessor's activation under the claimant's name — and the
+        // next reconcile pass would then be refused for a slot the claimant does not, in fact, hold.
         var compensation = activatedSlot.ReplacedActivationId is { } replacedActivationId
             ? await authority.TryActivateAsync(
                 new WorkflowActivationSlotRequest(
                     definitionId,
                     command.SlotName,
                     replacedActivationId,
-                    command.Source,
+                    activatedSlot.ReplacedSource ?? command.Source,
                     activatedSlot.Slot.Revision,
-                    timeProvider.GetUtcNow()),
+                    timeProvider.GetUtcNow(),
+                    WorkflowActivationOwnershipIntent.TakeOver),
                 CancellationToken.None)
             : await authority.TryDeactivateAsync(
                 definitionId,

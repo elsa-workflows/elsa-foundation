@@ -93,6 +93,64 @@ public sealed class WorkflowActivationAuthorityTests
         Assert.Equal(WorkflowActivationConflict.ForeignSource, otherFolder.Conflict);
     }
 
+    /// <summary>
+    /// T118: a request carrying an explicit takeover intent claims a foreign-owned slot and becomes its owner.
+    /// </summary>
+    /// <remarks>
+    /// The authority honours the intent <b>generically</b> — it never asks who declared it. Asserted with the
+    /// importer taking over from publishing, i.e. the opposite of the production asymmetry, so the test cannot
+    /// pass on a rule that special-cases a particular source.
+    /// </remarks>
+    [Fact]
+    public async Task An_explicit_takeover_claims_a_foreign_owned_slot_and_becomes_the_owner()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        var owned = await authority.TryActivateAsync(Request("activation-1", WorkflowActivationSource.Publishing));
+
+        var takeover = await authority.TryActivateAsync(Request(
+            "activation-2",
+            Importer,
+            owned.Slot.Revision,
+            intent: WorkflowActivationOwnershipIntent.TakeOver));
+
+        Assert.True(takeover.Succeeded);
+        Assert.Equal(WorkflowActivationConflict.None, takeover.Conflict);
+        Assert.Equal("activation-1", takeover.ReplacedActivationId);
+        // The displaced OWNER travels with the displaced id: compensation has to restore both, and only the
+        // authority knows who it was.
+        Assert.Equal(WorkflowActivationSource.PublishingKind, takeover.ReplacedSource!.Kind);
+
+        // One slot, re-owned — never a second lane beside the incumbent.
+        var slot = Assert.Single(await authority.ListByDefinitionAsync("definition-1"));
+        Assert.Equal("activation-2", slot.ActiveActivationId);
+        Assert.Equal(WorkflowActivationSource.ArtifactReconciliationKind, slot.Source!.Kind);
+        Assert.Equal("prod-drop", slot.Source.SourceId);
+    }
+
+    /// <summary>
+    /// Takeover overrides ownership, never the CAS guard: a stale revision is still a conflict.
+    /// </summary>
+    /// <remarks>
+    /// Without this, "explicit wins" would quietly become "explicit wins races too", and two concurrent operator
+    /// commands could interleave with the loser's write landing last.
+    /// </remarks>
+    [Fact]
+    public async Task An_explicit_takeover_does_not_override_the_revision_guard()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        await authority.TryActivateAsync(Request("activation-1", WorkflowActivationSource.Publishing));
+
+        var stale = await authority.TryActivateAsync(Request(
+            "activation-2",
+            Importer,
+            expectedRevision: 0,
+            intent: WorkflowActivationOwnershipIntent.TakeOver));
+
+        Assert.False(stale.Succeeded);
+        Assert.Equal(WorkflowActivationConflict.RevisionMismatch, stale.Conflict);
+        Assert.Equal("activation-1", (await authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+    }
+
     [Fact]
     public async Task Ownership_is_not_inferred_from_activation_id_prefixes()
     {
@@ -158,6 +216,7 @@ public sealed class WorkflowActivationAuthorityTests
         string activationId,
         WorkflowActivationSource source,
         long expectedRevision = 0,
-        string slotName = "default") =>
-        new("definition-1", slotName, activationId, source, expectedRevision, Now);
+        string slotName = "default",
+        WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
+        new("definition-1", slotName, activationId, source, expectedRevision, Now, intent);
 }

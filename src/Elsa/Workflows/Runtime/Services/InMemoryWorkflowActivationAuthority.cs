@@ -1,4 +1,4 @@
-using Elsa.Workflows.Runtime.Core.Contracts;
+﻿using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services;
@@ -61,7 +61,7 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
                     WorkflowActivationConflict.RevisionMismatch,
                     "The activation slot revision changed; another writer moved it first."));
 
-            if (!IsOwnedBy(current, request.Source))
+            if (!IsClaimableBy(current, request.Source, request.OwnershipIntent))
                 return ValueTask.FromResult(Conflict(
                     current,
                     WorkflowActivationConflict.ForeignSource,
@@ -89,7 +89,11 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
             };
             _slots[slotId] = next;
             _activationSlots[request.ActivationId] = slotId;
-            return ValueTask.FromResult(new WorkflowActivationTransition(true, next, replacedActivationId));
+            return ValueTask.FromResult(new WorkflowActivationTransition(
+                true,
+                next,
+                replacedActivationId,
+                ReplacedSource: current.Source));
         }
     }
 
@@ -134,7 +138,11 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
                 UpdatedAt = updatedAt
             };
             _slots[slotId] = next;
-            return ValueTask.FromResult(new WorkflowActivationTransition(true, next, replacedActivationId));
+            return ValueTask.FromResult(new WorkflowActivationTransition(
+                true,
+                next,
+                replacedActivationId,
+                ReplacedSource: current.Source));
         }
     }
 
@@ -144,6 +152,20 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
     /// </summary>
     private static bool IsOwnedBy(WorkflowActivationSlot slot, WorkflowActivationSource source) =>
         slot.ActiveActivationId is null || slot.Source is null || slot.Source.IsSameOwnerAs(source);
+
+    /// <summary>
+    /// Activation's claim rule: ownership, or an explicit takeover intent that overrides it (T118).
+    /// </summary>
+    /// <remarks>
+    /// The intent is honoured for <b>any</b> requesting source, which is the point — the authority never learns
+    /// which callers exist. Two reconciliation sources still refuse each other because neither declares a
+    /// takeover, not because the ledger knows what a reconciliation source is.
+    /// </remarks>
+    private static bool IsClaimableBy(
+        WorkflowActivationSlot slot,
+        WorkflowActivationSource source,
+        WorkflowActivationOwnershipIntent intent) =>
+        intent == WorkflowActivationOwnershipIntent.TakeOver || IsOwnedBy(slot, source);
 
     private static WorkflowActivationTransition Conflict(
         WorkflowActivationSlot slot,

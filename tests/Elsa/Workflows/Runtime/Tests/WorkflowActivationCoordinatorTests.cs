@@ -228,6 +228,76 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Equal("activation-failed", candidateReference!.DeletedReason);
     }
 
+    /// <summary>
+    /// T118: the coordinator passes the caller's takeover intent through to the authority unchanged, so a request
+    /// carrying it claims a foreign-owned slot and becomes its owner.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately expressed with the <em>importer</em> as the claimant and publishing as the incumbent — the
+    /// reverse of the production asymmetry. The rule under test is that the runtime honours the declared intent
+    /// generically; a test that could only pass for publishing would be asserting a coupling this design forbids.
+    /// </remarks>
+    [Fact]
+    public async Task A_takeover_claims_a_foreign_owned_slot_and_becomes_its_owner()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("activation-1", "artifact-1", source: WorkflowActivationSource.Publishing);
+
+        var takeover = await harness.ActivateAsync(
+            "import:prod-drop:1",
+            "artifact-2",
+            source: Importer,
+            expectedRevision: first.Slot.Revision,
+            ownershipIntent: WorkflowActivationOwnershipIntent.TakeOver);
+
+        Assert.True(takeover.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, takeover.Outcome);
+        Assert.Equal("activation-1", takeover.ReplacedActivationId);
+
+        // One slot, one owner, one serving artifact — the takeover REPLACED, it did not add a second lane.
+        var slot = Assert.Single(await harness.Authority.ListByDefinitionAsync("definition-1"));
+        Assert.Equal("import:prod-drop:1", slot.ActiveActivationId);
+        Assert.Equal(WorkflowActivationSource.ArtifactReconciliationKind, slot.Source!.Kind);
+        Assert.Equal("prod-drop", slot.Source.SourceId);
+        var serving = Assert.Single(await harness.ServingBindingsAsync());
+        Assert.Equal("import:prod-drop:1", serving.ActivationId);
+        // The displaced activation's reference is retired, exactly as for a same-owner replacement.
+        var predecessor = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1"));
+        Assert.Equal("activation-replaced", predecessor!.DeletedReason);
+    }
+
+    /// <summary>
+    /// A takeover that fails after the flip must put the predecessor back <b>under its own ownership</b>.
+    /// </summary>
+    /// <remarks>
+    /// The subtle half of T118. Compensation restores the displaced activation id; if it restored it under the
+    /// claimant's source the slot would end up serving the predecessor while naming the claimant as owner — and
+    /// the predecessor's own next pass would then be refused for a slot nobody actually holds against it. Nothing
+    /// else in the engine would report that, which is precisely why it is asserted here.
+    /// </remarks>
+    [Fact]
+    public async Task A_failed_takeover_restores_the_displaced_activation_under_its_original_owner()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("activation-1", "artifact-1", source: WorkflowActivationSource.Publishing);
+        harness.ResetCalls();
+        harness.Schedules.FailOn["activate:import:prod-drop:1"] = new InvalidOperationException("schedule store unavailable");
+
+        var result = await harness.ActivateAsync(
+            "import:prod-drop:1",
+            "artifact-2",
+            source: Importer,
+            expectedRevision: first.Slot.Revision,
+            ownershipIntent: WorkflowActivationOwnershipIntent.TakeOver);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.CompensationDiagnostic);
+        var slot = await harness.Authority.FindAsync("definition-1", "default");
+        Assert.Equal("activation-1", slot!.ActiveActivationId);
+        Assert.Equal(WorkflowActivationSource.PublishingKind, slot.Source!.Kind);
+        Assert.Null(slot.Source.SourceId);
+    }
+
     [Fact]
     public async Task A_stale_revision_is_refused_and_the_slot_does_not_move()
     {
@@ -836,8 +906,10 @@ public sealed class WorkflowActivationCoordinatorTests
             string artifactId,
             WorkflowActivationSource? source = null,
             long expectedRevision = 0,
-            string? sourceReferenceId = null) =>
-            Coordinator.ActivateAsync(Command(activationId, artifactId, source, expectedRevision, sourceReferenceId));
+            string? sourceReferenceId = null,
+            WorkflowActivationOwnershipIntent ownershipIntent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
+            Coordinator.ActivateAsync(
+                Command(activationId, artifactId, source, expectedRevision, sourceReferenceId, ownershipIntent));
 
         public ValueTask<WorkflowActivationResult> DeactivateAsync(
             string artifactId,
@@ -865,14 +937,16 @@ public sealed class WorkflowActivationCoordinatorTests
             string artifactId,
             WorkflowActivationSource? source = null,
             long expectedRevision = 0,
-            string? sourceReferenceId = null) =>
+            string? sourceReferenceId = null,
+            WorkflowActivationOwnershipIntent ownershipIntent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
             new(
                 Executable(artifactId),
                 Reference(activationId, artifactId, sourceReferenceId),
                 "default",
                 activationId,
                 source ?? WorkflowActivationSource.Publishing,
-                expectedRevision);
+                expectedRevision,
+                ownershipIntent);
 
         public WorkflowExecutableSourceReference Reference(
             string activationId,
