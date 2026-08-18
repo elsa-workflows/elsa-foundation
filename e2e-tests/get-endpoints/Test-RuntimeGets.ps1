@@ -6,7 +6,7 @@
     executed workflow with a captured value snapshot), plus filter/paging parameters and negative (404) cases.
     Covered: health; executables (list/get/provenance/input-sources); instances (list/filtered/paged/get/
     incidents); activity-executions (get/descendants/layout/value-evidence payload); dispatches (list/get);
-    diagnostics settings.
+    activation slots (list/get); diagnostics settings.
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -72,6 +72,13 @@ if ($evidenceId) {
 Assert-Get -Ctx $ctx -Label "dispatches?parentWorkflowExecutionId (filtered)" -Path "runtime/workflows/dispatches?parentWorkflowExecutionId=$wfId" | Out-Null
 Assert-Get -Ctx $ctx -Label "dispatches (no filter) -> 400" -Path "runtime/workflows/dispatches" -ExpectStatus 400 | Out-Null
 Assert-Get -Ctx $ctx -Label "dispatches/{bogus} -> 404" -Path "runtime/workflows/dispatches/dispatch-bogus$tag" -ExpectStatus 404 | Out-Null
+
+# --- activation slots (T117: the runtime owns the activation ledger; publishing owns publications) ---
+Assert-Get -Ctx $ctx -Label "activation-slots/{definitionId}" -Path "runtime/workflows/activation-slots/$($def.definition.id)" -Validate { param($r) @($r.Json.items).Count -ge 1 } | Out-Null
+Assert-Get -Ctx $ctx -Label "activation-slots/{definitionId}/default" -Path "runtime/workflows/activation-slots/$($def.definition.id)/default" -Validate { param($r) $r.Json.slotName -eq 'default' } | Out-Null
+# The listing is lenient: an unknown definitionId returns an empty list (200), not 404. Reading one named slot is not.
+Assert-Get -Ctx $ctx -Label "activation-slots/{bogus} (lenient 200 empty)" -Path "runtime/workflows/activation-slots/def-bogus$tag" -ExpectStatus 200 | Out-Null
+Assert-Get -Ctx $ctx -Label "activation-slots/{bogus}/default -> 404" -Path "runtime/workflows/activation-slots/def-bogus$tag/default" -ExpectStatus 404 | Out-Null
 
 # --- diagnostics ---
 Assert-Get -Ctx $ctx -Label "diagnostics/settings" -Path "runtime/workflows/diagnostics/settings" -Validate { param($r) $null -ne $r.Json.effective } | Out-Null

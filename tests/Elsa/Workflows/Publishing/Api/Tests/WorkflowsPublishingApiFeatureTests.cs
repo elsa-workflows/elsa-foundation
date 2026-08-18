@@ -74,6 +74,28 @@ public sealed class WorkflowsPublishingApiFeatureTests
         Assert.False(link.Templated);
     }
 
+    /// <summary>
+    /// T117: the activation ledger is runtime-owned, so publishing no longer advertises a way to read it.
+    /// </summary>
+    /// <remarks>
+    /// The relation is re-advertised as <c>workflow-activation-slots</c> / <c>workflow-activation-slot</c> on
+    /// <c>elsa.api.runtime</c>. Retiring it here is the transport half of the responsibility split: the two slot
+    /// lifecycle <em>commands</em> stay in publishing, but nothing here serves a slot listing any more.
+    /// </remarks>
+    [Fact]
+    public void No_longer_advertises_a_publishing_owned_slot_listing()
+    {
+        Assert.DoesNotContain(
+            PublishingApiCapabilities.StaticDeclaration.Links,
+            candidate => candidate.Rel == "publication-slots");
+        Assert.DoesNotContain(
+            PublishingApiCapabilities.StaticDeclaration.Links,
+            candidate => candidate.Href.EndsWith("/slots", StringComparison.Ordinal));
+        // Publishing keeps every other relation it owned, so this is a removal of one concept and not a sweep.
+        Assert.Contains(PublishingApiCapabilities.StaticDeclaration.Links, candidate => candidate.Rel == "publication-policy");
+        Assert.Contains(PublishingApiCapabilities.StaticDeclaration.Links, candidate => candidate.Rel == "workflow-publish");
+    }
+
     [Fact]
     public void CompileRequest_PreservesPreTenantConstructorAndDeconstruction()
     {

@@ -510,42 +510,10 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
-  /publishing/workflows/{definitionId}/slots:
-    parameters:
-      - $ref: '#/components/parameters/DefinitionId'
-    get:
-      tags: [Publishing]
-      operationId: listWorkflowPublicationSlots
-      responses:
-        '200':
-          description: Publication slots for a definition
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [items]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PublicationSlot'
-
   /publishing/workflows/{definitionId}/slots/{slotName}:
     parameters:
       - $ref: '#/components/parameters/DefinitionId'
       - $ref: '#/components/parameters/SlotName'
-    get:
-      tags: [Publishing]
-      operationId: getWorkflowPublicationSlot
-      responses:
-        '200':
-          description: Current slot authority and status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PublicationSlot'
-        '404':
-          $ref: '#/components/responses/NotFound'
     delete:
       tags: [Publishing]
       operationId: retireWorkflowPublicationSlot
@@ -655,6 +623,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TestRun'
+
+  /runtime/workflows/activation-slots/{definitionId}:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+    get:
+      tags: [Runtime]
+      operationId: listWorkflowActivationSlots
+      responses:
+        '200':
+          description: Activation slots for a definition
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowActivationSlot'
+
+  /runtime/workflows/activation-slots/{definitionId}/{slotName}:
+    parameters:
+      - $ref: '#/components/parameters/DefinitionId'
+      - $ref: '#/components/parameters/SlotName'
+    get:
+      tags: [Runtime]
+      operationId: getWorkflowActivationSlot
+      responses:
+        '200':
+          description: The live activation for one named slot and the source that owns it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowActivationSlot'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /runtime/workflows/executables:
     get:
@@ -980,7 +985,7 @@ components:
             Stable relation such as workflow-definitions, workflow-drafts,
             workflow-versions, scoped-variable-analysis, activity-input-options,
             activity-catalog, activity-availability, expression-descriptors,
-            variable-types, publication-preflight, publication-slots,
+            variable-types, publication-preflight, workflow-activation-slots,
             publication-policy, workflow-test-runs, workflow-executables,
             workflow-executable-provenance, workflow-execute, workflow-instances,
             or runtime-diagnostics.
@@ -1377,6 +1382,18 @@ components:
           $ref: '#/components/schemas/PublicationStatus'
         activatedAt: { type: [string, 'null'], format: date-time }
         retiredAt: { type: [string, 'null'], format: date-time }
+    WorkflowActivationSlot:
+      type: object
+      required: [slotId, definitionId, slotName, revision, updatedAt]
+      properties:
+        slotId: { type: string }
+        definitionId: { type: string }
+        slotName: { type: string }
+        activeActivationId: { type: [string, 'null'] }
+        sourceKind: { type: [string, 'null'] }
+        sourceId: { type: [string, 'null'] }
+        revision: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
     PublicationSlot:
       type: object
       required: [definitionId, slotName, status]

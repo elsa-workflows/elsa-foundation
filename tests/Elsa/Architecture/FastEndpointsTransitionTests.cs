@@ -15,6 +15,9 @@ public sealed class FastEndpointsTransitionTests
         // 113/24: spec 151 (FR-B-010a) adds the executable-closure export route to Publishing.Api, which was and
         // remains a wholly transitional module — the route joins the existing #1374 wave rather than opening a new
         // exception. The inventory is reviewed, so these numbers move only with a stated decision.
+        // 22/26: spec 151 (T117) moves the two activation-slot GETs from Publishing.Api to Runtime.Api. The total
+        // is unchanged — no route was added or removed, only reassigned — so the two owners' counts trade 2, and
+        // each moved registration takes its new owner's removal wave (#1374 -> #1375) with it.
         Assert.Equal(113, registrations.Count);
         Assert.Equal(4, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
@@ -22,8 +25,8 @@ public sealed class FastEndpointsTransitionTests
             {
                 ["Elsa.Activities.Design.Api"] = 38,
                 ["Elsa.Workflows.Design.Api"] = 27,
-                ["Elsa.Workflows.Publishing.Api"] = 24,
-                ["Elsa.Workflows.Runtime.Api"] = 24
+                ["Elsa.Workflows.Publishing.Api"] = 22,
+                ["Elsa.Workflows.Runtime.Api"] = 26
             },
             registrations.GroupBy(registration => registration.Owner, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal));

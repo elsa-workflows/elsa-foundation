@@ -74,8 +74,6 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `publishing/incident-strategies` | `WorkflowPublishingRead` | List safe incident-strategy descriptors and the effective default publication strategy. |
 | `POST` | `publishing/workflows/{versionId}/preflight` | `WorkflowPublishingRead` | Resolve policy and return trigger changes/conflicts without changing authority. |
 | `POST` | `publishing/workflows/{versionId}/publish` | `WorkflowPublishingManage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
-| `GET` | `publishing/workflows/{definitionId}/slots` | `WorkflowPublishingRead` | List publication slots and visible lifecycle state. |
-| `GET` | `publishing/workflows/{definitionId}/slots/{slotName}` | `WorkflowPublishingRead` | Read one slot. |
 | `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `WorkflowPublishingManage` | Unpublish the slot authority and its serving projections. |
 | `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `WorkflowPublishingManage` | Restore the latest eligible retired publication with a new authority transition. |
 | `GET` | `publishing/workflows/{definitionId}/policy` | `WorkflowPublishingRead` | Read the effective workflow/host policy. |
@@ -87,6 +85,14 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `design/activities/publications/{idempotencyKey}` | `WorkflowPublishingRead` | Read the durable activity publication receipt and terminal outcome. |
 
 The version route excludes the reserved literal `drafts`, so the two test-run routes cannot overlap.
+
+**Activation-slot reads are not here.** `GET /runtime/workflows/activation-slots/{definitionId}` and
+`GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` are served by `Elsa.Workflows.Runtime.Api`
+under the `elsa.api.runtime` capability: the activation slot is a runtime concept, and a runtime-only engine has
+one without ever having published anything. Publishing keeps the two slot lifecycle **commands** above, whose
+responses still join the resulting slot to its `PublicationRecord` — that join is a publishing concern because
+only publishing holds the journal. The retired `publication-slots` capability relation is now
+`workflow-activation-slots` / `workflow-activation-slot` on `elsa.api.runtime`.
 
 Activity publication clients must preflight immediately before publish and submit the returned
 opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the

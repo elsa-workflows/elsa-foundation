@@ -794,17 +794,6 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
-      "GET /publishing/workflows/{param}/slots/{param}"
-    ],
-    "followUp": "#1374",
-    "owner": "Elsa.Workflows.Publishing.Api",
-    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.GetPublicationSlotEndpoint",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "a96ecf82b86bbb57cc47574d12dd412cd7b2b81b6c7153b1e09a588f4c8e15ac"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
       "GET /publishing/workflows/{param}/policy"
     ],
     "followUp": "#1374",
@@ -832,17 +821,6 @@
     "followUp": "#1374",
     "owner": "Elsa.Workflows.Publishing.Api",
     "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListIncidentStrategies",
-    "removalOwner": "First-party REST API Consolidation",
-    "sourceHash": "a96ecf82b86bbb57cc47574d12dd412cd7b2b81b6c7153b1e09a588f4c8e15ac"
-  },
-  {
-    "dynamicallyUnloadable": false,
-    "endpoints": [
-      "GET /publishing/workflows/{param}/slots"
-    ],
-    "followUp": "#1374",
-    "owner": "Elsa.Workflows.Publishing.Api",
-    "registrationIdentity": "Elsa.Workflows.Publishing.Api.Endpoints.ListPublicationSlotsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
     "sourceHash": "a96ecf82b86bbb57cc47574d12dd412cd7b2b81b6c7153b1e09a588f4c8e15ac"
   },
@@ -1113,6 +1091,17 @@
   {
     "dynamicallyUnloadable": false,
     "endpoints": [
+      "GET /runtime/workflows/activation-slots/{param}/{param}"
+    ],
+    "followUp": "#1375",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.GetWorkflowActivationSlotEndpoint",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0684749a6f42a169ccc6b44ba8f3cf6fdadfba408101408301e984fdd475b2dd"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
       "GET /runtime/workflows/dispatches/{param}"
     ],
     "followUp": "#1375",
@@ -1184,6 +1173,17 @@
     "followUp": "#1375",
     "owner": "Elsa.Workflows.Runtime.Api",
     "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListInstancesPage",
+    "removalOwner": "First-party REST API Consolidation",
+    "sourceHash": "0684749a6f42a169ccc6b44ba8f3cf6fdadfba408101408301e984fdd475b2dd"
+  },
+  {
+    "dynamicallyUnloadable": false,
+    "endpoints": [
+      "GET /runtime/workflows/activation-slots/{param}"
+    ],
+    "followUp": "#1375",
+    "owner": "Elsa.Workflows.Runtime.Api",
+    "registrationIdentity": "Elsa.Workflows.Runtime.Api.Endpoints.ListWorkflowActivationSlotsEndpoint",
     "removalOwner": "First-party REST API Consolidation",
     "sourceHash": "0684749a6f42a169ccc6b44ba8f3cf6fdadfba408101408301e984fdd475b2dd"
   },

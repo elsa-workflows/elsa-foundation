@@ -21,6 +21,11 @@ public static class RuntimeApiCapabilities
             new("workflow-executable-input-sources", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources", templated: true),
             new("workflow-executable-provenance", "runtime/workflows/executables/{artifactId}/provenance", templated: true),
             new("workflow-execute", "runtime/workflows/executables/{artifactId}/execute", templated: true),
+            // FR-B-006 / T117: the activation ledger reads moved here from Publishing.Api, which was serving
+            // runtime-owned data under an `elsa.api.publishing` rel. The `publication-slots` rel is retired with
+            // the move; the slot is a runtime concept, and a publication is a separate publishing-owned fact.
+            new("workflow-activation-slots", "runtime/workflows/activation-slots/{definitionId}", templated: true),
+            new("workflow-activation-slot", "runtime/workflows/activation-slots/{definitionId}/{slotName}", templated: true),
             new("workflow-instances", "runtime/workflows/instances"),
             new("workflow-instances-page", "runtime/workflows/instances/page"),
             new("workflow-instance", "runtime/workflows/instances/{workflowExecutionId}", templated: true),

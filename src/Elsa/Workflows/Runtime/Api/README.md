@@ -27,6 +27,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 |---|---|
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
+| Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
 | Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
@@ -39,6 +40,23 @@ Executable, provenance, instance, and diagnostics reads use `workflow-runtime.re
 Dispatch inspection is allowlist-only: it exposes lifecycle/linkage, child artifact/source type, input name/type capture descriptors, timestamps, and classified diagnostic code/category. It never serializes raw input/output values, tenant/partition/authority context, arbitrary metadata, exception messages, or stack traces.
 
 Provenance is deliberately read-only here. Publishing owns creation and retirement of publication/test-run references, while Runtime owns artifact retention and garbage collection.
+
+## Activation slots
+
+The activation slot is the runtime's own ledger of which activation is live for a `(definitionId, slotName)` pair
+and which source owns it, so Runtime serves it and Publishing serves publications (FR-B-006). The view projects
+`slotId`, `definitionId`, `slotName`, `activeActivationId`, the owning `sourceKind`/`sourceId`, `revision` and
+`updatedAt`. It carries no publication state: a slot can be owned by artifact reconciliation, and a runtime-only
+engine has no publication journal at all. A publishing-enriched view of the same slot is the response of the
+publishing slot lifecycle commands in `Elsa.Workflows.Publishing.Api`.
+
+**This surface is read-only, deliberately and permanently.** There is no `DELETE`, and adding one is a spec
+change rather than a natural next endpoint. A runtime-only engine composes no publishing and therefore has no
+external deactivation surface: it is configured at startup and re-reconciles through a shell reload (FR-B-008),
+which is the immutability that makes a hardened runtime worth having. The runtime still deactivates
+**internally** — the coordinator retires the predecessor on supersession and compensates on failure — and that
+is all `IWorkflowActivationAuthority.TryDeactivateAsync` and `IWorkflowActivationCoordinator.DeactivateAsync`
+exist for. Retracting a publication remains a publishing command.
 
 ## Alteration plan API
 

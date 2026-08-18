@@ -22,7 +22,9 @@ public static class PublishingApiCapabilities
             // RouteConstants.WorkflowExecutableExport with the inline route constraint stripped. Adding a link is
             // additive, so ContractMajorVersion stays at 1: no existing rel changed meaning or shape.
             new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
-            new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),
+            // T117: `publication-slots` was retired here and re-advertised as `workflow-activation-slots` /
+            // `workflow-activation-slot` on `elsa.api.runtime`. The slot is runtime-owned data; publishing was
+            // serving it only because the endpoints happened to live here.
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),
             new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),
             new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs"),

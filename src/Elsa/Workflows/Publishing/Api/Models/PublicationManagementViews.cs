@@ -31,6 +31,15 @@ public sealed record PublicationView(
             publication.Failure);
 }
 
+/// <summary>
+/// A publishing view of one activation slot, enriched with the <see cref="PublicationView"/> that explains it.
+/// </summary>
+/// <remarks>
+/// Retained after T117 as the response of the publishing slot lifecycle <em>commands</em> (unpublish/restore).
+/// The slot <em>listing</em> moved to <c>Elsa.Workflows.Runtime.Api</c>, which serves the plain runtime
+/// activation slot without any publication join; joining the two remains a publishing concern because only
+/// publishing holds the journal.
+/// </remarks>
 public sealed record PublicationSlotView(
     string SlotId,
     string DefinitionId,
@@ -53,8 +62,6 @@ public sealed record PublicationSlotView(
             publication is null ? null : PublicationContract.ToView(publication.Status),
             publication is null ? null : PublicationView.From(publication));
 }
-
-public sealed record PublicationSlotListResponse(IReadOnlyCollection<PublicationSlotView> Items);
 
 public sealed record PublicationPolicyView(
     string DefinitionId,
