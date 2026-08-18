@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 115
+- Feature classes: 114
 - Concrete features missing explicit ShellFeature ID: 1
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 100
+- Feature-bearing source projects: 99
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -53,7 +53,6 @@ No duplicate explicit feature IDs were discovered.
 | GitHubCopilotAgent | GitHubCopilotAgentFeature | False | Elsa.Agent.GitHubCopilot | BaseDirectory: string?<br>Enabled: bool<br>GitHubToken: string?<br>GitHubTokenEnvironmentVariable: string?<br>Model: string<br>ReasoningEffort: string?<br>RuntimeConnectionToken: string?<br>RuntimeUrl: string?<br>SystemMessage: string?<br>UseLoggedInUser: bool<br>WorkingDirectory: string? | filesystem path signal<br>sensitive or deployment-specific value signal | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
 | FoundationWorkflowsAgent | FoundationWorkflowsAgentFeature | False | Elsa.Agent.Workflows | - | - | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/FoundationWorkflowsAgentFeature.cs) |
 | ApiCapabilities | ApiCapabilitiesFeature | False | Elsa.Api.Capabilities | - | - | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
-| ApiSecurity | ApiSecurityFeature | False | Elsa.Api.FastEndpoints | AllowAnonymous: bool | - | [ApiSecurityFeature.cs](../../src/Elsa/Api/FastEndpoints/ApiSecurityFeature.cs) |
 | AttentionApi | AttentionApiFeature | False | Elsa.Attention.Api | - | - | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCache | MemoryCacheFeature | False | Elsa.Caching.Memory | CacheDuration: TimeSpan | code default<br>sensitive or deployment-specific value signal | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | DiagnosticsOpenTelemetry | OpenTelemetryFeature | False | Elsa.Diagnostics.OpenTelemetry | AllowUnauthenticatedLoopback: bool<br>ApiKey: string?<br>ApiKeyHeaderName: string<br>LogRecordCapacity: int<br>MaxHttpRequestBodySize: long<br>MaxQuerySize: int<br>MetricInstrumentCapacity: int<br>MetricPointCapacity: int<br>ResourceCapacity: int<br>SpanCapacity: int<br>SubscriberChannelCapacity: int<br>TraceCapacity: int | code default<br>sensitive or deployment-specific value signal | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
@@ -175,7 +174,6 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | GitHubCopilotAgent | Elsa.Agent.GitHubCopilot | Elsa.Agent.Core (FoundationAgentAbstractions)<br>Elsa.Agent.Workflows (FoundationWorkflowsAgent) | - | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>GitHub.Copilot.SDK 1.0.4<br>Microsoft.Extensions.AI.Abstractions 10.5.1<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.Logging 10.0.10<br>Microsoft.Extensions.Logging.Abstractions 10.0.10<br>Microsoft.Extensions.Options 10.0.10 |
 | FoundationWorkflowsAgent | Elsa.Agent.Workflows | Elsa.Agent.Core (FoundationAgentAbstractions) | - | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.10 |
 | ApiCapabilities | Elsa.Api.Capabilities | Elsa.Foundation.Identity.Abstractions (FoundationIdentityAbstractions) | Elsa.Api.AspNetCore<br>Elsa.Events.Core | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79 |
-| ApiSecurity | Elsa.Api.FastEndpoints | Elsa.Foundation.Identity.Abstractions (FoundationIdentityAbstractions) | Elsa.Mediator.Core<br>Elsa.Primitives | CShells.FastEndpoints.Abstractions 0.0.29-preview.147 |
 | AttentionApi | Elsa.Attention.Api | Elsa.Foundation.Identity.Abstractions (FoundationIdentityAbstractions) | Elsa.Api.AspNetCore<br>Elsa.Attention.Core | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79 |
 | MemoryCache | Elsa.Caching.Memory | - | Elsa.Caching.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.Extensions.Caching.Memory 10.0.10 |
 | DiagnosticsOpenTelemetry | Elsa.Diagnostics.OpenTelemetry | Elsa.Foundation.Identity.Abstractions (FoundationIdentityAbstractions) | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79 |
