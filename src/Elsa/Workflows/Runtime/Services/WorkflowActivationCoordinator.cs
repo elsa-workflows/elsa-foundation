@@ -336,6 +336,14 @@ public sealed class WorkflowActivationCoordinator(
         string slotId,
         CancellationToken cancellationToken)
     {
+        // ORDERING INVARIANT, DUPLICATED: recurrences are materialized and validated BEFORE any binding is
+        // written. The same sequence exists in PublicationProjectionReconciler.PrepareAsync, which unpublish's
+        // RemoveAsync/RestoreAsync still route through. THE TWO MUST STAY IN STEP -- when T044b retired the
+        // decorator that used to prepare recurrences implicitly, this path was updated and that one was not, and
+        // the divergence was invisible because a test double reproduced the retired decorator. If you change the
+        // order or the participants here, change them there. T121 removes the duplication by giving this
+        // coordinator the deactivation path too and deleting that reconciler; until then, this comment is the
+        // only thing that tells you the other path exists.
         if (recurringSchedulePreparer is not null)
             await recurringSchedulePreparer.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
 

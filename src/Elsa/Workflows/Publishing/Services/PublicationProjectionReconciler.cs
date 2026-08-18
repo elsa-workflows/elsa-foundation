@@ -7,6 +7,28 @@ namespace Elsa.Workflows.Publishing.Services;
 /// <summary>
 /// Persists and idempotently delivers publication-scoped serving-projection intents.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>This is the SECOND path that prepares serving projections, and it must stay in step with the first.</b>
+/// <c>WorkflowActivationCoordinator</c> owns activation; this type survives only because unpublish's
+/// <see cref="RemoveAsync"/> / <see cref="RestoreAsync"/> still route through it. Three of its five members
+/// — <see cref="PrepareAsync"/>, <see cref="ActivateAsync"/> and <see cref="CompensateAsync"/> — have <b>no
+/// production caller at all</b> since publishing began activating through the coordinator.
+/// </para>
+/// <para>
+/// <b>The duplication has already caused one defect.</b> T044b retired the decorator that implicitly prepared
+/// recurring schedules through <c>IWorkflowTriggerIndexer</c>; the coordinator gained an explicit preparer and
+/// this type did not, so it stopped preparing the recurring projection while still activating it. On the
+/// <see cref="RestoreAsync"/> compensation path that meant a workflow's timers silently stopped after a failed
+/// unpublish. The suite did not notice, because a test double reproduced the retired decorator.
+/// </para>
+/// <para>
+/// <b>If you change the preparation order or its participants here, change them in
+/// <c>WorkflowActivationCoordinator.PrepareProjectionsAsync</c> too</b> — and prefer finishing <b>T121</b>,
+/// which gives the coordinator the deactivation path and deletes this type, making the divergence impossible
+/// rather than merely documented.
+/// </para>
+/// </remarks>
 public sealed class PublicationProjectionReconciler(
     IPublicationProjectionIntentStore intentStore,
     IWorkflowExecutableStore executableStore,
