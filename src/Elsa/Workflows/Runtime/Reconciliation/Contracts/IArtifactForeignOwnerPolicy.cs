@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Contracts;
 /// </para>
 /// <para>
 /// <b>§2.6.2 replacement contract.</b> Exactly one implementation is meaningful per engine, registered with
-/// <c>TryAddScoped</c>, so replacement is first-wins (ADR 0033): register yours <em>before</em> composing the
+/// <c>TryAddScoped</c>, so replacement is first-wins: register yours <em>before</em> composing the
 /// reconciliation feature, or <c>services.Replace(...)</c> afterwards. Declared in this domain's
 /// <c>EXTENSION_POINTS.md</c> under <em>Overridable contracts</em>.
 /// </para>

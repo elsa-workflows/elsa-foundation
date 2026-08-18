@@ -52,7 +52,7 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
         // TryAdd, not Add: the reconciler is a single-implementation contract, so §2.6.2 forbids letting a host's
-        // replacement be decided by registration order. First-wins (ADR 0033) is the convention the three runtime
+        // replacement be decided by registration order. First-wins is the convention the three runtime
         // replacement contracts already use, so a host registers its own BEFORE composing the feature — the same
         // gesture everywhere, rather than "before" here and "after" there.
         services.TryAddScoped<IWorkflowArtifactReconciler, WorkflowArtifactReconciler>();

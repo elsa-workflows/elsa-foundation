@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </para>
 /// <para>
 /// A <b>replacement contract</b> (§2.6.2): a second coordinator would mean a second activation lifecycle, so
-/// registration is <c>TryAdd</c> (first-wins, ADR 0033) rather than silent last-write-wins.
+/// registration is <c>TryAdd</c>, whose first-wins semantics prevent the silent last-write-wins §2.6.2 forbids.
 /// </para>
 /// </remarks>
 public interface IWorkflowActivationCoordinator

@@ -57,7 +57,7 @@ public class JsonWorkflowArtifactReconciliationFeature : WorkflowsArtifactReconc
         base.ConfigureServices(services);
 
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(Options));
-        // TryAdd for the reader (§2.6.2: single implementation, first-wins per ADR 0033) — plain Add for the
+        // TryAdd for the reader (§2.6.2: single implementation, first-wins) — plain Add for the
         // source, which is a fan-in contribution: several mounts legitimately contribute several sources.
         services.TryAddScoped<IWorkflowArtifactClosureReader, JsonWorkflowArtifactClosureReader>();
         services.AddScoped<IWorkflowArtifactReconciliationSource, JsonWorkflowArtifactReconciliationSource>();

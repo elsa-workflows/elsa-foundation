@@ -19,7 +19,7 @@ the [README](README.md); this file is only about how to extend it.
 All three contracts below are single-implementation replacement contracts (§2.6.2): the reconciler *is* the import
 pipeline, a second decoder would mean a second wire format, and two foreign-owner policies would mean the same
 condition reported two ways. All are registered with **`TryAddScoped`**, so
-replacement is **first-wins** (ADR 0033) — register yours **before** the feature composes and its default backs
+replacement is **first-wins** — register yours **before** the feature composes and its default backs
 off. Via feature inheritance that means: derive, register your contract **first**, *then* call
 `base.ConfigureServices(services)`; registering *after* the base call does nothing, because the default is
 already in the container. This is the same gesture as every other runtime replacement contract, rather than
