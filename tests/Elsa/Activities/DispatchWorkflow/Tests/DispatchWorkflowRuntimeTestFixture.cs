@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
@@ -404,7 +404,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [DispatchWorkflowConstants.PinnedTargetMetadataKey] = JsonSerializer.Serialize(
-                new DispatchWorkflowPin(ChildIdentity, WorkflowExecutableSourceProvenance.From(ChildSourceReference())),
+                new DispatchWorkflowPin(ChildIdentity, DispatchWorkflowPinProvenance.From(ChildSourceReference())),
                 SerializerOptions)
         };
         var node = NewNode(

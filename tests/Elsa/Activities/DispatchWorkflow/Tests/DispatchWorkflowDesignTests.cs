@@ -61,7 +61,7 @@ public sealed class DispatchWorkflowDesignTests
     }
 
     [Fact]
-    public async Task Pin_contribution_carries_exact_executable_and_source_identity()
+    public async Task Pin_contribution_carries_exact_executable_and_only_portable_source_identity()
     {
         var node = DispatchNode("dispatch-node", "child-definition");
         // Content-addressed executables may retain source facts from the first definition that produced the
@@ -85,15 +85,25 @@ public sealed class DispatchWorkflowDesignTests
         var pin = JsonSerializer.Deserialize<DispatchWorkflowPin>(contribution.Value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(pin);
         Assert.Equal(executable.Identity, pin!.Executable);
-        Assert.Equal(source.SourceReferenceId, pin.Source!.SourceReferenceId);
-        Assert.Equal(source.SourceKind, pin.Source.SourceKind);
-        Assert.Equal(source.SourceId, pin.Source.SourceId);
-        Assert.Equal(source.SourceVersion, pin.Source.SourceVersion);
-        Assert.Equal(source.DefinitionId, pin.Source.DefinitionId);
+        // The portable subset travels: three facts any engine compiling this authored content derives identically,
+        // so hashing them into the parent's identity is legitimate.
+        Assert.Equal(source.DefinitionId, pin.Source!.DefinitionId);
         Assert.Equal(source.DefinitionVersionId, pin.Source.DefinitionVersionId);
         Assert.Equal(source.ArtifactVersion, pin.Source.ArtifactVersion);
-        Assert.Equal(source.ActivationId, pin.Source.PublicationId);
-        Assert.Equal(source.SlotId, pin.Source.SlotId);
+        // ...and it is the reference's attribution, not the deduplicated artifact's, that answers "which child".
+        Assert.NotEqual(executable.Identity.DefinitionId, pin.Source.DefinitionId);
+
+        // The engine-local facts do not travel. Asserted against the serialized bytes rather than the model, because
+        // the bytes are what gets hashed into the parent's artifact id and what an export envelope ships: a field
+        // re-added to the record would slip past a model-shaped assertion.
+        Assert.DoesNotContain(source.SourceReferenceId, contribution.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain(source.SourceKind, contribution.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("sourceReferenceId", contribution.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("publicationId", contribution.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("slotId", contribution.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sourceKind", contribution.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sourceId", contribution.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sourceVersion", contribution.Value, StringComparison.OrdinalIgnoreCase);
         var dependency = Assert.Single(compileContribution.Dependencies);
         Assert.Equal(node.ExecutableNodeId, dependency.ExecutableNodeId);
         Assert.Equal(executable.Identity.ArtifactId, dependency.ArtifactId);
@@ -199,7 +209,7 @@ public sealed class DispatchWorkflowDesignTests
         var pin = JsonSerializer.Deserialize<DispatchWorkflowPin>(serializedPin, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.NotNull(pin);
         Assert.Equal(childExecutable.Identity, pin.Executable);
-        Assert.Equal(WorkflowExecutableSourceProvenance.From(childSource), pin.Source);
+        Assert.Equal(DispatchWorkflowPinProvenance.From(childSource), pin.Source);
         var dependency = Assert.Single(executable.Dependencies);
         Assert.Equal(childExecutable.Identity.ArtifactId, dependency.ArtifactId);
         Assert.Equal(childExecutable.Identity.ArtifactHash, dependency.ArtifactHash);
@@ -675,14 +685,28 @@ public sealed class DispatchWorkflowDesignTests
         await Assert.ThrowsAsync<ArgumentException>(async () =>
             await GetPinContributionAsync(node, inputContract));
 
+    /// <summary>
+    /// Asserts the pin names exactly one artifact, and names it <em>without</em> the publish-local reference id that
+    /// selected it.
+    /// </summary>
+    /// <remarks>
+    /// The artifact identity is what makes the pin exact — it is content-addressed, so it is the same on every engine.
+    /// <paramref name="selectingSourceReferenceId"/> is the reference the compiler resolved through, and it is passed in
+    /// only so its <b>absence</b> can be asserted: a pin that carried it would make the parent's hash depend on which
+    /// publish happened to serve the child, and would ship an unresolvable pointer to any importing engine.
+    /// </remarks>
     private static void AssertExactPin(
         ExecutableCompilationContribution contribution,
         WorkflowExecutableIdentity expectedIdentity,
-        string expectedSourceReferenceId)
+        string selectingSourceReferenceId)
     {
         var pin = DeserializePin(contribution);
         Assert.Equal(expectedIdentity, pin.Executable);
-        Assert.Equal(expectedSourceReferenceId, pin.Source!.SourceReferenceId);
+        Assert.Equal("child-definition", pin.Source!.DefinitionId);
+        Assert.DoesNotContain(
+            selectingSourceReferenceId,
+            Assert.Single(contribution.NodeMetadata).Value,
+            StringComparison.Ordinal);
         var dependency = Assert.Single(contribution.Dependencies);
         Assert.Equal(expectedIdentity.ArtifactId, dependency.ArtifactId);
         Assert.Equal(expectedIdentity.ArtifactHash, dependency.ArtifactHash);

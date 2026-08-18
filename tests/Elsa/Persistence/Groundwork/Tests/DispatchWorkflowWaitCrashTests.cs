@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
@@ -745,7 +745,7 @@ public sealed class DispatchWorkflowWaitCrashTests
                 [DispatchWorkflowConstants.PinnedTargetMetadataKey] = JsonSerializer.Serialize(
                     new DispatchWorkflowPin(
                         ChildExecutableIdentity,
-                        WorkflowExecutableSourceProvenance.From(ChildSourceReference())),
+                        DispatchWorkflowPinProvenance.From(ChildSourceReference())),
                     new JsonSerializerOptions(JsonSerializerDefaults.Web))
             });
         return new WorkflowExecutable(

@@ -100,7 +100,10 @@ public sealed class DispatchPinSource(
                     string.Join(" ", validation.Findings.Select(finding => finding.Message)));
             }
 
-            var pin = new DispatchWorkflowPin(executable.Identity, WorkflowExecutableSourceProvenance.From(source));
+            // Only the portable subset of the selected reference travels into node metadata: metadata is content-hash
+            // input, so a publish-local identifier here would make two engines disagree on the parent's artifact id for
+            // a reason with no behavioural meaning, and would export a pointer the importing engine cannot resolve.
+            var pin = new DispatchWorkflowPin(executable.Identity, DispatchWorkflowPinProvenance.From(source));
             metadata.Add(new ExecutableNodeMetadataClaim(
                 node.ExecutableNodeId,
                 DispatchWorkflowConstants.PinnedTargetMetadataKey,

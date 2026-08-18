@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Design;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Configuration;
@@ -24,6 +25,59 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 public sealed class DispatchWorkflowContractTests
 {
+    /// <summary>
+    /// Narrowing the pin (T093a) moves every future parent artifact hash, but it must not strand the parents already
+    /// published under the wide shape.
+    /// </summary>
+    /// <remarks>
+    /// Those artifacts are immutable — their stored node metadata still carries all nine provenance members, and their
+    /// hashes are still correct for the bytes they hold. The migration is therefore "new compilations get the new
+    /// shape", not "old artifacts get rewritten", and that only holds if the narrow record still reads an old pin. The
+    /// property name <c>source</c> was kept for exactly this reason; renaming it would have deserialized to null and
+    /// tripped <c>ValidatePin</c> on every already-published parent.
+    /// </remarks>
+    [Fact]
+    public void A_pin_written_before_the_portable_narrowing_still_deserializes_and_keeps_its_portable_facts()
+    {
+        const string legacyPin = """
+            {
+              "executable": {
+                "artifactId": "artifact-child",
+                "definitionId": "content-owner",
+                "definitionVersionId": "content-owner-version",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:child"
+              },
+              "source": {
+                "sourceReferenceId": "source-child",
+                "sourceKind": "WorkflowDefinitionVersion",
+                "sourceId": "child-definition-version",
+                "sourceVersion": "1.0.0",
+                "definitionId": "child-definition",
+                "definitionVersionId": "child-definition-version",
+                "artifactVersion": "1.0.0",
+                "publicationId": "publication-child",
+                "slotId": "slot-child"
+              }
+            }
+            """;
+
+        var pin = JsonSerializer.Deserialize<DispatchWorkflowPin>(
+            legacyPin,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(pin);
+        Assert.Equal("artifact-child", pin!.Executable.ArtifactId);
+        // ValidatePin resolves the authored target through this member, so a legacy parent keeps dispatching.
+        Assert.Equal("child-definition", pin.Source!.DefinitionId);
+        Assert.Equal("child-definition-version", pin.Source.DefinitionVersionId);
+        Assert.Equal("1.0.0", pin.Source.ArtifactVersion);
+        // The engine-local members are dropped on read rather than carried forward into runtime state.
+        Assert.Equal(
+            new DispatchWorkflowPinProvenance("child-definition", "child-definition-version", "1.0.0"),
+            pin.Source);
+    }
+
     [Fact]
     public void Feature_types_remain_inheritable_with_virtual_configuration()
     {

@@ -22,6 +22,7 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
 ]
 public sealed class DispatchWorkflow(
     IWorkflowExecutableStore executableStore,
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IWorkflowExecutableInputValidator inputValidator,
@@ -136,8 +137,7 @@ public sealed class DispatchWorkflow(
             ? activityState.Attempts?.SingleOrDefault(attempt => StringComparer.Ordinal.Equals(attempt.AttemptId, context.AttemptId))?.StartedAt
               ?? throw new InvalidOperationException("DispatchWorkflow wait mode requires a durable activity attempt timestamp.")
             : timeProvider.GetUtcNow();
-        var provenance = pin.Source
-            ?? throw new InvalidOperationException("DispatchWorkflow child executable pin does not carry source provenance.");
+        var provenance = await ResolveLocalChildSourceAsync(pin.Executable, now, context.CancellationToken);
         var dispatchNodeId = context.ExecutableNodeId;
         var hasRetainedEdge = parentExecutable.Dependencies.Any(dependency =>
                 StringComparer.Ordinal.Equals(dependency.ArtifactId, pin.Executable.ArtifactId) &&
@@ -265,6 +265,46 @@ public sealed class DispatchWorkflow(
         return ValueTask.FromResult(Complete(
             new DispatchWorkflowActivityResult(payload.ChildWorkflowExecutionId, payload.Result),
             outcome));
+    }
+
+    /// <summary>
+    /// Resolves the source reference that serves the pinned child <b>on this engine</b>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The pin cannot answer this. It is content-hash input, so it carries only portable facts (see
+    /// <see cref="DispatchWorkflowPinProvenance"/>); the reference that published the child elsewhere is not the one
+    /// serving it here, and on an importing engine it does not exist at all. A dispatch record must say which reference
+    /// actually served the child, because that record is what the runtime later reconciles against the child's own
+    /// pinned source and — on the legacy edge-less path — what the start dispatcher resolves the child through.
+    /// </para>
+    /// <para>
+    /// Live references win, ordered exactly as the compile-time pin selection orders them. A retired reference is still
+    /// accepted as a last resort rather than refused: a retained dependency deliberately keeps dispatching the exact
+    /// child after the child's publication is withdrawn, and naming the reference that served it is more honest than
+    /// failing the parent over provenance the start no longer depends on.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<WorkflowExecutableSourceProvenance> ResolveLocalChildSourceAsync(
+        WorkflowExecutableIdentity child,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var published = (await sourceReferenceStore.ListAllByArtifactAsync(child.ArtifactId, cancellationToken))
+            .Where(reference => reference.Scope == WorkflowExecutableReferenceScope.Published)
+            .ToArray();
+        var live = published.Where(reference => reference.IsLive(now)).ToArray();
+        var selected = (live.Length > 0 ? live : published)
+            .OrderByDescending(reference => reference.PublishedAt)
+            .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (selected is null)
+        {
+            throw new InvalidOperationException(
+                $"DispatchWorkflow pinned child executable '{child.ArtifactId}' has no Published source reference on this engine.");
+        }
+
+        return WorkflowExecutableSourceProvenance.From(selected);
     }
 
     private static void ValidatePin(DispatchWorkflowPin pin, string definitionId)

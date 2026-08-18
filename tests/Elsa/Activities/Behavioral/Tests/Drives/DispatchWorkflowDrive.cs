@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Elsa.Activities.Behavioral.Infrastructure;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
@@ -191,7 +191,7 @@ public sealed class DispatchWorkflowDrive : IActivityDrive
         if (bindDefinitionId)
             inputs[nameof(DispatchWorkflowActivity.WorkflowDefinitionId)] = childIdentity.DefinitionId;
 
-        var pin = new DispatchWorkflowPin(childIdentity, WorkflowExecutableSourceProvenance.From(childReference));
+        var pin = new DispatchWorkflowPin(childIdentity, DispatchWorkflowPinProvenance.From(childReference));
         var node = Nodes.Leaf(
             DispatchNodeId,
             typeof(DispatchWorkflowActivity),

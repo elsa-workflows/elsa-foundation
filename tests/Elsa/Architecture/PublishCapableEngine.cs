@@ -81,12 +81,18 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
 
     public ValueTask DisposeAsync() => _harness.DisposeAsync();
 
-    internal static PublishCapableEngine Create()
+    /// <param name="childCorrelationEffect">
+    /// The literal the child's intrinsic stamps. Parameterized so a second engine can author a <em>behaviourally
+    /// different</em> child — the control that keeps hash-portability assertions from being satisfiable by a pin that
+    /// stopped carrying anything meaningful at all.
+    /// </param>
+    internal static PublishCapableEngine Create(string childCorrelationEffect = ChildCorrelationEffect)
     {
         var harness = RuntimeEngines.NewBuilder()
             .WithFeature(services =>
             {
-                services.AddSingleton<IWorkflowDefinitionVersionStore>(new StubWorkflowVersionStore(ChildVersion(), ParentVersion()));
+                services.AddSingleton<IWorkflowDefinitionVersionStore>(
+                    new StubWorkflowVersionStore(ChildVersion(childCorrelationEffect), ParentVersion()));
                 services.AddSingleton<IActivityDefinitionVersionStore>(new StubActivityVersionStore(DispatchActivityVersion()));
                 services.AddSingleton<IActivityDefinitionVersionPublicationStore, EmptyActivityPublicationStore>();
                 services.AddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
@@ -107,13 +113,20 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
     /// <remarks>
     /// The parent cannot compile before the child is published: <c>DispatchPinSource</c> resolves the pin from the
     /// child's live Published source reference and refuses when there is none.
+    /// <para>
+    /// The publish-local identifiers are parameterized so a second engine can publish the <em>same authored content</em>
+    /// under different ones — the setup that exposes whether any of them leaked into a content hash.
+    /// </para>
     /// </remarks>
-    internal async Task<(WorkflowExecutable Parent, WorkflowExecutable Child)> CompileAndPublishAsync()
+    internal async Task<(WorkflowExecutable Parent, WorkflowExecutable Child)> CompileAndPublishAsync(
+        string childSourceReferenceId = "source-child",
+        string parentSourceReferenceId = "source-parent",
+        string childSlotId = "Default")
     {
         var child = await CompileAsync(ChildVersionId, "artifact-child-");
-        await PublishAsync(child, "source-child");
+        await PublishAsync(child, childSourceReferenceId, childSlotId);
         var parent = await CompileAsync(ParentVersionId, "artifact-parent-");
-        await PublishAsync(parent, "source-parent");
+        await PublishAsync(parent, parentSourceReferenceId);
         return (parent, child);
     }
 
@@ -138,7 +151,10 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
     /// which a compiler-produced artifact does not need and which would leave the in-place artifact subtly
     /// different from the one that was exported. Parity is only meaningful if both sides run the same bytes.
     /// </remarks>
-    internal async Task<WorkflowExecutableSourceReference> PublishAsync(WorkflowExecutable executable, string sourceReferenceId)
+    internal async Task<WorkflowExecutableSourceReference> PublishAsync(
+        WorkflowExecutable executable,
+        string sourceReferenceId,
+        string slotId = "Default")
     {
         await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var reference = new WorkflowExecutableSourceReference(
@@ -154,9 +170,17 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
             PublishedAt: PublishedAt,
             Scope: WorkflowExecutableReferenceScope.Published,
             ActivationId: $"activation-{sourceReferenceId}",
-            SlotId: "Default");
+            SlotId: slotId);
         await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference);
         return reference;
+    }
+
+    /// <summary>The single live Published source reference this engine minted for <paramref name="artifactId"/>.</summary>
+    internal async Task<WorkflowExecutableSourceReference> FindPublishedReferenceAsync(string artifactId)
+    {
+        var references = await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .ListAllByArtifactAsync(artifactId);
+        return references.Single(reference => reference.Scope == WorkflowExecutableReferenceScope.Published);
     }
 
     /// <summary>Runs the production closure factory over this engine's stores.</summary>
@@ -183,7 +207,7 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
     /// mark on the child's own execution state (<c>CorrelationId</c>), so "the child actually ran" is an assertion
     /// about an effect rather than about a row existing somewhere.
     /// </remarks>
-    private static WorkflowDefinitionVersion ChildVersion() =>
+    private static WorkflowDefinitionVersion ChildVersion(string correlationEffect = ChildCorrelationEffect) =>
         new(ChildDefinitionId, "1.0.0")
         {
             Id = ChildVersionId,
@@ -195,7 +219,7 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
                     ActivityVersionId: string.Empty,
                     [new ArgumentState(
                         WorkflowIntrinsicInputKeys.Value,
-                        new ArgumentValue(ChildCorrelationEffect, "Literal"),
+                        new ArgumentValue(correlationEffect, "Literal"),
                         null,
                         null,
                         null,

@@ -1,6 +1,9 @@
+using System.Text.Json;
+using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
@@ -92,12 +95,35 @@ public sealed class ArtifactExportImportRoundTripTests : IDisposable
         Assert.Contains(parent.Identity.ArtifactHash, wire, StringComparison.Ordinal);
         Assert.DoesNotContain("\"nodesById\"", wire, StringComparison.OrdinalIgnoreCase);
 
-        // The parent's pinned-target metadata rides in the bytes, and with it the EXPORTING engine's
-        // source-reference id — an identifier the importing engine has never heard of, sitting inside a
-        // content-hashed node. It survives the trip because it is provenance, not admission: the child start is
-        // authorized by the parent's dependency edge (RetainedDependency), not by that reference. Asserted rather
-        // than left implicit, because the day something starts resolving it the round trip breaks here first.
-        Assert.Contains("source-child", wire, StringComparison.Ordinal);
+        // The parent's pinned-target metadata rides in the bytes, and it carries NO publish-local identifier
+        // (T093a). Node metadata is content-hash input, so an exporting engine's source-reference id in there would
+        // make two engines disagree on the parent's artifact id over a fact with no behavioural meaning, and would
+        // ship a pointer the importing engine cannot resolve. Only the portable child attribution travels.
+        //
+        // Read back out of the wire rather than off the in-memory artifact: the claim is about what crosses between
+        // the engines. And scoped to the pin rather than to the whole document on purpose — "source-child" DOES
+        // still appear in the envelope, as the envelope-level source reference the importer ignores, so a
+        // whole-wire assertion is satisfied by the wrong occurrence and proves nothing about the hashed node.
+        var decoded = publisher.Services.GetRequiredService<IWorkflowArtifactClosureSerializer>().Deserialize(wire);
+        Assert.NotNull(decoded);
+        var decodedParent = decoded!.Artifacts.Single(artifact =>
+            artifact.Identity.ArtifactId == parent.Identity.ArtifactId);
+        var pinnedTarget = decodedParent.RootActivity.Metadata[DispatchWorkflowConstants.PinnedTargetMetadataKey];
+        Assert.DoesNotContain("source-child", pinnedTarget, StringComparison.Ordinal);
+        Assert.DoesNotContain("activation-source-child", pinnedTarget, StringComparison.Ordinal);
+        Assert.DoesNotContain("sourceReferenceId", pinnedTarget, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("publicationId", pinnedTarget, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("slotId", pinnedTarget, StringComparison.OrdinalIgnoreCase);
+        var decodedPin = JsonSerializer.Deserialize<DispatchWorkflowPin>(
+            pinnedTarget,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(child.Identity, decodedPin!.Executable);
+        Assert.Equal(
+            new DispatchWorkflowPinProvenance(
+                PublishCapableEngine.ChildDefinitionId,
+                PublishCapableEngine.ChildVersionId,
+                child.Identity.ArtifactVersion),
+            decodedPin.Source);
 
         // Compile-in-place: the same compiled artifacts, run where they were compiled.
         var inPlace = await RunParentAsync(publisher.Harness, "source-parent");
@@ -136,6 +162,21 @@ public sealed class ArtifactExportImportRoundTripTests : IDisposable
         Assert.Equal(PublishCapableEngine.ChildCorrelationEffect, imported.ChildCorrelationId);
         Assert.Equal(child.Identity.ArtifactId, imported.ChildArtifactId);
         Assert.Equal(1, imported.ChildDispatchNestingDepth);
+
+        // The other half of T093a, stated as an observable rather than as a shape: the dispatch record written on the
+        // importing engine names the reference that served the child HERE, and that id resolves HERE. Before the fix it
+        // named "source-child" — the exporter's id, copied out of hashed node metadata into this engine's own durable
+        // dispatch record and its "runtime.sourceReferenceId" metadata, where nothing could ever resolve it.
+        var importedDispatch = Assert.Single(
+            await runtimeOnly.Services.GetRequiredService<IWorkflowDispatchStore>().ListAsync(ParentExecutionId));
+        Assert.NotEqual("source-child", importedDispatch.ChildSource.SourceReferenceId);
+        Assert.Equal(
+            importedDispatch.ChildSource.SourceReferenceId,
+            importedDispatch.Metadata[RuntimeMetadataKeys.SourceReferenceId]);
+        var localChildReference = await runtimeOnly.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .FindAsync(importedDispatch.ChildSource.SourceReferenceId);
+        Assert.NotNull(localChildReference);
+        Assert.Equal(child.Identity.ArtifactId, localChildReference!.ArtifactId);
 
         // Behavior parity, compared rather than asserted: same outcome on both engines from the same bytes. Pinning
         // the imported side to literals above is what keeps this line from being satisfied by two empty runs.
