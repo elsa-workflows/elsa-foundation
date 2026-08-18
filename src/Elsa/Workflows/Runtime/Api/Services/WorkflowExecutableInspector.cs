@@ -11,7 +11,8 @@ public sealed class WorkflowExecutableInspector(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore referenceStore,
     IWorkflowExecutionStateStore executionStore,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    IDesignProvenanceResolver? designProvenance = null)
 {
     private const int PreviewLength = 80;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -155,9 +156,22 @@ public sealed class WorkflowExecutableInspector(
             .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
             .ToArray();
         var retained = (await RetainedCountsAsync(cancellationToken)).GetValueOrDefault(artifactId);
+
+        // FR-B-012: design provenance is echoed verbatim and flagged when it cannot be resolved HERE. The answer
+        // describes this engine, not the artifact, so it is computed per request and never persisted — the same
+        // artifact is resolvable on a combined engine and unresolvable on a runtime-only one. With no resolver
+        // composed there is no design surface at all, so every design id is unresolvable without asking.
+        var views = new List<ExecutableSourceReferenceView>(references.Length);
+        foreach (var reference in references)
+        {
+            var unresolved = designProvenance is null
+                || !await designProvenance.ResolvesAsync(reference.DefinitionVersionId, cancellationToken);
+            views.Add(ExecutableSourceReferenceView.From(reference, now, unresolved));
+        }
+
         return new ExecutableProvenanceView(
             artifactId,
-            references.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray(),
+            views,
             retained,
             retained > 0 || references.Any(reference => reference.IsLive(now)));
     }

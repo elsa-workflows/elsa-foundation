@@ -40,7 +40,13 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Contains("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore", dependencies);
         Assert.Contains("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore", dependencies);
         Assert.Contains("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore", dependencies);
-        Assert.DoesNotContain(dependencies, dependency => dependency?.Contains("Design", StringComparison.Ordinal) == true);
+        // The rule is "no Design ASSEMBLY", asserted on the owning namespace rather than on a substring. The
+        // substring form produced a false positive for IDesignProvenanceResolver -- a Runtime.Core contract that
+        // merely contains the word -- while a type named e.g. IFooResolver living in a Design assembly would have
+        // passed it. FR-B-012's own vocabulary is "design provenance", so a name is the wrong thing to police.
+        Assert.DoesNotContain(dependencies, dependency =>
+            dependency?.StartsWith("Elsa.Workflows.Design", StringComparison.Ordinal) == true ||
+            dependency?.StartsWith("Elsa.Activities.Design", StringComparison.Ordinal) == true);
     }
 
     [Fact]

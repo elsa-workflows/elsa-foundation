@@ -27,10 +27,17 @@ namespace Elsa.Architecture.Tests;
 /// </para>
 /// <para>
 /// <b>What "renders as opaque/unresolved rather than erroring" is taken to mean</b>, since the requirement does
-/// not spell it out: the inspection surfaces complete, they echo the design ids verbatim rather than dropping,
-/// blanking or attempting to dereference them, the design-side sidecars that did not travel (layout, activity
-/// presentation, authored inputs) render as empty rather than as failures, and asking any surface to resolve a
-/// design-provenance id <em>as if it were a local id</em> answers "not found" instead of faulting.
+/// not spell it out: the inspection surfaces complete, they echo the design ids verbatim rather than dropping or
+/// blanking them <b>and mark them as unresolvable here</b>, the design-side sidecars that did not travel (layout,
+/// activity presentation, authored inputs) render as empty rather than as failures, and asking any surface to
+/// resolve a design-provenance id <em>as if it were a local id</em> answers "not found" instead of faulting.
+/// </para>
+/// <para>
+/// <b>Echoing alone was the earlier reading and it was not enough</b> (T119, Joey 2026-08-18): a bare foreign id
+/// is indistinguishable from a local one until something follows it and gets a 404, which for a UI means drawing
+/// a dead link. The flag says "not resolvable <em>on this engine</em>" — a fact about the renderer, not the
+/// artifact — which is why the companion test below asserts a <b>combined</b> engine leaves the very same
+/// artifact unflagged. Without that contrast the flag would be indistinguishable from a constant.
 /// </para>
 /// <para>
 /// The request handlers are exercised beside the inspector because the not-found half only becomes a rendering
@@ -136,9 +143,11 @@ public sealed class ImportedArtifactProvenanceRenderingTests : IDisposable
         var provenance = await inspector.GetProvenanceAsync(parentArtifactId);
         Assert.NotNull(provenance);
         Assert.Equal(parentArtifactId, provenance!.ArtifactId);
-        Assert.Equal(
-            PublishCapableEngine.ParentVersionId,
-            Assert.Single(provenance.SourceReferences).DefinitionVersionId);
+        var renderedReference = Assert.Single(provenance.SourceReferences);
+        Assert.Equal(PublishCapableEngine.ParentVersionId, renderedReference.DefinitionVersionId);
+        // Echoed verbatim AND flagged. The id alone is indistinguishable from a local one, so a caller that
+        // rendered it as a link would draw a dead link; the flag is what makes it provenance instead.
+        Assert.True(renderedReference.DesignProvenanceUnresolved);
         Assert.True(provenance.ProtectedFromCollection);
 
         // ---- Input sources render: the design-authored inputs simply are not there, and that is not a fault.
@@ -162,5 +171,38 @@ public sealed class ImportedArtifactProvenanceRenderingTests : IDisposable
         await Assert.ThrowsAsync<EntityNotFoundException>(() => scope.ServiceProvider
             .GetRequiredService<IRequestHandler<GetWorkflowExecutableProvenance, ExecutableProvenanceView>>()
             .Handle(new GetWorkflowExecutableProvenance(PublishCapableEngine.ParentDefinitionId), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// The contrast that gives <c>DesignProvenanceUnresolved</c> meaning: a <b>combined</b> engine holds the
+    /// design catalog, so the very same provenance renders <b>unflagged</b>.
+    /// </summary>
+    /// <remarks>
+    /// Without this, an always-true flag would satisfy the runtime-only test above and be indistinguishable from
+    /// no flag at all. The flag describes the engine doing the rendering, never the artifact — which is also why
+    /// it is computed per request and never persisted: baking it into the artifact would mis-flag it the moment it
+    /// were imported somewhere the definition exists, and would put an engine-local value into content-hash input,
+    /// the defect T093a removed from the dispatch pin.
+    /// </remarks>
+    [Fact]
+    public async Task A_combined_engine_resolves_its_own_design_provenance_and_does_not_flag_it()
+    {
+        var version = CombinedEngine.EventWorkflow(
+            "definition-provenance",
+            "version-provenance",
+            "1.0.0",
+            "node-provenance",
+            "provenance-event");
+        await using var engine = CombinedEngine.Create([version]);
+        var published = await engine.PublishAsync(version.Id);
+
+        var provenance = await engine.Services
+            .GetRequiredService<WorkflowExecutableInspector>()
+            .GetProvenanceAsync(published.ArtifactId);
+
+        Assert.NotNull(provenance);
+        var reference = Assert.Single(provenance!.SourceReferences);
+        Assert.Equal(version.Id, reference.DefinitionVersionId);
+        Assert.False(reference.DesignProvenanceUnresolved);
     }
 }
