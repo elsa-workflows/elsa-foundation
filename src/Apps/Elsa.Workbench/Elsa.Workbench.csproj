@@ -57,6 +57,13 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
+		<!--
+			Runtime-side executable-artifact reconciliation (spec 151, #1304): the same catalog argument as the
+			design-side pair above — a shell (or an env-var composition, as e2e-tests/artifact-deployment does)
+			enabling JsonWorkflowArtifactReconciliation is silently skipped unless this assembly is in the CShells
+			runtime feature catalog. Referencing it does not enable it; the feature stays opt-in.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
