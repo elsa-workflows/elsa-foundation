@@ -3,8 +3,6 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
@@ -13,7 +11,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Core.Contracts;
-using Groundwork.Documents.Store;
+using Groundwork.Query.Model;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 
@@ -23,7 +21,8 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// and replaces the projection at a new visible watermark.
 /// </summary>
 public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
-    IBoundedDocumentStore boundedStore,
+    GroundworkV2ActivityDesignStore activityStore,
+    GroundworkDesignStorage designStorage,
     IPayloadSerializer payloadSerializer,
     IActivityDefinitionVersionPublicationStore publications,
     IActivityTemplateDependencyDiscovererRegistry discoverers,
@@ -54,13 +53,13 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private async Task AddActivityVersionsAsync(ICollection<ActivityDependencyItem> items, CancellationToken cancellationToken)
     {
-        foreach (var envelope in await ListAsync(
+        foreach (var document in await ListActivitiesAsync(
                      ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
                      ActivityListByOwnerVersionQuery,
                      ActivitiesDesignStorageManifest.ByOwnerVersionDocumentOrder,
                      cancellationToken))
         {
-            var edge = DeserializeActivity<ActivityDependencyEdge>(envelope);
+            var edge = DeserializeActivity<ActivityDependencyEdge>(document);
             var ownerPublication = await RequiredPublicationAsync(edge.OwnerVersionId, cancellationToken);
             var dependencyPublication = await RequiredPublicationAsync(edge.DependencyVersionId, cancellationToken);
             var owner = Reference(ownerPublication);
@@ -79,13 +78,13 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private async Task AddActivityDraftsAsync(ICollection<ActivityDependencyItem> items, CancellationToken cancellationToken)
     {
-        foreach (var envelope in await ListAsync(
+        foreach (var document in await ListActivitiesAsync(
                      ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
                      ActivityListByDefinitionQuery,
                      ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                      cancellationToken))
         {
-            var draft = DeserializeActivity<ActivityDefinitionDraft>(envelope);
+            var draft = DeserializeActivity<ActivityDefinitionDraft>(document);
             if (draft.Status != ActivityDefinitionDraftStatus.Active)
                 continue;
             var discovery = await discoverers.Resolve(draft.State.Provider.ProviderKey, draft.State.Provider.SchemaVersion)
@@ -108,21 +107,27 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         // The workflow-draft kind has no doc-id-sorted route after the by-collection removal; a zero-clause
         // traversal on the by-definition route (declared drafts order) still visits every draft across
         // definitions, and the rebuild re-keys the result so only completeness matters, not the visit order.
-        foreach (var envelope in await ListAsync(
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                     WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
+        var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind;
+        foreach (var entry in ListWorkflows(
+                     unit,
+                     WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                     [
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField),
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, descending: true),
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftCreatedAtField, descending: true),
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftIdField, descending: true)
+                     ],
+                     WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
                      cancellationToken))
         {
-            var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope.ContentJson, _workflowJson)
-                           ?? throw new InvalidOperationException($"Workflow draft '{envelope.Id}' is unreadable.");
+            var draft = designStorage.MapDraft(entry, _workflowJson);
             var owner = new ActivityDefinitionReference(
                 "WorkflowDraft",
-                document.Entity.WorkflowDefinitionId,
-                DraftId: document.Entity.Id,
-                Revision: envelope.Version,
-                TenantId: document.Entity.TenantId);
-            await AddWorkflowStateAsync(items, owner, document.Entity.State, cancellationToken);
+                draft.WorkflowDefinitionId,
+                DraftId: draft.Id,
+                Revision: entry.Entry.Version,
+                TenantId: draft.TenantId);
+            await AddWorkflowStateAsync(items, owner, draft.State, cancellationToken);
         }
     }
 
@@ -130,15 +135,19 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
     {
         // As with drafts, the workflow-version kind keeps no doc-id-sorted route; the by-definition route's
         // declared version order performs the exhaustive traversal, and only completeness matters here.
-        foreach (var envelope in await ListAsync(
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                     WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
-                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
+        var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
+        foreach (var entry in ListWorkflows(
+                     unit,
+                     WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                     [
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField),
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField),
+                         designStorage.Order(unit, WorkflowsDesignStorageManifest.VersionIdField)
+                     ],
+                     WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
                      cancellationToken))
         {
-            var document = JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinitionVersion>>(envelope.ContentJson, _workflowJson)
-                           ?? throw new InvalidOperationException($"Workflow version '{envelope.Id}' is unreadable.");
-            var version = document.Entity;
+            var version = designStorage.MapVersion(entry, _workflowJson);
             var owner = new ActivityDefinitionReference(
                 "WorkflowVersion",
                 version.DefinitionId,
@@ -198,30 +207,40 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         }
     }
 
-    // Deterministic full-kind traversal on a declared shaped route: a zero-clause bounded request the route
+    // Deterministic full-kind traversal on a declared route: a clause-free bounded request the route
     // admits, exhausted with the route's own declared order.
-    private async Task<IReadOnlyList<DocumentEnvelope>> ListAsync(
+    private Task<IReadOnlyList<ActivityDesignDocument>> ListActivitiesAsync(
         string kind,
         string queryIdentity,
-        IReadOnlyList<DocumentQueryOrder> order,
-        CancellationToken cancellationToken)
-    {
-        return await BoundedDocumentQueryPager.QueryAllOffsetAsync(
-            boundedStore,
-            kind,
-            queryIdentity,
-            [],
+        IReadOnlyList<ActivityDesignQueryOrder> order,
+        CancellationToken cancellationToken) =>
+        ActivityDesignQueryPager.QueryAllAsync(activityStore, kind, queryIdentity, [], order, cancellationToken);
+
+    /// <summary>
+    /// Walks a workflow-design route end to end. The unbounded range over the route's leading column is
+    /// how a clause-free traversal is spelled in the public v2 query model: it admits every row the index
+    /// covers, in the index's own order, rather than asking the provider for an unrouted scan.
+    /// </summary>
+    private IReadOnlyList<GroundworkDesignEntry> ListWorkflows(
+        string unitId,
+        string leadingField,
+        IReadOnlyList<OrderTerm> order,
+        string index,
+        CancellationToken cancellationToken) =>
+        designStorage.Query(
+            unitId,
+            new Predicate.Range(designStorage.Column(unitId, leadingField), null, null),
             order,
-            cancellationToken);
-    }
+            index,
+            cancellationToken: cancellationToken);
 
     private async Task<ActivityDefinitionVersionPublication> RequiredPublicationAsync(string versionId, CancellationToken cancellationToken) =>
         await publications.FindAsync(versionId, cancellationToken)
         ?? throw new InvalidOperationException($"Activity publication '{versionId}' referenced by the dependency projection is unavailable.");
 
-    private static T DeserializeActivity<T>(DocumentEnvelope envelope) where T : Entity =>
-        JsonSerializer.Deserialize<GroundworkDocument<T>>(envelope.ContentJson, ActivityJson)?.Entity
-        ?? throw new InvalidOperationException($"Activity document '{envelope.Id}' is unreadable.");
+    private static T DeserializeActivity<T>(ActivityDesignDocument document) where T : Entity =>
+        JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<T>>(document.ContentJson, ActivityJson)?.Entity
+        ?? throw new InvalidOperationException($"Activity document '{document.Id}' is unreadable.");
 
     private static ActivityDefinitionReference Reference(ActivityDefinitionVersionPublication publication) => new(
         "ActivityVersion",
@@ -259,9 +278,4 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
 
     private static string SortKey(ActivityDependencyItem item) =>
         $"{item.Owner.Kind}\u001f{item.Owner.DraftId ?? item.Owner.VersionId}\u001f{item.Occurrence.OccurrenceId}\u001f{item.Dependency.VersionId}";
-
-    private sealed record WorkflowDraftDocument(
-        string Collection,
-        WorkflowDefinitionDraft Entity,
-        IReadOnlyCollection<DesignMetadataRecord> Layout);
 }
