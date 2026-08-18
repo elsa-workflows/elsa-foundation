@@ -16,12 +16,14 @@ the [README](README.md); this file is only about how to extend it.
 
 ## Overridable contracts
 
-Both contracts below are single-implementation: the reconciler *is* the import pipeline, and a second decoder
-would mean a second wire format. Neither is registered with `TryAdd` — the base feature registers them with a
-plain `AddScoped`, so the sanctioned replacement route is **feature inheritance**: derive, call
-`base.ConfigureServices(services)`, then re-register the one contract afterwards (last registration wins in the
-container). Registering *before* the base call does nothing here, which is the opposite of the `TryAdd`
-first-wins convention used by `AddWorkflowRuntime()`.
+Both contracts below are single-implementation replacement contracts (§2.6.2): the reconciler *is* the import
+pipeline, and a second decoder would mean a second wire format. Both are registered with **`TryAddScoped`**, so
+replacement is **first-wins** (ADR 0033) — register yours **before** the feature composes and its default backs
+off. Via feature inheritance that means: derive, register your contract **first**, *then* call
+`base.ConfigureServices(services)`; registering *after* the base call does nothing, because the default is
+already in the container. This is the same gesture as every other runtime replacement contract, rather than
+"before" here and "after" there. `services.Replace(...)` after the fact remains available for a host that is not
+deriving a feature.
 
 | Contract | Built-in default | Replace when |
 |---|---|---|
@@ -128,6 +130,8 @@ same fan-in shape with the same self-identification rule — see the
 - **What a derived feature supplies:** the source (and, if its envelopes are not files, a reader). Override
   `ConfigureServices`, **call `base.ConfigureServices(services)` first**, then add. `JsonWorkflowArtifactReconciliationFeature`
   is the worked example: it validates its options, calls the base, then contributes the reader and the source.
+  That order is for *adding*; **replacing** the base's own `IWorkflowArtifactReconciler` is the opposite gesture
+  — register it before the base call, per [Overridable contracts](#overridable-contracts).
 - **What a derived feature must not skip:** the concrete feature owns the `[ShellFeature]` attribute and its
   `DependsOn` set. `WorkflowsRuntimeTriggers` belongs there — the base's `AddWorkflowRuntime()` does not supply
   the trigger binding/schedule/indexer spine, and without it the activation coordinator refuses to activate.

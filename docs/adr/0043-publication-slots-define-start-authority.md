@@ -1,10 +1,43 @@
 # Publication Slots Define Start Authority
 
-Status: accepted (2026-07-13)
+Status: accepted (2026-07-13); **superseded in part** by
+[spec 151](../../specs/151-executable-artifact-reconciliation/spec.md) (2026-08-18) — see Superseded in part
+below.
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
 Plan of record: `specs/092-domain-owned-apis/`.
+
+## Superseded in part (2026-08-18)
+
+Two mechanisms decided here were replaced while implementing
+[spec 151](../../specs/151-executable-artifact-reconciliation/spec.md). The original text is retained below as
+the historical record rather than rewritten, following
+[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md#superseded-framing-retained-for-provenance).
+The authority model itself — the slot as the sole start authority, and its revisioned compare-and-swap — is
+unchanged; what moved is where that ledger lives and how projection delivery is driven.
+
+**1. The durable projection-intent ledger is withdrawn.**
+[Projection intent makes cross-store activation durable](#projection-intent-makes-cross-store-activation-durable)
+decided that Publishing records durable `PublicationProjectionIntent` entries, delivered idempotently and
+converged afterwards by a reconciler. That is no longer the delivery mechanism, and none of it exists:
+`IPublicationProjectionPreparer` and its `PublicationProjectionReconciler` default were deleted, along with
+`IPublicationProjectionIntentStore`, the `PublicationProjectionIntent` model and the `publishingProjectionIntent`
+storage unit. **What replaced it:** `IWorkflowActivationCoordinator` in `Elsa.Workflows.Runtime.Core` owns the
+prepare → CAS → activate → notify sequence and its compensation, in **both** lifecycle directions — publishing's
+unpublish handler calls `DeactivateAsync` instead of driving a retraction of its own. The sequence is in-process
+and its recovery is the next request rather than a replayed intent, so there is no delivery record to converge.
+The reason for the change is the reason the ledger existed: two components had to know the same ordering
+invariant independently, and they drifted apart. Consequently the "projection-intent models" named under
+Consequences, and the `PendingProjection` state and reconciler in that section, no longer describe the system.
+
+**2. The slot ledger moved out of Publishing.** `IPublicationSlotStore` was deleted rather than relocated
+(spec 151, FR-B-006). The definition-keyed ledger is now `IWorkflowActivationAuthority` in
+`Elsa.Workflows.Runtime.Core`, with an explicit ownership field, so one engine has exactly one activation ledger
+that the publish pipeline and the artifact importer share. Slot semantics are as decided here; only the owning
+domain and the contract name changed. See the
+[Publishing engine catalog](../../src/Elsa/Workflows/Publishing/EXTENSION_POINTS.md) and the
+[Runtime catalog](../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
 
 ## Context
 

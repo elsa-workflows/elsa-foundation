@@ -33,7 +33,7 @@ services.AddGroundworkPublishingStores();
 ```
 
 This replaces (or, when composed first, prevents) the in-memory defaults for
-`IPublicationRecordStore`, `IPublicationPolicyStore`, `IPublicationProjectionIntentStore`, and the activity
+`IPublicationRecordStore`, `IPublicationPolicyStore`, and the activity
 publication receipt store. It does **not** cover activation: the slot ledger is
 `IWorkflowActivationAuthority`, owned by the runtime store family (spec 151, FR-B-006). The host must also compose the Runtime persistence used for executable artifacts,
 source references, trigger bindings, and recurring schedules.
@@ -86,9 +86,9 @@ The authority transition is one coordinated operation (identical to what the API
    route table, and the recurring pump).
 4. Activate the slot with compare-and-swap on its expected revision, then switch the prepared serving
    projections to the new publication and retire the replaced one.
-5. Persist idempotent per-publication projection intents; retries replay the same intent identity and
-   converge. A failed activation compensates by restoring the previous authority before the candidate is
-   removed.
+5. A failed activation compensates in-process: the coordinator restores the previous authority and re-activates
+   its projections before removing the candidate's. There is no delivery-intent ledger to replay — the retry is
+   a fresh request, and every step is idempotent.
 6. Retire or restore the publication source reference as provenance. Existing executions stay pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 
