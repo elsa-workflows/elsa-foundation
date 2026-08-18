@@ -56,6 +56,54 @@ feature. A replacement must supply the same tenant/scope facts the activity-draf
   outer activity execution identity. It must not expose synthetic wrapper/provider payloads or raw Runtime
   exception messages.
 
+## Portable artifact export targets
+
+### `IWorkflowArtifactExportTarget` *(Core contract — `Elsa.Workflows.Publishing.Core`)*
+
+- **Kind:** Contribution (fan-in; enumerable) — the export-side mirror of the import side's
+  `IWorkflowArtifactReconciliationSource`. **Targets contribute, they never replace.** A folder writer or blob
+  push arriving later must stand beside the built-in download rather than displace it, so registration is
+  `services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowArtifactExportTarget, MyTarget>())` and consumers
+  resolve `IEnumerable<IWorkflowArtifactExportTarget>` and select by `TargetId`. Registering one with
+  `Replace(...)`, or expecting `TryAdd` first-wins semantics, silently removes every other destination the host
+  composed.
+- **Signature:** `string TargetId { get; }` and
+  `Task<WorkflowArtifactExportDelivery> DeliverAsync(WorkflowArtifactClosure closure, CancellationToken)`.
+- **`TargetId` is self-identifying**, a property of the target rather than a key it is registered under: a
+  caller selecting a destination is naming a behaviour, not a DI slot, and a registration-supplied key would let
+  one target answer to two names. It must not change across restarts.
+- **Delivery kind decides what transport may bind it.** `WorkflowArtifactExportDeliveryKind.InlinePayload`
+  returns the encoded closure and writes nothing anywhere — safe, repeatable, and the only shape a GET may bind
+  to. `Receipt` means the closure went somewhere external and only a locator came back; that is a side effect a
+  crawler, retry or cache could repeat, so a receipt-producing target arrives with its own POST command surface
+  carrying an explicit idempotency contract. Construct deliveries through `WorkflowArtifactExportDelivery.Inline`
+  / `.Receipt` rather than the positional constructor, so the payload/location pairing is checked where it is
+  made.
+- **Encoding belongs to the target, not to the contract.** Targets take the closure model and encode it through
+  Runtime's `IWorkflowArtifactClosureSerializer` — the same codec the JSON import reader decodes with — so an
+  export/import round trip cannot drift. A target that reached for `JsonSerializer` directly would be a second
+  wire format nobody declared. This is also what keeps the engine's closure factory destination-agnostic; see
+  the [engine catalog](../EXTENSION_POINTS.md#portable-artifact-export).
+
+**Known implementation (shipped):** `DownloadWorkflowArtifactExportTarget` *(intra-domain — the v1 built-in;
+`TargetId` = `DownloadWorkflowArtifactExportTarget.Id` = `"download"`)*. Encodes as UTF-8 **without** a BOM: the
+envelope is JSON, RFC 8259 requires UTF-8 on the wire, and a BOM would make the exported bytes differ from the
+store-round-tripped ones for no semantic reason. It is contributed by this feature and not by the engine,
+because a destination is a transport concern; an engine composed without a transport resolves an empty
+enumerable rather than failing.
+
+### The export endpoint that consumes it
+
+`GET publishing/workflows/{versionId}/executable-export` binds to the `download` target **only** — there is no
+target selector in v1, by design (see the delivery-kind rule above). Its pins for
+[elsa-foundation-studio#493](https://github.com/elsa-workflows/elsa-foundation-studio/issues/493) are stable
+contract: route as above, capability `elsa.api.publishing`, link relation `workflow-executable-export`
+(declared in `PublishingApiCapabilities` as a templated link and discovered through `GET /capabilities`).
+
+Authorization is `PermissionNames.WorkflowPublishingRead` — deliberately **not** a new `.export` action. Executable
+content is already readable under that family, so export differs only by bundling the transitive closure into one
+response. If the executable-inspection endpoints are ever tightened, this must be tightened with them.
+
 ## HTTP endpoint surface
 
 The endpoint surface is documented in the [module README](README.md#http-endpoint-surface). Endpoint
@@ -77,6 +125,7 @@ implementations for **both** the engine's authority stores (documented in the
 ## References
 
 - Module behavior and endpoint surface: [README](README.md).
-- Engine seams (compiler, authority stores, policy/preflight/activation, compilation fan-in): [engine catalog](../EXTENSION_POINTS.md).
+- Engine seams (compiler, authority stores, policy/preflight/activation, closure factory, compilation fan-in): [engine catalog](../EXTENSION_POINTS.md).
+- The import counterpart of the export-target seam: [Workflows Runtime Reconciliation catalog](../../Runtime/Reconciliation/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../../EXTENSION_POINTS.md).

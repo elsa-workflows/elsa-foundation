@@ -20,6 +20,9 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 |---|---|---|
 | `IWorkflowExecutableCompiler` | `WorkflowExecutableCompiler` (scoped) | Compilation, artifact hashing, validation, or executable projection differs. |
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. **Owned by the runtime, not publishing** — see the note under Authority stores. |
+| `IWorkflowActivationCoordinator` *(Core — Elsa.Workflows.Runtime.Core)* | `WorkflowActivationCoordinator` (scoped) | Never, from publishing. **Runtime-owned**, `TryAdd`ed here only so a standalone publishing host can construct the publish handler. The complete activation lifecycle is documented in the [Runtime catalog](../Runtime/EXTENSION_POINTS.md); publishing requests activation and must not hold a parallel copy of the sequence. |
+| `IWorkflowExecutableHasher` *(Core — Elsa.Workflows.Runtime.Core)* | `WorkflowExecutableHasher` (scoped) | Never, from publishing. **Runtime-owned** (spec 151, FR-B-010) and `TryAdd`ed here for the same standalone-composition reason: the compiler depends on it, and only `AddWorkflowRuntime()` would otherwise register it. Changing the canonical payload moves every artifact id in existence. |
+| `IWorkflowArtifactClosureFactory` | `WorkflowArtifactClosureFactory` (scoped) | The exported closure must be assembled from another store topology. Scoped because it reads the source-reference reader, which durable providers register as scoped. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
 | `IPublicationProjectionIntentStore` | `InMemoryPublicationProjectionIntentStore` (singleton) | Projection delivery facts and retries must survive restart. |
@@ -84,6 +87,38 @@ and compensation. A losing or failed candidate cannot make the old publication i
 restore. Implementations must be idempotent and publication-scoped. Derived projection notifications occur only
 after the durable serving set reaches its final state; Runtime HTTP consumes the neutral
 `IWorkflowTriggerIndexObserver` seam and performs a full refresh when authority changes.
+
+### Portable artifact export
+
+`IWorkflowArtifactClosureFactory` builds the portable `WorkflowArtifactClosure` for one Published workflow
+definition version (FR-B-010): the pinned executable, its complete transitive dependency closure, the exporting
+engine's `Published`-scope source references, and the trigger bindings those artifacts own.
+
+- **Destination-agnostic, deliberately.** It returns the closure model and nothing else — never bytes, never a
+  file name, never an HTTP concept. Encoding belongs to Runtime's `IWorkflowArtifactClosureSerializer` and
+  delivery to `IWorkflowArtifactExportTarget`, so one producer serves a download, a folder writer, a blob push,
+  or a test that never leaves memory. Anything transport-shaped on this contract makes the export path
+  un-reusable by exactly the callers FR-B-010a exists for.
+- **Published-only (FR-B-011).** `TestRun`-scope references are expiring, tied to a `WorkflowTestScope`, and
+  carry `draft:`-prefixed version ids. They describe a snapshot that exists only on the engine that minted it,
+  so they are never a valid export subject.
+- **The closure is complete or it does not exist.** An envelope whose dependency edges resolve only because the
+  *importing* store happens to already hold a child is a broken export, so a dependency the exporting store
+  cannot produce is a hard failure here rather than a silently thinner file.
+- **Failure modes are distinguishable by exception type**, because a transport binding this contract maps them
+  to different responses. All four live in `Elsa.Workflows.Publishing.Exceptions` under the abstract
+  `WorkflowArtifactClosureException`: `WorkflowArtifactClosureSourceNotFoundException` (unknown version, or a
+  Published reference pointing at an artifact the store no longer holds),
+  `WorkflowArtifactClosureNotPublishedException` (exists but never published — deliberately distinct from
+  "unknown"), `IncompleteWorkflowArtifactClosureException` (unresolved dependencies, carried as structured data
+  so a caller can name them), and `WorkflowArtifactClosureCycleException` (store corruption — no
+  content-addressed compiler can produce a back edge). A replacement must preserve that taxonomy.
+
+**No `IWorkflowArtifactExportTarget` is registered by this engine.** The destination seam is **fan-in**, and its
+first implementation — the `download` target — is contributed by the transport feature, which is where a
+destination belongs. An engine composed without one still resolves an empty `IEnumerable<>`, so the absence is a
+composition fact rather than a missing dependency. Contribute a target through the
+[Publishing API catalog](Api/EXTENSION_POINTS.md#portable-artifact-export-targets).
 
 ## Persistence-provider checklist
 
@@ -160,5 +195,6 @@ The Activity Graph implementation and its feature registration are documented in
 
 - Engine behavior and composition: [README](README.md).
 - Transport surface, transport authorization, and activity-draft seams: [Publishing API catalog](Api/EXTENSION_POINTS.md).
+- The import counterpart that consumes the envelopes this engine produces: [Workflows Runtime Reconciliation catalog](../Runtime/Reconciliation/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../EXTENSION_POINTS.md).
