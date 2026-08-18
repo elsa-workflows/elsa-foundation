@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../../Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

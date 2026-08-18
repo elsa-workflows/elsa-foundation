@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Comparison;
@@ -113,8 +114,8 @@ public sealed class PublishingApiContractTests
             Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
             Assert.Equal(
                 PermissionKey.Normalize(route.Action == "read"
-                    ? Elsa.Foundation.Identity.Abstractions.Authorization.PermissionNames.WorkflowPublishingRead
-                    : Elsa.Foundation.Identity.Abstractions.Authorization.PermissionNames.WorkflowPublishingManage),
+                    ? Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Read
+                    : Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage),
                 Assert.Single(descriptor.Permissions));
             Assert.NotEqual(PermissionKey.Wildcard, descriptor.Permissions[0]);
 

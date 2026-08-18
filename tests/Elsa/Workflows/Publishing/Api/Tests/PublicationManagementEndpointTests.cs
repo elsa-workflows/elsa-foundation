@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -16,15 +17,15 @@ public sealed class PublicationManagementEndpointTests
 {
     public static TheoryData<string, string, string> ManagementEndpoints => new()
     {
-        { "PreflightWorkflowPublicationSnapshotEndpoint", "publishing/workflows/preflight", PermissionNames.WorkflowPublishingRead },
-        { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", PermissionNames.WorkflowPublishingRead },
-        { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", PermissionNames.WorkflowPublishingManage },
-        { "ListPublicationSlotsEndpoint", "publishing/workflows/{definitionId}/slots", PermissionNames.WorkflowPublishingRead },
-        { "GetPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", PermissionNames.WorkflowPublishingRead },
-        { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", PermissionNames.WorkflowPublishingManage },
-        { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", PermissionNames.WorkflowPublishingManage },
-        { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", PermissionNames.WorkflowPublishingRead },
-        { "SetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", PermissionNames.WorkflowPublishingManage }
+        { "PreflightWorkflowPublicationSnapshotEndpoint", "publishing/workflows/preflight", WorkflowPublishingPermissions.Read },
+        { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", WorkflowPublishingPermissions.Read },
+        { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", WorkflowPublishingPermissions.Manage },
+        { "ListPublicationSlotsEndpoint", "publishing/workflows/{definitionId}/slots", WorkflowPublishingPermissions.Read },
+        { "GetPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Read },
+        { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Manage },
+        { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", WorkflowPublishingPermissions.Manage },
+        { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Read },
+        { "SetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Manage }
     };
 
     [Theory]

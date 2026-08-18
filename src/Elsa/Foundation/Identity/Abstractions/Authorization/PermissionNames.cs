@@ -1,41 +1,25 @@
 namespace Elsa.Foundation.Identity.Abstractions.Authorization;
 
 /// <summary>
-/// The permission catalog custom hosts and identity providers grant against.
+/// The one permission name that is not owned by any domain.
 /// </summary>
 /// <remarks>
-/// These names exist so a host or an identity provider can grant a permission without referencing
-/// the domain API that enforces it. They were previously housed in the first-party FastEndpoints
-/// project, which made an authoring-model-neutral convention look FastEndpoints-specific; retiring
-/// that project moved them here, beside <see cref="EndpointPermissionPolicy"/>, which composes them.
+/// <see cref="All"/> is the wildcard every endpoint accepts in addition to its own permission, so it
+/// is the only name that genuinely belongs to the shared endpoint security convention rather than to
+/// a domain. <see cref="EndpointPermissionPolicy"/> composes it.
 /// <para>
-/// The action-scoped names below still couple this catalog to the Workflows, BPMN, and Elsa 3
-/// domains, which is a layering compromise inherited from the FastEndpoints project rather than a
-/// deliberate design. Wave 9 established the better pattern: an owner declares its own permissions
-/// class, as <c>Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions</c> does. Only
-/// <see cref="All"/> is genuinely cross-domain. Devolving the remaining names to their owners is
-/// tracked as follow-up work; it is a wide consumer-side rename and does not belong in a retirement
-/// unit whose contract is that observable behavior does not move.
+/// This type previously also carried the action-scoped names for Workflow Design, Activity Design,
+/// Expressions, Workflow Publishing, Workflow Runtime, API Capabilities, Elsa 3 import, and BPMN
+/// interchange. That was a layering compromise inherited from the first-party FastEndpoints project:
+/// those names belong to their domains, not to a shared library. They were also redundant, because
+/// every one of those owners already declares its own permissions class — for example
+/// <c>Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions</c> and
+/// <c>Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions</c>. Consumers now use the
+/// owning domain's class, which is the single source for that domain's permission names.
 /// </para>
 /// </remarks>
 public static class PermissionNames
 {
+    /// <summary>The all-access wildcard permission.</summary>
     public const string All = "*";
-
-    // Supported management-client APIs use action-scoped permissions.
-    public const string WorkflowDesignRead = "workflow-design.read";
-    public const string WorkflowDesignManage = "workflow-design.manage";
-    public const string ActivityDesignRead = "activity-design.read";
-    public const string ActivityDesignManage = "activity-design.manage";
-    public const string ExpressionsRead = "expressions.read";
-    public const string WorkflowPublishingRead = "workflow-publishing.read";
-    public const string WorkflowPublishingManage = "workflow-publishing.manage";
-    public const string WorkflowRuntimeRead = "workflow-runtime.read";
-    public const string WorkflowRuntimeExecute = "workflow-runtime.execute";
-    public const string WorkflowRuntimeManage = "workflow-runtime.manage";
-    public const string ApiCapabilitiesRead = "api-capabilities.read";
-    public const string Elsa3ImportRead = "elsa3-import.read";
-    public const string Elsa3ImportManage = "elsa3-import.manage";
-    public const string BpmnInterchangeRead = "bpmn-interchange.read";
-    public const string BpmnInterchangeManage = "bpmn-interchange.manage";
 }
