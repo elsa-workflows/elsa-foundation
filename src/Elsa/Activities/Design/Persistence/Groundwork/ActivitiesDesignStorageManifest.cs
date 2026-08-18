@@ -120,7 +120,7 @@ public static class ActivitiesDesignStorageManifest
     public const string ManagementVersionsQuery = "management-versions-identity-asc";
     public const string ManagementExpiredQuery = "management-expired";
     public const string ManagementExpiredIndex = "management_expired";
-    public const string DesignOperationDocumentKind = "designOperation";
+    public const string DesignOperationDocumentKind = "activityDesignOperation";
     public const string DesignOperationCollection = DesignOperationDocumentKind;
 
     public static IReadOnlyList<ActivityDesignQueryOrder> ByDefinitionDocumentOrder =>

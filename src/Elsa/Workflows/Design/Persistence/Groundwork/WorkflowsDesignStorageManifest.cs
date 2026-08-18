@@ -28,7 +28,7 @@ public static class WorkflowsDesignStorageManifest
     public const string WorkflowDefinitionVersionCollection = WorkflowDefinitionVersionDocumentKind;
     public const string WorkflowDefinitionDraftCollection = WorkflowDefinitionDraftDocumentKind;
     public const string WorkflowDefinitionVersionLayoutCollection = WorkflowDefinitionVersionLayoutDocumentKind;
-    public const string DesignOperationDocumentKind = "designOperation";
+    public const string DesignOperationDocumentKind = "workflowDesignOperation";
 
     public const string IdField = "id";
     public const string SchemaVersionField = "schemaVersion";

@@ -11,7 +11,7 @@ public sealed class WorkflowsDesignStorageManifestTests
         var units = WorkflowsDesignStorageManifest.CreateUnits();
 
         Assert.Equal(
-            ["designOperation", "workflowDefinition", "workflowDefinitionDraft", "workflowDefinitionVersion", "workflowDefinitionVersionLayout"],
+            ["workflowDefinition", "workflowDefinitionDraft", "workflowDefinitionVersion", "workflowDefinitionVersionLayout", "workflowDesignOperation"],
             units.Select(unit => unit.Id.Value).Order(StringComparer.Ordinal));
         Assert.Equal(5, units.Count);
         Assert.Equal(
