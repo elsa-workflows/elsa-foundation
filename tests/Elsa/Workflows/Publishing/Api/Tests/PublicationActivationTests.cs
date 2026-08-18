@@ -2,6 +2,7 @@
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -183,6 +184,51 @@ public sealed class PublicationActivationTests
         Assert.Equal(3, slot.Revision);
         Assert.Equal(PublicationStatus.Active, publication!.Status);
         Assert.True(projectionPreparer.Restored);
+    }
+
+    /// <summary>
+    /// T116 / FR-B-006: an activation minted by artifact reconciliation has no <see cref="PublicationRecord"/>,
+    /// and that absence is an <em>ownership</em> answer — "not published by me" — never a missing-data fault.
+    /// </summary>
+    /// <remarks>
+    /// The refusal carries <c>slot_owner_conflict</c>, the same code the authority's own
+    /// <see cref="WorkflowActivationConflict.ForeignSource"/> maps to, and it names the owner so an operator is
+    /// told who holds the definition. The slot assertions are the substantive half: publishing must not be able
+    /// to deactivate what it did not activate, so nothing about the foreign activation may move.
+    /// </remarks>
+    [Fact]
+    public async Task UnpublishRefusesAnImportOwnedSlotByNameInsteadOfReportingAMissingPublication()
+    {
+        const string importActivationId = "import:mounted-artifacts:artifact-1";
+        var owner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
+        var activated = await _slotStore.TryActivateAsync(new WorkflowActivationSlotRequest(
+            "definition-1",
+            "default",
+            importActivationId,
+            owner,
+            0,
+            _now));
+        Assert.True(activated.Succeeded);
+        var handler = new UnpublishPublicationSlotRequestHandler(
+            _slotStore,
+            _publicationStore,
+            new PartialRemovalProjectionPreparer(),
+            new InMemoryWorkflowExecutableSourceReferenceStore(),
+            new FixedTimeProvider(_now));
+
+        var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() => handler.Handle(
+            new UnpublishPublicationSlot("definition-1", "default"),
+            CancellationToken.None));
+
+        Assert.Equal("slot_owner_conflict", refusal.Code);
+        Assert.Contains(owner.Describe(), refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not exist", refusal.Message, StringComparison.Ordinal);
+
+        var slot = await _slotStore.FindAsync("definition-1", "default");
+        Assert.Equal(importActivationId, slot!.ActiveActivationId);
+        Assert.Equal(owner.Kind, slot.Source!.Kind);
+        Assert.Equal(owner.SourceId, slot.Source.SourceId);
+        Assert.Equal(activated.Slot.Revision, slot.Revision);
     }
 
     private PublicationActivator NewActivator(

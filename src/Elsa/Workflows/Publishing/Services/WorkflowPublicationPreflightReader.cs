@@ -12,11 +12,17 @@ public sealed record WorkflowPublicationPreflightPlan(
     IReadOnlyCollection<PublicationTriggerClaim> CandidateClaims);
 
 /// <summary>Builds the same policy-resolved, publication-scoped trigger plan used by preview and activation.</summary>
+/// <remarks>
+/// Deliberately reads <b>no</b> <c>IPublicationRecordStore</c>. Contention is a property of what a slot is
+/// actually serving, and the activation ledger plus the trigger-binding projection answer that on their own. An
+/// activation minted by another source — artifact reconciliation — has no <c>PublicationRecord</c> at all
+/// (FR-B-006, the 2026-08-16 publish/activation split), so a preflight that resolved every active activation
+/// through publishing's journal could not evaluate a mixed engine.
+/// </remarks>
 public sealed class WorkflowPublicationPreflightReader(
     IPublicationPolicyStore policyStore,
     IPublicationPolicyResolver policyResolver,
     IWorkflowActivationAuthority activationAuthority,
-    IPublicationRecordStore publicationStore,
     IPublicationPreflightService preflightService,
     IWorkflowTriggerBindingExtractor triggerExtractor,
     IWorkflowTriggerBindingStore triggerBindingStore,
@@ -50,16 +56,19 @@ public sealed class WorkflowPublicationPreflightReader(
         var authoritativeSets = new List<PublicationAuthoritativeClaimSet>();
         foreach (var authoritativeSlot in await activationAuthority.ListByDefinitionAsync(identity.DefinitionId, cancellationToken))
         {
-            if (authoritativeSlot.ActiveActivationId is not { } activePublicationId)
+            // Every live activation contends, whoever activated it. The claim set is identified by the activation
+            // id and named by the SLOT's own name — which is exactly what the publication record used to be read
+            // for, and which the slot already carries (PublicationActivator.ValidateCandidate makes the two equal
+            // by construction). Skipping an unjournalled slot instead would drop real exclusive-trigger contention
+            // against an imported artifact and let a publish claim a stimulus that is already being served.
+            if (authoritativeSlot.ActiveActivationId is not { } activeActivationId)
                 continue;
-            var active = await publicationStore.FindAsync(activePublicationId, cancellationToken)
-                ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
-            var activeBindings = await triggerBindingStore.ListAllByActivationAsync(activePublicationId, cancellationToken);
+            var activeBindings = await triggerBindingStore.ListAllByActivationAsync(activeActivationId, cancellationToken);
             authoritativeSets.Add(new PublicationAuthoritativeClaimSet(
-                activePublicationId,
-                active.SlotName,
-                StringComparer.Ordinal.Equals(activePublicationId, slot?.ActiveActivationId),
-                activeBindings.Select(binding => Claim(activePublicationId, binding)).ToArray()));
+                activeActivationId,
+                authoritativeSlot.SlotName,
+                StringComparer.Ordinal.Equals(activeActivationId, slot?.ActiveActivationId),
+                activeBindings.Select(binding => Claim(activeActivationId, binding)).ToArray()));
         }
 
         return new WorkflowPublicationPreflightPlan(

@@ -43,7 +43,6 @@ public sealed class PublishWorkflowRequestHandler(
         policyStore,
         policyResolver,
         activationAuthority,
-        publicationStore,
         preflightService,
         triggerExtractor,
         triggerBindingStore,
@@ -110,13 +109,20 @@ public sealed class PublishWorkflowRequestHandler(
         var resolved = plan.ResolvedAction;
         var slot = plan.Slot;
         // Publishing keeps its own four-condition same-artifact guard and calls the coordinator only once it has
-        // decided to activate. The coordinator's own no-op sees only the two runtime-resolvable conditions (same
-        // artifact + live reference); trigger-change retention and tenancy are publication-plan concepts it cannot
-        // see, and delegating wholesale would silently no-op a publish for a second tenant reusing one artifact.
-        if (slot?.ActiveActivationId is { } activePublicationId)
+        // decided to activate. The coordinator's own no-op cannot see trigger-change retention — a publication-plan
+        // concept — and delegating wholesale would therefore lose a condition publishing owns.
+        //
+        // The guard only speaks for slots publishing owns. Ownership is read from the slot's explicit
+        // WorkflowActivationSource (P3: never inferred from the activation id), and it is checked BEFORE the
+        // journal is consulted. A slot activated by artifact reconciliation legitimately holds an
+        // ActiveActivationId with no PublicationRecord behind it; that absence means "not published by me", not
+        // "your data is missing" (FR-B-006, the 2026-08-16 publish/activation split). Such a request falls through
+        // to the coordinator, which answers it properly: the same artifact is the idempotent no-op, and a
+        // different one is refused by the authority with a diagnostic naming the owning source.
+        if (slot is { ActiveActivationId: { } activePublicationId, Source: { } activeSource } &&
+            activeSource.IsSameOwnerAs(PublicationActivator.Source) &&
+            await publicationStore.FindAsync(activePublicationId, cancellationToken) is { } current)
         {
-            var current = await publicationStore.FindAsync(activePublicationId, cancellationToken)
-                ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
             if (StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId) &&
                 plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
             {

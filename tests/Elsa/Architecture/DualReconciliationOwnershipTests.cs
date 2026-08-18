@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
@@ -156,43 +157,43 @@ public sealed class DualReconciliationOwnershipTests : IDisposable
     }
 
     /// <summary>
-    /// The other direction of ownership — and a <b>recorded production gap</b>.
+    /// The other direction of ownership: an import-owned definition, and a publish that tries to take it over.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The serving-state half of FR-B-006 holds in both directions: an import-owned definition is not
-    /// double-activated by a publish, the mounted artifact keeps serving, and a stimulus still starts exactly one
-    /// instance. Those are asserted below and are the substance of the invariant.
+    /// The serving-state half of FR-B-006 holds in both directions: the definition is not double-activated by a
+    /// publish, the mounted artifact keeps serving, and a stimulus still starts exactly one instance.
     /// </para>
     /// <para>
-    /// <b>What does not hold is the surfacing.</b> T102 requires the publish side to surface the collision "on
-    /// the existing preflight conflict path" — i.e. as
-    /// <c>PublicationPreflightConflictException</c> carrying a diagnostic that names the owning
-    /// <see cref="WorkflowActivationSource"/>, symmetric to the importer's <c>ActivationConflict</c> entry.
-    /// It does not. Publishing never reaches its own preflight verdict, the activation authority, or the
-    /// coordinator: <c>WorkflowPublicationPreflightReader.EvaluateAsync</c> walks every slot of the definition and
-    /// resolves each active activation id through <c>IPublicationRecordStore</c>, throwing a raw
-    /// <see cref="InvalidOperationException"/> when the lookup misses. An import-owned slot holds an activation id
-    /// publishing never journalled, so the lookup always misses, and the operator is told
-    /// <c>"Active publication '…' does not exist."</c> — which names the id but not the owner, and reads as an
-    /// engine defect rather than as an ownership refusal.
+    /// <b>The surfacing half is what T116 added.</b> Publishing used to resolve every live activation of the
+    /// definition through <c>IPublicationRecordStore</c> and throw a raw
+    /// <see cref="InvalidOperationException"/> — <c>"Active publication '…' does not exist."</c> — when the lookup
+    /// missed. An import-owned slot holds an activation publishing never journalled, so the lookup always missed,
+    /// and the operator was told a record was absent rather than who owns the definition; FR-B-006's ownership
+    /// rules never ran at all, on either leg. Both legs are now decided by those rules:
     /// </para>
+    /// <list type="bullet">
+    /// <item>
+    /// a <b>different</b> artifact is refused by the activation authority and surfaces as publishing's own
+    /// <c>PublicationActivationException</c> carrying <c>slot_owner_conflict</c> and a diagnostic that
+    /// <b>names</b> the owning <see cref="WorkflowActivationSource"/> — the mirror of the importer's
+    /// <c>ActivationConflict</c> entry in the test above;
+    /// </item>
+    /// <item>
+    /// the <b>same</b> artifact is FR-B-006's idempotent no-op, which the coordinator resolves before the slot is
+    /// ever touched, so the publish succeeds having written nothing to the ledger.
+    /// </item>
+    /// </list>
     /// <para>
-    /// This is exactly consequence 1 of the 2026-08-16 "publish/activation responsibility split" decision recorded
-    /// in the feature's task list ("a missing <c>PublicationRecord</c> is a normal answer, never an error"), naming
-    /// <c>PublishWorkflowRequestHandler</c>, <c>WorkflowPublicationPreflightReader</c> and
-    /// <c>PublicationSlotLifecycleRequestHandlers</c> as the three sites that must stop throwing on absence. The
-    /// decision is recorded; the change is not implemented. It is characterized here rather than patched, because
-    /// a production change to the publish path is well outside a US5 test task — and pinned so that fixing it
-    /// makes this assertion fail loudly and demand the intended assertion in its place.
-    /// </para>
-    /// <para>
-    /// Both legs of FR-B-006 are affected: the same artifact (which should be the idempotent no-op) fails the same
-    /// way as a different one, because the failure happens before either rule is consulted.
+    /// Note the refusal is an <em>activation</em> conflict, not the <c>PublicationPreflightConflictException</c>
+    /// T102's note anticipated. Preflight answers a narrower question — cross-slot trigger cardinality — and here
+    /// the contending activation is in the very slot being published to, so preflight correctly treats it as the
+    /// replaced baseline and raises nothing. Ownership is the authority's rule to enforce, and it is enforced
+    /// where the slot actually moves.
     /// </para>
     /// </remarks>
     [Fact]
-    public async Task An_import_owned_definition_is_not_taken_over_by_a_publish_but_the_refusal_is_not_a_preflight_conflict()
+    public async Task An_import_owned_definition_is_not_taken_over_by_a_publish_and_the_refusal_names_the_owning_source()
     {
         await using var engine = CombinedEngine.Create([OrdersV1(), OrdersV2()], _mount);
 
@@ -230,26 +231,31 @@ public sealed class DualReconciliationOwnershipTests : IDisposable
         Assert.Equal(importedV1.RootArtifactId, Assert.Single(delivery.Starts).ArtifactId);
         Assert.Single(await engine.ListExecutionsAsync());
 
-        // The gap, pinned. When the recorded decision is implemented these four assertions must be replaced by
-        // the intended ones: PublicationPreflightConflictException whose diagnostic contains
-        // "artifact-reconciliation:mounted-artifacts" for the different artifact, and a successful no-op view for
-        // the same artifact.
-        AssertUnownedPublicationLookupFailure(differentArtifact, ownedSlot.ActiveActivationId!);
-        AssertUnownedPublicationLookupFailure(sameArtifact, ownedSlot.ActiveActivationId!);
+        // The diagnostic, which is the half T116 fixed. The different artifact is refused BY NAME; the same
+        // artifact is the no-op and therefore raises nothing at all.
+        AssertOwnershipRefusal(differentArtifact);
+        Assert.Null(sameArtifact);
     }
 
-    /// <summary>Pins the current — and unintended — shape of a publish into a foreign-owned activation slot.</summary>
-    private static void AssertUnownedPublicationLookupFailure(Exception? failure, string owningActivationId)
+    /// <summary>
+    /// The intended shape of a publish into a foreign-owned activation slot: publishing's own activation-conflict
+    /// exception, carrying the ownership code and a diagnostic naming the owner.
+    /// </summary>
+    /// <remarks>
+    /// Asserting on the owner's own <c>Describe()</c> rendering — kind <em>and</em> source id — keeps this from
+    /// passing on a generic "conflict" message, which is the failure mode P3 exists to prevent. The negative
+    /// assertion is the defect this replaced: absence of a <c>PublicationRecord</c> reported as missing data.
+    /// </remarks>
+    private static void AssertOwnershipRefusal(Exception? failure)
     {
-        Assert.NotNull(failure);
-        Assert.IsType<InvalidOperationException>(failure);
-        Assert.Contains(owningActivationId, failure!.Message, StringComparison.Ordinal);
-
-        // Not the intended path: no ownership diagnostic, and not the preflight conflict exception T102 expects.
-        Assert.DoesNotContain(
+        var refusal = Assert.IsType<PublicationActivationException>(failure);
+        Assert.Equal("slot_owner_conflict", refusal.Code);
+        Assert.Contains(
             WorkflowActivationSource.ArtifactReconciliation(CombinedEngine.MountSourceId).Describe(),
-            failure.Message,
+            refusal.Message,
             StringComparison.Ordinal);
+        Assert.Contains(OrdersDefinitionId, refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not exist", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

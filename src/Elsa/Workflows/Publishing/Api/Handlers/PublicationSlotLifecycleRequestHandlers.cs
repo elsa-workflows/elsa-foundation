@@ -25,8 +25,20 @@ public sealed class UnpublishPublicationSlotRequestHandler(
             ?? throw new InvalidOperationException($"Publication slot '{request.SlotName}' does not exist.");
         if (slot.ActiveActivationId is not { } publicationId)
             return slot;
-        var publication = await publicationStore.FindAsync(publicationId, cancellationToken)
-            ?? throw new InvalidOperationException($"Active publication '{publicationId}' does not exist.");
+
+        // FR-B-006 / the 2026-08-16 publish/activation split: unpublish retracts a PUBLICATION, so it can only
+        // speak for a slot publishing owns. Ownership is read from the slot's explicit WorkflowActivationSource
+        // (P3) BEFORE the journal is consulted, because a slot activated by artifact reconciliation legitimately
+        // holds an ActiveActivationId with no PublicationRecord behind it. That absence is the answer "not
+        // published by me", never a missing-data fault — and the journal is checked in the same breath rather
+        // than dereferenced, since IPublicationProjectionPreparer.RemoveAsync is keyed on the record and there is
+        // genuinely nothing for unpublish to retract without one. Both roads lead to the same honest reply:
+        // this activation is not publishing's to withdraw.
+        var publication = IsOwnedByPublishing(slot)
+            ? await publicationStore.FindAsync(publicationId, cancellationToken)
+            : null;
+        if (publication is null)
+            throw new PublicationActivationException(ForeignActivationFailure(slot, publicationId));
         var now = timeProvider.GetUtcNow();
         var transition = await activationAuthority.TryDeactivateAsync(
             request.WorkflowDefinitionId,
@@ -90,6 +102,21 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         }
         return transition.Slot;
     }
+
+    private static bool IsOwnedByPublishing(WorkflowActivationSlot slot) =>
+        slot.Source is { } source && source.IsSameOwnerAs(PublicationActivator.Source);
+
+    /// <summary>
+    /// The ownership refusal an unpublish gets when the live activation was not put there by publishing. It shares
+    /// <c>slot_owner_conflict</c> with <see cref="ToFailure"/>'s <see cref="WorkflowActivationConflict.ForeignSource"/>
+    /// mapping because it is the same answer, reached one step earlier — and it names the owner, so an operator is
+    /// told who holds the definition rather than that a record is missing.
+    /// </summary>
+    private static PublicationFailure ForeignActivationFailure(WorkflowActivationSlot slot, string activationId) => new(
+        "slot_owner_conflict",
+        $"Activation '{activationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' was not published by " +
+        $"'{PublicationActivator.Source.Describe()}'; it is owned by activation source '{slot.Source?.Describe() ?? "unknown"}' " +
+        "and can only be withdrawn through that source.");
 
     internal static PublicationFailure ToFailure(WorkflowActivationTransition transition) => transition.Conflict switch
     {
