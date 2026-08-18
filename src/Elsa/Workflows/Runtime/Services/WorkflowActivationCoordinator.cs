@@ -6,9 +6,18 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Services;
 
 /// <summary>
-/// The one activation lifecycle, shared by every path that makes a workflow executable live (FR-B-006).
+/// The one activation lifecycle, shared by every path that makes a workflow executable live — or stops it being
+/// live (FR-B-006).
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>Both directions live here (T121).</b> Retraction used to be a second component in the publishing family
+/// (<c>PublicationProjectionReconciler</c>) that independently knew how to prepare, activate and remove the same
+/// projections. Two paths obliged to stay in step is a defect generator, and it generated one: T044b changed how
+/// the recurring projection is prepared here and not there, so a failed unpublish silently stopped a workflow's
+/// timers. Deactivation is a public member of this type so that the preparation, its ordering and its
+/// compensation have exactly one implementation.
+/// </para>
 /// <para>
 /// Behavior-preserving by construction: the sequence and its compensation are absorbed from publishing's
 /// <c>PublishWorkflowRequestHandler</c> (lease, reference mint, predecessor retire) and <c>PublicationActivator</c>
@@ -66,30 +75,7 @@ public sealed class WorkflowActivationCoordinator(
         var definitionId = identity.DefinitionId;
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
 
-        // The trigger serving spine is registered by WorkflowsRuntimeTriggers, not by AddWorkflowRuntime(). An
-        // activation without it would silently produce a definition that no stimulus can ever start, so refuse
-        // loudly BEFORE the first write rather than half-activating.
-        if (triggerIndexer is null || triggerBindingStore is null)
-            throw new WorkflowActivationException(
-                definitionId,
-                command.SlotName,
-                command.ActivationId,
-                "Workflow activation requires the trigger serving spine (IWorkflowTriggerIndexer and IWorkflowTriggerBindingStore). " +
-                "Compose the WorkflowsRuntimeTriggers feature before activating.");
-
-        // Same rule, one projection over: a recurring store with no preparer means the recurring projection is
-        // never written, and the store refuses to activate an unprepared projection. Left unchecked that surfaces
-        // at step 4 — AFTER the slot CAS — so the activation lands in compensation instead of failing fast. The
-        // two are registered together by WorkflowsRuntimeRecurringTriggers; this refuses the composition that
-        // pulled them apart, before the first write.
-        if (recurringScheduleStore is not null && recurringSchedulePreparer is null)
-            throw new WorkflowActivationException(
-                definitionId,
-                command.SlotName,
-                command.ActivationId,
-                "Workflow activation found an IRecurringTriggerScheduleStore with no IRecurringTriggerScheduleProjectionPreparer. " +
-                "The recurring projection would never be prepared and the activation would fail after the slot transition. " +
-                "Compose the WorkflowsRuntimeRecurringTriggers feature, which registers both, or register a preparer.");
+        GuardComposition(definitionId, command.SlotName, command.ActivationId);
 
         var noOp = await TryResolveSameArtifactNoOpAsync(command, identity.ArtifactId, cancellationToken);
         if (noOp is not null)
@@ -147,6 +133,154 @@ public sealed class WorkflowActivationCoordinator(
             command.SlotName,
             command.ActivationId,
             $"Activation '{command.ActivationId}' produced no outcome; the retention lease did not run the activation sequence.");
+    }
+
+    /// <summary>
+    /// The retraction half of the lifecycle: CAS the slot empty, remove the retracted activation's serving
+    /// projections, notify observers — and put all three back if the removal does not finish.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately <b>not</b> under the root-write lease that <see cref="ActivateAsync"/> takes. That lease
+    /// exists to fence reference garbage collection out while an artifact is gaining its first live reference;
+    /// deactivation writes no reference and removes projections, and the caller retires the reference afterwards,
+    /// so a GC pass that runs concurrently sees a slot that is already empty and an artifact that is already
+    /// unreferenced — which is precisely what it is entitled to reclaim.
+    /// </para>
+    /// <para>
+    /// The compensation reuses <see cref="PrepareProjectionsAsync"/> and <see cref="ActivateProjectionsAsync"/>
+    /// rather than owning a second copy of them (T121). Anything that changes how a projection is prepared
+    /// therefore changes both directions of the lifecycle at once.
+    /// </para>
+    /// </remarks>
+    public async ValueTask<WorkflowActivationResult> DeactivateAsync(
+        WorkflowDeactivationCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(command.Executable);
+        ArgumentNullException.ThrowIfNull(command.Source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.SlotName);
+        ArgumentOutOfRangeException.ThrowIfNegative(command.ExpectedRevision);
+
+        var definitionId = command.Executable.Identity.DefinitionId;
+        var slot = await authority.FindAsync(definitionId, command.SlotName, cancellationToken);
+
+        // Nothing live means nothing to retract. Writing anyway would move the slot revision for a request that
+        // changed nothing, which turns a harmless repeated unpublish into a CAS conflict for the next writer.
+        if (slot?.ActiveActivationId is not { } activationId)
+            return new WorkflowActivationResult(
+                true,
+                WorkflowActivationOutcome.AlreadyInactive,
+                slot ?? EmptySlot(definitionId, command.SlotName));
+
+        // The same composition guards activation runs, for a sharper reason: this path's compensation RE-PREPARES
+        // the projections. A recurring store with no preparer would restore an activation whose timers never fire
+        // again, reported nowhere. Refuse before the first write.
+        GuardComposition(definitionId, command.SlotName, activationId);
+
+        // Step 1 — the slot CAS. The authority owns the revision and ownership rules, so a foreign source or a
+        // stale revision is refused here and nothing else in the sequence runs.
+        WorkflowActivationTransition transition;
+        try
+        {
+            transition = await authority.TryDeactivateAsync(
+                definitionId,
+                command.SlotName,
+                command.Source,
+                command.ExpectedRevision,
+                timeProvider.GetUtcNow(),
+                cancellationToken);
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
+        {
+            // Nothing flipped, so there is nothing to compensate.
+            return new WorkflowActivationResult(
+                false,
+                WorkflowActivationOutcome.Failed,
+                slot,
+                null,
+                activationId,
+                WorkflowActivationConflict.None,
+                Truncate(SafeMessage(exception)),
+                WorkflowActivationStep.SlotTransition);
+        }
+
+        if (!transition.Succeeded)
+            return new WorkflowActivationResult(
+                false,
+                WorkflowActivationOutcome.Conflict,
+                transition.Slot,
+                null,
+                activationId,
+                transition.Conflict,
+                Truncate(transition.Diagnostic ?? "The activation slot transition was refused."));
+
+        // Step 2 — the retracted activation's projections stop existing. The slot already stopped serving them,
+        // so this is cleanup behind a decision that has been made, not part of making it.
+        try
+        {
+            await RemoveProjectionsAsync(activationId, cancellationToken);
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
+        {
+            return await FailDeactivationAsync(command, activationId, transition, WorkflowActivationStep.ProjectionRemoval, exception);
+        }
+
+        // Step 3 — notify derived projections (route tables and the like), after the removal, so an observer
+        // never reads a serving surface that is halfway retracted.
+        try
+        {
+            await NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, cancellationToken);
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
+        {
+            return await FailDeactivationAsync(command, activationId, transition, WorkflowActivationStep.TriggerObserverNotification, exception);
+        }
+
+        return new WorkflowActivationResult(
+            true,
+            WorkflowActivationOutcome.Deactivated,
+            transition.Slot,
+            null,
+            activationId);
+    }
+
+    /// <summary>
+    /// The composition this coordinator refuses to run at all, checked before the first write of either
+    /// lifecycle direction.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The trigger serving spine is registered by <c>WorkflowsRuntimeTriggers</c>, not by <c>AddWorkflowRuntime()</c>.
+    /// An activation without it would silently produce a definition that no stimulus can ever start.
+    /// </para>
+    /// <para>
+    /// Same rule, one projection over: a recurring store with no preparer means the recurring projection is never
+    /// written, and the store refuses to activate an unprepared projection. Left unchecked that surfaces
+    /// <i>after</i> the slot CAS, so the request lands in compensation instead of failing fast. The two are
+    /// registered together by <c>WorkflowsRuntimeRecurringTriggers</c>; this refuses the composition that pulled
+    /// them apart.
+    /// </para>
+    /// </remarks>
+    private void GuardComposition(string definitionId, string slotName, string activationId)
+    {
+        if (triggerIndexer is null || triggerBindingStore is null)
+            throw new WorkflowActivationException(
+                definitionId,
+                slotName,
+                activationId,
+                "Workflow activation requires the trigger serving spine (IWorkflowTriggerIndexer and IWorkflowTriggerBindingStore). " +
+                "Compose the WorkflowsRuntimeTriggers feature before activating.");
+
+        if (recurringScheduleStore is not null && recurringSchedulePreparer is null)
+            throw new WorkflowActivationException(
+                definitionId,
+                slotName,
+                activationId,
+                "Workflow activation found an IRecurringTriggerScheduleStore with no IRecurringTriggerScheduleProjectionPreparer. " +
+                "The recurring projection would never be prepared and the activation would fail after the slot transition. " +
+                "Compose the WorkflowsRuntimeRecurringTriggers feature, which registers both, or register a preparer.");
     }
 
     /// <summary>
@@ -229,7 +363,7 @@ public sealed class WorkflowActivationCoordinator(
         // Step 2 — prepare BOTH projections in non-serving state.
         try
         {
-            await PrepareProjectionsAsync(command, slotId, cancellationToken);
+            await PrepareProjectionsAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -321,33 +455,34 @@ public sealed class WorkflowActivationCoordinator(
     /// prepares the trigger bindings and <see cref="IRecurringTriggerScheduleProjectionPreparer"/> prepares the
     /// recurring schedules — the latter unconditionally, so an engine that composes the recurring store with no
     /// recurring providers still gets an explicit empty projection. The read-back-then-re-prepare this replaced
-    /// (inherited from <c>PublicationProjectionReconciler</c>) wrote the schedule projection a second time and,
-    /// worse, made the recurring projection's durability depend on a separate delivery record from the one that
-    /// governed the write that actually produced it.
+    /// (inherited from the deleted <c>PublicationProjectionReconciler</c>) wrote the schedule projection a second
+    /// time and, worse, made the recurring projection's durability depend on a separate delivery record from the
+    /// one that governed the write that actually produced it.
     /// </para>
     /// <para>
     /// The recurring preparer runs <b>first</b>, which is the ordering the retired decorator provided from the
     /// inside: it materializes and validates every recurrence before writing, so an invalid or exhausted
     /// recurrence fails the activation with neither projection mutated.
     /// </para>
+    /// <para>
+    /// <b>This is the only preparation in the engine</b> (T121). Activation calls it forwards and deactivation's
+    /// compensation calls it to put a retracted activation back, so the ordering invariant above cannot be
+    /// half-updated: there is no second copy of it to forget. The retraction path used to have one, and when
+    /// T044b changed the participants here it was not changed there — which is the defect this consolidation
+    /// makes unrepresentable rather than merely documented against.
+    /// </para>
     /// </remarks>
     private async ValueTask PrepareProjectionsAsync(
-        WorkflowActivationCommand command,
+        WorkflowExecutable executable,
+        string activationId,
         string slotId,
         CancellationToken cancellationToken)
     {
-        // ORDERING INVARIANT, DUPLICATED: recurrences are materialized and validated BEFORE any binding is
-        // written. The same sequence exists in PublicationProjectionReconciler.PrepareAsync, which unpublish's
-        // RemoveAsync/RestoreAsync still route through. THE TWO MUST STAY IN STEP -- when T044b retired the
-        // decorator that used to prepare recurrences implicitly, this path was updated and that one was not, and
-        // the divergence was invisible because a test double reproduced the retired decorator. If you change the
-        // order or the participants here, change them there. T121 removes the duplication by giving this
-        // coordinator the deactivation path too and deleting that reconciler; until then, this comment is the
-        // only thing that tells you the other path exists.
+        // ORDERING INVARIANT: recurrences are materialized and validated BEFORE any binding is written.
         if (recurringSchedulePreparer is not null)
-            await recurringSchedulePreparer.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+            await recurringSchedulePreparer.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
 
-        await triggerIndexer!.PrepareActivationAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+        await triggerIndexer!.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
     }
 
     private async ValueTask ActivateProjectionsAsync(
@@ -420,7 +555,7 @@ public sealed class WorkflowActivationCoordinator(
             failedStep);
 
         var compensationFailure = await CompensateAsync(command, reference, activatedSlot);
-        var slot = await CurrentSlotAsync(command);
+        var slot = await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName);
         return new WorkflowActivationResult(
             false,
             WorkflowActivationOutcome.Failed,
@@ -431,6 +566,98 @@ public sealed class WorkflowActivationCoordinator(
             Truncate(Join(SafeMessage(failure), compensationFailure)),
             failedStep,
             compensationFailure);
+    }
+
+    private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(
+        WorkflowDeactivationCommand command,
+        string activationId,
+        WorkflowActivationTransition transition,
+        WorkflowActivationStep failedStep,
+        Exception failure)
+    {
+        logger?.LogWarning(
+            failure,
+            "Deactivation of activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}; compensating",
+            activationId,
+            command.Executable.Identity.DefinitionId,
+            command.SlotName,
+            failedStep);
+
+        var compensationFailure = await CompensateDeactivationAsync(command, activationId, transition);
+        var slot = await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName);
+        return new WorkflowActivationResult(
+            false,
+            WorkflowActivationOutcome.Failed,
+            slot,
+            null,
+            activationId,
+            WorkflowActivationConflict.None,
+            Truncate(Join(SafeMessage(failure), compensationFailure)),
+            failedStep,
+            compensationFailure);
+    }
+
+    /// <summary>
+    /// Puts the retracted activation back: the slot first, then its serving projections, then the observers that
+    /// derive from them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Restoring the projections means <b>re-preparing them from the artifact</b>, not re-activating what is
+    /// still there: <see cref="RemoveProjectionsAsync"/> deletes rows, and a partially completed removal has
+    /// nothing left to flip back on. This is the force-replay the deleted publication reconciler performed
+    /// through its delivery ledger, expressed as what it always was — an unconditional re-preparation — and it
+    /// runs through the <see cref="PrepareProjectionsAsync"/> every activation uses, so the recurring projection
+    /// cannot be forgotten here while activation remembers it.
+    /// </para>
+    /// <para>
+    /// Best-effort, like activation's compensation: every step is attempted even if an earlier one failed, and
+    /// what did not converge is reported rather than thrown, so the original failure is never masked.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<string?> CompensateDeactivationAsync(
+        WorkflowDeactivationCommand command,
+        string activationId,
+        WorkflowActivationTransition transition)
+    {
+        var definitionId = command.Executable.Identity.DefinitionId;
+        var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
+        var failures = new List<string>();
+
+        await CaptureAsync(failures, "Authority compensation", async () =>
+        {
+            // The CAS presents the POST-flip revision: we are undoing our own transition. Ownership is safe to
+            // assert with the retracting source because a foreign-owned slot could not have been deactivated.
+            var compensation = await authority.TryActivateAsync(
+                new WorkflowActivationSlotRequest(
+                    definitionId,
+                    command.SlotName,
+                    activationId,
+                    command.Source,
+                    transition.Slot.Revision,
+                    timeProvider.GetUtcNow()),
+                CancellationToken.None);
+            if (!compensation.Succeeded)
+                throw new WorkflowActivationException(
+                    definitionId,
+                    command.SlotName,
+                    activationId,
+                    $"Deactivation of activation '{activationId}' failed and the slot authority could not be restored: {compensation.Diagnostic}");
+        });
+
+        await CaptureAsync(failures, "Projection compensation", async () =>
+        {
+            await PrepareProjectionsAsync(command.Executable, activationId, slotId, CancellationToken.None);
+            await ActivateProjectionsAsync(activationId, replacedActivationId: null, CancellationToken.None);
+        });
+
+        // Observers last, so they are reconciled only once the restored activation is fully serving again.
+        await CaptureAsync(
+            failures,
+            "Observer compensation",
+            () => NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
+
+        return failures.Count == 0 ? null : string.Join(" ", failures);
     }
 
     /// <summary>
@@ -456,7 +683,7 @@ public sealed class WorkflowActivationCoordinator(
             await CaptureAsync(failures, "Replaced projection compensation", () => RestoreProjectionsAsync(command, activatedSlot!.ReplacedActivationId));
         }
 
-        await CaptureAsync(failures, "Candidate projection compensation", () => RemoveProjectionsAsync(command.ActivationId));
+        await CaptureAsync(failures, "Candidate projection compensation", () => RemoveProjectionsAsync(command.ActivationId, CancellationToken.None));
         await CaptureAsync(failures, "Reference compensation", () => RetireFailedReferenceAsync(command, reference));
 
         // Observers are reconciled only after BOTH sides reached their final serving state. A refresh between
@@ -523,12 +750,12 @@ public sealed class WorkflowActivationCoordinator(
             await recurringScheduleStore.ActivateAsync(replaced, command.ActivationId, CancellationToken.None);
     }
 
-    private async ValueTask RemoveProjectionsAsync(string activationId)
+    private async ValueTask RemoveProjectionsAsync(string activationId, CancellationToken cancellationToken)
     {
-        await triggerBindingStore!.DeleteByActivationAsync(activationId, CancellationToken.None);
+        await triggerBindingStore!.DeleteByActivationAsync(activationId, cancellationToken);
 
         if (recurringScheduleStore is not null)
-            await recurringScheduleStore.DeleteByActivationAsync(activationId, CancellationToken.None);
+            await recurringScheduleStore.DeleteByActivationAsync(activationId, cancellationToken);
     }
 
     private async ValueTask RetireFailedReferenceAsync(
@@ -547,13 +774,12 @@ public sealed class WorkflowActivationCoordinator(
             CancellationToken.None);
     }
 
-    private async ValueTask<WorkflowActivationSlot> CurrentSlotAsync(WorkflowActivationCommand command)
+    private async ValueTask<WorkflowActivationSlot> CurrentSlotAsync(string definitionId, string slotName)
     {
-        var definitionId = command.Executable.Identity.DefinitionId;
         WorkflowActivationSlot? slot = null;
         try
         {
-            slot = await authority.FindAsync(definitionId, command.SlotName, CancellationToken.None);
+            slot = await authority.FindAsync(definitionId, slotName, CancellationToken.None);
         }
         catch (Exception exception)
         {
@@ -561,18 +787,20 @@ public sealed class WorkflowActivationCoordinator(
                 exception,
                 "Could not read back the activation slot of definition {DefinitionId} slot {SlotName} after a failed activation",
                 definitionId,
-                command.SlotName);
+                slotName);
         }
 
-        return slot ?? new WorkflowActivationSlot(
-            WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName),
-            definitionId,
-            command.SlotName,
-            null,
-            null,
-            0,
-            timeProvider.GetUtcNow());
+        return slot ?? EmptySlot(definitionId, slotName);
     }
+
+    private WorkflowActivationSlot EmptySlot(string definitionId, string slotName) => new(
+        WorkflowActivationSlotIdentity.Create(definitionId, slotName),
+        definitionId,
+        slotName,
+        null,
+        null,
+        0,
+        timeProvider.GetUtcNow());
 
     private static async ValueTask CaptureAsync(List<string> failures, string label, Func<ValueTask> step)
     {

@@ -73,7 +73,6 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.
-        services.TryAddScoped<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();

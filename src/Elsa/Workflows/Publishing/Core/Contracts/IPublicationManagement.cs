@@ -45,26 +45,10 @@ public interface IPublicationPreflightService
         IReadOnlyCollection<PublicationAuthoritativeClaimSet> authoritativeClaims);
 }
 
-public interface IPublicationProjectionPreparer
-{
-    ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default);
-
-    ValueTask ActivateAsync(
-        PublicationRecord candidate,
-        string? replacedPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask CompensateAsync(
-        PublicationRecord candidate,
-        string? restoredPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RestoreAsync(
-        PublicationRecord publication,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
-}
+// `IPublicationProjectionPreparer` is deliberately absent (T121). Serving projections have one owner in either
+// direction of the lifecycle: `IWorkflowActivationCoordinator` (Elsa.Workflows.Runtime.Core) prepares, activates,
+// removes and restores them for publishing and for artifact reconciliation alike. A publishing-side copy of that
+// sequence had to stay in step with the runtime's and did not, so it was deleted rather than re-synchronised.
 
 public interface IPublicationActivator
 {

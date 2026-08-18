@@ -39,8 +39,10 @@ public sealed class PublishingGroundworkLifetimeTests
         services.AddOptions<Elsa.Workflows.Runtime.Configuration.WorkflowExecutableGarbageCollectionOptions>();
         services.AddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
 
-        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IPublicationProjectionPreparer)).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IPublicationActivator)).Lifetime);
+        // The serving projections have no publishing-side owner any more (T121): IWorkflowActivationCoordinator
+        // owns them in both lifecycle directions, so its lifetime is the one that matters here.
+        Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IWorkflowActivationCoordinator)).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(PublicationSnapshotReviewService)).Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IPublicationPolicyResolver)).Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IPublicationPreflightService)).Lifetime);
@@ -49,7 +51,7 @@ public sealed class PublishingGroundworkLifetimeTests
         using var firstScope = provider.CreateScope();
         using var secondScope = provider.CreateScope();
 
-        AssertScopedAcrossRequests<IPublicationProjectionPreparer>(firstScope, secondScope);
+        AssertScopedAcrossRequests<IWorkflowActivationCoordinator>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationActivator>(firstScope, secondScope);
         AssertScopedAcrossRequests<PublicationSnapshotReviewService>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationRecordStore>(firstScope, secondScope);

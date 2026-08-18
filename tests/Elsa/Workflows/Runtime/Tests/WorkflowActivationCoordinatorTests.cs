@@ -39,13 +39,17 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Null(result.ReplacedActivationId);
 
         // Ordering is the invariant, not merely the call set: preparing after the slot flip would expose an
-        // empty serving projection, and observing before activation would publish a stale route table.
+        // empty serving projection, and observing before activation would publish a stale route table. Asserted
+        // across both stores in one log, because the recurring-before-bindings half of the order is invisible in
+        // either store's own log.
         Assert.Equal(
-            ["prepare:activation-1", "activate:activation-1->"],
-            harness.Bindings.Calls);
-        Assert.Equal(
-            ["prepare:activation-1", "activate:activation-1->"],
-            harness.Schedules.Calls);
+            [
+                "schedules:prepare:activation-1",
+                "bindings:prepare:activation-1",
+                "bindings:activate:activation-1->",
+                "schedules:activate:activation-1->"
+            ],
+            harness.Sequence);
         Assert.Single(harness.Observer.Snapshots);
         Assert.True(harness.Observer.Snapshots[0].RequiresProjectionRefresh);
     }
@@ -513,6 +517,261 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     // ---------------------------------------------------------------------------------------------------
+    // Deactivation — the retraction half of the lifecycle (T121)
+    //
+    // These absorb the objectives of the deleted PublicationProjectionReconcilerTests. That type was the SECOND
+    // path that prepared, activated and removed serving projections; it had to know the same ordering invariant
+    // as this coordinator, and when T044b changed the invariant here and not there, a failed unpublish silently
+    // stopped a workflow's timers. The behaviour it was asked to have is now asked of the only path there is.
+    // ---------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Deactivating_clears_the_slot_removes_both_projections_and_observes_once()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        Assert.NotEmpty(await harness.ServingBindingsAsync());
+        Assert.NotEmpty(await harness.ServingSchedulesAsync());
+        harness.ResetCalls();
+
+        var result = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
+        Assert.Null(result.Slot.ActiveActivationId);
+        Assert.Equal("activation-1", result.ReplacedActivationId);
+        // BOTH projections, not just the bindings. A binding-only retraction leaves a definition nothing can
+        // start but whose timers keep firing, which is the worse half of the pair to forget.
+        Assert.Equal(["delete:activation-1"], harness.Bindings.Calls);
+        Assert.Equal(["delete:activation-1"], harness.Schedules.Calls);
+        Assert.Empty(await harness.ServingBindingsAsync());
+        Assert.Empty(await harness.ServingSchedulesAsync());
+        // Once, and after the removal: an observer that refreshed mid-retraction would publish a half-empty
+        // route table as if it were the settled one.
+        Assert.Equal(1, harness.Observer.Calls);
+    }
+
+    [Fact]
+    public async Task Deactivating_twice_converges_and_the_second_request_writes_nothing()
+    {
+        // The idempotency the deleted reconciler bought with a durable per-kind intent ledger. The slot itself
+        // supplies it: a slot serving nothing has nothing to retract, so the repeat neither writes projections
+        // nor moves the revision — and a revision the repeat had bumped would turn a harmless retry into a CAS
+        // conflict for the next writer.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        var first = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+        harness.ResetCalls();
+
+        var second = await harness.DeactivateAsync("artifact-1", first.Slot.Revision);
+
+        Assert.True(second.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.AlreadyInactive, second.Outcome);
+        Assert.Equal(first.Slot.Revision, second.Slot.Revision);
+        Assert.Empty(harness.Bindings.Calls);
+        Assert.Empty(harness.Schedules.Calls);
+        Assert.Equal(0, harness.Observer.Calls);
+    }
+
+    [Fact]
+    public async Task A_stale_revision_or_a_foreign_source_cannot_retract_an_activation()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+
+        var stale = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision + 5);
+        var foreign = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision, Importer);
+
+        Assert.False(stale.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Conflict, stale.Outcome);
+        Assert.Equal(WorkflowActivationConflict.RevisionMismatch, stale.Conflict);
+        Assert.False(foreign.Succeeded);
+        Assert.Equal(WorkflowActivationConflict.ForeignSource, foreign.Conflict);
+        // A refusal is not a partial retraction: the activation is untouched and still serving.
+        Assert.Empty(harness.Bindings.Calls);
+        Assert.Empty(harness.Schedules.Calls);
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.NotEmpty(await harness.ServingBindingsAsync());
+    }
+
+    [Fact]
+    public async Task A_partial_removal_restores_the_slot_and_force_replays_both_projections()
+    {
+        // The objective of the deleted Restore_ForceReplaysDeliveredPrepareAndActivateAfterProjectionRemoval and
+        // UnpublishProjectionRemovalFailureRestoresAuthorityAndReplaysServingProjection. The bindings are already
+        // deleted when the schedules' removal fails, so "re-activate what is still there" restores nothing —
+        // compensation has to RE-PREPARE from the artifact, which is the force-replay expressed as what it is.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+
+        var result = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkflowActivationStep.ProjectionRemoval, result.FailedStep);
+        Assert.Null(result.CompensationDiagnostic);
+        // The slot is back, owned by the same activation.
+        var slot = await harness.Authority.FindAsync("definition-1", "default");
+        Assert.Equal("activation-1", slot!.ActiveActivationId);
+        // And it is genuinely serving again — both projections, not merely the one the removal got to first.
+        Assert.NotEmpty(await harness.ServingBindingsAsync());
+        Assert.NotEmpty(await harness.ServingSchedulesAsync());
+    }
+
+    [Fact]
+    public async Task The_compensating_replay_re_prepares_the_recurring_projection_before_the_trigger_projection()
+    {
+        // The ordering invariant, asserted on the RETRACTION path. It holds here because compensation calls the
+        // one PrepareProjectionsAsync activation calls — which is the entire point of T121: there is no second
+        // copy of this order to forget to update.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+
+        await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        // Asserted across BOTH stores in one log. The per-store logs cannot see this: inverting the order of the
+        // two preparations leaves each store's own log byte-identical, which is exactly how a swapped ordering
+        // could pass a suite that only counts calls.
+        Assert.Equal(
+            [
+                "bindings:delete:activation-1",
+                "schedules:delete:activation-1",
+                // The recurring projection is re-prepared BEFORE the first binding is written, exactly as on the
+                // activating path: an invalid recurrence must fail the replay with no binding restored against it.
+                "schedules:prepare:activation-1",
+                "bindings:prepare:activation-1",
+                "bindings:activate:activation-1->",
+                "schedules:activate:activation-1->"
+            ],
+            harness.Sequence);
+    }
+
+    [Fact]
+    public async Task The_compensating_replay_writes_each_projection_exactly_once_and_does_not_erase_the_schedules()
+    {
+        // The objective of the deleted Preparation_writes_each_projection_exactly_once_and_a_replay_cannot_erase
+        // _the_schedules. There it was bought with one delivery record governing both projections; here it is
+        // structural — one preparation call per projection, no read-back to re-prepare an emptied projection from.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+
+        await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.Single(harness.Schedules.Calls, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+        Assert.Single(harness.Bindings.Calls, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Schedules.Calls, call => call.StartsWith("list:", StringComparison.Ordinal));
+        Assert.Single(await harness.ServingSchedulesAsync());
+    }
+
+    [Fact]
+    public async Task The_compensating_replay_notifies_observers_once_after_the_restored_activation_is_serving()
+    {
+        // The objective of the deleted Compensation_NotifiesObserversOnce_AfterTheFinalAuthorityStateIsVisible.
+        // A refresh taken between the removal and the replay would project an empty route table and then be
+        // skipped as a repeat by an observer optimization, leaving the restored activation unreachable.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+
+        await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.Equal(1, harness.Observer.Calls);
+        var snapshot = Assert.Single(harness.Observer.Snapshots);
+        Assert.True(snapshot.RequiresProjectionRefresh);
+        var binding = Assert.Single(snapshot.Bindings);
+        Assert.Equal("activation-1", binding.ActivationId);
+    }
+
+    [Fact]
+    public async Task A_compensated_deactivation_failure_leaves_a_retry_that_converges()
+    {
+        // The objective of the deleted FailedPreparationIsPersistedAndRetryConvergesUsingSameIntentIdentity,
+        // restated for a coordinator that deliberately carries no delivery-intent ledger: the recovery unit is
+        // the caller's own next attempt, and it is safe because a compensated failure left nothing half-done.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+        var failed = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+        Assert.False(failed.Succeeded);
+
+        harness.Schedules.FailAfterOn.Clear();
+        var slot = await harness.Authority.FindAsync("definition-1", "default");
+        var retry = await harness.DeactivateAsync("artifact-1", slot!.Revision);
+
+        Assert.True(retry.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, retry.Outcome);
+        Assert.Null(retry.Slot.ActiveActivationId);
+        Assert.Empty(await harness.ServingBindingsAsync());
+        Assert.Empty(await harness.ServingSchedulesAsync());
+    }
+
+    [Fact]
+    public async Task A_failed_authority_restore_is_reported_alongside_the_original_failure_and_does_not_throw()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.Schedules.FailAfterOn["delete:activation-1"] = new InvalidOperationException("the schedule store is offline");
+        harness.Authority.Refuse.Add("activation-1");
+
+        var result = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.CompensationDiagnostic);
+        Assert.Contains("Authority compensation failed", result.CompensationDiagnostic!, StringComparison.Ordinal);
+        // The original cause survives the compensation report — the undo failing must never mask what broke.
+        Assert.Contains("the schedule store is offline", result.Diagnostic!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Deactivating_with_a_recurring_store_but_no_preparer_is_refused_before_the_first_write()
+    {
+        // The composition guard, migrated from the deleted reconciler's own copy of it. It bites HARDER on this
+        // path: deactivation's compensation re-prepares, so a recurring store with no preparer would restore an
+        // activation whose timers never fire again, and report nothing.
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+
+        var exception = await Assert.ThrowsAsync<WorkflowActivationException>(
+            async () => await harness.DeactivateAsync(
+                "artifact-1",
+                activated.Slot.Revision,
+                coordinator: harness.CreateWithoutSchedulePreparer()));
+
+        Assert.Contains("IRecurringTriggerScheduleProjectionPreparer", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("activation-1", exception.ActivationId);
+        // Before the first write: the slot has not moved and neither projection was touched.
+        Assert.Empty(harness.Bindings.Calls);
+        Assert.Empty(harness.Schedules.Calls);
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.NotEmpty(await harness.ServingBindingsAsync());
+    }
+
+    [Fact]
+    public async Task Deactivating_without_the_trigger_spine_is_refused_before_the_first_write()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        harness.ResetCalls();
+
+        await Assert.ThrowsAsync<WorkflowActivationException>(
+            async () => await harness.DeactivateAsync(
+                "artifact-1",
+                activated.Slot.Revision,
+                coordinator: harness.CreateWithoutTriggerSpine()));
+
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+    }
+
+    // ---------------------------------------------------------------------------------------------------
     // Harness
     // ---------------------------------------------------------------------------------------------------
 
@@ -520,8 +779,8 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public Harness()
         {
-            Bindings = new(new InMemoryWorkflowTriggerBindingStore());
-            Schedules = new(new InMemoryRecurringTriggerScheduleStore());
+            Bindings = new(new InMemoryWorkflowTriggerBindingStore(), Sequence, "bindings");
+            Schedules = new(new InMemoryRecurringTriggerScheduleStore(), Sequence, "schedules");
             Indexer = new(Bindings);
             SchedulePreparer = new(Schedules);
             Coordinator = new WorkflowActivationCoordinator(
@@ -535,6 +794,14 @@ public sealed class WorkflowActivationCoordinatorTests
                 SchedulePreparer,
                 [Observer]);
         }
+
+        /// <summary>
+        /// One log across BOTH projection stores, in call order. The per-store logs cannot see the invariant that
+        /// matters — "the recurring projection is prepared before the first binding is written" is a statement
+        /// about the order of two stores relative to each other, and inverting it leaves each store's own log
+        /// unchanged.
+        /// </summary>
+        public List<string> Sequence { get; } = [];
 
         public FailingActivationAuthority Authority { get; } = new();
         public RecordingReferenceStore References { get; } = new(new InMemoryWorkflowExecutableSourceReferenceStore());
@@ -555,6 +822,7 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public void ResetCalls()
         {
+            Sequence.Clear();
             Bindings.Calls.Clear();
             Schedules.Calls.Clear();
             References.Calls.Clear();
@@ -570,6 +838,27 @@ public sealed class WorkflowActivationCoordinatorTests
             long expectedRevision = 0,
             string? sourceReferenceId = null) =>
             Coordinator.ActivateAsync(Command(activationId, artifactId, source, expectedRevision, sourceReferenceId));
+
+        public ValueTask<WorkflowActivationResult> DeactivateAsync(
+            string artifactId,
+            long expectedRevision,
+            WorkflowActivationSource? source = null,
+            IWorkflowActivationCoordinator? coordinator = null) =>
+            (coordinator ?? Coordinator).DeactivateAsync(DeactivationCommand(artifactId, expectedRevision, source));
+
+        public WorkflowDeactivationCommand DeactivationCommand(
+            string artifactId,
+            long expectedRevision,
+            WorkflowActivationSource? source = null) =>
+            new(Executable(artifactId), "default", source ?? WorkflowActivationSource.Publishing, expectedRevision);
+
+        /// <summary>The bindings a stimulus can actually reach — i.e. what is genuinely serving.</summary>
+        public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ServingBindingsAsync() =>
+            (await Bindings.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("test", "hash-1"))).Items;
+
+        /// <summary>The recurring schedules the pump would actually fire — i.e. what is genuinely serving.</summary>
+        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ServingSchedulesAsync() =>
+            Schedules.ListDueAsync(Now.AddHours(2), 10);
 
         public WorkflowActivationCommand Command(
             string activationId,
@@ -752,6 +1041,12 @@ public sealed class WorkflowActivationCoordinatorTests
     /// recurring projection, prepared unconditionally (an explicit empty projection when nothing recurs), because
     /// the store refuses to activate an activation that has no prepared projection.
     /// </summary>
+    /// <remarks>
+    /// It materializes a real schedule rather than an empty set. That matters for the deactivation-compensation
+    /// tests, which have to be able to see whether a replay <i>restored</i> the recurring projection or quietly
+    /// erased it — an empty projection looks identical either way, which is the shape of blindness that let the
+    /// T044b regression through in the first place.
+    /// </remarks>
     private sealed class RecordingSchedulePreparer(IRecurringTriggerScheduleStore scheduleStore)
         : IRecurringTriggerScheduleProjectionPreparer
     {
@@ -766,7 +1061,21 @@ public sealed class WorkflowActivationCoordinatorTests
             if (Failure is not null)
                 throw Failure;
 
-            await scheduleStore.PrepareActivationAsync(activationId, [], cancellationToken);
+            var artifactId = executable.Identity.ArtifactId;
+            var schedule = new RecurringTriggerSchedule(
+                RecurringTriggerSchedule.BuildId(activationId, artifactId, "node-start"),
+                artifactId,
+                "node-start",
+                "test",
+                "hash-1",
+                RecurringScheduleKind.Interval,
+                "PT1H",
+                Now.AddHours(1),
+                Now,
+                ActivationId: activationId,
+                SlotId: slotId,
+                IsActive: false);
+            await scheduleStore.PrepareActivationAsync(activationId, [schedule], cancellationToken);
         }
     }
 
@@ -811,17 +1120,26 @@ public sealed class WorkflowActivationCoordinatorTests
         }
     }
 
-    private sealed class RecordingBindingStore(IWorkflowTriggerBindingStore inner) : IWorkflowTriggerBindingStore
+    private sealed class RecordingBindingStore(
+        IWorkflowTriggerBindingStore inner,
+        List<string> sequence,
+        string label) : IWorkflowTriggerBindingStore
     {
         public List<string> Calls { get; } = [];
         public Dictionary<string, Exception> FailOn { get; } = new(StringComparer.Ordinal);
+
+        private void Record(string call)
+        {
+            Calls.Add(call);
+            sequence.Add($"{label}:{call}");
+        }
 
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(binding, cancellationToken);
 
         public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"prepare:{activationId}");
+            Record($"prepare:{activationId}");
             Throw($"prepare:{activationId}");
             return inner.PrepareActivationAsync(activationId, bindings, cancellationToken);
         }
@@ -831,14 +1149,14 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"activate:{activationId}->{replacedActivationId}");
+            Record($"activate:{activationId}->{replacedActivationId}");
             Throw($"activate:{activationId}");
             return inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
         }
 
         public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"delete:{activationId}");
+            Record($"delete:{activationId}");
             Throw($"delete:{activationId}");
             return inner.DeleteByActivationAsync(activationId, cancellationToken);
         }
@@ -862,17 +1180,29 @@ public sealed class WorkflowActivationCoordinatorTests
         }
     }
 
-    private sealed class RecordingScheduleStore(IRecurringTriggerScheduleStore inner) : IRecurringTriggerScheduleStore
+    private sealed class RecordingScheduleStore(
+        IRecurringTriggerScheduleStore inner,
+        List<string> sequence,
+        string label) : IRecurringTriggerScheduleStore
     {
         public List<string> Calls { get; } = [];
         public Dictionary<string, Exception> FailOn { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Faults raised AFTER the underlying write applied — a genuinely partial removal.</summary>
+        public Dictionary<string, Exception> FailAfterOn { get; } = new(StringComparer.Ordinal);
+
+        private void Record(string call)
+        {
+            Calls.Add(call);
+            sequence.Add($"{label}:{call}");
+        }
 
         public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(schedule, cancellationToken);
 
         public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"prepare:{activationId}");
+            Record($"prepare:{activationId}");
             Throw($"prepare:{activationId}");
             return inner.PrepareActivationAsync(activationId, schedules, cancellationToken);
         }
@@ -880,7 +1210,7 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default)
         {
             // Recorded so a test can prove the coordinator does NOT read the projection back before writing it.
-            Calls.Add($"list:{query.ActivationId}");
+            Record($"list:{query.ActivationId}");
             return inner.ListByActivationPageAsync(query, cancellationToken);
         }
 
@@ -889,16 +1219,21 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"activate:{activationId}->{replacedActivationId}");
+            Record($"activate:{activationId}->{replacedActivationId}");
             Throw($"activate:{activationId}");
             return inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
         }
 
-        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
+        public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
-            Calls.Add($"delete:{activationId}");
+            Record($"delete:{activationId}");
             Throw($"delete:{activationId}");
-            return inner.DeleteByActivationAsync(activationId, cancellationToken);
+            await inner.DeleteByActivationAsync(activationId, cancellationToken);
+            // FailAfterOn deletes and THEN throws. Refusing before the delete would leave the projection
+            // standing, so "it is still serving afterwards" would hold whether or not compensation re-prepared
+            // anything. Losing it first is what makes the replay observable rather than assumed.
+            if (FailAfterOn.TryGetValue($"delete:{activationId}", out var afterFailure))
+                throw afterFailure;
         }
 
         public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>

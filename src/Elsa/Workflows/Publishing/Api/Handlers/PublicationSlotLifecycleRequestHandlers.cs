@@ -11,10 +11,22 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
+/// <summary>
+/// Retracts a publication: publishing's own bookkeeping wrapped around one call to the shared
+/// <see cref="IWorkflowActivationCoordinator"/>.
+/// </summary>
+/// <remarks>
+/// The mirror of <see cref="PublicationActivator"/>, and deliberately shaped the same way (T121). It holds
+/// <b>no</b> copy of the retraction sequence: the slot transition, the serving projections' removal, the observer
+/// notification and the compensation that puts all of them back belong to the coordinator, which owns the same
+/// machinery in the activating direction. What stays here is publishing's: deciding whether this activation is
+/// publishing's to withdraw at all, retiring the <c>PublicationRecord</c>, and retiring the source reference.
+/// </remarks>
 public sealed class UnpublishPublicationSlotRequestHandler(
     IWorkflowActivationAuthority activationAuthority,
+    IWorkflowActivationCoordinator activationCoordinator,
     IPublicationRecordStore publicationStore,
-    IPublicationProjectionPreparer projectionPreparer,
+    IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     TimeProvider timeProvider,
     ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IRequestHandler<UnpublishPublicationSlot, WorkflowActivationSlot>
@@ -31,62 +43,37 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         // (P3) BEFORE the journal is consulted, because a slot activated by artifact reconciliation legitimately
         // holds an ActiveActivationId with no PublicationRecord behind it. That absence is the answer "not
         // published by me", never a missing-data fault — and the journal is checked in the same breath rather
-        // than dereferenced, since IPublicationProjectionPreparer.RemoveAsync is keyed on the record and there is
-        // genuinely nothing for unpublish to retract without one. Both roads lead to the same honest reply:
-        // this activation is not publishing's to withdraw.
+        // than dereferenced, since without a record there is genuinely nothing for unpublish to retract. Both
+        // roads lead to the same honest reply: this activation is not publishing's to withdraw.
         var publication = IsOwnedByPublishing(slot)
             ? await publicationStore.FindAsync(publicationId, cancellationToken)
             : null;
         if (publication is null)
             throw new PublicationActivationException(ForeignActivationFailure(slot, publicationId));
+
+        // The artifact is required by the coordinator's COMPENSATION path, which re-prepares the serving
+        // projections from it if the removal does not finish. Resolving it up front means a missing artifact
+        // fails the unpublish before the slot moves, rather than stranding a retracted slot that cannot be undone.
+        var executable = await executableStore.FindAsync(publication.ArtifactId, cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Executable artifact '{publication.ArtifactId}' is unavailable, so publication '{publicationId}' cannot be unpublished.");
+
         var now = timeProvider.GetUtcNow();
-        var transition = await activationAuthority.TryDeactivateAsync(
-            request.WorkflowDefinitionId,
-            request.SlotName,
-            PublicationActivator.Source,
-            slot.Revision,
-            now,
+        var deactivation = await activationCoordinator.DeactivateAsync(
+            new WorkflowDeactivationCommand(executable, request.SlotName, PublicationActivator.Source, slot.Revision),
             cancellationToken);
-        if (!transition.Succeeded)
-            throw new PublicationActivationException(ToFailure(transition));
-
-        try
+        if (!deactivation.Succeeded)
         {
-            await projectionPreparer.RemoveAsync(publication, cancellationToken);
-        }
-        catch (Exception removalException)
-        {
-            Exception? compensationException = null;
-            try
-            {
-                var compensation = await activationAuthority.TryActivateAsync(
-                    new WorkflowActivationSlotRequest(
-                        request.WorkflowDefinitionId,
-                        request.SlotName,
-                        publication.PublicationId,
-                        PublicationActivator.Source,
-                        transition.Slot.Revision,
-                        timeProvider.GetUtcNow()),
-                    CancellationToken.None);
-                if (!compensation.Succeeded)
-                    throw new InvalidOperationException(
-                        $"Publication slot '{request.SlotName}' authority could not be restored after projection removal failed.");
+            if (deactivation.Outcome == WorkflowActivationOutcome.Conflict)
+                throw new PublicationActivationException(ToFailure(deactivation.Conflict, deactivation.Diagnostic));
 
-                await projectionPreparer.RestoreAsync(publication, CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                compensationException = exception;
-            }
-
-            if (compensationException is not null)
-                throw new InvalidOperationException(
-                    $"Publication '{publication.PublicationId}' could not be unpublished and compensation failed: {compensationException.Message}",
-                    removalException);
-            throw new InvalidOperationException(
-                $"Publication '{publication.PublicationId}' could not be unpublished; its slot authority and serving projections were restored.",
-                removalException);
+            // A compensated retraction failure leaves the publication exactly as it was — slot, projections and
+            // record all still Active — so it is reported as a failed command, not as a partial unpublish.
+            throw new InvalidOperationException(deactivation.CompensationDiagnostic is null
+                ? $"Publication '{publicationId}' could not be unpublished; its slot authority and serving projections were restored. {deactivation.Diagnostic}"
+                : $"Publication '{publicationId}' could not be unpublished and compensation failed: {deactivation.Diagnostic}");
         }
+
         var retired = publication with { Status = PublicationStatus.Retired, RetiredAt = now };
         if (!await publicationStore.TryTransitionAsync(retired, PublicationStatus.Active, cancellationToken))
             throw new InvalidOperationException($"Publication '{publicationId}' could not be retired.");
@@ -100,7 +87,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
                 request.SlotName);
             await sourceReferenceStore.RetireAsync(sourceReferenceId, now, "publication-unpublished", cancellationToken);
         }
-        return transition.Slot;
+        return deactivation.Slot;
     }
 
     private static bool IsOwnedByPublishing(WorkflowActivationSlot slot) =>
@@ -118,11 +105,11 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         $"'{PublicationActivator.Source.Describe()}'; it is owned by activation source '{slot.Source?.Describe() ?? "unknown"}' " +
         "and can only be withdrawn through that source.");
 
-    internal static PublicationFailure ToFailure(WorkflowActivationTransition transition) => transition.Conflict switch
+    internal static PublicationFailure ToFailure(WorkflowActivationConflict conflict, string? diagnostic) => conflict switch
     {
         WorkflowActivationConflict.ForeignSource =>
-            new("slot_owner_conflict", transition.Diagnostic ?? "The activation slot is owned by another activation source."),
-        _ => new("slot_revision_conflict", transition.Diagnostic ?? "The publication slot revision changed.")
+            new("slot_owner_conflict", diagnostic ?? "The activation slot is owned by another activation source."),
+        _ => new("slot_revision_conflict", diagnostic ?? "The publication slot revision changed.")
     };
 }
 

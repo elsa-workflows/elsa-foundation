@@ -162,28 +162,66 @@ public sealed class PublicationActivationTests
         Assert.Null(oldPublication.RetiredAt);
     }
 
+    /// <summary>
+    /// T121. Unpublish holds no retraction sequence of its own any more, so this exercises the real
+    /// <see cref="WorkflowActivationCoordinator"/> against real projection stores and asserts what the operator
+    /// actually cares about: a failed unpublish leaves the workflow serving.
+    /// </summary>
+    /// <remarks>
+    /// It deliberately does not stub the coordinator. The predecessor of this test asserted
+    /// <c>preparer.Restored == true</c> against a hand-written <c>IPublicationProjectionPreparer</c> whose
+    /// <c>RestoreAsync</c> set a flag and restored nothing — which is how the recurring-preparation defect stayed
+    /// invisible. The assertions below read the serving projections back instead.
+    /// </remarks>
     [Fact]
     public async Task UnpublishProjectionRemovalFailureRestoresAuthorityAndReplaysServingProjection()
     {
-        await SeedActivePublicationAsync("publication-current");
-        var projectionPreparer = new PartialRemovalProjectionPreparer();
-        var handler = new UnpublishPublicationSlotRequestHandler(
-            _slotStore,
-            _publicationStore,
-            projectionPreparer,
-            new InMemoryWorkflowExecutableSourceReferenceStore(),
-            new FixedTimeProvider(_now));
+        var bindings = new InMemoryWorkflowTriggerBindingStore();
+        var schedules = new FailingRecurringScheduleStore();
+        var coordinator = NewCoordinator(bindings, schedules);
+        var publication = await ActivateThroughCoordinatorAsync(coordinator, "publication-current");
+        Assert.NotEmpty(await ServingBindingsAsync(bindings));
+        Assert.NotEmpty(await schedules.ListDueAsync(_now.AddHours(2), 10));
+        schedules.FailRemoval = true;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => NewUnpublishHandler(coordinator).Handle(
             new UnpublishPublicationSlot("definition-1", "default"),
             CancellationToken.None));
 
         var slot = await _slotStore.FindAsync("definition-1", "default");
-        var publication = await _publicationStore.FindAsync("publication-current");
+        var stored = await _publicationStore.FindAsync(publication.PublicationId);
         Assert.Equal("publication-current", slot!.ActiveActivationId);
         Assert.Equal(3, slot.Revision);
-        Assert.Equal(PublicationStatus.Active, publication!.Status);
-        Assert.True(projectionPreparer.Restored);
+        // The journal is retired only once the retraction succeeded, so a restored slot keeps an Active record.
+        Assert.Equal(PublicationStatus.Active, stored!.Status);
+        // Restored means SERVING, on both projections — the recurring one is the half a flag-setting stub used
+        // to be able to lie about.
+        Assert.NotEmpty(await ServingBindingsAsync(bindings));
+        Assert.NotEmpty(await schedules.ListDueAsync(_now.AddHours(2), 10));
+    }
+
+    [Fact]
+    public async Task UnpublishClearsTheSlotRetiresTheRecordAndStopsTheServingProjections()
+    {
+        var bindings = new InMemoryWorkflowTriggerBindingStore();
+        var schedules = new FailingRecurringScheduleStore();
+        var coordinator = NewCoordinator(bindings, schedules);
+        var publication = await ActivateThroughCoordinatorAsync(coordinator, "publication-current");
+
+        var slot = await NewUnpublishHandler(coordinator).Handle(
+            new UnpublishPublicationSlot("definition-1", "default"),
+            CancellationToken.None);
+
+        Assert.Null(slot.ActiveActivationId);
+        var stored = await _publicationStore.FindAsync(publication.PublicationId);
+        Assert.Equal(PublicationStatus.Retired, stored!.Status);
+        // Publishing still owns its own bookkeeping: the record and the source reference are retired here, by
+        // the handler, with publishing's own reason — the runtime owns the slot and the projections.
+        var reference = await _referenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create("publication-current"));
+        Assert.NotNull(reference!.DeletedAt);
+        Assert.Equal("publication-unpublished", reference.DeletedReason);
+        Assert.Empty(await ServingBindingsAsync(bindings));
+        Assert.Empty(await schedules.ListDueAsync(_now.AddHours(2), 10));
     }
 
     /// <summary>
@@ -209,12 +247,7 @@ public sealed class PublicationActivationTests
             0,
             _now));
         Assert.True(activated.Succeeded);
-        var handler = new UnpublishPublicationSlotRequestHandler(
-            _slotStore,
-            _publicationStore,
-            new PartialRemovalProjectionPreparer(),
-            new InMemoryWorkflowExecutableSourceReferenceStore(),
-            new FixedTimeProvider(_now));
+        var handler = NewUnpublishHandler(NewCoordinator(new InMemoryWorkflowTriggerBindingStore(), new FailingRecurringScheduleStore()));
 
         var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() => handler.Handle(
             new UnpublishPublicationSlot("definition-1", "default"),
@@ -245,6 +278,60 @@ public sealed class PublicationActivationTests
                 triggerBindingStore ?? new NoopTriggerBindingStore()),
             publicationStore ?? _publicationStore,
             new FixedTimeProvider(_now));
+
+    /// <summary>
+    /// A real coordinator over real projection stores, for the retraction tests. Unpublish requests deactivation
+    /// through this; it does not implement one (T121).
+    /// </summary>
+    private WorkflowActivationCoordinator NewCoordinator(
+        IWorkflowTriggerBindingStore bindingStore,
+        IRecurringTriggerScheduleStore scheduleStore) =>
+        new(
+            _slotStore,
+            _referenceStore,
+            TestRootWriteLeases.Create(_executableStore),
+            new FixedTimeProvider(_now),
+            new ServingProjectionIndexer(bindingStore, _now),
+            bindingStore,
+            scheduleStore,
+            new ServingSchedulePreparer(scheduleStore, _now));
+
+    private UnpublishPublicationSlotRequestHandler NewUnpublishHandler(IWorkflowActivationCoordinator coordinator) =>
+        new(
+            _slotStore,
+            coordinator,
+            _publicationStore,
+            _executableStore,
+            _referenceStore,
+            new FixedTimeProvider(_now));
+
+    /// <summary>Makes one publication live through the coordinator, the way a publish would.</summary>
+    private async Task<PublicationRecord> ActivateThroughCoordinatorAsync(
+        IWorkflowActivationCoordinator coordinator,
+        string publicationId)
+    {
+        // The publish pipeline mints the record's SourceReferenceId from the activation id, because the
+        // coordinator owns activation↔reference identity; mirror that or the record points at nothing.
+        var record = Record(publicationId, expectedSlotRevision: 0, PublicationStatus.Active, activatedAt: _now) with
+        {
+            SourceReferenceId = WorkflowActivationReferenceIdentity.Create(publicationId)
+        };
+        await _publicationStore.SaveAsync(record);
+        var executable = Executable(record);
+        await _executableStore.SaveAsync(executable);
+        var activation = await coordinator.ActivateAsync(new WorkflowActivationCommand(
+            executable,
+            Reference(record),
+            "default",
+            publicationId,
+            WorkflowActivationSource.Publishing,
+            0));
+        Assert.True(activation.Succeeded);
+        return record;
+    }
+
+    private static async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ServingBindingsAsync(IWorkflowTriggerBindingStore store) =>
+        (await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "orders"))).Items;
 
     /// <summary>
     /// The coordinator takes the executable's root-write lease, so the artifact has to exist in the store —
@@ -432,22 +519,116 @@ public sealed class PublicationActivationTests
         }
     }
 
-    private sealed class PartialRemovalProjectionPreparer : IPublicationProjectionPreparer
+    /// <summary>
+    /// Fails the recurring projection's removal only — the shape the old <c>PartialRemovalProjectionPreparer</c>
+    /// described in a comment: the trigger bindings are already gone when the schedules refuse to follow, so
+    /// nothing is left to simply re-activate and the coordinator has to re-prepare from the artifact.
+    /// </summary>
+    private sealed class FailingRecurringScheduleStore : IRecurringTriggerScheduleStore
     {
-        public bool Restored { get; private set; }
+        private readonly InMemoryRecurringTriggerScheduleStore _inner = new();
 
-        public ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-        public ValueTask ActivateAsync(PublicationRecord candidate, string? replacedPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-        public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public bool FailRemoval { get; set; }
 
-        public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
+        public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
-            Restored = true;
-            return ValueTask.CompletedTask;
+            // Deletes and THEN throws. A store that refused before deleting would leave the schedules standing,
+            // and an assertion that they are still serving afterwards would hold whether or not compensation
+            // re-prepared anything — measuring nothing. Losing them first is what makes the replay observable.
+            await _inner.DeleteByActivationAsync(activationId, cancellationToken);
+            if (FailRemoval)
+                throw new InvalidOperationException("Recurring schedule removal failed after trigger bindings were removed.");
         }
 
-        public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) =>
-            ValueTask.FromException(new InvalidOperationException("Recurring schedule removal failed after trigger bindings were removed."));
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default) =>
+            _inner.PrepareActivationAsync(activationId, schedules, cancellationToken);
+
+        public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(schedule, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default) =>
+            _inner.ListByActivationPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            _inner.ListByArtifactPageAsync(query, cancellationToken);
+
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default) =>
+            _inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>
+            _inner.ListDueAsync(asOf, limit, cancellationToken);
+
+        public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            _inner.FindAsync(scheduleId, cancellationToken);
+
+        public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default) =>
+            _inner.TryAdvanceAsync(scheduleId, expectedNextOccurrence, newNextOccurrence, cancellationToken);
+
+        public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteByArtifactAsync(artifactId, cancellationToken);
+
+        public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            _inner.DeleteAsync(scheduleId, cancellationToken);
+    }
+
+    /// <summary>Prepares one real trigger binding, and nothing else — the whole of what the indexer advertises.</summary>
+    private sealed class ServingProjectionIndexer(IWorkflowTriggerBindingStore bindingStore, DateTimeOffset now) : IWorkflowTriggerIndexer
+    {
+        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default)
+        {
+            var binding = new WorkflowTriggerBinding(
+                WorkflowTriggerBinding.BuildId(activationId, executable.Identity.ArtifactId, "node-root", "orders"),
+                executable.Identity.ArtifactId,
+                executable.Identity.DefinitionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.ArtifactHash,
+                "node-root",
+                "Event",
+                "orders",
+                CorrelationScope: null,
+                Metadata: new Dictionary<string, string>(),
+                CreatedAt: now,
+                ActivationId: activationId,
+                SlotId: slotId,
+                IsActive: false);
+            await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            return [binding];
+        }
+    }
+
+    /// <summary>
+    /// Prepares one real recurring schedule, which the indexer above deliberately does not. Keeping the two
+    /// obligations in separate doubles is what lets a lost recurring preparation be seen at all — a single double
+    /// covering both is what reproduced the decorator T044b retired and hid the defect.
+    /// </summary>
+    private sealed class ServingSchedulePreparer(IRecurringTriggerScheduleStore scheduleStore, DateTimeOffset now)
+        : IRecurringTriggerScheduleProjectionPreparer
+    {
+        public async ValueTask PrepareActivationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string slotId,
+            CancellationToken cancellationToken = default)
+        {
+            var schedule = new RecurringTriggerSchedule(
+                RecurringTriggerSchedule.BuildId(activationId, executable.Identity.ArtifactId, "node-root"),
+                executable.Identity.ArtifactId,
+                "node-root",
+                "Event",
+                "orders",
+                RecurringScheduleKind.Interval,
+                "PT1H",
+                now.AddHours(1),
+                now,
+                ActivationId: activationId,
+                SlotId: slotId,
+                IsActive: false);
+            await scheduleStore.PrepareActivationAsync(activationId, [schedule], cancellationToken);
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

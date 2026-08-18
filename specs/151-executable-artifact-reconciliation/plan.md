@@ -74,6 +74,33 @@ Two tests were **deleted** in T041, not migrated. Recording per §2.21.1: removi
 
 **If Sipke disagrees**, the remedy is to re-add equivalent coverage against the coordinator rather than restore the indexer path, which no longer exists.
 
+### Test removals (3) — §2.21.1, T121, recorded 2026-08-17
+
+Six tests were **deleted** in T121 along with the type they exercised. Recording per §2.21.1: removing a test requires explicit architect approval and a passing CI is not sufficient justification.
+
+**Approving architect.** Joey, 2026-08-17, on seeing the recurring-preparation defect: *"having two paths — the coordinator and reconciler — seems a bit tricky, I hoped we could have the seam so clear that there would be only the coordinator path."* This is not new scope: **P2 pins one coordinator owning the complete *lifecycle***, and until T121 one coordinator owned activation while a second component owned deactivation.
+
+**What was removed.** `PublicationProjectionReconciler` (`Publishing/Services`), the `IPublicationProjectionPreparer` contract it implemented, its `TryAddScoped` registration in `WorkflowsPublishingFeature`, and the whole of `PublicationProjectionReconcilerTests` (6 tests). `IWorkflowActivationCoordinator` gained `DeactivateAsync`; unpublish now retires its `PublicationRecord` and source reference and asks the coordinator to deactivate.
+
+**Why the subject no longer exists.** The reconciler was the **second** path that prepared, activated and removed serving projections, and it had to know the same ordering invariant the coordinator knows (recurrences materialized and validated before any binding is written). It already failed to: T044b retired the decorator that prepared recurring schedules implicitly, updated the coordinator, and did not update the reconciler — so a failed unpublish silently stopped a workflow's timers, invisibly, because a test double reproduced the retired decorator. Three of the reconciler's five members (`PrepareAsync`, `ActivateAsync`, `CompensateAsync`) already had **no production caller**. Deleting it makes the divergence unrepresentable rather than documented against.
+
+**Where each objective now lives** — all six migrated, none dropped:
+
+| Removed test | Objective | New home |
+|---|---|---|
+| `ReplaysPrepareActivateAndRemoveIdempotentlyWithDurablePerKindIntents` | idempotent delivery; a replay converges and writes nothing new | `WorkflowActivationCoordinatorTests.Deactivating_twice_converges_and_the_second_request_writes_nothing` (the slot supplies the idempotency the per-kind intent ledger used to buy) + `Deactivating_clears_the_slot_removes_both_projections_and_observes_once` |
+| `Preparation_writes_each_projection_exactly_once_and_a_replay_cannot_erase_the_schedules` | exactly one write per projection; a replay must not erase the schedules | `The_compensating_replay_writes_each_projection_exactly_once_and_does_not_erase_the_schedules` (+ the pre-existing `Each_projection_is_prepared_by_exactly_one_owned_write_with_no_read_back` for the activating direction) |
+| `FailedPreparationIsPersistedAndRetryConvergesUsingSameIntentIdentity` | a failed delivery is recoverable and the retry converges | `A_compensated_deactivation_failure_leaves_a_retry_that_converges` — restated for a coordinator that deliberately carries **no** delivery-intent ledger: the recovery unit is the caller's next attempt, which is safe because a compensated failure left nothing half-done |
+| `Compensation_NotifiesObserversOnce_AfterTheFinalAuthorityStateIsVisible` | observers notified exactly once, after the final authority state is visible | `The_compensating_replay_notifies_observers_once_after_the_restored_activation_is_serving` |
+| `Restore_ForceReplaysDeliveredPrepareAndActivateAfterProjectionRemoval` | force-replay on restore after the projections were removed | `A_partial_removal_restores_the_slot_and_force_replays_both_projections` + `The_compensating_replay_re_prepares_the_recurring_projection_before_the_trigger_projection`, and at handler level `PublicationActivationTests.UnpublishProjectionRemovalFailureRestoresAuthorityAndReplaysServingProjection` |
+| `A_recurring_store_without_a_preparer_is_refused_before_the_first_write` | the composition guard | `Deactivating_with_a_recurring_store_but_no_preparer_is_refused_before_the_first_write` (+ `Deactivating_without_the_trigger_spine_is_refused_before_the_first_write`). It bites **harder** on the retraction path: deactivation's compensation re-prepares, so the broken composition would restore an activation whose timers never fire again |
+
+**The migration was mutation-checked, not asserted.** Inverting the preparation order inside the shared `PrepareProjectionsAsync` turns 4 tests red (2 activation, 2 deactivation); dropping the recurring re-preparation from the deactivation compensation — the exact T044b defect class — turns 3 runtime tests and 1 publishing test red; removing the composition guard from `DeactivateAsync` turns 2 red. Two test weaknesses were found and fixed by that check: the ordering assertions compared per-store call logs, which cannot see a swap between two stores (replaced by one shared cross-store sequence log), and the injected removal fault threw *before* deleting, so "the schedules are still serving" held whether or not compensation replayed anything (the fault now deletes and then throws).
+
+**Net counts.** `Elsa.Workflows.Publishing.Api.Tests` 499 → 494 (−6 removed, +1 added); `Elsa.Workflows.Runtime.Tests` 1713 → 1724 (+11).
+
+**A knowingly-left leftover.** `IPublicationProjectionIntentStore` and its `PublicationProjectionIntent` model now have **no production consumer** — the reconciler was the only one. They are left standing deliberately: removing them moves the Groundwork publishing manifest, the `publicationProjectionState` document kind, its schema fixture and the coverage-ledger unit id, all beyond T121's scope. Recorded here so it is a decision, not a discovery.
+
 ### Behaviour change — §2.23.4 recorded decision: the coordinator does not reproduce publishing's projection leak
 
 **Approved by Joey, 2026-08-15**, on the recommendation below. Recorded here because §2.23.4 treats "the refactor resolved a bug the tests silently relied on" as an architect decision, never a solo one.

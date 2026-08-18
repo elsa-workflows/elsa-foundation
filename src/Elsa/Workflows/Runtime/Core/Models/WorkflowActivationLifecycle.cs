@@ -26,7 +26,7 @@ public static class WorkflowActivationReferenceIdentity
     }
 }
 
-/// <summary>How an activation request was resolved.</summary>
+/// <summary>How an activation or deactivation request was resolved.</summary>
 public enum WorkflowActivationOutcome
 {
     /// <summary>The candidate is now the live activation for its slot.</summary>
@@ -45,7 +45,19 @@ public enum WorkflowActivationOutcome
     Conflict,
 
     /// <summary>A step of the sequence failed; compensation ran. See <c>Diagnostic</c>.</summary>
-    Failed
+    Failed,
+
+    /// <summary>
+    /// The slot no longer serves anything: its activation was retracted and that activation's serving
+    /// projections were removed. The deactivation counterpart of <see cref="Activated"/>.
+    /// </summary>
+    Deactivated,
+
+    /// <summary>
+    /// The slot was already serving nothing, so nothing was written. The deactivation counterpart of
+    /// <see cref="AlreadyActive"/>, and idempotent for the same reason: a repeated retraction converges.
+    /// </summary>
+    AlreadyInactive
 }
 
 /// <summary>Which step of the activation sequence a <see cref="WorkflowActivationOutcome.Failed"/> outcome broke on.</summary>
@@ -82,7 +94,14 @@ public enum WorkflowActivationStep
     TriggerObserverNotification,
 
     /// <summary>Retiring the predecessor activation's source reference.</summary>
-    PredecessorReferenceRetirement
+    PredecessorReferenceRetirement,
+
+    /// <summary>
+    /// Removing the retracted activation's serving projections during a deactivation. Distinct from
+    /// <see cref="ProjectionActivation"/>: the slot has already stopped serving, and what failed is the cleanup
+    /// behind it — which is why its compensation puts the activation <i>back</i>.
+    /// </summary>
+    ProjectionRemoval
 }
 
 /// <summary>One request to make an artifact the live activation of a definition's slot.</summary>
@@ -116,9 +135,45 @@ public sealed record WorkflowActivationCommand(
     WorkflowActivationSource Source,
     long ExpectedRevision);
 
-/// <summary>The outcome of one complete activation lifecycle.</summary>
-/// <param name="Succeeded">True for <see cref="WorkflowActivationOutcome.Activated"/> and <see cref="WorkflowActivationOutcome.AlreadyActive"/>.</param>
-/// <param name="Outcome">Which of the four resolutions applied.</param>
+/// <summary>One request to retract whatever activation a definition's slot currently serves.</summary>
+/// <remarks>
+/// <para>
+/// The mirror image of <see cref="WorkflowActivationCommand"/>, and the single entry point for every retracting
+/// path for the same reason activation has one: the slot transition, the projection removal, the observer
+/// notification and the compensation that puts all three back are one indivisible sequence. Callers keep their
+/// own bookkeeping — publishing retires its <c>PublicationRecord</c> and its source reference — and request the
+/// retraction rather than implementing it.
+/// </para>
+/// <para>
+/// There is deliberately <b>no activation id</b> on this command: the slot is the authority on what is live, so
+/// the coordinator reads the activation it is retracting from the slot rather than trusting a caller's copy of
+/// it. <see cref="ExpectedRevision"/> is the CAS guard that makes that read safe.
+/// </para>
+/// </remarks>
+/// <param name="Executable">
+/// The artifact the slot is serving. Needed on the <i>compensation</i> path only, and that is exactly why it is
+/// required rather than optional: undoing a half-finished removal means re-preparing the serving projections from
+/// the artifact, and a coordinator that could not do so would silently leave the restored activation with no
+/// triggers and no schedules.
+/// </param>
+/// <param name="SlotName">The named activation lane of the definition.</param>
+/// <param name="Source">
+/// The retracting party's ownership descriptor. The authority refuses a source that does not own the slot, which
+/// is what stops publishing from unpublishing an imported definition (and vice versa).
+/// </param>
+/// <param name="ExpectedRevision">The slot revision the caller read; the CAS guard for concurrent writers.</param>
+public sealed record WorkflowDeactivationCommand(
+    WorkflowExecutable Executable,
+    string SlotName,
+    WorkflowActivationSource Source,
+    long ExpectedRevision);
+
+/// <summary>The outcome of one complete activation or deactivation lifecycle.</summary>
+/// <param name="Succeeded">
+/// True for <see cref="WorkflowActivationOutcome.Activated"/>, <see cref="WorkflowActivationOutcome.AlreadyActive"/>,
+/// <see cref="WorkflowActivationOutcome.Deactivated"/> and <see cref="WorkflowActivationOutcome.AlreadyInactive"/>.
+/// </param>
+/// <param name="Outcome">Which resolution applied.</param>
 /// <param name="Slot">The slot as it stands after the request settled (including after compensation).</param>
 /// <param name="Reference">The stored live reference, or the already-active one for a no-op.</param>
 /// <param name="ReplacedActivationId">The predecessor the transition displaced, whose reference was retired.</param>

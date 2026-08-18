@@ -3,8 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// The single entry point for making a workflow executable live, owning the <b>complete</b> activation lifecycle
-/// for every calling path (FR-B-006).
+/// The single entry point for making a workflow executable live — and for taking it back out — owning the
+/// <b>complete</b> activation lifecycle for every calling path (FR-B-006).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,5 +44,30 @@ public interface IWorkflowActivationCoordinator
     /// </remarks>
     ValueTask<WorkflowActivationResult> ActivateAsync(
         WorkflowActivationCommand command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Runs the complete deactivation lifecycle for whatever the slot currently serves.</summary>
+    /// <remarks>
+    /// <para>
+    /// The sequence, in order: CAS the slot empty on <see cref="IWorkflowActivationAuthority"/> → remove the
+    /// retracted activation's serving projections → notify every <see cref="IWorkflowTriggerIndexObserver"/>. A
+    /// slot that already serves nothing is <see cref="WorkflowActivationOutcome.AlreadyInactive"/> and writes
+    /// nothing, so a repeated retraction converges.
+    /// </para>
+    /// <para>
+    /// On a post-flip failure the coordinator compensates by re-activating the slot, <b>re-preparing and
+    /// re-activating</b> the projections from the artifact — the same preparation, in the same order, that
+    /// <see cref="ActivateAsync"/> runs — and reconciling observers afterwards. That shared preparation is the
+    /// point of putting deactivation here: a separate retraction path had to know the same ordering invariant
+    /// (recurrences materialized and validated before any binding is written), and the two drifted apart once
+    /// already.
+    /// </para>
+    /// <para>
+    /// Callers keep what is theirs. Publishing still retires its <c>PublicationRecord</c> and the unpublished
+    /// activation's source reference; the runtime owns the slot, the projections and the undo.
+    /// </para>
+    /// </remarks>
+    ValueTask<WorkflowActivationResult> DeactivateAsync(
+        WorkflowDeactivationCommand command,
         CancellationToken cancellationToken = default);
 }
