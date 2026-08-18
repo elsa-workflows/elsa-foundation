@@ -116,6 +116,33 @@ mixed-host coexistence does not become entirely unguarded.
 | `src/Elsa/{Secrets,Studio/Preferences}/Api/README.md`, `src/Elsa/Diagnostics/StructuredLogs/README.md` | prose | Module READMEs describing current state; verify against post-removal reality. |
 | `src/Apps/Elsa.Foundation.Host/{appsettings.json,Program.cs,*.csproj}` | configuration | Allowlist and host wiring; reconcile against what the host loads. |
 
+## Form of this artifact, and where it falls short of its own schema
+
+`data-model.md` specifies one entry per reference with an `evidence` field once acted on. This
+document groups references by category instead, and carries evidence in the commit messages and the
+completion report rather than in a per-row column. That is a real deviation from the schema this unit
+wrote for itself, raised in review, and it is recorded here rather than quietly tolerated.
+
+The grouping is deliberate for the 1640-hit scan: the large majority are `specs/**` and
+`docs/reports/**`, which are the program's historical record and share one reason. Enumerating them
+individually would bury the entries that carry a decision. What the grouped form genuinely cannot do
+is demonstrate V-1 and V-2 mechanically — a reader must trust that the categories partition the scan
+rather than verify it row by row.
+
+Two review findings landed against exactly that weakness, and both were real misses:
+
+- `src/Elsa/Activities/Bpmn/Interchange/EXTENSION_POINTS.md` still described its routes as discovered
+  by "the FastEndpoints assembly scan via `FastEndpointsFeatureBase`". The prose sweep had covered
+  `src/**/*.cs` but not `src/**/*.md`.
+- The root `EXTENSION_POINTS.md` still indexed the deleted `src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md`.
+  The generated extension-point map reported this faithfully as `root-indexed but missing on disk`,
+  which is worth noting: a byte-fresh map and a green freshness check can still encode a broken index,
+  because the check verifies that the map describes the tree, not that the tree is healthy.
+
+Three module READMEs were corrected in the same pass: they claimed other *Elsa* modules might still
+expose FastEndpoints routes during staged migration, which stopped being true when the last wave
+landed. Third-party coexistence remains, and the corrected text says so.
+
 ## Open at classification time
 
 `Unresolved`: none as categories. The one deliberately deferred question is R-005 — whether each

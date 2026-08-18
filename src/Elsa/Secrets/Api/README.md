@@ -33,6 +33,6 @@ Responses expose metadata only. Raw values, configuration keys, protected payloa
 
 ## Transition and collectibility
 
-The production package contains no FastEndpoints dependency or endpoint discovery types. FastEndpoints routes from other modules can coexist in a transitional host because both authoring models publish standard ASP.NET Core endpoints and use Foundation authorization.
+The production package contains no FastEndpoints dependency or endpoint discovery types. FastEndpoints routes from third-party modules can coexist in the same host because both authoring models publish standard ASP.NET Core endpoints and use Foundation authorization.
 
 Handlers use explicit `RequestDelegate` boundaries and explicit endpoint metadata. This avoids retaining collectible module types in ASP.NET Core request-delegate caches. Compatibility tests materialize the production routes, execute JSON traffic, exercise route/service/serializer release, and invoke the real ASP.NET OpenAPI document provider. The OpenAPI path currently leaves a framework-held collectible reference after all harness owners are disposed, so OpenAPI-enabled dynamic unload is not yet a supported claim. See `docs/reports/secrets-minimal-api-migration-2026-08.md` for the complete evidence and required follow-up.

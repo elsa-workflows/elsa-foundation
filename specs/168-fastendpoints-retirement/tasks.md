@@ -113,7 +113,7 @@ instrument.
 - [x] T036 [US2] Search for surviving mentions of removed types across `src/`, `docs/`, and `specs/`, including `FastEndpointsFeatureBase`, `ElsaEndpoint*`, `ApiSecurityFeature`, and `PermissionNames`
 - [x] T037 [US2] Read each hit and correct those that *describe* a removed type; a mention is not automatically wrong
 - [ ] T038 [US2] Correct the `PermissionNames` reference in `IdentitySeeder` specifically (FR-009) — **BLOCKED, deliberately not done.** The file sits under the frozen ASP.NET Core Identity EF oracle owned by the Zero-EF program, whose ratchet permits no source change before its own approved removal unit. Attempting it turned `FrozenAspNetCoreIdentityEfOracleRatchetTests` red; the edit was reverted and the dangling reference is recorded in the completion report for that unit to fix.
-- [x] T039 [US2] Confirm zero surviving comments or documents describe a removed type (SC-005) — met **except** the single T038 exception above, which is recorded rather than silently tolerated
+- [x] T039 [US2] Confirm zero surviving comments or documents describe a removed type (SC-005) — met **except** the single T038 exception above. Review caught two further misses after this was first claimed: the Bpmn Interchange extension-point catalog and the root `EXTENSION_POINTS.md` index row for the deleted catalog, both now fixed, plus three module READMEs asserting staged migration that had stopped being true. The original sweep covered `src/**/*.cs` but not `src/**/*.md`, which is why they survived.
 
 ---
 

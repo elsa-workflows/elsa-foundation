@@ -8,9 +8,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 - Catalog files discovered: 64
 - Source catalogs discovered: 63
-- Source catalogs indexed from root: 61
+- Source catalogs indexed from root: 60
 - Discovered source catalogs not linked from root index: 3
-- Root-indexed catalogs missing on disk: 1
+- Root-indexed catalogs missing on disk: 0
 
 ## Catalogs
 
@@ -88,4 +88,3 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | discovered but not root-indexed | [src/Elsa/Activities/Bpmn/EXTENSION_POINTS.md](../../src/Elsa/Activities/Bpmn/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/Elsa/Activities/Bpmn/Interchange/EXTENSION_POINTS.md](../../src/Elsa/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md](../../src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
-| root-indexed but missing on disk | src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md |

@@ -81,7 +81,6 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| FastEndpoints (secure-by-construction endpoint bases, per-shell API security, endpoint configurators/filters) | [`src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md`](src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md) |
 | API Capabilities (typed operational Sources and deterministic catalog replacement) | [`src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`](src/Elsa/Api/Capabilities/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
