@@ -1,7 +1,7 @@
 # Publication Slots Define Start Authority
 
 Status: accepted (2026-07-13); **superseded in part** by
-[spec 151](../../specs/151-executable-artifact-reconciliation/spec.md) (2026-08-18) — see Superseded in part
+[ADR 0069](0069-activation-ownership-is-explicit-and-runtime-owned.md) (2026-08-18) — see Superseded in part
 below.
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
@@ -10,7 +10,9 @@ Plan of record: `specs/092-domain-owned-apis/`.
 
 ## Superseded in part (2026-08-18)
 
-Two mechanisms decided here were replaced while implementing
+Two mechanisms decided here were replaced by
+[ADR 0069](0069-activation-ownership-is-explicit-and-runtime-owned.md), which is the standing decision on
+activation ownership and is where a reader should go; it was implemented under
 [spec 151](../../specs/151-executable-artifact-reconciliation/spec.md). The original text is retained below as
 the historical record rather than rewritten, following
 [ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md#superseded-framing-retained-for-provenance).
