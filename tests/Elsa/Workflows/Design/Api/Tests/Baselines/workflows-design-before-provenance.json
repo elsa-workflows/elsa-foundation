@@ -7,15 +7,43 @@
   "captureCommand": "WORKFLOWS_DESIGN_BEFORE_COMMIT=67ba4b3b9bec3a6c2aac0d6d332099baf723e802 bash tools/compatibility/capture-workflows-design-before.sh",
   "captureRunnerIdentity": "checked-in-commit",
   "runnerDependencies": [
-    { "identity": "checked-in-commit", "path": "tools/compatibility/capture-workflows-design-before.sh", "sha256": "c14a3e4c4f5093e7f9094855a3e1fa70ccde05cb93d303a4a7530ca1e0061c54" },
-    { "identity": "checked-in-commit", "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs", "sha256": "548addc87f0f475a4d4eda352625e819aacc6749213972ec7d08f9b219b1400b" },
-    { "identity": "checked-in-commit", "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj", "sha256": "95f86520277e811adc51d73436fa1fea296e4e279695cd494abc945c385f7150" },
-    { "identity": "checked-in-commit", "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs", "sha256": "93c551149576e476c0e97dc9a958b0f19673f8ffa7806a5a25eceb17f0c06723" },
-    { "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802", "path": "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs", "sha256": "74e3701ef05ac7edf4cef136e40d0c1385477b04c345b90ccbefa91d8ad88d97" },
-    { "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802", "path": "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs", "sha256": "f2a7574bca741e335b275b25103627d47092caf475b43f311ca6803a4e53bf6c" },
-    { "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802", "path": "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs", "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a" }
+    {
+      "identity": "checked-in-commit",
+      "path": "tools/compatibility/capture-workflows-design-before.sh",
+      "sha256": "c14a3e4c4f5093e7f9094855a3e1fa70ccde05cb93d303a4a7530ca1e0061c54"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
+      "sha256": "548addc87f0f475a4d4eda352625e819aacc6749213972ec7d08f9b219b1400b"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/WorkflowsDesignFastEndpointsCapture.csproj",
+      "sha256": "ff422917840c3092d9db31b2836d8470306ec3019c4025df59263c08428271f4"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/HistoricalOpenApiEvidenceCapture.cs",
+      "sha256": "93c551149576e476c0e97dc9a958b0f19673f8ffa7806a5a25eceb17f0c06723"
+    },
+    {
+      "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+      "sha256": "74e3701ef05ac7edf4cef136e40d0c1385477b04c345b90ccbefa91d8ad88d97"
+    },
+    {
+      "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+      "sha256": "f2a7574bca741e335b275b25103627d47092caf475b43f311ca6803a4e53bf6c"
+    },
+    {
+      "identity": "source-commit:67ba4b3b9bec3a6c2aac0d6d332099baf723e802",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs",
+      "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
+    }
   ],
-  "runnerFingerprint": "8f2959632506958a510eafcc1430b423e5e9dca1157f34a46bc02b4ba8363d1e",
+  "runnerFingerprint": "6eaed74e872fa63ac2a57a1b6df0a6919397955b53e9a3dae95ce024fc4b27b7",
   "httpFixture": "workflows-design-http-fastendpoints.json",
   "openApiFixture": "workflows-design-openapi-fastendpoints.json",
   "handlerTraceFixture": "workflows-design-handler-trace-fastendpoints.json",
@@ -23,7 +51,10 @@
   "openApiSha256": "cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5",
   "handlerTraceSha256": "02dfcb7bbc50d64ea785df897128b8bc39caeec2709444b8fc34d91a04f6133c",
   "capturedAtUtc": "2026-08-16T16:02:00Z",
-  "volatileHeaders": ["date", "server"],
+  "volatileHeaders": [
+    "date",
+    "server"
+  ],
   "registrationCount": 27,
   "caseCount": 78,
   "operationCount": 27
