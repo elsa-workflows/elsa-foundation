@@ -109,10 +109,6 @@ public class WorkflowsPublishingFeature : IShellFeature
         // (TryAddEnumerable) and its first implementation — the API download target — is contributed by the
         // transport feature, which is where a destination belongs. An engine composed without one still resolves
         // an empty IEnumerable, so the absence is a composition fact, not a missing dependency.
-        // FR-B-012: publishing is the sanctioned Design/Runtime bridge, so it answers Runtime's inspection
-        // question "does this design id resolve here?". A runtime-only engine composes no publishing, registers
-        // no resolver, and renders every design identifier as unresolved -- which is the truth about it.
-        services.TryAddScoped<IDesignProvenanceResolver, DesignCatalogProvenanceResolver>();
         services.TryAddScoped<IWorkflowArtifactClosureFactory, WorkflowArtifactClosureFactory>();
         services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();

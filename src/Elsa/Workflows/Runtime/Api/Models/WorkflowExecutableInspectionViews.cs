@@ -38,18 +38,6 @@ public sealed record ExecutableSourceReferenceView(
     string? DeletedReason,
     bool Live)
 {
-    /// <summary>
-    /// True when this engine cannot resolve the design provenance above — <see cref="DefinitionId"/> and
-    /// <see cref="DefinitionVersionId"/> name a design definition that does not exist here (FR-B-012).
-    /// </summary>
-    /// <remarks>
-    /// A property of <b>the engine rendering the response</b>, not of the artifact: the same artifact renders
-    /// unflagged on a combined engine and flagged on a runtime-only one. Computed per request via
-    /// <c>IDesignProvenanceResolver</c>, never persisted, and never part of an artifact's content hash.
-    /// Defaults to <see langword="false"/> so a caller that never evaluated it makes no claim either way.
-    /// </remarks>
-    public bool DesignProvenanceUnresolved { get; init; }
-
     /// <summary>Runtime API v1 compatibility alias for <see cref="SourceKind"/>.</summary>
     [Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
     [JsonPropertyName("sourceType")]
@@ -143,10 +131,7 @@ public sealed record ExecutableSourceReferenceView(
         Live = this.Live;
     }
 
-    public static ExecutableSourceReferenceView From(
-        WorkflowExecutableSourceReference reference,
-        DateTimeOffset now,
-        bool designProvenanceUnresolved = false) =>
+    public static ExecutableSourceReferenceView From(WorkflowExecutableSourceReference reference, DateTimeOffset now) =>
         new(
             reference.SourceReferenceId,
             reference.ArtifactId,
@@ -164,10 +149,7 @@ public sealed record ExecutableSourceReferenceView(
             reference.ExpiresAt,
             reference.DeletedAt,
             reference.DeletedReason,
-            reference.IsLive(now))
-        {
-            DesignProvenanceUnresolved = designProvenanceUnresolved
-        };
+            reference.IsLive(now));
 
     private static string? ResolveSourceKind(string? sourceType, string? sourceKind)
     {
