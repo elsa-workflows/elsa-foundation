@@ -86,6 +86,12 @@
     <!-- spec 151 SC-B-001/005: the runtime-only artifact composition guard composes the reconciliation feature and
          drives it on the shared execution harness. -->
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <!-- spec 151 FR-B-009: the independent-composability matrix has to compose the design-side reconciler and the
+         runtime-side artifact reconciler in one shell and start it. No other test project can reference both, and
+         this is the only design-side reconciliation package that ships a concrete (non-abstract) feature. Safe
+         here for the same reason the Publishing reference above is: the runtime-only guards in this suite assert
+         over transitive REFERENCE CLOSURES and composed containers, never over the test host's loaded assemblies. -->
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
     <!-- spec 151 SC-B-003: the export→import round trip (ArtifactExportImportRoundTripTests) composes a
          publish-capable engine beside the runtime-only one. Design.Persistence.Core is the compiler's authored-state
          store; Resumption is the sweep the dispatch outbox needs; DispatchWorkflow gives the parent a child to

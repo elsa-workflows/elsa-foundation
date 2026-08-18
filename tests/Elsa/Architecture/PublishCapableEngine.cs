@@ -323,7 +323,7 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private sealed class StubWorkflowVersionStore(params WorkflowDefinitionVersion[] versions) : IWorkflowDefinitionVersionStore
+    internal sealed class StubWorkflowVersionStore(params WorkflowDefinitionVersion[] versions) : IWorkflowDefinitionVersionStore
     {
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
             GetWithDefinitionAsync(versionId, cancellationToken);
@@ -347,7 +347,7 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
             Task.FromResult(versions.Any(version => version.DefinitionId == definitionId && version.SemVerSortKey == semVerSortKey));
     }
 
-    private sealed class StubActivityVersionStore(params ActivityDefinitionVersion[] versions) : IActivityDefinitionVersionStore
+    internal sealed class StubActivityVersionStore(params ActivityDefinitionVersion[] versions) : IActivityDefinitionVersionStore
     {
         public Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
             GetWithDefinitionAsync(versionId, cancellationToken);
@@ -383,7 +383,7 @@ internal sealed class PublishCapableEngine : IAsyncDisposable
             Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(versions);
     }
 
-    private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
+    internal sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore
     {
         public Task<ActivityDefinitionVersionPublication?> FindAsync(
             string definitionVersionId,
