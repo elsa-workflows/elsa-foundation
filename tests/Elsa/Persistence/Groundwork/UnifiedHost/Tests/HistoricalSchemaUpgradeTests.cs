@@ -56,6 +56,11 @@ public sealed class HistoricalSchemaUpgradeTests
     /// <item><c>publishingPublicationSlot</c>: T027 superseded publishing's slot store with the runtime
     /// activation authority and T036 removed the orphaned manifest unit. One physical activation ledger per
     /// engine; the old unit has no writer and no successor rows to carry over.</item>
+    /// <item><c>publishingProjectionIntent</c>: T121 deleted <c>PublicationProjectionReconciler</c>, the
+    /// delivery-intent ledger's only consumer, and T122 removed the orphaned contract, models, stores and
+    /// manifest unit. The activation coordinator that replaced the reconciler deliberately carries no
+    /// delivery-intent ledger, so there is no successor unit and nothing to carry over — the same shape as
+    /// <c>publishingPublicationSlot</c> above.</item>
     /// </list>
     /// Legitimate pre-1.0 with no consumers (research risk R2). A deployment carrying preview.95 data resets
     /// these units and republishes — see <c>docs/serialization.md</c>.
@@ -64,7 +69,8 @@ public sealed class HistoricalSchemaUpgradeTests
     {
         "workflowTriggerBinding",
         "recurringTriggerSchedule",
-        "publishingPublicationSlot"
+        "publishingPublicationSlot",
+        "publishingProjectionIntent"
     };
 
     private static readonly string[] ExpectedVersionedIndexes =
@@ -153,8 +159,9 @@ public sealed class HistoricalSchemaUpgradeTests
 
         // Nothing the clean break removed may still be declared on a clean-break unit: if a by-publication
         // index survived T034's rename sweep, excluding that unit below would hide it instead of proving it
-        // gone. Scoped to the named units on purpose — publishing's own `publishingProjectionIntent` keeps
-        // `by-publication`, which T028 deliberately leaves on publication naming inside its own domain.
+        // gone. Scoped to the named units on purpose. T122 removed `publishingProjectionIntent`, the last
+        // unit that still declared a `by-publication` index — publishing kept it on publication naming inside
+        // its own domain (T028), and the unit is gone rather than renamed, so no route declares it now.
         Assert.DoesNotContain(
             current.Routes
                 .Where(route => IsCleanBreak(route.StorageUnit.Value))

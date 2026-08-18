@@ -64,7 +64,6 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
-    private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
     private readonly PublicationSnapshotReviewService _snapshotReviews = new(
         TimeProvider.System,
         new InMemoryPublicationSnapshotReviewStore());
@@ -920,7 +919,6 @@ public sealed class PublishWorkflowRequestHandlerTests
         services.AddSingleton<IWorkflowActivationAuthority>(_activationAuthority);
         services.AddSingleton<IPublicationRecordStore>(_publicationStore);
         services.AddSingleton<IPublicationPolicyStore>(_policyStore);
-        services.AddSingleton<IPublicationProjectionIntentStore>(_intentStore);
         services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(TestRootWriteLeases.Create(_store));
         var extractor = new WorkflowTriggerBindingExtractor([]);
         services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);

@@ -66,50 +66,6 @@
       "boundedMutations": []
     },
     {
-      "identity": "publishingProjectionIntent",
-      "definitionDigest": "98483bf20d7f203b0576e7b30fefbd1491d73f82c67e103de69c4047222ff6c4",
-      "provisioningMode": "Dynamic",
-      "policy": "Explicit(SharedDocuments)",
-      "logicalIndexes": [
-        {
-          "identity": "by-publication",
-          "fields": [
-            {
-              "path": "publicationId"
-            }
-          ],
-          "valueKind": "Keyword",
-          "isUnique": false,
-          "missingValueBehavior": "Excluded"
-        }
-      ],
-      "boundedQueries": [
-        {
-          "identity": "list-by-publication",
-          "indexIdentity": "by-publication",
-          "operations": [
-            "Equal"
-          ],
-          "sortSupport": "None",
-          "pagingSupport": "Offset",
-          "executionClass": "Ordinary",
-          "supportsDisjunction": false,
-          "supportsTotalCount": false,
-          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
-          "sortFields": [],
-          "predicateFields": [],
-          "residualPredicateFields": [],
-          "resultOperations": [
-            "Any",
-            "Documents",
-            "First"
-          ]
-        }
-      ],
-      "nameOverrides": [],
-      "boundedMutations": []
-    },
-    {
       "identity": "publishingPublicationPolicy",
       "definitionDigest": "43983ada08ad2ecdb0fdd6a0d9eac8cc362d2b1938b0f42d464c4cf21f77b557",
       "provisioningMode": "Dynamic",

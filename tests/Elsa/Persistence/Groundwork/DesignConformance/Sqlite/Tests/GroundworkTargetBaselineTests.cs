@@ -31,25 +31,29 @@ public sealed class GroundworkTargetBaselineTests
     // physical target. Only the PENDING fingerprint moves;
     // AcceptedTargetFingerprint is the ratified floor at preview.81 and is deliberately left alone, so
     // this records a head that has moved rather than re-ratifying anything.
-    // 2026-08-17 (spec 151 / T036): BOTH PENDING FINGERPRINTS BELOW ARE KNOWN STALE AND MUST BE RE-MEASURED.
-    // This feature changes the composed physical target three ways: the runtime manifest gains the
+    // 2026-08-18 (spec 151 / T036a): BOTH PENDING FINGERPRINTS BELOW WERE RE-MEASURED AND UPDATED.
+    // This feature changes the composed physical target four ways: the runtime manifest gains the
     // `workflowActivationSlot` storage unit (T026); `workflowTriggerBinding` and `recurringTriggerSchedule`
     // move their index identity and projected field from `by-publication`/`publicationId` and
-    // `by-publication-and-*-id` to `by-activation`/`activationId` and `by-activation-and-*-id` (T034); and
-    // the publishing manifest drops the orphaned `publishingPublicationSlot` unit (T036). Each of those moves
-    // the target fingerprint, and the added/removed units move the provisioning plan fingerprint.
+    // `by-publication-and-*-id` to `by-activation`/`activationId` and `by-activation-and-*-id` (T034); the
+    // publishing manifest drops the orphaned `publishingPublicationSlot` unit (T036); and it drops
+    // `publishingProjectionIntent` with its `by-publication` index and `list-by-publication` query (T122,
+    // the dead delivery-intent ledger left over from the reconciler T121 deleted). Each of those moves the
+    // target fingerprint, and the added/removed units move the provisioning plan fingerprint.
     //
-    // The values were NOT updated here because they could not be measured: this workspace cannot run the
-    // Groundwork schema CLI (every scenario in this class fails with "Groundwork schema tool emitted invalid
-    // JSON (exit 1)"), and the fingerprints are read from that tool's output via GroundworkBaselineTelemetry,
-    // not computed in-process. Leaving the stale values is deliberate — the assertion messages print the
-    // observed fingerprints, so the first run on a machine with a working schema CLI reports exactly what to
-    // paste in. AcceptedTargetFingerprint / AcceptedPlanFingerprint are the ratified preview.81 floor and
-    // stay untouched, as they have through every drift since.
-    private const string PendingTargetFingerprint = "b0edf8cee1bea256f2c4d7ada93ad5aba56c6654b6ca210506cbd055776cd46c";
-    // Moves with PendingTargetFingerprint above, and for the same reason: a new storage unit and a bounded
-    // projected column change the provisioning plan. AcceptedPlanFingerprint is untouched.
-    private const string PendingPlanFingerprint = "ac21d2897906bd3f7d37b706696983c09d6570c0c00f335325653a37055ea6f4";
+    // Measured on the post-T122 tree. The earlier record here claimed the values were unmeasurable in this
+    // workspace because the Groundwork schema CLI emitted "invalid JSON (exit 1)" — that was never
+    // environmental: `groundwork.tool` simply was not restored, so `dotnet tool run groundwork` printed a
+    // restore hint that the fixture parsed as JSON. After `dotnet tool restore` the CLI runs and the
+    // assertion messages report the observed fingerprints directly. If that message reappears, run
+    // `dotnet tool restore` before concluding anything about the target.
+    //
+    // AcceptedTargetFingerprint / AcceptedPlanFingerprint are the ratified preview.81 floor and stay
+    // untouched, as they have through every drift since. Only the pending values below move.
+    private const string PendingTargetFingerprint = "988665e91e59113fb1ec3e6a0fc3e87ba6107cdbe5160844acffd04ac26eaa99";
+    // Moves with PendingTargetFingerprint above, and for the same reason: added and removed storage units and
+    // their bounded projected columns change the provisioning plan. AcceptedPlanFingerprint is untouched.
+    private const string PendingPlanFingerprint = "8b2e7823d641c076308ec0dc6f419c949738b99e5e3158b894a6b0a51e1844ab";
 
     [Fact]
     public async Task Target_profile_matches_the_ratified_twenty_five_green_baseline()

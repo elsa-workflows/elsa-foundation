@@ -67,7 +67,6 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
-        services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
         // Deterministic policies hold no request or persistence state and remain safe singletons.
         services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();

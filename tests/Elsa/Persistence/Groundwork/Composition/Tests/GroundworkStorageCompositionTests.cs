@@ -1017,7 +1017,6 @@ public class GroundworkStorageCompositionTests
             typeof(IActivityDraftTestRunStore),
             typeof(IPublicationRecordStore),
             typeof(IPublicationPolicyStore),
-            typeof(IPublicationProjectionIntentStore),
             typeof(IPublicationSnapshotReviewStore)
         ],
         _ => throw new ArgumentOutOfRangeException(nameof(family), family, null)

@@ -56,7 +56,6 @@ public sealed class PublishingGroundworkLifetimeTests
         AssertScopedAcrossRequests<PublicationSnapshotReviewService>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationRecordStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationPolicyStore>(firstScope, secondScope);
-        AssertScopedAcrossRequests<IPublicationProjectionIntentStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationSnapshotReviewStore>(firstScope, secondScope);
 
         Assert.Same(

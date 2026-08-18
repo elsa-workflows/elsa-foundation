@@ -16,8 +16,6 @@ internal sealed class PublishingTestBoundedDocumentStore(IDocumentEnumerationSou
         {
             [PublishingGroundworkStorageManifest.ListBySlotQuery] =
                 (PublishingGroundworkStorageManifest.BySlotIndex, PublishingGroundworkStorageManifest.SlotIdField),
-            [PublishingGroundworkStorageManifest.ListByPublicationQuery] =
-                (PublishingGroundworkStorageManifest.ByPublicationIndex, PublishingGroundworkStorageManifest.PublicationIdField),
             [PublishingGroundworkStorageManifest.DeleteExpiredQuery] =
                 (PublishingGroundworkStorageManifest.ByExpiresAtIndex, PublishingGroundworkStorageManifest.ExpiresAtField)
         };

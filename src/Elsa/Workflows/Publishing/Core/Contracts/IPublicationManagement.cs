@@ -57,13 +57,9 @@ public interface IPublicationActivator
         CancellationToken cancellationToken = default);
 }
 
-public interface IPublicationProjectionIntentStore
-{
-    ValueTask SaveAsync(PublicationProjectionIntent intent, CancellationToken cancellationToken = default);
-    ValueTask<PublicationProjectionIntent?> FindAsync(string intentId, CancellationToken cancellationToken = default);
-    ValueTask<IReadOnlyCollection<PublicationProjectionIntent>> ListByPublicationAsync(string publicationId, CancellationToken cancellationToken = default);
-    ValueTask<PublicationProjectionIntentTransitionResult> TryTransitionAsync(
-        PublicationProjectionIntent intent,
-        PublicationProjectionIntentStatus expectedStatus,
-        CancellationToken cancellationToken = default);
-}
+// `IPublicationProjectionIntentStore` is deliberately absent (T122). It was the delivery-intent ledger of the
+// projection reconciler T121 deleted, and it outlived its only consumer: a `public` contract, two models, two
+// implementations and a Groundwork document kind that nothing wrote to. `IWorkflowActivationCoordinator`
+// carries no delivery-intent ledger by design — the recovery unit is the caller's next attempt, which is safe
+// because a compensated failure leaves nothing half-done. Removed rather than left standing, because a
+// supported-looking ledger invites composers to write to it.

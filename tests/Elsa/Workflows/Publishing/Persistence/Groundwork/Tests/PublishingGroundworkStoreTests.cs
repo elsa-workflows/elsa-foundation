@@ -39,10 +39,8 @@ public sealed class PublishingGroundworkStoreTests
         var queries = new RecordingBoundedDocumentStore();
         var serializer = new PublishingGroundworkDocumentSerializer();
         var publications = new GroundworkPublicationRecordStore(documents, serializer, queries);
-        var intents = new GroundworkPublicationProjectionIntentStore(documents, serializer, queries);
 
         await publications.ListBySlotAsync("definition-1:default");
-        await intents.ListByPublicationAsync("publication-1");
 
         Assert.Collection(
             queries.Observed,
@@ -51,13 +49,7 @@ public sealed class PublishingGroundworkStoreTests
                 "publishingPublicationRecord",
                 "list-by-slot",
                 "slotId",
-                "definition-1:default"),
-            query => AssertQuery(
-                query,
-                "publishingProjectionIntent",
-                "list-by-publication",
-                "publicationId",
-                "publication-1"));
+                "definition-1:default"));
     }
 
     [Fact]
@@ -98,23 +90,12 @@ public sealed class PublishingGroundworkStoreTests
             stores.Policies.TrySaveAsync(policy with { DefaultSlotName = "blue" }, 0).AsTask());
         Assert.Single(policyWrites, x => x.Succeeded);
 
-        var intent = new PublicationProjectionIntent(
-            "intent-1", "publication-record", PublicationProjectionKinds.TriggerBindings,
-            PublicationProjectionOperation.Prepare, PublicationProjectionIntentStatus.Pending, 0, null, null);
-        await stores.Intents.SaveAsync(intent);
-        var claimed = await stores.Intents.TryTransitionAsync(
-            intent with { Status = PublicationProjectionIntentStatus.Delivering, AttemptCount = 1 },
-            PublicationProjectionIntentStatus.Pending);
-        Assert.True(claimed.Succeeded);
-
         await fixture.RestartAsync();
         stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
 
         Assert.Single(await stores.Publications.ListBySlotAsync(candidate.SlotId));
         Assert.NotEqual(PublicationStatus.Candidate, (await stores.Publications.FindAsync(candidate.PublicationId))!.Status);
         Assert.Equal(1, (await stores.Policies.FindAsync("definition-1"))!.Revision);
-        Assert.Equal(PublicationProjectionIntentStatus.Delivering, (await stores.Intents.FindAsync("intent-1"))!.Status);
-        Assert.Single(await stores.Intents.ListByPublicationAsync("publication-record"));
     }
 
     [Theory]
@@ -207,8 +188,7 @@ public sealed class PublishingGroundworkStoreTests
 
     private sealed record Stores(
         GroundworkPublicationRecordStore Publications,
-        GroundworkPublicationPolicyStore Policies,
-        GroundworkPublicationProjectionIntentStore Intents)
+        GroundworkPublicationPolicyStore Policies)
     {
         public static Stores Create(
             IDocumentStore store,
@@ -217,8 +197,7 @@ public sealed class PublishingGroundworkStoreTests
         {
             return new Stores(
                 new GroundworkPublicationRecordStore(store, serializer, queries),
-                new GroundworkPublicationPolicyStore(store, serializer),
-                new GroundworkPublicationProjectionIntentStore(store, serializer, queries));
+                new GroundworkPublicationPolicyStore(store, serializer));
         }
     }
 

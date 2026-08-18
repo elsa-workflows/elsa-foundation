@@ -16,19 +16,20 @@ public static class PublishingGroundworkStorageManifest
     // provisioned a storage unit nothing could write. T036 removes the orphan: one physical activation
     // ledger per engine. No migration — pre-1.0, no consumers (research R2).
     public const string PublicationRecordDocumentKind = "publishingPublicationRecord";
+    // T122 removes `publishingProjectionIntent` on the same reasoning. T121 deleted
+    // `PublicationProjectionReconciler`, the delivery-intent ledger's only consumer, and the coordinator that
+    // replaced it deliberately carries no such ledger, so the unit, its `by-publication` index and its
+    // `list-by-publication` query provisioned storage nothing wrote to. A clean break as well: see
+    // `CleanBreakStorageUnits` in HistoricalSchemaUpgradeTests.
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
-    public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
     public const string SnapshotReviewDocumentKind = "publishingSnapshotReview";
     public const string ActivityPublicationReceiptDocumentKind = "publishingActivityPublicationReceipt";
     public const string ActivityDraftTestRunDocumentKind = "publishingActivityDraftTestRun";
     public const string BySlotIndex = "by-slot";
-    public const string ByPublicationIndex = "by-publication";
     public const string ByExpiresAtIndex = "by-expires-at";
     public const string ListBySlotQuery = "list-by-slot";
-    public const string ListByPublicationQuery = "list-by-publication";
     public const string DeleteExpiredQuery = "delete-expired";
     public const string SlotIdField = "slotId";
-    public const string PublicationIdField = "publicationId";
     public const string ExpiresAtField = "expiresAt";
     public const string ReceiptExpiresAtField = "receiptExpiresAt";
 
@@ -39,7 +40,6 @@ public static class PublishingGroundworkStorageManifest
         [
             Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query(ListBySlotQuery, BySlotIndex)]),
             Unit(PublicationPolicyDocumentKind, "Publication policy", [], []),
-            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query(ListByPublicationQuery, ByPublicationIndex)]),
             Unit(
                 SnapshotReviewDocumentKind,
                 "Publication snapshot review",

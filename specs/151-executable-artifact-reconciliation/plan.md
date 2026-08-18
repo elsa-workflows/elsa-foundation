@@ -99,7 +99,41 @@ Six tests were **deleted** in T121 along with the type they exercised. Recording
 
 **Net counts.** `Elsa.Workflows.Publishing.Api.Tests` 499 → 494 (−6 removed, +1 added); `Elsa.Workflows.Runtime.Tests` 1713 → 1724 (+11).
 
-**A knowingly-left leftover.** `IPublicationProjectionIntentStore` and its `PublicationProjectionIntent` model now have **no production consumer** — the reconciler was the only one. They are left standing deliberately: removing them moves the Groundwork publishing manifest, the `publicationProjectionState` document kind, its schema fixture and the coverage-ledger unit id, all beyond T121's scope. Recorded here so it is a decision, not a discovery.
+**A knowingly-left leftover — since retracted by T122.** `IPublicationProjectionIntentStore` and its `PublicationProjectionIntent` model were left standing at T121 with **no production consumer**, on the reasoning that removing them was beyond T121's scope. Two claims in that reasoning were wrong and are corrected in the T122 entry below: the affected document kind is the publishing family's `publishingProjectionIntent`, **not** the runtime's `publicationProjectionState` (a live kind owned by the trigger-binding store), and there is no coverage-ledger unit id involved. The leftover was removed in T122.
+
+### Test removals (4) — §2.21.1, T122, recorded 2026-08-17
+
+**What was removed.** The whole publication-projection **delivery-intent ledger**, dead public API since T121 deleted `PublicationProjectionReconciler`, its only consumer:
+
+- `IPublicationProjectionIntentStore` (`Publishing.Core/Contracts/IPublicationManagement.cs`), replaced by a tombstone comment in the file's existing style;
+- `Publishing.Core/Models/PublicationProjectionIntent.cs` in full — `PublicationProjectionIntent`, `PublicationProjectionIntentTransitionResult`, `PublicationProjectionIntentStatus`, `PublicationProjectionOperation`, `PublicationProjectionKinds`. Every type in the file was reachable only from the ledger;
+- `GroundworkPublicationProjectionIntentStore` and `InMemoryPublicationProjectionIntentStore`;
+- the `publishingProjectionIntent` Groundwork document kind, its manifest unit, its `by-publication` index, its `list-by-publication` query and the three now-unreferenced constants that declared them (`ByPublicationIndex`, `ListByPublicationQuery`, `PublicationIdField`), plus its serializer version-map entry and its entry in `PublishingGroundworkStorageManifestSource`'s declared-store list;
+- both DI registrations (`WorkflowsPublishingFeature`, `GroundworkPublishingStoreRegistration`);
+- the frozen v1 golden fixture `Fixtures/v1/projectionIntent.json`.
+
+**Approving architect.** Joey, 2026-08-17 — the T122 decision record: dead *public* API is worse than dead private code, because a composer sees a supported-looking intent ledger that nothing writes to. Same reasoning as P2, which deleted publishing's slot store rather than migrating it. `IWorkflowActivationCoordinator` deliberately carries **no** delivery-intent ledger; the recovery unit is the caller's next attempt, which is safe because a compensated failure leaves nothing half-done (see the T121 table above).
+
+**Disposition of every affected test — no objective was dropped.**
+
+| Test | Subject gone? | Disposition |
+|---|---|---|
+| `PublishingGroundworkStoreTests.EqualityLookupsUseTheirDeclaredBoundedQueryIdentitiesAndPaths` | partly | **Kept.** Its objective — equality lookups address their *declared* bounded-query identity and path — is asserted over `publishingPublicationRecord`/`list-by-slot`; only the intent half of the `Assert.Collection` went with the store. |
+| `PublishingGroundworkStoreTests.StoresEnforceCasAndSurviveAdapterRestart` | partly | **Kept.** CAS-under-contention and survive-restart still assert over publication records and policies across both the memory and SQLite lanes; the intent save/transition/list steps went with the store. |
+| `PublishingGroundworkFixtureTests.FrozenV1FixturesDeserializeThroughEveryStore` | partly | **Kept.** Still proves the frozen v1 fixtures deserialize through their stores for the record and policy kinds; the intent seed and its fixture file went with the kind. |
+| `PublishingGroundworkFixtureTests.EveryPublishingDocumentKindStartsAtV1AndRejectsUnknownKinds` | partly | **Kept.** One kind left the enumerated list; the "every kind starts at v1, unknown kinds throw" objective is untouched. |
+| `PublishingGroundworkLifetimeTests.Groundwork_consumers_are_scoped_and_do_not_cross_request_scopes` | partly | **Kept.** Per the T122 instruction, the scoped-registration assertion went **with** its registration rather than being left asserting a ghost; the other six consumers still assert scoped-per-request. |
+| `GroundworkStorageCompositionTests` publishing-family expectation | partly | **Kept.** The declared-store list for the `publishing` family loses one entry; the composition assertions are unchanged. |
+| `PublishWorkflowRequestHandlerTests`, `PublishWorkflowTriggerIndexingTests` | no | **Kept.** Both only *composed* the in-memory intent store into a fixture; neither asserted anything about it, and in `PublishWorkflowTriggerIndexingTests` the field was already unreferenced. Pure fixture cleanup. |
+
+**No test file was deleted and no test method was removed.** Counts hold exactly: `Elsa.Workflows.Publishing.Api.Tests` 494/0, `Elsa.Workflows.Publishing.Persistence.Groundwork.Tests` 11/0, `Elsa.Persistence.Groundwork.Composition.Tests` 92/0.
+
+**Two consequences outside the reported blast radius**, both found by re-verifying against the code rather than the task text:
+
+1. **`tests/Elsa/Persistence/Groundwork/Tests/Goldens/publishing.json`** pins the publishing manifest's physical surface and carried the `publishingProjectionIntent` unit. Regenerated with `ELSA_UPDATE_GOLDENS=1`; the diff is 44 deleted lines and nothing else — no other unit's `definitionDigest` moved.
+2. **`HistoricalSchemaUpgradeTests.CleanBreakStorageUnits`** needed a fourth entry. Removing the unit makes the preview.95 upgrade proof emit five `GW-SCHEMA-004` diagnostics (*"Applied operation … is absent from the desired target"*) for the unit's projected column, backfills, linked storage and physical index — verified by mutation: with the entry removed the four `Preview102_is_an_additive_upgrade…` theories fail with exactly those diagnostics and no others. That file's own comment calls adding to the list *"a decision, not a fix"*; the decision is this entry, and it is the same shape as `publishingPublicationSlot` — pre-1.0, no writer, no successor unit, nothing to carry over. The neighbouring `by-publication` comment was also corrected: `publishingProjectionIntent` was the last unit still declaring that index, and it is now gone rather than renamed.
+
+**Fingerprint consequence (T036a).** Removing the unit moves the composed physical target, which is why T122 had to land first. Measured on the post-deletion tree: `PendingTargetFingerprint` `b0edf8ce…` → `988665e9…` (pre-T122 head would have been `6d6826aa…`), `PendingPlanFingerprint` `ac21d289…` → `8b2e7823…`. The ratified preview.81 `AcceptedTargetFingerprint` / `AcceptedPlanFingerprint` floor is untouched.
 
 ### Behaviour change — §2.23.4 recorded decision: the coordinator does not reproduce publishing's projection leak
 

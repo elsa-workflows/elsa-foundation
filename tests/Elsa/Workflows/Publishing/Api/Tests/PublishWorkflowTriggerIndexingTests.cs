@@ -49,7 +49,6 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
-    private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
 
     [Fact]
     public async Task PublishingStartTrigger_IndexesBindingOverPublishedArtifact()

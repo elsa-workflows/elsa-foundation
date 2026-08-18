@@ -20,7 +20,6 @@ public sealed class PublishingGroundworkStorageManifestSource : IGroundworkStora
             [
                 typeof(IPublicationRecordStore),
                 typeof(IPublicationPolicyStore),
-                typeof(IPublicationProjectionIntentStore),
                 typeof(IPublicationSnapshotReviewStore),
                 typeof(IActivityDraftTestRunStore)
             ],

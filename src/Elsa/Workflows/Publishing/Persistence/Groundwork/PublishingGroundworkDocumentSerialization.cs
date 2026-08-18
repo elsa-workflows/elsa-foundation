@@ -18,7 +18,6 @@ public sealed class PublishingGroundworkDocumentSerializer(IEnumerable<IPublishi
     {
         [PublishingGroundworkStorageManifest.PublicationRecordDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind] = 1,
-        [PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind] = 1,
         [PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind] = 1

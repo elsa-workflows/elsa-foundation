@@ -38,7 +38,6 @@ public static class GroundworkPublishingStoreRegistration
         // registered by AddGroundworkRuntimeStores (FR-B-006 — one physical ledger per engine).
         lane.Replace<IPublicationRecordStore, GroundworkPublicationRecordStore>();
         lane.Replace<IPublicationPolicyStore, GroundworkPublicationPolicyStore>();
-        lane.Replace<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>();
         lane.Replace<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>();
         lane.Replace<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>();
         lane.Replace<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>();
