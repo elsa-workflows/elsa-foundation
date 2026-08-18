@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Exceptions;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
+using Elsa.Workflows.Runtime.Reconciliation.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Reconciliation.Services;
@@ -62,6 +63,7 @@ public sealed class WorkflowArtifactReconciler(
     IWorkflowActivationAuthority activationAuthority,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowActivationCoordinator activationCoordinator,
+    IArtifactForeignOwnerPolicy foreignOwnerPolicy,
     TimeProvider timeProvider,
     ILogger<WorkflowArtifactReconciler> logger) : IWorkflowArtifactReconciler
 {
@@ -382,43 +384,71 @@ public sealed class WorkflowArtifactReconciler(
                     result.Slot.ActiveActivationId);
 
             case WorkflowActivationOutcome.Conflict when result.Conflict == WorkflowActivationConflict.ForeignSource:
+            {
                 // T118: another activation source owns the slot, and reconciliation never takes it back. Not a
-                // rejection — the artifact is fine and its unit imported — but it MUST be loud: while the slot is
-                // held elsewhere, replacing the mounted file changes nothing for this definition, and an operator
-                // who is not told that has no way to discover it.
+                // rejection by default — the artifact is fine and its unit imported — but it MUST be loud: while
+                // the slot is held elsewhere, replacing the mounted file changes nothing for this definition, and
+                // an operator who is not told that has no way to discover it.
                 //
                 // The owner is named from the slot's own Source field, exactly as before. There is deliberately
                 // no test for WHO the owner is: reconciliation yields to any foreign owner, and a comparison
                 // against a particular kind here would be the coupling T118 exists to avoid.
-                var owner = result.Slot.Source?.Describe() ?? "another activation source";
-                logger.LogWarning(
-                    "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
-                    + "'{SlotName}' activation slot is owned by activation source '{Owner}'. Reconciliation never reclaims a "
-                    + "slot another source owns, so updating the mounted artifact will not change what this definition serves "
-                    + "until that source releases it.",
-                    identity.ArtifactId,
-                    file.Origin,
-                    identity.DefinitionId,
-                    DefaultSlotName,
-                    owner,
-                    result.Diagnostic);
-                // Deliberately NOT recorded as unresolved, for the reason the latest-wins skip is not: the
-                // definition IS live — on the owner's activation — so a dependent that dispatches into it is not
-                // dispatching into nothing.
-                return WorkflowArtifactImportEntry.Skipped(
-                    file.Origin,
-                    source.SourceId,
-                    identity.ArtifactId,
-                    identity.DefinitionId,
-                    identity.ArtifactVersion,
-                    WorkflowArtifactSkipReason.ForeignSlotOwner,
-                    // Named generically on purpose: the owner is whatever the slot says, and the runtime must not
-                    // learn the vocabulary of any particular activation source to describe it (T118). How a given
-                    // source releases a slot is that source's documentation, not this diagnostic's.
+                var incumbent = result.Slot.Source;
+                var owner = incumbent?.Describe() ?? "another activation source";
+
+                // Named generically on purpose: the owner is whatever the slot says, and the runtime must not
+                // learn the vocabulary of any particular activation source to describe it (T118). How a given
+                // source releases a slot is that source's documentation, not this diagnostic's.
+                var ownership =
                     $"definition '{identity.DefinitionId}' slot '{DefaultSlotName}' is owned by activation source "
                     + $"'{owner}', which claimed it explicitly. Reconciliation never reclaims a slot another source owns, "
                     + "so this mounted artifact is ignored for this definition until that source releases the slot. "
-                    + $"{result.Diagnostic}".TrimEnd());
+                    + $"{result.Diagnostic}".TrimEnd();
+
+                // T124 — how this is REPORTED is the deployment's call; that it is not activated is not. The
+                // policy runs here, downstream of a refusal that has already happened, and is handed the
+                // incumbent so a host that knows what its own source ids mean can act on that without the runtime
+                // learning any of it. A slot conflict with no owner recorded is an authority defect rather than a
+                // question for a policy, so it takes the safe default without asking.
+                var decision = incumbent is null
+                    ? ArtifactForeignOwnerDecision.Skip
+                    : await foreignOwnerPolicy.DecideAsync(
+                        new ArtifactForeignOwnerContext(identity.DefinitionId, incumbent, command.Source),
+                        cancellationToken);
+
+                if (ReferenceEquals(decision, ArtifactForeignOwnerDecision.Reject))
+                {
+                    logger.LogError(
+                        "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
+                        + "'{SlotName}' activation slot is owned by activation source '{Owner}', and this engine's foreign-owner "
+                        + "policy treats that as a rejection.",
+                        identity.ArtifactId,
+                        file.Origin,
+                        identity.DefinitionId,
+                        DefaultSlotName,
+                        owner);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
+                        + "'{SlotName}' activation slot is owned by activation source '{Owner}'. Reconciliation never reclaims a "
+                        + "slot another source owns, so updating the mounted artifact will not change what this definition serves "
+                        + "until that source releases it.",
+                        identity.ArtifactId,
+                        file.Origin,
+                        identity.DefinitionId,
+                        DefaultSlotName,
+                        owner,
+                        result.Diagnostic);
+                }
+
+                // Deliberately NOT recorded as unresolved on either answer, for the reason the latest-wins skip is
+                // not: the definition IS live — on the owner's activation — so a dependent that dispatches into it
+                // is not dispatching into nothing. A host calling the condition a rejection is describing its own
+                // expectations, and must not thereby change which artifacts a sibling unit may depend on.
+                return ForeignOwnerEntry(decision, file, source, identity, ownership);
+            }
 
             case WorkflowActivationOutcome.Conflict:
                 logger.LogWarning(
@@ -453,6 +483,40 @@ public sealed class WorkflowArtifactReconciler(
                     result.Diagnostic ?? $"the activation sequence failed at step {result.FailedStep}.");
         }
     }
+
+    /// <summary>
+    /// Turns an <see cref="IArtifactForeignOwnerPolicy"/> answer into the pass entry that reports it.
+    /// </summary>
+    /// <remarks>
+    /// <b><see langword="static"/> on purpose, and load-bearing (T124).</b> A static method cannot touch this
+    /// class's injected <c>IWorkflowActivationCoordinator</c> or <c>IWorkflowActivationAuthority</c>, so the whole
+    /// route from "a host's policy answered" to "something got activated" is one the compiler refuses rather than
+    /// one a comment discourages. Both answers produce an entry that did not activate; the slot is already
+    /// untouched by the time either is built.
+    /// </remarks>
+    private static WorkflowArtifactImportEntry ForeignOwnerEntry(
+        ArtifactForeignOwnerDecision decision,
+        WorkflowArtifactClosureFile file,
+        IWorkflowArtifactReconciliationSource source,
+        WorkflowExecutableIdentity identity,
+        string diagnostic) =>
+        ReferenceEquals(decision, ArtifactForeignOwnerDecision.Reject)
+            ? WorkflowArtifactImportEntry.Rejected(
+                file.Origin,
+                source.SourceId,
+                identity.ArtifactId,
+                identity.DefinitionId,
+                identity.ArtifactVersion,
+                WorkflowArtifactRejectionKind.ActivationConflict,
+                diagnostic)
+            : WorkflowArtifactImportEntry.Skipped(
+                file.Origin,
+                source.SourceId,
+                identity.ArtifactId,
+                identity.DefinitionId,
+                identity.ArtifactVersion,
+                WorkflowArtifactSkipReason.ForeignSlotOwner,
+                diagnostic);
 
     /// <summary>
     /// The live source reference the definition's slot currently serves, or <see langword="null"/> when nothing is

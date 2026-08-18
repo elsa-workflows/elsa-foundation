@@ -61,6 +61,58 @@ internal static class ArtifactImportHarness
         return await scope.ServiceProvider.GetRequiredService<IWorkflowArtifactReconciler>().ReconcileAsync();
     }
 
+    /// <summary>
+    /// Puts a <b>different</b> activation source in charge of a definition's default slot, through the production
+    /// authority and the production reference store.
+    /// </summary>
+    /// <remarks>
+    /// Written directly rather than by running a second importer because two <c>JsonWorkflowArtifactReconciliation</c>
+    /// features on one container share a single <c>IOptions</c> registration and would therefore read the same
+    /// mount. This is real engine state, not a double: the reconciler reads the slot and the live reference exactly
+    /// as it would for any incumbent, and the reference is what makes the latest-wins comparison run at all.
+    /// </remarks>
+    public static async Task GiveTheSlotToAsync(
+        WorkflowExecutionHarness harness,
+        WorkflowActivationSource incumbent,
+        string activationId,
+        WorkflowExecutable executable)
+    {
+        var definitionId = executable.Identity.DefinitionId;
+        var slotId = WorkflowActivationSlotIdentity.Create(definitionId, WorkflowArtifactReconciler.DefaultSlotName);
+        await harness.Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                SourceReferenceId: WorkflowActivationReferenceIdentity.Create(activationId),
+                ArtifactId: executable.Identity.ArtifactId,
+                SourceKind: "workflow-artifact-closure",
+                // The reference's SourceId is provenance and is required; an unscoped owner (publishing carries no
+                // source id) falls back to its kind. Ownership itself is read from the slot's own
+                // WorkflowActivationSource, never from here.
+                SourceId: incumbent.SourceId ?? incumbent.Kind,
+                SourceVersion: null,
+                DefinitionId: definitionId,
+                DefinitionVersionId: executable.Identity.DefinitionVersionId,
+                ArtifactVersion: executable.Identity.ArtifactVersion,
+                CreatedAt: ArtifactClosureFixture.CreatedAt,
+                PublishedAt: ArtifactClosureFixture.CreatedAt,
+                Scope: WorkflowExecutableReferenceScope.Published,
+                ActivationId: activationId,
+                SlotId: slotId));
+
+        var claimed = await harness.Services.GetRequiredService<IWorkflowActivationAuthority>().TryActivateAsync(
+            new WorkflowActivationSlotRequest(
+                definitionId,
+                WorkflowArtifactReconciler.DefaultSlotName,
+                activationId,
+                incumbent,
+                0,
+                ArtifactClosureFixture.CreatedAt));
+
+        if (!claimed.Succeeded)
+            throw new InvalidOperationException(
+                $"the incumbent could not claim '{definitionId}', so nothing about foreign ownership can be proven: {claimed.Diagnostic}");
+    }
+
     /// <summary>Whether the executable store holds anything at all for <paramref name="artifactId"/>.</summary>
     public static async Task<bool> IsInStoreAsync(WorkflowExecutionHarness harness, string artifactId) =>
         await harness.Services.GetRequiredService<IWorkflowExecutableStore>().FindAsync(artifactId) is not null;

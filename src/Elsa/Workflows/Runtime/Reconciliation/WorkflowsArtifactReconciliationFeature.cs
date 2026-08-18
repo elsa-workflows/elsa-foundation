@@ -56,6 +56,12 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
         // replacement contracts already use, so a host registers its own BEFORE composing the feature — the same
         // gesture everywhere, rather than "before" here and "after" there.
         services.TryAddScoped<IWorkflowArtifactReconciler, WorkflowArtifactReconciler>();
+
+        // T124. The foreign-owner outcome is the default, not the whole story: a deployment that expects its mount
+        // to own its definitions may want the same condition reported as a rejection. Same §2.6.2 shape and same
+        // first-wins gesture as the reconciler above — what it can answer is deliberately narrow, and never
+        // includes taking the slot.
+        services.TryAddScoped<IArtifactForeignOwnerPolicy, SkipArtifactForeignOwnerPolicy>();
         services.AddScoped<IStartupTask, WorkflowArtifactReconcilerStartupTask>();
     }
 }

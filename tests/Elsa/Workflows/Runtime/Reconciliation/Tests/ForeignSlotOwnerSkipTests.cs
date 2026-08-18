@@ -58,7 +58,7 @@ public sealed class ForeignSlotOwnerSkipTests : IDisposable
     {
         await using var harness = ArtifactImportHarness.Build(_mount);
         var incumbent = ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-incumbent"), DefinitionId, "1.0.0");
-        await GiveTheSlotToAnotherSourceAsync(harness, incumbent);
+        await ArtifactImportHarness.GiveTheSlotToAsync(harness, Incumbent, IncumbentActivationId, incumbent);
 
         // The mounted candidate is NEWER than what is serving, so latest-wins is not what stops it.
         var candidate = ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-candidate"), DefinitionId, "2.0.0");
@@ -130,48 +130,6 @@ public sealed class ForeignSlotOwnerSkipTests : IDisposable
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Contains(diagnostic, entry.Message, StringComparison.Ordinal);
         Assert.Contains("artifact-1", entry.Message, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// Puts a different activation source in charge of the definition's default slot, through the production
-    /// authority and the production reference store.
-    /// </summary>
-    /// <remarks>
-    /// Written directly rather than by running a second importer because two <c>JsonWorkflowArtifactReconciliation</c>
-    /// features on one container share a single <c>IOptions</c> registration and would therefore read the same
-    /// mount. This is real engine state, not a double: the reconciler reads the slot and the live reference exactly
-    /// as it would for any incumbent, and the reference is what makes the latest-wins comparison run at all.
-    /// </remarks>
-    private static async Task GiveTheSlotToAnotherSourceAsync(WorkflowExecutionHarness harness, WorkflowExecutable incumbent)
-    {
-        var slotId = WorkflowActivationSlotIdentity.Create(DefinitionId, WorkflowArtifactReconciler.DefaultSlotName);
-        await harness.Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(incumbent);
-        await harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
-            new WorkflowExecutableSourceReference(
-                SourceReferenceId: WorkflowActivationReferenceIdentity.Create(IncumbentActivationId),
-                ArtifactId: incumbent.Identity.ArtifactId,
-                SourceKind: "workflow-artifact-closure",
-                SourceId: IncumbentSourceId,
-                SourceVersion: null,
-                DefinitionId: DefinitionId,
-                DefinitionVersionId: incumbent.Identity.DefinitionVersionId,
-                ArtifactVersion: incumbent.Identity.ArtifactVersion,
-                CreatedAt: ArtifactClosureFixture.CreatedAt,
-                PublishedAt: ArtifactClosureFixture.CreatedAt,
-                Scope: WorkflowExecutableReferenceScope.Published,
-                ActivationId: IncumbentActivationId,
-                SlotId: slotId));
-
-        var claimed = await harness.Services.GetRequiredService<IWorkflowActivationAuthority>().TryActivateAsync(
-            new WorkflowActivationSlotRequest(
-                DefinitionId,
-                WorkflowArtifactReconciler.DefaultSlotName,
-                IncumbentActivationId,
-                Incumbent,
-                0,
-                ArtifactClosureFixture.CreatedAt));
-
-        Assert.True(claimed.Succeeded);
     }
 
     private sealed class StubReconciler(WorkflowArtifactReconciliationResult result) : IWorkflowArtifactReconciler

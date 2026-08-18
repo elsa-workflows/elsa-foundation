@@ -14,6 +14,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
+using Elsa.Workflows.Publishing.Api.Handlers;
+using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
@@ -132,6 +134,30 @@ internal sealed class CombinedEngine : IAsyncDisposable
         return await scope.ServiceProvider
             .GetRequiredService<IRequestHandler<PublishWorkflow, PublishedWorkflowView>>()
             .Handle(new PublishWorkflow(definitionVersionId), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Retracts the definition's publication through the production unpublish handler.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The production handler, constructed rather than resolved.</b> <c>UnpublishPublicationSlotRequestHandler</c>
+    /// lives in <c>Elsa.Workflows.Publishing.Api</c>, whose feature this engine deliberately does not compose — it
+    /// would drag the HTTP transport surface into a container whose subject is activation ownership. Every
+    /// collaborator still comes from this container, so the ownership check, the coordinator's deactivation, the
+    /// journal retirement and the source-reference retirement are all the real ones; only the mediator dispatch is
+    /// skipped, and it is not what unpublishing means.
+    /// </para>
+    /// <para>
+    /// Deliberately <b>not</b> a slot write. Clearing the slot by hand would assert the loop against a fixture's
+    /// idea of what unpublishing does, which is precisely the step the round trip exists to check.
+    /// </para>
+    /// </remarks>
+    internal async Task<WorkflowActivationSlot> UnpublishAsync(string definitionId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var handler = ActivatorUtilities.CreateInstance<UnpublishPublicationSlotRequestHandler>(scope.ServiceProvider);
+        return await handler.Handle(new UnpublishPublicationSlot(definitionId, SlotName), CancellationToken.None);
     }
 
     /// <summary>Produces the portable closure for a published version through the production factory.</summary>

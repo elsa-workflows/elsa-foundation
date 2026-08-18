@@ -3,8 +3,8 @@
 The per-domain catalog (framework §2.22.1), anchored at `Elsa.Workflows.Runtime.Reconciliation` — the
 composition root where the reconciler, its startup pass and the JSON source are registered. The source contract
 lives in `Elsa.Workflows.Runtime.Reconciliation.Core` so a future source package can be written without
-referencing this feature; the reconciler and reader contracts live in this feature project because their only
-callers are inside it.
+referencing this feature; the reconciler, reader and foreign-owner-policy contracts live in this feature project
+because their only callers are inside it.
 
 This domain imports **portable workflow-executable closures** (spec 151, FR-B-002/007) into a runtime that may
 carry no design, publishing or compiler surface. It owns no activation machinery: making an imported artifact
@@ -16,8 +16,9 @@ the [README](README.md); this file is only about how to extend it.
 
 ## Overridable contracts
 
-Both contracts below are single-implementation replacement contracts (§2.6.2): the reconciler *is* the import
-pipeline, and a second decoder would mean a second wire format. Both are registered with **`TryAddScoped`**, so
+All three contracts below are single-implementation replacement contracts (§2.6.2): the reconciler *is* the import
+pipeline, a second decoder would mean a second wire format, and two foreign-owner policies would mean the same
+condition reported two ways. All are registered with **`TryAddScoped`**, so
 replacement is **first-wins** (ADR 0033) — register yours **before** the feature composes and its default backs
 off. Via feature inheritance that means: derive, register your contract **first**, *then* call
 `base.ConfigureServices(services)`; registering *after* the base call does nothing, because the default is
@@ -29,6 +30,50 @@ deriving a feature.
 |---|---|---|
 | `IWorkflowArtifactReconciler` *(feature — `Elsa.Workflows.Runtime.Reconciliation`)* | `WorkflowArtifactReconciler` (scoped, registered by `WorkflowsArtifactReconciliationFeature`) | The gate order, the isolation unit, or the supersession rule must differ. |
 | `IWorkflowArtifactClosureReader` *(feature — `Elsa.Workflows.Runtime.Reconciliation`)* | `JsonWorkflowArtifactClosureReader` (scoped, registered by `JsonWorkflowArtifactReconciliationFeature`) | Envelopes arrive as something other than a readable file path — an embedded resource, a stream, a remote fetch. |
+| `IArtifactForeignOwnerPolicy` *(feature — `Elsa.Workflows.Runtime.Reconciliation`)* | `SkipArtifactForeignOwnerPolicy` (scoped, registered by `WorkflowsArtifactReconciliationFeature`) | A mount losing a definition to another activation source should be reported as a **rejection** rather than a tolerated skip. |
+
+### `IArtifactForeignOwnerPolicy` — what a replacement may decide, and what it may not
+
+One member, one default, no options. It is consulted once per artifact whose definition's default slot a
+**different** activation source already owns, and it answers with `ArtifactForeignOwnerDecision.Skip` (the
+built-in) or `.Reject`.
+
+**It is downstream of the supersession gate**, which is easy to trip over when writing a test or reasoning about
+a mount. Latest-wins runs *before* the activation request, so a mounted artifact whose `ArtifactVersion` sorts
+below what the definition already serves is reported as an `OlderVersion` skip and never reaches the ownership
+rule or this policy at all. The policy sees only candidates that would otherwise have been activated.
+
+**It cannot make reconciliation a claimant, by construction.** A policy that could authorise reconciliation to
+seize a foreign-owned slot would break the never-reclaim half of T118 and let a shell reload silently revert an
+operator's publish, so the boundary is structural rather than documented:
+
+1. `ArtifactForeignOwnerDecision` is a **closed pair of instances** behind a private constructor — no host can
+   construct a third, and no enum member can be added to it.
+2. The policy is called **after** the activation attempt has already been refused. There is no pending request
+   left for any answer to influence.
+3. The decision is consumed by a **`static`** mapping onto a report entry, which cannot reach the reconciler's
+   injected `IWorkflowActivationCoordinator` or `IWorkflowActivationAuthority` at all.
+
+Takeover therefore stays where T118 put it: behind the explicit `WorkflowActivationOwnershipIntent.TakeOver` that
+only an operator-initiated publish carries, and that reconciliation never passes.
+
+**What actually changes between the two answers** is the report, not the engine. The slot, the serving
+projections and the store contents are identical either way; the artifact is in the content-addressed store on
+both paths. What moves is the entry's `Outcome` (`Skipped`/`ForeignSlotOwner` versus `Rejected`/
+`ActivationConflict`), which of `OwnershipSkips` / `Rejections` it lands in, and therefore which of the startup
+task's two boot messages an operator reads — *"imported but NOT activated"* or *"was not imported"*. Neither
+answer marks the artifact unresolved, so a sibling in the same closure unit that depends on the definition still
+activates: the definition **is** live, on the owner's activation.
+
+**The runtime still knows only "foreign".** The policy is handed the incumbent `WorkflowActivationSource`, the
+candidate source and the definition id, so a deployment that knows what its own source ids mean can branch on
+them. Runtime does not and must not: there is no comparison against any particular source kind anywhere in it
+(§E2.2). A conflict whose slot records no owner at all is an authority defect, not a question for a policy, and
+takes the built-in skip without the policy being called.
+
+**A throwing policy aborts the pass.** Exceptions out of this contract are not caught — a host asserting its own
+expectations gets to fail loudly rather than be silently defaulted — so a policy that consults a remote service
+should handle its own faults and answer.
 
 ### `IWorkflowArtifactReconciler` — what a replacement inherits
 
