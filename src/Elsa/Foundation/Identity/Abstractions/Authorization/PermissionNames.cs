@@ -1,14 +1,22 @@
-namespace Elsa.Api.AspNetCore;
+namespace Elsa.Foundation.Identity.Abstractions.Authorization;
 
 /// <summary>
-/// The shared endpoint security convention's permission catalog.
+/// The permission catalog custom hosts and identity providers grant against.
 /// </summary>
 /// <remarks>
-/// These names live with the shared endpoint security convention so custom hosts and identity
-/// providers can grant them without referencing an individual domain API implementation. They were
-/// previously housed in the first-party FastEndpoints project, which made a convention that is
-/// authoring-model-neutral look FastEndpoints-specific; retiring that project moved them here,
-/// beside the endpoint ownership, authoring, and security-disposition metadata they compose with.
+/// These names exist so a host or an identity provider can grant a permission without referencing
+/// the domain API that enforces it. They were previously housed in the first-party FastEndpoints
+/// project, which made an authoring-model-neutral convention look FastEndpoints-specific; retiring
+/// that project moved them here, beside <see cref="EndpointPermissionPolicy"/>, which composes them.
+/// <para>
+/// The action-scoped names below still couple this catalog to the Workflows, BPMN, and Elsa 3
+/// domains, which is a layering compromise inherited from the FastEndpoints project rather than a
+/// deliberate design. Wave 9 established the better pattern: an owner declares its own permissions
+/// class, as <c>Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions</c> does. Only
+/// <see cref="All"/> is genuinely cross-domain. Devolving the remaining names to their owners is
+/// tracked as follow-up work; it is a wide consumer-side rename and does not belong in a retirement
+/// unit whose contract is that observable behavior does not move.
+/// </para>
 /// </remarks>
 public static class PermissionNames
 {
