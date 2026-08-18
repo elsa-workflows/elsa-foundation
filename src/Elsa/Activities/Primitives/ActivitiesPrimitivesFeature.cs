@@ -30,10 +30,9 @@ public class ActivitiesPrimitivesFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, ClrActivityActivator>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability>(
-            new RuntimeActivityConsumerCapability(
-                WellKnownRuntimeActivityConsumers.ClrActivity,
-                [RuntimeActivityDescriptor.InitialSchemaVersion])));
+        // A distinct type, not the shared generic capability record: TryAddEnumerable de-duplicates by
+        // implementation type, so two capabilities of one class silently collapse into whichever composed first.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, ClrActivityConsumerCapability>());
 
         // Contribute the Event start-trigger's stimulus provider (W7, E3-1) so the publish-time trigger extractor
         // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
