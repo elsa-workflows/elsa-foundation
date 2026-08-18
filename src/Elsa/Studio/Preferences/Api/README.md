@@ -25,4 +25,4 @@ There are no module-owned event handlers, background tasks, or scheduled jobs. P
 
 ## Transition scope
 
-The package contains no production FastEndpoints dependency or endpoint discovery types. Other Elsa modules may continue to expose FastEndpoints routes in the same host during staged migration; both authoring models ultimately publish standard ASP.NET Core endpoints and use the same Foundation authorization evaluator. The canary evidence and remaining risks are recorded in `docs/reports/studio-preferences-minimal-api-canary-2026-08.md`.
+The package contains no production FastEndpoints dependency or endpoint discovery types. No first-party Elsa module exposes FastEndpoints routes any more, but a third-party module still can in the same host: both authoring models publish standard ASP.NET Core endpoints and use the same Foundation authorization evaluator. The canary evidence and remaining risks are recorded in `docs/reports/studio-preferences-minimal-api-canary-2026-08.md`.

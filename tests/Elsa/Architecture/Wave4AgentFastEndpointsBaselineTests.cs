@@ -4,7 +4,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.OpenApi;
-using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using FastEndpoints;

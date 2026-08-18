@@ -94,9 +94,7 @@
   <Folder Name="/src/Elsa/Api/">
     <Project Path="src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <Project Path="src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
-    <Project Path="src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Api/FastEndpoints/" />
   <Folder Name="/src/Elsa/Caching/">
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
@@ -407,9 +405,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Api/Capabilities/">
     <Project Path="tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Api/FastEndpoints/">
-    <Project Path="tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />

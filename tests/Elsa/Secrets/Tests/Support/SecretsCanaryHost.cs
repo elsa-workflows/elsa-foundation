@@ -2,7 +2,7 @@ using System.Security.Claims;
 using System.Collections.Concurrent;
 using CShells.FastEndpoints.Contracts;
 using Elsa.Api.Compatibility.Testing.Http;
-using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -66,10 +66,7 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
 
     public static Task<SecretsCanaryHost> StartMigratedAsync() => StartAsync();
 
-    public static Task<SecretsCanaryHost> StartMigratedWithFastEndpointsAsync() =>
-        StartAsync(includeCoexistingFastEndpoints: true);
-
-    private static async Task<SecretsCanaryHost> StartAsync(bool includeCoexistingFastEndpoints = false)
+    private static async Task<SecretsCanaryHost> StartAsync()
     {
         IReadOnlyList<EndpointDataSource>? endpointDataSources = null;
         var host = new HostBuilder()
@@ -99,13 +96,6 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                     services.AddScoped<IPermissionResourceHandler, CanaryPermissionResourceHandler>();
 
                     new SecretsApiFeature().ConfigureServices(services);
-                    if (includeCoexistingFastEndpoints)
-                    {
-                        services.AddFastEndpoints(options =>
-                        {
-                            options.Assemblies = [typeof(UnrelatedFastEndpointsEndpoint).Assembly];
-                        });
-                    }
                 });
                 webHost.Configure(app =>
                 {
@@ -142,15 +132,6 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        if (includeCoexistingFastEndpoints)
-                        {
-                            endpoints.MapFastEndpoints(config =>
-                            {
-                                using var scope = endpoints.ServiceProvider.CreateScope();
-                                foreach (var configurator in scope.ServiceProvider.GetServices<IFastEndpointsConfigurator>())
-                                    configurator.Configure(config);
-                            });
-                        }
                         SecretsApi.MapSecretsApi(endpoints);
                         endpoints.MapOpenApi();
                         endpointDataSources = endpoints.DataSources.ToArray();

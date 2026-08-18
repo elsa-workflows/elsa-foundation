@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Services;
-using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;

@@ -1,7 +1,8 @@
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Capabilities;
@@ -30,7 +31,7 @@ public sealed class ValueConversionProfilesEndpointTests
         var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
         var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
         Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
-        Assert.Equal(PermissionKey.Normalize(PermissionNames.WorkflowPublishingRead),
+        Assert.Equal(PermissionKey.Normalize(WorkflowPublishingPermissions.Read),
             Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
     }
 

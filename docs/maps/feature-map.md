@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 114
 
 ## Features
 
@@ -37,7 +37,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
 | FoundationWorkflowsAgentFeature | direct IShellFeature | Elsa.Agent.Workflows | IShellFeature | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/FoundationWorkflowsAgentFeature.cs) |
 | ApiCapabilitiesFeature | direct IWebShellFeature | Elsa.Api.Capabilities | IWebShellFeature | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
-| ApiSecurityFeature | direct IShellFeature | Elsa.Api.FastEndpoints | IShellFeature | [ApiSecurityFeature.cs](../../src/Elsa/Api/FastEndpoints/ApiSecurityFeature.cs) |
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | OpenTelemetryFeature | direct IWebShellFeature | Elsa.Diagnostics.OpenTelemetry | IWebShellFeature | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |

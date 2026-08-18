@@ -18,7 +18,6 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />

@@ -1,4 +1,5 @@
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Publishing.Api.Authorization;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Publishing.Api;
@@ -24,7 +25,7 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
         var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
         var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
         Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
-        Assert.Equal(PermissionKey.Normalize(PermissionNames.WorkflowPublishingRead),
+        Assert.Equal(PermissionKey.Normalize(WorkflowPublishingPermissions.Read),
             Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
     }
 

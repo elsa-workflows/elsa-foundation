@@ -31,7 +31,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tools/compatibility/RuntimeFastEndpointsCapture/RuntimeFastEndpointsCapture.csproj",
-      "sha256": "1f18463f22812f1ed6323722c6655e0e6cfd2a550c36ae1e44fa586c42bfa242"
+      "sha256": "f360e1f31ff719e8ccb0e73dc4931f4ed66bf00044da75d7b863693ced417715"
     },
     {
       "identity": "checked-in-commit",
@@ -54,7 +54,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "003e3e3f56c3ef8eca08d647d39e944708a4f70faaa4bb55437471285a400823",
+  "runnerFingerprint": "66e4b9228bf4be701ffc93456118991071ebd6c2d992fffbaefec497f8398a18",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "67ba4b3b9bec3a6c2aac0d6d332099baf723e802"
 }
