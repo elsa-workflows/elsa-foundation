@@ -27,15 +27,28 @@ Compose a runtime-only engine — no design, no publishing, no compiler — with
     "ActivitiesRuntime": {},            // registers activity types (the reconciler orders itself after this)
     "WorkflowsRuntimeApi": {},          // or any composition that arms AddWorkflowRuntime()
     "WorkflowsRuntimeTriggers": {},     // stimulus routing for trigger-started workflows
+    "FileSystemDistributedLocking": {}, // REQUIRED: see note below. Any Elsa.Locking.* provider.
     "JsonWorkflowArtifactReconciliation": {
-      "FolderPath": "/mnt/artifacts",   // or FilePath / ordered Files
-      "SourceId": "prod-artifact-drop",
-      // "TenantId": "tenant-a"         // optional; default null
+      // Settings nest under "Options" -- they bind to the feature's Options property, the same
+      // shape ClrActivityReconciliation uses in the shipped shells.json. Flat keys silently bind
+      // nothing and the feature then throws on its empty SourceId.
+      "Options": {
+        "FolderPath": "/mnt/artifacts", // or FilePath / ordered Files -- exactly one of the three
+        "SourceId": "prod-artifact-drop",
+        // "TenantId": "tenant-a"       // optional; default null
+      }
     }
     // + a Groundwork runtime persistence feature for durability (in-memory otherwise)
   }
 }
 ```
+
+> **A locking feature is not optional.** The reconcile pass is a `[SingleNodeTask]` guarded by
+> `IDistributedLockProvider`, and **no default is registered anywhere in the framework — deliberately.**
+> A process-local stand-in would satisfy DI, behave perfectly on one node, and then let two nodes
+> reconcile the same mount concurrently, which is the exact condition the single-node guard exists to
+> prevent. Composing without one fails at container validation. `FileSystemDistributedLocking` is
+> sufficient for a single host; a multi-node deployment needs a genuinely distributed provider.
 
 Drop `my-workflow-closure.json` into `/mnt/artifacts` and start the shell. At activation, the reconciler (single-node, distributed-locked, before readiness):
 

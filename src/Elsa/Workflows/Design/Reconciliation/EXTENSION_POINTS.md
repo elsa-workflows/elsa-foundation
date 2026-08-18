@@ -64,6 +64,6 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 ## Cross-references
 
-- Workflow catalog persistence: [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Workflow catalog persistence: [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Persistence/Groundwork/EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.
