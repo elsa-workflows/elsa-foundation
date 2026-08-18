@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 [ShellFeature(
     name: "WorkflowsRuntimeRecurringTriggers",
     DisplayName = "Workflows Runtime Recurring Triggers",
-    Description = "Background pump that fires recurring Timer/Cron start triggers, starting new workflow instances on a schedule through the stimulus router. Populates the recurring-schedule store at publish time. Compose alongside the Workflows Runtime Triggers feature and the Tasks feature.",
+    Description = "Background pump that fires recurring Timer/Cron start triggers, starting new workflow instances on a schedule through the stimulus router. Populates the recurring-schedule store at activation time, for publishing and artifact reconciliation alike. Compose alongside the Workflows Runtime Triggers feature and the Tasks feature.",
     DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Tasks" })]
 public sealed class WorkflowsRuntimeRecurringTriggersFeature : IShellFeature
 {

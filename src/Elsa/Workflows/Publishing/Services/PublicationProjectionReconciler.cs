@@ -14,7 +14,8 @@ public sealed class PublicationProjectionReconciler(
     IWorkflowTriggerBindingStore triggerBindingStore,
     TimeProvider timeProvider,
     IRecurringTriggerScheduleStore? recurringScheduleStore = null,
-    IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null) : IPublicationProjectionPreparer
+    IEnumerable<IWorkflowTriggerIndexObserver>? triggerObservers = null,
+    IRecurringTriggerScheduleProjectionPreparer? recurringSchedulePreparer = null) : IPublicationProjectionPreparer
 {
     private readonly IReadOnlyCollection<IWorkflowTriggerIndexObserver> _triggerObservers = triggerObservers?.ToArray() ?? [];
 
@@ -30,18 +31,30 @@ public sealed class PublicationProjectionReconciler(
         var executable = await executableStore.FindAsync(candidate.ArtifactId, cancellationToken)
             ?? throw new InvalidOperationException($"Executable artifact '{candidate.ArtifactId}' was not found for publication '{candidate.PublicationId}'.");
 
-        // ONE owned write per projection (FR-B-006 writer census, finding 3). The indexer chain prepares both the
-        // trigger bindings and — through its recurring decorator, unconditionally, even with no recurring
-        // providers composed — the recurring schedules. The read-back-then-re-prepare that used to follow under a
-        // second delivery record wrote the schedule projection twice, and its independent record could short-
-        // circuit (see DeliverAsync's Delivered guard) out of step with the write that actually produced the
-        // projection: a replay whose bindings record was already Delivered skipped the indexer, then re-prepared
-        // the schedules from an empty read-back and erased them. One write under one record removes both hazards.
+        // ONE owned write per projection (FR-B-006 writer census, finding 3). Both projections are prepared under
+        // the SAME delivery record, deliberately: the read-back-then-re-prepare that used to follow under a second
+        // record wrote the schedule projection twice, and its independent record could short-circuit (see
+        // DeliverAsync's Delivered guard) out of step with the write that actually produced the projection — a
+        // replay whose bindings record was already Delivered skipped the indexer, then re-prepared the schedules
+        // from an empty read-back and erased them. One write under one record removes both hazards.
+        //
+        // The recurring schedule is prepared explicitly here, in the same order the activation coordinator uses
+        // (recurrences materialized and validated before any binding is written). It used to arrive implicitly
+        // through a decorator over IWorkflowTriggerIndexer; T044b retired that decorator because it made the
+        // indexer a replacement contract that silently owned a second obligation. Preparing it explicitly is the
+        // point of that change — and omitting it here would leave ActivateAsync below activating a recurring
+        // projection that was never prepared, which on the RestoreAsync compensation path means a workflow's
+        // timers silently stop after a failed unpublish.
         await DeliverAsync(
             candidate.PublicationId,
             PublicationProjectionKinds.TriggerBindings,
             PublicationProjectionOperation.Prepare,
-            ct => AsVoid(triggerIndexer.PrepareActivationAsync(executable, candidate.PublicationId, candidate.SlotId, ct)),
+            async ct =>
+            {
+                if (recurringSchedulePreparer is not null)
+                    await recurringSchedulePreparer.PrepareActivationAsync(executable, candidate.PublicationId, candidate.SlotId, ct);
+                await triggerIndexer.PrepareActivationAsync(executable, candidate.PublicationId, candidate.SlotId, ct);
+            },
             cancellationToken,
             forceReplay);
     }
@@ -228,9 +241,6 @@ public sealed class PublicationProjectionReconciler(
             throw;
         }
     }
-
-    private static async ValueTask AsVoid(ValueTask<IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding>> operation) =>
-        _ = await operation;
 
     private async ValueTask NotifyTriggerObserversAsync(
         PublicationRecord publication,
