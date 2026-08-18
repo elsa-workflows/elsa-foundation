@@ -15,51 +15,33 @@ compile; this one imports already-compiled *artifacts* for an engine that did no
 |---|---|
 | `Test-ArtifactBasedDeployment.ps1` | Publishes a child workflow and a parent that waits on a `DispatchWorkflow` of it, exports the parent's closure over HTTP, then restarts the server with `JsonWorkflowArtifactReconciliation` composed (`SourceId` + `FolderPath`) **against a freshly schema-deployed empty database**, and asserts: the importing engine's design catalog holds neither definition, both the parent's and the child's activation slots are claimed, the parent executes to completion including the child; a second restart over the unchanged mount is idempotent (same activation, no duplicate); and a v2 closure dropped into the mount supersedes v1 (T095 latest-wins). |
 
-## Current result: RED — the round trip does not work on a real server
+## Current result: GREEN — 13 assertions, 0 failures (2026-08-18)
 
-As written this suite **fails**, and the failure is a real defect, not a stale test. Every phase past
-the export is blocked by one cause:
+The round trip works end to end on a real server: publish → export over HTTP → mount → import at
+startup → **parent and pinned child both execute** → idempotent restart → newer `ArtifactVersion`
+supersedes.
 
-```text
-Workflow artifact closure at '...\parent-v1.json' could not be read; source '...' stopped after it.
-InvalidWorkflowArtifactClosureException: ... the file is not a valid closure envelope.
- ---> System.Text.Json.JsonException: The JSON value could not be converted to
-      Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy.
-      Path: $.artifacts[0].rootActivity.activityContract.result.policy.lifecycle
-Workflow artifact reconciliation completed: 0 imported, 0 already current, 0 skipped, 1 rejected.
-Workflow artifact '' from '...' was not imported (MalformedClosure)
-```
+It was red when first written, and both causes were **real production defects this suite found** —
+neither visible to any in-process test:
 
-**Startup-task ordering.** `WorkflowArtifactClosureSerializer` encodes and decodes through
-`IPayloadSerializer.GetOptions()`, and `JsonPayloadSerializer` builds those options from
-`JsonPayloadConverterRegistry` — which is populated by `JsonPayloadConvertersInitializingStartupTask`.
-In the server's actual startup order that task runs **after**
-`WorkflowArtifactReconcilerStartupTask`:
+1. **Converter ordering** (fixed in `01939ca63`). `JsonPayloadConvertersInitializingStartupTask` had no
+   `[Order]`, so the reconciler deserialized closures at boot before the JSON converters existed and an
+   artifact exported at request time could not be read back. Latent for **any** startup task reading a
+   payload; this feature was simply the first to lose the race.
+2. **Capability collision** (fixed in `1d8a58e89`). `TryAddEnumerable` de-duplicates by *implementation
+   type*, and two features registered the same capability class differing only in data, so one was
+   silently discarded. A fully-featured engine reported `activity consumer 'elsa.clr-activity' schema
+   '1' is not installed` and refused artifacts it could run.
 
-```text
-Startup task ...RegisterActivityTypesStartupTask completed
-Startup task ...WorkflowArtifactReconcilerStartupTask completed      <-- import runs here
-Startup task ...JsonPayloadConvertersInitializingStartupTask completed  <-- converters registered here
-```
+Both were shadowing each other — fixing the first only revealed the second. **That is the argument for
+keeping this suite:** every in-process test resolves a fully-initialised serializer and composes its own
+capabilities, so neither defect was reachable from there.
 
-So the import pass deserializes with an **empty converter set**: no `JsonStringEnumConverter`, so
-enums are expected as numbers, and the `"lifecycle": "Result"` the exporter wrote (at request time,
-when the registry *was* populated) cannot be read back. The export and import genuinely do share one
-codec — the encoder and decoder are the same class — but they do not share one converter registry
-state, because one runs after startup and the other during it.
-
-The reconciler declares `[TaskDependency(typeof(RegisterActivityTypesStartupTask))]` and nothing
-about serialization. `TaskManager` sorts startup tasks by `[Order]` (both of these default to `0f`)
-and then topologically by `[TaskDependency]` — so with no edge between them, their relative order is
-**whatever the DI registration order happens to be**. The import running before the converters exist
-is therefore incidental, not configured, and could flip with a composition change.
-
-In-process coverage misses this entirely: `ArtifactExportImportRoundTripTests` and the
-reconciliation fixtures resolve a fully-initialised serializer, so the round trip passes there and
-fails only against a booting server.
-
-The suite is deliberately left asserting the intended behaviour rather than being softened into a
-green tracker, so it flips to green the moment the ordering is fixed.
+**What this suite does NOT prove.** Both halves run on Workbench, whose single shell composes design,
+publishing and the compiler, and env vars can override a config value but cannot *remove* a key. So it
+proves *"an engine whose store never held these definitions"*, not *"an engine that cannot compile"*.
+The assembly-boundary claim (SC-B-001/005) remains in-process-only, and the lockless-composition
+failure is unassertable here for the same reason. See spec 151's T126.
 
 ## Why a second database
 
