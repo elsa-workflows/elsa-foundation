@@ -198,6 +198,9 @@ public sealed class DomainManagementApiCompositionTests
                 // WorkflowsPublishingApi and GraphActivitiesDesign now DependsOn. Seed the engine and its
                 // transitive Runtime-triggers/Events feature assemblies so shell composition can discover them.
                 typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,
+                // WorkflowsPublishing declares DependsOn WorkflowDesignValidations (spec 151 T126), and an
+                // unreferenced dependency is a FeatureNotFoundException at shell activation, not a skip.
+                typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
                 typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeTriggersFeature).Assembly,
                 typeof(Elsa.Events.EventsFeature).Assembly,
                 typeof(ExpressionsFeature).Assembly,
