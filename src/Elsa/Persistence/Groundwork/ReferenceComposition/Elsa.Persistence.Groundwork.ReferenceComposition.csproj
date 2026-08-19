@@ -8,6 +8,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <!-- The deployment schema selects the shared design atomic-write ledger, which lives here. It
+         arrived transitively through Publishing until that lane took the public v2 closure. -->
+    <ProjectReference Include="..\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
