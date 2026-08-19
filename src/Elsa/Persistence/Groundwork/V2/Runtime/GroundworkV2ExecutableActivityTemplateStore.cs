@@ -210,6 +210,39 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     }
 
     /// <summary>
+    /// Whether this template still needs creating, for a caller about to stage it into a transaction it
+    /// owns. This is the preflight <see cref="SaveAsync"/> runs before staging, kept in the lane that owns
+    /// the invariants: false means an identical template is already durable and staging it again would
+    /// fail a create-only write for no reason, and a template id bound to different behaviour, or a hash
+    /// already claimed by another template, throws here rather than inside the caller's transaction.
+    /// </summary>
+    public async ValueTask<bool> RequiresCreateAsync(
+        ExecutableActivityTemplate template,
+        CancellationToken cancellationToken = default)
+    {
+        GroundworkV2ExecutableActivityTemplateStorageConventions.Validate(template);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existingById = await FindAsync(template.TemplateId, cancellationToken);
+        if (existingById is not null)
+        {
+            EnsureSameIdentityAndContent(existingById, template);
+            EnsureOwnedClaim(template, await FindClaimAsync(template.TemplateHash, cancellationToken));
+            return false;
+        }
+
+        var existingClaim = await FindClaimAsync(template.TemplateHash, cancellationToken);
+        if (existingClaim is not null && !StringComparer.Ordinal.Equals(existingClaim.TemplateId, template.TemplateId))
+            throw HashCollision(template, existingClaim.TemplateId);
+
+        var existingByHash = await FindByHashAsync(template.TemplateHash, cancellationToken);
+        if (existingByHash is not null)
+            throw HashCollision(template, existingByHash.TemplateId);
+
+        return true;
+    }
+
+    /// <summary>
     /// Stages this template's creation into a transaction the caller owns, for an operation that is one
     /// act across lanes — publishing an activity writes design rows, this template and a publication
     /// receipt, and either all of it happened or none of it did.
