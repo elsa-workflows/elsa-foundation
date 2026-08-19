@@ -6,15 +6,17 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 120
 
 ## Features
 
 | Feature class | Kind | Project | Base/interface | File |
 |---|---|---|---|---|
-| ActivitiesBpmnFeature | direct IShellFeature | Elsa.Activities.Bpmn | IShellFeature | [ActivitiesBpmnFeature.cs](../../src/Elsa/Activities/Bpmn/ActivitiesBpmnFeature.cs) |
+| ActivitiesBpmnDesignFeature | direct IShellFeature | Elsa.Activities.Bpmn.Design | IShellFeature | [ActivitiesBpmnDesignFeature.cs](../../src/Elsa/Activities/Bpmn/Design/ActivitiesBpmnDesignFeature.cs) |
 | ActivitiesBpmnInterchangeFeature | direct IWebShellFeature | Elsa.Activities.Bpmn.Interchange | IWebShellFeature | [ActivitiesBpmnInterchangeFeature.cs](../../src/Elsa/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
-| ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
+| ActivitiesBpmnRuntimeFeature | direct IShellFeature | Elsa.Activities.Bpmn.Runtime | IShellFeature | [ActivitiesBpmnRuntimeFeature.cs](../../src/Elsa/Activities/Bpmn/Runtime/ActivitiesBpmnRuntimeFeature.cs) |
+| ActivitiesControlFlowDesignFeature | direct IShellFeature | Elsa.Activities.ControlFlow.Design | IShellFeature | [ActivitiesControlFlowDesignFeature.cs](../../src/Elsa/Activities/ControlFlow/Design/ActivitiesControlFlowDesignFeature.cs) |
+| ActivitiesControlFlowRuntimeFeature | direct IShellFeature | Elsa.Activities.ControlFlow.Runtime | IShellFeature | [ActivitiesControlFlowRuntimeFeature.cs](../../src/Elsa/Activities/ControlFlow/Runtime/ActivitiesControlFlowRuntimeFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | ActivitiesDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.Groundwork | IShellFeature | [ActivitiesDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkPersistenceFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
@@ -22,7 +24,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | JsonActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Json | IShellFeature | [JsonActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Json/JsonActivityReconciliationFeature.cs) |
 | DispatchWorkflowDesignFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Design | IShellFeature | [DispatchWorkflowDesignFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Design/DispatchWorkflowDesignFeature.cs) |
 | DispatchWorkflowRuntimeFeature | direct IShellFeature | Elsa.Activities.DispatchWorkflow.Runtime | IShellFeature | [DispatchWorkflowRuntimeFeature.cs](../../src/Elsa/Activities/DispatchWorkflow/Runtime/DispatchWorkflowRuntimeFeature.cs) |
-| ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
+| ActivitiesFlowchartDesignFeature | direct IShellFeature | Elsa.Activities.Flowchart.Design | IShellFeature | [ActivitiesFlowchartDesignFeature.cs](../../src/Elsa/Activities/Flowchart/Design/ActivitiesFlowchartDesignFeature.cs) |
+| ActivitiesFlowchartRuntimeFeature | direct IShellFeature | Elsa.Activities.Flowchart.Runtime | IShellFeature | [ActivitiesFlowchartRuntimeFeature.cs](../../src/Elsa/Activities/Flowchart/Runtime/ActivitiesFlowchartRuntimeFeature.cs) |
 | GraphActivitiesDesignFeature | direct IShellFeature | Elsa.Activities.Graph.Design | IShellFeature | [GraphActivitiesDesignFeature.cs](../../src/Elsa/Activities/Graph/Design/GraphActivitiesDesignFeature.cs) |
 | GraphActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Graph.Runtime | IShellFeature | [GraphActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Graph/Runtime/GraphActivitiesRuntimeFeature.cs) |
 | ActivitiesHttpFeature | direct IShellFeature | Elsa.Activities.Http | IShellFeature, IMiddlewareShellFeature | [ActivitiesHttpFeature.cs](../../src/Elsa/Activities/Http/ActivitiesHttpFeature.cs) |
@@ -30,7 +33,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSchedulingFeature | direct IShellFeature | Elsa.Activities.Scheduling | IShellFeature | [ActivitiesSchedulingFeature.cs](../../src/Elsa/Activities/Scheduling/ActivitiesSchedulingFeature.cs) |
 | ActivitiesScriptingFeature | direct IShellFeature | Elsa.Activities.Scripting | IShellFeature | [ActivitiesScriptingFeature.cs](../../src/Elsa/Activities/Scripting/ActivitiesScriptingFeature.cs) |
-| ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
+| ActivitiesSequenceDesignFeature | direct IShellFeature | Elsa.Activities.Sequence.Design | IShellFeature | [ActivitiesSequenceDesignFeature.cs](../../src/Elsa/Activities/Sequence/Design/ActivitiesSequenceDesignFeature.cs) |
+| ActivitiesSequenceRuntimeFeature | direct IShellFeature | Elsa.Activities.Sequence.Runtime | IShellFeature | [ActivitiesSequenceRuntimeFeature.cs](../../src/Elsa/Activities/Sequence/Runtime/ActivitiesSequenceRuntimeFeature.cs) |
 | AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
 | FoundationAgentApiFeature | direct IWebShellFeature | Elsa.Agent.Api | IWebShellFeature | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationAgentAbstractionsFeature | direct IShellFeature | Elsa.Agent.Core | IShellFeature | [FoundationAgentAbstractionsFeature.cs](../../src/Elsa/Agent/Core/FoundationAgentAbstractionsFeature.cs) |
@@ -119,6 +123,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.JavaScript | IWebShellFeature | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
+| WorkflowsArtifactReconciliationFeature | direct IShellFeature | Elsa.Workflows.Runtime.Reconciliation | IShellFeature | [WorkflowsArtifactReconciliationFeature.cs](../../src/Elsa/Workflows/Runtime/Reconciliation/WorkflowsArtifactReconciliationFeature.cs) |
 | WorkflowsRuntimeReferenceGarbageCollectionFeature | direct IShellFeature | Elsa.Workflows.Runtime.ReferenceGarbageCollection | IShellFeature | [WorkflowsRuntimeReferenceGarbageCollectionFeature.cs](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
 | WorkflowsRuntimeRecurringTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |

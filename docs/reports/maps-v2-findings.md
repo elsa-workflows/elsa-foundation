@@ -7,21 +7,25 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 ## Summary
 
 - Domains in domain map: 27
-- Source extension catalogs discovered: 64
-- Source extension catalogs indexed from root: 61
-- Discovered source catalogs not linked from root index: 3
-- Root-indexed catalogs missing on disk: 0
+- Source extension catalogs discovered: 69
+- Source extension catalogs indexed from root: 62
+- Discovered source catalogs not linked from root index: 16
+- Root-indexed catalogs missing on disk: 9
 - Runtime-to-design direct reference signals: 0
-- Design-to-runtime direct reference signals: 5
+- Design-to-runtime direct reference signals: 9
 - Bridge-like direct reference shapes: 14
 
 ## Reference Signals
 
+- Elsa.Activities.Bpmn.Design -> Elsa.Activities.Bpmn.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Activities.ControlFlow.Design -> Elsa.Activities.ControlFlow.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.Design.Reconciliation.Clr -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.DispatchWorkflow.Design -> Elsa.Activities.DispatchWorkflow.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.DispatchWorkflow.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Activities.Flowchart.Design -> Elsa.Activities.Flowchart.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.Graph.Design -> Elsa.Activities.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
 - Elsa.Activities.Graph.Design -> Elsa.Workflows.Runtime.Core (design-to-runtime): expected in some design/read/publish paths; review context.
+- Elsa.Activities.Sequence.Design -> Elsa.Activities.Sequence.Runtime (design-to-runtime): expected in some design/read/publish paths; review context.
 
 ## Next Map Work
 
