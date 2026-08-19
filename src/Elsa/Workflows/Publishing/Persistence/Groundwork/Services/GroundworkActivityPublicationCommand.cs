@@ -40,7 +40,7 @@ public sealed class GroundworkActivityPublicationCommand(
     GroundworkPublishingStorage publishingStorage,
     GroundworkV2ExecutableActivityTemplateStore templates,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
-    TimeProvider timeProvider)
+    TimeProvider? timeProvider = null)
     : ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>
 {
     private static readonly JsonSerializerOptions DesignJson = GroundworkActivitiesDesignJson.Options;

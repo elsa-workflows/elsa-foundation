@@ -30,7 +30,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
     GroundworkV2ExecutableActivityTemplateStore templates,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
-    TimeProvider timeProvider)
+    TimeProvider? timeProvider = null)
     : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
 {
     private static readonly string[] DesignKinds =
