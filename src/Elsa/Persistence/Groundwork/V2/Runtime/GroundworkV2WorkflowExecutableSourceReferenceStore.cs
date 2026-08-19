@@ -63,6 +63,20 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Stages this source reference's creation into a transaction the caller owns, for an operation that
+    /// is one act across lanes. Create-only, as the lane's own save is: the caller resolves an existing
+    /// reference before staging.
+    /// </summary>
+    public static void StageCreate(GroundworkStorageTransaction transaction, WorkflowExecutableSourceReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        transaction.StageInsert(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(reference),
+            WriteOptions.CreateOnly);
+    }
+
     public ValueTask<WorkflowExecutableSourceReference?> FindAsync(
         string sourceReferenceId,
         CancellationToken cancellationToken = default)

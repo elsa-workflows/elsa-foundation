@@ -12,9 +12,9 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
 /// <summary>
 /// Public-v2 storage access for the publishing units.
 /// <para>
-/// Publishing reads and writes only its own lane. Cross-lane publication is staged by the publication
-/// commands, which own a design unit of work and hand this storage the receipt; nothing here reaches
-/// across scopes, so there is no privileged query seam to audit.
+/// Publishing's own reads and writes never leave the lane, and nothing here reaches across scopes, so
+/// there is no privileged query seam to audit. A publication is one act across three lanes and commits
+/// through a transaction spanning all of their units instead.
 /// </para>
 /// </summary>
 public sealed class GroundworkPublishingStorage(
@@ -180,36 +180,13 @@ public sealed class GroundworkPublishingStorage(
         Open(unitId).Delete(Key(id), options);
 
     /// <summary>
-    /// Opens one exact unit of work over the named publishing units. The guards mirror the design lane:
-    /// a privileged or across-scope caller is refused before any provider is acquired, and staging
-    /// requires the provider's evidenced atomic-commit capability rather than discovering mid-commit
-    /// that the target cannot honour it.
+    /// Opens one exact transaction over the named publishing units. Publishing's own writes never leave
+    /// the lane; a publication that also writes design and runtime material asks the shared factory for a
+    /// transaction spanning all three instead.
     /// </summary>
-    public PublishingUnitOfWork BeginUnitOfWork(IReadOnlyCollection<string> unitIds)
-    {
-        ArgumentNullException.ThrowIfNull(unitIds);
-        if (unitIds.Count == 0)
-            throw new ArgumentException("At least one publishing unit is required.", nameof(unitIds));
-        var current = accessContextAccessor.Current ?? throw new InvalidOperationException(
-            "Publishing persistence access context is missing.");
-        if (current.AcrossScopes || current.AccessPolicy == PersistenceAccessPolicy.Privileged)
-            throw new InvalidOperationException(
-                "Privileged or across-scope publishing writes are refused before provider acquisition.");
-        RequireAtomicCommit();
-
-        var distinct = unitIds.Distinct(StringComparer.Ordinal).ToArray();
-        var units = distinct.Select(Unit).ToArray();
-        var accesses = units
-            .Select(unit => GroundworkStorageAccessMapper.Map(current, unit.Scope, FeatureIdentity))
-            .Distinct()
-            .ToArray();
-        if (accesses.Length != 1)
-            throw new InvalidOperationException("A publishing unit of work must use one exact persistence access context.");
-
-        return new PublishingUnitOfWork(
-            sessions.BeginUnitOfWork(accesses[0], BatchWriteOptions.Exact, distinct, targetName),
-            units.ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal));
-    }
+    public GroundworkStorageTransaction BeginUnitOfWork(IReadOnlyCollection<string> unitIds) =>
+        new GroundworkStorageTransactionFactory(sessions, accessContextAccessor)
+            .Begin(FeatureIdentity, unitIds, targetName);
 
     public IStorageSession Open(string unitId)
     {
@@ -233,16 +210,6 @@ public sealed class GroundworkPublishingStorage(
         {
             throw new GroundworkProviderFailureException(
                 $"Provider session open for unit '{unitId}' failed.", exception);
-        }
-    }
-
-    private void RequireAtomicCommit()
-    {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
-            throw new NotSupportedException(
-                "Publishing staging requires the provider's evidenced atomic-commit capability.");
         }
     }
 
@@ -290,23 +257,4 @@ public sealed class GroundworkPublishingStorage(
             stringComparison: QueryStringComparisonPolicy.Ordinal);
     }
 
-    /// <summary>One exact publishing transaction. Staging is conditional so a lost CAS race fails the commit.</summary>
-    public sealed class PublishingUnitOfWork(IUnitOfWork inner, IReadOnlyDictionary<string, StorageUnit> units) : IDisposable
-    {
-        public void Stage(string unitId, StorageValues values, WriteOptions options) =>
-            inner.Stage(RowWrite.ConditionalUpsert(Require(unitId), values, options));
-
-        public void StageDelete(string unitId, string id, WriteOptions options) =>
-            inner.Stage(RowWrite.Delete(Require(unitId), Key(id), options));
-
-        public BatchWriteReport Commit() => inner.CommitWithOutcomes();
-
-        public void Rollback() => inner.Rollback();
-
-        public void Dispose() => inner.Dispose();
-
-        private StorageUnit Require(string unitId) => units.TryGetValue(unitId, out var unit)
-            ? unit
-            : throw new InvalidOperationException($"Unit '{unitId}' was not admitted to this unit of work.");
-    }
 }

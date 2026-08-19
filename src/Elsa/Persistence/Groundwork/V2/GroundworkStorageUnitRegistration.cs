@@ -73,6 +73,9 @@ public static class GroundworkStorageUnitServiceCollectionExtensions
 
     private static void AddRuntimeOnce(IServiceCollection services)
     {
+        // Available to every lane: an operation that is one act across lanes asks for a transaction
+        // spanning their units, and nothing about that is specific to the lane that happens to drive it.
+        services.TryAddScoped<GroundworkStorageTransactionFactory>();
         services.TryAddSingleton<GroundworkPrivilegedQueryAuditSink>();
         services.TryAddSingleton<IGroundworkPrivilegedQueryAuditSink>(provider =>
             provider.GetRequiredService<GroundworkPrivilegedQueryAuditSink>());

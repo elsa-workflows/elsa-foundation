@@ -209,6 +209,32 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
             $"Executable activity template '{templateId}' changed concurrently and did not settle after {MaximumDeleteAttempts} attempts.");
     }
 
+    /// <summary>
+    /// Stages this template's creation into a transaction the caller owns, for an operation that is one
+    /// act across lanes — publishing an activity writes design rows, this template and a publication
+    /// receipt, and either all of it happened or none of it did.
+    /// <para>
+    /// The template and its hash claim are staged create-only together, exactly as the lane's own save
+    /// does, so the hash stays single-writer. The caller is responsible for the preflight this lane's
+    /// <see cref="SaveAsync"/> performs first: an existing template or a foreign hash claim must be
+    /// resolved before staging, because a transaction that spans lanes cannot reconcile a lost race by
+    /// itself.
+    /// </para>
+    /// </summary>
+    public static void StageCreate(GroundworkStorageTransaction transaction, ExecutableActivityTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        GroundworkV2ExecutableActivityTemplateStorageConventions.Validate(template);
+        transaction.StageInsert(
+            ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+            GroundworkV2ExecutableActivityTemplateStorageConventions.Values(template),
+            WriteOptions.CreateOnly);
+        transaction.StageInsert(
+            ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
+            GroundworkV2ExecutableActivityTemplateStorageConventions.ClaimValues(template),
+            WriteOptions.CreateOnly);
+    }
+
     private async ValueTask<BatchWriteReport> TryCreateAsync(
         ExecutableActivityTemplate template,
         CancellationToken cancellationToken)
