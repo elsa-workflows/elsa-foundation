@@ -257,3 +257,14 @@ the version" as a deployment idiom now gets a rejection instead of a silent re-p
 intended outcome — a content change without a version change is exactly what the broken-source
 diagnostic is for — and it was weighed against the alternative before being accepted. It will show up
 again in the real-host run against `Elsa.Foundation.Host`; that is expected, not a regression.
+
+### Test removals (4) — §2.21.1, T128, recorded 2026-08-19
+
+One pre-existing test file was deleted by the composite-activity split: `tests/Elsa/Activities/Sequence/Tests/ActivitiesSequenceFeatureTests.cs`, whose single test was `ConfigureServices_RegistersSequenceStructureHandler`.
+
+**Its subject moved and its objective was strengthened, not dropped.** `Elsa.Activities.Sequence` no longer has a single feature registering both halves, so a test named for "the" feature has no subject. The successor `ActivitiesSequenceFeatureRegistrationTests` splits it in two and asserts more than the original did:
+
+- `DesignFeature_RegistersSequenceStructureHandler` — the original objective, on the half that now owns it.
+- `RuntimeFeature_RegistersSchedulingServicesAndNoStructureHandler` — **new**, and the one that matters: it asserts the structure handler is *absent* from the runtime half. That is the invariant T128 exists to create, and nothing asserted it before.
+
+Recorded per §2.21.1 because a file was deleted, and per §2.23.4 because the subject moved. No coverage was lost; the golden-rule sweep (T112) measured **+84 assertions and +13 test methods** across the 114 pre-existing test files this feature touched.

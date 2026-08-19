@@ -15,7 +15,7 @@ namespace Elsa.Persistence.Groundwork.SqlServer;
     name: "GroundworkRuntimePersistenceSqlServer",
     DisplayName = "Groundwork SQL Server Runtime Persistence",
     Description = "Backs workflow runtime persistence with an admission-gated Groundwork SQL Server target. Apply schema through Groundwork.Tool before host startup.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class SqlServerGroundworkRuntimePersistenceShellFeature : GroundworkRuntimePersistenceShellFeatureBase
 {
     public const string DefaultConnectionString =

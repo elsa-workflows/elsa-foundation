@@ -21,7 +21,7 @@ namespace Elsa.Persistence.Groundwork;
     name: "WorkflowsRuntimeGroundworkPersistence",
     DisplayName = "Workflows Runtime Groundwork Persistence",
     Description = "Persists workflow execution state, bookmarks, executables, checkpoints, the post-commit outbox and the durable scheduler through Groundwork. Binds to a named Groundwork target, so runtime state can live in its own database.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class WorkflowsRuntimeGroundworkPersistenceFeature : GroundworkPersistenceShellFeatureBase
 {
     [ManifestSetting(

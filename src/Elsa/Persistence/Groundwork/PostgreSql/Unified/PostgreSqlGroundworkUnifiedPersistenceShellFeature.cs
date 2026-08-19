@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
     name: "GroundworkUnifiedPersistencePostgreSql",
     DisplayName = "Groundwork PostgreSQL Unified Persistence",
     Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
 {
     public PostgreSqlGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)

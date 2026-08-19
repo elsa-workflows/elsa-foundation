@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.MongoDb.Unified;
     name: "GroundworkUnifiedPersistenceMongoDb",
     DisplayName = "Groundwork MongoDB Unified Persistence",
     Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required; safe missing document structures and diagnostic streams can be auto-applied at startup.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class MongoDbGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
 {
     public MongoDbGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)

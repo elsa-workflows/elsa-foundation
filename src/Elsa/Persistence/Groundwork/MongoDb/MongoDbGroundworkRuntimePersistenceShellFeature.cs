@@ -15,7 +15,7 @@ namespace Elsa.Persistence.Groundwork.MongoDb;
     name: "GroundworkRuntimePersistenceMongoDb",
     DisplayName = "Groundwork MongoDB Runtime Persistence",
     Description = "Backs workflow runtime persistence with one deployment-owned Groundwork MongoDB target. A writable transaction-capable replica set and the exact pre-applied schema are required at startup.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class MongoDbGroundworkRuntimePersistenceShellFeature : GroundworkRuntimePersistenceShellFeatureBase
 {
     public const string DefaultConnectionString = "mongodb://localhost:27017/?replicaSet=rs0";

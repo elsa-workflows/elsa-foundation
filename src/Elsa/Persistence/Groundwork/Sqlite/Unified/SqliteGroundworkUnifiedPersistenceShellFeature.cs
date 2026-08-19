@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
     name: "GroundworkUnifiedPersistenceSqlite",
     DisplayName = "Groundwork SQLite Unified Persistence",
     Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQLite target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class SqliteGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
 {
     public SqliteGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)

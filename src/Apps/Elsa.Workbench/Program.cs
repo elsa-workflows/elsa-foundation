@@ -251,6 +251,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // enabled in any default shell because the feature requires a SourceId and a file/folder path.
             typeof(WorkflowsDesignReconciliationFeature).Assembly,
             typeof(JsonWorkflowReconciliationFeature).Assembly,
+            // Spec 151: portable executable-artifact reconciliation. Listed so the feature is discoverable
+            // from shells.json -- without it an appsettings composition is silently skipped rather than
+            // refused, which is the failure mode the e2e suite hit before the reference was added.
+            typeof(Elsa.Workflows.Runtime.Reconciliation.JsonWorkflowArtifactReconciliationFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,

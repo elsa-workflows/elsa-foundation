@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.SqlServer.Unified;
     name: "GroundworkUnifiedPersistenceSqlServer",
     DisplayName = "Groundwork SQL Server Unified Persistence",
     Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork SQL Server target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool.",
-    DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
+    DependsOn = new object[] { "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers" })]
 public class SqlServerGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
 {
     public SqlServerGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)
