@@ -44,7 +44,10 @@
   recommendations, grounded in four codebase research passes). Notable: FR-B-006 was upgraded from
   "runtime-owned record or opaque keys" to the **activation-authority extraction** (publishing's slot
   contract moves to the runtime layer; one ledger per engine; cross-authority guard) after critical
-  review of the dual-reconciliation coexistence hazard.
+  review of the dual-reconciliation coexistence hazard. That relocation shape was itself superseded
+  by the 2026-08-15 architect review: publishing's slot contract is deleted rather than moved,
+  replaced by neutrally named runtime activation contracts whose explicit source-ownership field
+  takes the place of the cross-authority guard (research.md D3).
 - Audience: this repository's specs are written for and consumed by software architects; the
   "non-technical stakeholders" criterion is interpreted as "no unexplained jargon", which the spec
   meets (each named contract is introduced with its role).
