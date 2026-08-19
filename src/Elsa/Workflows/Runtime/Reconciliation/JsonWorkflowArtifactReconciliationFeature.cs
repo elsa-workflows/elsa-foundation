@@ -31,10 +31,19 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// A process-local stand-in would satisfy DI, behave perfectly on one node, and then silently let two nodes
 /// reconcile the same mount concurrently, which is the exact condition the single-node guard exists to prevent.
 /// Absence of a default is the safety property, not an oversight: composing without a locking feature fails at
-/// container validation, at boot, and cannot be shipped past. Compose any <c>Elsa.Locking.*</c> provider —
-/// <c>Elsa.Locking.FileSystem</c> is sufficient for a single host; a multi-node deployment needs a genuinely
-/// distributed one. This is not expressed as a <c>DependsOn</c> because that would pin one provider choice, and
-/// the design-side reconcilers carry the identical requirement the same way.
+/// shell activation, when DI constructs this feature's startup task, and cannot be shipped past. (No production
+/// path sets <c>ValidateOnBuild</c>, so the refusal is a resolution failure at activation rather than at container
+/// build — loud and unstartable either way, but it is not caught earlier than that.)
+/// </para>
+/// <para>
+/// <b>The requirement is inherited, not introduced.</b> <c>Elsa.Tasks</c> — which this feature already declares in
+/// <c>DependsOn</c> — resolves <c>IDistributedLockProvider</c> in <c>TaskExecutor</c>'s constructor, so every Tasks
+/// consumer carries it. That is why no guard is added here: a fail-fast of our own would sit behind Tasks' identical
+/// failure and never be reached. It is deliberately not a <c>DependsOn</c> on a locking <em>feature</em>, because
+/// naming one would pin a provider choice — <c>FileSystemDistributedLocking</c> coordinates through the file system,
+/// so hard-wiring it would silently hand a multi-node deployment single-host locking. Depending on the abstraction
+/// and letting composition choose the provider is the seam; the design-side reconcilers carry it the same way.
+/// <c>Elsa.Locking.FileSystem</c> is the only provider this repository ships and is sufficient for a single host.
 /// </para>
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]

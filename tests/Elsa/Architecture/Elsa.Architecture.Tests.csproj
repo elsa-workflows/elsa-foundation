@@ -100,7 +100,11 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
     <!-- spec 151 T128: the runtime-only guard must run a SEQUENCE-rooted workflow, not only probe leaves.
-         Only the .Runtime half is referenced here on purpose - the closure assertion would fail on .Design. -->
+         Only the .Runtime half is referenced, because that is the half under test and the test has no use for the
+         design one. It is NOT because a .Design reference here would trip the closure assertion - it would not.
+         That assertion walks GetReferencedAssemblies() from the composed *feature* assemblies, which a test-project
+         reference cannot perturb; this same file already references Elsa.Activities.Graph.Design and
+         Elsa.Activities.DispatchWorkflow.Design with the suite green. (T132, correcting the original note.) -->
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Sequence\Runtime\Elsa.Activities.Sequence.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />

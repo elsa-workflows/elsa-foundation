@@ -27,7 +27,7 @@ Compose a runtime-only engine — no design, no publishing, no compiler — with
     "ActivitiesRuntime": {},            // registers activity types (the reconciler orders itself after this)
     "WorkflowsRuntimeApi": {},          // or any composition that arms AddWorkflowRuntime()
     "WorkflowsRuntimeTriggers": {},     // stimulus routing for trigger-started workflows
-    "FileSystemDistributedLocking": {}, // REQUIRED: see note below. Any Elsa.Locking.* provider.
+    "FileSystemDistributedLocking": {}, // REQUIRED: see note below. The only provider shipped today.
     "JsonWorkflowArtifactReconciliation": {
       // Settings nest under "Options" -- they bind to the feature's Options property, the same
       // shape ClrActivityReconciliation uses in the shipped shells.json. Flat keys silently bind
@@ -47,8 +47,19 @@ Compose a runtime-only engine — no design, no publishing, no compiler — with
 > `IDistributedLockProvider`, and **no default is registered anywhere in the framework — deliberately.**
 > A process-local stand-in would satisfy DI, behave perfectly on one node, and then let two nodes
 > reconcile the same mount concurrently, which is the exact condition the single-node guard exists to
-> prevent. Composing without one fails at container validation. `FileSystemDistributedLocking` is
-> sufficient for a single host; a multi-node deployment needs a genuinely distributed provider.
+> prevent. Composing without one fails at **shell activation**, when DI constructs the startup task that
+> takes `IDistributedLockProvider`. No production path sets `ValidateOnBuild`, so it is a resolution
+> failure at activation, not at container build — unstartable either way, but not caught earlier.
+>
+> The requirement is **inherited, not introduced**: `Elsa.Tasks`, which this feature depends on, already
+> resolves `IDistributedLockProvider` in `TaskExecutor`. It is deliberately not a `DependsOn` on a locking
+> *feature* — naming one would pin a provider choice for every consumer.
+>
+> **`FileSystemDistributedLocking` is the only provider this repository ships**, and it coordinates
+> through the file system, so it is sufficient for a single host only. A multi-node runtime therefore
+> cannot import artifacts safely today without first writing a genuinely distributed provider against
+> `Elsa.Locking.Core.IDistributedLockProvider` — there is no Redis or SQL provider to compose instead.
+> Do not read the single-host case working as evidence that the multi-node case does.
 
 Drop `my-workflow-closure.json` into `/mnt/artifacts` and start the shell. At activation, the reconciler (single-node, distributed-locked, before readiness):
 
@@ -69,4 +80,4 @@ Copy the v2 closure into the folder and reload the shell via the existing shell-
 
 ## Verifying the composition claim (SC-B-001/005)
 
-The runtime-only composition test asserts no `Elsa.Workflows.Design.*` / `Elsa.Workflows.Publishing*` / `Elsa.Activities.Design.*` assembly is loaded while executing an imported artifact end-to-end — the assembly-enforced boundary this feature exists to serve.
+The runtime-only composition test asserts that no design or publishing assembly is loaded while executing an imported artifact end-to-end — the assembly-enforced boundary this feature exists to serve. Two naming families count as design: the shared cores (`Elsa.Workflows.Design.*`, `Elsa.Activities.Design.*`) and the per-package design halves introduced by the `.Design`/`.Runtime` split (`Elsa.Activities.Sequence.Design` and its five siblings). Both are forbidden; see `ForbiddenAssemblyPrefixes` in `tests/Elsa/Architecture/RuntimeOnlyArtifactCompositionTests.cs` for the enforced list.
