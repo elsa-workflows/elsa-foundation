@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
@@ -148,6 +148,13 @@ builder.Services.AddCors(options =>
         .WithOrigins(studioCorsOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
+        // AllowAnyHeader covers the *request* side only. Content-Disposition is not a CORS-safelisted
+        // response header, so without this the executable-export download (FR-B-010a) reaches Studio with
+        // its filename unreadable -- the browser strips the header from the JS-visible response and the
+        // client silently falls back to a name the server never chose. Studio is cross-origin to the API
+        // (the origins above vs. this host), so the export endpoint's filename contract only actually
+        // holds because of this line.
+        .WithExposedHeaders("Content-Disposition")
         .AllowCredentials());
 });
 
