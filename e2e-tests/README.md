@@ -71,6 +71,7 @@ candidates are flagged for future migration so coverage is never dropped before 
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
 | `artifact-deployment` | true e2e | server restart with a mounted **executable-artifact closure** exported over HTTP, against a second empty database; startup import, activation, cross-engine execution, restart idempotency, v2 supersession (spec 151) |
+| `runtime-only-deployment` | true e2e | the same round trip between **two `Elsa.Foundation.Host` instances composed from packed package feeds** — so the importing engine genuinely has no design surface, no publishing surface and no compiler; adds the two assertions only that shape can reach (spec 151, T126) |
 
 The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
 response shapes with little runtime behavior — the natural long-term home is an in-process `WebApplicationFactory`
@@ -108,6 +109,7 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147): definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
 | `artifact-deployment/Test-ArtifactBasedDeployment.ps1` | executable-artifact deployment across engines (spec 151): publish a parent + child, export the closure via `GET publishing/workflows/{versionId}/executable-export`, restart with `JsonWorkflowArtifactReconciliation` over a mount **and a freshly deployed empty database**, then assert import -> activation -> execution (child included), restart idempotency, and v2 latest-wins. **Currently RED** - see that suite's README |
+| `runtime-only-deployment/Test-RuntimeOnlyArtifactDeployment.ps1` | the same claim against a **genuinely runtime-only engine** (spec 151, T126): packs two package feeds from source and runs two `Elsa.Foundation.Host` instances — a publish-capable one that authors/publishes/exports and is then stopped, and a runtime-only one that imports and executes the closure. Adds the two assertions the Workbench suite cannot reach: the importing engine **cannot resolve a compiler** (no Design/Publishing package in its feed, none loaded by its process, and the publish/export/design routes 404 on it), and the same engine **without a locking feature refuses to activate**. Uses ports 5401-5403, not 5095 |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`
