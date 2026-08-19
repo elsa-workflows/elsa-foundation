@@ -19,7 +19,8 @@ public sealed class ActivitiesFlowchartFeatureTests
     {
         var services = new ServiceCollection();
 
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
 
         var handler = Assert.Single(provider.GetServices<IActivityStructureHandler>());
@@ -32,7 +33,8 @@ public sealed class ActivitiesFlowchartFeatureTests
     public void Structure_handler_projects_only_connected_child_outcome_reference_keys()
     {
         var services = new ServiceCollection();
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
         var handler = Assert.Single(services.BuildServiceProvider().GetServices<IActivityStructureHandler>());
         var structure = new FlowchartAuthoredStructure(
             connections:
@@ -73,7 +75,8 @@ public sealed class ActivitiesFlowchartFeatureTests
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
         var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetRequiredService<FlowchartReachabilityAnalyzer>());

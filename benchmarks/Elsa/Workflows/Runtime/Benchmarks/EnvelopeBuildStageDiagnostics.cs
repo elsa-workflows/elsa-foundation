@@ -69,7 +69,7 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
         IDocumentStore store = opened.Store;
 
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);

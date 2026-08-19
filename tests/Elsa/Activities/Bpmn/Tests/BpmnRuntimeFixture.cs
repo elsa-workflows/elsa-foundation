@@ -31,7 +31,7 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
     public static ValueTask<BpmnRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesBpmnRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .WithFaultingLeaf();
         if (configureServices is not null)

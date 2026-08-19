@@ -22,7 +22,7 @@ public abstract class PrimitiveDrive : IActivityDrive
 
     protected static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .Build(activityExecutionIds);
 
     /// <summary>Wraps children in a Sequence root so a leaf is scheduled as a child, not executed as the root.</summary>
@@ -65,7 +65,7 @@ public sealed class SequenceDrive : IActivityDrive
     private async Task RunAsync(ActivityDriveRecorder recorder, bool breakOut, string[] ids)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .Build(ids);
 
         var first = breakOut
@@ -228,7 +228,7 @@ public sealed class PublishEventDrive : PrimitiveDrive
     public override async Task DriveAsync(ActivityDriveRecorder recorder)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .Build("actexec-seq", "actexec-publish");
 
@@ -255,7 +255,7 @@ public sealed class EventDrive : PrimitiveDrive
     public override async Task DriveAsync(ActivityDriveRecorder recorder)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .Build("actexec-seq", "actexec-event");
 

@@ -17,7 +17,7 @@ public sealed class ReusableBoundaryOutcomeFlowchartTests
     public async Task Mapped_reusable_boundary_outcome_runs_only_the_matching_parent_branch()
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(["actexec-flowchart", "actexec-boundary", "actexec-entry", "actexec-declined"]);

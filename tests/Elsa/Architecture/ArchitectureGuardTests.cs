@@ -168,8 +168,8 @@ public sealed class ArchitectureGuardTests
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(
-            features.ContainsKey("ActivitiesFlowchart"),
-            $"{fileName} must enable ActivitiesFlowchart so Flowchart root activities can resolve runtime services.");
+            features.ContainsKey("ActivitiesFlowchartRuntime"),
+            $"{fileName} must enable ActivitiesFlowchartRuntime so Flowchart root activities can resolve runtime services.");
     }
 
     [Theory]

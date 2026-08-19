@@ -113,8 +113,8 @@ public sealed class WhileRuntimeTests
     private static WorkflowExecutionHarness NewHarness(bool coalescing, params string[] activityExecutionIds)
     {
         var builder = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf();
         if (coalescing)
             builder = builder.WithCoalescing();

@@ -77,7 +77,7 @@ public sealed class SequenceRuntimeTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 

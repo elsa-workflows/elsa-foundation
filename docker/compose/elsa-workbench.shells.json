@@ -8,14 +8,17 @@
       "default": {
         "Name": "default",
         "Features": {
-          "ActivitiesControlFlow": {},
+          "ActivitiesControlFlowRuntime": {},
+          "ActivitiesControlFlowDesign": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
-          "ActivitiesFlowchart": {},
+          "ActivitiesFlowchartRuntime": {},
+          "ActivitiesFlowchartDesign": {},
           "ActivitiesPrimitives": {},
           "ActivitiesRuntime": {},
-          "ActivitiesSequence": {},
+          "ActivitiesSequenceRuntime": {},
+          "ActivitiesSequenceDesign": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""

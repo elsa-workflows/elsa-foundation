@@ -21,7 +21,8 @@ public sealed class SwitchDuplicateCaseValidatorTests : IDisposable
     public SwitchDuplicateCaseValidatorTests()
     {
         var services = new ServiceCollection();
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.Design.ActivitiesControlFlowDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         _structureService = new DefaultActivityStructureService(_provider.GetServices<IActivityStructureHandler>());
         _validator = new SwitchDuplicateCaseValidator(_structureService);
@@ -36,7 +37,8 @@ public sealed class SwitchDuplicateCaseValidatorTests : IDisposable
         // dependency is supplied by the design-validations feature at composition time, not by the
         // activity feature in isolation.
         var services = new ServiceCollection();
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.Design.ActivitiesControlFlowDesignFeature().ConfigureServices(services);
 
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IDraftValidator) &&

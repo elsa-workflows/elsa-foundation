@@ -1141,8 +1141,10 @@ public sealed class PublishWorkflowRequestHandlerTests
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
-        new ActivitiesSequenceFeature().ConfigureServices(services);
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesSequenceRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.Design.ActivitiesSequenceDesignFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }

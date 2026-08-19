@@ -99,6 +99,9 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <!-- spec 151 T128: the runtime-only guard must run a SEQUENCE-rooted workflow, not only probe leaves.
+         Only the .Runtime half is referenced here on purpose - the closure assertion would fail on .Design. -->
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Sequence\Runtime\Elsa.Activities.Sequence.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />

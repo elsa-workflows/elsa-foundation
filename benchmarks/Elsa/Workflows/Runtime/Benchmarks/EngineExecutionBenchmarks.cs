@@ -572,7 +572,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     {
         var readCounter = new ExecutableReadCounter();
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });
@@ -589,7 +589,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
 
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 // Swap the runtime's in-memory store defaults for the durable Groundwork bridges, backed by the

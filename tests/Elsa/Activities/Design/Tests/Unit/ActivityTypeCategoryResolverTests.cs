@@ -39,6 +39,36 @@ public sealed class ActivityTypeCategoryResolverTests
         Assert.Equal("Primitives", result);
     }
 
+    [Theory]
+    [InlineData("Elsa.Activities.ControlFlow.Runtime", "Control Flow")]
+    [InlineData("Elsa.Activities.ControlFlow.Design", "Control Flow")]
+    [InlineData("Elsa.Activities.Bpmn.Runtime", "BPMN")]
+    [InlineData("Elsa.Activities.Graph.Runtime", "Graph")]
+    [InlineData("Elsa.Activities.DispatchWorkflow.Runtime", "Dispatch Workflow")]
+    public void PlaneSuffix_IsSkipped_SoBothHalvesShareTheDomainBucket(string assemblyName, string expected)
+    {
+        // spec 151 T128 split the composite activity packages into .Design/.Runtime halves. The suffix names
+        // the composition plane, not the catalog bucket, so it must not become the category — otherwise every
+        // composite activity in the designer palette collapses into one "Runtime" group.
+        var assembly = EmitAssemblyNamed(assemblyName, out var type);
+
+        var result = _resolver.Resolve(type, assembly);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void RuntimeActivityPackage_KeepsRuntime_BecauseTheSuffixIsItsDomain()
+    {
+        // The guard on the skip: Elsa.Activities.Runtime IS the runtime activity package, so stripping here
+        // would fall back to the meaningless "Activities".
+        var assembly = EmitAssemblyNamed("Elsa.Activities.Runtime", out var type);
+
+        var result = _resolver.Resolve(type, assembly);
+
+        Assert.Equal("Runtime", result);
+    }
+
     [Fact]
     public void SingleSegmentAssemblyName_IsHumanized()
     {

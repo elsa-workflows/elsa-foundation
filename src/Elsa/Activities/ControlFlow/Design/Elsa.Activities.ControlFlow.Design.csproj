@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Runtime\Elsa.Activities.ControlFlow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+  </ItemGroup>
+
+</Project>

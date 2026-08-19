@@ -118,14 +118,14 @@ public sealed class ForEachRuntimeTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutionHarness NewHarnessWithPrimitives(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .Build(activityExecutionIds);
 

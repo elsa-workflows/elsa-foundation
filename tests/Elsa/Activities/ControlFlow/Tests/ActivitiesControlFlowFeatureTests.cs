@@ -19,7 +19,8 @@ public sealed class ActivitiesControlFlowFeatureTests
     public ActivitiesControlFlowFeatureTests()
     {
         var services = new ServiceCollection();
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.Design.ActivitiesControlFlowDesignFeature().ConfigureServices(services);
         _handlers = services.BuildServiceProvider().GetServices<IActivityStructureHandler>().ToList();
     }
 

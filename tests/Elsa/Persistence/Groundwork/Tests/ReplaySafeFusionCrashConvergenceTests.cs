@@ -178,7 +178,7 @@ public sealed class ReplaySafeFusionCrashConvergenceTests
 
     private static WorkflowExecutionHarness BuildHarness(IDocumentStore store, Action<IServiceCollection>? customize) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton(store);

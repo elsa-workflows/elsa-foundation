@@ -19,10 +19,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Runtime\Elsa.Activities.Flowchart.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Sequence\Runtime\Elsa.Activities.Sequence.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Runtime\Elsa.Activities.ControlFlow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Scripting\Elsa.Activities.Scripting.csproj" />

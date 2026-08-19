@@ -125,7 +125,7 @@ public sealed class DoRuntimeTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 

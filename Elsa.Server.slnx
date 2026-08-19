@@ -38,17 +38,27 @@
     <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/">
-    <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
-    <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <Project Path="src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj" />
-    <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Bpmn/">
-    <Project Path="src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj" />
+    <Project Path="src/Elsa/Activities/Bpmn/Design/Elsa.Activities.Bpmn.Design.csproj" />
+    <Project Path="src/Elsa/Activities/Bpmn/Runtime/Elsa.Activities.Bpmn.Runtime.csproj" />
     <Project Path="src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Activities/ControlFlow/">
+    <Project Path="src/Elsa/Activities/ControlFlow/Design/Elsa.Activities.ControlFlow.Design.csproj" />
+    <Project Path="src/Elsa/Activities/ControlFlow/Runtime/Elsa.Activities.ControlFlow.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Activities/Flowchart/">
+    <Project Path="src/Elsa/Activities/Flowchart/Design/Elsa.Activities.Flowchart.Design.csproj" />
+    <Project Path="src/Elsa/Activities/Flowchart/Runtime/Elsa.Activities.Flowchart.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Activities/Sequence/">
+    <Project Path="src/Elsa/Activities/Sequence/Design/Elsa.Activities.Sequence.Design.csproj" />
+    <Project Path="src/Elsa/Activities/Sequence/Runtime/Elsa.Activities.Sequence.Runtime.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Graph/">
     <Project Path="src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />

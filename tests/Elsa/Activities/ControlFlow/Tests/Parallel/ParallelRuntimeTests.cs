@@ -123,7 +123,7 @@ public sealed class ParallelRuntimeTests
         // still-queued sibling branch work rather than dispatching post-completion state. The Parallel's
         // own join never fires — the composite stays Running — because Finish short-circuits the run.
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build("actexec-parallel", "actexec-finish", "actexec-b", "actexec-c");
 
@@ -176,13 +176,13 @@ public sealed class ParallelRuntimeTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
     private static WorkflowExecutionHarness NewFaultAwareHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .WithFaultingLeaf()
             .Build(activityExecutionIds);

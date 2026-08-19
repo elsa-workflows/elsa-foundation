@@ -59,7 +59,7 @@ public sealed class FinishCorrelateExecutionTests
     public async Task FinishInsideSequence_EndsWorkflow_AndSkipsLaterSiblings()
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .Build("actexec-sequence", "actexec-finish");
 

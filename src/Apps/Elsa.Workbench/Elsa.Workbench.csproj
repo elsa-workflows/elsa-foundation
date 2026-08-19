@@ -65,17 +65,21 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Design\Elsa.Activities.Bpmn.Design.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Runtime\Elsa.Activities.Bpmn.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Design\Elsa.Activities.ControlFlow.Design.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\ControlFlow\Runtime\Elsa.Activities.ControlFlow.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Design\Elsa.Activities.Flowchart.Design.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Flowchart\Runtime\Elsa.Activities.Flowchart.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
-		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Design\Elsa.Activities.Sequence.Design.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Runtime\Elsa.Activities.Sequence.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />

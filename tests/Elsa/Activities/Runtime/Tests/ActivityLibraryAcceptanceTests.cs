@@ -203,8 +203,8 @@ public sealed class ActivityLibraryAcceptanceTests
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds)
     {
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddLogging();

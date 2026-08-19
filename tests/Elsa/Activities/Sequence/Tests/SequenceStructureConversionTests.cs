@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Sequence.Design;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
@@ -24,7 +25,7 @@ public sealed class SequenceStructureConversionTests
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
-        new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesSequenceDesignFeature().ConfigureServices(services);
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
 

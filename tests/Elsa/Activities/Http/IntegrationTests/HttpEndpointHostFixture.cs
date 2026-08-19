@@ -183,7 +183,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // The Sequence composite (spec 089 D scenario 2 sequences two endpoints in one workflow). Its
                     // feature only registers the structure handler; construction goes through the primitives'
                     // ClrActivityConstructor, so the primitives feature must precede it (already does).
-                    new ActivitiesSequenceFeature().ConfigureServices(services);
+                    new ActivitiesSequenceRuntimeFeature().ConfigureServices(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
 
                     // The real route-table stack (spec 089 B). The REAL resolver, route-table startup task, and

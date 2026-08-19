@@ -32,7 +32,7 @@
     <!-- Shared in-process execution harness (real agent/dispatcher/scheduler-drainer). -->
     <ProjectReference Include="..\..\..\..\..\tests\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- Flowchart activity + feature + structure models for the root composite. -->
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Runtime\Elsa.Activities.Flowchart.Runtime.csproj" />
     <!-- Durable Groundwork runtime store bridges + SQLite document store + storage manifest. -->
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />

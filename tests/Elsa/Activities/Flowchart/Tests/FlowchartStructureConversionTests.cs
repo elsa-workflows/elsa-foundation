@@ -25,7 +25,8 @@ public sealed class FlowchartStructureConversionTests
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
 

@@ -27,7 +27,7 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
     public static ValueTask<FlowchartRuntimeFixture> CreateAsync(IEnumerable<string> activityExecutionIds, Action<IServiceCollection>? configureServices = null)
     {
         var builder = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf();
         if (configureServices is not null)
             builder.ConfigureServices(configureServices);

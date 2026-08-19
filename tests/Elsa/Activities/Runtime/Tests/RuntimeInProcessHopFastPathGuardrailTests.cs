@@ -64,7 +64,7 @@ public sealed class RuntimeInProcessHopFastPathGuardrailTests
     private static async Task<RunFingerprint> DriveAsync(bool fastPathEnabled)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton(new RuntimeInProcessHopFastPathOptions { Enabled = fastPathEnabled });

@@ -58,7 +58,7 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
         using var tracer = new StageTracer(metrics);
 
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);

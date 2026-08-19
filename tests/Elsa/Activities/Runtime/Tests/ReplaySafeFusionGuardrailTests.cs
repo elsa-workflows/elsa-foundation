@@ -292,7 +292,7 @@ public sealed class ReplaySafeFusionGuardrailTests
     private static async Task<RunFingerprint> DriveAsync(Func<WorkflowExecutable> buildExecutable, RuntimeReplaySafeFusionOptions fusionOptions)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithCoalescing()
             .ConfigureServices(services =>
             {

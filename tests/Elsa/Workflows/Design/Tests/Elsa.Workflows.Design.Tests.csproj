@@ -13,7 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Design\Elsa.Activities.ControlFlow.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ControlFlow\Runtime\Elsa.Activities.ControlFlow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />

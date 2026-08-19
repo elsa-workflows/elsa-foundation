@@ -12,7 +12,8 @@ public sealed class ActivitiesBpmnFeatureTests
     public void ConfigureServices_RegistersEngineBehaviorsAndStructureHandler()
     {
         var services = new ServiceCollection();
-        new ActivitiesBpmnFeature().ConfigureServices(services);
+        new ActivitiesBpmnRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
         Assert.NotNull(provider.GetRequiredService<BpmnExecutionEngine>());

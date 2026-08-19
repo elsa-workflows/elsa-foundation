@@ -175,7 +175,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         IDocumentStore store = opened.Store;
 
         var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton<IDocumentStore>(store);
@@ -248,7 +248,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
     private async Task<RunCounts> RunInMemoryAsync(string label, WorkflowExecutable executable, RuntimeReplaySafeFusionOptions fusion)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithCoalescing()
             .ConfigureServices(services => services.AddSingleton(fusion))
             .Build(Enumerable.Range(0, 64).Select(i => $"actexec-{i}").ToArray());

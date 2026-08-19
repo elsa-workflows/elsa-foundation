@@ -152,9 +152,9 @@ public sealed class BreakPropagationExecutionTests
             // SerializationFeature. The probe leaf supplies the marker steps.
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-            // ActivitiesFlowchartFeature wires the Flowchart execution engine and its policies for the
+            // ActivitiesFlowchartRuntimeFeature wires the Flowchart execution engine and its policies for the
             // Flowchart-body Break cases (#304); harmless for the linear/branch cases above.
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf();
 
     private static ExecutableNode NewForNode(string nodeId, int start, int end, ExecutableNode body) =>

@@ -56,7 +56,7 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
     private static async Task<(bool Completed, int CommitCount)> DriveAsync(bool coalescing)
     {
         var builder = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services));
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services));
         if (coalescing)
             builder = builder.WithCoalescing();
 

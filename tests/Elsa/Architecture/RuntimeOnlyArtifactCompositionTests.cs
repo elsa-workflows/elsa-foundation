@@ -1,8 +1,10 @@
 using System.Reflection;
+using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -19,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Architecture.Tests;
 
@@ -80,12 +83,15 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
             typeof(WorkflowsRuntimeTriggersFeature).Assembly,
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
+            typeof(ActivitiesSequenceRuntimeFeature).Assembly,
             typeof(JsonWorkflowArtifactReconciliationFeature).Assembly);
 
         // A traversal that silently found nothing would pass every containment check below.
         Assert.True(closure.Count > 15, $"The traversal only reached {closure.Count} Elsa assemblies; it is not walking the graph.");
         Assert.Contains("Elsa.Workflows.Runtime.Reconciliation", closure);
         Assert.Contains("Elsa.Workflows.Runtime.Core", closure);
+        // T128: the composite activity a real workflow is rooted in is inside the closure, not merely alongside it.
+        Assert.Contains("Elsa.Activities.Sequence.Runtime", closure);
 
         var forbidden = closure.Where(IsForbidden).Order(StringComparer.Ordinal).ToArray();
 
@@ -184,6 +190,89 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
         Assert.True(offenders.Length == 0, "The executing engine resolved services from: " + string.Join(", ", offenders));
     }
 
+    /// <summary>
+    /// T128: the guard's proof condition. Every other case in this class roots its artifact in a probe leaf, so the
+    /// closure it walked was only ever the leaf's — and the five composite activity packages that a real workflow is
+    /// actually built from (<c>Sequence</c>, <c>Flowchart</c>, <c>ControlFlow</c>, <c>Bpmn</c>) each shipped their
+    /// design-time structure handler in the same assembly as their runtime activity, so any Sequence-rooted workflow
+    /// dragged <c>Elsa.Workflows.Design.Core</c> into a "runtime-only" engine. This case roots the mounted artifact in
+    /// a real <see cref="SequenceActivity"/> with probe children, so the closure being asserted is the one a real
+    /// workflow needs.
+    /// </summary>
+    /// <remarks>
+    /// The assertion deliberately walks the closure of the assembly that supplied the executing root activity. If the
+    /// <c>Elsa.Workflows.Design.Core</c> reference is restored on <c>Elsa.Activities.Sequence.Runtime.csproj</c>, this
+    /// case fails while still executing the workflow successfully — which is exactly the hole it exists to close.
+    /// </remarks>
+    [Fact]
+    public async Task The_runtime_only_composition_imports_and_executes_a_sequence_rooted_artifact()
+    {
+        await using var harness = BuildRuntimeOnlyEngine();
+
+        var serializer = harness.Services.GetRequiredService<IPayloadSerializer>();
+        var children = new[]
+        {
+            AsConsumerKeyed(WorkflowExecutionHarness.NewProbeNode("node-step-one")),
+            AsConsumerKeyed(WorkflowExecutionHarness.NewProbeNode("node-step-two"))
+        };
+        var sequenceRooted = NewArtifact(NewSequenceNode(serializer, children), "definition-sequence");
+        Mount(harness, "sequence.json", sequenceRooted);
+
+        harness.InitializeActivityTypes();
+        WorkflowArtifactReconciliationResult result;
+        await using (var reconcileScope = harness.Services.CreateAsyncScope())
+            result = await reconcileScope.ServiceProvider.GetRequiredService<IWorkflowArtifactReconciler>().ReconcileAsync();
+
+        Assert.Equal(1, result.ImportedCount);
+        Assert.Equal(0, result.RejectedCount);
+
+        // The composite actually runs on the runtime-only engine: both children execute and the workflow completes.
+        var referenceStore = harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        var activationId = result.Entries.Single(entry => entry.DefinitionId == "definition-sequence").ActivationId!;
+        var reference = await referenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId));
+        Assert.NotNull(reference);
+        await harness.StartPublishedAsync(reference!, WorkflowExecutionHarness.WorkflowExecutionId);
+
+        var run = await harness.ReadRunAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(run.States("node-sequence")).Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(run.States("node-step-one")).Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(run.States("node-step-two")).Status);
+
+        // SC-B-005 against the composite that actually ran: the package supplying the root activity carries no
+        // Design or Publishing assembly anywhere in its transitive closure.
+        var closure = TransitiveElsaClosure(typeof(SequenceActivity).Assembly);
+        Assert.Contains("Elsa.Activities.Sequence.Runtime", closure);
+        var forbidden = closure.Where(IsForbidden).Order(StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            forbidden.Length == 0,
+            "The Sequence-rooted workflow's activity package reaches Design/Publishing: " + string.Join(", ", forbidden));
+    }
+
+    /// <summary>
+    /// Builds the executable form of a Sequence root: the compiled <c>elsa.sequence.structure</c> payload lists its
+    /// children by executable node id, and the children hang off the declared child slot.
+    /// </summary>
+    private static ExecutableNode NewSequenceNode(IPayloadSerializer serializer, IReadOnlyCollection<ExecutableNode> children) =>
+        new(
+            executableNodeId: "node-sequence",
+            authoredActivityId: "authored-sequence",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: WellKnownRuntimeActivityConsumers.ClrActivity,
+            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })),
+            // The artifact arrives through the importer, not through the harness's RunAsync, so nothing pins the
+            // contract on the way in — a compiled artifact carries it, and this test has to carry it too.
+            activityContract: ClrActivityContractTestBuilder.BuildContract(typeof(SequenceActivity)));
+
     private static bool IsForbidden(string assemblyName) =>
         ForbiddenAssemblyPrefixes.Any(prefix => assemblyName.StartsWith(prefix, StringComparison.Ordinal));
 
@@ -244,6 +333,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
         new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new ActivitiesPrimitivesFeature().ConfigureServices(services);
+        new ActivitiesSequenceRuntimeFeature().ConfigureServices(services);
         NewReconciliationFeature().ConfigureServices(services);
         return services;
     }
@@ -251,6 +341,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
     private WorkflowExecutionHarness BuildRuntimeOnlyEngine() =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => NewReconciliationFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {

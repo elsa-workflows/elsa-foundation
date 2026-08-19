@@ -179,7 +179,8 @@ public sealed class FlowchartActivityTests : IDisposable
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Flowchart.Design.ActivitiesFlowchartDesignFeature().ConfigureServices(services);
         return services.BuildServiceProvider();
     }
 

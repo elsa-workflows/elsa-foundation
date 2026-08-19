@@ -22,8 +22,8 @@ public abstract class ControlFlowDrive : IActivityDrive
 
     protected static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
             .Build(activityExecutionIds);
 
     /// <summary>A probe leaf that completes with the given outcome — how a body signals Break to its loop.</summary>

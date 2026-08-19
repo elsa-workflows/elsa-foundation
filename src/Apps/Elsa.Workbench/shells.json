@@ -4,20 +4,24 @@
       "default": {
         "Name": "default",
         "Features": {
-          "ActivitiesBpmn": {},
-          "ActivitiesControlFlow": {},
+          "ActivitiesBpmnRuntime": {},
+          "ActivitiesBpmnDesign": {},
+          "ActivitiesControlFlowRuntime": {},
+          "ActivitiesControlFlowDesign": {},
           "ActivitiesDispatchWorkflowRuntime": {},
           "ActivitiesDispatchWorkflowDesign": {},
           "ActivitiesDesignApi": {},
           "ActivitiesGraphDesign": {},
           "ActivitiesDesignReconciliation": {},
-          "ActivitiesFlowchart": {},
+          "ActivitiesFlowchartRuntime": {},
+          "ActivitiesFlowchartDesign": {},
           "ActivitiesHttp": {},
           "ActivitiesPrimitives": {},
           "ActivitiesGraphRuntime": {},
           "ActivitiesRuntime": {},
           "ActivitiesScheduling": {},
-          "ActivitiesSequence": {},
+          "ActivitiesSequenceRuntime": {},
+          "ActivitiesSequenceDesign": {},
           "ApiCapabilities": {},
           "ClrActivityReconciliation": {
             "Options": {

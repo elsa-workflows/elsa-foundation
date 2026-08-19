@@ -21,7 +21,7 @@ public sealed class FlowchartDrive : IActivityDrive
     private async Task RunAsync(ActivityDriveRecorder recorder, bool breakOut, string[] ids)
     {
         await using var harness = WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .Build(ids);
 
         var first = breakOut

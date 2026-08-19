@@ -14,7 +14,6 @@
 	  <ProjectReference Include="Core\Elsa.Expressions.Core.csproj" />
 	  <ProjectReference Include="..\Events\Core\Elsa.Events.Core.csproj" />
 	  <ProjectReference Include="..\Serialization\Core\Elsa.Serialization.Core.csproj" />
-	  <ProjectReference Include="..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
 	</ItemGroup>
 
   <ItemGroup>

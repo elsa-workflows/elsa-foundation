@@ -575,7 +575,8 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         var services = new ServiceCollection();
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
-        new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesSequenceRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.Design.ActivitiesSequenceDesignFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }

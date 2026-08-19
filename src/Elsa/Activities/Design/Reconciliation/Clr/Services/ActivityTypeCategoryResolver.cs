@@ -12,6 +12,11 @@ namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 /// requiring a per-activity annotation. A feature that wants richer categorisation (e.g. a
 /// type-level <c>[Category]</c> attribute) overrides this in isolation.
 /// The raw segment is humanized for display (<c>ControlFlow</c> → <c>Control Flow</c>, <c>Bpmn</c> → <c>BPMN</c>).
+/// A trailing <c>.Runtime</c> or <c>.Design</c> segment names the composition <em>plane</em>, not the catalog
+/// bucket, and is skipped: <c>Elsa.Activities.ControlFlow.Runtime</c> ships Control Flow activities, not
+/// "Runtime" ones (spec 151 T128 split these packages in two). The skip never consumes the domain segment
+/// itself, so <c>Elsa.Activities.Runtime</c> — which <em>is</em> the runtime activity package — stays
+/// <c>Runtime</c>.
 /// </summary>
 public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
 {
@@ -22,6 +27,13 @@ public sealed class ActivityTypeCategoryResolver : IActivityTypeCategoryResolver
             return null;
 
         var segments = simpleName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        // Drop the plane suffix only when a real domain segment is left behind. Falling back to "Activities"
+        // would mean the suffix was the domain (Elsa.Activities.Runtime), so in that case it is kept.
+        if (segments is [.., var domain, "Runtime" or "Design"] &&
+            !string.Equals(domain, "Activities", StringComparison.Ordinal))
+            return domain.Humanize();
+
         return segments is [.., var last] ? last.Humanize() : null;
     }
 }

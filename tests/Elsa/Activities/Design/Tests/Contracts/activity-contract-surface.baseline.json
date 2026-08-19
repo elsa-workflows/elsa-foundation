@@ -80,7 +80,7 @@
       "alias": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "version": "1.0.0",
-      "category": "Runtime",
+      "category": "Dispatch Workflow",
       "executionType": "Action",
       "inputs": [
         {
@@ -392,7 +392,7 @@
       "alias": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
       "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
       "version": "1.0.0",
-      "category": "Runtime",
+      "category": "Graph",
       "executionType": "Action",
       "inputs": [],
       "outputs": [],

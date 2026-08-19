@@ -17,7 +17,8 @@ public sealed class BpmnStructureHandlerTests : IDisposable
     public BpmnStructureHandlerTests()
     {
         var services = new ServiceCollection();
-        new ActivitiesBpmnFeature().ConfigureServices(services);
+        new ActivitiesBpmnRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Bpmn.Design.ActivitiesBpmnDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>());
     }

@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Bpmn\Runtime\Elsa.Activities.Bpmn.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

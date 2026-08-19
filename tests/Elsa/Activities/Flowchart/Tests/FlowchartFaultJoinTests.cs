@@ -57,7 +57,7 @@ public sealed class FlowchartFaultJoinTests
 
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .WithProbeLeaf()
             .WithFaultingLeaf()
             .Build(activityExecutionIds);

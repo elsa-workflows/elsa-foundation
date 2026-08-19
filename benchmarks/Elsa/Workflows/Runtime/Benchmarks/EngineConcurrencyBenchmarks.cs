@@ -496,7 +496,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         RuntimeAdmissionDiagnostics diagnostics,
         RuntimeAdmissionOptions options) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 services.AddSingleton(store);
@@ -705,7 +705,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
 
     private static WorkflowExecutionHarness NewInMemoryHarness(WorkflowExecutableIdentity identity, string executionId, IEnumerable<string> activityIds) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .Build(identity, executionId, activityIds);
 
     private static WorkflowExecutionHarness NewDurableHarness(IDocumentStore store, IBoundedDocumentStore queries, WorkflowExecutableIdentity identity, string executionId, IEnumerable<string> activityIds) =>
@@ -719,7 +719,7 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         IEnumerable<string> activityIds,
         RuntimeGroupCommitCoordinator? groupCommit) =>
         WorkflowExecutionHarness.Create()
-            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesFlowchartRuntimeFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
                 // The shipping durable configuration: durable Groundwork bridges over the (possibly shared) SQLite

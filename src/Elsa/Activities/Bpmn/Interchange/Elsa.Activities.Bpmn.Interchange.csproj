@@ -13,7 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Activities.Bpmn.csproj" />
+    <!-- T128: Interchange is wholly design-time - it maps BPMN 2.0 XML onto the AUTHORED structure (ActivityNode,
+         BpmnAuthoredStructure, pools, lanes, message flows) and serves an authoring API. It therefore depends on
+         the .Design half, which brings the .Runtime half transitively for the shared element/sequence-flow models.
+         It is deliberately NOT split: there is no runtime half of an importer. -->
+    <ProjectReference Include="..\Design\Elsa.Activities.Bpmn.Design.csproj" />
     <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />

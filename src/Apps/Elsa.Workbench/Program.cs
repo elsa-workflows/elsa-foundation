@@ -229,8 +229,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
             typeof(ActivitiesRuntimeFeature).Assembly,
             typeof(ActivitiesPrimitivesFeature).Assembly,
-            typeof(ActivitiesSequenceFeature).Assembly,
-            typeof(ActivitiesFlowchartFeature).Assembly,
+            typeof(ActivitiesSequenceRuntimeFeature).Assembly,
+            typeof(Elsa.Activities.Sequence.Design.ActivitiesSequenceDesignFeature).Assembly,
+            typeof(ActivitiesFlowchartRuntimeFeature).Assembly,
             // Design-side graph provider. Kept separate from Graph Runtime so authoring-only and runtime-only
             // custom hosts can compose exactly the plane they need.
             typeof(GraphActivitiesDesignFeature).Assembly,

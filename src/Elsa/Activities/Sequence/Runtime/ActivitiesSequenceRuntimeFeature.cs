@@ -2,7 +2,6 @@ using CShells.Features;
 using Elsa.Activities.Sequence.Internal;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,17 +11,17 @@ namespace Elsa.Activities.Sequence;
 
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
+[ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("Composition")]
 [ShellFeature(
-    name: "ActivitiesSequence",
-    DisplayName = "Activities Sequence",
-    Description = "Sequence composite activity and executable-node child slot contracts."
+    name: "ActivitiesSequenceRuntime",
+    DisplayName = "Activities Sequence (Runtime)",
+    Description = "Sequence composite activity execution and executable-node child slot scheduling."
 )]
-public class ActivitiesSequenceFeature : IShellFeature
+public class ActivitiesSequenceRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<IActivityStructureHandler, SequenceStructureHandler>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IOperatorActivitySchedulingCapabilityProvider, SequenceOperatorActivitySchedulingCapabilityProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IOperatorActivitySchedulingPolicy, SequenceOperatorActivitySchedulingPolicy>());
         // spec 123 D2 (ADR 0047 resolution #1): a sequence successor is single-predecessor by construction; this

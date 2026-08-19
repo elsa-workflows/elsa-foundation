@@ -129,7 +129,7 @@ public sealed class ActivityExecutionInspectionOutcomeTests
 
     private static WorkflowExecutionHarness NewHarness() => WorkflowExecutionHarness.Create()
         .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
-        .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+        .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceRuntimeFeature().ConfigureServices(services))
         .Build("actexec-root", "actexec-leaf");
 
     private static ExecutableNode NewLeaf(Type activityType, IReadOnlyDictionary<string, object?> inputs) =>

@@ -17,7 +17,8 @@ public sealed class IfStructureHandlerTests : IDisposable
     public IfStructureHandlerTests()
     {
         var services = new ServiceCollection();
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesControlFlowRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.ControlFlow.Design.ActivitiesControlFlowDesignFeature().ConfigureServices(services);
         _provider = services.BuildServiceProvider();
         _handler = Assert.Single(_provider.GetServices<IActivityStructureHandler>(), h => h.Kind == IfActivity.StructureKind);
     }
