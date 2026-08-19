@@ -17,7 +17,10 @@ namespace Elsa.Serialization.SystemText;
 [ShellFeature(
     name: "Serialization",
     DisplayName = "Serialization",
-    Description = "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the JsonPayloadConvertersInitializing domain event (framework §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).")]
+    Description = "Provides JSON-based payload serialization. Pluggable JsonConverter contributions flow through the JsonPayloadConvertersInitializing domain event (framework §2.6.1 Registry + StartUp Task sub-pattern; Elsa §E3.3 worked example).",
+    // Its startup task publishes JsonPayloadConvertersInitializing through IInlineEventPublisher, which only
+    // Events registers. Composing without it failed at activation rather than at composition (T126).
+    DependsOn = new object[] { "Events" })]
 public class SerializationFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

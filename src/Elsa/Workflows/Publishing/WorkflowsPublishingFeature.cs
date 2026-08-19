@@ -40,7 +40,10 @@ namespace Elsa.Workflows.Publishing;
     name: "WorkflowsPublishing",
     DisplayName = "Workflows Publishing",
     Description = "Endpoint-free engine that compiles designed workflow definitions into canonical executables.",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events" }
+    // WorkflowDesignValidations: PublishWorkflowRequestHandler treats an absent expression validator as
+    // "validation unavailable" rather than "nothing to validate", so publishing answers 503
+    // expression-validation-unavailable before it ever reaches the compiler. Discovered by crashing (T126).
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "Events", "WorkflowDesignValidations" }
 )]
 public class WorkflowsPublishingFeature : IShellFeature
 {
