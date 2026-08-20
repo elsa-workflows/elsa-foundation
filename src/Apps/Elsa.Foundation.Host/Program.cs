@@ -78,7 +78,27 @@ var moduleManagement = ModuleManagementOptions.Read(configuration);
 if (moduleManagement.Enabled)
     builder.Services.AddNuplaneAdmin();
 
+// CORS — the Elsa Studio SPA runs on a separate origin and calls this host's API from the browser, so the
+// host must emit CORS headers or every cross-origin request fails preflight. The host composes no Elsa
+// features, so this is a host-level concern (as in Elsa.Workbench). Origins come from Cors:AllowedOrigins;
+// a dev default covers the local Studio port.
+const string studioCorsPolicy = "ElsaStudio";
+var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
+    studioCorsOrigins = ["http://localhost:14000"];
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(studioCorsPolicy, policy => policy
+        .WithOrigins(studioCorsOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 var app = builder.Build();
+
+// CORS runs before shell resolution/endpoints so the policy applies to every shell-mapped API route.
+app.UseCors(studioCorsPolicy);
 
 // Host-level probes: liveness (process up) + readiness (configured shells activated — reflects eager load).
 app.MapHostHealth();
