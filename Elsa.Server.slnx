@@ -464,6 +464,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Groundwork/" />
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/" />
+  <Folder Name="/tests/Elsa/Groundwork/ProviderEvidenceImporter/">
+    <Project Path="tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/AdapterHost/">
     <Project Path="tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj" />
   </Folder>

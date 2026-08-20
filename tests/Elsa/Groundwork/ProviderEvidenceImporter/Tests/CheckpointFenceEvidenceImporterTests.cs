@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using Elsa.Groundwork.Tools;
 using Xunit;
 
-namespace Elsa.Architecture.Tests;
+namespace Elsa.Groundwork.ProviderEvidenceImporter.Tests;
 
 public sealed class CheckpointFenceEvidenceImporterTests
 {
