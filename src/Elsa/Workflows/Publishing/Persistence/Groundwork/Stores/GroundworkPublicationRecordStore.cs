@@ -21,7 +21,7 @@ public sealed class GroundworkPublicationRecordStore(
             return ValueTask.CompletedTask;
         }
 
-        if (!Save(publication.PublicationId, new RecordDocument(publication.SlotId, publication), null, Projections(publication.SlotId)))
+        if (!SaveSucceeded(publication.PublicationId, new RecordDocument(publication.SlotId, publication), null, Projections(publication.SlotId)))
             throw new InvalidOperationException($"Publication '{publication.PublicationId}' was created concurrently.");
         return ValueTask.CompletedTask;
     }
@@ -53,7 +53,7 @@ public sealed class GroundworkPublicationRecordStore(
         if (loaded is null || loaded.Value.Document.Publication.Status != expectedStatus)
             return ValueTask.FromResult(false);
         EnsureSameIdentity(loaded.Value.Document.Publication, publication);
-        return ValueTask.FromResult(Save(
+        return ValueTask.FromResult(SaveSucceeded(
             publication.PublicationId,
             new RecordDocument(publication.SlotId, publication),
             loaded.Value.Entry.Version,

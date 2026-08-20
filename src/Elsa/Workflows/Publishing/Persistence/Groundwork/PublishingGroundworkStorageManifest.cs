@@ -79,7 +79,13 @@ public static class PublishingGroundworkStorageManifest
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
             .Index(SlotByDefinitionIndex, WorkflowDefinitionIdField, IdField)
-            .Index(SlotByActivePublicationIndex, ActivePublicationIdField, IdField)
+            // A publication occupies at most one slot, and the database is what enforces it: checking for
+            // another owner with a read and then writing lets two concurrent activations both observe a
+            // free publication and both commit. Missing values are excluded because an unpublished slot
+            // has no active publication, and every one of those would otherwise collide with the others.
+            .UniqueIndex(SlotByActivePublicationIndex, index => index
+                .Ascending(ActivePublicationIdField)
+                .ExcludeMissingValues())
             .Scoped()
             .Build();
 

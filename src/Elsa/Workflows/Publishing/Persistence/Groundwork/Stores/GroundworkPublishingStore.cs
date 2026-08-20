@@ -59,15 +59,20 @@ public abstract class GroundworkPublishingStore(
     }
 
     /// <summary>
-    /// Writes the row under the version the caller read, or as a create when it read nothing. A lost race
-    /// returns false rather than throwing, because every publishing caller resolves the conflict itself —
-    /// by re-reading the winner and reporting it — instead of surfacing a provider exception.
+    /// Writes the row under the version the caller read, or as a create when it read nothing. The outcome
+    /// is returned rather than thrown, because every publishing caller resolves the conflict itself — by
+    /// re-reading the winner and reporting it — and because a uniqueness refusal is a different answer
+    /// from a lost CAS race.
     /// </summary>
-    protected bool Save<T>(string id, T document, long? expectedVersion, IReadOnlyDictionary<string, object?>? projections = null)
+    protected WriteOutcome Save<T>(string id, T document, long? expectedVersion, IReadOnlyDictionary<string, object?>? projections = null)
     {
         var options = expectedVersion is null ? WriteOptions.CreateOnly : WriteOptions.IfVersion(expectedVersion.Value);
-        return Storage.ConditionalUpsert(UnitId, Values(id, document, projections), options).Succeeded;
+        return Storage.ConditionalUpsert(UnitId, Values(id, document, projections), options);
     }
+
+    /// <summary>Whether the write landed, for the callers that do not distinguish why it did not.</summary>
+    protected bool SaveSucceeded<T>(string id, T document, long? expectedVersion, IReadOnlyDictionary<string, object?>? projections = null) =>
+        Save(id, document, expectedVersion, projections).Succeeded;
 
     protected IReadOnlyList<T> QueryBy<T>(string field, string value, string index)
     {

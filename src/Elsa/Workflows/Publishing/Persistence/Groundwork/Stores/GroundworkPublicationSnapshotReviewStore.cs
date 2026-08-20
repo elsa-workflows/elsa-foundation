@@ -21,7 +21,7 @@ public sealed class GroundworkPublicationSnapshotReviewStore(
         ArgumentNullException.ThrowIfNull(review);
         cancellationToken.ThrowIfCancellationRequested();
         accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
-        return ValueTask.FromResult(Save(review.PreflightToken, review, null, Projections(review)));
+        return ValueTask.FromResult(SaveSucceeded(review.PreflightToken, review, null, Projections(review)));
     }
 
     public ValueTask<PublicationSnapshotReview?> FindAsync(

@@ -1,5 +1,6 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
@@ -55,27 +56,41 @@ public sealed class GroundworkPublicationSlotStore(
 
         if (publicationId is not null)
         {
-            var owners = QueryBy<SlotDocument>(
-                PublishingGroundworkStorageManifest.ActivePublicationIdField,
-                publicationId,
-                PublishingGroundworkStorageManifest.SlotByActivePublicationIndex);
-            if (owners.Any(owner => !StringComparer.Ordinal.Equals(owner.Slot.SlotId, slotId)))
+            // Uniqueness is enforced by the index; this read only turns the common case into a clear
+            // answer instead of a write refusal. It cannot be relied on alone — two activations can both
+            // read nothing here — which is why the refusal below is the authority.
+            var owner = FindActiveOwner(publicationId);
+            if (owner is not null && !StringComparer.Ordinal.Equals(owner.Slot.SlotId, slotId))
                 return ValueTask.FromResult(Failed(current, "publication_already_active", "The publication is already active in another slot."));
         }
 
         var next = current with { ActivePublicationId = publicationId, Revision = current.Revision + 1, UpdatedAt = updatedAt };
-        var saved = Save(
+        var outcome = Save(
             slotId,
             new SlotDocument(workflowDefinitionId, next),
             loaded?.Entry.Version,
             Projections(workflowDefinitionId, publicationId));
-        if (!saved)
+        if (outcome.Status == WriteOutcomeStatus.UniqueViolation)
+            return ValueTask.FromResult(Failed(current, "publication_already_active", "The publication is already active in another slot."));
+        if (!outcome.Succeeded)
         {
             var winner = Load<SlotDocument>(slotId)?.Document.Slot ?? current;
             return ValueTask.FromResult(Failed(winner, "slot_revision_conflict", "The publication slot revision changed."));
         }
 
         return ValueTask.FromResult(new PublicationSlotTransitionResult(true, next, current.ActivePublicationId));
+    }
+
+    /// <summary>The slot holding <paramref name="publicationId"/>, of which the unique index admits at most one.</summary>
+    private SlotDocument? FindActiveOwner(string publicationId)
+    {
+        var rows = Storage.Query(
+            UnitId,
+            Storage.Equal(UnitId, PublishingGroundworkStorageManifest.ActivePublicationIdField, publicationId),
+            [Storage.Order(UnitId, PublishingGroundworkStorageManifest.ActivePublicationIdField)],
+            PublishingGroundworkStorageManifest.SlotByActivePublicationIndex,
+            take: 1);
+        return rows.Count == 0 ? null : Read<SlotDocument>(rows[0]);
     }
 
     private static IReadOnlyDictionary<string, object?> Projections(string workflowDefinitionId, string? activePublicationId) =>

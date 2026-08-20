@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Store;
@@ -9,7 +10,8 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkActivityPublicationReceiptStore(
     GroundworkPublishingStorage storage,
-    PublishingGroundworkDocumentSerializer serializer)
+    PublishingGroundworkDocumentSerializer serializer,
+    IPersistenceAccessContextAccessor accessContextAccessor)
     : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind),
         IActivityPublicationReceiptStore
 {
@@ -20,6 +22,7 @@ public sealed class GroundworkActivityPublicationReceiptStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
         cancellationToken.ThrowIfCancellationRequested();
+        accessContextAccessor.Current.EnsureTenantScope(tenantId);
         var loaded = Load<ActivityPublicationReceipt>(Id(tenantId, idempotencyKey));
         if (loaded is null)
             return ValueTask.FromResult<ActivityPublicationReceipt?>(null);
@@ -36,7 +39,7 @@ public sealed class GroundworkActivityPublicationReceiptStore(
     {
         ArgumentNullException.ThrowIfNull(receipt);
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Save(Id(receipt.TenantId, receipt.IdempotencyKey), receipt, null));
+        return ValueTask.FromResult(SaveSucceeded(Id(receipt.TenantId, receipt.IdempotencyKey), receipt, null));
     }
 
     /// <summary>

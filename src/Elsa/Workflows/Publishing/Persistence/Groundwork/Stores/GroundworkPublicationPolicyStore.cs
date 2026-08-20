@@ -32,7 +32,7 @@ public sealed class GroundworkPublicationPolicyStore(
             return ValueTask.FromResult(new PublicationPolicyWriteResult(false, loaded?.Document.Policy ?? policy));
 
         var saved = policy with { Revision = currentRevision + 1 };
-        if (Save(id, new PolicyDocument(policy.WorkflowDefinitionId, saved), loaded?.Entry.Version, Projections(policy.WorkflowDefinitionId)))
+        if (SaveSucceeded(id, new PolicyDocument(policy.WorkflowDefinitionId, saved), loaded?.Entry.Version, Projections(policy.WorkflowDefinitionId)))
             return ValueTask.FromResult(new PublicationPolicyWriteResult(true, saved));
 
         var winner = Load<PolicyDocument>(id)?.Document.Policy ?? policy;

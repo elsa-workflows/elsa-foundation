@@ -21,7 +21,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         ActivityDraftTestRunIdentity.EnsureOperationScope(receipt);
         accessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
 
-        if (Save(receipt.TestRunId, receipt, null, Projections(receipt)))
+        if (SaveSucceeded(receipt.TestRunId, receipt, null, Projections(receipt)))
             return ValueTask.FromResult(new ActivityDraftTestRunCreateResult(true, receipt));
 
         var existing = Load<ActivityDraftTestRunReceipt>(receipt.TestRunId)?.Document
@@ -68,7 +68,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         var loaded = Load<ActivityDraftTestRunReceipt>(receipt.TestRunId);
         if (loaded is null || loaded.Value.Document.Revision != expectedRevision)
             return ValueTask.FromResult(false);
-        return ValueTask.FromResult(Save(receipt.TestRunId, receipt, loaded.Value.Entry.Version, Projections(receipt)));
+        return ValueTask.FromResult(SaveSucceeded(receipt.TestRunId, receipt, loaded.Value.Entry.Version, Projections(receipt)));
     }
 
     public ValueTask<int> DeleteExpiredAsync(

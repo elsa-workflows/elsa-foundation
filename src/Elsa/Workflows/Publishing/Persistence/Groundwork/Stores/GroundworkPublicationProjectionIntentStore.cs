@@ -21,7 +21,7 @@ public sealed class GroundworkPublicationProjectionIntentStore(
             return ValueTask.CompletedTask;
         }
 
-        if (!Save(intent.IntentId, new IntentDocument(intent.PublicationId, intent), null, Projections(intent.PublicationId)))
+        if (!SaveSucceeded(intent.IntentId, new IntentDocument(intent.PublicationId, intent), null, Projections(intent.PublicationId)))
             throw new InvalidOperationException($"Publication projection intent '{intent.IntentId}' was created concurrently.");
         return ValueTask.CompletedTask;
     }
@@ -57,7 +57,7 @@ public sealed class GroundworkPublicationProjectionIntentStore(
         if (current.PublicationId != intent.PublicationId || current.ProjectionKind != intent.ProjectionKind || current.Operation != intent.Operation)
             throw new InvalidOperationException("A projection-intent transition cannot change immutable delivery identity.");
 
-        if (Save(intent.IntentId, new IntentDocument(intent.PublicationId, intent), loaded.Value.Entry.Version, Projections(intent.PublicationId)))
+        if (SaveSucceeded(intent.IntentId, new IntentDocument(intent.PublicationId, intent), loaded.Value.Entry.Version, Projections(intent.PublicationId)))
             return ValueTask.FromResult(new PublicationProjectionIntentTransitionResult(true, intent));
 
         var winner = Load<IntentDocument>(intent.IntentId)?.Document.Intent ?? intent;
