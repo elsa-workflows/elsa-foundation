@@ -1069,15 +1069,27 @@ public static class ActivitiesDesignStorageManifest
                     : [current];
             })
             .ToArray();
+        // Identity (*_id) index-key columns are non-nullable references to their owning entity, matching the
+        // explicit units (ActivityDefinition/Version/Management all declare definition_id non-null). Regression
+        // guard: the auto-physicalized units (#1336) defaulted these to nullable, which made the offset-paged
+        // (hence unique) by-definition index key a nullable column — a shape the query planner rejects as a
+        // scale-bearing index over a nullable key (GW-ROUTE-007), 500-ing e.g. the activity picker.
+        // head_version_id is the one identity key that is genuinely optional (a definition may have no
+        // published head version yet), so it stays nullable.
+        var nullableIdentityFields = new HashSet<string>(StringComparer.Ordinal) { HeadVersionIdField };
         var indexedColumns = indexes
             .SelectMany(index => index.Fields)
             .Distinct(StringComparer.Ordinal)
-            .Select(field => Column(
-                ColumnName(field),
-                field,
-                length: ColumnName(field).EndsWith("_id", StringComparison.Ordinal)
-                    ? IdentityColumnLength
-                    : TextColumnLength))
+            .Select(field =>
+            {
+                var isIdentity = ColumnName(field).EndsWith("_id", StringComparison.Ordinal);
+                var nonNullable = isIdentity && !nullableIdentityFields.Contains(field);
+                return Column(
+                    ColumnName(field),
+                    field,
+                    nullable: !nonNullable,
+                    length: isIdentity ? IdentityColumnLength : TextColumnLength);
+            })
             .ToArray();
         ProjectedColumnDefinition[] columns = indexedColumns.Length == 0 || documentIdOrderedIndexes.Count > 0
             ? [.. indexedColumns, Column("entity_id", EntityIdField, false, IdentityColumnLength)]
