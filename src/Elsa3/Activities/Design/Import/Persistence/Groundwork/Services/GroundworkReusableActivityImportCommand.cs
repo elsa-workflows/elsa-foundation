@@ -701,6 +701,11 @@ public sealed class GroundworkReusableActivityImportCommand(
         }
     }
 
+    private const string ImportFeatureIdentity = "elsa3-reusable-activity-import";
+
+    private readonly GroundworkStorageTransactionFactory transactions =
+        new(sessions, accessContextAccessor);
+
     private async Task CommitExactAsync(
         IReadOnlyList<ImportSaveCandidate> pending,
         IReadOnlyList<ActivityDesignSaveRequest> projectionRequests,
@@ -713,24 +718,18 @@ public sealed class GroundworkReusableActivityImportCommand(
         if (allUnitIds.Length == 0)
             return;
 
-        var current = accessContextAccessor.Current ?? throw new InvalidOperationException(
-            "Elsa 3 import persistence access context is missing.");
-        var units = allUnitIds.Select(unitId => sessions.Unit(unitId)).ToArray();
-        var accesses = units
-            .Select(unit => GroundworkStorageAccessMapper.Map(current, unit.Scope, "elsa3-reusable-activity-import"))
-            .Distinct()
-            .ToArray();
-        if (accesses.Length != 1)
-            throw new InvalidOperationException(
-                "Elsa 3 import atomic writes must use one exact persistence access context.");
-
-        using var inner = sessions.BeginUnitOfWork(accesses[0], BatchWriteOptions.Exact, allUnitIds);
-        var activityUnits = units
-            .Where(unit => !IsWorkflowKind(unit.Id.Value))
-            .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
-        var workflowUnits = units
-            .Where(unit => IsWorkflowKind(unit.Id.Value))
-            .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
+        // An import is one act across the activity and workflow design catalogs, which is the shared
+        // lane-spanning transaction: it resolves the access context, refuses a privileged or across-scope
+        // caller before a provider is acquired, requires the evidenced atomic commit, and reports a host
+        // that has split these catalogs across databases rather than failing on a missing unit.
+        using var transaction = transactions.Begin(ImportFeatureIdentity, allUnitIds);
+        var inner = transaction.Inner;
+        var activityUnits = transaction.Units
+            .Where(unit => !IsWorkflowKind(unit.Key))
+            .ToDictionary(unit => unit.Key, unit => unit.Value, StringComparer.Ordinal);
+        var workflowUnits = transaction.Units
+            .Where(unit => IsWorkflowKind(unit.Key))
+            .ToDictionary(unit => unit.Key, unit => unit.Value, StringComparer.Ordinal);
         var activityUow = new ActivityDesignUnitOfWork(inner, activityUnits);
         var workflowUow = new GroundworkDesignStorage.DesignUnitOfWork(inner, workflowUnits);
         try
