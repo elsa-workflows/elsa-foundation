@@ -144,8 +144,12 @@ internal sealed class MutableImportAccess(PersistenceAccessContext current) : IP
 
 internal sealed class ImportSessionSource(
     IStorageProviderConnection connection,
-    IReadOnlyDictionary<string, StorageUnit> units) : IGroundworkStorageSessionSource
+    IReadOnlyDictionary<string, StorageUnit> units) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
 {
+    // The design lanes refuse to stage without an evidenced atomic commit, so the harness reports what
+    // the provider under test actually offers rather than asserting the capability on its behalf.
+    public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
+
     public bool ThrowOnRead { get; set; }
     public bool ThrowOnCommit { get; set; }
     public string? FailOnUnit { get; set; }
