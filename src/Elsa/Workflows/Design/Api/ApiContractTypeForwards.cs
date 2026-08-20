@@ -3,6 +3,16 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using System.Runtime.CompilerServices;
 
+// The public wire-contract types now live in Api.Core so native API-description metadata cannot retain a
+// collectible Workflows Design implementation assembly: ASP.NET Core's API Explorer and OpenAPI document
+// service hold on to each endpoint's request and response Type even after the endpoint data source is
+// removed and drained (ADR 0069). Keep the old API assembly as a binary-compatible forwarding facade;
+// implementation-only handlers, adapters, and mapping helpers intentionally remain here.
+//
+// The forwarded list is exhaustive and asserted by
+// Every_contract_type_is_compiled_in_core_and_forwarded_by_the_legacy_api_assembly, so adding, removing,
+// or renaming a public request/response/enum is an intentional compatibility decision rather than a
+// silent source break.
 [assembly: TypeForwardedTo(typeof(ActivityInputOptionsRequest))]
 [assembly: TypeForwardedTo(typeof(ActivityInputOptionsResponse))]
 [assembly: TypeForwardedTo(typeof(ActivityPresentationRecordView))]

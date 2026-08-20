@@ -5,6 +5,12 @@ using System.Runtime.CompilerServices;
 // Publishing HTTP contracts live in Api.Core so API Explorer and JSON metadata can outlive a
 // replaceable Publishing implementation generation. Keep the former API assembly as a binary-
 // compatible facade; owner-local services, handlers, diagnostics, and mapping adapters stay here.
+//
+// The retention is ASP.NET Core's: API Explorer and the OpenAPI document service hold each endpoint's
+// request and response Type even after the endpoint data source is removed and drained (ADR 0069). The
+// forwarded list is exhaustive and guarded by
+// Every_contract_type_is_compiled_in_core_and_forwarded_by_the_legacy_api_assembly, so adding, removing,
+// or renaming a public request/response/enum is an intentional compatibility decision, not a silent break.
 [assembly: TypeForwardedTo(typeof(ActivityDraftTestRunInput))]
 [assembly: TypeForwardedTo(typeof(StartActivityDraftTestRun))]
 [assembly: TypeForwardedTo(typeof(ActivityDraftTestRunView))]

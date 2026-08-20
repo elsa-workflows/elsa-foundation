@@ -6,6 +6,12 @@ using System.Runtime.CompilerServices;
 // The public wire-contract types now live in Api.Core so native API-description metadata cannot retain a
 // collectible Activities Design implementation assembly. Keep the old API assembly as a binary-compatible
 // forwarding facade; implementation-only adapters and mapping helpers intentionally remain here.
+//
+// The retention is ASP.NET Core's: API Explorer and the OpenAPI document service hold each endpoint's
+// request and response Type even after the endpoint data source is removed and drained (ADR 0069). The
+// forwarded list is exhaustive and guarded by
+// Every_contract_type_is_compiled_in_core_and_forwarded_by_the_legacy_api_assembly, so adding, removing,
+// or renaming a public request/response/enum is an intentional compatibility decision, not a silent break.
 [assembly: TypeForwardedTo(typeof(ActivityActionAvailabilityView))]
 [assembly: TypeForwardedTo(typeof(ActivityAuthoringCapabilitiesView))]
 [assembly: TypeForwardedTo(typeof(ActivityAuthoringCatalogView))]
