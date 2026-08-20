@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Store;
@@ -6,10 +7,16 @@ using Groundwork.Store;
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkActivityDraftTestRunStore(
-    GroundworkPublishingStorage storage,
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     PublishingGroundworkDocumentSerializer serializer,
-    IPersistenceAccessContextAccessor accessContextAccessor)
-    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind),
+    string? targetName = null)
+    : GroundworkPublishingStore(
+        sessions,
+        accessContextAccessor,
+        serializer,
+        PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind,
+        targetName),
         IActivityDraftTestRunStore
 {
     public ValueTask<ActivityDraftTestRunCreateResult> TryCreateAsync(
@@ -19,7 +26,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         ArgumentNullException.ThrowIfNull(receipt);
         cancellationToken.ThrowIfCancellationRequested();
         ActivityDraftTestRunIdentity.EnsureOperationScope(receipt);
-        accessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
 
         if (SaveSucceeded(receipt.TestRunId, receipt, null, Projections(receipt)))
             return ValueTask.FromResult(new ActivityDraftTestRunCreateResult(true, receipt));
@@ -27,7 +34,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         var existing = Load<ActivityDraftTestRunReceipt>(receipt.TestRunId)?.Document
                        ?? throw new InvalidOperationException("The activity Test Run receipt was created concurrently but could not be read.");
         ActivityDraftTestRunIdentity.EnsureOperationScope(existing);
-        accessContextAccessor.Current.EnsureTenantScope(existing.TenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(existing.TenantId);
         return ValueTask.FromResult(new ActivityDraftTestRunCreateResult(false, existing));
     }
 
@@ -41,7 +48,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         if (receipt is not null)
         {
             ActivityDraftTestRunIdentity.EnsureOperationScope(receipt);
-            accessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
+            AccessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
         }
         return ValueTask.FromResult(receipt);
     }
@@ -61,7 +68,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
         ArgumentNullException.ThrowIfNull(receipt);
         cancellationToken.ThrowIfCancellationRequested();
         ActivityDraftTestRunIdentity.EnsureOperationScope(receipt);
-        accessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(receipt.TenantId);
         if (receipt.Revision != expectedRevision + 1)
             throw new ArgumentException("The next receipt revision must advance the expected revision exactly once.", nameof(receipt));
 
@@ -102,7 +109,7 @@ public sealed class GroundworkActivityDraftTestRunStore(
             var loaded = Load<ActivityDraftTestRunReceipt>(testRunId);
             if (loaded is null)
                 continue;
-            accessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
+            AccessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
             var version = loaded.Value.Entry.Version;
             var outcome = Storage.Delete(
                 UnitId,

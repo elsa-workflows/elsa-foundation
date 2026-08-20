@@ -1,39 +1,41 @@
-using Elsa.Persistence.Groundwork.Testing;
+using System.Text.Json;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
 
 public sealed class PublishingGroundworkFixtureTests
 {
-    private readonly InMemoryDocumentStore _documents = new(PublishingGroundworkStorageManifest.Create());
-    private readonly PublishingGroundworkDocumentSerializer _serializer = new();
+    private readonly PublishingGroundworkDocumentSerializer serializer = new();
 
     [Fact]
-    public async Task FrozenV1FixturesDeserializeThroughEveryStore()
+    public async Task CurrentFixturesDeserializeThroughEveryStore()
     {
-        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
-        await SeedAsync(PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, slotId, "publicationSlot.json");
-        await SeedAsync(PublishingGroundworkStorageManifest.PublicationRecordDocumentKind, "publication-1", "publicationRecord.json");
-        await SeedAsync(PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind, "workflow:12:definition-1", "publicationPolicy.json");
-        await SeedAsync(PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind, "intent-1", "projectionIntent.json");
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
+        var access = persistence.Access();
+        var slotStore = new GroundworkPublicationSlotStore(persistence.Sessions, access, serializer);
+        var publicationStore = new GroundworkPublicationRecordStore(persistence.Sessions, access, serializer);
+        var policyStore = new GroundworkPublicationPolicyStore(persistence.Sessions, access, serializer);
+        var intentStore = new GroundworkPublicationProjectionIntentStore(persistence.Sessions, access, serializer);
 
-        var queries = new PublishingTestBoundedDocumentStore(_documents);
-        var slot = await new GroundworkPublicationSlotStore(_documents, _serializer, queries).FindAsync("definition-1", "default");
-        var publication = await new GroundworkPublicationRecordStore(_documents, _serializer, queries).FindAsync("publication-1");
-        var policy = await new GroundworkPublicationPolicyStore(_documents, _serializer).FindAsync("definition-1");
-        var intent = await new GroundworkPublicationProjectionIntentStore(_documents, _serializer, queries).FindAsync("intent-1");
+        var slot = Read<SlotFixture>("publicationSlot.json").Slot;
+        var publication = Read<PublicationFixture>("publicationRecord.json").Publication;
+        var policy = Read<PolicyFixture>("publicationPolicy.json").Policy;
+        var intent = Read<IntentFixture>("projectionIntent.json").Intent;
+        await slotStore.TryActivateAsync(slot.WorkflowDefinitionId, slot.SlotName, slot.ActivePublicationId!, 0, slot.UpdatedAt);
+        await publicationStore.SaveAsync(publication);
+        await policyStore.TrySaveAsync(policy, 0);
+        await intentStore.SaveAsync(intent);
 
-        Assert.Equal("publication-1", slot!.ActivePublicationId);
-        Assert.Equal(PublicationStatus.Active, publication!.Status);
-        Assert.Equal(1, policy!.Revision);
-        Assert.Equal(PublicationProjectionIntentStatus.Pending, intent!.Status);
+        Assert.Equal("publication-1", (await slotStore.FindAsync("definition-1", "default"))!.ActivePublicationId);
+        Assert.Equal(PublicationStatus.Active, (await publicationStore.FindAsync("publication-1"))!.Status);
+        Assert.Equal(1, (await policyStore.FindAsync("definition-1"))!.Revision);
+        Assert.Equal(PublicationProjectionIntentStatus.Pending, (await intentStore.FindAsync("intent-1"))!.Status);
     }
 
     [Fact]
-    public void EveryPublishingDocumentKindStartsAtV1AndRejectsUnknownKinds()
+    public void EveryPublishingDocumentKindUsesTheCurrentSchemaAndRejectsUnknownKinds()
     {
         var kinds = new[]
         {
@@ -41,35 +43,36 @@ public sealed class PublishingGroundworkFixtureTests
             PublishingGroundworkStorageManifest.PublicationRecordDocumentKind,
             PublishingGroundworkStorageManifest.PublicationPolicyDocumentKind,
             PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind,
-            PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind
+            PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind,
+            PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+            PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind
         };
-        Assert.All(kinds, kind => Assert.Equal(1, PublishingGroundworkDocumentSerializer.CurrentFor(kind)));
-        Assert.Throws<ArgumentException>(() => PublishingGroundworkDocumentSerializer.CurrentFor("unknown"));
+        Assert.All(kinds, kind => Assert.Equal(PublishingGroundworkStorageManifest.SchemaVersion,
+            serializer.Serialize(kind, new { value = "current" }).SchemaVersion));
+        Assert.Throws<ArgumentException>(() => serializer.Serialize("unknown", new { value = "current" }));
     }
 
     [Fact]
-    public void SerializerRejectsMissingUpcastStepsAndFutureVersions()
+    public void SerializerRejectsMalformedContentWithoutCompatibilityPaths()
     {
-        var content = "{\"workflowDefinitionId\":\"definition-1\",\"slot\":{}}";
-        var old = Envelope("0.0.0", content);
-        var future = Envelope("2.0.0", content);
-
-        Assert.Throws<InvalidOperationException>(() => _serializer.Deserialize<object>(old));
-        Assert.Throws<InvalidOperationException>(() => _serializer.Deserialize<object>(future));
+        Assert.Throws<ArgumentException>(() => serializer.Deserialize<object>(
+            "unknown", "id", PublishingGroundworkStorageManifest.SchemaVersion, "{}"));
+        Assert.ThrowsAny<JsonException>(() => serializer.Deserialize<object>(
+            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
+            "id",
+            PublishingGroundworkStorageManifest.SchemaVersion,
+            "not-json"));
     }
 
-    private async Task SeedAsync(string kind, string id, string fixtureName)
+    private T Read<T>(string fixtureName)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1", fixtureName);
-        await _documents.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", await File.ReadAllTextAsync(path)));
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "current", fixtureName);
+        return JsonSerializer.Deserialize<T>(File.ReadAllText(path), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+               ?? throw new InvalidDataException($"Fixture '{fixtureName}' is empty.");
     }
 
-    private static DocumentEnvelope Envelope(string schemaVersion, string content) => new(
-        PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
-        "slot-1",
-        schemaVersion,
-        1,
-        content,
-        DateTimeOffset.UnixEpoch,
-        DateTimeOffset.UnixEpoch);
+    private sealed record SlotFixture(string WorkflowDefinitionId, PublicationSlot Slot);
+    private sealed record PublicationFixture(string SlotId, PublicationRecord Publication);
+    private sealed record PolicyFixture(string WorkflowDefinitionId, PublicationPolicy Policy);
+    private sealed record IntentFixture(string PublicationId, PublicationProjectionIntent Intent);
 }

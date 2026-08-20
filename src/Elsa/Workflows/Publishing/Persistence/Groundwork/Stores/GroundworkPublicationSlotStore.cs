@@ -1,3 +1,5 @@
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Store;
@@ -5,9 +7,16 @@ using Groundwork.Store;
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkPublicationSlotStore(
-    GroundworkPublishingStorage storage,
-    PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind),
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    PublishingGroundworkDocumentSerializer serializer,
+    string? targetName = null)
+    : GroundworkPublishingStore(
+        sessions,
+        accessContextAccessor,
+        serializer,
+        PublishingGroundworkStorageManifest.PublicationSlotDocumentKind,
+        targetName),
         IPublicationSlotStore
 {
     public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)

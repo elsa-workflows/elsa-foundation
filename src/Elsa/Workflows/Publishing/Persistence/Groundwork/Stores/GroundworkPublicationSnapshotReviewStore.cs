@@ -1,4 +1,5 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Store;
@@ -10,17 +11,23 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 /// only one publisher can win even when multiple server replicas validate the same token concurrently.
 /// </summary>
 public sealed class GroundworkPublicationSnapshotReviewStore(
-    GroundworkPublishingStorage storage,
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     PublishingGroundworkDocumentSerializer serializer,
-    IPersistenceAccessContextAccessor accessContextAccessor)
-    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind),
+    string? targetName = null)
+    : GroundworkPublishingStore(
+        sessions,
+        accessContextAccessor,
+        serializer,
+        PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind,
+        targetName),
         IPublicationSnapshotReviewStore
 {
     public ValueTask<bool> TryAddAsync(PublicationSnapshotReview review, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(review);
         cancellationToken.ThrowIfCancellationRequested();
-        accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(review.TenantId);
         return ValueTask.FromResult(SaveSucceeded(review.PreflightToken, review, null, Projections(review)));
     }
 
@@ -31,7 +38,7 @@ public sealed class GroundworkPublicationSnapshotReviewStore(
         cancellationToken.ThrowIfCancellationRequested();
         var review = Load<PublicationSnapshotReview>(preflightToken)?.Document;
         if (review is not null)
-            accessContextAccessor.Current.EnsureTenantScope(review.TenantId);
+            AccessContextAccessor.Current.EnsureTenantScope(review.TenantId);
         return ValueTask.FromResult(review);
     }
 
@@ -41,7 +48,7 @@ public sealed class GroundworkPublicationSnapshotReviewStore(
         var loaded = Load<PublicationSnapshotReview>(preflightToken);
         if (loaded is null)
             return ValueTask.FromResult(false);
-        accessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
         return ValueTask.FromResult(Delete(preflightToken, loaded.Value.Entry.Version));
     }
 
@@ -76,7 +83,7 @@ public sealed class GroundworkPublicationSnapshotReviewStore(
             var loaded = Load<PublicationSnapshotReview>(token);
             if (loaded is null)
                 continue;
-            accessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
+            AccessContextAccessor.Current.EnsureTenantScope(loaded.Value.Document.TenantId);
             if (Delete(token, loaded.Value.Entry.Version))
                 deleted++;
         }

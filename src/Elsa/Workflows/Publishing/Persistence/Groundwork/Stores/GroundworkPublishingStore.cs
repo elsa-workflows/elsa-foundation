@@ -1,3 +1,6 @@
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
+using System.Text.Json;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -10,11 +13,18 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 /// rather than reaching into the payload.
 /// </summary>
 public abstract class GroundworkPublishingStore(
-    GroundworkPublishingStorage storage,
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     PublishingGroundworkDocumentSerializer serializer,
-    string unitId)
+    string unitId,
+    string? targetName = null)
 {
-    protected GroundworkPublishingStorage Storage { get; } = storage ?? throw new ArgumentNullException(nameof(storage));
+    protected GroundworkPublishingStorage Storage { get; } = new(
+        sessions ?? throw new ArgumentNullException(nameof(sessions)),
+        accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor)),
+        targetName);
+
+    protected IPersistenceAccessContextAccessor AccessContextAccessor { get; } = accessContextAccessor;
 
     protected PublishingGroundworkDocumentSerializer Serializer { get; } =
         serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -37,9 +47,22 @@ public abstract class GroundworkPublishingStore(
             Text(values, PublishingGroundworkStorageManifest.IdField) ?? "",
             Text(values, PublishingGroundworkStorageManifest.SchemaVersionField)
                 ?? throw new InvalidOperationException($"Publishing document '{UnitId}' has no schema version."),
-            Text(values, PublishingGroundworkStorageManifest.ContentField)
-                ?? throw new InvalidOperationException($"Publishing document '{UnitId}' has no payload."));
+            Payload(values));
     }
+
+    /// <summary>
+    /// The row's JSON payload. A provider is free to hand a JSON column back as text, as a parsed
+    /// element, or as a document, so all three are accepted rather than assuming the one the writer
+    /// happened to pass in.
+    /// </summary>
+    private string Payload(IReadOnlyDictionary<string, object?> values) =>
+        values.GetValueOrDefault(PublishingGroundworkStorageManifest.ContentField) switch
+        {
+            string text => text,
+            JsonElement element => element.GetRawText(),
+            JsonDocument document => document.RootElement.GetRawText(),
+            _ => throw new InvalidOperationException($"Publishing document '{UnitId}' has no payload.")
+        };
 
     /// <summary>Builds the row for <paramref name="document"/>, with its route columns projected alongside.</summary>
     protected StorageValues Values<T>(string id, T document, IReadOnlyDictionary<string, object?>? projections = null)

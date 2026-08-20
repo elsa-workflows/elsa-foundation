@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Groundwork.Store;
@@ -9,10 +10,16 @@ using Groundwork.Store;
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkActivityPublicationReceiptStore(
-    GroundworkPublishingStorage storage,
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
     PublishingGroundworkDocumentSerializer serializer,
-    IPersistenceAccessContextAccessor accessContextAccessor)
-    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind),
+    string? targetName = null)
+    : GroundworkPublishingStore(
+        sessions,
+        accessContextAccessor,
+        serializer,
+        PublishingGroundworkStorageManifest.ActivityPublicationReceiptDocumentKind,
+        targetName),
         IActivityPublicationReceiptStore
 {
     public ValueTask<ActivityPublicationReceipt?> FindAsync(
@@ -22,7 +29,7 @@ public sealed class GroundworkActivityPublicationReceiptStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
         cancellationToken.ThrowIfCancellationRequested();
-        accessContextAccessor.Current.EnsureTenantScope(tenantId);
+        AccessContextAccessor.Current.EnsureTenantScope(tenantId);
         var loaded = Load<ActivityPublicationReceipt>(Id(tenantId, idempotencyKey));
         if (loaded is null)
             return ValueTask.FromResult<ActivityPublicationReceipt?>(null);

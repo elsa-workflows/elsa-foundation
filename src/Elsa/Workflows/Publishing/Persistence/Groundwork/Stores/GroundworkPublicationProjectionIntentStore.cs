@@ -1,12 +1,21 @@
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 
 public sealed class GroundworkPublicationProjectionIntentStore(
-    GroundworkPublishingStorage storage,
-    PublishingGroundworkDocumentSerializer serializer)
-    : GroundworkPublishingStore(storage, serializer, PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind),
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    PublishingGroundworkDocumentSerializer serializer,
+    string? targetName = null)
+    : GroundworkPublishingStore(
+        sessions,
+        accessContextAccessor,
+        serializer,
+        PublishingGroundworkStorageManifest.ProjectionIntentDocumentKind,
+        targetName),
         IPublicationProjectionIntentStore
 {
     public ValueTask SaveAsync(PublicationProjectionIntent intent, CancellationToken cancellationToken = default)

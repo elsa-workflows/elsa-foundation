@@ -1,4 +1,5 @@
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
@@ -6,7 +7,7 @@ using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -16,20 +17,18 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
 public sealed class PublishingGroundworkLifetimeTests
 {
     [Fact]
-    public void Groundwork_consumers_are_scoped_and_do_not_cross_request_scopes()
+    public async Task Groundwork_consumers_are_scoped_and_do_not_cross_request_scopes()
     {
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
         var services = new ServiceCollection();
-        // spec 145: the auth-free engine services (projection preparer/activator, snapshot review, policy
-        // resolver/preflight, publication stores) moved to the WorkflowsPublishing engine feature, which the
-        // Api feature pulls in via DependsOn at shell composition. This test invokes ConfigureServices directly
-        // (bypassing DependsOn), so it composes both features to assert the same lifetimes it always has.
+        // The auth-free engine services (projection preparer/activator, snapshot review, policy resolver,
+        // preflight, and publication stores) are registered by the two publishing features. This test
+        // composes both directly, as the shell's feature dependency does.
         new Elsa.Workflows.Publishing.WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.AddGroundworkPublishingStores();
-        services.AddScoped(_ => new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
-        services.AddScoped<IDocumentStore>(sp => sp.GetRequiredService<InMemoryDocumentStore>());
-        services.AddScoped<IBoundedDocumentStore>(sp =>
-            new PublishingTestBoundedDocumentStore(sp.GetRequiredService<InMemoryDocumentStore>()));
+        services.AddSingleton<IGroundworkStorageSessionSource>(persistence.Sessions);
+        services.AddSingleton<IPersistenceAccessContextAccessor>(persistence.Access());
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddScoped<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
@@ -53,6 +52,8 @@ public sealed class PublishingGroundworkLifetimeTests
         AssertScopedAcrossRequests<IPublicationPolicyStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationProjectionIntentStore>(firstScope, secondScope);
         AssertScopedAcrossRequests<IPublicationSnapshotReviewStore>(firstScope, secondScope);
+        AssertScopedAcrossRequests<IActivityPublicationReceiptStore>(firstScope, secondScope);
+        AssertScopedAcrossRequests<IActivityDraftTestRunStore>(firstScope, secondScope);
 
         Assert.Same(
             provider.GetRequiredService<IPublicationPolicyResolver>(),
