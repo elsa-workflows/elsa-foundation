@@ -250,7 +250,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -448,7 +448,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -605,7 +605,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -1783,7 +1783,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -2841,7 +2841,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],
@@ -3153,7 +3153,7 @@
       "ownerKind": "Module",
       "responses": [
         {
-          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
           "contentTypes": [
             "application/json"
           ],

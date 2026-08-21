@@ -14,29 +14,8 @@
   <ItemGroup>
     <!-- The nested stable Core project owns its generated obj/bin files. Do not let the parent
          SDK glob compile those generated assembly attributes into the implementation assembly. -->
-    <Compile Remove="Core\**\*.cs" />
     <!-- Public HTTP contracts are compiled by the stable Api.Core seam and reached here through
          the existing namespaces. The implementation assembly retains only owner-local adapters. -->
-    <Compile Remove="Models\ActivityDraftTestRunViews.cs" />
-    <Compile Remove="Models\ActivityPublicationPreflightView.cs" />
-    <Compile Remove="Models\ConstructableActivityView.cs" />
-    <Compile Remove="Models\ConstructedActivityView.cs" />
-    <Compile Remove="Models\IncidentStrategyViews.cs" />
-    <Compile Remove="Models\PublicationManagementViews.cs" />
-    <Compile Remove="Models\PublishingProblemDetailsViews.cs" />
-    <Compile Remove="Models\RuntimeRequirementPreflightViews.cs" />
-    <Compile Remove="Models\ValueConversionProfileViews.cs" />
-    <Compile Remove="Models\WorkflowTestRunViews.cs" />
-    <Compile Remove="Requests\ConstructActivity.cs" />
-    <Compile Remove="Requests\ListConstructableActivities.cs" />
-    <Compile Remove="Requests\ListIncidentStrategies.cs" />
-    <Compile Remove="Requests\ListValueConversionProfiles.cs" />
-    <Compile Remove="Requests\PreflightActivityDraftPublication.cs" />
-    <Compile Remove="Requests\PublicationManagementRequests.cs" />
-    <Compile Remove="Requests\PublicationSlotLifecycleRequests.cs" />
-    <Compile Remove="Requests\PublishActivityDraft.cs" />
-    <Compile Remove="Requests\RunRuntimeRequirementPreflight.cs" />
-    <Compile Remove="Requests\StartWorkflowTestRun.cs" />
     <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
@@ -46,13 +25,14 @@
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
     <ProjectReference Include="..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
   </ItemGroup>
 
 </Project>

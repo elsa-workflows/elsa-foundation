@@ -141,56 +141,74 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityCatalogAvailability)
     ];
 
+    /// <summary>
+    /// Interfaces, exceptions, mapping helpers, and policies that share the contract namespaces but
+    /// never appear on the wire. They stayed out of the former Api.Core assembly for the same reason.
+    /// </summary>
+    private static readonly Type[] ImplementationOnlyTypes =
+    [
+        typeof(DefaultActivityVersionSelectionPolicy),
+        typeof(IActivityAuthoringContext),
+        typeof(IActivityAuthoringContextAsync),
+        typeof(IActivityVersionSelectionPolicy),
+        typeof(ActivityAuthoringException),
+        typeof(ActivityContractViewMappings),
+        typeof(ActivityDependencyViewMappings),
+        typeof(ActivityProblemDetails),
+        typeof(ActivityUpgradeViewMappings),
+        typeof(ActivityVersionDiffViewMappings)
+    ];
+
     [Fact]
-    public void Every_contract_type_is_compiled_in_core_and_forwarded_by_the_legacy_api_assembly()
+    public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
         Assert.Equal(120, ContractTypes.Length);
 
-        var coreAssembly = typeof(ActivityDefinitionView).Assembly;
-        var legacyAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
+        var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
-        Assert.Equal("Elsa.Activities.Design.Api.Core", coreAssembly.GetName().Name);
-
-        var forwarded = legacyAssembly.GetForwardedTypes()
-            .Where(type => type.Namespace is "Elsa.Activities.Design.Api.Models" or "Elsa.Activities.Design.Api.Requests" or "Elsa.Activities.Design.Api.Commands")
-            .ToDictionary(type => type.FullName!, StringComparer.Ordinal);
+        Assert.Equal("Elsa.Activities.Design.Api", apiAssembly.GetName().Name);
 
         foreach (var contractType in ContractTypes)
         {
-            Assert.Same(coreAssembly, contractType.Assembly);
-            Assert.True(forwarded.TryGetValue(contractType.FullName!, out var forwardedType), $"Missing type forwarder for {contractType.FullName}.");
-            Assert.Same(contractType, forwardedType);
-            Assert.Same(contractType, legacyAssembly.GetType(contractType.FullName!, throwOnError: true));
+            Assert.Same(apiAssembly, contractType.Assembly);
+            Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
+            Assert.Same(contractType, apiAssembly.GetType(contractType.FullName!, throwOnError: true));
         }
+
+        // Every public type in the contract namespaces is classified as either a wire contract or an
+        // implementation-only helper. The Api.Core assembly used to carry that distinction; with one
+        // assembly per domain these lists are its only carrier, so a new or deleted type fails here
+        // rather than reaching consumers unreviewed.
+        Assert.Empty(ContractTypes.Intersect(ImplementationOnlyTypes));
+
+        var exported = apiAssembly.GetExportedTypes()
+            .Where(type => type.Namespace is "Elsa.Activities.Design.Api.Models" or "Elsa.Activities.Design.Api.Requests" or "Elsa.Activities.Design.Api.Commands")
+            .Select(type => type.FullName)
+            .Order(StringComparer.Ordinal);
 
         Assert.Equal(
-            ContractTypes.Select(type => type.FullName).Order(StringComparer.Ordinal),
-            coreAssembly.GetExportedTypes().Select(type => type.FullName).Order(StringComparer.Ordinal));
-        Assert.Equal(ContractTypes.Select(type => type.FullName).Order(StringComparer.Ordinal), forwarded.Keys.Order(StringComparer.Ordinal));
+            ContractTypes.Concat(ImplementationOnlyTypes).Select(type => type.FullName).Order(StringComparer.Ordinal),
+            exported);
     }
 
     [Fact]
-    public void Forwarded_types_preserve_the_complete_public_member_surface()
+    public void Contract_types_preserve_the_complete_public_member_surface()
     {
-        var legacyAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
-
-        foreach (var contractType in ContractTypes)
-        {
-            var forwardedType = legacyAssembly.GetType(contractType.FullName!, throwOnError: true)!;
-            Assert.Equal(PublicShape(contractType), PublicShape(forwardedType));
-        }
-
-        Assert.Equal("72ee0cb1931dd51ac0f0d3fc2c5254ed4dcdff6e3f010b915d8f0ac29af63132", PublicShapeHash(ContractTypes));
+        // This hash is deliberately updated only with a reviewed public contract change. It catches
+        // accidental constructor/property/method drift even when the type list still compiles.
+        // It moved once when the contracts left the Api.Core assembly: a constructed generic type's
+        // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
+        // JSON wire shape did not.
+        Assert.Equal("29f2f67d23618d6d2151fc688e01858eacb22d9126cb1b1769d16709b297bab5", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
-    public void Core_does_not_reference_endpoint_or_persistence_frameworks()
+    public void Api_assembly_does_not_reference_retired_endpoint_frameworks()
     {
-        var references = typeof(ActivityDefinitionView).Assembly.GetReferencedAssemblies();
+        var references = typeof(ActivitiesDesignApiFeature).Assembly.GetReferencedAssemblies();
 
         Assert.DoesNotContain(references, reference => reference.Name is
-            "Elsa.Api.FastEndpoints" or "FastEndpoints" or "FastEndpoints.Attributes" or
-            "Elsa.Activities.Design.Persistence.Core" or "Elsa.Persistence.Core");
+            "Elsa.Api.FastEndpoints" or "FastEndpoints" or "FastEndpoints.Attributes");
     }
 
     private static string PublicShape(Type type) => string.Join(
