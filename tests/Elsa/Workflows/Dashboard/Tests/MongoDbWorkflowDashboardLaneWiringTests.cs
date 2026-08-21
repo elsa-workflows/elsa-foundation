@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using System.Text.Json;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
@@ -153,7 +154,7 @@ public sealed class MongoDbWorkflowDashboardLaneWiringTests
     }
 
     private static void BindDesignLaneTo(IServiceCollection services, string? target) =>
-        services.AddGroundworkManifestSource<WorkflowsDesignGroundworkStorageManifestSource>(target);
+        services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(target);
 
     private static void BindRuntimeLaneTo(IServiceCollection services, string? target) =>
         services.AddGroundworkManifestSource<RuntimeGroundworkStorageManifestSource>(target);

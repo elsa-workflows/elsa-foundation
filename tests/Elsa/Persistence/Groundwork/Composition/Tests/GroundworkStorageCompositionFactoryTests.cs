@@ -104,35 +104,6 @@ public sealed class GroundworkStorageCompositionFactoryTests
     }
 
     [Fact]
-    public void Reference_deployment_schema_unions_exact_workflow_and_activity_physical_definitions()
-    {
-        var manifest = new GroundworkAllFeaturesDeploymentSchema().CreateManifest();
-        var expectedUnits = WorkflowsDesignStorageManifest.Create().StorageUnits
-            .Concat(ActivitiesDesignStorageManifest.Create().StorageUnits)
-            .ToArray();
-
-        Assert.Equal("elsa-documents", manifest.Identity.Value);
-        Assert.Equal("elsa.documents", manifest.Owner.Value);
-        Assert.Equal("1.0.0", manifest.Version.Value);
-        foreach (var expected in expectedUnits)
-        {
-            var actual = Assert.Single(manifest.StorageUnits, unit => unit.Identity == expected.Identity);
-            var expectedStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
-                Assert.IsType<StorageUnitPhysicalStorage>(expected.PhysicalStorage).Policy);
-            var actualStorage = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(
-                Assert.IsType<StorageUnitPhysicalStorage>(actual.PhysicalStorage).Policy);
-
-            Assert.Equal(expectedStorage.Definition, actualStorage.Definition);
-            Assert.Equal(
-                expected.PhysicalStorage.LogicalIndexes.Select(index => index.Identity),
-                actual.PhysicalStorage.LogicalIndexes.Select(index => index.Identity));
-            Assert.Equal(
-                expected.PhysicalStorage.BoundedQueries.Select(query => query.Identity),
-                actual.PhysicalStorage.BoundedQueries.Select(query => query.Identity));
-        }
-    }
-
-    [Fact]
     public void Deployment_schema_exposes_one_host_naming_policy_for_both_design_families()
     {
         var source = new PrefixedDesignDeploymentSchema();
@@ -229,9 +200,11 @@ public sealed class GroundworkStorageCompositionFactoryTests
     [Fact]
     public async Task Factory_rejects_a_missing_executable_handler_before_provider_work()
     {
-        var manifest = WorkflowsDesignStorageManifest.Create();
+        // Any composed manifest will do; the design catalogs declare their units directly against the
+        // public v2 catalog and no longer compose one, so this takes the shared design ledger's.
+        var manifest = GroundworkDesignAtomicWriteStorageManifest.Create();
         var unit = manifest.StorageUnits.Single(candidate =>
-            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+            candidate.Identity.Value == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind);
         var source = new FixedManifestSource(new GroundworkStorageManifestDeclaration(
             "missing-handler-feature",
             manifest,

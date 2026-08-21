@@ -1197,17 +1197,19 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     private sealed class ThrowingSource(IGroundworkStorageSessionSource inner, Exception failure)
-        : IGroundworkStorageSessionSource
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => throw failure;
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
             inner.BeginUnitOfWork(access, options, unitIds, targetName);
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
     private sealed class AcknowledgementLostAfterCommitDocumentStore(
         IGroundworkStorageSessionSource inner,
-        CancellationTokenSource callerCancellation) : IGroundworkStorageSessionSource
+        CancellationTokenSource callerCancellation) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         private int ledgerLoads;
 
@@ -1226,10 +1228,12 @@ public class GroundworkWorkflowDefinitionCommandTests
                 inner.BeginUnitOfWork(access, options, unitIds, targetName), callerCancellation);
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
     private sealed class VersionSaveConflictDocumentStore(IGroundworkStorageSessionSource inner)
-        : IGroundworkStorageSessionSource
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         public bool VersionSaveWasRejected { get; set; }
 
@@ -1240,6 +1244,8 @@ public class GroundworkWorkflowDefinitionCommandTests
                 inner.BeginUnitOfWork(access, options, unitIds, targetName), this);
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
     private sealed class VersionSaveConflictUnitOfWork(

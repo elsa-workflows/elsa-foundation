@@ -21,11 +21,11 @@ public class GroundworkManifestPhysicalStorageGoldenTests
     private static readonly IReadOnlyDictionary<string, Func<StorageManifest>> Manifests =
         new Dictionary<string, Func<StorageManifest>>(StringComparer.Ordinal)
         {
+            // Only manifests that still compose a physical host declaration have a golden here. The
+            // design and publishing catalogs declare v2 storage units directly, and their physical shape
+            // is pinned by their own manifest suites.
             ["runtime"] = ElsaRuntimeStorageManifest.CreatePhysicalized,
-            ["design-atomic-write"] = GroundworkDesignAtomicWriteStorageManifest.Create,
-            ["publishing"] = PublishingGroundworkStorageManifest.Create,
-            ["activities-design"] = ActivitiesDesignStorageManifest.Create,
-            ["workflows-design"] = WorkflowsDesignStorageManifest.Create
+            ["design-atomic-write"] = GroundworkDesignAtomicWriteStorageManifest.Create
         };
 
     public static TheoryData<string> ManifestNames => [.. Manifests.Keys];

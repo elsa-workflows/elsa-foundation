@@ -17,6 +17,9 @@
     <ProjectReference Include="..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
+    <!-- These suites compose the shared design atomic-write ledger, which lives here. It arrived
+         transitively through Publishing until that lane took the public v2 closure. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Attention\Core\Elsa.Attention.Core.csproj" />

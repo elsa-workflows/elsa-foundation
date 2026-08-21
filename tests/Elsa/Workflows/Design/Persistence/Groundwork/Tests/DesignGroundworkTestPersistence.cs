@@ -11,7 +11,7 @@ using Groundwork.Testing;
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
 /// <summary>Provider-neutral public-v2 fixture for the preserved workflow-design behavior cases.</summary>
-internal sealed class DesignGroundworkTestPersistence : IGroundworkStorageSessionSource, IDisposable
+internal sealed class DesignGroundworkTestPersistence : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource, IDisposable
 {
     private readonly IReadOnlyDictionary<string, StorageUnit> units =
         WorkflowsDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
@@ -51,6 +51,8 @@ internal sealed class DesignGroundworkTestPersistence : IGroundworkStorageSessio
     }
 
     public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+
+    public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
 
     public void SeedDefinition(WorkflowDefinition definition)
     {

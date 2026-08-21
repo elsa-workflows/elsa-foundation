@@ -139,29 +139,28 @@ public sealed class DeploymentShapeLaneExclusionTests
         return provider;
     }
 
+    /// <summary>
+    /// The design catalogs declare their storage units directly against the public v2 catalog, so a lane's
+    /// presence shows in its store contracts and its own atomic writer rather than in a contributed
+    /// manifest source.
+    /// </summary>
     private static void AssertDesignLanePresent(ServiceCollection services)
     {
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDefinitionStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityDefinitionStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDesignAtomicWriter));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            descriptor.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource));
+            descriptor.ServiceType == typeof(Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter));
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            descriptor.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource));
+            descriptor.ServiceType == typeof(Elsa.Activities.Design.Persistence.Groundwork.IDesignAtomicWriter));
     }
 
     private static void AssertDesignLaneAbsent(ServiceCollection services)
     {
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDefinitionStore));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IActivityDefinitionStore));
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IDesignAtomicWriter));
         Assert.DoesNotContain(services, descriptor =>
-            descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            descriptor.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource));
+            descriptor.ServiceType == typeof(Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter));
         Assert.DoesNotContain(services, descriptor =>
-            descriptor.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            descriptor.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource));
+            descriptor.ServiceType == typeof(Elsa.Activities.Design.Persistence.Groundwork.IDesignAtomicWriter));
     }
 }

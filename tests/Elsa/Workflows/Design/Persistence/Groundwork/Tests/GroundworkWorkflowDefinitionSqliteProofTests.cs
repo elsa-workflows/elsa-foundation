@@ -167,7 +167,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection);
 
     private sealed class NativeSessionSource(IStorageProviderConnection connection)
-        : IGroundworkStorageSessionSource
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         private readonly IReadOnlyDictionary<string, StorageUnit> units =
             WorkflowsDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
@@ -183,6 +183,8 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             string? targetName = null) => throw new NotSupportedException();
 
         public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
 
         public sealed record RecordedQuery(QueryRequest Request, QueryRenderOptions? Options);
 

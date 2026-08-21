@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Composition;
 using System.Data.Common;
 using System.Text.Json;
 using Elsa.Persistence.Groundwork;
@@ -167,7 +168,7 @@ public sealed class WorkflowsDashboardGroundworkLaneWiringTests
             (_, key) => new StubConnectionSource((string)key, providerIdentity));
 
     private static void BindDesignLaneTo(IServiceCollection services, string? target) =>
-        services.AddGroundworkManifestSource<WorkflowsDesignGroundworkStorageManifestSource>(target);
+        services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(target);
 
     private static void BindRuntimeLaneTo(IServiceCollection services, string? target) =>
         services.AddGroundworkManifestSource<RuntimeGroundworkStorageManifestSource>(target);

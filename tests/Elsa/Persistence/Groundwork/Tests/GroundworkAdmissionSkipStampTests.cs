@@ -28,11 +28,10 @@ public sealed class GroundworkAdmissionSkipStampTests
 
     private static IReadOnlyList<IGroundworkStorageManifestSource> ReferenceDeploymentSources() =>
     [
+        // The design and publishing catalogs declare their v2 storage units directly and contribute no
+        // composed declaration, so the reference deployment admits these two.
         new RuntimeGroundworkStorageManifestSource(),
-        new WorkflowsDesignGroundworkStorageManifestSource(),
-        new ActivitiesDesignGroundworkStorageManifestSource(),
-        new GroundworkDesignAtomicWriteStorageManifestSource(),
-        new PublishingGroundworkStorageManifestSource()
+        new GroundworkDesignAtomicWriteStorageManifestSource()
     ];
 
     private static GroundworkAdmissionSkipStamp Stamp(

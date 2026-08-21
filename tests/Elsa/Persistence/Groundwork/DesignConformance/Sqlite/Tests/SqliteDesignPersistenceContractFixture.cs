@@ -32,6 +32,18 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+// These fixtures sit between the design lane and the v1 querying lane, which still declare
+// same-named atomic-write types. The design lane is the one under test here.
+using IDesignAtomicWriter = Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter;
+using GroundworkDesignAtomicWriteRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteRequest;
+using GroundworkDesignOperationIdentity = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignOperationIdentity;
+using GroundworkDocumentWriter = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDocumentWriter;
+using GroundworkDesignAtomicWriteResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteResult;
+using GroundworkDesignAtomicWriteContext = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteContext;
+using GroundworkDesignAtomicWriteStageResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStageResult;
+using GroundworkDesignSaveRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignSaveRequest;
+using GroundworkDesignAtomicCommand = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicCommand;
+using GroundworkDesignAtomicWriteStatus = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStatus;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 
@@ -321,7 +333,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
-    private static SaveDocumentRequest DefinitionSave(AtomicityDocumentIdentities identities, string storageScope)
+    private static GroundworkDesignSaveRequest DefinitionSave(AtomicityDocumentIdentities identities, string storageScope)
     {
         var definition = new WorkflowDefinition
         {
@@ -341,7 +353,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
         { ExpectedVersion = 0 };
     }
 
-    private static SaveDocumentRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
+    private static GroundworkDesignSaveRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
     {
         var version = new WorkflowDefinitionVersion(identities.DefinitionId, "1.0.0")
         {

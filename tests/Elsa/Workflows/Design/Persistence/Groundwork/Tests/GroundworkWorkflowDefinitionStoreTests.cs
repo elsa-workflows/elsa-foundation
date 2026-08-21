@@ -95,7 +95,9 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         {
             Assert.Equal("b", (await store.FindByIdAsync("b"))?.Id);
             Assert.Equal("b", (await store.ListAsync(new WorkflowDefinitionFilter { Id = "b" })).Single().Id);
-                AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+            Assert.Equal(2, raw.Queries.Count);
+            Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex, raw.Queries[0].IndexName);
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
                 [WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
@@ -381,11 +383,13 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
             scope);
     }
 
-    private sealed class ThrowingSource(IGroundworkStorageSessionSource inner, Exception failure) : IGroundworkStorageSessionSource
+    private sealed class ThrowingSource(IGroundworkStorageSessionSource inner, Exception failure) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => throw failure;
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => inner.BeginUnitOfWork(access, options, unitIds, targetName);
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
     private static void AssertRoute(
@@ -393,7 +397,7 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         string index,
         IReadOnlyList<string> order)
     {
-        var query = Assert.Single(raw.Queries);
+        var query = Assert.Single(raw.Queries.TakeLast(1));
         Assert.Equal(index, query.IndexName);
         Assert.Equal(index, query.Options!.SelectedIndex);
         Assert.Equal(order, query.Request.Order.Select(term => term.Column.Name));

@@ -598,11 +598,14 @@ public class GroundworkStorageCompositionTests
         Assert.NotEqual(baseline.Snapshot.TargetFingerprint, changedPolicy.Snapshot!.TargetFingerprint);
     }
 
+    /// <summary>
+    /// Only families that still contribute a composed host manifest are covered here. The design and
+    /// publishing lanes declare their storage units directly against the public v2 catalog, so they have
+    /// no declaration to compose; their contract is asserted by their own manifest suites and by the
+    /// architecture gate that holds them identity-only.
+    /// </summary>
     [Theory]
     [InlineData("runtime", "elsa-workflows-runtime")]
-    [InlineData("workflows-design", "elsa-workflows-design")]
-    [InlineData("activities-design", "elsa-activities-design")]
-    [InlineData("publishing", "elsa-workflows-publishing")]
     public async Task Family_source_declares_exact_manifest_and_public_store_contracts(
         string family,
         string expectedFeatureIdentity)
@@ -631,20 +634,6 @@ public class GroundworkStorageCompositionTests
         }
     }
 
-    [Theory]
-    [InlineData("workflows-design")]
-    [InlineData("activities-design")]
-    public async Task Design_family_sources_observe_cancellation_before_compiling_their_manifest(
-        string family)
-    {
-        var source = CreateFamilySource(family);
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            source.CreateDeclarationAsync(cancellation.Token).AsTask());
-    }
-
     [Fact]
     public async Task Shared_documents_recipe_bounds_projected_string_index_keys()
     {
@@ -666,9 +655,6 @@ public class GroundworkStorageCompositionTests
 
     [Theory]
     [InlineData("runtime", typeof(RuntimeGroundworkStorageManifestSource))]
-    [InlineData("workflows-design", typeof(WorkflowsDesignGroundworkStorageManifestSource))]
-    [InlineData("activities-design", typeof(ActivitiesDesignGroundworkStorageManifestSource))]
-    [InlineData("publishing", typeof(PublishingGroundworkStorageManifestSource))]
     public void Family_registration_adds_its_source_scoped_and_idempotently(string family, Type implementationType)
     {
         var services = new ServiceCollection();
@@ -681,8 +667,13 @@ public class GroundworkStorageCompositionTests
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
 
+    /// <summary>
+    /// Each design catalog owns its own atomic writer over its own operation ledger, so the two lanes
+    /// register two distinct contracts rather than competing for one. Registering a lane twice still
+    /// contributes exactly one writer.
+    /// </summary>
     [Fact]
-    public void Workflow_and_activity_design_registrations_share_one_atomic_write_source_and_helper()
+    public void Each_design_registration_contributes_exactly_one_atomic_writer_for_its_own_lane()
     {
         var services = new ServiceCollection();
 
@@ -691,14 +682,14 @@ public class GroundworkStorageCompositionTests
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 
-        var source = Assert.Single(services, x =>
-            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource));
-        Assert.Equal(ServiceLifetime.Scoped, source.Lifetime);
-        // The writer is bound to the design lane's target, so it is registered through a factory rather
-        // than by implementation type; both design registrations still contribute exactly one.
-        var helper = Assert.Single(services, x => x.ServiceType == typeof(IDesignAtomicWriter));
-        Assert.Equal(ServiceLifetime.Scoped, helper.Lifetime);
+        var workflowWriter = Assert.Single(services, x =>
+            x.ServiceType == typeof(Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter));
+        var activityWriter = Assert.Single(services, x =>
+            x.ServiceType == typeof(Elsa.Activities.Design.Persistence.Groundwork.IDesignAtomicWriter));
+
+        Assert.Equal(ServiceLifetime.Scoped, workflowWriter.Lifetime);
+        Assert.Equal(ServiceLifetime.Scoped, activityWriter.Lifetime);
+        Assert.NotEqual(workflowWriter.ServiceType, activityWriter.ServiceType);
     }
 
     [Fact]
@@ -898,9 +889,6 @@ public class GroundworkStorageCompositionTests
     private static IGroundworkStorageManifestSource CreateFamilySource(string family) => family switch
     {
         "runtime" => new RuntimeGroundworkStorageManifestSource(),
-        "workflows-design" => new WorkflowsDesignGroundworkStorageManifestSource(),
-        "activities-design" => new ActivitiesDesignGroundworkStorageManifestSource(),
-        "publishing" => new PublishingGroundworkStorageManifestSource(),
         _ => throw new ArgumentOutOfRangeException(nameof(family), family, null)
     };
 
