@@ -10,149 +10,72 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// Compile-time and reflection checks for the stable Publishing API contract boundary.
-/// The explicit list is intentionally kept next to the forwarders: removing or changing a public
-/// request/response member requires a compatibility decision rather than silently changing wire API.
+/// Compile-time and reflection checks for the Publishing API wire contract.
+/// The explicit list is the tripwire: adding, removing, or changing a public request/response
+/// member requires a deliberate compatibility decision rather than silently changing wire API.
 /// </summary>
 public sealed class PublishingApiContractCompatibilityTests
 {
-    private static readonly Type[] ContractTypes =
-    [
-        typeof(ActivityDraftTestRunInput),
-        typeof(StartActivityDraftTestRun),
-        typeof(ActivityDraftTestRunView),
-        typeof(ActivityDraftTestRunFailureView),
-        typeof(ActivityDraftTestRunExpirationView),
-        typeof(ActivityDraftTestRunCancellationView),
-        typeof(GetActivityDraftTestRun),
-        typeof(GetActivityDraftTestRunByIdempotencyKey),
-        typeof(CancelActivityDraftTestRun),
-        typeof(ActivityPublicationDependencyEvidenceView),
-        typeof(ActivityPublicationCapabilityReadinessView),
-        typeof(ActivityPublicationPreflightView),
-        typeof(ActivityPublicationReceiptView),
-        typeof(ConstructableActivityView),
-        typeof(ConstructedActivityView),
-        typeof(ArgumentView),
-        typeof(IncidentStrategyReferenceView),
-        typeof(IncidentStrategyDescriptorView),
-        typeof(IncidentStrategiesResponse),
-        typeof(PublicationView),
-        typeof(PublicationSlotView),
-        typeof(PublicationSlotListResponse),
-        typeof(PublicationPolicyView),
-        typeof(PublicationPolicyDefaultActionView),
-        typeof(PublicationPolicyContract),
-        typeof(PublicationActionView),
-        typeof(PublicationPolicySourceView),
-        typeof(PublicationTriggerChangeKindView),
-        typeof(PublicationTriggerCardinalityView),
-        typeof(PublicationTriggerChangeView),
-        typeof(PublicationTriggerConflictView),
-        typeof(PublicationContract),
-        typeof(PublicationIntentContract),
-        typeof(PublicationPreflightView),
-        typeof(PublicationTriggerClaimView),
-        typeof(PublicationSnapshotPreflightView),
-        typeof(ActivityPublishingDiagnosticView),
-        typeof(ActivityPublishingProblemDetails),
-        typeof(ExpressionPublicationValidationDiagnosticView),
-        typeof(ExpressionPublicationValidationProblemDetails),
-        typeof(RuntimePreflightProblemDetails),
-        typeof(RuntimeRequirementPreflightView),
-        typeof(RuntimeRequirementPreflightItemView),
-        typeof(ValueConversionProfileReferenceView),
-        typeof(ValueConversionProfileView),
-        typeof(ValueConversionProfilesResponse),
-        typeof(WorkflowTestRunView),
-        typeof(ConstructActivity),
-        typeof(ListConstructableActivities),
-        typeof(ListIncidentStrategies),
-        typeof(ListValueConversionProfiles),
-        typeof(PreflightActivityDraftPublication),
-        typeof(GetActivityPublicationReceipt),
-        typeof(ListPublicationSlots),
-        typeof(GetPublicationSlot),
-        typeof(GetWorkflowPublicationPolicy),
-        typeof(SetWorkflowPublicationPolicy),
-        typeof(PreflightWorkflowPublication),
-        typeof(PreflightWorkflowPublicationSnapshot),
-        typeof(PublishWorkflowRequest),
-        typeof(UnpublishPublicationSlotRequest),
-        typeof(RestorePublicationSlotRequest),
-        typeof(UnpublishPublicationSlot),
-        typeof(RestorePublicationSlot),
-        typeof(PublishActivityDraft),
-        typeof(RunRuntimeRequirementPreflight),
-        typeof(StartWorkflowTestRun),
-        typeof(StartWorkflowDraftTestRun)
-    ];
+    private static readonly Type[] ContractTypes = PublishingApiContractSurface.ContractTypes;
 
     [Fact]
-    public void Every_contract_type_is_compiled_in_core_and_forwarded_by_the_legacy_api_assembly()
+    public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
         Assert.Equal(68, ContractTypes.Length);
 
-        var coreAssembly = typeof(ConstructActivity).Assembly;
-        var legacyAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
+        var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
-        Assert.Equal("Elsa.Workflows.Publishing.Api.Core", coreAssembly.GetName().Name);
-
-        var forwarded = legacyAssembly.GetForwardedTypes()
-            .Where(type => type.Namespace is "Elsa.Workflows.Publishing.Api.Models" or "Elsa.Workflows.Publishing.Api.Requests")
-            .ToDictionary(type => type.FullName!, StringComparer.Ordinal);
+        Assert.Equal("Elsa.Workflows.Publishing.Api", apiAssembly.GetName().Name);
 
         foreach (var contractType in ContractTypes)
         {
-            Assert.Same(coreAssembly, contractType.Assembly);
-            Assert.True(forwarded.TryGetValue(contractType.FullName!, out var forwardedType), $"Missing type forwarder for {contractType.FullName}.");
-            Assert.Same(contractType, forwardedType);
-            Assert.Same(contractType, legacyAssembly.GetType(contractType.FullName!, throwOnError: true));
+            Assert.Same(apiAssembly, contractType.Assembly);
+            Assert.True(contractType.IsPublic, $"{contractType.FullName} must stay publicly exported.");
+            Assert.Same(contractType, apiAssembly.GetType(contractType.FullName!, throwOnError: true));
         }
 
+        // Every public type in the contract namespaces is classified as either a wire contract or an
+        // implementation-only model, so a new or deleted type fails here rather than reaching
+        // consumers unreviewed.
+        Assert.Empty(ContractTypes.Intersect(PublishingApiContractSurface.ImplementationOnlyModelTypes));
+
         Assert.Equal(
-            ContractTypes.Select(type => type.FullName).Order(StringComparer.Ordinal),
-            coreAssembly.GetExportedTypes().Select(type => type.FullName).Order(StringComparer.Ordinal));
-        Assert.Equal(ContractTypes.Select(type => type.FullName).Order(StringComparer.Ordinal), forwarded.Keys.Order(StringComparer.Ordinal));
+            ContractTypes.Concat(PublishingApiContractSurface.ImplementationOnlyModelTypes)
+                .Select(type => type.FullName).Order(StringComparer.Ordinal),
+            PublishingApiContractSurface.ExportedContractNamespaceTypes()
+                .Select(type => type.FullName).Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public void Forwarded_types_preserve_the_public_member_surface()
+    public void Contract_types_preserve_the_public_member_surface()
     {
-        var legacyAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
-
-        foreach (var contractType in ContractTypes)
-        {
-            var forwardedType = legacyAssembly.GetType(contractType.FullName!, throwOnError: true)!;
-            Assert.Equal(PublicShape(contractType), PublicShape(forwardedType));
-        }
-
-        // This hash is deliberately updated only with a reviewed public contract change. It catches
-        // accidental constructor/property/method drift even when the forwarder list still compiles.
+        // These hashes are deliberately updated only with a reviewed public contract change. They
+        // catch accidental constructor/property/method drift even when the type list still compiles.
+        // They moved once when the contracts left the Api.Core assembly: a constructed generic type's
+        // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
+        // JSON wire shape did not.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
                                                        type != typeof(ExpressionPublicationValidationProblemDetails) &&
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         Assert.Equal(
-            "0b73ac1112c405da944c99089dd55b68fbd872f930d7084f76b3adf336bc35e6",
+            "1182d2c91fc8dd16ff60cce1dc3df6424a09b26e9c0c21eca27e628cacb694d0",
             PublicShapeHash(legacyTypes));
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "b4d3a74a659f310d47fb8fd399733821c2211aaab8105fa68b93b7b4edceb8e2",
-            $"The Publishing API Core public-shape hash changed to {actualHash}.");
+            actualHash == "f276114228a2b7f04d466d0ecbc217816ddad997af7ba022b4b2e8a5e15a9d78",
+            $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 
     [Fact]
-    public void Core_does_not_reference_endpoint_or_persistence_implementation_frameworks()
+    public void Api_assembly_does_not_reference_retired_endpoint_frameworks()
     {
-        var references = typeof(ConstructActivity).Assembly.GetReferencedAssemblies();
+        var references = typeof(WorkflowsPublishingApiFeature).Assembly.GetReferencedAssemblies();
 
         Assert.DoesNotContain(references, reference => reference.Name is
-            "Elsa.Api.FastEndpoints" or "FastEndpoints" or "FastEndpoints.Attributes" or
-            "Elsa.Workflows.Publishing.Api" or "Elsa.Workflows.Publishing.Persistence.Groundwork" or
-            "Elsa.Persistence.Groundwork" or "Elsa.Persistence.Core");
+            "Elsa.Api.FastEndpoints" or "FastEndpoints" or "FastEndpoints.Attributes");
     }
 
     private static string PublicShape(Type type) => string.Join(

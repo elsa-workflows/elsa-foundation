@@ -146,9 +146,8 @@ public sealed class PublishingSerializationContractTests
     public void Every_concrete_public_api_model_has_generated_metadata()
     {
         var context = Context;
-        var missing = typeof(ConstructActivity).Assembly
-            .GetExportedTypes()
-            .Where(type => type.Namespace is "Elsa.Workflows.Publishing.Api.Models" or "Elsa.Workflows.Publishing.Api.Requests")
+        var missing = PublishingApiContractSurface.ExportedContractNamespaceTypes()
+            .Except(PublishingApiContractSurface.ImplementationOnlyModelTypes)
             .Where(type => !type.IsAbstract && !typeof(Exception).IsAssignableFrom(type) && !type.ContainsGenericParameters)
             .Where(type => context.GetTypeInfo(type) is null)
             .Select(type => type.FullName)
