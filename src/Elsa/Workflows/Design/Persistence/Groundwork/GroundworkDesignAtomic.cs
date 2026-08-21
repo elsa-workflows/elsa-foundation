@@ -169,10 +169,26 @@ public sealed class GroundworkDesignAtomicWrite(
             catch (GroundworkDesignUncertainCommitException)
             {
                 using var reconciliation = new CancellationTokenSource(timeout);
-                var winner = ReadMarker(markerId);
-                if (winner is not null)
-                    return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Reconciled);
-                throw;
+                var backoff = MarkerRaceBackoffStep;
+                while (true)
+                {
+                    var winner = ReadMarker(markerId);
+                    if (winner is not null)
+                        return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Reconciled);
+
+                    try
+                    {
+                        await Task.Delay(backoff, clock, reconciliation.Token);
+                    }
+                    catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
+                    {
+                        throw new GroundworkDesignUncertainCommitException(
+                            $"Design operation marker '{markerId}' did not become visible within the reconciliation timeout.");
+                    }
+
+                    backoff = TimeSpan.FromMilliseconds(
+                        Math.Min(backoff.TotalMilliseconds * 2, 250));
+                }
             }
         }
     }

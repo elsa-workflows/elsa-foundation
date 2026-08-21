@@ -91,6 +91,8 @@ public sealed class GroundworkDesignStorage(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         RequireAcrossScopesIfRequested(acrossScopes);
+        if (StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind))
+            return ReadDefinitionById(id, acrossScopes);
         if (!acrossScopes)
         {
             var session = Open(unitId);
@@ -110,30 +112,92 @@ public sealed class GroundworkDesignStorage(
             }
         }
 
-        var result = ExecutePrivilegedQuery(
+        return ExecutePrivilegedQuery(
             unitId,
             "point-read-workflow-design-across-scopes",
             privileged =>
             {
                 var unit = sessions.Unit(unitId, targetName);
                 var table = new TableId(unit.Name);
-                var idColumn = Column(unit, table, WorkflowsDesignStorageManifest.IdField);
-                return privileged.QueryAcrossScopes(
-                    new QueryRequest(
-                        table,
-                        new Predicate.Equal(idColumn, QueryConstant.Of(idColumn, id)),
-                        [new OrderTerm(idColumn, OrderDirection.Ascending, NullOrder.Last)],
-                        Projection.All,
-                        Paging.Keyset(2)),
-                    QueryOptions(unit, null));
+                var request = new QueryRequest(
+                    table,
+                    Equal(unitId, WorkflowsDesignStorageManifest.IdField, id),
+                    [Order(unitId, WorkflowsDesignStorageManifest.DefinitionIdField)],
+                    Projection.All,
+                    Paging.Keyset(2));
+                var result = privileged.QueryAcrossScopes(
+                    request,
+                    QueryOptions(unit, WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex));
+                if (result.Rows.Count == 0)
+                    return null;
+                if (result.Rows.Count > 1)
+                    throw new GroundworkQueryReadinessException(
+                        $"Cross-scope point read for '{unitId}/{id}' is ambiguous across {result.Rows.Count} scopes.");
+                var row = result.Rows[0];
+                return new GroundworkDesignEntry(
+                    new StoredEntry(new StorageValues(row.Values), null),
+                    row.Scope);
             });
+    }
+
+    private GroundworkDesignEntry? ReadDefinitionById(string id, bool acrossScopes)
+    {
+        var unitId = WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind;
+        var unit = sessions.Unit(unitId, targetName);
+        var table = new TableId(unit.Name);
+        var request = new QueryRequest(
+            table,
+            Equal(unitId, WorkflowsDesignStorageManifest.IdField, id),
+            [Order(unitId, WorkflowsDesignStorageManifest.DefinitionIdField)],
+            Projection.All,
+            Paging.Keyset(2));
+        var options = QueryOptions(unit, WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex);
+        if (acrossScopes)
+            return ExecutePrivilegedQuery(
+                unitId,
+                "point-read-workflow-design-across-scopes",
+                privileged => ReadDefinitionResult(privileged.QueryAcrossScopes(request, options), id));
+
+        var session = Open(unitId);
+        try
+        {
+            return ReadDefinitionResult(session.Query(request, options), id);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (GroundworkQueryException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GroundworkProviderFailureException(
+                $"Provider point read for unit '{unitId}' failed.", exception);
+        }
+    }
+
+    private static GroundworkDesignEntry? ReadDefinitionResult(QueryMaterializedResult result, string id)
+    {
         if (result.Rows.Count == 0)
             return null;
         if (result.Rows.Count > 1)
             throw new GroundworkQueryReadinessException(
-                $"Cross-scope point read for '{unitId}/{id}' is ambiguous across {result.Rows.Count} scopes.");
-        var row = result.Rows[0];
-        return new GroundworkDesignEntry(new StoredEntry(new StorageValues(row.Values), null), row.Scope);
+                $"Workflow-definition point read for '{id}' is ambiguous across {result.Rows.Count} rows.");
+        return new GroundworkDesignEntry(new StoredEntry(new StorageValues(result.Rows[0]), null), null);
+    }
+
+    private static GroundworkDesignEntry? ReadDefinitionResult(CrossScopeQueryResult result, string id)
+    {
+        if (result.Rows.Count == 0)
+            return null;
+        if (result.Rows.Count > 1)
+            throw new GroundworkQueryReadinessException(
+                $"Workflow-definition point read for '{id}' is ambiguous across {result.Rows.Count} scopes.");
+        return new GroundworkDesignEntry(
+            new StoredEntry(new StorageValues(result.Rows[0].Values), null),
+            result.Rows[0].Scope);
     }
 
     public IReadOnlyList<GroundworkDesignEntry> Query(
@@ -258,9 +322,13 @@ public sealed class GroundworkDesignStorage(
             var result = ExecutePrivilegedQuery(
                 unitId,
                 "search-cardinality-workflow-design-across-scopes",
-                privileged => privileged.QueryAcrossScopes(request, QueryOptions(unit, null)),
+                privileged =>
+                {
+                    var result = privileged.QueryAcrossScopes(request, QueryOptions(unit, null));
+                    return ProbeRows(unitId, result.Rows.Select(row => (row.Values, (StorageScope?)row.Scope)), result.NextContinuationToken);
+                },
                 cancellationToken);
-            return ProbeRows(unitId, result.Rows.Select(row => (row.Values, (StorageScope?)row.Scope)), result.NextContinuationToken);
+            return result;
         }
 
         var session = Open(unitId);
@@ -291,6 +359,7 @@ public sealed class GroundworkDesignStorage(
         bool acrossScopes = false,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         RequireAcrossScopesIfRequested(acrossScopes);
         var unit = sessions.Unit(unitId, targetName);
         var table = new TableId(unit.Name);
@@ -304,9 +373,25 @@ public sealed class GroundworkDesignStorage(
                         QueryOptions(unit, expectedIndex)).Rows.Count > 0,
                 cancellationToken);
         var session = Open(unitId);
-        return session.Query(
-                new QueryRequest(table, predicate, [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)], Projection.All, Paging.Keyset(1)),
-                QueryOptions(unit, expectedIndex)).Rows.Count > 0;
+        try
+        {
+            return session.Query(
+                    new QueryRequest(table, predicate, [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)], Projection.All, Paging.Keyset(1)),
+                    QueryOptions(unit, expectedIndex)).Rows.Count > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (GroundworkQueryException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GroundworkProviderFailureException(
+                $"Provider existence query for unit '{unitId}' failed.", exception);
+        }
     }
 
     public WriteOutcome Insert(string unitId, StorageValues values, WriteOptions? options = null) =>
@@ -328,6 +413,10 @@ public sealed class GroundworkDesignStorage(
             throw new ArgumentException("At least one workflow-design unit is required.", nameof(unitIds));
         var current = accessContextAccessor.Current ?? throw new InvalidOperationException(
             "Workflow-design persistence access context is missing.");
+        if (current.AcrossScopes || current.AccessPolicy == PersistenceAccessPolicy.Privileged)
+            throw new InvalidOperationException(
+                "Privileged or across-scope workflow-design writes are refused before provider acquisition.");
+        RequireAtomicCommit();
         var distinct = unitIds.Distinct(StringComparer.Ordinal).ToArray();
         var units = distinct.Select(unitId => sessions.Unit(unitId, targetName)).ToArray();
         var accesses = units
@@ -339,6 +428,16 @@ public sealed class GroundworkDesignStorage(
         return new DesignUnitOfWork(
             sessions.BeginUnitOfWork(accesses[0], BatchWriteOptions.Exact, distinct, targetName),
             units.ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal));
+    }
+
+    private void RequireAtomicCommit()
+    {
+        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
+            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
+        {
+            throw new NotSupportedException(
+                "Workflow-design staging requires the provider's evidenced atomic-commit capability.");
+        }
     }
 
     public IStorageSession Open(string unitId, bool acrossScopes = false)
@@ -448,7 +547,44 @@ public sealed class GroundworkDesignStorage(
     public WorkflowDefinitionVersionLayout MapLayout(GroundworkDesignEntry entry, JsonSerializerOptions jsonOptions) =>
         Deserialize<WorkflowDefinitionVersionLayout>(entry.Entry, jsonOptions);
 
-    public long? Version(GroundworkDesignEntry? entry) => entry?.Entry.Version;
+    public long? Version(GroundworkDesignEntry? entry)
+    {
+        if (entry is null)
+            return null;
+        if (entry.Entry.Version is not null)
+            return entry.Entry.Version;
+
+        var values = entry.Entry.Values.Values;
+        var unitId = values.ContainsKey(WorkflowsDesignStorageManifest.DefinitionIdField)
+            ? WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind
+            : values.ContainsKey(WorkflowsDesignStorageManifest.VersionField)
+                ? WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind
+                : values.ContainsKey(WorkflowsDesignStorageManifest.DraftDefinitionIdField)
+                    ? WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind
+                    : values.ContainsKey(WorkflowsDesignStorageManifest.LayoutVersionIdField)
+                        ? WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind
+                        : null;
+        var id = values.GetValueOrDefault(WorkflowsDesignStorageManifest.IdField)?.ToString();
+        if (unitId is null || string.IsNullOrWhiteSpace(id))
+            return null;
+        try
+        {
+            return Open(unitId).Read(Key(id))?.Version;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (GroundworkQueryException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GroundworkProviderFailureException(
+                $"Provider version refresh for unit '{unitId}' failed.", exception);
+        }
+    }
 
     public static TEntity Deserialize<TEntity>(StoredEntry entry, JsonSerializerOptions jsonOptions)
         where TEntity : Entity
