@@ -11,13 +11,11 @@ using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Globalization;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using ProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
@@ -38,56 +36,54 @@ public static class ActivitiesDesignApi
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var group = endpoints.MapGroup("/design/activities");
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
         // Availability, catalog, and capability routes retain the historical mediator error transport.
-        Map(group.MapGet("/availability/settings", (RequestDelegate)HandleGetAvailabilitySettingsAsync), "AvailabilityGetSettings", ActivityDesignPermissions.Read, typeof(GetActivityAvailabilitySettings), typeof(ActivityAvailabilitySettings), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapGet("/availability/diagnostics", (RequestDelegate)HandleListAvailabilityDiagnosticsAsync), "AvailabilityListDiagnostics", ActivityDesignPermissions.Read, null, typeof(ActivityAvailabilityDiagnostics), descriptionMethod);
-        Map(group.MapPut("/availability/settings", (RequestDelegate)HandleSaveAvailabilitySettingsAsync), "AvailabilitySaveSettings", ActivityDesignPermissions.Manage, typeof(SaveActivityAvailabilitySettings), typeof(ActivityAvailabilitySettings), descriptionMethod, [JsonMediaType]);
-        Map(group.MapGet("/authoring-capabilities", (RequestDelegate)HandleGetAuthoringCapabilitiesAsync), "AuthoringCapabilitiesGet", ActivityDesignPermissions.Read, null, typeof(ActivityAuthoringCapabilitiesView), descriptionMethod);
-        Map(group.MapGet("/catalog", (RequestDelegate)HandleListCatalogAsync), "CatalogList", ActivityDesignPermissions.Read, typeof(ListActivityAuthoringCatalog), typeof(ActivityAuthoringCatalogView), descriptionMethod, ["*/*", "application/json"]);
+        Map(group.MapGet("/availability/settings", (RequestDelegate)HandleGetAvailabilitySettingsAsync), "AvailabilityGetSettings", ActivityDesignPermissions.Read, typeof(GetActivityAvailabilitySettings), typeof(ActivityAvailabilitySettings), ["*/*", "application/json"]);
+        Map(group.MapGet("/availability/diagnostics", (RequestDelegate)HandleListAvailabilityDiagnosticsAsync), "AvailabilityListDiagnostics", ActivityDesignPermissions.Read, null, typeof(ActivityAvailabilityDiagnostics));
+        Map(group.MapPut("/availability/settings", (RequestDelegate)HandleSaveAvailabilitySettingsAsync), "AvailabilitySaveSettings", ActivityDesignPermissions.Manage, typeof(SaveActivityAvailabilitySettings), typeof(ActivityAvailabilitySettings), [JsonMediaType]);
+        Map(group.MapGet("/authoring-capabilities", (RequestDelegate)HandleGetAuthoringCapabilitiesAsync), "AuthoringCapabilitiesGet", ActivityDesignPermissions.Read, null, typeof(ActivityAuthoringCapabilitiesView));
+        Map(group.MapGet("/catalog", (RequestDelegate)HandleListCatalogAsync), "CatalogList", ActivityDesignPermissions.Read, typeof(ListActivityAuthoringCatalog), typeof(ActivityAuthoringCatalogView), ["*/*", "application/json"]);
 
         // Definitions, drafts, forks, and their authoring operations.
-        Map(group.MapPost("/definitions", (RequestDelegate)HandleCreateDefinitionAsync), "DefinitionsAdd", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDefinition), typeof(ReusableActivityDefinitionMutationView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapPost("/definitions/{definitionId}/fork-previews", (RequestDelegate)HandlePreviewForkAsync), "DefinitionsPreviewFork", ActivityDesignPermissions.Manage, typeof(PreviewReusableActivityFork), typeof(ActivityForkPreviewView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapGet("/definitions", (RequestDelegate)HandleListDefinitionsAsync), "DefinitionsList", ActivityDesignPermissions.Read, typeof(ListReusableActivityDefinitions), typeof(ActivityManagementPageView<ReusableActivityDefinitionManagementView>), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapGet("/definitions/{definitionId}", (RequestDelegate)HandleGetDefinitionAsync), "DefinitionsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityDefinition), typeof(ReusableActivityDefinitionManagementView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPatch("/definitions/{definitionId}", (RequestDelegate)HandleUpdateDefinitionAsync), "DefinitionsUpdate", ActivityDesignPermissions.Manage, typeof(UpdateReusableActivityDefinition), typeof(ActivityDefinitionIdentityView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPut("/definitions/{definitionId}/recommendation", (RequestDelegate)HandleSetRecommendationAsync), "DefinitionsRecommendation", ActivityDesignPermissions.Manage, typeof(SetRecommendedReusableActivityVersion), typeof(ActivityDefinitionRecommendationView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapGet("/definitions/picker", (RequestDelegate)HandlePickerAsync), "DefinitionsPicker", ActivityDesignPermissions.Read, typeof(ListRecommendedActivityDefinitions), typeof(RecommendedActivityDefinitionPageView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapGet("/definitions/{definitionId}/drafts", (RequestDelegate)HandleListDraftsAsync), "DefinitionsListDrafts", ActivityDesignPermissions.Read, typeof(ListReusableActivityDrafts), typeof(ActivityManagementPageView<ReusableActivityDraftManagementView>), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPost("/definitions/{definitionId}/drafts", (RequestDelegate)HandleCreateDraftAsync), "DefinitionsAddDraft", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDraft), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapGet("/definitions/{definitionId}/versions", (RequestDelegate)HandleListVersionsAsync), "DefinitionsListVersions", ActivityDesignPermissions.Read, typeof(ListReusableActivityVersions), typeof(ActivityManagementPageView<ReusableActivityVersionManagementView>), descriptionMethod, ["*/*", "application/json"]);
+        Map(group.MapPost("/definitions", (RequestDelegate)HandleCreateDefinitionAsync), "DefinitionsAdd", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDefinition), typeof(ReusableActivityDefinitionMutationView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapPost("/definitions/{definitionId}/fork-previews", (RequestDelegate)HandlePreviewForkAsync), "DefinitionsPreviewFork", ActivityDesignPermissions.Manage, typeof(PreviewReusableActivityFork), typeof(ActivityForkPreviewView), [JsonMediaType]);
+        Map(group.MapGet("/definitions", (RequestDelegate)HandleListDefinitionsAsync), "DefinitionsList", ActivityDesignPermissions.Read, typeof(ListReusableActivityDefinitions), typeof(ActivityManagementPageView<ReusableActivityDefinitionManagementView>), ["*/*", "application/json"]);
+        Map(group.MapGet("/definitions/{definitionId}", (RequestDelegate)HandleGetDefinitionAsync), "DefinitionsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityDefinition), typeof(ReusableActivityDefinitionManagementView), ["*/*", "application/json"]);
+        Map(group.MapPatch("/definitions/{definitionId}", (RequestDelegate)HandleUpdateDefinitionAsync), "DefinitionsUpdate", ActivityDesignPermissions.Manage, typeof(UpdateReusableActivityDefinition), typeof(ActivityDefinitionIdentityView), [JsonMediaType]);
+        Map(group.MapPut("/definitions/{definitionId}/recommendation", (RequestDelegate)HandleSetRecommendationAsync), "DefinitionsRecommendation", ActivityDesignPermissions.Manage, typeof(SetRecommendedReusableActivityVersion), typeof(ActivityDefinitionRecommendationView), [JsonMediaType]);
+        Map(group.MapGet("/definitions/picker", (RequestDelegate)HandlePickerAsync), "DefinitionsPicker", ActivityDesignPermissions.Read, typeof(ListRecommendedActivityDefinitions), typeof(RecommendedActivityDefinitionPageView), ["*/*", "application/json"]);
+        Map(group.MapGet("/definitions/{definitionId}/drafts", (RequestDelegate)HandleListDraftsAsync), "DefinitionsListDrafts", ActivityDesignPermissions.Read, typeof(ListReusableActivityDrafts), typeof(ActivityManagementPageView<ReusableActivityDraftManagementView>), ["*/*", "application/json"]);
+        Map(group.MapPost("/definitions/{definitionId}/drafts", (RequestDelegate)HandleCreateDraftAsync), "DefinitionsAddDraft", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDraft), typeof(ReusableActivityDraftView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapGet("/definitions/{definitionId}/versions", (RequestDelegate)HandleListVersionsAsync), "DefinitionsListVersions", ActivityDesignPermissions.Read, typeof(ListReusableActivityVersions), typeof(ActivityManagementPageView<ReusableActivityVersionManagementView>), ["*/*", "application/json"]);
 
-        Map(group.MapGet("/drafts/{draftId}", (RequestDelegate)HandleGetDraftAsync), "DraftsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityDraft), typeof(ReusableActivityDraftView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPut("/drafts/{draftId}", (RequestDelegate)HandleReplaceDraftAsync), "DraftsReplace", ActivityDesignPermissions.Manage, typeof(ReplaceReusableActivityDraft), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPatch("/drafts/{draftId}/presentation", (RequestDelegate)HandleUpdateDraftPresentationAsync), "DraftsUpdatePresentation", ActivityDesignPermissions.Manage, typeof(UpdateReusableActivityDraftPresentation), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPost("/drafts/{draftId}/conflict-copies", (RequestDelegate)HandleCreateConflictCopyAsync), "DraftsConflictCopy", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDraftConflictCopy), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapPost("/drafts/{draftId}/validate", (RequestDelegate)HandleValidateDraftAsync), "DraftsValidate", ActivityDesignPermissions.Manage, typeof(ValidateReusableActivityDraft), typeof(ActivityDraftValidationView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPost("/drafts/{draftId}/migrate-provider", (RequestDelegate)HandleMigrateProviderAsync), "DraftsMigrateProvider", ActivityDesignPermissions.Manage, typeof(MigrateReusableActivityDraft), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapPost("/drafts/{draftId}/contract-proposals", (RequestDelegate)HandleProposeContractAsync), "DraftsProposeContract", ActivityDesignPermissions.Manage, typeof(ProposeReusableActivityContract), typeof(ActivityContractProposalView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPost("/drafts/{draftId}/contract-proposals/apply", (RequestDelegate)HandleApplyContractProposalAsync), "DraftsApplyContractProposal", ActivityDesignPermissions.Manage, typeof(ApplyReusableActivityContractProposal), typeof(ReusableActivityDraftView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapDelete("/drafts/{draftId}", (RequestDelegate)HandleDiscardDraftAsync), "DraftsDiscard", ActivityDesignPermissions.Manage, typeof(DiscardReusableActivityDraft), typeof(void), descriptionMethod, ["*/*", "application/json"], StatusCodes.Status204NoContent);
-        Map(group.MapPost("/drafts/{draftId}/diff", (RequestDelegate)HandlePreviewDraftDiffAsync), "DraftsDiff", ActivityDesignPermissions.Read, typeof(PreviewActivityDraftDiff), typeof(ActivityVersionDiffView), descriptionMethod, [JsonMediaType]);
+        Map(group.MapGet("/drafts/{draftId}", (RequestDelegate)HandleGetDraftAsync), "DraftsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityDraft), typeof(ReusableActivityDraftView), ["*/*", "application/json"]);
+        Map(group.MapPut("/drafts/{draftId}", (RequestDelegate)HandleReplaceDraftAsync), "DraftsReplace", ActivityDesignPermissions.Manage, typeof(ReplaceReusableActivityDraft), typeof(ReusableActivityDraftView), [JsonMediaType]);
+        Map(group.MapPatch("/drafts/{draftId}/presentation", (RequestDelegate)HandleUpdateDraftPresentationAsync), "DraftsUpdatePresentation", ActivityDesignPermissions.Manage, typeof(UpdateReusableActivityDraftPresentation), typeof(ReusableActivityDraftView), [JsonMediaType]);
+        Map(group.MapPost("/drafts/{draftId}/conflict-copies", (RequestDelegate)HandleCreateConflictCopyAsync), "DraftsConflictCopy", ActivityDesignPermissions.Manage, typeof(CreateReusableActivityDraftConflictCopy), typeof(ReusableActivityDraftView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapPost("/drafts/{draftId}/validate", (RequestDelegate)HandleValidateDraftAsync), "DraftsValidate", ActivityDesignPermissions.Manage, typeof(ValidateReusableActivityDraft), typeof(ActivityDraftValidationView), [JsonMediaType]);
+        Map(group.MapPost("/drafts/{draftId}/migrate-provider", (RequestDelegate)HandleMigrateProviderAsync), "DraftsMigrateProvider", ActivityDesignPermissions.Manage, typeof(MigrateReusableActivityDraft), typeof(ReusableActivityDraftView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapPost("/drafts/{draftId}/contract-proposals", (RequestDelegate)HandleProposeContractAsync), "DraftsProposeContract", ActivityDesignPermissions.Manage, typeof(ProposeReusableActivityContract), typeof(ActivityContractProposalView), [JsonMediaType]);
+        Map(group.MapPost("/drafts/{draftId}/contract-proposals/apply", (RequestDelegate)HandleApplyContractProposalAsync), "DraftsApplyContractProposal", ActivityDesignPermissions.Manage, typeof(ApplyReusableActivityContractProposal), typeof(ReusableActivityDraftView), [JsonMediaType]);
+        Map(group.MapDelete("/drafts/{draftId}", (RequestDelegate)HandleDiscardDraftAsync), "DraftsDiscard", ActivityDesignPermissions.Manage, typeof(DiscardReusableActivityDraft), typeof(void), ["*/*", "application/json"], StatusCodes.Status204NoContent);
+        Map(group.MapPost("/drafts/{draftId}/diff", (RequestDelegate)HandlePreviewDraftDiffAsync), "DraftsDiff", ActivityDesignPermissions.Read, typeof(PreviewActivityDraftDiff), typeof(ActivityVersionDiffView), [JsonMediaType]);
 
-        Map(group.MapPost("/fork-candidates/{candidateId}/apply", (RequestDelegate)HandleApplyForkAsync), "ForksApply", ActivityDesignPermissions.Manage, typeof(ApplyReusableActivityFork), typeof(ActivityForkReceiptView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapGet("/forks/{idempotencyKey}", (RequestDelegate)HandleGetForkStatusAsync), "ForksGetStatus", ActivityDesignPermissions.Read, typeof(GetReusableActivityForkStatus), typeof(ActivityForkReceiptView), descriptionMethod, ["*/*", "application/json"]);
+        Map(group.MapPost("/fork-candidates/{candidateId}/apply", (RequestDelegate)HandleApplyForkAsync), "ForksApply", ActivityDesignPermissions.Manage, typeof(ApplyReusableActivityFork), typeof(ActivityForkReceiptView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapGet("/forks/{idempotencyKey}", (RequestDelegate)HandleGetForkStatusAsync), "ForksGetStatus", ActivityDesignPermissions.Read, typeof(GetReusableActivityForkStatus), typeof(ActivityForkReceiptView), ["*/*", "application/json"]);
 
         // Version, dependency, diff, and lifecycle operations.
-        Map(group.MapGet("/versions/{versionId}/dependencies", (RequestDelegate)HandleGetDependenciesAsync), "VersionsDependencies", ActivityDesignPermissions.Read, typeof(GetActivityDependencies), typeof(ActivityDependencyPageView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapGet("/versions/{fromVersionId}/diff/{toVersionId}", (RequestDelegate)HandleCompareVersionsAsync), "VersionsDiff", ActivityDesignPermissions.Read, typeof(CompareActivityVersions), typeof(ActivityVersionDiffView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapGet("/versions/{versionId}", (RequestDelegate)HandleGetVersionAsync), "VersionsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityVersion), typeof(ReusableActivityVersionView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPost("/versions/{versionId}/retire", (RequestDelegate)HandleRetireVersionAsync), "VersionsRetire", ActivityDesignPermissions.Manage, typeof(RetireReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPost("/versions/{versionId}/restore", (RequestDelegate)HandleRestoreVersionAsync), "VersionsRestore", ActivityDesignPermissions.Manage, typeof(RestoreReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapPost("/versions/{versionId}/revoke", (RequestDelegate)HandleRevokeVersionAsync), "VersionsRevoke", ActivityDesignPermissions.Manage, typeof(RevokeReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), descriptionMethod, [JsonMediaType]);
+        Map(group.MapGet("/versions/{versionId}/dependencies", (RequestDelegate)HandleGetDependenciesAsync), "VersionsDependencies", ActivityDesignPermissions.Read, typeof(GetActivityDependencies), typeof(ActivityDependencyPageView), ["*/*", "application/json"]);
+        Map(group.MapGet("/versions/{fromVersionId}/diff/{toVersionId}", (RequestDelegate)HandleCompareVersionsAsync), "VersionsDiff", ActivityDesignPermissions.Read, typeof(CompareActivityVersions), typeof(ActivityVersionDiffView), ["*/*", "application/json"]);
+        Map(group.MapGet("/versions/{versionId}", (RequestDelegate)HandleGetVersionAsync), "VersionsGet", ActivityDesignPermissions.Read, typeof(GetReusableActivityVersion), typeof(ReusableActivityVersionView), ["*/*", "application/json"]);
+        Map(group.MapPost("/versions/{versionId}/retire", (RequestDelegate)HandleRetireVersionAsync), "VersionsRetire", ActivityDesignPermissions.Manage, typeof(RetireReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), [JsonMediaType]);
+        Map(group.MapPost("/versions/{versionId}/restore", (RequestDelegate)HandleRestoreVersionAsync), "VersionsRestore", ActivityDesignPermissions.Manage, typeof(RestoreReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), [JsonMediaType]);
+        Map(group.MapPost("/versions/{versionId}/revoke", (RequestDelegate)HandleRevokeVersionAsync), "VersionsRevoke", ActivityDesignPermissions.Manage, typeof(RevokeReusableActivityVersion), typeof(ReusableActivityVersionLifecycleView), [JsonMediaType]);
 
         // Upgrade plans are authoring operations with staged handoff and created-location semantics.
-        Map(group.MapPost("/upgrade-plans", (RequestDelegate)HandleCreateUpgradePlanAsync), "UpgradePlansCreate", ActivityDesignPermissions.Manage, typeof(CreateActivityUpgradePlan), typeof(ActivityUpgradePlanView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
-        Map(group.MapGet("/upgrade-plans/{planId}", (RequestDelegate)HandleGetUpgradePlanAsync), "UpgradePlansGet", ActivityDesignPermissions.Read, typeof(GetActivityUpgradePlan), typeof(ActivityUpgradePlanView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPost("/upgrade-plans/{planId}/apply", (RequestDelegate)HandleApplyUpgradePlanAsync), "UpgradePlansApply", ActivityDesignPermissions.Manage, typeof(ApplyActivityUpgradePlan), typeof(ActivityUpgradeApplyResultView), descriptionMethod, [JsonMediaType]);
-        Map(group.MapGet("/upgrade-plans/{planId}/receipts/{receiptId}", (RequestDelegate)HandleGetUpgradeReceiptAsync), "UpgradePlansGetReceipt", ActivityDesignPermissions.Read, typeof(GetActivityUpgradeApplyReceipt), typeof(ActivityUpgradeApplyReceiptView), descriptionMethod, ["*/*", "application/json"]);
-        Map(group.MapPost("/upgrade-plans/{planId}/refresh", (RequestDelegate)HandleRefreshUpgradePlanAsync), "UpgradePlansRefresh", ActivityDesignPermissions.Manage, typeof(RefreshActivityUpgradePlan), typeof(ActivityUpgradePlanView), descriptionMethod, [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapPost("/upgrade-plans", (RequestDelegate)HandleCreateUpgradePlanAsync), "UpgradePlansCreate", ActivityDesignPermissions.Manage, typeof(CreateActivityUpgradePlan), typeof(ActivityUpgradePlanView), [JsonMediaType], StatusCodes.Status201Created);
+        Map(group.MapGet("/upgrade-plans/{planId}", (RequestDelegate)HandleGetUpgradePlanAsync), "UpgradePlansGet", ActivityDesignPermissions.Read, typeof(GetActivityUpgradePlan), typeof(ActivityUpgradePlanView), ["*/*", "application/json"]);
+        Map(group.MapPost("/upgrade-plans/{planId}/apply", (RequestDelegate)HandleApplyUpgradePlanAsync), "UpgradePlansApply", ActivityDesignPermissions.Manage, typeof(ApplyActivityUpgradePlan), typeof(ActivityUpgradeApplyResultView), [JsonMediaType]);
+        Map(group.MapGet("/upgrade-plans/{planId}/receipts/{receiptId}", (RequestDelegate)HandleGetUpgradeReceiptAsync), "UpgradePlansGetReceipt", ActivityDesignPermissions.Read, typeof(GetActivityUpgradeApplyReceipt), typeof(ActivityUpgradeApplyReceiptView), ["*/*", "application/json"]);
+        Map(group.MapPost("/upgrade-plans/{planId}/refresh", (RequestDelegate)HandleRefreshUpgradePlanAsync), "UpgradePlansRefresh", ActivityDesignPermissions.Manage, typeof(RefreshActivityUpgradePlan), typeof(ActivityUpgradePlanView), [JsonMediaType], StatusCodes.Status201Created);
 
         return group;
     }
@@ -98,31 +94,16 @@ public static class ActivitiesDesignApi
         string permission,
         Type? requestType,
         Type responseType,
-        MethodInfo descriptionMethod,
         string[]? accepts = null,
-        int successStatus = StatusCodes.Status200OK)
-    {
-        var metadata = new List<object>
-        {
-            new ProducesResponseTypeMetadata(successStatus, responseType, responseType == typeof(void) ? [] : ["application/json"]),
-            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), [])
-        };
-
-        if (requestType is not null && accepts is not null)
-            metadata.Add(new AcceptsMetadata(accepts, requestType, false));
-
-        builder.WithName($"ElsaActivitiesDesignApiEndpoints{operation}")
-            .WithTags(OwnerId)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(permission)
-            .WithMetadata(metadata.ToArray())
-            // Keep API Explorer's description method stable and framework-owned. The actual request delegate
-            // is intentionally not published as MethodInfo metadata, so a replaceable owner generation is not rooted.
-            .WithMetadata(descriptionMethod)
-            .RequireStableOpenApi();
-    }
+        int successStatus = StatusCodes.Status200OK) =>
+        builder.WithModuleOperation(
+                $"ElsaActivitiesDesignApiEndpoints{operation}",
+                OwnerId,
+                responseType,
+                accepts is null ? null : requestType,
+                accepts,
+                successStatus)
+            .RequirePermission(permission);
 
     private static Task HandleGetAvailabilitySettingsAsync(HttpContext context) =>
         LegacyRequestResult(context, new GetActivityAvailabilitySettings(Query(context, "scope")));

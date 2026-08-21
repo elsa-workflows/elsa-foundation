@@ -20,7 +20,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,57 +45,55 @@ public static class WorkflowsPublishingApi
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var group = endpoints.MapGroup(string.Empty);
-        var description = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
         Map(group.MapGet("/publishing/activities", (RequestDelegate)HandleListActivitiesAsync), "List", WorkflowPublishingPermissions.Read,
-            typeof(IEnumerable<ConstructableActivityView>), description, typeof(ListConstructableActivities), [AnyMediaType, JsonMediaType]);
+            typeof(IEnumerable<ConstructableActivityView>), typeof(ListConstructableActivities), [AnyMediaType, JsonMediaType]);
         Map(group.MapGet("/publishing/activities/{activityId}/construct", (RequestDelegate)HandleConstructActivityAsync), "Construct", WorkflowPublishingPermissions.Read,
-            typeof(ConstructedActivityView), description, typeof(ConstructActivity), [AnyMediaType, JsonMediaType]);
+            typeof(ConstructedActivityView), typeof(ConstructActivity), [AnyMediaType, JsonMediaType]);
         Map(group.MapGet("/publishing/incident-strategies", (RequestDelegate)HandleListIncidentStrategiesAsync), "ListIncidentStrategies", WorkflowPublishingPermissions.Read,
-            typeof(IncidentStrategiesResponse), description);
+            typeof(IncidentStrategiesResponse));
         Map(group.MapGet("/publishing/value-conversion/profiles", (RequestDelegate)HandleListValueConversionProfilesAsync), "ListValueConversionProfiles", WorkflowPublishingPermissions.Read,
-            typeof(ValueConversionProfilesResponse), description);
+            typeof(ValueConversionProfilesResponse));
 
         Map(group.MapPost(RouteConstants.WorkflowPreflight, (RequestDelegate)HandleWorkflowPreflightAsync), "PreflightWorkflowPublicationEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(PublicationPreflightView), description, typeof(PreflightWorkflowPublication));
+            typeof(PublicationPreflightView), typeof(PreflightWorkflowPublication));
         Map(group.MapPost(RouteConstants.WorkflowSnapshotPreflight, (RequestDelegate)HandleWorkflowSnapshotPreflightAsync), "PreflightWorkflowPublicationSnapshotEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(PublicationSnapshotPreflightView), description, typeof(PreflightWorkflowPublicationSnapshot));
+            typeof(PublicationSnapshotPreflightView), typeof(PreflightWorkflowPublicationSnapshot));
         Map(group.MapGet(RouteConstants.WorkflowSlots, (RequestDelegate)HandleListSlotsAsync), "ListPublicationSlotsEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(PublicationSlotListResponse), description, typeof(ListPublicationSlots), [AnyMediaType, JsonMediaType]);
+            typeof(PublicationSlotListResponse), typeof(ListPublicationSlots), [AnyMediaType, JsonMediaType]);
         Map(group.MapGet(RouteConstants.WorkflowSlot, (RequestDelegate)HandleGetSlotAsync), "GetPublicationSlotEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(PublicationSlotView), description, typeof(GetPublicationSlot), [AnyMediaType, JsonMediaType]);
+            typeof(PublicationSlotView), typeof(GetPublicationSlot), [AnyMediaType, JsonMediaType]);
         Map(group.MapDelete(RouteConstants.WorkflowSlot, (RequestDelegate)HandleUnpublishSlotAsync), "UnpublishPublicationSlotEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(PublicationSlotView), description, typeof(UnpublishPublicationSlotRequest), [AnyMediaType, JsonMediaType]);
+            typeof(PublicationSlotView), typeof(UnpublishPublicationSlotRequest), [AnyMediaType, JsonMediaType]);
         Map(group.MapPost(RouteConstants.WorkflowSlotRestore, (RequestDelegate)HandleRestoreSlotAsync), "RestorePublicationSlotEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(PublicationSlotView), description, typeof(RestorePublicationSlotRequest));
+            typeof(PublicationSlotView), typeof(RestorePublicationSlotRequest));
         Map(group.MapGet(RouteConstants.WorkflowPolicy, (RequestDelegate)HandleGetPolicyAsync), "GetWorkflowPublicationPolicyEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(PublicationPolicyView), description, typeof(GetWorkflowPublicationPolicy), [AnyMediaType, JsonMediaType]);
+            typeof(PublicationPolicyView), typeof(GetWorkflowPublicationPolicy), [AnyMediaType, JsonMediaType]);
         Map(group.MapPut(RouteConstants.WorkflowPolicy, (RequestDelegate)HandleSetPolicyAsync), "SetWorkflowPublicationPolicyEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(PublicationPolicyView), description, typeof(SetWorkflowPublicationPolicy));
+            typeof(PublicationPolicyView), typeof(SetWorkflowPublicationPolicy));
         Map(group.MapPost(RouteConstants.WorkflowPublish, (RequestDelegate)HandlePublishWorkflowAsync), "PublishWorkflowEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(PublishedWorkflowView), description, typeof(PublishWorkflowRequest));
+            typeof(PublishedWorkflowView), typeof(PublishWorkflowRequest));
         Map(group.MapPost(RouteConstants.VersionedWorkflowTestRuns, (RequestDelegate)HandleStartWorkflowTestRunAsync), "TestRunsStart", WorkflowPublishingPermissions.Manage,
-            typeof(WorkflowTestRunView), description, typeof(StartWorkflowTestRun));
+            typeof(WorkflowTestRunView), typeof(StartWorkflowTestRun));
         Map(group.MapPost(RouteConstants.WorkflowDraftTestRuns, (RequestDelegate)HandleStartWorkflowDraftTestRunAsync), "TestRunsStartDraft", WorkflowPublishingPermissions.Manage,
-            typeof(WorkflowTestRunView), description, typeof(StartWorkflowDraftTestRun));
+            typeof(WorkflowTestRunView), typeof(StartWorkflowDraftTestRun));
         Map(group.MapPost(RouteConstants.GetRoute("preflight"), (RequestDelegate)HandleRuntimePreflightAsync), "RuntimeRequirementPreflightEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(RuntimeRequirementPreflightView), description, typeof(RunRuntimeRequirementPreflight));
+            typeof(RuntimeRequirementPreflightView), typeof(RunRuntimeRequirementPreflight));
 
         Map(group.MapPost("/design/activities/drafts/{draftId}/publication-preflight", (RequestDelegate)HandleActivityPreflightAsync), "PreflightActivityDraftPublicationEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(ActivityPublicationPreflightView), description, typeof(PreflightActivityDraftPublication));
+            typeof(ActivityPublicationPreflightView), typeof(PreflightActivityDraftPublication));
         Map(group.MapPost("/design/activities/drafts/{draftId}/publish", (RequestDelegate)HandlePublishActivityAsync), "PublishActivityDraftEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(ActivityPublicationReceiptView), description, typeof(PublishActivityDraft));
+            typeof(ActivityPublicationReceiptView), typeof(PublishActivityDraft));
         Map(group.MapGet("/design/activities/publications/{idempotencyKey}", (RequestDelegate)HandleGetActivityReceiptAsync), "GetActivityPublicationReceiptEndpoint", WorkflowPublishingPermissions.Read,
-            typeof(ActivityPublicationReceiptView), description);
+            typeof(ActivityPublicationReceiptView));
         Map(group.MapPost("/publishing/activity-drafts/{draftId}/test-runs", (RequestDelegate)HandleStartActivityTestRunAsync), "ActivityDraftTestRunEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(ActivityDraftTestRunView), description, typeof(StartActivityDraftTestRun));
+            typeof(ActivityDraftTestRunView), typeof(StartActivityDraftTestRun));
         Map(group.MapGet("/publishing/activity-test-runs/{testRunId}", (RequestDelegate)HandleGetActivityTestRunAsync), "GetActivityDraftTestRunEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(ActivityDraftTestRunView), description);
+            typeof(ActivityDraftTestRunView));
         Map(group.MapGet("/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", (RequestDelegate)HandleGetActivityTestRunByIdempotencyAsync), "GetActivityDraftTestRunByIdempotencyKeyEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(ActivityDraftTestRunView), description);
+            typeof(ActivityDraftTestRunView));
         Map(group.MapPost("/publishing/activity-test-runs/{testRunId}/cancel", (RequestDelegate)HandleCancelActivityTestRunAsync), "CancelActivityDraftTestRunEndpoint", WorkflowPublishingPermissions.Manage,
-            typeof(ActivityDraftTestRunView), description);
+            typeof(ActivityDraftTestRunView));
 
         return group;
     }
@@ -106,28 +103,15 @@ public static class WorkflowsPublishingApi
         string operation,
         string permission,
         Type responseType,
-        System.Reflection.MethodInfo description,
         Type? requestType = null,
-        string[]? requestContentTypes = null)
-    {
-        var metadata = new List<object>
-        {
-            new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, [JsonMediaType]),
-            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), [])
-        };
-        if (requestType is not null)
-            metadata.Add(new AcceptsMetadata(requestContentTypes ?? [JsonMediaType], requestType, false));
-
-        builder.WithName($"ElsaWorkflowsPublishingApiEndpoints{operation}")
-            .WithTags(OwnerId)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(permission)
-            .WithMetadata(metadata.ToArray())
-            .WithMetadata(description)
-            .RequireStableOpenApi();
-    }
+        string[]? requestContentTypes = null) =>
+        builder.WithModuleOperation(
+                $"ElsaWorkflowsPublishingApiEndpoints{operation}",
+                OwnerId,
+                responseType,
+                requestType,
+                requestContentTypes ?? [JsonMediaType])
+            .RequirePermission(permission);
 
     private static Task HandleListActivitiesAsync(HttpContext context) =>
         LegacyRequestResult(context, new ListConstructableActivities(Query(context, "consumerKey")));

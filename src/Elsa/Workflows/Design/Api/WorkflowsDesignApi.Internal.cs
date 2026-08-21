@@ -16,7 +16,6 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -210,15 +209,6 @@ public static partial class WorkflowsDesignApi
         JsonResult(context, new WorkflowDesignError(
             new Dictionary<string, string[]>(StringComparer.Ordinal) { ["serializerErrors"] = [message] },
             "One or more errors occurred!", statusCode), statusCode, ProblemJsonContentType);
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type type) =>
-        new(statusCode, type, type == typeof(void) ? [] : ["application/json"]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 
     private static string? Route(HttpContext context, string key) =>
         context.Request.RouteValues.TryGetValue(key, out var value) ? value?.ToString() : null;
