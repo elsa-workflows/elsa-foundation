@@ -375,11 +375,12 @@ public sealed class PublishingHttpContractTests
         var routes = new PublishingTestEndpointRouteBuilder(provider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
+        // The request DTO this used to serialize is gone. It existed only as the FastEndpoints binding target,
+        // and a GET carries no request body, so under Minimal APIs it was an exported public type that nothing
+        // constructed and no endpoint declared -- which is why it failed the generated-metadata invariant. The
+        // route and verb are what studio#493 depends on, and they are still pinned verbatim here.
         AssertRoute(routes, "ExportWorkflowExecutableClosureEndpoint", "GET",
             "/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export");
-        Assert.Equal(
-            "{\"versionId\":\"version-1\"}",
-            JsonSerializer.Serialize(new ExportWorkflowExecutableClosure("version-1"), JsonOptions));
     }
 
     [Fact]

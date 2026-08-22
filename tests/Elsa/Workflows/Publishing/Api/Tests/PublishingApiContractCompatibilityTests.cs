@@ -21,7 +21,11 @@ public sealed class PublishingApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(68, ContractTypes.Length);
+        // 68 before spec 151. T117 moved slot *reads* to the runtime activation-slot API, retiring
+        // PublicationSlotListResponse, ListPublicationSlots and GetPublicationSlot from the publishing wire
+        // contract; publishing keeps the slot lifecycle commands. The removal is recorded as an approved
+        // difference against the frozen surface, so this number moves with that record and not on its own.
+        Assert.Equal(65, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -59,13 +63,16 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
                                                        type != typeof(ExpressionPublicationValidationProblemDetails) &&
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
+        // Moved again for spec 151 / T117: the three slot-read contract types left the publishing wire surface
+        // when slot reads became runtime-owned. This is a deliberate contract change with a recorded approved
+        // difference behind it, not drift -- the hash moves only alongside that record.
         Assert.Equal(
-            "1182d2c91fc8dd16ff60cce1dc3df6424a09b26e9c0c21eca27e628cacb694d0",
+            "c3346b31bcc5fa4fcdf7fe21e409a4d2740f1ec51c08588c04d5e2adbd2e494b",
             PublicShapeHash(legacyTypes));
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "f276114228a2b7f04d466d0ecbc217816ddad997af7ba022b4b2e8a5e15a9d78",
+            actualHash == "5e7bcfb8542ce1e17769b8641191371fa204022bd30f03fe6592ec33acf8f5ba",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

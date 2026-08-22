@@ -91,12 +91,20 @@ public sealed class PublishingMinimalApiBehaviorTests
         var factory = new RecordingRequestSenderFactory();
         await using var host = await PublishingMinimalApiHost.StartAsync(factory.Create);
 
-        using var notFound = await SendAsync(
+        // This probe used to be GET .../slots/{slotName} expecting 404. T117 moved slot reads to the runtime
+        // activation-slot API and the path survives here only for DELETE and the restore POST, so the same request
+        // now answers 405 -- the route exists, the verb does not. Asserting that keeps T117's effect on this
+        // surface pinned rather than merely absent.
+        //
+        // The missing-entity-returns-404-with-a-safe-payload objective is not lost: it is asserted against the
+        // export endpoint in WorkflowExecutableExportEndpointTests, which runs on a host that registers the
+        // serializer that endpoint needs. This lightweight host does not, which is why the objective lives there.
+        using var readRemoved = await SendAsync(
             host.Client,
             HttpMethod.Get,
             "/publishing/workflows/missing-definition/slots/default",
             identity: "trusted-domain-not-found");
-        Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, readRemoved.StatusCode);
 
         using var conflict = await SendAsync(
             host.Client,
