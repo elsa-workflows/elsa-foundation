@@ -1,4 +1,3 @@
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -9,6 +8,7 @@ using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Identity;
@@ -57,6 +57,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
 
         // Several contracts are served by one adapter each; bind the adapter to the target once and alias.
         lane.TryAddSelf<GroundworkReusableActivityStores>();
+        lane.TryAddSelf<GroundworkRecommendedActivityDefinitionPickerStore>();
         lane.TryAddSelf<GroundworkActivityManagementProjectionWriter>();
         lane.TryAddSelf<GroundworkActivityManagementProjectionRetention>();
         lane.TryAddSelf<GroundworkActivityDependencyProjection>();
@@ -65,7 +66,7 @@ public static class GroundworkActivitiesDesignStoreRegistration
         lane.Alias<IActivityDefinitionAuthoringStore, GroundworkReusableActivityStores>();
         lane.Alias<IActivityDefinitionDraftStore, GroundworkReusableActivityStores>();
         lane.Alias<IActivityDefinitionVersionPublicationStore, GroundworkReusableActivityStores>();
-        lane.Alias<IRecommendedActivityDefinitionPickerStore, GroundworkReusableActivityStores>();
+        lane.Alias<IRecommendedActivityDefinitionPickerStore, GroundworkRecommendedActivityDefinitionPickerStore>();
         lane.Alias<IActivityDefinitionLayoutStore, GroundworkReusableActivityStores>();
         lane.Alias<IActivityDraftValidationStore, GroundworkReusableActivityStores>();
         lane.Alias<IActivityForkStore, GroundworkReusableActivityStores>();

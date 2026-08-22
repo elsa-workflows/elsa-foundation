@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
@@ -121,6 +122,23 @@ public sealed class StructuredLogsApiContractTests
         await using var host = await StructuredLogsApiHost.StartReplacementAsync();
         var actual = OpenApiEvidenceCapture.Capture(await host.GetCurrentOpenApiDocumentAsync());
         Assert.Equal(CompatibilityJson.Serialize(expected), CompatibilityJson.Serialize(actual));
+    }
+
+    [Fact]
+    public void Openapi_comparison_bites_when_a_specific_schema_is_weakened_to_object()
+    {
+        var expected = BaselineFile.Load<OpenApiEvidenceDocument>(OpenApiBaselinePath);
+        var first = expected.Operations[0];
+        var mutated = expected with
+        {
+            Operations = [first with { Schemas = "{\"type\":\"object\"}" }, .. expected.Operations.Skip(1)]
+        };
+
+        var exception = Assert.Throws<EqualException>(() => Assert.Equal(
+            CompatibilityJson.Serialize(expected),
+            CompatibilityJson.Serialize(mutated)));
+
+        Assert.StartsWith("Assert.Equal() Failure: Strings differ", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -21,6 +21,8 @@ public sealed record ApprovedDifference
     public required string Owner { get; init; }
     public required string Reason { get; init; }
     public required string FollowUp { get; init; }
+    /// <summary>Marks the reverse before/after direction for bidirectional comparisons.</summary>
+    public bool Reverse { get; init; }
 
     public string Key => CompatibilityJson.Serialize(new[] { Endpoint, Method, Case, Facet, Expected, Actual });
 }
@@ -65,8 +67,10 @@ public static class CompatibilityComparer
         foreach (var approval in approved)
         {
             var error = Validate(approval);
-            if (error is not null) { invalid.Add(error); continue; }
-            if (!valid.TryAdd(approval.Key, approval)) invalid.Add($"Duplicate approved difference: {approval.Key}");
+            if (error is not null)
+            { invalid.Add(error); continue; }
+            if (!valid.TryAdd(approval.Key, approval))
+                invalid.Add($"Duplicate approved difference: {approval.Key}");
         }
 
         var remaining = deltas.Where(delta => !valid.Remove(delta.Key, out _)).ToList();
@@ -79,7 +83,26 @@ public static class CompatibilityComparer
         IEnumerable<ApprovedDifference>? approvals = null)
     {
         var result = Compare(before, after, approvals);
-        if (!result.IsCompatible) throw new InvalidOperationException(string.Join(Environment.NewLine, result.Failures));
+        if (!result.IsCompatible)
+            throw new InvalidOperationException(string.Join(Environment.NewLine, result.Failures));
+    }
+
+    /// <summary>
+    /// Compares an approved compatibility delta in both directions. This prevents an approval that
+    /// only hides the before-to-after difference while leaving the reverse contract unexamined.
+    /// </summary>
+    public static CompatibilityComparisonResult CompareBidirectional(CompatibilityEvidenceSet before,
+        CompatibilityEvidenceSet after, IEnumerable<ApprovedDifference>? approvals = null)
+    {
+        var allApprovals = (approvals ?? []).ToArray();
+        var forward = Compare(before, after, allApprovals.Where(approval => !approval.Reverse));
+        var reverseApprovals = allApprovals.Where(approval => approval.Reverse)
+            .Select(approval => approval with { Expected = approval.Actual, Actual = approval.Expected })
+            .ToArray();
+        var reverse = Compare(after, before, reverseApprovals);
+        return new(
+            forward.Deltas.Concat(reverse.Deltas).OrderBy(delta => delta.Key, StringComparer.Ordinal).ToArray(),
+            forward.InvalidApprovals.Concat(reverse.InvalidApprovals).Order(StringComparer.Ordinal).ToArray());
     }
 
     private static IEnumerable<CompatibilityDelta> CompareHttp(IReadOnlyList<HttpCompatibilityObservation> before,
@@ -160,10 +183,13 @@ public static class CompatibilityComparer
 
     private static string? Validate(ApprovedDifference approval)
     {
-        if (approval is null) return "Approved difference cannot be null.";
+        if (approval is null)
+            return "Approved difference cannot be null.";
         if (new[] { approval.Endpoint, approval.Method, approval.Case, approval.Facet, approval.Owner, approval.Reason, approval.FollowUp }
-            .Any(string.IsNullOrWhiteSpace)) return $"Approved difference has an empty scope or attribution: {approval.Key}";
-        try { _ = new Manifests.EndpointIdentity(approval.Endpoint, approval.Method); }
+            .Any(string.IsNullOrWhiteSpace))
+            return $"Approved difference has an empty scope or attribution: {approval.Key}";
+        try
+        { _ = new Manifests.EndpointIdentity(approval.Endpoint, approval.Method); }
         catch (ArgumentException) { return $"Approved difference has an invalid endpoint: {approval.Key}"; }
         return null;
     }
@@ -173,8 +199,12 @@ public static class CompatibilityComparer
 
     private static CompatibilityDelta Delta(Manifests.EndpointIdentity endpoint, string @case, string facet,
         string expected, string actual) => new()
-    {
-        Endpoint = endpoint.Route.Value, Method = endpoint.Method.Value, Case = @case, Facet = facet,
-        Expected = expected, Actual = actual
-    };
+        {
+            Endpoint = endpoint.Route.Value,
+            Method = endpoint.Method.Value,
+            Case = @case,
+            Facet = facet,
+            Expected = expected,
+            Actual = actual
+        };
 }

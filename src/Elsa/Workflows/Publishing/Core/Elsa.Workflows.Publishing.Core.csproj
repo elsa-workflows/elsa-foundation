@@ -3,8 +3,7 @@
   <!--
     Contracts-only seam for the compile-and-publish domain (DS-1). It carries the compiler contract,
     the compile request/source/exception model, and the artifact/test-run store contracts so a CLI,
-    a batch republish job, or a test can compile a workflow without referencing the FastEndpoints
-    .Api shell. It depends DOWN only on the two .Core seams whose model types the contracts expose.
+    a batch republish job, or a test can compile a workflow without referencing the .Api shell. It depends DOWN only on the two .Core seams whose model types the contracts expose.
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />

@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -58,6 +58,36 @@ public static class EndpointConventionBuilderExtensions
     public static TBuilder WithAuthoringModel<TBuilder>(this TBuilder builder, string model)
         where TBuilder : IEndpointConventionBuilder =>
         AddMetadata(builder, new EndpointAuthoringMetadata(model));
+
+    /// <summary>
+    /// Validates the completed endpoint metadata as the final standard ASP.NET Core convention.
+    /// The returned builder is the original builder and no request, routing, authorization, binding,
+    /// serialization, or result behavior is changed.
+    /// </summary>
+    public static TBuilder RequireStableOpenApi<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        builder.Finally(RemoveCompilerMetadataAndValidate);
+        return builder;
+    }
+
+    private static void RemoveCompilerMetadataAndValidate(EndpointBuilder builder)
+    {
+        // RequestDelegateFactory copies handler attributes into endpoint metadata. Compiler-only
+        // attributes are not part of the HTTP/OpenAPI contract, but AsyncStateMachineAttribute
+        // references the handler's generated implementation type and would pin a collectible owner.
+        for (var index = builder.Metadata.Count - 1; index >= 0; index--)
+        {
+            if (builder.Metadata[index] is System.Runtime.CompilerServices.AsyncStateMachineAttribute
+                or System.Diagnostics.DebuggerStepThroughAttribute)
+            {
+                builder.Metadata.RemoveAt(index);
+            }
+        }
+
+        OpenApiLifetimeValidator.ValidateAndMark(builder);
+    }
 
     /// <summary>
     /// Preserves the host application's OpenAPI tag without introducing a module-specific endpoint

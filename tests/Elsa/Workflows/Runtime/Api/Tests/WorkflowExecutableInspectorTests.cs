@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Services;
@@ -248,7 +248,7 @@ public sealed class WorkflowExecutableInspectorTests
     {
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
 
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
     }
 
@@ -258,7 +258,7 @@ public sealed class WorkflowExecutableInspectorTests
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(
             "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources");
 
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowPublishingRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowPublishingRead);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
         AssertProperties(RuntimeApiEndpointTestFactory.Contract(endpoint).Response,
             "ArtifactId", "SourceReferenceId", "AccessState", "AuthoredInputs", "CompiledInputs");

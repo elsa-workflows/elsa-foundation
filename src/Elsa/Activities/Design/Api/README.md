@@ -8,18 +8,25 @@ See the [domain-owned API specification](../../../../../specs/092-domain-owned-a
 
 Add `ActivitiesDesignApiFeature` to the active shell together with an Activity Design persistence provider and the reconciliation features that populate its definitions. The feature supplies default availability evaluation, diagnostics projection, and an in-memory availability-settings store; durable hosts should replace that store as appropriate.
 
-The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell.
+The package has no dependency on `Elsa.Workbench`. Custom hosts expose the same routes by composing the feature in their own shell. `ActivitiesDesignApiFeature` calls the public `ActivitiesDesignApi.MapActivitiesDesignApi(IEndpointRouteBuilder)` mapping entry point; all 38 routes are ordinary ASP.NET Core Minimal API endpoints with standard route, authorization, API Explorer, and OpenAPI metadata.
 
-## Supported routes
+API-visible request and response types live in `Elsa.Activities.Design.Api.Core`. The implementation package forwards the former public type names, supplies owner-local source-generated JSON metadata, and keeps providers, stores, handlers, and transport adapters outside endpoint/OpenAPI contract metadata. This separation lets a retired feature generation release its endpoint, DI, serializer, and API-description state.
+
+## Supported route areas
 
 | Area | Routes |
 |---|---|
 | Authoring catalog | `GET /design/activities/catalog?availability=addable|all` |
 | Availability | `GET/PUT /design/activities/availability/settings`, `GET /design/activities/availability/diagnostics` |
-| Definitions | `GET/POST /design/activities/definitions`, `GET /design/activities/definitions/{id}`, `GET /design/activities/definitions/{definitionId}/versions` |
-| Versions | `GET/POST /design/activities/versions`, `GET /design/activities/versions/{versionId}` |
+| Definitions | Definition list/get/create/update, picker, recommendation, drafts, versions, and fork preview under `/design/activities/definitions` |
+| Drafts | Draft get/create/replace/presentation/conflict-copy/validate/migrate/discard/diff and contract proposals under `/design/activities/drafts` |
+| Versions | Version get/diff/dependencies and retire/restore/revoke under `/design/activities/versions` |
+| Forks | Candidate apply and idempotency status under `/design/activities/fork-candidates` and `/design/activities/forks` |
+| Upgrade plans | Create/get/apply/receipt/refresh under `/design/activities/upgrade-plans` |
 
-Catalog and read operations use `activity-design.read`; management operations use `activity-design.manage`. The shared wildcard permission remains supported. Authentication and RFC 7807 errors are provided by the common FastEndpoints API infrastructure.
+The exact method/template/operation inventory is the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md).
+
+Catalog and read operations declare exactly `activity-design.read`; management operations declare exactly `activity-design.manage`. Foundation Identity owns normalized-principal trust, implication, wildcard compatibility, replaceable evaluation, tenant/resource handlers, and the standard `401`/`403` boundary. Wildcard is evaluator-level grant compatibility and is not endpoint-owned policy metadata. Transport errors preserve the reviewed RFC 7807 contract through the owner-local Minimal API mapping.
 
 The default catalog returns addable activities. `availability=all` is the diagnostic/administrative view and includes unavailable entries with their reason; it does not change availability.
 

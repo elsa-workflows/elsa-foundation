@@ -1,11 +1,11 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Groundwork.Querying;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
@@ -224,8 +224,20 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
             cancellationToken);
     }
 
-    private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan);
-    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt);
+    // The original physical manifest projects the standard `entity.id` path. Upgrade plans and
+    // receipts predate the shared GroundworkDocument<TEntity> envelope, so keep their wire shape and
+    // add the same identity projection instead of changing an already-applied physical column in place.
+    private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan)
+    {
+        public ActivityUpgradeDocumentIdentity Entity { get; init; } = new(Plan.PlanId);
+    }
+
+    private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt)
+    {
+        public ActivityUpgradeDocumentIdentity Entity { get; init; } = new(Receipt.ReceiptId);
+    }
+
+    private sealed record ActivityUpgradeDocumentIdentity(string Id);
 
     private static bool SamePlan(ActivityUpgradePlan left, ActivityUpgradePlan right) =>
         JsonNode.DeepEquals(

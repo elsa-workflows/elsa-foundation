@@ -11,28 +11,11 @@ public sealed class FastEndpointsTransitionTests
     public void First_party_FastEndpoints_surface_matches_the_exact_reviewed_transition_registry()
     {
         var registrations = DiscoverRegistrations();
-        Assert.NotEmpty(registrations);
-        // 113/24: spec 151 (FR-B-010a) adds the executable-closure export route to Publishing.Api, which was and
-        // remains a wholly transitional module — the route joins the existing #1374 wave rather than opening a new
-        // exception. The inventory is reviewed, so these numbers move only with a stated decision.
-        // 22/26: spec 151 (T117) moves the two activation-slot GETs from Publishing.Api to Runtime.Api. The total
-        // is unchanged — no route was added or removed, only reassigned — so the two owners' counts trade 2, and
-        // each moved registration takes its new owner's removal wave (#1374 -> #1375) with it.
-        Assert.Equal(113, registrations.Count);
-        Assert.Equal(4, registrations.Select(registration => registration.Owner).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(
-            new Dictionary<string, int>(StringComparer.Ordinal)
-            {
-                ["Elsa.Activities.Design.Api"] = 38,
-                ["Elsa.Workflows.Design.Api"] = 27,
-                ["Elsa.Workflows.Publishing.Api"] = 22,
-                ["Elsa.Workflows.Runtime.Api"] = 26
-            },
-            registrations.GroupBy(registration => registration.Owner, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal));
+        Assert.Empty(registrations);
 
         var baselinePath = Path.Join(RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "fastendpoints-transition-exceptions.json");
         var reviewed = BaselineFile.Load<FastEndpointsTransitionException[]>(baselinePath);
+        Assert.Empty(reviewed);
         Assert.All(reviewed, exception =>
         {
             Assert.True(ExpectedRemovalWaves.TryGetValue(exception.Owner, out var expectedWave),
@@ -48,19 +31,12 @@ public sealed class FastEndpointsTransitionTests
     }
 
     [Fact]
-    public void FastEndpoints_retirement_mode_rejects_reviewed_registrations_until_the_surface_is_empty()
+    public void FastEndpoints_retirement_mode_accepts_the_empty_first_party_surface()
     {
         var result = TransitionExceptionValidator.ValidateRetirement(DiscoverRegistrations());
 
-        if (Environment.GetEnvironmentVariable("ELSA_FASTENDPOINTS_RETIREMENT_MODE") == "1")
-        {
-            Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Issues.Select(issue =>
-                $"{issue.Code}: {issue.RegistrationIdentity}: {issue.Message}")));
-            return;
-        }
-
-        Assert.Equal(113, result.Issues.Count);
-        Assert.All(result.Issues, issue => Assert.Equal("FirstPartyFastEndpointsRegistration", issue.Code));
+        Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Issues.Select(issue =>
+            $"{issue.Code}: {issue.RegistrationIdentity}: {issue.Message}")));
     }
 
     private static IReadOnlyList<FastEndpointsRegistration> DiscoverRegistrations()
@@ -104,6 +80,8 @@ public sealed class FastEndpointsTransitionTests
         throw new InvalidOperationException($"No owning project was found for '{sourcePath}'.");
     }
 
+    private static string RepoRoot { get; } = FindRepoRoot();
+
     private static IReadOnlyDictionary<string, string> ExpectedRemovalWaves { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -126,8 +104,6 @@ public sealed class FastEndpointsTransitionTests
             ["Elsa.Workflows.Runtime.JavaScript"] = "#1367",
             ["Elsa3.Activities.Design.Import"] = "#1368"
         };
-
-    private static string RepoRoot { get; } = FindRepoRoot();
 
     private static string FindRepoRoot()
     {

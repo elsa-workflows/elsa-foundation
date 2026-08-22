@@ -66,11 +66,27 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         Assert.Empty(result.Layout);
     }
 
+    [Fact]
+    public async Task Synthetic_draft_version_ids_are_rejected_before_store_access()
+    {
+        var store = new StubVersionStore(_version);
+        var layout = new StubLayoutStore(layout: null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionRequestHandler(store, layout).Handle(
+            new GetVersion("draft:synthetic"),
+            CancellationToken.None));
+
+        Assert.Equal(0, store.GetWithDefinitionCalls);
+        Assert.Equal(0, layout.Calls);
+    }
+
     private GetVersionRequestHandler NewHandler(WorkflowDefinitionVersionLayout? layout) =>
         new(new StubVersionStore(_version), new StubLayoutStore(layout));
 
     private sealed class StubVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
     {
+        public int GetWithDefinitionCalls { get; private set; }
+
         public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
             Task.FromResult(version);
 
@@ -78,7 +94,13 @@ public sealed class WorkflowDefinitionVersionDetailsTests
             Task.FromResult<WorkflowDefinitionVersion?>(version);
 
         public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(version);
+            CountAndReturn();
+
+        private Task<WorkflowDefinitionVersion> CountAndReturn()
+        {
+            GetWithDefinitionCalls++;
+            return Task.FromResult(version);
+        }
 
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<WorkflowDefinitionVersion?>(version);
@@ -92,7 +114,15 @@ public sealed class WorkflowDefinitionVersionDetailsTests
 
     private sealed class StubLayoutStore(WorkflowDefinitionVersionLayout? layout) : IWorkflowDefinitionVersionLayoutStore
     {
+        public int Calls { get; private set; }
+
         public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(layout);
+            CountAndReturn();
+
+        private Task<WorkflowDefinitionVersionLayout?> CountAndReturn()
+        {
+            Calls++;
+            return Task.FromResult(layout);
+        }
     }
 }

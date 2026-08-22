@@ -1,5 +1,5 @@
 using System.Reflection;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -20,7 +20,7 @@ public sealed class WorkflowInstanceListContractTests
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
             "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
         Assert.Equal(typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>), response);
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class WorkflowInstanceListContractTests
             "Items", "NextCursor", "HasNext", "Count", "TotalCount");
         var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
         AssertProperties(item, "RunKind");
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
+        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
 
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.ToDictionary(link => link.Rel, StringComparer.Ordinal);
         Assert.Equal("runtime/workflows/instances", links["workflow-instances"].Href);
@@ -68,32 +68,16 @@ public sealed class WorkflowInstanceListContractTests
     [InlineData("runtime/workflows/instances/page", "Paged")]
     public async Task Each_route_selects_its_own_page_size_contract(string route, string expectedContract)
     {
-        var sender = new CapturingRequestSender();
         var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
-        endpoint = RuntimeApiEndpointTestFactory.Create(endpoint.GetType(), sender);
-        var handle = endpoint.GetType().GetMethod("HandleAsync", BindingFlags.Public | BindingFlags.Instance);
-
-        Assert.NotNull(handle);
-        await Assert.IsAssignableFrom<Task>(handle!.Invoke(
-            endpoint,
-            [new ListWorkflowInstances(null, null, null, Take: null), CancellationToken.None]));
-
+        Assert.Equal(typeof(ListWorkflowInstances), endpoint.Request);
+        var request = new ListWorkflowInstances(null, null, null, Take: null);
+        var normalized = expectedContract == "LegacyArray" ? request.ForLegacyArray() : request;
         var contract = typeof(ListWorkflowInstances).GetProperty("PagingContract", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(contract);
-        Assert.Equal(expectedContract, contract!.GetValue(sender.Request)!.ToString());
+        Assert.Equal(expectedContract, contract!.GetValue(normalized)!.ToString());
     }
 
     private static void AssertProperties(Type type, params string[] properties) =>
         Assert.All(properties, property => Assert.NotNull(type.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)));
 
-    private sealed class CapturingRequestSender : IRequestSender
-    {
-        public ListWorkflowInstances? Request { get; private set; }
-
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            Request = Assert.IsType<ListWorkflowInstances>(request);
-            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, false, 0, 0));
-        }
-    }
 }

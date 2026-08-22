@@ -53,7 +53,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
         var outputs = outputProjections.ToDictionary(
             output => output.Name,
             output => canInspectSensitiveValues
-                ? WorkflowOutputView.From(output)
+                ? new WorkflowOutputView(output.Value, output.IsRedacted, output.RedactionReason, output.CapturedAt)
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 

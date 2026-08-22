@@ -1,22 +1,21 @@
-using Elsa.Workflows.Publishing.Api.Handlers;
-using Elsa.Workflows.Publishing.Api.Models;
-using Elsa.Workflows.Publishing.Services;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text.Json;
+using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Capabilities;
+using Elsa.Workflows.Publishing.Api.Handlers;
+using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -26,40 +25,35 @@ public sealed class ValueConversionProfilesEndpointTests
     [Fact]
     public void Endpoint_has_pinned_route_and_publishing_read_permission()
     {
-        var definition = ConfiguredDefinition("Elsa.Workflows.Publishing.Api.Endpoints.ListValueConversionProfiles");
+        var endpoint = PublishingMinimalApiTestSurface.Named("ListValueConversionProfiles");
 
-        Assert.Contains("publishing/value-conversion/profiles", definition.Routes);
-        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
-        Assert.All(
-            definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([PermissionNames.WorkflowPublishingRead]), policy));
-        Assert.Null(definition.AnonymousVerbs);
+        Assert.Equal("publishing/value-conversion/profiles", endpoint.RoutePattern.RawText?.TrimStart('/'));
+        var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+        Assert.Equal(PermissionKey.Normalize(WorkflowPublishingPermissions.Read),
+            Assert.Single(Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor).Permissions));
     }
 
     [Fact]
-    public void Every_endpoint_request_dto_in_the_assembly_is_bindable_by_fastendpoints()
+    public void Every_minimal_api_request_dto_is_bindable_by_the_owner_source_generated_context()
     {
-        // FastEndpoints' RequestBinder<T> static initializer rejects DTOs without publicly accessible
-        // properties at first request, not at startup; parameterless endpoints must use EmptyRequest.
-        var endpointTypes = typeof(ConversionProfilesCapabilitySource).Assembly.GetTypes()
-            .Where(type => !type.IsAbstract && typeof(BaseEndpoint).IsAssignableFrom(type));
+        var requestTypes = PublishingMinimalApiTestSurface.Map()
+            .SelectMany(endpoint => endpoint.Metadata.GetOrderedMetadata<IAcceptsMetadata>())
+            .Select(metadata => metadata.RequestType)
+            .Where(type => type is not null)
+            .Cast<Type>()
+            .Distinct()
+            .ToArray();
 
-        foreach (var endpointType in endpointTypes)
-        {
-            var requestType = RequestTypeOf(endpointType);
-            var exception = Record.Exception(() => Activator.CreateInstance(typeof(RequestBinder<>).MakeGenericType(requestType)));
-            Assert.True(exception is null, $"FastEndpoints cannot bind request DTO '{requestType}' of endpoint '{endpointType}': {exception?.InnerException ?? exception}");
-        }
-    }
-
-    private static Type RequestTypeOf(Type endpointType)
-    {
-        for (var type = endpointType; type is not null; type = type.BaseType)
-        {
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Endpoint<,>))
-                return type.GenericTypeArguments[0];
-        }
-        throw new InvalidOperationException($"Endpoint '{endpointType}' does not derive from FastEndpoints.Endpoint<TRequest, TResponse>.");
+        Assert.NotEmpty(requestTypes);
+        var contextType = typeof(WorkflowsPublishingApiFeature).Assembly.GetType(
+            "Elsa.Workflows.Publishing.Api.WorkflowsPublishingJsonContext",
+            throwOnError: true)!;
+        var context = Assert.IsAssignableFrom<JsonSerializerContext>(
+            contextType.GetProperty("Default")!.GetValue(null));
+        Assert.All(requestTypes, requestType =>
+            Assert.NotNull(context.Options.GetTypeInfo(requestType)));
     }
 
     [Fact]
@@ -153,49 +147,6 @@ public sealed class ValueConversionProfilesEndpointTests
         var document = await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
 
         Assert.DoesNotContain(document.Capabilities, capability => capability.Id == "elsa.api.expressions");
-    }
-
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
-    {
-        var endpointType = typeof(ConversionProfilesCapabilitySource).Assembly.GetType(endpointTypeName, throwOnError: true)!;
-        var dependencies = endpointType
-            .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(parameter => ResolveDependency(parameter.ParameterType))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create)
-                              && method.IsGenericMethodDefinition
-                              && method.GetParameters() is [var first, var rest]
-                              && first.ParameterType == typeof(DefaultHttpContext)
-                              && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
-        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
-        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
-        endpoint.Configure();
-        return endpoint.Definition;
-    }
-
-    private static object ResolveDependency(Type type)
-    {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
-        {
-            var nullLoggerType = typeof(NullLogger<>).MakeGenericType(type.GenericTypeArguments[0]);
-            return (nullLoggerType.GetProperty(nameof(NullLogger<object>.Instance))?.GetValue(null)
-                    ?? nullLoggerType.GetField(nameof(NullLogger<object>.Instance))?.GetValue(null))!;
-        }
-        if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(NoopProxy));
-        return RuntimeHelpers.GetUninitializedObject(type);
-    }
-
-    private class NoopProxy : DispatchProxy
-    {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            throw new InvalidOperationException("A configuration-only endpoint test must not invoke dependencies.");
     }
 
     private sealed class StubProfileRegistry(IReadOnlyCollection<ValueConversionProfileDefinition> definitions)

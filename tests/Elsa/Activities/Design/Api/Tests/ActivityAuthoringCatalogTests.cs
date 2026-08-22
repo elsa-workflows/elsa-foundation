@@ -1,14 +1,15 @@
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Api.FastEndpoints.Constants;
-using FastEndpoints;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
 using Xunit;
 
 namespace Elsa.Activities.Design.Api.Tests;
@@ -16,23 +17,24 @@ namespace Elsa.Activities.Design.Api.Tests;
 /// <summary>RED contract for the unified, persisted, availability-aware authoring catalog.</summary>
 public sealed class ActivityAuthoringCatalogTests
 {
-    private const string CatalogRoute = "design/activities/catalog";
+    private const string CatalogRoute = "/design/activities/catalog";
 
     [Fact]
     public void Activity_design_owns_one_secured_canonical_authoring_catalog()
     {
         var endpoint = FindCatalogEndpoint();
+        var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
 
-        Assert.Contains(
-            ElsaEndpointPermissions.ComposePolicy([PermissionNames.ActivityDesignRead]),
-            endpoint.Definition.PreBuiltUserPolicies!);
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+        Assert.Equal([PermissionKey.Normalize(ActivityDesignPermissions.Read)], parsed.Descriptor!.Permissions);
+        Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
     }
 
     [Fact]
     public void Catalog_query_defaults_to_addable_and_supports_privileged_all_mode()
     {
-        var (request, _) = EndpointContract(FindCatalogEndpoint());
+        var request = typeof(ListActivityAuthoringCatalog);
         var availability = request.GetProperty("Availability", BindingFlags.Public | BindingFlags.Instance);
         Assert.NotNull(availability);
         var constructorParameter = Assert.Single(request.GetConstructors().Single().GetParameters(), parameter =>
@@ -46,7 +48,7 @@ public sealed class ActivityAuthoringCatalogTests
     [Fact]
     public void Catalog_response_is_normalized_for_one_call_editor_bootstrap()
     {
-        var (_, response) = EndpointContract(FindCatalogEndpoint());
+        var response = typeof(ActivityAuthoringCatalogView);
         var activities = response.GetProperty("Activities", BindingFlags.Public | BindingFlags.Instance);
         Assert.NotNull(activities);
         var descriptor = CollectionElementType(activities!.PropertyType);
@@ -89,7 +91,7 @@ public sealed class ActivityAuthoringCatalogTests
     [Fact]
     public void Availability_contract_can_explain_installed_but_unavailable_entries()
     {
-        var (_, response) = EndpointContract(FindCatalogEndpoint());
+        var response = typeof(ActivityAuthoringCatalogView);
         var descriptor = CollectionElementType(response.GetProperty("Activities")!.PropertyType);
 
         Assert.Equal(typeof(bool), descriptor.GetProperty("Available")!.PropertyType);
@@ -131,52 +133,14 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.Contains("Elsa.Activities.Design.Api.Contracts.IActivityFeatureAttributionResolver", dependencies);
     }
 
-    private static BaseEndpoint FindCatalogEndpoint()
+    private static RouteEndpoint FindCatalogEndpoint()
     {
-        var endpoint = typeof(ActivitiesDesignApiFeature).Assembly.GetTypes()
-            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(BaseEndpoint).IsAssignableFrom(type))
-            .Select(CreateEndpoint)
-            .SingleOrDefault(candidate => candidate.Definition.Routes.Contains(CatalogRoute, StringComparer.Ordinal));
-        Assert.NotNull(endpoint);
-        return endpoint;
-    }
-
-    private static (Type Request, Type Response) EndpointContract(BaseEndpoint endpoint)
-    {
-        for (var current = endpoint.GetType().BaseType; current is not null; current = current.BaseType)
-        {
-            if (current.IsGenericType && current.GenericTypeArguments.Length >= 2 &&
-                current.GetGenericTypeDefinition().Namespace == "Elsa.Api.FastEndpoints.Abstractions")
-                return (current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
-        }
-        throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' does not declare a request/response contract.");
-    }
-
-    private static BaseEndpoint CreateEndpoint(Type endpointType)
-    {
-        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single().GetParameters().Select(parameter => ResolveDependency(parameter.ParameterType)).ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
-                              method.GetParameters() is [var first, var rest] &&
-                              first.ParameterType == typeof(Action<DefaultHttpContext>) &&
-                              rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
-        endpoint.Configure();
-        return endpoint;
-    }
-
-    private static object ResolveDependency(Type type)
-    {
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
-        {
-            var nullLogger = typeof(NullLogger<>).MakeGenericType(type.GenericTypeArguments[0]);
-            return (nullLogger.GetProperty("Instance")?.GetValue(null) ?? nullLogger.GetField("Instance")?.GetValue(null))!;
-        }
-        if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(NoopProxy));
-        return RuntimeHelpers.GetUninitializedObject(type);
+        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        ActivitiesDesignApi.MapActivitiesDesignApi(routes);
+        return Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>(), endpoint =>
+            endpoint.RoutePattern.RawText == CatalogRoute &&
+            endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] && method == HttpMethods.Get);
     }
 
     private static Type CollectionElementType(Type collectionType) =>
@@ -189,9 +153,11 @@ public sealed class ActivityAuthoringCatalogTests
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
 
-    private class NoopProxy : DispatchProxy
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
     {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            throw new InvalidOperationException("A contract-only endpoint test must not invoke dependencies.");
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
+
 }

@@ -240,7 +240,11 @@ FastEndpoints is retired from first-party REST authoring only when all of the fo
 
 Migration waves are separate reviewable work units. Each wave must leave the repository deployable
 and must remove the migrated module's obsolete FastEndpoints wiring rather than carrying two live
-implementations indefinitely.
+implementations indefinitely. Each owner report records its stable contract assembly, explicit mapper,
+authorization disposition, immutable before evidence, native OpenAPI/serialization lifetime proof, and
+live-host result. Activities Design is the first large provider/store-rich owner to exercise those
+obligations together; Publishing is the first owner to take the first-party FastEndpoints inventory
+to zero and remove the now-empty Workbench shell feature.
 
 ## Considered options
 
@@ -300,4 +304,8 @@ table and generated maps should change only as production migrations alter the s
 - [Migration evidence and authoring gates #1346](https://github.com/elsa-workflows/elsa-foundation/issues/1346)
 - [Atomic CShells endpoint publication #1345](https://github.com/elsa-workflows/elsa-foundation/issues/1345)
 - [Studio Preferences canary #1347](https://github.com/elsa-workflows/elsa-foundation/issues/1347)
+- [Activities Design migration #1373](https://github.com/elsa-workflows/elsa-foundation/issues/1373)
+- [Activities Design migration evidence](../reports/activities-design-api-migration-2026-08.md)
+- [Publishing migration #1374](https://github.com/elsa-workflows/elsa-foundation/issues/1374)
+- [Publishing migration evidence](../reports/publishing-api-migration-2026-08.md)
 - [Studio management bridge decision](0037-studio-management-bridge-keeps-host-management-key-server-side.md)

@@ -44,7 +44,7 @@ the non-wildcard permission once under owner `Elsa.Diagnostics.StructuredLogs`, 
 wildcard remains a grant and is deliberately not contributed to the catalog.
 
 The routes carry explicit module ownership, Minimal API authoring, and security-disposition metadata, so
-they can coexist with still-unmigrated FastEndpoints routes while using the same Foundation evaluator.
+they can coexist with third-party FastEndpoints routes while using the same Foundation evaluator.
 
 ## Query parameters (recent + stream)
 

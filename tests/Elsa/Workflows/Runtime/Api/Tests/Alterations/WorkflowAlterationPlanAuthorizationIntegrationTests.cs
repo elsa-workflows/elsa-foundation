@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Encodings.Web;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -22,7 +22,6 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using AlterationContracts = Elsa.Workflows.Runtime.Api.Contracts.Alterations;
-using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -31,6 +30,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using PermissionNames = Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions;
 
 namespace Elsa.Workflows.Runtime.Api.Tests.Alterations;
 
@@ -853,16 +853,6 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
             configureServices?.Invoke(builder.Services);
             builder.Services.AddScoped<IRequestSender, AlterationRequestSender>();
-            builder.Services.AddFastEndpoints(options =>
-            {
-                options.Assemblies = [typeof(WorkflowsRuntimeApiFeature).Assembly];
-                options.Filter = type => type.FullName is
-                    "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.SubmitWorkflowAlterationPlanEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.GetWorkflowAlterationPlanEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.PageWorkflowAlterationJobsEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.GetWorkflowAlterationJobEndpoint" or
-                    "Elsa.Workflows.Runtime.Api.Endpoints.Alterations.CancelWorkflowAlterationPlanEndpoint";
-            });
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -873,7 +863,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             });
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseFastEndpoints(options => options.Security.PermissionsClaimType = PermissionClaim);
+            WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
             await app.StartAsync();
             return new(app, app.GetTestClient());
         }

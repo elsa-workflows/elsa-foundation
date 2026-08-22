@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.Core.Extensions;
 /// Host-agnostic composition root for the workflow runtime (ADR 0029 / RT-4). Registers the runtime execution spine —
 /// stores, scheduler, drainer, coordinator, command processor, the workflow/activity execution pipelines, and every
 /// scheduler work handler — independently of any HTTP/API host, so a worker, a test harness, or another module can
-/// compose and drive the runtime without the FastEndpoints API feature. The API feature (<c>WorkflowsRuntimeApiFeature</c>)
+/// compose and drive the runtime without the API feature. The API feature (<c>WorkflowsRuntimeApiFeature</c>)
 /// layers only its endpoint/request-handler wiring on top of this.
 /// </summary>
 /// <remarks>

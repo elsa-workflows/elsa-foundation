@@ -1,5 +1,5 @@
-using System.Reflection;
 using Elsa.Diagnostics.StructuredLogs.Tests.Support;
+using System.Reflection;
 using Xunit;
 
 namespace Elsa.Diagnostics.StructuredLogs.Tests;
@@ -20,22 +20,24 @@ public sealed class StructuredLogsApiCollectibilityTests
     {
         for (var cycleNumber = 0; cycleNumber < 3; cycleNumber++)
         {
-            using var cycle = StructuredLogsCollectibleFixture.Create();
+            var documentationFirst = cycleNumber % 2 == 1;
+            using var cycle = StructuredLogsCollectibleFixture.Create(documentationFirst: documentationFirst);
 
             Assert.Equal(3, cycle.RouteCount);
             Assert.True(cycle.QueryExercised, "The materialized recent route must execute a representative query.");
             Assert.True(cycle.StreamStarted, "The materialized stream route must start an SSE response.");
             Assert.True(cycle.StreamCancelled, "The materialized stream route must observe cancellation.");
             Assert.True(cycle.SerializerExercised, "The production serializer must be exercised before unload.");
+            Assert.True(cycle.AuthorizationExercised, "The production permission policy must authorize a normalized exact grant.");
             Assert.True(cycle.DocumentationGenerated, "The real ASP.NET Core OpenAPI provider must generate the document.");
-            Assert.True(cycle.OpenApiCache.ServiceInspected, "The keyed OpenAPI document service cache must be inspected.");
-            // A zero context count is meaningful: the ASP.NET cache is populated for endpoint operation
-            // transformers, and this mapper intentionally contributes none from the collectible module.
-            Assert.Equal(0, cycle.OpenApiCache.ContextCount);
-            Assert.False(cycle.OpenApiCache.HasModuleOwnedMetadata);
+            Assert.Equal(documentationFirst, cycle.DocumentationFirst);
+            Assert.True(cycle.OpenApiDescription.DescriptionsInspected, "The API Explorer descriptions used by OpenAPI must be inspected.");
+            Assert.Equal(3, cycle.OpenApiDescription.DescriptionCount);
+            Assert.False(cycle.OpenApiDescription.HasModuleOwnedMetadata);
 
             var evidence = cycle.VerifyCollection(ReleaseCollectionAttempts);
             Assert.True(evidence.Collected, evidence.Diagnostic);
+            Assert.False(evidence.SerializerContextType.IsAlive);
             Assert.Equal(StructuredLogsRetentionStage.Clean, evidence.Stage);
         }
     }
@@ -52,6 +54,7 @@ public sealed class StructuredLogsApiCollectibilityTests
         Assert.True(cycle.StreamStarted);
         Assert.True(cycle.StreamCancelled);
         Assert.True(cycle.SerializerExercised);
+        Assert.True(cycle.AuthorizationExercised);
 
         var retained = cycle.VerifyCollection();
         Assert.False(retained.Collected, retained.Diagnostic);
@@ -66,14 +69,14 @@ public sealed class StructuredLogsApiCollectibilityTests
     }
 
     [Fact]
-    public void Openapi_cache_evidence_contains_only_values_and_weak_handles()
+    public void Openapi_description_evidence_contains_only_values_and_weak_handles()
     {
         using var cycle = StructuredLogsCollectibleFixture.Create();
         var evidence = cycle.VerifyCollection(ReleaseCollectionAttempts);
 
-        Assert.True(cycle.OpenApiCache.ServiceInspected);
-        Assert.Equal(0, cycle.OpenApiCache.ContextCount);
-        Assert.False(cycle.OpenApiCache.HasModuleOwnedMetadata);
+        Assert.True(cycle.OpenApiDescription.DescriptionsInspected);
+        Assert.Equal(3, cycle.OpenApiDescription.DescriptionCount);
+        Assert.False(cycle.OpenApiDescription.HasModuleOwnedMetadata);
         Assert.DoesNotContain(
             typeof(Type),
             typeof(StructuredLogsUnloadEvidence).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
@@ -82,10 +85,10 @@ public sealed class StructuredLogsApiCollectibilityTests
             typeof(StructuredLogsUnloadEvidence).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
         Assert.DoesNotContain(
             typeof(MethodInfo),
-            typeof(OpenApiCacheInspection).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
+            typeof(OpenApiDescriptionInspection).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
         Assert.DoesNotContain(
             typeof(Delegate),
-            typeof(OpenApiCacheInspection).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
+            typeof(OpenApiDescriptionInspection).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
 
         Assert.True(evidence.Collected, evidence.Diagnostic);
         Assert.Equal(StructuredLogsRetentionStage.Clean, evidence.Stage);

@@ -23,8 +23,10 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Work
 | `Test-ReusableActivity.ps1` | author+publish a reusable activity, consume it as a **parent workflow root**, execute; asserts it runs inlined |
 | `Test-ReusableActivityDeep.ps1` | **3-layer hierarchy** C←B←A with C nested in B's Sequence; published bottom-up; verifies B→C dependency and that all layers run |
 | `Test-ReusableActivityPinning.ps1` | a consumer binds the child by an **exact, immutable version id** (no floating/auto-upgrade) — the core "no auto-cascade" signal |
+| `Test-ActivityUpgradePlan.ps1` | persisted **upgrade-plan** journey across A→B→C: create/get, apply a staged dependency update, publish the exact handoff, refresh, apply the successor, read receipts, and verify the final exact-version pins |
 | `Test-DraftTestRun.ps1` | execute a **workflow DRAFT** via `publishing/workflows/drafts/test-runs` (no publish) |
 | `Test-ActivityDraftTestRun.ps1` | execute a **reusable-activity DRAFT** via `publishing/activity-drafts/{draftId}/test-runs` (no publish) |
+| `Test-PublishingLifecycle.ps1` | migrated Publishing API journey: snapshot review/publish, route authority, Runtime preflight, policy CAS, slot unpublish/restore, activity receipt replay, and Test Run lookup/cancel |
 | `Test-SetOutcome.ps1` | **Set Outcome** (`Control` intrinsic) + Flowchart routes only the matching branch (both outcomes) |
 | `Test-ReusableActivityOutcomeLimit.ps1` | publishes schema-2 mapped outcomes and proves only the matching parent branch runs |
 | `Test-ReusableSequenceNesting.ps1` | regression coverage for reusable placement inside a workflow Sequence |

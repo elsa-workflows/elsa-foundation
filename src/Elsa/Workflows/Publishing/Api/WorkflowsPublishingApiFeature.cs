@@ -1,18 +1,19 @@
+using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Events.Core.Extensions;
-using Elsa.Api.FastEndpoints;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
+using Elsa.Events.Core.Extensions;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Authorization;
-using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Commands;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
@@ -21,8 +22,10 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -42,17 +45,16 @@ namespace Elsa.Workflows.Publishing.Api;
     Description = "Bridge endpoints that compile persisted catalog metadata into canonical workflow executables.",
     DependsOn = new object[] { "WorkflowsPublishing", "ApiCapabilities" }
 )]
-public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
+public class WorkflowsPublishingApiFeature : IWebShellFeature
 {
-    public override void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
-        base.ConfigureServices(services);
-
         var assembly = GetType().Assembly;
 
         // Transport authorization (HTTP-bound). Authorization is a transport concern; the engine is
         // authorization-free, so its context + the activity-draft services that consume it live here.
         services.AddHttpContextAccessor();
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<IActivityPublishingAuthorizationContext, HttpContextActivityPublishingAuthorizationContext>();
         services.TryAddScoped<IActivityDefinitionPublisher, ActivityDefinitionPublisher>();
         services.TryAddScoped<IActivitySourceVersionPublisher, SourceOwnedActivityVersionPublisher>();
@@ -67,6 +69,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         // The workflow-publish + compile engine (compiler + collaborators, publication stores/activator,
         // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via DependsOn.
         services.AddRequestHandlersFrom(assembly);
+        // Keep the owner serializer contract ready for the Minimal API mapper. The effective host
+        // options preserve the former FastEndpoints web defaults while routing Publishing types
+        // through generated metadata before any general fallback resolver.
+        services.ConfigureHttpJsonOptions(options => WorkflowsPublishingJsonOptions.Configure(options.SerializerOptions));
         services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
         // The conversion-profiles endpoint is served here (it reads IValueConversionProfileRegistry, supplied by
         // the engine) but advertised under the client's expressions capability; the source merges that relation
@@ -80,4 +86,7 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddEnumerable(
             ServiceDescriptor.Scoped<IWorkflowArtifactExportTarget, DownloadWorkflowArtifactExportTarget>());
     }
+
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+        WorkflowsPublishingApi.MapWorkflowsPublishingApi(endpoints);
 }

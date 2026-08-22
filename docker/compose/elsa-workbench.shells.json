@@ -30,9 +30,6 @@
           "DiagnosticsStructuredLogs": {},
           "Events": {},
           "Expressions": {},
-          "FastEndpoints": {
-            "EndpointRoutePrefix": ""
-          },
           "FileSystemDistributedLocking": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},

@@ -1,0 +1,6428 @@
+{
+  "components": {
+    "schemas": {
+      "ActivityActionAvailabilityView": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "allowed": {
+            "type": "boolean"
+          },
+          "unavailableCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "action",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "ActivityArgumentValue": {
+        "properties": {
+          "expressionType": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "value",
+          "expressionType"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringCapabilitiesView": {
+        "properties": {
+          "activityTypeKeyRules": {
+            "$ref": "#/components/schemas/ActivityTypeKeyRules"
+          },
+          "contractSchemaVersions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityProviderAuthoringCapabilityView"
+            },
+            "type": "array"
+          },
+          "snapshotFingerprint": {
+            "type": "string"
+          },
+          "storageDriverKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityContractTypeCapabilityView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "contractSchemaVersions",
+          "activityTypeKeyRules",
+          "providers",
+          "types",
+          "storageDriverKeys",
+          "snapshotFingerprint"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringCatalogView": {
+        "properties": {
+          "activities": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityAuthoringDescriptorView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "activities"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringDescriptorView": {
+        "properties": {
+          "activityTypeKey": {
+            "type": "string"
+          },
+          "activityVersionId": {
+            "type": "string"
+          },
+          "authoringTemplate": {
+            "$ref": "#/components/schemas/ActivityAuthoringTemplateView"
+          },
+          "availabilityReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "containerStructure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "executionType": {
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityInputDescriptorView"
+            },
+            "type": "array"
+          },
+          "intrinsic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityAuthoringIntrinsicView"
+              }
+            ]
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityOutputDescriptorView"
+            },
+            "type": "array"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityPortDescriptorView"
+            },
+            "type": "array"
+          },
+          "provenance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityAuthoringProvenanceView"
+              }
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "activityVersionId",
+          "activityTypeKey",
+          "version",
+          "displayName",
+          "category",
+          "description",
+          "executionType",
+          "available",
+          "availabilityReason",
+          "inputs",
+          "outputs",
+          "ports",
+          "containerStructure",
+          "authoringTemplate"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringIntrinsicView": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "outputNameInputKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "valueInputKey": {
+            "type": "string"
+          },
+          "variableInputKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "valueInputKey",
+          "variableInputKey",
+          "outputNameInputKey"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringProvenanceView": {
+        "properties": {
+          "featureId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceKind",
+          "sourceId",
+          "featureId"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringStructureView": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "schemaVersion",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "ActivityAuthoringTemplateView": {
+        "properties": {
+          "activityVersionId": {
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ActivityArgumentValue"
+            },
+            "type": "object"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "outputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ActivityArgumentValue"
+            },
+            "type": "object"
+          },
+          "structure": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityAuthoringStructureView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "nodeId",
+          "activityVersionId",
+          "inputs",
+          "outputs",
+          "structure"
+        ],
+        "type": "object"
+      },
+      "ActivityAvailabilityDiagnosticEntry": {
+        "properties": {
+          "activityDefinitionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "activityTypeKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "layer": {
+            "$ref": "#/components/schemas/ActivityAvailabilityPolicyLayer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "referenceKind": {
+            "$ref": "#/components/schemas/ActivityAvailabilityReferenceKind"
+          },
+          "referenceName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ActivityAvailabilityDiagnosticState"
+          }
+        },
+        "required": [
+          "activityDefinitionId",
+          "activityTypeKey",
+          "displayName",
+          "category",
+          "state",
+          "layer",
+          "referenceKind",
+          "referenceName",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ActivityAvailabilityDiagnosticState": {
+        "type": "integer"
+      },
+      "ActivityAvailabilityDiagnostics": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityAvailabilityDiagnosticEntry"
+            },
+            "type": "array"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityAvailabilitySetDiagnostic"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "sets"
+        ],
+        "type": "object"
+      },
+      "ActivityAvailabilityManagementMode": {
+        "type": "integer"
+      },
+      "ActivityAvailabilityPolicyLayer": {
+        "type": "integer"
+      },
+      "ActivityAvailabilityReferenceKind": {
+        "type": "integer"
+      },
+      "ActivityAvailabilityRuleSet": {
+        "properties": {
+          "activityTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ActivityAvailabilitySetDiagnostic": {
+        "properties": {
+          "activityTypeKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "activityTypeKeys"
+        ],
+        "type": "object"
+      },
+      "ActivityAvailabilitySettings": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ActivityAvailabilityManagementMode"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/ActivityAvailabilityRuleSet"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ActivityBoundaryDurability": {
+        "default": 0,
+        "type": "integer"
+      },
+      "ActivityCatalogAvailability": {
+        "default": 0,
+        "type": "integer"
+      },
+      "ActivityContentAuthority": {
+        "properties": {
+          "authorityKey": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActivityContentAuthorityKind"
+          },
+          "sourceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "authorityKey"
+        ],
+        "type": "object"
+      },
+      "ActivityContentAuthorityKind": {
+        "type": "integer"
+      },
+      "ActivityContractMemberKind": {
+        "type": "integer"
+      },
+      "ActivityContractMemberUsage": {
+        "properties": {
+          "memberKind": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "usageKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberKind",
+          "referenceKey",
+          "usageKind"
+        ],
+        "type": "object"
+      },
+      "ActivityContractProposalChangeView": {
+        "properties": {
+          "changeId": {
+            "type": "string"
+          },
+          "input": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityInputContractView"
+              }
+            ]
+          },
+          "memberKind": {
+            "$ref": "#/components/schemas/ActivityContractMemberKind"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/ActivityContractProposalOperation"
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityOutcomeContractView"
+              }
+            ]
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityOutputContractView"
+              }
+            ]
+          },
+          "referenceKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "changeId",
+          "operation",
+          "memberKind",
+          "referenceKey",
+          "input",
+          "output",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "ActivityContractProposalOperation": {
+        "type": "integer"
+      },
+      "ActivityContractProposalView": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityContractProposalChangeView"
+            },
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "manifestFingerprint": {
+            "type": "string"
+          },
+          "proposalFingerprint": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "draftId",
+          "revision",
+          "providerKey",
+          "providerSchemaVersion",
+          "manifestFingerprint",
+          "proposalFingerprint",
+          "changes",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityContractTypeCapabilityView": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "compatibleStorageDriverKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "defaultEditor": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "supportedCollectionKinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supportsDurability": {
+            "type": "boolean"
+          },
+          "supportsNull": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alias",
+          "displayName",
+          "category",
+          "defaultEditor",
+          "supportedCollectionKinds",
+          "supportsNull",
+          "supportsDurability",
+          "compatibleStorageDriverKeys"
+        ],
+        "type": "object"
+      },
+      "ActivityContractView": {
+        "properties": {
+          "contractSchemaVersion": {
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityInputContractView"
+            },
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityOutcomeContractView"
+            },
+            "type": "array"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityOutputContractView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "contractSchemaVersion",
+          "inputs",
+          "outputs",
+          "outcomes"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionDraftStatus": {
+        "type": "integer"
+      },
+      "ActivityDefinitionForkOrigin": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionIdentityView": {
+        "properties": {
+          "activityTypeKey": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "contentAuthority": {
+            "$ref": "#/components/schemas/ActivityContentAuthority"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "forkedFrom": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionForkOrigin"
+              }
+            ]
+          },
+          "headVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recommendedVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "definitionId",
+          "activityTypeKey",
+          "tenantId",
+          "category",
+          "displayName",
+          "description",
+          "contentAuthority",
+          "forkedFrom",
+          "headVersionId",
+          "recommendedVersionId"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionLifecycleSummaryView": {
+        "properties": {
+          "draftCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "head": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionVersionReferenceView"
+              }
+            ]
+          },
+          "recommendation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionVersionReferenceView"
+              }
+            ]
+          },
+          "versionCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "draftCount",
+          "versionCount",
+          "head",
+          "recommendation"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionRecommendationView": {
+        "properties": {
+          "changedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "headVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommendedVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "definitionId",
+          "headVersionId",
+          "recommendedVersionId",
+          "changedAt",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionReference": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+              }
+            ]
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "templateHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionReferenceView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "templateHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId",
+          "versionId",
+          "version",
+          "draftId",
+          "revision",
+          "templateHash",
+          "tenantId",
+          "lifecycle"
+        ],
+        "type": "object"
+      },
+      "ActivityDefinitionVersionLifecycle": {
+        "type": "integer"
+      },
+      "ActivityDefinitionVersionReferenceView": {
+        "properties": {
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId",
+          "version",
+          "lifecycle",
+          "providerKey",
+          "providerSchemaVersion"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyConsistencyView": {
+        "properties": {
+          "asOf": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "asOfSequence": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "isAuthoritative": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "rebuildId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "isAuthoritative",
+          "asOfSequence",
+          "asOf",
+          "rebuildId"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyItemView": {
+        "properties": {
+          "dependency": {
+            "$ref": "#/components/schemas/ActivityDefinitionReferenceView"
+          },
+          "depth": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "isDirect": {
+            "type": "boolean"
+          },
+          "memberUsage": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityContractMemberUsage"
+            },
+            "type": "array"
+          },
+          "occurrence": {
+            "$ref": "#/components/schemas/ActivityDependencyOccurrenceView"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ActivityDefinitionReferenceView"
+          },
+          "path": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDefinitionReferenceView"
+            },
+            "type": "array"
+          },
+          "relationshipId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relationshipId",
+          "owner",
+          "dependency",
+          "occurrence",
+          "isDirect",
+          "depth",
+          "path",
+          "memberUsage"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyOccurrenceView": {
+        "properties": {
+          "nodeOrigin": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityNodeOrigin"
+            },
+            "type": "array"
+          },
+          "occurrenceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurrenceId",
+          "nodeOrigin"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyPageView": {
+        "properties": {
+          "consistency": {
+            "$ref": "#/components/schemas/ActivityDependencyConsistencyView"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDependencyItemView"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "query": {
+            "$ref": "#/components/schemas/ActivityDependencyQueryView"
+          },
+          "root": {
+            "$ref": "#/components/schemas/ActivityDefinitionReferenceView"
+          }
+        },
+        "required": [
+          "root",
+          "query",
+          "consistency",
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyPathItem": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version",
+          "templateHash"
+        ],
+        "type": "object"
+      },
+      "ActivityDependencyQueryView": {
+        "properties": {
+          "direction": {
+            "type": "string"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "transitive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "direction",
+          "transitive",
+          "include"
+        ],
+        "type": "object"
+      },
+      "ActivityDiagnostic": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "location": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDiagnosticLocation"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "null",
+              "object"
+            ]
+          },
+          "remediation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "severity": {
+            "$ref": "#/components/schemas/ActivityDiagnosticSeverity"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ActivityDiagnosticSubject"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "ActivityDiagnosticLocation": {
+        "properties": {
+          "dependencyPath": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDependencyPathItem"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "jsonPointer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nodeOrigin": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityNodeOrigin"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "providerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ActivityDiagnosticSeverity": {
+        "type": "integer"
+      },
+      "ActivityDiagnosticSubject": {
+        "properties": {
+          "definitionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ActivityDraftValidationView": {
+        "properties": {
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "validatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draftId",
+          "revision",
+          "isValid",
+          "validatedAt",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityForkAccessBindingView": {
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint"
+        ],
+        "type": "object"
+      },
+      "ActivityForkCandidateLifecycleView": {
+        "type": "integer"
+      },
+      "ActivityForkContractChangeView": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "referenceKey",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ActivityForkContractComparisonView": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityForkContractChangeView"
+            },
+            "type": "array"
+          },
+          "isCompatible": {
+            "type": "boolean"
+          },
+          "sourceFingerprint": {
+            "type": "string"
+          },
+          "targetFingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceFingerprint",
+          "targetFingerprint",
+          "isCompatible",
+          "changes"
+        ],
+        "type": "object"
+      },
+      "ActivityForkOutcomeView": {
+        "type": "integer"
+      },
+      "ActivityForkPresentationView": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "displayName",
+          "description"
+        ],
+        "type": "object"
+      },
+      "ActivityForkPreviewView": {
+        "properties": {
+          "accessBinding": {
+            "$ref": "#/components/schemas/ActivityForkAccessBindingView"
+          },
+          "candidateId": {
+            "type": "string"
+          },
+          "contractComparison": {
+            "$ref": "#/components/schemas/ActivityForkContractComparisonView"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "presentation": {
+            "$ref": "#/components/schemas/ActivityForkPresentationView"
+          },
+          "providerMigration": {
+            "$ref": "#/components/schemas/ActivityForkProviderMigrationView"
+          },
+          "requestFingerprint": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ActivityForkSourceView"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityForkCandidateLifecycleView"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ActivityForkTargetView"
+          }
+        },
+        "required": [
+          "candidateId",
+          "requestFingerprint",
+          "status",
+          "accessBinding",
+          "source",
+          "presentation",
+          "target",
+          "providerMigration",
+          "contractComparison",
+          "createdAt",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "ActivityForkProviderMigrationView": {
+        "properties": {
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "sourceProviderKey": {
+            "type": "string"
+          },
+          "sourceProviderSchemaVersion": {
+            "type": "string"
+          },
+          "targetManifestFingerprint": {
+            "type": "string"
+          },
+          "targetProviderKey": {
+            "type": "string"
+          },
+          "targetProviderSchemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceProviderKey",
+          "sourceProviderSchemaVersion",
+          "targetProviderKey",
+          "targetProviderSchemaVersion",
+          "targetManifestFingerprint",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityForkReceiptView": {
+        "properties": {
+          "accessBinding": {
+            "$ref": "#/components/schemas/ActivityForkAccessBindingView"
+          },
+          "appliedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "candidateId": {
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ActivityDefinitionIdentityView"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ReusableActivityDraftSummaryView"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ActivityForkOutcomeView"
+          },
+          "requestFingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "candidateId",
+          "requestFingerprint",
+          "outcome",
+          "accessBinding",
+          "definition",
+          "draft",
+          "appliedAt"
+        ],
+        "type": "object"
+      },
+      "ActivityForkSourceView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "providerFingerprint": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version",
+          "lifecycle",
+          "providerKey",
+          "providerSchemaVersion",
+          "providerFingerprint"
+        ],
+        "type": "object"
+      },
+      "ActivityForkTargetView": {
+        "properties": {
+          "activityTypeKey": {
+            "type": "string"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "manifestFingerprint": {
+            "type": "string"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "activityTypeKey",
+          "draftId",
+          "providerKey",
+          "providerSchemaVersion",
+          "manifestFingerprint",
+          "contract"
+        ],
+        "type": "object"
+      },
+      "ActivityInputContractView": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "default": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityInputDefaultView"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "durability": {
+            "$ref": "#/components/schemas/ActivityBoundaryDurability"
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "default": 0,
+            "format": "float",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "storageDriverKey": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ActivityTypeReferenceView"
+          },
+          "uiHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uiSpecifications": {}
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "isRequired",
+          "isNullable",
+          "default",
+          "storageDriverKey"
+        ],
+        "type": "object"
+      },
+      "ActivityInputDefaultView": {
+        "properties": {
+          "syntax": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "required": [
+          "syntax",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ActivityInputDescriptorView": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "collectionKind": {
+            "$ref": "#/components/schemas/CollectionKind"
+          },
+          "defaultSyntax": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultValue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isBrowsable": {
+            "type": "boolean"
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "format": "float",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "uiHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uiSpecifications": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          }
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "collectionKind",
+          "displayName",
+          "description",
+          "order",
+          "category",
+          "isBrowsable",
+          "isRequired",
+          "isNullable",
+          "uiHint",
+          "defaultValue",
+          "defaultSyntax",
+          "uiSpecifications"
+        ],
+        "type": "object"
+      },
+      "ActivityLayoutRecord": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "nodeId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nodeId",
+          "data"
+        ],
+        "type": "object"
+      },
+      "ActivityManagementPageViewOfReusableActivityDefinitionManagementView": {
+        "properties": {
+          "continuation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "count": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReusableActivityDefinitionManagementView"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ActivityManagementSnapshotView"
+          },
+          "totalCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "count",
+          "totalCount",
+          "hasMore",
+          "continuation",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "ActivityManagementPageViewOfReusableActivityDraftManagementView": {
+        "properties": {
+          "continuation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "count": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReusableActivityDraftManagementView"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ActivityManagementSnapshotView"
+          },
+          "totalCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "count",
+          "totalCount",
+          "hasMore",
+          "continuation",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "ActivityManagementPageViewOfReusableActivityVersionManagementView": {
+        "properties": {
+          "continuation": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "count": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReusableActivityVersionManagementView"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ActivityManagementSnapshotView"
+          },
+          "totalCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "count",
+          "totalCount",
+          "hasMore",
+          "continuation",
+          "snapshot"
+        ],
+        "type": "object"
+      },
+      "ActivityManagementSnapshotView": {
+        "properties": {
+          "asOf": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "snapshotId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshotId",
+          "asOf"
+        ],
+        "type": "object"
+      },
+      "ActivityNodeOrigin": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ActivityOutcomeContractView": {
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isEmitted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "isEmitted"
+        ],
+        "type": "object"
+      },
+      "ActivityOutputContractView": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "durability": {
+            "$ref": "#/components/schemas/ActivityBoundaryDurability"
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "default": 0,
+            "format": "float",
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d\u002B)?(?:[eE][\u002B-]?\\d\u002B)?$",
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": "string"
+          },
+          "sourceRepresentation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValueRepresentation"
+              }
+            ]
+          },
+          "storageDriverKey": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ActivityTypeReferenceView"
+          },
+          "uiHint": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uiSpecifications": {}
+        },
+        "required": [
+          "referenceKey",
+          "name",
+          "type",
+          "isRequired",
+          "isNullable",
+          "storageDriverKey"
+        ],
+        "type": "object"
+      },
+      "ActivityOutputDescriptorView": {
+        "properties": {
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "collectionKind": {
+            "$ref": "#/components/schemas/CollectionKind"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isBrowsable": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "collectionKind",
+          "displayName",
+          "description",
+          "category",
+          "isBrowsable"
+        ],
+        "type": "object"
+      },
+      "ActivityPortDescriptorView": {
+        "properties": {
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isBrowsable": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "displayName",
+          "type",
+          "isBrowsable"
+        ],
+        "type": "object"
+      },
+      "ActivityProviderAuthoringCapabilityView": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "manifestSchemas": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityProviderManifestSchemaCapabilityView"
+            },
+            "type": "array"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "requiredOutcomes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityOutcomeContractView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "providerKey",
+          "displayName",
+          "manifestSchemas",
+          "requiredOutcomes"
+        ],
+        "type": "object"
+      },
+      "ActivityProviderManifest": {
+        "properties": {
+          "payload": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerKey",
+          "schemaVersion",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "ActivityProviderManifestSchemaCapabilityView": {
+        "properties": {
+          "isAuthorable": {
+            "type": "boolean"
+          },
+          "migratableFromSchemaVersions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "isAuthorable",
+          "migratableFromSchemaVersions"
+        ],
+        "type": "object"
+      },
+      "ActivityProviderManifestView": {
+        "properties": {
+          "manifestFingerprint": {
+            "type": "string"
+          },
+          "payload": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "providerKey",
+          "schemaVersion",
+          "manifestFingerprint",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "ActivityPublishedTemplateView": {
+        "properties": {
+          "closedTemplateCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "directDependencyCount": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "providerFingerprint": {
+            "type": "string"
+          },
+          "runtimeRequirements": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityRuntimeRequirementDeclaration"
+            },
+            "type": "array"
+          },
+          "sourceReferenceId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "templateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "templateId",
+          "templateHash",
+          "sourceReferenceId",
+          "providerFingerprint",
+          "directDependencyCount",
+          "closedTemplateCount",
+          "runtimeRequirements"
+        ],
+        "type": "object"
+      },
+      "ActivityRecommendationDecision": {
+        "properties": {
+          "disposition": {
+            "$ref": "#/components/schemas/ActivityRecommendationDisposition"
+          },
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRecommendedVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedReplacementLifecycle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+              }
+            ]
+          },
+          "replacementVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedDefinitionHeadVersionId",
+          "expectedRecommendedVersionId",
+          "disposition"
+        ],
+        "type": "object"
+      },
+      "ActivityRecommendationDisposition": {
+        "type": "integer"
+      },
+      "ActivityRuntimeRequirementDeclaration": {
+        "properties": {
+          "consumerKey": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumerKey",
+          "schemaVersion"
+        ],
+        "type": "object"
+      },
+      "ActivityTypeKeyRules": {
+        "properties": {
+          "allowsPreCreationOverride": {
+            "type": "boolean"
+          },
+          "collisionScope": {
+            "type": "string"
+          },
+          "immutable": {
+            "type": "boolean"
+          },
+          "maximumLength": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "serverGenerated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "serverGenerated",
+          "allowsPreCreationOverride",
+          "immutable",
+          "prefix",
+          "pattern",
+          "maximumLength",
+          "collisionScope"
+        ],
+        "type": "object"
+      },
+      "ActivityTypeReferenceView": {
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "collectionKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alias",
+          "collectionKind"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeAction": {
+        "type": "integer"
+      },
+      "ActivityUpgradeAppliedDraft": {
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "draftId",
+          "definitionId",
+          "revision",
+          "created"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeApplyReceiptView": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "receiptId": {
+            "type": "string"
+          },
+          "rejectionCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "rejectionStatusCode": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityUpgradeApplyResultView"
+              }
+            ]
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiptId",
+          "planId",
+          "stageId",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "result",
+          "diagnostics",
+          "rejectionStatusCode",
+          "rejectionCode"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeApplyResultView": {
+        "properties": {
+          "appliedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "awaitingPublications": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradePublicationHandoff"
+            },
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeAppliedDraft"
+            },
+            "type": "array"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "receiptId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId",
+          "status",
+          "appliedAt",
+          "drafts",
+          "diagnostics",
+          "receiptId",
+          "stageId",
+          "awaitingPublications"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeExpectedSnapshot": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "headVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "revision",
+          "definitionId",
+          "headVersionId"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeOccurrenceReplacement": {
+        "properties": {
+          "fromVersionId": {
+            "type": "string"
+          },
+          "occurrenceId": {
+            "type": "string"
+          },
+          "toVersionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "occurrenceId",
+          "fromVersionId",
+          "toVersionId"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradePlanBinding": {
+        "properties": {
+          "accessProfileFingerprint": {
+            "type": "string"
+          },
+          "createDraftsForPublishedDependents": {
+            "type": "boolean"
+          },
+          "includeTransitiveDependents": {
+            "type": "boolean"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeRoot"
+            },
+            "type": "array"
+          },
+          "selectedClosure": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDefinitionReference"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "roots",
+          "includeTransitiveDependents",
+          "createDraftsForPublishedDependents",
+          "accessProfileFingerprint",
+          "selectedClosure"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradePlanView": {
+        "properties": {
+          "binding": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityUpgradePlanBinding"
+              }
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "expectedSnapshots": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeExpectedSnapshot"
+            },
+            "type": "array"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "planId": {
+            "type": "string"
+          },
+          "predecessorPlanId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeReplacementView"
+            },
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeStage"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeStep"
+            },
+            "type": "array"
+          },
+          "successorPlanId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "planId",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "replacements",
+          "expectedSnapshots",
+          "steps",
+          "stages",
+          "binding",
+          "diagnostics",
+          "predecessorPlanId",
+          "successorPlanId"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradePublicationHandoff": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "draftKind": {
+            "type": "string"
+          },
+          "requiredByStageIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draftKind",
+          "draftId",
+          "definitionId",
+          "revision",
+          "sourceVersionId",
+          "requiredByStageIds"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradePublicationReceipt": {
+        "properties": {
+          "publishedDrafts": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradePublishedDraftSelection"
+            },
+            "type": "array"
+          },
+          "receiptId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiptId",
+          "publishedDrafts"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradePublishedDraftSelection": {
+        "properties": {
+          "draftId": {
+            "type": "string"
+          },
+          "publishedVersionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draftId",
+          "publishedVersionId"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeReplacementView": {
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/ActivityUpgradeVersionIdentityView"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ActivityUpgradeVersionIdentityView"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeRoot": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeStage": {
+        "properties": {
+          "dependsOnStageIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "order": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "stageId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityUpgradeStageStatus"
+          },
+          "stepIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "stageId",
+          "order",
+          "status",
+          "stepIds",
+          "dependsOnStageIds"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeStageStatus": {
+        "type": "integer"
+      },
+      "ActivityUpgradeStep": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActivityUpgradeAction"
+          },
+          "dependsOnStepIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "order": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeOccurrenceReplacement"
+            },
+            "type": "array"
+          },
+          "resultingDiff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityVersionDiff"
+              }
+            ]
+          },
+          "stageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "stepId": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ActivityUpgradeTarget"
+          }
+        },
+        "required": [
+          "stepId",
+          "order",
+          "target",
+          "action",
+          "dependsOnStepIds",
+          "replacements",
+          "expectedRevision",
+          "expectedDefinitionHeadVersionId",
+          "resultingDiff",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeTarget": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId",
+          "draftId",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "ActivityUpgradeVersionIdentityView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "templateHash": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "versionId",
+          "version",
+          "templateHash"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionBump": {
+        "type": "integer"
+      },
+      "ActivityVersionChange": {
+        "properties": {
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "area": {
+            "$ref": "#/components/schemas/ActivityVersionChangeArea"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/ActivityVersionChangeImpact"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requiredBump": {
+            "$ref": "#/components/schemas/ActivityVersionBump"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ActivityVersionChangeSubject"
+          }
+        },
+        "required": [
+          "changeId",
+          "area",
+          "kind",
+          "subject",
+          "before",
+          "after",
+          "impact",
+          "requiredBump",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionChangeArea": {
+        "type": "integer"
+      },
+      "ActivityVersionChangeImpact": {
+        "type": "integer"
+      },
+      "ActivityVersionChangeSubject": {
+        "properties": {
+          "dependencyVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "memberKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "occurrenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ActivityVersionChangeSubjectView": {
+        "properties": {
+          "dependencyVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "memberKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "occurrenceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "referenceKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "memberKind",
+          "referenceKey",
+          "dependencyVersionId",
+          "occurrenceId"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionChangeView": {
+        "properties": {
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "area": {
+            "type": "string"
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requiredBump": {
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ActivityVersionChangeSubjectView"
+          }
+        },
+        "required": [
+          "changeId",
+          "area",
+          "kind",
+          "subject",
+          "before",
+          "after",
+          "impact",
+          "requiredBump",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionCompatibility": {
+        "type": "integer"
+      },
+      "ActivityVersionDiff": {
+        "properties": {
+          "behaviorChanged": {
+            "type": "boolean"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityVersionChange"
+            },
+            "type": "array"
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/ActivityVersionCompatibility"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ActivityVersionIdentity"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityVersionProviderDiff"
+          },
+          "requiredBump": {
+            "$ref": "#/components/schemas/ActivityVersionBump"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ActivityVersionDiffSummary"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ActivityVersionIdentity"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "compatibility",
+          "requiredBump",
+          "behaviorChanged",
+          "provider",
+          "summary",
+          "changes",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionDiffIdentityView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "templateHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId",
+          "versionId",
+          "draftId",
+          "revision",
+          "version",
+          "templateHash"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionDiffSummary": {
+        "properties": {
+          "additive": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "breaking": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "nonBehavioral": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "warnings": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "breaking",
+          "additive",
+          "nonBehavioral",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionDiffSummaryView": {
+        "properties": {
+          "additive": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "breaking": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "nonBehavioral": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "warnings": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "breaking",
+          "additive",
+          "nonBehavioral",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionDiffView": {
+        "properties": {
+          "behaviorChanged": {
+            "type": "boolean"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityVersionChangeView"
+            },
+            "type": "array"
+          },
+          "compatibility": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityDiagnostic"
+            },
+            "type": "array"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ActivityVersionDiffIdentityView"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityVersionProviderDiffView"
+          },
+          "requiredBump": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ActivityVersionDiffSummaryView"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ActivityVersionDiffIdentityView"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "compatibility",
+          "requiredBump",
+          "behaviorChanged",
+          "provider",
+          "summary",
+          "changes",
+          "diagnostics"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionIdentity": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "templateHash": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "versionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionProviderDiff": {
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "fromKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fromSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "fromKey",
+          "fromSchemaVersion",
+          "toKey",
+          "toSchemaVersion",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionProviderDiffView": {
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "fromKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fromSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "toSchemaVersion": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "fromKey",
+          "fromSchemaVersion",
+          "toKey",
+          "toSchemaVersion",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "ActivityVersionReplacement": {
+        "properties": {
+          "fromVersionId": {
+            "type": "string"
+          },
+          "toVersionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fromVersionId",
+          "toVersionId"
+        ],
+        "type": "object"
+      },
+      "ApplyActivityUpgradePlan": {
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "stageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stageId",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "ApplyReusableActivityContractProposal": {
+        "properties": {
+          "expectedManifestFingerprint": {
+            "type": "string"
+          },
+          "expectedProviderKey": {
+            "type": "string"
+          },
+          "expectedProviderSchemaVersion": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "proposalFingerprint": {
+            "type": "string"
+          },
+          "selectedChangeIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "expectedProviderKey",
+          "expectedProviderSchemaVersion",
+          "expectedManifestFingerprint",
+          "proposalFingerprint",
+          "selectedChangeIds"
+        ],
+        "type": "object"
+      },
+      "ApplyReusableActivityFork": {
+        "properties": {
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "requestFingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "requestFingerprint",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "CollectionKind": {
+        "enum": [
+          "Single",
+          "Array",
+          "List",
+          "HashSet",
+          "Dictionary"
+        ]
+      },
+      "CompareActivityVersions": {
+        "properties": {
+          "fromVersionId": {
+            "type": "string"
+          },
+          "toVersionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fromVersionId",
+          "toVersionId"
+        ],
+        "type": "object"
+      },
+      "CreateActivityUpgradePlan": {
+        "properties": {
+          "createDraftsForPublishedDependents": {
+            "default": false,
+            "type": "boolean"
+          },
+          "includeTransitiveDependents": {
+            "default": true,
+            "type": "boolean"
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityVersionReplacement"
+            },
+            "type": "array"
+          },
+          "roots": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradeRoot"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "replacements",
+          "roots"
+        ],
+        "type": "object"
+      },
+      "CreateReusableActivityDefinition": {
+        "properties": {
+          "activityTypeKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityLayoutRecord"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityProviderManifest"
+          }
+        },
+        "required": [
+          "category",
+          "displayName",
+          "description",
+          "provider",
+          "contract",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "CreateReusableActivityDraft": {
+        "properties": {
+          "contract": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityContractView"
+              }
+            ]
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityLayoutRecord"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "provider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityProviderManifest"
+              }
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "sourceVersionId"
+        ],
+        "type": "object"
+      },
+      "CreateReusableActivityDraftConflictCopy": {
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "expectedSourceRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityLayoutRecord"
+            },
+            "type": "array"
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityProviderManifest"
+          }
+        },
+        "required": [
+          "expectedSourceRevision",
+          "contract",
+          "provider",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "DiscardReusableActivityDraft": {
+        "properties": {
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ],
+        "type": "object"
+      },
+      "GetActivityAvailabilitySettings": {
+        "properties": {
+          "scope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "GetActivityDependencies": {
+        "properties": {
+          "cursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "direction": {
+            "default": "outbound",
+            "type": "string"
+          },
+          "include": {
+            "default": "versions",
+            "type": "string"
+          },
+          "limit": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "transitive": {
+            "default": false,
+            "type": "boolean"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "GetActivityUpgradeApplyReceipt": {
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "receiptId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId",
+          "receiptId"
+        ],
+        "type": "object"
+      },
+      "GetActivityUpgradePlan": {
+        "properties": {
+          "planId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "planId"
+        ],
+        "type": "object"
+      },
+      "GetReusableActivityDefinition": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "GetReusableActivityDraft": {
+        "properties": {
+          "draftId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "draftId"
+        ],
+        "type": "object"
+      },
+      "GetReusableActivityForkStatus": {
+        "type": "object"
+      },
+      "GetReusableActivityVersion": {
+        "properties": {
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId"
+        ],
+        "type": "object"
+      },
+      "JsonElement": {},
+      "ListActivityAuthoringCatalog": {
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/ActivityCatalogAvailability"
+          }
+        },
+        "type": "object"
+      },
+      "ListRecommendedActivityDefinitions": {
+        "properties": {
+          "limit": {
+            "default": 25,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "offset": {
+            "default": 0,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ListReusableActivityDefinitions": {
+        "properties": {
+          "authority": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "cursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "limit": {
+            "default": 25,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "providerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "search": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sort": {
+            "default": "identity-asc",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ListReusableActivityDrafts": {
+        "properties": {
+          "cursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "limit": {
+            "default": 25,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "providerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "search": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sort": {
+            "default": "identity-asc",
+            "type": "string"
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "ListReusableActivityVersions": {
+        "properties": {
+          "cursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "limit": {
+            "default": 25,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "providerKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "search": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sort": {
+            "default": "identity-asc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId"
+        ],
+        "type": "object"
+      },
+      "MigrateReusableActivityDraft": {
+        "properties": {
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "targetProviderKey": {
+            "type": "string"
+          },
+          "targetSchemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "targetProviderKey",
+          "targetSchemaVersion"
+        ],
+        "type": "object"
+      },
+      "PreviewActivityDraftDiff": {
+        "properties": {
+          "baseVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ],
+        "type": "object"
+      },
+      "PreviewReusableActivityFork": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "sourceVersionId": {
+            "type": "string"
+          },
+          "targetProviderKey": {
+            "type": "string"
+          },
+          "targetProviderSchemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "sourceVersionId",
+          "category",
+          "displayName",
+          "description",
+          "targetProviderKey",
+          "targetProviderSchemaVersion"
+        ],
+        "type": "object"
+      },
+      "ProposeReusableActivityContract": {
+        "properties": {
+          "expectedManifestFingerprint": {
+            "type": "string"
+          },
+          "expectedProviderKey": {
+            "type": "string"
+          },
+          "expectedProviderSchemaVersion": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "expectedProviderKey",
+          "expectedProviderSchemaVersion",
+          "expectedManifestFingerprint"
+        ],
+        "type": "object"
+      },
+      "RecommendedActivityDefinitionPageView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedActivityDefinitionView"
+            },
+            "type": "array"
+          },
+          "nextOffset": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextOffset"
+        ],
+        "type": "object"
+      },
+      "RecommendedActivityDefinitionView": {
+        "properties": {
+          "activityTypeKey": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "unavailableReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definitionId",
+          "activityTypeKey",
+          "tenantId",
+          "category",
+          "displayName",
+          "description",
+          "versionId",
+          "version",
+          "isAvailable",
+          "unavailableReason"
+        ],
+        "type": "object"
+      },
+      "RefreshActivityUpgradePlan": {
+        "properties": {
+          "publications": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityUpgradePublicationReceipt"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "publications"
+        ],
+        "type": "object"
+      },
+      "ReplaceReusableActivityDraft": {
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityLayoutRecord"
+            },
+            "type": "array"
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityProviderManifest"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "contract",
+          "provider",
+          "layout"
+        ],
+        "type": "object"
+      },
+      "RestoreReusableActivityVersion": {
+        "properties": {
+          "expectedLifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedLifecycle",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "RetireReusableActivityVersion": {
+        "properties": {
+          "expectedLifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommendationDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityRecommendationDecision"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expectedLifecycle",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityDefinitionManagementView": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityActionAvailabilityView"
+            },
+            "type": "array"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ActivityDefinitionIdentityView"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionLifecycleSummaryView"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition",
+          "lifecycle",
+          "actions",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityDefinitionMutationView": {
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/ActivityDefinitionIdentityView"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ReusableActivityDraftSummaryView"
+          }
+        },
+        "required": [
+          "definition",
+          "draft"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityDraftManagementView": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityActionAvailabilityView"
+            },
+            "type": "array"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/ReusableActivityDraftSummaryView"
+          }
+        },
+        "required": [
+          "draft",
+          "actions"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityDraftSummaryView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityDefinitionDraftStatus"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draftId",
+          "definitionId",
+          "revision",
+          "sourceVersionId",
+          "status",
+          "providerKey",
+          "providerSchemaVersion",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityDraftView": {
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "definitionId": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "layout": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityLayoutRecord"
+            },
+            "type": "array"
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityProviderManifestView"
+          },
+          "revision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActivityDefinitionDraftStatus"
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDraftValidationView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "draftId",
+          "definitionId",
+          "tenantId",
+          "revision",
+          "sourceVersionId",
+          "status",
+          "contract",
+          "provider",
+          "layout",
+          "validation",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityVersionLifecycleView": {
+        "properties": {
+          "changedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId",
+          "lifecycle",
+          "reason",
+          "changedAt"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityVersionManagementView": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityActionAvailabilityView"
+            },
+            "type": "array"
+          },
+          "isRecommended": {
+            "type": "boolean"
+          },
+          "providerKey": {
+            "type": "string"
+          },
+          "providerSchemaVersion": {
+            "type": "string"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ReusableActivityVersionSummaryView"
+          }
+        },
+        "required": [
+          "version",
+          "providerKey",
+          "providerSchemaVersion",
+          "isRecommended",
+          "actions"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityVersionSummaryView": {
+        "properties": {
+          "definitionId": {
+            "type": "string"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "versionId",
+          "definitionId",
+          "version",
+          "lifecycle",
+          "publishedAt"
+        ],
+        "type": "object"
+      },
+      "ReusableActivityVersionView": {
+        "properties": {
+          "contract": {
+            "$ref": "#/components/schemas/ActivityContractView"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ActivityDefinitionIdentityView"
+          },
+          "lifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ActivityProviderManifestView"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sourceDraftId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sourceVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "template": {
+            "$ref": "#/components/schemas/ActivityPublishedTemplateView"
+          },
+          "version": {
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition",
+          "versionId",
+          "version",
+          "sourceDraftId",
+          "sourceVersionId",
+          "contract",
+          "provider",
+          "template",
+          "lifecycle",
+          "publishedAt"
+        ],
+        "type": "object"
+      },
+      "RevokeReusableActivityVersion": {
+        "properties": {
+          "expectedLifecycle": {
+            "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommendationDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityRecommendationDecision"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expectedLifecycle",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "SaveActivityAvailabilitySettings": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ActivityAvailabilityManagementMode"
+          },
+          "rules": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityAvailabilityRuleSet"
+              }
+            ]
+          },
+          "scope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "mode",
+          "rules"
+        ],
+        "type": "object"
+      },
+      "SetRecommendedReusableActivityVersion": {
+        "properties": {
+          "expectedDefinitionHeadVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRecommendedVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expectedRecommendedVersionLifecycle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityDefinitionVersionLifecycle"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommendedVersionId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedDefinitionHeadVersionId",
+          "expectedRecommendedVersionId",
+          "recommendedVersionId",
+          "expectedRecommendedVersionLifecycle",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "UpdateReusableActivityDefinition": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "displayName",
+          "description"
+        ],
+        "type": "object"
+      },
+      "UpdateReusableActivityDraftPresentation": {
+        "properties": {
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "presentationLabel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "presentationLabel"
+        ],
+        "type": "object"
+      },
+      "ValidateReusableActivityDraft": {
+        "properties": {
+          "expectedRevision": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ],
+        "type": "object"
+      },
+      "ValueRepresentation": {
+        "enum": [
+          "TypedValue",
+          "StructuredValue",
+          "TextValue",
+          "FormattedContent",
+          "BinaryContent",
+          "DurableReference",
+          "TransientResource",
+          null
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Elsa.Activities.Design.BeforeCapture | v1",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.1",
+  "paths": {
+    "/design/activities/authoring-capabilities": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsAuthoringCapabilitiesGet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityAuthoringCapabilitiesView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/availability/diagnostics": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsAvailabilityListDiagnostics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityAvailabilityDiagnostics"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/availability/settings": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsAvailabilityGetSettings",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityAvailabilitySettings"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityAvailabilitySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityAvailabilitySettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "put": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsAvailabilitySaveSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveActivityAvailabilitySettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityAvailabilitySettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/catalog": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsCatalogList",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListActivityAuthoringCatalog"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListActivityAuthoringCatalog"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityAuthoringCatalogView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsList",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityDefinitions"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityDefinitions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityManagementPageViewOfReusableActivityDefinitionManagementView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsAdd",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReusableActivityDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDefinitionMutationView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/picker": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsPicker",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListRecommendedActivityDefinitions"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListRecommendedActivityDefinitions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendedActivityDefinitionPageView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/{definitionId}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsGet",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityDefinition"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDefinitionManagementView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "patch": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReusableActivityDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDefinitionIdentityView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/{definitionId}/drafts": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsListDrafts",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityDrafts"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityDrafts"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityManagementPageViewOfReusableActivityDraftManagementView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsAddDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/{definitionId}/fork-previews": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsPreviewFork",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewReusableActivityFork"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityForkPreviewView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/{definitionId}/recommendation": {
+      "put": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsRecommendation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRecommendedReusableActivityVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDefinitionRecommendationView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/definitions/{definitionId}/versions": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDefinitionsListVersions",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityVersions"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListReusableActivityVersions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityManagementPageViewOfReusableActivityVersionManagementView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}": {
+      "delete": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsDiscard",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardReusableActivityDraft"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsGet",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityDraft"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      },
+      "put": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsReplace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/conflict-copies": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsConflictCopy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReusableActivityDraftConflictCopy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/contract-proposals": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsProposeContract",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeReusableActivityContract"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityContractProposalView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/contract-proposals/apply": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsApplyContractProposal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyReusableActivityContractProposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/diff": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsDiff",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewActivityDraftDiff"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityVersionDiffView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/migrate-provider": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsMigrateProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MigrateReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/presentation": {
+      "patch": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsUpdatePresentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReusableActivityDraftPresentation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityDraftView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/drafts/{draftId}/validate": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsDraftsValidate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateReusableActivityDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDraftValidationView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/fork-candidates/{candidateId}/apply": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsForksApply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyReusableActivityFork"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityForkReceiptView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/forks/{idempotencyKey}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsForksGetStatus",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityForkStatus"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityForkReceiptView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/upgrade-plans": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsUpgradePlansCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateActivityUpgradePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityUpgradePlanView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/upgrade-plans/{planId}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsUpgradePlansGet",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityUpgradePlan"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityUpgradePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityUpgradePlanView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/upgrade-plans/{planId}/apply": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsUpgradePlansApply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyActivityUpgradePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityUpgradeApplyResultView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/upgrade-plans/{planId}/receipts/{receiptId}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsUpgradePlansGetReceipt",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityUpgradeApplyReceipt"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityUpgradeApplyReceipt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityUpgradeApplyReceiptView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/upgrade-plans/{planId}/refresh": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsUpgradePlansRefresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshActivityUpgradePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityUpgradePlanView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{fromVersionId}/diff/{toVersionId}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsDiff",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareActivityVersions"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareActivityVersions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityVersionDiffView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{versionId}": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsGet",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityVersion"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetReusableActivityVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityVersionView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{versionId}/dependencies": {
+      "get": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsDependencies",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityDependencies"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetActivityDependencies"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityDependencyPageView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{versionId}/restore": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsRestore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreReusableActivityVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityVersionLifecycleView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{versionId}/retire": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsRetire",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireReusableActivityVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityVersionLifecycleView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    },
+    "/design/activities/versions/{versionId}/revoke": {
+      "post": {
+        "operationId": "ElsaActivitiesDesignApiEndpointsVersionsRevoke",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeReusableActivityVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReusableActivityVersionLifecycleView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "tags": [
+          "Elsa.Activities.Design.BeforeCapture"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Elsa.Activities.Design.BeforeCapture"
+    }
+  ]
+}

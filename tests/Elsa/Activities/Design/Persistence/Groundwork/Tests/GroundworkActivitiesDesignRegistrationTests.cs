@@ -12,9 +12,9 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
-using Groundwork.Documents.Store;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -73,6 +73,8 @@ public class GroundworkActivitiesDesignRegistrationTests
         var reusable = Assert.IsType<GroundworkReusableActivityStores>(sp.GetRequiredService<IActivityDefinitionAuthoringStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionDraftStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionVersionPublicationStore>());
+        Assert.IsType<GroundworkRecommendedActivityDefinitionPickerStore>(
+            sp.GetRequiredService<IRecommendedActivityDefinitionPickerStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionLayoutStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityDraftValidationStore>());
         Assert.Same(reusable, sp.GetRequiredService<IActivityForkStore>());
@@ -186,16 +188,17 @@ public class GroundworkActivitiesDesignRegistrationTests
 
         AssertScopedOnce<IDesignAtomicWriter>(services);
         AssertScopedOnce<GroundworkReusableActivityStores>(services);
+        AssertScopedOnce<GroundworkRecommendedActivityDefinitionPickerStore>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionWriter>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
         AssertScopedOnce<GroundworkActivityDependencyProjection>(services);
         AssertScopedOnce<GroundworkActivityUpgradePlanStore>(services);
-        Assert.Single(services.Where(x =>
+        Assert.Single(services, x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource)));
-        Assert.Single(services.Where(x =>
+            x.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource));
+        Assert.Single(services, x =>
             x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource));
     }
 
     private static void AssertScopedOnce<TService>(IServiceCollection services)
@@ -203,7 +206,7 @@ public class GroundworkActivitiesDesignRegistrationTests
 
     private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
     {
-        var registration = Assert.Single(services.Where(x => x.ServiceType == serviceType));
+        var registration = Assert.Single(services, x => x.ServiceType == serviceType);
 
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }

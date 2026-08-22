@@ -40,11 +40,11 @@
       "sourceIdentity": "ElsaApiCapabilitiesEndpointsGetCapabilities"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: GET design/activities/authoring-capabilities",
+      "displayName": "HTTP: GET /design/activities/authoring-capabilities",
       "methods": [
         "GET"
       ],
@@ -74,16 +74,16 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAuthoringCapabilitiesGet"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: GET design/activities/availability/diagnostics",
+      "displayName": "HTTP: GET /design/activities/availability/diagnostics",
       "methods": [
         "GET"
       ],
@@ -113,17 +113,96 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilityListDiagnostics"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
         "application/json"
       ],
-      "displayName": "HTTP: GET design/activities/catalog",
+      "displayName": "HTTP: GET /design/activities/availability/settings",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/availability/settings"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilityGetSettings"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT /design/activities/availability/settings",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Core.Models.ActivityAvailabilitySettings",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/availability/settings"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilitySaveSettings"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/catalog",
       "methods": [
         "GET"
       ],
@@ -153,12 +232,1427 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsCatalogList"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/definitions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsList"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/definitions",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionMutationView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsAdd"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/definitions/picker",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.RecommendedActivityDefinitionPageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/picker"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsPicker"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/definitions/{definitionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDefinitionManagementView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsGet"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PATCH /design/activities/definitions/{definitionId}",
+      "methods": [
+        "PATCH"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityDefinitionIdentityView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsUpdate"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/definitions/{definitionId}/drafts",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityDraftManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}/drafts"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsListDrafts"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/definitions/{definitionId}/drafts",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}/drafts"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsAddDraft"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/definitions/{definitionId}/fork-previews",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityForkPreviewView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}/fork-previews"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsPreviewFork"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT /design/activities/definitions/{definitionId}/recommendation",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityDefinitionRecommendationView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}/recommendation"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsRecommendation"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/definitions/{definitionId}/versions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityManagementPageView\u00601[[Elsa.Activities.Design.Api.Models.ReusableActivityVersionManagementView, Elsa.Activities.Design.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/definitions/{param}/versions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsListVersions"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: DELETE /design/activities/drafts/{draftId}",
+      "methods": [
+        "DELETE"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 204
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsDiscard"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/drafts/{draftId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsGet"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT /design/activities/drafts/{draftId}",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsReplace"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/conflict-copies",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/conflict-copies"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsConflictCopy"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/contract-proposals",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityContractProposalView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/contract-proposals"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsProposeContract"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/contract-proposals/apply",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/contract-proposals/apply"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsApplyContractProposal"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/diff",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityVersionDiffView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/diff"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsDiff"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/migrate-provider",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/migrate-provider"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsMigrateProvider"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PATCH /design/activities/drafts/{draftId}/presentation",
+      "methods": [
+        "PATCH"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityDraftView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/presentation"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsUpdatePresentation"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/publication-preflight",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationPreflightView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/publication-preflight"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightActivityDraftPublicationEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/publish",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/publish"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPublishActivityDraftEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/drafts/{draftId}/validate",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityDraftValidationView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/drafts/{param}/validate"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsValidate"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/fork-candidates/{candidateId}/apply",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityForkReceiptView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/fork-candidates/{param}/apply"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsForksApply"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/forks/{idempotencyKey}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityForkReceiptView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/forks/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsForksGetStatus"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/publications/{idempotencyKey}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityPublicationReceiptView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/publications/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityPublicationReceiptEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/upgrade-plans",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/upgrade-plans"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansCreate"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/upgrade-plans/{planId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/upgrade-plans/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansGet"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/upgrade-plans/{planId}/apply",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityUpgradeApplyResultView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/upgrade-plans/{param}/apply"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansApply"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/upgrade-plans/{planId}/receipts/{receiptId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityUpgradeApplyReceiptView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/upgrade-plans/{param}/receipts/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansGetReceipt"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/upgrade-plans/{planId}/refresh",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityUpgradePlanView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 201
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/upgrade-plans/{param}/refresh"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansRefresh"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/versions/{versionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsGet"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/versions/{versionId}/dependencies",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityDependencyPageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}/dependencies"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsDependencies"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /design/activities/versions/{fromVersionId}/diff/{toVersionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ActivityVersionDiffView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}/diff/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsDiff"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/versions/{versionId}/restore",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}/restore"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRestore"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/versions/{versionId}/retire",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}/retire"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRetire"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /design/activities/versions/{versionId}/revoke",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Activities.Design.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Activities.Design.Api.Models.ReusableActivityVersionLifecycleView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/design/activities/versions/{param}/revoke"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+      },
+      "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRevoke"
+    },
+    {
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
         "application/json"
@@ -193,7 +1687,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctREVTSUdOLlJFQUQ"
       },
       "sourceIdentity": "ElsaWorkflowsDesignApiEndpointsDefinitionsList"
     },
@@ -276,11 +1770,481 @@
       "sourceIdentity": "ElsaExpressionsApiEndpointsListVariableTypeDescriptors"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/activities",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Collections.Generic.IEnumerable\u00601[[Elsa.Workflows.Publishing.Api.Models.ConstructableActivityView, Elsa.Workflows.Publishing.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activities"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsList"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/activities/{activityId}/construct",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ConstructedActivityView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activities/{param}/construct"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsConstruct"
+    },
+    {
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "application/json"
       ],
-      "displayName": "HTTP: POST publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
+      "displayName": "HTTP: POST /publishing/activity-drafts/{draftId}/test-runs",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activity-drafts/{param}/test-runs"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsActivityDraftTestRunEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activity-drafts/{param}/test-runs/idempotency/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunByIdempotencyKeyEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/activity-test-runs/{testRunId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activity-test-runs/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/activity-test-runs/{testRunId}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ActivityDraftTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/activity-test-runs/{param}/cancel"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsCancelActivityDraftTestRunEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/incident-strategies",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.IncidentStrategiesResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/incident-strategies"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListIncidentStrategies"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/preflight",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.RuntimeRequirementPreflightView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/preflight"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRuntimeRequirementPreflightEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/value-conversion/profiles",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.ValueConversionProfilesResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/value-conversion/profiles"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListValueConversionProfiles"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/drafts/test-runs",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/drafts/test-runs"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsStartDraft"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/preflight",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSnapshotPreflightView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/preflight"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationSnapshotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationPreflightView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/preflight"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/publish",
       "methods": [
         "POST"
       ],
@@ -310,14 +2274,680 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPublishWorkflowEndpoint"
     },
     {
-      "authoringModel": "FastEndpoints",
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/test-runs",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/test-runs"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsStart"
+    },
+    {
+      "authoringModel": "Minimal API",
       "contentTypes": [
         "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflows/{definitionId}/policy",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/policy"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowPublicationPolicyEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT /publishing/workflows/{definitionId}/policy",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationPolicyView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/policy"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsSetWorkflowPublicationPolicyEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflows/{definitionId}/slots",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotListResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/slots"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListPublicationSlotsEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: DELETE /publishing/workflows/{definitionId}/slots/{slotName}",
+      "methods": [
+        "DELETE"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/slots/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsUnpublishPublicationSlotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflows/{definitionId}/slots/{slotName}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/slots/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetPublicationSlotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/{definitionId}/slots/{slotName}/restore",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param}/slots/{param}/restore"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRestorePublicationSlotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/workflows/alteration-plans",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanSubmissionView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/alteration-plans"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsSubmitAlteration"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/alteration-plans/{planId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/alteration-plans/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetAlteration"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/workflows/alteration-plans/{planId}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationPlanView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/alteration-plans/{param}/cancel"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsCancelAlteration"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/alteration-plans/{planId}/jobs/page",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationJobPageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/alteration-plans/{param}/jobs/page"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsPageAlterationJobs"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/alteration-plans/{planId}/jobs/{jobId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.Alterations.WorkflowAlterationJobView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/alteration-plans/{param}/jobs/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetAlterationJob"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/diagnostics/settings",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSettingsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/diagnostics/settings"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetDiagnostics"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: PUT runtime/workflows/diagnostics/settings",
+      "methods": [
+        "PUT"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.Models.RuntimeDiagnosticsSettingsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/diagnostics/settings"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsSaveDiagnostics"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/dispatches",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/dispatches"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListDispatches"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/dispatches/{dispatchId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/dispatches/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetDispatch"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/workflows/dispatches/{dispatchId}/redrive",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowDispatchRedriveView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/dispatches/{param}/redrive"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsRedriveDispatch"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
         "application/json"
       ],
       "displayName": "HTTP: GET runtime/workflows/executables",
@@ -350,9 +2980,516 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
       },
-      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListWorkflowExecutablesEndpoint"
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListExecutables"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/executables/{artifactId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableDetailsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/executables/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutable"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/workflows/executables/{artifactId}/execute",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutionStartDispatchView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/executables/{param}/execute"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5FWEVDVVRF"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsExecute"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/executables/{artifactId}/provenance",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ExecutableProvenanceView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/executables/{param}/provenance"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutableProvenance"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableInputSourcesView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/executables/{param}/source-references/{param}/input-sources"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutableInputSources"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "System.Collections.Generic.IReadOnlyCollection\u00601[[Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceSummaryView, Elsa.Workflows.Runtime.Api.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListInstances"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/page",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceListView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/page"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListInstancesPage"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDetailsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetInstance"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionInspectionView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityExecution"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionHierarchyPageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/descendants"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityDescendants"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionLayoutView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/layout"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityLayout"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Contracts.ActivityExecutionValuePayloadView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/value-evidence/{param}/payload"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityValuePayload"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/incidents",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Requests.ListIncidentsResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/incidents"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListIncidents"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST runtime/workflows/stimuli",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.DispatchStimulusResponse",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/stimuli"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5FWEVDVVRF"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDispatchStimulus"
     }
   ]
 }

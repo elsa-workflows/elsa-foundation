@@ -1,16 +1,10 @@
-﻿using System.Diagnostics;
 using ConsoleLogStreaming.AspNetCore.DependencyInjection;
 using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
-using CShells.Lifecycle;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Management.Api;
-using Elsa.Api.FastEndpoints;
-using Elsa.Api.AspNetCore;
-using Elsa.Workbench;
-using Elsa.Workbench.Boot;
-using Elsa.Workbench.Readiness;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -22,11 +16,13 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
-using Elsa.Api.Capabilities;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core;
 using Elsa.Agent.GitHubCopilot;
 using Elsa.Agent.Workflows;
+using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
@@ -44,42 +40,45 @@ using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Modularity.Attention;
 using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified;
+using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Primitives.Hosting;
+using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
-using Elsa.Tasks;
-using Elsa.Attention.Api;
-using Elsa.Modularity.Attention;
-using Elsa.Secrets.Attention;
 using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
+using Elsa.Tasks;
+using Elsa.Workbench;
+using Elsa.Workbench.Boot;
+using Elsa.Workbench.Readiness;
+using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
-using Elsa.Workflows.Dashboard;
+using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
-using Elsa.Workflows.Runtime.Attention;
-using Elsa.Workflows.ExecutionEvidence;
 using Elsa.Workflows.Runtime.Tracing;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
-using Elsa.Modularity.ExtensionBuilder;
-using Elsa.Modularity.ExtensionBuilder.Extensions;
+using System.Diagnostics;
 
 // Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
 // attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
@@ -190,6 +189,7 @@ builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
 builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
+builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {
@@ -294,9 +294,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
             // rejected with 401. All of these are enabled in the default shell (see shells.json) with
             // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
-            // The per-shell ApiSecurity feature is the only way to opt a shell out of endpoint security,
-            // and it is never enabled here (and is neutralized in Production regardless — see below).
-            //
             // W18 note (resolved): the earlier guard kept the token-issuance endpoints out of the default
             // shell because enabling them without an ITokenService would fault endpoint registration. The
             // OpenIddict module now supplies that service, so the fault condition no longer exists and the
@@ -311,7 +308,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
 
             typeof(OpenIddictIdentityFeature).Assembly,
-            typeof(ApiSecurityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,
             typeof(StudioPreferencesFeature).Assembly,
             typeof(StudioPreferencesApiFeature).Assembly,
@@ -427,7 +423,7 @@ app.MapShellManagementApi("/_admin/shells")
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
 // note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
 // the captured console output is not readable anonymously — these are root-mapped endpoints that bypass the
-// per-shell ApiSecurity, so they must carry their own authorization. The empty-prefix group keeps the absolute
+// per-shell endpoint pipeline, so they must carry their own authorization. The empty-prefix group keeps the absolute
 // routes and applies the convention to every endpoint the mapper adds, including the hub.
 if (consoleLogStreamingEnabled)
 {

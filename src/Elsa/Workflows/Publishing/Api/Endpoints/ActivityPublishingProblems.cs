@@ -1,34 +1,14 @@
-using Elsa.Workflows.Publishing.Api.Services;
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
-using Microsoft.AspNetCore.Http;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
+using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
-internal sealed record ActivityPublishingDiagnosticView(
-    string Code,
-    string Severity,
-    string Message,
-    ActivityDiagnosticSubject Subject,
-    ActivityDiagnosticLocation? Location,
-    string? Remediation,
-    IReadOnlyDictionary<string, string> Metadata);
-
-internal sealed record ActivityPublishingProblemDetails(
-    string Type,
-    string Title,
-    int Status,
-    string Detail,
-    string Instance,
-    string ErrorCode,
-    string TraceId,
-    IReadOnlyList<ActivityPublishingDiagnosticView> Diagnostics);
-
 internal static class ActivityPublishingProblems
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyDictionary<string, string> EmptyMetadata =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -66,7 +46,11 @@ internal static class ActivityPublishingProblems
     {
         response.StatusCode = problem.Status;
         response.ContentType = "application/problem+json";
-        await JsonSerializer.SerializeAsync(response.Body, problem, JsonOptions, cancellationToken);
+        await System.Text.Json.JsonSerializer.SerializeAsync(
+            response.Body,
+            problem,
+            WorkflowsPublishingJsonContext.Default.ActivityPublishingProblemDetails,
+            cancellationToken);
     }
 
     private static int StatusCode(ActivityPublicationRejectedException exception) => exception.ErrorCode switch

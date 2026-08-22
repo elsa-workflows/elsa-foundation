@@ -15,12 +15,6 @@ public interface IActivityExecutionValuePayloadReader
         CancellationToken cancellationToken = default);
 }
 
-/// <summary>Raw value evidence released by the separately-authorized and audited resolution boundary.</summary>
-public sealed record ActivityExecutionValuePayloadView(
-    string EvidenceId,
-    string CaptureMode,
-    JsonElement Payload);
-
 /// <summary>Represents the non-disclosing terminal result of an evidence-payload resolution attempt.</summary>
 public sealed record ActivityExecutionValuePayloadReadResult(
     ActivityExecutionValuePayloadReadOutcome Outcome,

@@ -9,6 +9,8 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\endpoint-manifest.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Baselines\runtime-e2e-build-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\fastendpoints-transition-exceptions.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave1-http-fastendpoints.json"
@@ -28,6 +30,18 @@
     <None Include="Baselines\wave4-agent-sse-error-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="Baselines\wave4-agent-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-before-capture-receipt.json"
+          Link="Baselines\wave9-runtime-before-capture-receipt.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-fastendpoints.json"
+          Link="Baselines\wave9-runtime-openapi-fastendpoints.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-openapi-approved-differences.json"
+          Link="Baselines\wave9-runtime-openapi-approved-differences.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Workflows\Runtime\Api\Tests\Baselines\runtime-http-fastendpoints.json"
+          Link="Baselines\wave9-runtime-http-fastendpoints.json"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -57,7 +71,6 @@
     <ProjectReference Include="..\..\..\src\Elsa\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
@@ -79,9 +92,12 @@
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Core\Elsa.Workflows.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Core\Elsa.Workflows.Runtime.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- spec 151 SC-B-001/005: the runtime-only artifact composition guard composes the reconciliation feature and
          drives it on the shared execution harness. -->

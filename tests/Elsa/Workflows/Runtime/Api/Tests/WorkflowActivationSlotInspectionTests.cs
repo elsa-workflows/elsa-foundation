@@ -1,5 +1,7 @@
 using System.Reflection;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -8,8 +10,14 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services;
-using FastEndpoints;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using PermissionNames = Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
@@ -30,14 +38,37 @@ public sealed class WorkflowActivationSlotInspectionTests
     [Theory]
     [InlineData(SlotsRoute, typeof(ListWorkflowActivationSlots), typeof(WorkflowActivationSlotListView))]
     [InlineData(SlotRoute, typeof(GetWorkflowActivationSlot), typeof(WorkflowActivationSlotView))]
-    public void Endpoints_expose_authenticated_runtime_read_contracts(string route, Type request, Type response)
+    public async Task Endpoints_expose_authenticated_runtime_read_contracts(string route, Type request, Type response)
     {
-        var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
+        var endpoint = MappedEndpoint(route);
 
-        Assert.Equal((request, response), RuntimeApiEndpointTestFactory.Contract(endpoint));
-        RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, PermissionNames.WorkflowRuntimeRead);
-        Assert.Null(endpoint.Definition.AnonymousVerbs);
-        Assert.Equal(["GET"], endpoint.Definition.Verbs);
+        // The verb and the permission are the security-relevant half of the contract, so both are asserted
+        // exactly rather than merely "at least".
+        Assert.Equal<string>(["GET"], Verbs(endpoint));
+
+        var expectedPolicy = new PermissionPolicyCodec().Format(
+            PermissionPolicyDescriptor.Single(PermissionNames.WorkflowRuntimeRead));
+        var dispositions = endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>();
+        Assert.Single(dispositions);
+        Assert.Equal(EndpointSecurityDispositionKind.Permission, dispositions[0].Kind);
+        Assert.Equal(expectedPolicy, dispositions[0].Value);
+
+        var authorization = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        Assert.Single(authorization);
+        Assert.Equal(expectedPolicy, authorization[0].Policy);
+        // Replaces the FastEndpoints `Definition.AnonymousVerbs is null` check: under Minimal APIs an endpoint
+        // escapes its authorization policy only by carrying IAllowAnonymous metadata.
+        Assert.DoesNotContain(endpoint.Metadata, item => item is IAllowAnonymous);
+
+        // The response half of the contract is published as endpoint metadata.
+        var produces = endpoint.Metadata
+            .GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Single(metadata => metadata.StatusCode == StatusCodes.Status200OK);
+        Assert.Equal(response, produces.Type);
+
+        // A Minimal API GET publishes no request DTO, so the request half is proven by driving the mapped
+        // delegate and capturing the request/response pair it actually sends through the mediator.
+        Assert.Equal((request, response), await CapturedContractAsync(endpoint));
     }
 
     [Fact]
@@ -118,11 +149,8 @@ public sealed class WorkflowActivationSlotInspectionTests
     public void Runtime_api_exposes_no_activation_mutation_and_never_injects_the_coordinator()
     {
         var apiTypes = typeof(WorkflowsRuntimeApiFeature).Assembly.GetTypes();
-        var activationRoutes = apiTypes
-            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(BaseEndpoint).IsAssignableFrom(type))
-            .Select(type => RuntimeApiEndpointTestFactory.Create(type))
-            .Where(endpoint => endpoint.Definition.Routes!.Any(route =>
-                route.Contains("activation-slots", StringComparison.Ordinal)))
+        var activationRoutes = MappedEndpoints()
+            .Where(endpoint => endpoint.RoutePattern.RawText!.Contains("activation-slots", StringComparison.Ordinal))
             .ToArray();
         var coordinatorConsumers = apiTypes
             .SelectMany(type => type
@@ -139,7 +167,57 @@ public sealed class WorkflowActivationSlotInspectionTests
 
         // The traversal must actually have found the two reads, or every assertion below is vacuous.
         Assert.Equal(2, activationRoutes.Length);
-        Assert.All(activationRoutes, endpoint => Assert.Equal(["GET"], endpoint.Definition.Verbs));
+        Assert.All(activationRoutes, endpoint => Assert.Equal<string>(["GET"], Verbs(endpoint)));
         Assert.Empty(coordinatorConsumers);
+    }
+
+    /// <summary>Maps the production Runtime API and returns the endpoints it actually registered.</summary>
+    private static RouteEndpoint[] MappedEndpoints()
+    {
+        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var builder = new TestEndpointRouteBuilder(services);
+
+        WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(builder);
+
+        return builder.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
+    }
+
+    private static RouteEndpoint MappedEndpoint(string route) =>
+        Assert.Single(MappedEndpoints(), endpoint => endpoint.RoutePattern.RawText == route);
+
+    private static IReadOnlyList<string> Verbs(RouteEndpoint endpoint) =>
+        Assert.IsType<HttpMethodMetadata>(endpoint.Metadata.GetMetadata<HttpMethodMetadata>()).HttpMethods;
+
+    private static async Task<(Type Request, Type Response)> CapturedContractAsync(RouteEndpoint endpoint)
+    {
+        var sender = new ContractCapturingRequestSender();
+        await using var services = new ServiceCollection().AddSingleton<IRequestSender>(sender).BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
+        context.Response.Body = new MemoryStream();
+        context.Request.RouteValues["definitionId"] = "definition-1";
+        context.Request.RouteValues["slotName"] = "default";
+
+        await endpoint.RequestDelegate!(context);
+
+        return Assert.IsType<(Type Request, Type Response)>(sender.Captured);
+    }
+
+    /// <summary>Captures the mediator contract the mapped delegate uses, then forces the handled 404 path.</summary>
+    private sealed class ContractCapturingRequestSender : IRequestSender
+    {
+        public (Type Request, Type Response)? Captured { get; private set; }
+
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        {
+            Captured = (request.GetType(), typeof(T));
+            throw new EntityNotFoundException("Contract capture stops the request before any store is touched.");
+        }
+    }
+
+    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
+    {
+        public IServiceProvider ServiceProvider { get; } = serviceProvider;
+        public ICollection<EndpointDataSource> DataSources { get; } = [];
+        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

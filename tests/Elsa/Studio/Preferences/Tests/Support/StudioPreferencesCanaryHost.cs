@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using CShells.AspNetCore.Features;
-using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;

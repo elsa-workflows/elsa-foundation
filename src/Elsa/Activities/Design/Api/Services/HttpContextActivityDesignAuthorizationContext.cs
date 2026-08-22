@@ -1,12 +1,13 @@
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
+using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Elsa.Activities.Design.Api.Services;
 
@@ -24,9 +25,9 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     IActivityAuthoringContextAsync,
     IActivityDependencyContextAsync
 {
-    public const string AuthorPermission = "activities.design.author";
-    public const string ProviderPayloadReadPermission = "activities.design.provider-payload.read";
-    public const string ActivityDesignManagePermission = "activity-design.manage";
+    public const string AuthorPermission = ActivityDesignPermissions.AuthorProvider;
+    public const string ProviderPayloadReadPermission = ActivityDesignPermissions.ReadProviderPayload;
+    public const string ActivityDesignManagePermission = ActivityDesignPermissions.Manage;
 
     private readonly IPermissionAuthorizationService _authorization;
     private readonly NormalizedPrincipalValidator _principalValidator;
