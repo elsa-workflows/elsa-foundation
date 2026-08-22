@@ -79,9 +79,14 @@ Assert-Write -Ctx $ctx -Label "stale workflow policy CAS is rejected" -Method PU
     -ExpectStatus 409 | Out-Null
 
 # Slot lifecycle. Bodies deliberately carry conflicting identities; route values own the operation.
-$slot = Assert-Write -Ctx $ctx -Label "read active publication slot" -Method GET `
-    -Path "publishing/workflows/$definitionId/slots/default" -ExpectStatus 200 `
-    -Validate { param($response) $response.Json.activePublicationId -eq $published.Json.publicationId }
+# T117 moved slot READS to the runtime authority: publishing/workflows/{id}/slots/{slot} now carries only
+# the lifecycle commands (DELETE, POST restore), so a GET there answers 405. The read lives at the runtime
+# route and returns WorkflowActivationSlotView, which names the field activeActivationId. The publishing
+# command responses still return PublicationSlotView with activePublicationId - both identify the same
+# activation, which is why the transition assertion below compares one against the other.
+$slot = Assert-Write -Ctx $ctx -Label "read active activation slot (runtime-owned since T117)" -Method GET `
+    -Path "runtime/workflows/activation-slots/$definitionId/default" -ExpectStatus 200 `
+    -Validate { param($response) $response.Json.activeActivationId -eq $published.Json.publicationId }
 $retired = Assert-Write -Ctx $ctx -Label "unpublish route identity wins over body" -Method DELETE `
     -Path "publishing/workflows/$definitionId/slots/default" `
     -Body @{ definitionId = "body-definition-must-not-win-$tag"; slotName = "body-slot-must-not-win" } `
@@ -91,7 +96,7 @@ $restored = Assert-Write -Ctx $ctx -Label "restore route identity wins over body
     -Body @{ definitionId = "body-definition-must-not-win-$tag"; slotName = "body-slot-must-not-win" } `
     -ExpectStatus 200 `
     -Validate { param($response) $response.Json.definitionId -eq $definitionId -and $response.Json.slotName -eq "default" }
-Assert-LifecycleCondition "slot transitioned away from the original active publication" ($retired.Json.activePublicationId -ne $slot.Json.activePublicationId)
+Assert-LifecycleCondition "slot transitioned away from the original active publication" ($retired.Json.activePublicationId -ne $slot.Json.activeActivationId)
 Assert-LifecycleCondition "slot restore completed for the route-owned slot" ($restored.Json.definitionId -eq $definitionId)
 
 # Reusable-activity publication and durable receipt replay.
