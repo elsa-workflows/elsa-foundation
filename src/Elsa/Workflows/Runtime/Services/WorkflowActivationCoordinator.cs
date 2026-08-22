@@ -285,7 +285,8 @@ public sealed class WorkflowActivationCoordinator(
 
     /// <summary>
     /// FR-B-006's idempotent no-op: a request for the artifact the slot already serves writes nothing and
-    /// succeeds, whichever source asks.
+    /// succeeds — unless it carries an explicit takeover intent against a different owner, in which case
+    /// ownership must move even though nothing else does.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -313,6 +314,29 @@ public sealed class WorkflowActivationCoordinator(
             cancellationToken);
         if (current?.ActiveActivationId is not { } activeActivationId)
             return null;
+
+        // Ownership is decided before, and independently of, whether the projections change (FR-B-006, amended
+        // 2026-08-22). Sameness is evaluated first here, so without this an explicit takeover of an artifact the
+        // slot already serves was swallowed as a no-op: the caller got a success, ownership stayed with the
+        // incumbent, and the later unpublish refused with a foreign-owner conflict. Falling through runs the real
+        // sequence, which transfers ownership and consumes a revision even though the serving projections are
+        // byte-identical -- an ownership-only transition is still a transition. A request *without* takeover
+        // still no-ops, which is what stops reconciliation reclaiming a slot publishing owns.
+        if (command.OwnershipIntent == WorkflowActivationOwnershipIntent.TakeOver &&
+            current.Source is { } incumbent &&
+            !incumbent.IsSameOwnerAs(command.Source))
+        {
+            logger?.LogDebug(
+                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves the same artifact as "
+                + "{ActiveActivationId}, but carries takeover intent against owner {Owner}; running the full sequence "
+                + "so ownership transfers.",
+                command.ActivationId,
+                command.Executable.Identity.DefinitionId,
+                command.SlotName,
+                activeActivationId,
+                incumbent.Describe());
+            return null;
+        }
 
         var activeReference = await sourceReferenceStore.FindAsync(
             WorkflowActivationReferenceIdentity.Create(activeActivationId),

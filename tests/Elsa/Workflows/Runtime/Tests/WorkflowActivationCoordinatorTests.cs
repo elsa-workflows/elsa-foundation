@@ -136,6 +136,42 @@ public sealed class WorkflowActivationCoordinatorTests
     // Same-artifact idempotent no-op
     // ---------------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// FR-B-006 as amended 2026-08-22: ownership is decided before, and independently of, whether the projections
+    /// change. An explicit takeover of the artifact the slot already serves must still move ownership.
+    /// </summary>
+    /// <remarks>
+    /// Before the amendment the sameness check ran first and swallowed this: the caller got a success, the
+    /// incumbent kept the slot, and the later unpublish refused with a foreign-owner conflict. Export an artifact,
+    /// import it, then publish the design that compiles to the same artifact and you hit it -- which is a natural
+    /// thing to try, so it was reachable by hand long before any test looked for it.
+    /// </remarks>
+    [Fact]
+    public async Task An_explicit_takeover_of_the_same_artifact_still_transfers_ownership()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("import:prod-drop:1", "artifact-1", source: Importer);
+        harness.ResetCalls();
+
+        var takeover = await harness.ActivateAsync(
+            "publication-1",
+            "artifact-1",
+            source: WorkflowActivationSource.Publishing,
+            expectedRevision: first.Slot.Revision,
+            ownershipIntent: WorkflowActivationOwnershipIntent.TakeOver);
+
+        Assert.True(takeover.Succeeded);
+        // Not AlreadyActive: an ownership-only transition is still a transition.
+        Assert.NotEqual(WorkflowActivationOutcome.AlreadyActive, takeover.Outcome);
+        Assert.Equal(WorkflowActivationSource.PublishingKind, takeover.Slot.Source!.Kind);
+        Assert.Equal("publication-1", takeover.Slot.ActiveActivationId);
+        // It consumed a revision, so a concurrent writer holding the old one is still correctly refused.
+        Assert.True(takeover.Slot.Revision > first.Slot.Revision);
+        // The displaced activation's reference is retired rather than left live alongside the new owner's.
+        var retired = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("import:prod-drop:1"));
+        Assert.NotNull(retired!.DeletedAt);
+    }
+
     [Fact]
     public async Task Requesting_the_artifact_the_slot_already_serves_writes_nothing()
     {
@@ -158,14 +194,15 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
-    public async Task The_same_artifact_no_op_applies_to_a_request_from_any_source()
+    public async Task The_same_artifact_no_op_applies_to_any_source_that_does_not_claim_ownership()
     {
         var harness = new Harness();
         var first = await harness.ActivateAsync("activation-1", "artifact-1", source: WorkflowActivationSource.Publishing);
         harness.ResetCalls();
 
         // A NON-owning source asking for the artifact already being served is still a no-op, not a
-        // ForeignSource rejection: FR-B-006 scopes the loud rejection to a DIFFERENT artifact.
+        // ForeignSource rejection: FR-B-006 scopes the loud rejection to a DIFFERENT artifact. No takeover intent
+        // is passed, which is the case that must stay a no-op -- see the takeover test below for the other half.
         var repeat = await harness.ActivateAsync(
             "import:prod-drop:1",
             "artifact-1",
