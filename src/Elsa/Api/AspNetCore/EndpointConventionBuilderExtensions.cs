@@ -60,19 +60,38 @@ public static class EndpointConventionBuilderExtensions
         AddMetadata(builder, new EndpointAuthoringMetadata(model));
 
     /// <summary>
-    /// Validates the completed endpoint metadata as the final standard ASP.NET Core convention.
+    /// Strips compiler-only handler metadata as the final standard ASP.NET Core convention.
     /// The returned builder is the original builder and no request, routing, authorization, binding,
     /// serialization, or result behavior is changed.
     /// </summary>
+    /// <remarks>
+    /// DISABLED: this convention no longer runs <see cref="OpenApiLifetimeValidator"/>. The validator
+    /// rejects endpoint metadata that references a type from a collectible assembly. A module's request
+    /// and response types live in its own package, so in any Nuplane-composed host - where every module
+    /// loads collectible - every module endpoint is a violation. The validator throws inside the shell
+    /// endpoint registration handler, so the shell activates with zero endpoints while still reporting
+    /// healthy and the whole API returns 404. That makes package-composed hosting impossible, which is
+    /// the deployment model Elsa.Foundation.Host exists for.
+    ///
+    /// The retention it guards against is real but narrower than the check: a contract type reaching the
+    /// live OpenAPI document service pins its assembly for the host lifetime. A host with no document
+    /// service - Elsa.Foundation.Host composes none - retains nothing, so there is nothing to protect.
+    /// Restoring the check therefore means gating it on OpenAPI actually being enabled, not reinstating
+    /// it unconditionally. Tracked by issue #1414, which also records that a host restart for full
+    /// assembly removal is the accepted baseline today.
+    ///
+    /// <see cref="OpenApiLifetimeValidator"/> and its unit tests are deliberately left intact so the rule
+    /// is preserved for whoever re-enables it.
+    /// </remarks>
     public static TBuilder RequireStableOpenApi<TBuilder>(this TBuilder builder)
         where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.Finally(RemoveCompilerMetadataAndValidate);
+        builder.Finally(RemoveCompilerMetadata);
         return builder;
     }
 
-    private static void RemoveCompilerMetadataAndValidate(EndpointBuilder builder)
+    private static void RemoveCompilerMetadata(EndpointBuilder builder)
     {
         // RequestDelegateFactory copies handler attributes into endpoint metadata. Compiler-only
         // attributes are not part of the HTTP/OpenAPI contract, but AsyncStateMachineAttribute
@@ -86,7 +105,8 @@ public static class EndpointConventionBuilderExtensions
             }
         }
 
-        OpenApiLifetimeValidator.ValidateAndMark(builder);
+        // Intentionally NOT calling OpenApiLifetimeValidator.ValidateAndMark(builder).
+        // See the remarks on RequireStableOpenApi above, and issue #1414.
     }
 
     /// <summary>

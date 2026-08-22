@@ -41,10 +41,9 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Equal(38, endpoints.Length);
         Assert.All(endpoints, endpoint =>
         {
-            var marker = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
-            Assert.Equal(OpenApiLifetimeClassification.SharedContract, marker.Classification);
-            Assert.Equal("Elsa.Activities.Design.Api", marker.Owner);
-
+            // No OpenApiLifetimeMetadata marker is asserted: RequireStableOpenApi no longer runs the
+            // validator (issue #1414). The contract-type checks below are the substantive claim and
+            // still hold.
             var acceptedTypes = endpoint.Metadata
                 .GetOrderedMetadata<IAcceptsMetadata>()
                 .Select(metadata => metadata.RequestType)
@@ -81,10 +80,9 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Equal(22, endpoints.Length);
         Assert.All(endpoints, endpoint =>
         {
-            var lifetime = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
-            Assert.Equal(OpenApiLifetimeClassification.SharedContract, lifetime.Classification);
-            Assert.Equal("Elsa.Workflows.Publishing.Api", lifetime.Owner);
-
+            // No OpenApiLifetimeMetadata marker is asserted: RequireStableOpenApi no longer runs the
+            // validator (issue #1414). The contract-type checks below are the substantive claim and
+            // still hold.
             var acceptedTypes = endpoint.Metadata
                 .GetOrderedMetadata<IAcceptsMetadata>()
                 .Select(metadata => metadata.RequestType)
@@ -175,7 +173,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Empty(conventions.OrdinaryConventions);
         var builder = Endpoint("GET /safe", EndpointOwnershipMetadata.Host("Elsa.Tests"));
         conventions.FinalConventions.Single()(builder);
-        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+
+        // The convention no longer validates or marks: OpenApiLifetimeValidator is disabled at this
+        // call site because it makes package-composed hosting impossible (issue #1414).
+        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
     }
 
     [Fact]
@@ -191,7 +192,7 @@ public sealed class OpenApiLifetimeBoundaryTests
 
         Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
         Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
-        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
     }
 
     [Fact]
@@ -203,7 +204,12 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /late", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
 
         conventions.OrdinaryConventions.Single()(builder);
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => conventions.FinalConventions.Single()(builder));
+        conventions.FinalConventions.Single()(builder);
+
+        // The ordering claim still holds - metadata added by an ordinary convention is visible to a
+        // later pass - but the final convention no longer validates (issue #1414), so assert against
+        // the validator directly rather than through the disabled call site.
+        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
 
         Assert.Equal(OpenApiLifetimeViolationCategory.RequestType, exception.Violation.Category);
         Assert.Contains("owner='Elsa.Tests'; shell='shell-a'; generation=7; endpoint='GET /late'; category=RequestType", exception.Message, StringComparison.Ordinal);
