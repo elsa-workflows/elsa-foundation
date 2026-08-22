@@ -720,3 +720,48 @@ Phase 1 (Setup)
 - [#1358](https://github.com/elsa-workflows/elsa-foundation/issues/1358) GC of orphaned serving rows — the adjacent pre-existing gap found by the writer census, filed separately; **coordinate designs only**, do not fix here
 - Changing how **execution** works (already design-free and assembly-enforced)
 - Pulling publishing-only publication machinery into the runtime (`IPublicationRecordStore` history, publication policies, preflight views stay in Publishing)
+
+---
+
+## Phase 9 — Sipke's review (PR #1330, 2026-08-21)
+
+Verdict: the decision list is approved except where noted, with **three blockers**. Sequence is his:
+integrate first, then the FR amendment, then the blockers, then the tail.
+
+### Integration
+
+- [x] T135 **Integrate `origin/main`.** Done in two merges. Main retired FastEndpoints (#1405) and migrated Publishing (#1403) / Runtime (#1400), deleting `ElsaEndpoint` **and** `ElsaRequestHandlerEndpoint` — so the export endpoint and both T117 activation-slot reads had to be **converted**, not merged. Then main moved five more commits mid-flight: #1415 collapsed `Api.Core` into the Api projects (deleting two files that had just been ported to the T117 contracts), and #1411 moved the evidence-importer tests out of the architecture suite. `origin/main` is now 0 ahead. Build 0 errors.
+- [x] T136 **Regenerate the maps** rather than merge them, per review guidance.
+
+### Blockers
+
+- [ ] T137 **Amend FR-B-006 before touching code** (blocks T139). The spec says both "same artifact = no-op" and "publish takes over". Architect's ruling: **intent wins** — a `TakeOver` request transfers ownership even when the projections do not change.
+- [ ] T138 **BLOCKER 1 — one bad artifact can fail shell startup.** `WorkflowArtifactReconciler.ActivateMemberAsync:348` catches only `WorkflowActivationException`. **Verified:** `GroundworkWorkflowActivationAuthorityException` and `PublicationActivationException` are siblings, not subtypes, and the coordinator rethrows lease exceptions unwrapped. Any of them escapes the pass and fails activation — which the reconciler's own doc says must never happen. Catch the family; a rejected artifact must stay a rejected artifact.
+- [ ] T139 **BLOCKER 2 — `TakeOver` is dropped when the artifact matches.** The same-artifact no-op check runs before intent/source is considered, so publishing a design that compiles to an artifact a mount already serves returns 200 while the mount keeps ownership, writes a second `Active` record, and then makes unpublish fail with `slot_owner_conflict`. Check intent/source **first**. Depends on T137.
+- [ ] T140 **BLOCKER 3 — the runtime-only guard does not bite.** **Verified:** four files carry the forbidden-assembly classifier and T131's `.Design` segment fix landed in **one** (`RuntimeOnlyLoadedAssemblyTests` still has the old prefix list). Nothing pins the matcher positively, so making `IsForbidden` return `false` passes everything, and `IsRuntimeProject` matches none of the four new `.Runtime` projects. Fix: **one shared classifier**, a **positive `[Theory]` over the six `.Design` names**, and enrol the new projects in the csproj guards. *My T131 mutation test proved the rule worked in the copy I edited and said nothing about the other three — a negative mutation on one copy is not evidence about the set.*
+
+### Contract counts exposed by the integration
+
+- [ ] T151 **Reviewed contract-count updates + approved differences.** Main froze both surfaces before spec 151 landed:
+  - Publishing manifest is pinned at **23**; we are +1 (export) −2 (slot reads) = **22**. Needs the count, a `PublishingCompatibilityCases.Manifest` entry for the export route, and approved-difference entries (the frozen "before" corpus has no such route).
+  - Runtime is pinned at **24**; our two activation-slot reads make **26** (`Wave9RuntimeMinimalApiCompositionTests`).
+  Both are genuine spec-151 API changes and belong in a reviewable artefact rather than a silently relaxed assertion.
+- [ ] T152 **Triage the remaining architecture failures.** Post-integration: 505 total / 34 failed. Sipke measured the *pre-merge* branch at 465/465 where this machine measured 465/423/42, so some are environment-dependent, not code. Known ours: `Wave9` (8, T151). Unclassified: `GroundworkCoverageLedgerTests` (13), `HostEndpointMetadataTests` (2), `DomainManagementApiCompositionTests` (2), `EndpointSecurityTests` (1), `OpenApiLifetimeBoundaryTests` (1), Wave1/2/4/5 (4), `EfCoreSurfaceRatchetTests` (1), `ArchitectureGuardTests` (1). Establish for each whether it is ours, main's, or environmental — **by comparison, not assertion**.
+
+### Worth fixing while in there
+
+- [ ] T141 Deactivation compensation restores the slot **before** the projections; activation does the reverse, for the reason its own comment states. Make the order deliberate and consistent.
+- [ ] T142 The three document kinds renamed `publicationId` → `activationId` **in place** need a version bump, so stale rows fail loudly instead of deserializing a null.
+- [ ] T143 Enrol `workflowActivationSlot` in the provider probe — the ledger is currently only plan-verified on SQLite (the GW-QUERY-008 trap).
+- [ ] T144 **The `Content-Disposition` CORS fix landed in Workbench but not Foundation.Host** — the host Studio actually calls. **Verified:** Foundation.Host has `AddCors` and no `WithExposedHeaders`. *This is the same half-applied-fix pattern T109 called out in `cec78ff25` — "the one provider that works implies the others do" — repeated by me in T130.*
+- [ ] T145 `WorkflowArtifactClosureFactory` reads the whole source-reference table per request; filter at the store.
+- [ ] T146 The e2e index README says artifact-deployment is RED while the suite's own README says green.
+- [ ] T147 `plan.md` has two sections numbered "Test removals (4)".
+
+### Records
+
+- [ ] T148 **T041 is only conditionally approved.** Two of its objectives came out weaker than the record claims, and one deleted fixture — the v4 `workflowExecutableSourceReference` one — has **no record at all**, which §2.21.1 requires. Strengthen the two, write the missing record.
+- [ ] T149 **Renumber the ADR 0070 → 0071.** Main holds 0069 *and* 0070 (verified). Update ADR 0043's supersession note, the PR description, and issues #1407 and elsa-foundation-studio#495, all of which cite the old number.
+- [ ] T150 **The PR description's "42 pre-existing failures" paragraph is stale** and must be re-measured against the integrated tree, not edited to a new guess.
+
+**Approved as recorded, no action:** ADR 0043 partial supersession · the slot move to Runtime · keeping `IWorkflowArtifactExportTarget` · T121/T122/T128 removals · all three "deliberately not done" items.
