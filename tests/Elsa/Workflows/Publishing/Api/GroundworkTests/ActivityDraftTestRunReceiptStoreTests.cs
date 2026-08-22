@@ -2,8 +2,10 @@ using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using System.Text.Json;
+using Elsa.Persistence.Groundwork.V2.Testing;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
@@ -32,13 +34,12 @@ public sealed class ActivityDraftTestRunReceiptStoreTests
     [Fact]
     public async Task Groundwork_receipt_survives_store_recreation()
     {
-        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            PublishingGroundworkStorageManifest.CreateUnits());
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var firstStore = new GroundworkActivityDraftTestRunStore(
-            documents,
-            serializer,
-            GroundworkTestAccess.DefaultAccessContextAccessor,
-            documents);
+        var access = persistence.Access();
+        var firstStore = new GroundworkActivityDraftTestRunStore(persistence.Sessions, access, serializer);
         var now = new DateTimeOffset(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
         var receipt = Receipt("fingerprint-a", null, null) with
         {
@@ -50,16 +51,22 @@ public sealed class ActivityDraftTestRunReceiptStoreTests
 
         Assert.True((await firstStore.TryCreateAsync(receipt)).Created);
 
-        var reopenedStore = new GroundworkActivityDraftTestRunStore(
-            documents,
-            serializer,
-            GroundworkTestAccess.DefaultAccessContextAccessor,
-            documents);
+        var reopenedStore = new GroundworkActivityDraftTestRunStore(persistence.Sessions, access, serializer);
         Assert.Equal(receipt, await reopenedStore.FindAsync(receipt.TestRunId));
-        var envelope = await documents.LoadAsync(
-            PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind,
-            receipt.TestRunId);
-        Assert.DoesNotContain("rerun-42", Assert.IsType<string>(envelope?.ContentJson), StringComparison.Ordinal);
+        // Read the stored row directly: the raw idempotency key must not reach the payload, only its hash.
+        var unit = PublishingGroundworkStorageManifest.Require(
+            PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind);
+        var session = persistence.Sessions.Open(
+            unit.Id.Value,
+            StorageAccess.Scoped(new StorageScope("tenant-a")));
+        var row = session.Read(new StorageKey(new Dictionary<string, object?>
+        {
+            [PublishingGroundworkStorageManifest.IdField] = receipt.TestRunId
+        }));
+        Assert.NotNull(row);
+        var content = row!.Values.Values[PublishingGroundworkStorageManifest.ContentField];
+        var payload = content as string ?? ((JsonElement)content!).GetRawText();
+        Assert.DoesNotContain("rerun-42", payload, StringComparison.Ordinal);
     }
 
     [Fact]

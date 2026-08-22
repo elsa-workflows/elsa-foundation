@@ -11,7 +11,7 @@ using ActivityDependencyProjection = Elsa.Activities.Design.Persistence.Groundwo
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.V2.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
@@ -411,13 +411,13 @@ public sealed class ActivityUpgradeGroundworkTests
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateCollection, Authoring());
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, from);
             await SaveActivityAsync(documents, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, to);
-            await documents.SaveAsync(JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+            await activityStore.SaveAsync(ToActivitySave(
                 ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
                 plan.PlanId,
                 ActivitiesDesignStorageManifest.SchemaVersion,
                 new UpgradePlanDocument(ActivitiesDesignStorageManifest.ActivityUpgradePlanCollection, plan),
                 GroundworkActivitiesDesignJson.Options));
-            await documents.SaveAsync(JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+            await activityStore.SaveAsync(ToActivitySave(
                 ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
                 "receipt",
                 ActivitiesDesignStorageManifest.SchemaVersion,
@@ -425,7 +425,7 @@ public sealed class ActivityUpgradeGroundworkTests
                     ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection,
                     Receipt(plan)),
                 GroundworkActivitiesDesignJson.Options));
-            await documents.SaveAsync(JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+            await activityStore.SaveAsync(ToActivitySave(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
                 "workflow-draft",
                 WorkflowsDesignStorageManifest.SchemaVersion,
@@ -522,31 +522,31 @@ public sealed class ActivityUpgradeGroundworkTests
 
         public async Task<ActivityDefinitionDraft> LoadActivityDraftAsync()
         {
-            var envelope = await documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "activity-draft");
+            var envelope = await activityStore.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind, "activity-draft");
             return JsonSerializer.Deserialize<GroundworkDocument<ActivityDefinitionDraft>>(envelope!.ContentJson, GroundworkActivitiesDesignJson.Options)!.Entity;
         }
 
         public async Task<(WorkflowDefinitionDraft Entity, long EnvelopeVersion)> LoadWorkflowDraftAsync()
         {
-            var envelope = await documents.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
+            var envelope = await activityStore.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
             var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope!.ContentJson, workflowJson)!;
             return (document.Entity, envelope.Version);
         }
 
         public async Task<ActivityUpgradePlan> LoadPlanAsync()
         {
-            var envelope = await documents.LoadAsync(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind, Plan.PlanId);
+            var envelope = await activityStore.LoadAsync(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind, Plan.PlanId);
             return JsonSerializer.Deserialize<UpgradePlanDocument>(envelope!.ContentJson, GroundworkActivitiesDesignJson.Options)!.Plan;
         }
 
         public async Task<long> LoadPlanEnvelopeVersionAsync() =>
-            (await documents.LoadAsync(
+            (await activityStore.LoadAsync(
                 ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
                 Plan.PlanId))!.Version;
 
         public async Task<ActivityUpgradeApplyReceipt> LoadReceiptAsync()
         {
-            var envelope = await documents.LoadAsync(
+            var envelope = await activityStore.LoadAsync(
                 ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
                 "receipt");
             return JsonSerializer.Deserialize<ApplyReceiptDocument>(
@@ -556,7 +556,7 @@ public sealed class ActivityUpgradeGroundworkTests
 
         public async Task<JsonElement> LoadDocumentJsonAsync(string documentKind, string id)
         {
-            var envelope = await documents.LoadAsync(documentKind, id);
+            var envelope = await activityStore.LoadAsync(documentKind, id);
             return JsonDocument.Parse(envelope!.ContentJson).RootElement.Clone();
         }
 
@@ -576,7 +576,7 @@ public sealed class ActivityUpgradeGroundworkTests
 
         public async Task<ActivityDependencyProjectionState> LoadProjectionAsync()
         {
-            var envelope = await documents.LoadAsync(
+            var envelope = await activityStore.LoadAsync(
                 ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
                 ActivityDependencyProjectionState.CurrentId);
             return JsonSerializer.Deserialize<GroundworkDocument<ActivityDependencyProjectionState>>(
@@ -585,13 +585,13 @@ public sealed class ActivityUpgradeGroundworkTests
         }
 
         public async Task<long> LoadProjectionEnvelopeVersionAsync() =>
-            (await documents.LoadAsync(
+            (await activityStore.LoadAsync(
                 ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
                 ActivityDependencyProjectionState.CurrentId))!.Version;
 
         public async Task ChangeWorkflowDependencyOutsidePublishingAsync(string versionId)
         {
-            var envelope = await documents.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
+            var envelope = await activityStore.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
             var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope!.ContentJson, workflowJson)!;
             document.Entity.State = document.Entity.State with { RootActivity = document.Entity.State.RootActivity! with { ActivityVersionId = versionId } };
             var request = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
@@ -605,7 +605,7 @@ public sealed class ActivityUpgradeGroundworkTests
 
         public async Task ChangeWorkflowStateOutsidePublishingAsync(WorkflowDefinitionState state)
         {
-            var envelope = await documents.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
+            var envelope = await activityStore.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "workflow-draft");
             var document = JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope!.ContentJson, workflowJson)!;
             document.Entity.State = state;
             var request = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
@@ -644,7 +644,7 @@ public sealed class ActivityUpgradeGroundworkTests
 
         public async Task SaveVersionLifecycleAsync(string versionId)
         {
-            var envelope = await documents.LoadAsync(
+            var envelope = await activityStore.LoadAsync(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
                 versionId);
             var request = GroundworkDocumentWriter.ToSaveRequest(
@@ -738,15 +738,23 @@ public sealed class ActivityUpgradeGroundworkTests
             [owner, dependency]);
     }
 
-    private static async Task SaveActivityAsync<TEntity>(IDocumentStore store, string kind, string collection, TEntity entity) where TEntity : Elsa.Primitives.Entities.Entity =>
-        await store.SaveAsync(GroundworkDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, GroundworkActivitiesDesignJson.Options));
+    private static async Task SaveActivityAsync<TEntity>(
+        GroundworkV2ActivityDesignStore store,
+        string kind,
+        string collection,
+        TEntity entity) where TEntity : Elsa.Primitives.Entities.Entity =>
+        await store.SaveAsync(GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
+            kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, GroundworkActivitiesDesignJson.Options));
 
-    private static StorageManifest CombinedManifest()
-    {
-        var activity = ActivitiesDesignStorageManifest.Create();
-        var workflow = WorkflowsDesignStorageManifest.Create();
-        return new(new("upgrade-tests"), new("elsa.tests"), new("1.0.0"), activity.StorageUnits.Concat(workflow.StorageUnits).ToArray(), new HashSet<string> { "optimistic-concurrency" }, []);
-    }
+    /// <summary>
+    /// An upgrade apply spans both design catalogs and commits through the publishing lane's transaction,
+    /// so all three are declared against one provider, as a single-target host has them.
+    /// </summary>
+    private static GroundworkV2TestPersistence CreateCatalog() => GroundworkV2TestPersistence.Create(
+        "memory",
+        ActivitiesDesignStorageManifest.CreateUnits(),
+        WorkflowsDesignStorageManifest.CreateUnits(),
+        PublishingGroundworkStorageManifest.CreateUnits());
 
     private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan);
     private sealed record ApplyReceiptDocument(string Collection, ActivityUpgradeApplyReceipt Receipt);
@@ -867,7 +875,7 @@ public sealed class ActivityUpgradeGroundworkTests
             CancellationToken cancellationToken)
             where TEntity : Elsa.Primitives.Entities.Entity
         {
-            var envelope = await documents.LoadAsync(kind, id, cancellationToken);
+            var envelope = await activityStore.LoadAsync(kind, id, cancellationToken);
             return envelope is null
                 ? default
                 : JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(

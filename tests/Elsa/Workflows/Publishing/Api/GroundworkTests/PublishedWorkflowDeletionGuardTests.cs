@@ -1,4 +1,4 @@
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.V2.Testing;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
@@ -110,24 +110,27 @@ public sealed class PublishedWorkflowDeletionGuardTests
     [Fact]
     public async Task Permanent_delete_is_refused_until_the_definition_is_unpublished()
     {
-        var documents = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            WorkflowsDesignStorageManifest.CreateUnits());
         var payloads = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-        var access = GroundworkTestAccess.DefaultAccessContextAccessor;
-        var atomicWrite = new GroundworkDesignAtomicWrite(documents);
-        var definitions = new GroundworkWorkflowDefinitionStore(documents);
+        var access = persistence.Access();
+        var storage = new GroundworkDesignStorage(persistence.Sessions, access);
+        var atomicWrite = new GroundworkDesignAtomicWrite(storage);
+        var definitions = new GroundworkWorkflowDefinitionStore(persistence.Sessions, access);
         await new GroundworkMaterializeWorkflowDefinitionCommand(atomicWrite, new FixedClock(), access).Execute(
             new DesignOperationKey("published-delete-seed"),
             new WorkflowDefinition { Id = DefinitionId, Name = "Published", DeletedAt = Now });
         await ActivateSlot();
         await SaveReference();
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            documents,
+            storage,
             atomicWrite,
             payloads,
             definitions,
-            new GroundworkWorkflowDefinitionDraftStore(documents, payloads, access),
-            new GroundworkWorkflowDefinitionVersionStore(documents, definitions, payloads),
-            new GroundworkWorkflowDefinitionVersionLayoutStore(documents),
+            new GroundworkWorkflowDefinitionDraftStore(storage, payloads, access),
+            new GroundworkWorkflowDefinitionVersionStore(persistence.Sessions, definitions, payloads, access),
+            new GroundworkWorkflowDefinitionVersionLayoutStore(persistence.Sessions, access),
             access,
             [_guard]);
 
