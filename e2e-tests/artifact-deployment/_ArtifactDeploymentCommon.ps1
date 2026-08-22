@@ -157,11 +157,49 @@ function Start-ElsaServer {
 
 # The deployment gate: /health/ready turns 200 only after shell activation, which includes the
 # artifact reconcile pass. '/' is NOT a gate - it 500s while the shell is still activating.
+# Fatal patterns in the server log. A shell that fails activation keeps answering 503 forever, so
+# polling alone cannot distinguish "still starting" from "will never start" - it just burns the whole
+# timeout, once per server start. These are the shapes that mean the wait is pointless.
+$script:FatalStartupPatterns = @(
+    'GroundworkRuntimeSchemaAdmissionException',
+    'GroundworkStorageCompositionException',
+    'FeatureNotFoundException',
+    'GW-SCHEMA-\d+',
+    'GW-PHYSICAL-\d+',
+    'Unable to resolve service for type',
+    'fail: Elsa\.Workbench\.Readiness\.DefaultShellWarmup'
+)
+
+function Get-FatalStartupReason {
+    if (-not (Test-Path $script:ServerOutLog)) { return $null }
+    foreach ($pattern in $script:FatalStartupPatterns) {
+        $hit = Get-Content $script:ServerOutLog -ErrorAction SilentlyContinue |
+            Select-String -Pattern $pattern | Select-Object -First 1
+        if ($hit) { return $hit.Line.Trim() }
+    }
+    return $null
+}
+
 function Wait-ElsaReady {
-    param([string] $BaseUrl = "http://localhost:5095", [int] $TimeoutSec = 180)
+    param([string] $BaseUrl = "http://localhost:5095", [int] $TimeoutSec = 180, [int] $Port = 5095)
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $last = $null
     while ((Get-Date) -lt $deadline) {
+        # Fail fast on a dead process. Waiting for readiness from a server that has exited is the
+        # single most expensive way this suite can waste time.
+        if (-not (Get-ServerPid -Port $Port)) {
+            Show-ServerLogTail
+            throw "The server is no longer listening on port ${Port}; it exited during startup. See the log tail above."
+        }
+
+        # Fail fast on a fatal already recorded in the log. Startup faults are terminal: the shell does
+        # not retry activation, so every further poll is guaranteed to return 503.
+        $fatal = Get-FatalStartupReason
+        if ($fatal) {
+            Show-ServerLogTail
+            throw "Shell startup failed and will not recover: $fatal"
+        }
+
         try {
             $r = Invoke-WebRequest "$BaseUrl/health/ready" -TimeoutSec 5 -UseBasicParsing
             if ($r.StatusCode -eq 200) { Write-Host "  [ready] /health/ready = 200"; return $true }

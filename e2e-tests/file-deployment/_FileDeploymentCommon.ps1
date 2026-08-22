@@ -137,11 +137,40 @@ function Start-ElsaServer {
 
 # The deployment gate (spec 147 readiness note): /health/ready turns 200 only after shell activation,
 # which includes the reconcile pass and (opt-in) publish-on-reconcile. '/' is NOT a gate.
+# A shell that fails activation answers 503 for ever, so polling alone cannot tell "still starting"
+# from "will never start" -- it just burns the whole timeout. These are the shapes that mean waiting
+# is pointless; the sibling artifact-deployment suite carries the same list for the same reason.
+$script:FatalStartupPatterns = @(
+    'GroundworkRuntimeSchemaAdmissionException',
+    'GroundworkStorageCompositionException',
+    'FeatureNotFoundException',
+    'GW-SCHEMA-\d+',
+    'GW-PHYSICAL-\d+',
+    'Unable to resolve service for type',
+    'fail: Elsa\.Workbench\.Readiness\.DefaultShellWarmup'
+)
+
 function Wait-ElsaReady {
-    param([string] $BaseUrl = "http://localhost:5095", [int] $TimeoutSec = 120)
+    param([string] $BaseUrl = "http://localhost:5095", [int] $TimeoutSec = 120, [int] $Port = 5095)
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $serverLog = Join-Path ([System.IO.Path]::GetTempPath()) "elsa-filedeploy-server.out.log"
     $last = $null
     while ((Get-Date) -lt $deadline) {
+        # Waiting on a server that has already exited is the most expensive way this suite can fail.
+        if (-not (Get-ServerPid -Port $Port)) {
+            if (Test-Path $serverLog) { Write-Host "  [log] $((Get-Content $serverLog -Tail 20) -join [Environment]::NewLine)" }
+            throw "The server is no longer listening on port ${Port}; it exited during startup."
+        }
+
+        # Startup faults are terminal -- the shell does not retry activation, so every further poll is
+        # guaranteed to return 503.
+        if (Test-Path $serverLog) {
+            foreach ($pattern in $script:FatalStartupPatterns) {
+                $hit = Get-Content $serverLog -ErrorAction SilentlyContinue | Select-String -Pattern $pattern | Select-Object -First 1
+                if ($hit) { throw "Shell startup failed and will not recover: $($hit.Line.Trim())" }
+            }
+        }
+
         try {
             $r = Invoke-WebRequest "$BaseUrl/health/ready" -TimeoutSec 5 -UseBasicParsing
             if ($r.StatusCode -eq 200) { Write-Host "  [ready] /health/ready = 200"; return $true }
