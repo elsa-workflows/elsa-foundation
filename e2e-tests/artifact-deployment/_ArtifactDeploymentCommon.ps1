@@ -107,7 +107,15 @@ function Set-ServerLogLabel {
 
 # Start the server. With -SourceId/-FolderPath/-DatabasePath it becomes the IMPORTING engine:
 # JsonWorkflowArtifactReconciliation composed over the mount, backed by the empty temp database.
-# With -Plain it is the developer's normal server again (no feature, stock connection string).
+# With -Plain it carries no reconciliation feature -- the publishing/design engine the closure is
+# exported from.
+#
+# Both shapes get their own database. -Plain used to inherit the developer's stock connection string,
+# which made the suite depend on whatever local state that database happened to be in: a schema
+# applied by an older build fails admission, the shell never activates, and the failure looks like a
+# defect in this feature rather than a stale local file. A suite that cannot be trusted to mean the
+# same thing on two machines is not evidence, so the publishing engine now runs on a temp database of
+# its own and the run is reproducible regardless of local state.
 function Start-ElsaServer {
     param(
         [int] $Port = 5095,
@@ -116,6 +124,10 @@ function Start-ElsaServer {
         [string] $DatabasePath,
         [string] $LogLabel,
         [switch] $Plain,
+        # Cleanup only: hand the developer's server back on its own stock database. Every in-suite
+        # start uses a temp store so the run is reproducible; the final restore must not, or the
+        # suite would leave the developer pointed at a scratch file.
+        [switch] $StockDatabase,
         [int] $TimeoutSec = 120
     )
     if (-not (Test-Path $script:ServerDll)) { throw "Server DLL not found at $script:ServerDll - build the server first (dotnet build)." }
@@ -128,6 +140,17 @@ function Start-ElsaServer {
         $env:CShells__Shells__default__Features__GroundworkUnifiedPersistenceSqlite__ConnectionString = "Data Source=$DatabasePath"
         Write-Host "  [server] composing JsonWorkflowArtifactReconciliation (SourceId=$SourceId, FolderPath=$FolderPath)"
         Write-Host "  [server] importing-engine store: $DatabasePath"
+    }
+    elseif (-not $StockDatabase) {
+        # The publishing engine gets its own store for the same reason the importing one does. One
+        # database is reused across every -Plain start in a run so the definition published in the
+        # first phase is still there for the later ones.
+        if (-not $script:PublishingDbPath) {
+            $script:PublishingDbPath = Join-Path ([System.IO.Path]::GetTempPath()) `
+                ("elsa-artifactdeploy-publish-{0}.db" -f (Get-Date -Format "yyyyMMddHHmmss"))
+        }
+        $env:CShells__Shells__default__Features__GroundworkUnifiedPersistenceSqlite__ConnectionString = "Data Source=$script:PublishingDbPath"
+        Write-Host "  [server] publishing-engine store: $script:PublishingDbPath"
     }
 
     $env:ASPNETCORE_URLS = "http://localhost:$Port"

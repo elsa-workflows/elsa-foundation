@@ -59,11 +59,17 @@ try {
     # --- Phase A: build the artifact on the publish-capable engine and export it ---------------
     Write-Host ""
     Write-Host "-- Phase A: build engine (publish + export) --" -ForegroundColor Cyan
-    if (-not (Get-ServerPid)) {
-        Write-Host "  [server] nothing on 5095 - starting the plain server for phase A"
-        Start-ElsaServer -Plain -LogLabel "phase-a" | Out-Null
-        Wait-ElsaReady -BaseUrl $BaseUrl | Out-Null
+    # Always the suite's own server on the suite's own store, never whatever happens to be running.
+    # This used to reuse a server already on 5095, which made the run depend on the developer's local
+    # database: one applied by an older build fails schema admission, the shell never activates, and
+    # the failure looks like a defect in this feature rather than a stale local file. A suite that
+    # means different things on two machines is not evidence.
+    if (Get-ServerPid) {
+        Write-Host "  [server] stopping the server already on 5095 - this suite brings its own"
+        Stop-ElsaServer
     }
+    Start-ElsaServer -Plain -LogLabel "phase-a" | Out-Null
+    Wait-ElsaReady -BaseUrl $BaseUrl | Out-Null
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 
     $writeLine = Invoke-Step "resolve WriteLine"        { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine' }
@@ -282,9 +288,11 @@ finally {
     Write-Host ""
     Write-Host "  [cleanup] restoring the plain server ..." -ForegroundColor DarkGray
     try { Stop-ElsaServer } catch {}
-    try { Start-ElsaServer -Plain -LogLabel "cleanup" | Out-Null } catch { Write-Host "  [cleanup] plain restart failed: $_" -ForegroundColor Yellow }
+    # -StockDatabase, so the developer is handed back their own server and not the suite's scratch store.
+    try { Start-ElsaServer -Plain -StockDatabase -LogLabel "cleanup" | Out-Null } catch { Write-Host "  [cleanup] plain restart failed: $_" -ForegroundColor Yellow }
     foreach ($path in @($mount, $staging)) { try { Remove-Item -Recurse -Force $path -ErrorAction SilentlyContinue } catch {} }
     try { Remove-Item -Force "$importDb*" -ErrorAction SilentlyContinue } catch {}
+    try { if ($script:PublishingDbPath) { Remove-Item -Force "$($script:PublishingDbPath)*" -ErrorAction SilentlyContinue } } catch {}
 }
 
 Complete-ArtifactDeploymentSuite
