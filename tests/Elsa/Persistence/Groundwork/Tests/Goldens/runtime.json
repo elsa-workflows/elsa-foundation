@@ -5287,7 +5287,7 @@
     },
     {
       "identity": "workflowExecutableSourceReference",
-      "definitionDigest": "0736d1d3230d40df67f0180fb4cfbf8fe6c8ddbf70f937e0254eadf0d1c3bdcf",
+      "definitionDigest": "b0c95892704ed42836c92e640ab77bfb6caa8d40ede0782c0fd3001bcefd3c49",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -5383,6 +5383,33 @@
             {
               "path": "expiresAt",
               "valueKind": "DateTime"
+            },
+            {
+              "path": "reference.sourceReferenceId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
+          "identity": "by-definition-version",
+          "fields": [
+            {
+              "path": "reference.definitionVersionId"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-definition-version-and-document-id",
+          "fields": [
+            {
+              "path": "reference.definitionVersionId",
+              "valueKind": "Keyword"
             },
             {
               "path": "reference.sourceReferenceId",
@@ -5681,6 +5708,27 @@
           ]
         },
         {
+          "identity": "list-by-definition-version",
+          "indexIdentity": "by-definition-version",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "None",
+          "pagingSupport": "Offset",
+          "executionClass": "Ordinary",
+          "supportsDisjunction": false,
+          "supportsTotalCount": false,
+          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
+          "sortFields": [],
+          "predicateFields": [],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Documents",
+            "First"
+          ]
+        },
+        {
           "identity": "list-by-scope",
           "indexIdentity": "by-scope",
           "operations": [
@@ -5798,6 +5846,40 @@
           "predicateFields": [
             {
               "path": "artifactId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
+          "residualPredicateFields": [],
+          "resultOperations": [
+            "Any",
+            "Count",
+            "Documents",
+            "First"
+          ]
+        },
+        {
+          "identity": "page-by-definition-version",
+          "indexIdentity": "by-definition-version-and-document-id",
+          "operations": [
+            "Equal"
+          ],
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
+          "supportsDisjunction": false,
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "reference.sourceReferenceId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "reference.definitionVersionId",
               "operations": [
                 "Equal"
               ]

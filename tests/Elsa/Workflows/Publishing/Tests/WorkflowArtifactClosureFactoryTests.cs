@@ -175,6 +175,65 @@ public sealed class WorkflowArtifactClosureFactoryTests
         Assert.Equal("wf:9.9.9", exception.DefinitionVersionId);
     }
 
+    // Root selection is fed by the store's by-definition-version route now, not by a whole-table read the factory
+    // filtered afterwards. The neighbouring version is published FIRST on purpose: references tie-break on
+    // ordinal reference id, so a read that failed to narrow would hand root selection 'ref-001' — the neighbour —
+    // and this test would export the wrong workflow rather than merely reading too much.
+    [Fact]
+    public async Task Roots_at_the_named_version_when_a_neighbouring_version_is_also_published()
+    {
+        var fixture = new WorkflowArtifactExportFixture();
+
+        var neighbour = WorkflowArtifactExportFixture.Executable(
+            "wf",
+            WorkflowArtifactExportFixture.Node("v2-root"),
+            artifactVersion: "2.0.0");
+        await fixture.PublishAsync(neighbour);
+
+        var target = WorkflowArtifactExportFixture.Executable(
+            "wf",
+            WorkflowArtifactExportFixture.Node("v1-root"),
+            artifactVersion: "1.0.0");
+        await fixture.PublishAsync(target);
+
+        var closure = await fixture.CreateFactory().CreateAsync(target.Identity.DefinitionVersionId);
+
+        Assert.Equal(target.Identity.ArtifactId, closure.RootArtifactId);
+        Assert.Equal(target.Identity.ArtifactId, Assert.Single(closure.Artifacts).Identity.ArtifactId);
+
+        // The neighbour is not a closure member, so its Published reference is not provenance for this export.
+        Assert.Equal(
+            target.Identity.ArtifactId,
+            Assert.Single(closure.SourceReferences).ArtifactId);
+    }
+
+    // The 409 has to survive a store that holds Published references for other versions of the same definition:
+    // "never published" is a statement about this version, and only this version's references can settle it.
+    [Fact]
+    public async Task Refuses_a_test_run_only_version_even_when_a_sibling_version_is_published()
+    {
+        var fixture = new WorkflowArtifactExportFixture();
+
+        var published = WorkflowArtifactExportFixture.Executable(
+            "wf",
+            WorkflowArtifactExportFixture.Node("published-root"),
+            artifactVersion: "1.0.0");
+        await fixture.PublishAsync(published);
+
+        var draft = WorkflowArtifactExportFixture.Executable(
+            "wf",
+            WorkflowArtifactExportFixture.Node("draft-root"),
+            artifactVersion: "2.0.0");
+        await fixture.SaveArtifactAsync(draft);
+        await fixture.AddReferenceAsync(draft, WorkflowExecutableReferenceScope.TestRun);
+
+        var exception = await Assert.ThrowsAsync<WorkflowArtifactClosureNotPublishedException>(
+            () => fixture.CreateFactory().CreateAsync(draft.Identity.DefinitionVersionId));
+
+        Assert.Equal(draft.Identity.DefinitionVersionId, exception.DefinitionVersionId);
+        Assert.Equal([WorkflowExecutableReferenceScope.TestRun], exception.ObservedScopes);
+    }
+
     [Fact]
     public async Task Refuses_when_the_published_reference_points_at_an_artifact_the_store_lost()
     {

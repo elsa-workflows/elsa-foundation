@@ -82,6 +82,7 @@ public static class ElsaGroundworkQueryRoutes
 
         Primary("runtime-executable-source-reference", "find-by-reference", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, "primary.workflow-executable-source-reference.reference.v1"),
         Route("runtime-executable-source-reference", "list-by-artifact-bounded", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByArtifactQuery, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifactAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField], Equal(ElsaRuntimeStorageManifest.ArtifactIdField))),
+        Route("runtime-executable-source-reference", "list-by-definition-version-bounded", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByDefinitionVersionAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField], Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField))),
         Route("runtime-executable-source-reference", "list-live-by-scope-bounded", ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, Documents(),
             BoundedOrdered(ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesQuery, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByCollectionAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField], Equal(ElsaRuntimeStorageManifest.CollectionField)),
             BoundedOrdered(ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByScopeQuery, ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScopeAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField], Equal(ElsaRuntimeStorageManifest.ScopeField)),
@@ -826,6 +827,15 @@ public static class ElsaGroundworkQueryRoutes
                     Field(
                         ElsaRuntimeStorageManifest.ArtifactIdField,
                         ElsaRuntimeStorageManifest.ByArtifactIndex,
+                        length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
+                ],
+                UsesCursorPaging: true),
+            new EnvelopeOrderedRoute(
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByDefinitionVersionAndId,
+                [
+                    Field(
+                        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+                        ElsaRuntimeStorageManifest.ByDefinitionVersionIndex,
                         length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
                 ],
                 UsesCursorPaging: true),

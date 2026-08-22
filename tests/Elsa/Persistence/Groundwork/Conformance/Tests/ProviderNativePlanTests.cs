@@ -51,7 +51,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(79, declared.Length);
+        Assert.Equal(80, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -856,6 +856,15 @@ public sealed class ProviderNativePlanTests
                 ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
                 ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByArtifactQuery,
                 [Equal(ElsaRuntimeStorageManifest.ArtifactIdField, "artifact-id")],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField)]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+                ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery,
+                [
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+                        "definition-version-id")
+                ],
                 [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField)]),
             Documents(
                 ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,

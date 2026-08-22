@@ -16,6 +16,27 @@ public sealed record WorkflowExecutableSourceReferenceArtifactPageQuery : Runtim
     public string ArtifactId { get; }
 }
 
+/// <summary>One finite page of the source references minted for one definition version, in every scope.</summary>
+/// <remarks>
+/// Scope is deliberately not a parameter. The export producer has to tell "this version was never published"
+/// apart from "this engine has never heard of this version", and only an any-scope read carries that
+/// distinction; a Published-only query would collapse the two into one answer.
+/// </remarks>
+public sealed record WorkflowExecutableSourceReferenceDefinitionVersionPageQuery : RuntimeStorePageRequest
+{
+    public WorkflowExecutableSourceReferenceDefinitionVersionPageQuery(
+        string definitionVersionId,
+        int limit = DefaultLimit,
+        string? continuationToken = null)
+        : base(limit, continuationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(definitionVersionId);
+        DefinitionVersionId = definitionVersionId;
+    }
+
+    public string DefinitionVersionId { get; }
+}
+
 /// <summary>One finite page of source references, optionally restricted to one scope and its live records.</summary>
 public sealed record WorkflowExecutableSourceReferencePageQuery : RuntimeStorePageRequest
 {

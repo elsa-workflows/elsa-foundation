@@ -81,6 +81,7 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowTriggerBindingByActive = "by-active";
     public const string ByScopeIndex = "by-scope";
     public const string ByRetiredIndex = "by-retired";
+    public const string ByDefinitionVersionIndex = "by-definition-version";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string WorkflowAlterationPlanIdField = "planId";
     public const string WorkflowAlterationPlanTenantPartitionField = "tenantPartition";
@@ -104,6 +105,10 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutableArtifactIdField = "executable.identity.artifactId";
     public const string ExecutableActivityTemplateIdField = "template.templateId";
     public const string WorkflowExecutableSourceReferenceIdField = "reference.sourceReferenceId";
+    // Nested dot-path into the persisted source-reference document: the definition version already lives inside
+    // the document's "reference" payload, so indexing this path adds an index over an EXISTING serialized field
+    // without changing the document shape (same mechanism as ParentActivityExecutionIdField below).
+    public const string WorkflowExecutableSourceReferenceDefinitionVersionIdField = "reference.definitionVersionId";
     public const string ExecutionScopeIdField = "executionScopeId";
     public const string ActivationIdField = "activationId";
     public const string ListAllQuery = "list-all";
@@ -214,6 +219,25 @@ public static class ElsaRuntimeStorageManifest
     /// <summary>Index used by <c>IWorkflowExecutableSourceReferenceStore.ListByArtifactAsync</c> and the GC unreferenced-artifact sweep.</summary>
     public const string WorkflowExecutableSourceReferenceByArtifact = ByArtifactIndex;
     public const string ListWorkflowExecutableSourceReferencesByArtifactQuery = ListByArtifactQuery;
+
+    /// <summary>
+    /// Index used by <c>IWorkflowExecutableSourceReferenceStore.ListByDefinitionVersionPageAsync</c> so the export
+    /// producer can resolve one definition version's references — in every scope, which is what separates
+    /// "unknown version" from "known but never published" — without reading the whole reference table.
+    /// </summary>
+    /// <remarks>
+    /// A keyword over the <b>already persisted</b> nested field <c>reference.definitionVersionId</c>; Groundwork
+    /// index fields are dot-paths resolved by walking nested JSON, so this indexes an existing field rather than
+    /// lifting a new one into the flat envelope. Same shape, and the same reasoning, as
+    /// <see cref="ActivityExecutionStateByParent"/>: the document shape is unchanged, so no schema-version bump
+    /// and no upcaster, and pre-existing references are carried into the index by Groundwork's added-index
+    /// backfill (docs/serialization.md, Condition 7) rather than needing a re-save.
+    /// </remarks>
+    public const string WorkflowExecutableSourceReferenceByDefinitionVersion = ByDefinitionVersionIndex;
+    public const string ListWorkflowExecutableSourceReferencesByDefinitionVersionQuery = "list-by-definition-version";
+    public const string PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery = "page-by-definition-version";
+    public const string WorkflowExecutableSourceReferenceByDefinitionVersionAndId =
+        "by-definition-version-and-document-id";
 
     /// <summary>Constant partition value stamped on every source-reference document so the unfiltered list/expiry sweep can use a keyword equality index.</summary>
     public const string WorkflowExecutableSourceReferenceCollection = "workflowExecutableSourceReference";
@@ -741,6 +765,9 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Keyword(ByCollectionIndex, CollectionField),
                     Keyword(ByArtifactIndex, ArtifactIdField),
+                    Keyword(
+                        WorkflowExecutableSourceReferenceByDefinitionVersion,
+                        WorkflowExecutableSourceReferenceDefinitionVersionIdField),
                     Keyword(WorkflowExecutableSourceReferenceByScope, ScopeField),
                     DateTime(WorkflowExecutableSourceReferenceByExpiresAt, ExpiresAtField),
                     Keyword(WorkflowExecutableSourceReferenceByRetired, IsRetiredField)
@@ -748,6 +775,9 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex),
+                    Query(
+                        ListWorkflowExecutableSourceReferencesByDefinitionVersionQuery,
+                        WorkflowExecutableSourceReferenceByDefinitionVersion),
                     Query(ListWorkflowExecutableSourceReferencesByScopeQuery, WorkflowExecutableSourceReferenceByScope),
                     Query(
                         ListExpiredWorkflowExecutableSourceReferencesQuery,

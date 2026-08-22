@@ -50,6 +50,22 @@ public interface IWorkflowExecutableSourceReferenceReader
     ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One finite page of the references minted for a definition version, in every scope.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted rather than required so an in-process reader double stays compilable, and defaulted to a
+    /// <em>correct but unnarrowed</em> residual filter over <see cref="ListPageAsync"/> rather than to a throw,
+    /// so a double that is handed to a real consumer answers instead of faulting. The default is not the
+    /// contract's intent: a durable store must override it with a declared by-definition-version route, and
+    /// both shipped stores do.
+    /// </remarks>
+    ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        WorkflowExecutableSourceReferenceReaderDefaults.ListByDefinitionVersionPageAsync(this, query, cancellationToken);
+
     ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
         WorkflowExecutableArtifactCandidateBatch candidates,
         DateTimeOffset now,

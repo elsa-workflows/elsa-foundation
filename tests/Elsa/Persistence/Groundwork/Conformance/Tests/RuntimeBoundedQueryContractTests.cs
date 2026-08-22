@@ -45,6 +45,7 @@ public sealed class RuntimeBoundedQueryContractTests
         "durableValueState/list-by-workflow-execution",
         "incidentState/page-attention-by-status",
         "workflowExecutableSourceReference/page-by-artifact",
+        "workflowExecutableSourceReference/page-by-definition-version",
         "workflowExecutableSourceReference/page-all",
         "workflowExecutableSourceReference/page-by-scope",
         "workflowExecutableSourceReference/page-live-all",

@@ -48,6 +48,28 @@ public sealed class GroundworkWorkflowExecutableSourceReferenceStore(
             cancellationToken);
     }
 
+    /// <remarks>
+    /// The predicate is the nested <c>reference.definitionVersionId</c> dot-path rather than a lifted envelope
+    /// field: the value is already serialized on every reference, so the declared route is an added index over an
+    /// existing field and needs neither a document-shape change nor a re-save of the rows written before it.
+    /// </remarks>
+    public async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return await QueryPageAsync(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery,
+            query,
+            [
+                Equal(
+                    ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+                    query.DefinitionVersionId)
+            ],
+            cancellationToken);
+    }
+
     public async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default)

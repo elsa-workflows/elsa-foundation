@@ -678,6 +678,76 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal(new[] { "artifact-2", "artifact-3" }, unreferenced.OrderBy(x => x));
     }
 
+    // The export producer resolves a definition version through this route. It must return that version's
+    // references in EVERY scope -- Published, TestRun, retired -- because "known but never published" and
+    // "never heard of it" are two different refusals, and only an any-scope answer separates them.
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SourceReferenceStore_ByDefinitionVersion_ReturnsOnlyThatVersion_InEveryScope(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                fixture.BoundedDocumentStore);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.Published, publishedAt: now));
+        await store.SaveAsync(Reference("ref-2", "artifact-1", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(30)));
+        await store.SaveAsync(Reference("ref-3", "artifact-2", WorkflowExecutableReferenceScope.Published, publishedAt: now, definitionVersionId: "version-2"));
+        await store.SaveAsync(Reference("ref-4", "artifact-3", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(30), definitionVersionId: "version-2"));
+
+        var firstVersion = await store.ListAllByDefinitionVersionAsync("version-1");
+        Assert.Equal(new[] { "ref-1", "ref-2" }, firstVersion.Select(r => r.SourceReferenceId).Order(StringComparer.Ordinal));
+
+        var secondVersion = await store.ListAllByDefinitionVersionAsync("version-2");
+        Assert.Equal(new[] { "ref-3", "ref-4" }, secondVersion.Select(r => r.SourceReferenceId).Order(StringComparer.Ordinal));
+
+        // A version nobody ever minted a reference for is the 404 the export producer reports; an empty answer
+        // here is the only thing that lets it tell that apart from a version that exists but was never published.
+        Assert.Empty(await store.ListAllByDefinitionVersionAsync("version-absent"));
+
+        // Retirement is a fact about a reference, not a reason to hide it: a retired Published reference is still
+        // exportable when the caller names its version explicitly.
+        Assert.True(await store.RetireAsync("ref-1", now, "activation-replaced"));
+        var afterRetirement = await store.ListAllByDefinitionVersionAsync("version-1");
+        Assert.Equal(new[] { "ref-1", "ref-2" }, afterRetirement.Select(r => r.SourceReferenceId).Order(StringComparer.Ordinal));
+    }
+
+    // The narrowing has to happen at the provider, not after materialization: the whole point of the route is
+    // that an export of one workflow does not hand back every reference the engine ever minted.
+    [Fact]
+    public async Task SourceReferenceStore_ByDefinitionVersion_UsesDeclaredDefinitionVersionRoute()
+    {
+        await using var fixture = CreateStore("memory");
+        var queries = new RecordingBoundedDocumentStore();
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(
+                fixture.DocumentStore,
+                GroundworkTestSerialization.Serializer,
+                queries);
+
+        await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery("version-1"));
+
+        var query = Assert.Single(queries.Observed);
+        Assert.Equal(ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind, query.DocumentKind);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery,
+            query.QueryIdentity);
+        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+            comparison.Path);
+        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
+        Assert.Equal("version-1", Assert.Single(comparison.Values));
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceIdField,
+            Assert.Single(query.Order).Path);
+    }
+
     [Fact]
     public async Task SourceReferenceStore_ScopedList_UsesDeclaredScopeRoute()
     {
@@ -936,7 +1006,8 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         string artifactId,
         WorkflowExecutableReferenceScope scope,
         DateTimeOffset? publishedAt = null,
-        DateTimeOffset? expiresAt = null) =>
+        DateTimeOffset? expiresAt = null,
+        string definitionVersionId = "version-1") =>
         new(
             SourceReferenceId: sourceReferenceId,
             ArtifactId: artifactId,
@@ -944,7 +1015,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
             SourceId: "version-1",
             SourceVersion: "1.0.0",
             DefinitionId: "definition-1",
-            DefinitionVersionId: "version-1",
+            DefinitionVersionId: definitionVersionId,
             ArtifactVersion: "1.0.0",
             CreatedAt: publishedAt ?? DateTimeOffset.UnixEpoch,
             PublishedAt: publishedAt,

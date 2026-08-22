@@ -40,6 +40,20 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
                 _references.Values.Where(reference => string.Equals(reference.ArtifactId, query.ArtifactId, StringComparison.Ordinal))));
     }
 
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        lock (_gate)
+            return ValueTask.FromResult(Page(
+                query,
+                $"source-reference:definition-version:{query.DefinitionVersionId}",
+                _references.Values.Where(reference =>
+                    string.Equals(reference.DefinitionVersionId, query.DefinitionVersionId, StringComparison.Ordinal))));
+    }
+
     public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default)

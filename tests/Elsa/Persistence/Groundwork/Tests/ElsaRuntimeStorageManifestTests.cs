@@ -313,6 +313,16 @@ public sealed class ElsaRuntimeStorageManifestTests
         Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.ByCollectionIndex);
         Assert.Contains(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
 
+        // The export producer's root lookup. Keyed on the already-persisted nested reference payload, so the
+        // index is additive over documents written before it existed rather than a document-shape change.
+        var byDefinitionVersion = Assert.Single(
+            storage.LogicalIndexes,
+            i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByDefinitionVersion);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+            Assert.Single(byDefinitionVersion.Fields).Path);
+        Assert.StartsWith("reference.", Assert.Single(byDefinitionVersion.Fields).Path, StringComparison.Ordinal);
+
         var byScope = Assert.Single(storage.LogicalIndexes, i => i.Identity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
         Assert.Equal(ElsaRuntimeStorageManifest.ScopeField, Assert.Single(byScope.Fields).Path);
 
@@ -1291,6 +1301,10 @@ public sealed class ElsaRuntimeStorageManifestTests
                      query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByArtifact);
         Assert.Contains(
             unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.PageWorkflowExecutableSourceReferencesByDefinitionVersionQuery &&
+                     query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByDefinitionVersionAndId);
+        Assert.Contains(
+            unit.PhysicalStorage.BoundedQueries,
             query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowExecutableSourceReferencesByScopeQuery &&
                      query.IndexIdentity == ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceByScope);
         Assert.Contains(
@@ -1324,13 +1338,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     {
         var routes = ElsaGroundworkQueryRoutes.All;
 
-        Assert.Equal(43, routes.Count);
+        Assert.Equal(44, routes.Count);
         Assert.Equal(routes.Count, routes.Select(route => route.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             7,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead));
         Assert.Equal(
-            36,
+            37,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.BoundedRoute));
         Assert.All(routes, route => Assert.InRange(route.MaximumResultCount, 1, ElsaGroundworkQueryRoutes.MaximumResultCount));
         Assert.All(

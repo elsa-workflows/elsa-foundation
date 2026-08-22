@@ -20,6 +20,13 @@ namespace Elsa.Workflows.Publishing.Services;
 /// which is what <c>LoadClosureAsync</c> does and what an export of one workflow should not need.
 /// </para>
 /// <para>
+/// <b>Every read is narrowed at the store.</b> Both source-reference reads used to be served from one
+/// <c>ListAllAsync</c> of the reference table filtered in memory, so exporting one workflow cost a scan
+/// proportional to every publish the engine had ever made. Root selection now goes through the declared
+/// by-definition-version route, and the carried references through the by-artifact route once per closure
+/// member. The sets are identical; only the amount the provider had to hand over changed.
+/// </para>
+/// <para>
 /// <b>Determinism.</b> Every collection the envelope carries is ordinally sorted before it is returned, and the
 /// dependency walk visits edges in ordinal order. Two exports of the same store state therefore produce
 /// byte-identical envelopes, which is what makes an exported file diffable and a round-trip test meaningful.
@@ -41,12 +48,12 @@ public sealed class WorkflowArtifactClosureFactory(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionVersionId);
 
-        var allReferences = await ReadAsync(
+        var versionReferences = await ReadAsync(
             definitionVersionId,
-            "read the executable source references",
-            async () => await sourceReferenceReader.ListAllAsync(cancellationToken: cancellationToken));
+            "read the executable source references of the definition version",
+            async () => await sourceReferenceReader.ListAllByDefinitionVersionAsync(definitionVersionId, cancellationToken));
 
-        var rootReference = SelectRootReference(definitionVersionId, allReferences);
+        var rootReference = SelectRootReference(definitionVersionId, versionReferences);
 
         var root = await ReadAsync(
             definitionVersionId,
@@ -68,7 +75,7 @@ public sealed class WorkflowArtifactClosureFactory(
             WorkflowArtifactClosureFormat.CurrentVersion,
             root.Identity.ArtifactId,
             artifacts,
-            SelectCarriedReferences(allReferences, memberIds),
+            await ReadCarriedReferencesAsync(definitionVersionId, memberIds, cancellationToken),
             await ReadCarriedBindingsAsync(definitionVersionId, memberIds, cancellationToken));
     }
 
@@ -76,15 +83,17 @@ public sealed class WorkflowArtifactClosureFactory(
     /// Resolves the definition version to the one Published reference the export is rooted at, or refuses with the
     /// exception type that says which of the two "nothing to export" situations this is.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="versionReferences"/> arrives already restricted to the definition version by the store's
+    /// by-definition-version route, and to <em>every</em> scope: the two refusals below are only distinguishable
+    /// while the non-Published scopes are still in hand, so narrowing to Published at the store would answer
+    /// "unknown version" to a version that exists but was never published.
+    /// </remarks>
     private static WorkflowExecutableSourceReference SelectRootReference(
         string definitionVersionId,
-        IReadOnlyCollection<WorkflowExecutableSourceReference> allReferences)
+        IReadOnlyCollection<WorkflowExecutableSourceReference> versionReferences)
     {
-        var versionReferences = allReferences
-            .Where(reference => StringComparer.Ordinal.Equals(reference.DefinitionVersionId, definitionVersionId))
-            .ToArray();
-
-        if (versionReferences.Length == 0)
+        if (versionReferences.Count == 0)
         {
             throw new WorkflowArtifactClosureSourceNotFoundException(
                 definitionVersionId,
@@ -218,15 +227,36 @@ public sealed class WorkflowArtifactClosureFactory(
     /// describe what this engine published, and hiding a superseded publish would make the cross-check narrower
     /// than the truth it is checking against.
     /// </remarks>
-    private static IReadOnlyList<WorkflowExecutableSourceReference> SelectCarriedReferences(
-        IReadOnlyCollection<WorkflowExecutableSourceReference> allReferences,
-        IReadOnlySet<string> memberIds) =>
-        allReferences
-            .Where(reference => reference.Scope == WorkflowExecutableReferenceScope.Published)
-            .Where(reference => memberIds.Contains(reference.ArtifactId))
+    /// <remarks>
+    /// <para>
+    /// Read member by member through the store's by-artifact route, which is the same shape
+    /// <see cref="ReadCarriedBindingsAsync"/> already uses: one bounded read per closure member instead of one
+    /// read of every reference the engine has ever minted. Scope is the only residual filter, and it has to be —
+    /// there is no by-artifact-and-scope route, and one would buy nothing over a per-artifact reference set.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<WorkflowExecutableSourceReference>> ReadCarriedReferencesAsync(
+        string definitionVersionId,
+        IReadOnlySet<string> memberIds,
+        CancellationToken cancellationToken)
+    {
+        var references = new List<WorkflowExecutableSourceReference>();
+
+        foreach (var artifactId in memberIds.Order(StringComparer.Ordinal))
+        {
+            var artifactReferences = await ReadAsync(
+                definitionVersionId,
+                $"read the source references of artifact '{artifactId}'",
+                async () => await sourceReferenceReader.ListAllByArtifactAsync(artifactId, cancellationToken));
+            references.AddRange(artifactReferences.Where(reference =>
+                reference.Scope == WorkflowExecutableReferenceScope.Published));
+        }
+
+        return references
             .OrderBy(reference => reference.ArtifactId, StringComparer.Ordinal)
             .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
             .ToArray();
+    }
 
     /// <summary>The bindings this engine currently has indexed for the closure's members — expectations only.</summary>
     private async Task<IReadOnlyList<WorkflowTriggerBinding>> ReadCarriedBindingsAsync(

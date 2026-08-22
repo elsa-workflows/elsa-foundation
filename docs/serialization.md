@@ -120,6 +120,27 @@ supported historical fixture. An intentionally incompatible change advances the 
 and documents the required persistence reset. Executable activity template v1-to-v2 is the supported rolling
 window under this rule.
 
+### Adding an index to a live document kind
+
+Adding an index is **not** a document change, so it needs **no version bump, no upcaster, and no fixture
+replacement** — provided the indexed field is one the document already persists. Groundwork index fields are
+dot-paths resolved by walking nested JSON, so a value living inside a nested payload can be indexed where it
+already is; only *lifting a new value into the flat envelope* changes the document shape and pulls in the
+clean-break steps above. Pre-existing rows are carried into the new index by the Condition 7 backfill below,
+so no re-save is required and no old row is silently invisible to the new filter.
+
+Three runtime kinds have taken this path: `bookmarkState`/`by-stimulus`,
+`activityExecutionState`/`by-parent-activity-execution` (nested `state.parentActivityExecutionId`), and
+`workflowExecutableSourceReference`/`by-definition-version` (nested `reference.definitionVersionId`, added so
+the artifact-export producer can resolve one definition version instead of reading the whole reference
+table). None bumped its kind's version; all three kept their golden fixtures unchanged, which is the
+wire-safety proof.
+
+What an added index *does* change is the physical surface: regenerate the manifest golden
+(`ELSA_UPDATE_GOLDENS=1`), and enrol any new bounded route in the provider conformance denominators
+(`RuntimeBoundedQueryContractTests.ExpectedB7PhysicalRoutes` and, for a scale-bearing route,
+`ProviderNativePlanTests`) so it is exercised on every provider rather than only plan-verified on SQLite.
+
 ### Pre-GA clean-baseline reset
 
 Every Runtime document kind except `executableActivityTemplate` currently admits only its current fixture.
