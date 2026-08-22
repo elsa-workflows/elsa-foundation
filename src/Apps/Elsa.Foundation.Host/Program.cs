@@ -92,6 +92,13 @@ builder.Services.AddCors(options =>
         .WithOrigins(studioCorsOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
+        // AllowAnyHeader covers the *request* side only. Content-Disposition is not a CORS-safelisted response
+        // header, so without this the executable-export download (FR-B-010a) reaches Studio with its filename
+        // unreadable -- the browser strips the header from the JS-visible response and the client silently falls
+        // back to a name the server never chose. This host is the one Studio actually calls, so the export
+        // endpoint's filename contract only holds in production because of this line. Workbench carries the same
+        // line for the same reason; they must not drift apart.
+        .WithExposedHeaders("Content-Disposition")
         .AllowCredentials());
 });
 

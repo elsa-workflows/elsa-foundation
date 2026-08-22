@@ -258,7 +258,7 @@ intended outcome — a content change without a version change is exactly what t
 diagnostic is for — and it was weighed against the alternative before being accepted. It will show up
 again in the real-host run against `Elsa.Foundation.Host`; that is expected, not a regression.
 
-### Test removals (4) — §2.21.1, T128, recorded 2026-08-19
+### Test removals (5) — §2.21.1, T128, recorded 2026-08-19
 
 One pre-existing test file was deleted by the composite-activity split: `tests/Elsa/Activities/Sequence/Tests/ActivitiesSequenceFeatureTests.cs`, whose single test was `ConfigureServices_RegistersSequenceStructureHandler`.
 

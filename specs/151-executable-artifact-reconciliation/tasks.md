@@ -769,15 +769,19 @@ integrate first, then the FR amendment, then the blockers, then the tail.
 - [ ] T141 Deactivation compensation restores the slot **before** the projections; activation does the reverse, for the reason its own comment states. Make the order deliberate and consistent.
 - [ ] T142 The three document kinds renamed `publicationId` → `activationId` **in place** need a version bump, so stale rows fail loudly instead of deserializing a null.
 - [ ] T143 Enrol `workflowActivationSlot` in the provider probe — the ledger is currently only plan-verified on SQLite (the GW-QUERY-008 trap).
-- [ ] T144 **The `Content-Disposition` CORS fix landed in Workbench but not Foundation.Host** — the host Studio actually calls. **Verified:** Foundation.Host has `AddCors` and no `WithExposedHeaders`. *This is the same half-applied-fix pattern T109 called out in `cec78ff25` — "the one provider that works implies the others do" — repeated by me in T130.*
+- [x] T144 **The `Content-Disposition` CORS fix landed in Workbench but not Foundation.Host** — the host Studio actually calls. **Verified:** Foundation.Host has `AddCors` and no `WithExposedHeaders`. *This is the same half-applied-fix pattern T109 called out in `cec78ff25` — "the one provider that works implies the others do" — repeated by me in T130.*
+  - **Fixed 2026-08-22.** `.WithExposedHeaders("Content-Disposition")` added to Foundation.Host's Studio policy, with a comment on both hosts saying they must not drift. **This time the whole set was swept**: every `AddCors` in `src/` now exposes the header — which is the check T130 skipped.
 - [ ] T145 `WorkflowArtifactClosureFactory` reads the whole source-reference table per request; filter at the store.
-- [ ] T146 The e2e index README says artifact-deployment is RED while the suite's own README says green.
-- [ ] T147 `plan.md` has two sections numbered "Test removals (4)".
+- [x] T146 The e2e index README says artifact-deployment is RED while the suite's own README says green.
+  - **Fixed 2026-08-22.** The index said "Currently RED"; the suite's own README records GREEN (13 assertions, 0 failures, 2026-08-18). The index now states the result and points at the suite README for the two production defects it found while red.
+- [x] T147 `plan.md` has two sections numbered "Test removals (4)".
+  - **Fixed 2026-08-22.** The T128 record was the fifth, not a second fourth; records now read 1–5.
 
 ### Records
 
 - [ ] T148 **T041 is only conditionally approved.** Two of its objectives came out weaker than the record claims, and one deleted fixture — the v4 `workflowExecutableSourceReference` one — has **no record at all**, which §2.21.1 requires. Strengthen the two, write the missing record.
-- [ ] T149 **Renumber the ADR 0070 → 0071.** Main holds 0069 *and* 0070 (verified). Update ADR 0043's supersession note, the PR description, and issues #1407 and elsa-foundation-studio#495, all of which cite the old number.
+- [x] T149 **Renumber the ADR 0070 → 0071.** Main holds 0069 *and* 0070 (verified). Update ADR 0043's supersession note, the PR description, and issues #1407 and elsa-foundation-studio#495, all of which cite the old number.
+  - **Repo side done 2026-08-22**: ADR renumbered `0070 → 0071` (main holds 0069 *and* 0070, both now present after the merge), ADR 0043's supersession note follows it, and no stale in-repo reference remains. PR description and issues #1407 / studio#495 updated separately — they cite the number externally.
 - [ ] T150 **The PR description's "42 pre-existing failures" paragraph is stale** and must be re-measured against the integrated tree, not edited to a new guess.
 
 **Approved as recorded, no action:** ADR 0043 partial supersession · the slot move to Runtime · keeping `IWorkflowArtifactExportTarget` · T121/T122/T128 removals · all three "deliberately not done" items.
