@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Elsa.Activities.Testing;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -131,15 +132,23 @@ public sealed class ArchitectureGuardTests
         Assert.Empty(PackageReferences(primitives));
     }
 
+    /// <summary>
+    /// No runtime-half project takes a project reference on a design-half one.
+    /// </summary>
+    /// <remarks>
+    /// The reference filter is the <c>Design</c>-segment rule, not the two <c>Elsa.*.Design.</c> prefixes it used
+    /// to be. The prefixes named only the shared design cores, so the six per-package design halves T128 created —
+    /// <c>Elsa.Activities.Sequence.Design</c> and its five siblings — matched neither, and a runtime project could
+    /// have referenced one outright with this guard green. Segment-exact rather than <c>Contains("Design")</c> for
+    /// the reason set out on <see cref="DesignTimeAssemblies.HasDesignSegment"/>.
+    /// </remarks>
     [Fact]
     public void Runtime_projects_do_not_add_design_references()
     {
         var violations = ProjectFiles()
             .Where(IsRuntimeProject)
             .SelectMany(project => ProjectReferences(project)
-                .Where(reference =>
-                    reference.Name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal) ||
-                    reference.Name.StartsWith("Elsa.Activities.Design.", StringComparison.Ordinal))
+                .Where(reference => DesignTimeAssemblies.HasDesignSegment(reference.Name))
                 .Where(reference => !DeferredRuntimeDesignReferences.Contains((project.Name, reference.Name)))
                 .Select(reference => $"{project.Name} -> {reference.Name}"))
             .ToList();
@@ -964,12 +973,27 @@ public sealed class ArchitectureGuardTests
         return normalized.Contains("/obj/", StringComparison.Ordinal) || normalized.Contains("/bin/", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Whether a project is a runtime-half project, and so subject to the design-reference and Elsa3 guards above.
+    /// </summary>
+    /// <remarks>
+    /// The <c>Elsa.Activities.*</c> arm is a naming rule rather than a name list, and that is the fix rather than a
+    /// convenience. T128 split the composite activity packages into <c>.Design</c>/<c>.Runtime</c> halves and
+    /// created four new runtime ones — <c>Bpmn</c>, <c>ControlFlow</c>, <c>Flowchart</c> and <c>Sequence</c> —
+    /// none of which the previous per-name list matched, so the halves whose whole reason for existing is to stand
+    /// clear of Design were the ones not enrolled in the guard that checks it. Recognizing <c>Runtime</c> as a
+    /// whole dot-separated segment enrols the next split on the day it lands. Segment-exact for the same reason
+    /// the design classifier is: a hypothetical <c>Elsa.Activities.RuntimeConformance</c> is not a runtime half.
+    /// </remarks>
     private static bool IsRuntimeProject(ProjectInfo project) =>
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
-        || project.Name == "Elsa.Activities.Runtime"
-        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
-        || project.Name == "Elsa.Activities.Graph.Runtime";
+        || (project.Name.StartsWith("Elsa.Activities.", StringComparison.Ordinal) && HasRuntimeSegment(project.Name));
+
+    /// <summary>Whether the name carries <c>Runtime</c> as a whole dot-separated segment.</summary>
+    private static bool HasRuntimeSegment(string projectName) =>
+        projectName.EndsWith(".Runtime", StringComparison.Ordinal)
+        || projectName.Contains(".Runtime.", StringComparison.Ordinal);
 
     [Fact]
     public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()

@@ -29,13 +29,6 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 /// </remarks>
 public sealed class RuntimeOnlyLoadedAssemblyTests : IDisposable
 {
-    private static readonly string[] ForbiddenAssemblyPrefixes =
-    [
-        "Elsa.Workflows.Design",
-        "Elsa.Workflows.Publishing",
-        "Elsa.Activities.Design"
-    ];
-
     private readonly string _mount = Path.Combine(
         Path.GetTempPath(),
         "elsa-runtime-only-loaded",
@@ -87,10 +80,21 @@ public sealed class RuntimeOnlyLoadedAssemblyTests : IDisposable
             (await harness.ReadRunAsync(Assert.Single(routing.Starts).WorkflowExecutionId!)).AssertWorkflowCompleted();
         }
 
+        // The matcher is not vacuous. Every assertion in this file is of the form "nothing forbidden is present",
+        // which a classifier that matches nothing satisfies without checking anything — this whole suite stays
+        // green with it stubbed out. The exhaustive pin is DesignTimeAssemblyClassifierTests over in
+        // tests/Elsa/Architecture; these two lines are what keep THIS assembly from passing on a dead matcher.
+        Assert.True(DesignTimeAssemblies.IsDesignOrPublishing("Elsa.Activities.Sequence.Design"));
+        Assert.False(DesignTimeAssemblies.IsDesignOrPublishing("Elsa.Persistence.Groundwork.DesignConformance"));
+
+        // The classifier is DesignTimeAssemblies, shared with the three sibling guards in tests/Elsa/Architecture.
+        // This copy used to carry its own prefix list, and it kept the pre-T128 one: the six per-package design
+        // halves (Elsa.Activities.{Bpmn,ControlFlow,DispatchWorkflow,Flowchart,Graph,Sequence}.Design) matched no
+        // prefix in it and were caught only transitively, through a *.Design.Core each happens to reference.
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
             .Select(assembly => assembly.GetName().Name)
             .OfType<string>()
-            .Where(name => ForbiddenAssemblyPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+            .Where(DesignTimeAssemblies.IsDesignOrPublishing)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();

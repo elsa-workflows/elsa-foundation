@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Primitives.Activation;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Serialization.SystemText;
@@ -209,11 +210,14 @@ public sealed class ArtifactCompositionMatrixTests : IDisposable
         Assert.NotNull(services.GetRequiredService<IWorkflowDefinitionVersionStore>());
         Assert.NotNull(services.GetRequiredService<IActivityDefinitionVersionStore>());
 
+        // Read here as a classifier rather than as a ban: in the combined shape both families are expected, and
+        // what is being asserted is that each contract is served by the right one. Same predicate as the
+        // runtime-only guards use to forbid — see DesignTimeAssemblies.
         Assert.All(designHalf, service => Assert.True(
-            IsDesignOrPublishing(AssemblyNameOf(service)),
+            DesignTimeAssemblies.IsDesignOrPublishing(AssemblyNameOf(service)),
             $"A design-half contract was served from outside Design/Publishing: {service.GetType().FullName}"));
         Assert.All(runtimeHalf, service => Assert.False(
-            IsDesignOrPublishing(AssemblyNameOf(service)),
+            DesignTimeAssemblies.IsDesignOrPublishing(AssemblyNameOf(service)),
             $"A runtime-half contract was served from Design/Publishing: {service.GetType().FullName}"));
 
         // And the importer specifically is the shipped one, not something the design half supplied.
@@ -381,19 +385,6 @@ public sealed class ArtifactCompositionMatrixTests : IDisposable
     }
 
     private static string AssemblyNameOf(object service) => service.GetType().Assembly.GetName().Name!;
-
-    /// <summary>
-    /// Whether an assembly belongs to the design/publish family — the half a runtime-only shape excludes.
-    /// </summary>
-    /// <remarks>
-    /// The same three prefixes <see cref="RuntimeOnlyArtifactCompositionTests"/> forbids, read here as a
-    /// <em>classifier</em> rather than as a ban: in the combined shape both families are expected, and what is
-    /// being asserted is that each contract is served by the right one.
-    /// </remarks>
-    private static bool IsDesignOrPublishing(string assemblyName) =>
-        assemblyName.StartsWith("Elsa.Workflows.Design", StringComparison.Ordinal) ||
-        assemblyName.StartsWith("Elsa.Workflows.Publishing", StringComparison.Ordinal) ||
-        assemblyName.StartsWith("Elsa.Activities.Design", StringComparison.Ordinal);
 
     /// <summary>Walks the Elsa half of the reference graph, recording every assembly name it reaches.</summary>
     /// <remarks>

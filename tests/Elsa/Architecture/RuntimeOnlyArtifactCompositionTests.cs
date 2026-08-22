@@ -48,26 +48,6 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
 {
-    /// <summary>
-    /// The assembly-name prefixes a runtime-only engine must not depend on. <c>Elsa.Workflows.Publishing</c> has no
-    /// trailing dot: the engine assembly itself is the one that must stay out, not only its sub-packages.
-    /// </summary>
-    /// <remarks>
-    /// These prefixes do not describe design assemblies exhaustively, which is why <see cref="IsForbidden"/> also
-    /// matches a <c>.Design</c> name segment. T128 split the composite activity packages into design and runtime
-    /// halves named <c>Elsa.Activities.Sequence.Design</c> and five siblings — a family none of these prefixes
-    /// match. They are caught today only because each one happens to reference a <c>*.Design.Core</c> that a prefix
-    /// <em>does</em> match, so the boundary held transitively and by coincidence, and the failure named the core
-    /// rather than the real offender. The first design half that needs no core would have walked into a
-    /// "runtime-only" engine unseen, which is precisely the claim SC-B-001/005 exists to make.
-    /// </remarks>
-    private static readonly string[] ForbiddenAssemblyPrefixes =
-    [
-        "Elsa.Workflows.Design",
-        "Elsa.Workflows.Publishing",
-        "Elsa.Activities.Design"
-    ];
-
     private const string SourceId = "mounted-artifacts";
 
     private readonly string _mount = Path.Combine(
@@ -102,7 +82,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
         // T128: the composite activity a real workflow is rooted in is inside the closure, not merely alongside it.
         Assert.Contains("Elsa.Activities.Sequence.Runtime", closure);
 
-        var forbidden = closure.Where(IsForbidden).Order(StringComparer.Ordinal).ToArray();
+        var forbidden = closure.Where(DesignTimeAssemblies.IsDesignOrPublishing).Order(StringComparer.Ordinal).ToArray();
 
         Assert.True(
             forbidden.Length == 0,
@@ -125,7 +105,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
             .SelectMany(Unwrap)
             .Select(type => type.Assembly.GetName().Name)
             .OfType<string>()
-            .Where(IsForbidden)
+            .Where(DesignTimeAssemblies.IsDesignOrPublishing)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -192,7 +172,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
             .Concat(assertionScope.ServiceProvider.GetServices<IActivityActivationStrategy>())
             .Select(service => service.GetType().Assembly.GetName().Name)
             .OfType<string>()
-            .Where(IsForbidden)
+            .Where(DesignTimeAssemblies.IsDesignOrPublishing)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -252,7 +232,7 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
         // Design or Publishing assembly anywhere in its transitive closure.
         var closure = TransitiveElsaClosure(typeof(SequenceActivity).Assembly);
         Assert.Contains("Elsa.Activities.Sequence.Runtime", closure);
-        var forbidden = closure.Where(IsForbidden).Order(StringComparer.Ordinal).ToArray();
+        var forbidden = closure.Where(DesignTimeAssemblies.IsDesignOrPublishing).Order(StringComparer.Ordinal).ToArray();
 
         Assert.True(
             forbidden.Length == 0,
@@ -281,24 +261,6 @@ public sealed class RuntimeOnlyArtifactCompositionTests : IDisposable
             // The artifact arrives through the importer, not through the harness's RunAsync, so nothing pins the
             // contract on the way in — a compiled artifact carries it, and this test has to carry it too.
             activityContract: ClrActivityContractTestBuilder.BuildContract(typeof(SequenceActivity)));
-
-    private static bool IsForbidden(string assemblyName) =>
-        ForbiddenAssemblyPrefixes.Any(prefix => assemblyName.StartsWith(prefix, StringComparison.Ordinal))
-        || HasDesignSegment(assemblyName);
-
-    /// <summary>
-    /// Whether the name carries <c>Design</c> as a whole dot-separated segment — the T128 <c>.Design</c>/<c>.Runtime</c>
-    /// naming, wherever it appears in the name.
-    /// </summary>
-    /// <remarks>
-    /// Segment-exact on purpose. A bare <c>Contains("Design")</c> would also sweep up
-    /// <c>Elsa.Persistence.Groundwork.DesignConformance</c>, which is a conformance suite rather than a design
-    /// assembly and belongs in a runtime-only closure; requiring the segment to end at a dot or at the end of the
-    /// name keeps it out while still catching every <c>X.Design</c>.
-    /// </remarks>
-    private static bool HasDesignSegment(string assemblyName) =>
-        assemblyName.EndsWith(".Design", StringComparison.Ordinal)
-        || assemblyName.Contains(".Design.", StringComparison.Ordinal);
 
     /// <summary>Walks the Elsa half of the reference graph, recording every assembly name it reaches.</summary>
     /// <remarks>

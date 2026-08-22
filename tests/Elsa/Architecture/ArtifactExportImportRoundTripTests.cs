@@ -224,10 +224,7 @@ public sealed class ArtifactExportImportRoundTripTests : IDisposable
             runtimeOnly.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
 
         var forbidden = RuntimeEngines.RuntimeOnlyAssemblyClosure()
-            .Where(name =>
-                name.StartsWith("Elsa.Workflows.Design", StringComparison.Ordinal) ||
-                name.StartsWith("Elsa.Workflows.Publishing", StringComparison.Ordinal) ||
-                name.StartsWith("Elsa.Activities.Design", StringComparison.Ordinal))
+            .Where(DesignTimeAssemblies.IsDesignOrPublishing)
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.True(
