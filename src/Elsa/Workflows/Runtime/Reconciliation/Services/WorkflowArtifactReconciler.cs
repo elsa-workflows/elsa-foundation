@@ -345,7 +345,13 @@ public sealed class WorkflowArtifactReconciler(
         {
             result = await activationCoordinator.ActivateAsync(command, cancellationToken);
         }
-        catch (WorkflowActivationException exception)
+        // Deliberately the whole family, not WorkflowActivationException alone. The authority and the coordinator
+        // throw siblings rather than subtypes -- GroundworkWorkflowActivationAuthorityException comes from the
+        // provider, PublicationActivationException from the publishing side of the shared coordinator, and the
+        // root-write lease exceptions are rethrown unwrapped -- so a narrow catch lets any of them escape the pass
+        // and fail shell activation. That is precisely what this class promises cannot happen: one broken export
+        // must not take down the deploy. Cancellation still propagates; a per-artifact fault stays per-artifact.
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(
                 exception,
