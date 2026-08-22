@@ -27,6 +27,20 @@ everything the core flow needs (design + publishing + runtime APIs, identity, `G
 Run schema deployment while the server is stopped. The manifest assembly must come from the server output directory,
 where all feature assemblies needed by the complete deployment schema are colocated.
 
+## Suites excluded from a full sweep
+
+Most suites here drive one shared `Elsa.Workbench` on port 5095, so a sweep can start the server once and
+run them in sequence. Two do not, and **must be excluded from any run-all** and invoked only on explicit
+request:
+
+| Suite | Why it is opt-in |
+|---|---|
+| `runtime-only-deployment/Test-RuntimeOnlyArtifactDeployment.ps1` | Packs two package feeds from source (~83 projects) and runs its own `Elsa.Foundation.Host` instances on ports 5401-5403. Takes far longer than a Workbench suite and shares nothing with the sweep. Owned by spec 151; run it deliberately, not incidentally. |
+| `artifact-deployment/Test-ArtifactBasedDeployment.ps1` | Starts and stops its own Workbench with its own temp databases, and deliberately leaves a server running at the end so the developer gets their instance back. A sweep that assumes one long-lived server will fight it. |
+
+A sweep that includes them will report misleading results: they exceed a per-suite timeout that is
+generous for everything else, and they take the shared port out from under the suites that follow.
+
 ## Running these tests — READ THIS (agents included)
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no

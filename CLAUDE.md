@@ -33,6 +33,12 @@ Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation`; extern
 
 Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
 
+### Integrating main
+
+`main` is the source of truth. Check whether it is ahead early, and after merging re-run the suites that
+cover deployment modes - a gate that landed on `main` can make a whole mode impossible while unit tests
+stay green. See `docs/agents/main-integration.md`.
+
 ### Domain docs
 
 Use the single-context domain-doc layout: root `CONTEXT.md` plus root `docs/adr/` when present. See `docs/agents/domain.md`.

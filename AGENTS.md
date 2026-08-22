@@ -23,6 +23,7 @@ Use the narrowest source that answers the task.
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
+| Integrating `main`, and what a merge means for your branch | [docs/agents/main-integration.md](docs/agents/main-integration.md) |
 
 Do not duplicate concept explanations in new docs. Link to the canonical glossary entry or map instead.
 
@@ -78,6 +79,23 @@ When work belongs to a program, the GitHub issue is the public, legible record o
 - Keep the program's project board Status and any labels in sync at the same time.
 - Throttle concurrent agent sessions on one program to two or three.
 - Merge only on a green gate. Run the build, the affected suites, the architecture guard, the generated-maps check, and a diff review; add a revert or mutation bite-proof where a behavioral change is claimed. Post that evidence as a PR comment, because that comment is the notification of record. Do not self-merge a peer session's PR without it.
+
+## Integrating main
+
+`main` is the source of truth; a branch is a proposal. Check whether `main` is ahead at the start of a
+session and again before claiming a suite is green - not only when opening the PR.
+
+A merge can change what your branch is *allowed* to do, not just what it conflicts with. Gates and
+invariants that landed while you were working fail in places that do not name your change, and the
+worst of them make an entire deployment mode impossible while every unit test still passes. After
+merging `main`, re-run the suites that cover deployment modes, not just the unit tests.
+
+Disagreement is settled in the open: open an issue or FR, challenge or amend the ADR, and once the
+amended ADR is merged the code follows it. Do not quietly work around an invariant on a branch.
+
+See [Integrating main](docs/agents/main-integration.md) for the failure shapes worth recognising, how
+to establish whether a failure is yours by comparison against the merge base, and how to record
+out-of-scope work so another role can find it.
 
 ## Post-merge gates
 

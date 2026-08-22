@@ -111,7 +111,7 @@ try {
         -Features (New-PublishCapableFeatures -DatabasePath $databaseA -ScanFolder $scanFolder) | Out-Null
     Start-FoundationHost -ContentRoot $instanceA -Port $PublishPort -Label "publish" | Out-Null
     $startedPorts += $PublishPort
-    if (-not (Wait-FoundationReady -Port $PublishPort)) { Show-HostLogTail -Label "publish"; throw "The publish-capable engine never became ready on $PublishPort (log: %TEMP%\elsa-runtimeonly-publish.out.log)." }
+    if (-not (Wait-FoundationReady -Port $PublishPort -LogLabel "publish")) { Show-HostLogTail -Label "publish"; throw "The publish-capable engine never became ready on $PublishPort (log: %TEMP%\elsa-runtimeonly-publish.out.log)." }
     $ctxA = New-AnonymousContext -BaseUrl $publishBase
 
     # The design activity catalog is populated by ClrActivityReconciliation scanning the packed
@@ -204,7 +204,7 @@ try {
         -Features (New-RuntimeOnlyFeatures -DatabasePath $databaseB -MountPath $mount -SourceId $sourceId) | Out-Null
     Start-FoundationHost -ContentRoot $instanceB -Port $RuntimePort -Label "runtime-b" | Out-Null
     $startedPorts += $RuntimePort
-    if (-not (Wait-FoundationReady -Port $RuntimePort)) { Show-HostLogTail -Label "runtime-b"; throw "The runtime-only engine never became ready on $RuntimePort." }
+    if (-not (Wait-FoundationReady -Port $RuntimePort -LogLabel "runtime-b")) { Show-HostLogTail -Label "runtime-b"; throw "The runtime-only engine never became ready on $RuntimePort." }
     Show-HostDiagnostics -Label "runtime-b"
     $ctxB = New-AnonymousContext -BaseUrl $runtimeBase
 
@@ -285,7 +285,7 @@ try {
     Write-Host "-- Phase C: restart over the unchanged mount (idempotency) --" -ForegroundColor Cyan
     Stop-FoundationHost -Port $RuntimePort
     Start-FoundationHost -ContentRoot $instanceB -Port $RuntimePort -Label "runtime-c" | Out-Null
-    if (-not (Wait-FoundationReady -Port $RuntimePort)) { Show-HostLogTail -Label "runtime-c"; throw "The runtime-only engine never became ready after the idempotency restart." }
+    if (-not (Wait-FoundationReady -Port $RuntimePort -LogLabel "runtime-c")) { Show-HostLogTail -Label "runtime-c"; throw "The runtime-only engine never became ready after the idempotency restart." }
     Show-HostDiagnostics -Label "runtime-c"
     $ctxB = New-AnonymousContext -BaseUrl $runtimeBase
 
@@ -308,7 +308,7 @@ try {
         Stop-FoundationHost -Port $RuntimePort
         Copy-Item $v2File (Join-Path $mount "parent-v2.json")
         Start-FoundationHost -ContentRoot $instanceB -Port $RuntimePort -Label "runtime-d" | Out-Null
-        if (-not (Wait-FoundationReady -Port $RuntimePort)) { Show-HostLogTail -Label "runtime-d"; throw "The runtime-only engine never became ready after the v2 rollout." }
+        if (-not (Wait-FoundationReady -Port $RuntimePort -LogLabel "runtime-d")) { Show-HostLogTail -Label "runtime-d"; throw "The runtime-only engine never became ready after the v2 rollout." }
         Show-HostDiagnostics -Label "runtime-d"
         $ctxB = New-AnonymousContext -BaseUrl $runtimeBase
 
@@ -348,7 +348,7 @@ try {
     # E1 - the feed IS the feature surface of this host, so a feed with no Design/Publishing package
     # is an engine that could not compose one even if its shells.json asked.
     $feedPackages = @(Get-ChildItem $feedB -Filter *.nupkg | ForEach-Object { [regex]::Match($_.BaseName, '^(?<id>.+?)\.\d').Groups['id'].Value })
-    $forbiddenInFeed = @($feedPackages | Where-Object { $id = $_; @($script:ForbiddenPrefixes | Where-Object { $id.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0 })
+    $forbiddenInFeed = @($feedPackages | Where-Object { $id = $_; (@($script:ForbiddenPrefixes | Where-Object { $id.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0) -or ($id -match $script:ForbiddenDesignSegment) })
     Assert-That "the runtime-only feed contains no Design or Publishing package" ($forbiddenInFeed.Count -eq 0) `
         ("found: " + ($forbiddenInFeed -join ', '))
     Write-Host ("  [closure] runtime-only feed = {0} Elsa packages, none matching {1}" -f $feedPackages.Count, ($script:ForbiddenPrefixes -join '|'))
@@ -359,7 +359,7 @@ try {
     $loaded = @(Get-HostLog -Label "runtime-d" | Select-String -Pattern 'Loaded package (?<id>[^@]+)@' |
         ForEach-Object { $_.Matches[0].Groups['id'].Value } | Sort-Object -Unique)
     if ($loaded.Count -eq 0) { $loaded = @(Get-HostLog -Label "runtime-b" | Select-String -Pattern 'Loaded package (?<id>[^@]+)@' | ForEach-Object { $_.Matches[0].Groups['id'].Value } | Sort-Object -Unique) }
-    $forbiddenLoaded = @($loaded | Where-Object { $id = $_; @($script:ForbiddenPrefixes | Where-Object { $id.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0 })
+    $forbiddenLoaded = @($loaded | Where-Object { $id = $_; (@($script:ForbiddenPrefixes | Where-Object { $id.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0) -or ($id -match $script:ForbiddenDesignSegment) })
     Assert-That "the running engine loaded no Design or Publishing assembly" `
         ($loaded.Count -gt 15 -and $forbiddenLoaded.Count -eq 0) `
         ("loaded packages = " + $loaded.Count + "; forbidden = " + ($forbiddenLoaded -join ', '))
@@ -390,7 +390,7 @@ try {
     $startedPorts += $LocklessPort
     # A shorter budget on purpose: this host must never become ready, and the whole suite would
     # otherwise wait out the full activation timeout to learn nothing.
-    $locklessReady = Wait-FoundationReady -Port $LocklessPort -TimeoutSec 90
+    $locklessReady = Wait-FoundationReady -Port $LocklessPort -LogLabel "lockless" -TimeoutSec 90
     $locklessLog = @(Get-HostLog -Label "lockless") -join "`n"
     Assert-That "the same engine without a locking feature never becomes ready" (-not $locklessReady) `
         "/health/ready returned 200 on a composition that has no IDistributedLockProvider"

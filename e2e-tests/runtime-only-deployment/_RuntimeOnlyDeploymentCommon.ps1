@@ -40,6 +40,7 @@
 #>
 
 . "$PSScriptRoot/../_ElsaCommon.ps1"
+. "$PSScriptRoot/../_FoundationHostIdentity.ps1"
 
 $ErrorActionPreference = 'Stop'
 
@@ -51,7 +52,13 @@ $script:NuGetCache = Join-Path $env:USERPROFILE ".nuget/packages"
 # The assembly-name prefixes a runtime-only engine must not carry. Mirrors
 # tests/Elsa/Architecture/RuntimeOnlyArtifactCompositionTests.cs; Elsa.Workflows.Publishing has no
 # trailing dot on purpose - the engine assembly itself is the one that must stay out.
+# T128 split the composite activity packages into design and runtime halves, producing a second
+# naming family -- Elsa.Activities.Sequence.Design and five siblings -- that none of these prefixes
+# match. The in-process guard had the same blind spot and was corrected under T140; this is the same
+# correction for the packaged closure, where it matters more because a design half arriving as a
+# NuGet package is exactly what this suite exists to catch.
 $script:ForbiddenPrefixes = @('Elsa.Workflows.Design', 'Elsa.Workflows.Publishing', 'Elsa.Activities.Design')
+$script:ForbiddenDesignSegment = '\.Design(\.|$)'
 
 # Package id prefixes Nuplane never requests because the Foundation.Host runtime already provides
 # them. Putting them in a feed is how the earlier attempt ended up with a 200-package graph.
@@ -80,6 +87,7 @@ $script:SharedAssemblies = @(
 # mapped to one does not belong here.
 
 $script:RuntimeOnlyProjects = @(
+    (Get-FoundationHostIdentityProjects)
     'src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj'                                        # Minimal API host support
     'src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj'                    # Serialization
     'src/Elsa/Events/Elsa.Events.csproj'                                                        # Events
@@ -103,9 +111,6 @@ function New-RuntimeOnlyFeatures {
     # [ordered] so the emitted shells.json reads in composition order rather than hash order.
     $features = [ordered]@{
         # Maps the runtime API the suite reads (activation slots, executables, execute).
-        FastEndpoints = @{ EndpointRoutePrefix = "" }
-        # Lets the suite read those endpoints without composing an identity stack on a runtime-only engine.
-        ApiSecurity = @{ AllowAnonymous = $true }
         # Decodes the mounted closure. Without it nothing can be imported at all.
         Serialization = @{}
         # DEMANDED BY A FAILED BOOT: Serialization's JsonPayloadConvertersInitializingStartupTask
@@ -148,6 +153,8 @@ function New-RuntimeOnlyFeatures {
         ActivitiesDispatchWorkflowRuntime = @{}
     }
     if ($WithoutLocking) { $features.Remove('FileSystemDistributedLocking') }
+    # Identity is shared by every Foundation.Host suite; see ../_FoundationHostIdentity.ps1.
+    foreach ($entry in (Get-FoundationHostIdentityFeatures).GetEnumerator()) { $features[$entry.Key] = $entry.Value }
     return $features
 }
 
@@ -155,6 +162,7 @@ function New-RuntimeOnlyFeatures {
 # self-contained: it never touches the developer's server, port, or database, and it needs no
 # Groundwork deploy step (AutoApplySchemaOnStartup defaults true).
 $script:PublishCapableProjects = @(
+    (Get-FoundationHostIdentityProjects)
     'src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj'
     'src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj'
     'src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj'
@@ -188,9 +196,7 @@ $script:PublishCapableProjects = @(
 
 function New-PublishCapableFeatures {
     param([Parameter(Mandatory)][string] $DatabasePath, [Parameter(Mandatory)][string] $ScanFolder)
-    [ordered]@{
-        FastEndpoints = @{ EndpointRoutePrefix = "" }
-        ApiSecurity = @{ AllowAnonymous = $true }
+    $features = [ordered]@{
         ApiCapabilities = @{}
         Serialization = @{}
         Events = @{}
@@ -223,6 +229,9 @@ function New-PublishCapableFeatures {
         ActivitiesDispatchWorkflowRuntime = @{}
         ActivitiesDispatchWorkflowDesign = @{}
     }
+    # Identity is shared by every Foundation.Host suite; see ../_FoundationHostIdentity.ps1.
+    foreach ($entry in (Get-FoundationHostIdentityFeatures).GetEnumerator()) { $features[$entry.Key] = $entry.Value }
+    return $features
 }
 
 # --- filesystem -------------------------------------------------------------------------------
@@ -510,12 +519,44 @@ function Start-FoundationHost {
 # ~100 packages and applies the Groundwork schema, and it runs on a machine that has just finished
 # ~100 Release builds; the publish-capable instance has been observed taking over four minutes.
 # The heartbeat exists so a slow boot is visibly a slow boot rather than an apparent hang.
+# Terminal startup faults. A host that fails to start keeps refusing /health/ready, so polling alone
+# cannot tell "still activating" from "will never activate" -- it just burns the whole timeout, which
+# here is seven minutes per host. These are the shapes that mean waiting is pointless.
+$script:FatalStartupPatterns = @(
+    'NuplaneStartupReconciliationException',
+    'Multiple assemblies were found under',
+    'GroundworkRuntimeSchemaAdmissionException',
+    'GroundworkStorageCompositionException',
+    'FeatureNotFoundException',
+    'Unable to resolve service for type',
+    'Hosting failed to start'
+)
+
 function Wait-FoundationReady {
-    param([Parameter(Mandatory)][int] $Port, [int] $TimeoutSec = 420)
+    param([Parameter(Mandatory)][int] $Port, [int] $TimeoutSec = 420, [string] $LogLabel)
     $started = Get-Date
     $deadline = $started.AddSeconds($TimeoutSec)
     $nextHeartbeat = $started.AddSeconds(60)
+    $logs = @()
+    if ($LogLabel) {
+        $logs = @("$env:TEMP\elsa-runtimeonly-$LogLabel.out.log", "$env:TEMP\elsa-runtimeonly-$LogLabel.err.log")
+    }
     while ((Get-Date) -lt $deadline) {
+        # A startup fault is terminal -- the host does not retry -- so stop as soon as one is recorded
+        # rather than polling a corpse for the remainder of the timeout.
+        foreach ($log in $logs) {
+            if (-not (Test-Path $log)) { continue }
+            $text = Get-Content $log -Raw -ErrorAction SilentlyContinue
+            if (-not $text) { continue }
+            foreach ($pattern in $script:FatalStartupPatterns) {
+                if ($text -match $pattern) {
+                    $line = ($text -split "`n" | Select-String -Pattern $pattern | Select-Object -First 1)
+                    Write-Host ("  [ready] port {0} failed to start after {1:n0}s - not waiting out the timeout" -f $Port, ((Get-Date) - $started).TotalSeconds) -ForegroundColor Yellow
+                    Write-Host ("  [ready] $($line.Line.Trim())") -ForegroundColor Yellow
+                    return $false
+                }
+            }
+        }
         try {
             if ((Invoke-WebRequest "http://localhost:$Port/health/ready" -TimeoutSec 5 -UseBasicParsing).StatusCode -eq 200) {
                 Write-Host ("  [ready] port {0} -> /health/ready 200 after {1:n0}s" -f $Port, ((Get-Date) - $started).TotalSeconds)
@@ -561,9 +602,10 @@ function Show-HostLogTail {
 
 # ApiSecurity.AllowAnonymous means there is no login endpoint to call, but _ElsaCommon's helpers all
 # pass -WebSession, so hand them a real (empty) session object rather than $null.
+# Kept as a thin alias so existing call sites read unchanged; the real work is shared.
 function New-AnonymousContext {
     param([Parameter(Mandatory)][string] $BaseUrl)
-    return @{ Session = (New-Object Microsoft.PowerShell.Commands.WebRequestSession); BaseUrl = $BaseUrl }
+    return Connect-FoundationHost -BaseUrl $BaseUrl
 }
 
 # Returns the HTTP status of a request that is expected to fail, so phase E can assert that a route
