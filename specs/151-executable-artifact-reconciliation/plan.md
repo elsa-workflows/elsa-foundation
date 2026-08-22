@@ -70,7 +70,18 @@ Two tests were **deleted** in T041, not migrated. Recording per §2.21.1: removi
 
 **Why the subject no longer exists.** FR-B-006 makes observer notification part of the activation lifecycle, owned by `WorkflowActivationCoordinator` — the indexer never notifies now, and `WorkflowTriggerIndexer` lost its `IEnumerable<IWorkflowTriggerIndexObserver>` constructor parameter entirely. This is §2.23.4's *"has the subject moved?"* case, and it moved to a component with its own coverage: notification is asserted in `WorkflowActivationCoordinatorTests`. **The objective is preserved; only its home changed.**
 
-**Everything else was migrated, not weakened.** T041's blast radius was nine test files — the artifact-scoped path was the standard publish shortcut in fixtures. All but these two were rewritten onto prepare→activate with assertions intact.
+**Everything else was migrated. Two of them were deliberately *inverted*, which the original wording hid.** T041's blast radius was nine test files — the artifact-scoped path was the standard publish shortcut in fixtures. All but the two deleted were rewritten onto prepare→activate. The claim that they kept "assertions intact" was wrong for two of them, corrected here 2026-08-22 (T148):
+
+| Test | What changed |
+| --- | --- |
+| `Index_ReplacesPriorBindingsForSameArtifact_OnRepublish` → `PrepareActivation_LeavesEveryOtherActivationOnTheSameArtifactIntact` | assertion **reversed**: prior rows for the artifact used to be replaced; preparation is now activation-scoped and leaves other activations' rows standing |
+| `Index_ReplacesPriorSchedulesForArtifact_OnRepublish` → `PrepareActivation_LeavesSchedulesOfAnotherActivationOnTheSameArtifactIntact` | same reversal, same reason |
+
+Both reversals are **correct**: the old `DeleteByArtifactAsync` opening wiped projections no activation lifecycle had authorized (FR-B-006 writer census, finding 1). The defect was describing a reversal as an intact assertion.
+
+**One objective did come out weaker, and is restored (T148).** `Index_NotifiesObservers_AfterSave_WithNewBindings` proved the observer was handed bindings **already durable in the store** — it queried the store to show it. Its replacement asserted only that a snapshot arrived carrying the right activation id, which a notification fired *before* the write would equally satisfy. Restored as `WorkflowActivationCoordinatorTests.The_observer_is_handed_bindings_that_are_already_durable_when_it_is_notified`, which reads the store at the notification instant through a new `OnNotifying` hook.
+
+**Checked and found preserved**, so the record's count of two deletions stands: `Index_ObserverFailure_PropagatesAndFailsPublish` (preserved and strengthened — the coordinator now also asserts the whole transition compensates), `Index_MaterializesEverySchedule_BeforeInnerAndReplacementWrites` (preserved and strengthened — also pins one owned write and no artifact-wide delete), and `Index_WithNoProviders_IsPassthrough` (preserved as `…_StillPreparesAnExplicitEmptyProjection`).
 
 **If Sipke disagrees**, the remedy is to re-add equivalent coverage against the coordinator rather than restore the indexer path, which no longer exists.
 

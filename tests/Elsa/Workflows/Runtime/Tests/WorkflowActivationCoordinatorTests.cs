@@ -156,6 +156,35 @@ public sealed class WorkflowActivationCoordinatorTests
     /// a serving definition with no bindings. The assertion is made <b>at the instant the slot moves</b> rather
     /// than afterwards, because both orders leave the same end state and only the intermediate state differs.
     /// </remarks>
+    /// <summary>
+    /// T148/A: restores an objective T041's record claimed was preserved by relocation. The deleted
+    /// <c>NotifiesObservers_AfterSave_WithNewBindings</c> proved the observer was handed bindings that were
+    /// <b>already durable</b> — it queried the store to show it. Its replacement asserted only that a snapshot
+    /// arrived carrying the right activation id, which a notification fired <i>before</i> the write would also
+    /// satisfy.
+    /// </summary>
+    [Fact]
+    public async Task The_observer_is_handed_bindings_that_are_already_durable_when_it_is_notified()
+    {
+        var harness = new Harness();
+
+        IReadOnlyCollection<WorkflowTriggerBinding>? durableAtNotification = null;
+        harness.Observer.OnNotifying = async snapshot =>
+            durableAtNotification ??= await harness.Bindings.ListAllByActivationAsync(
+                snapshot.Bindings.Single().ActivationId);
+
+        await harness.ActivateAsync("activation-1", "artifact-1");
+
+        // Notified at all -- otherwise the assertion below would pass vacuously on a null-guard.
+        Assert.NotNull(durableAtNotification);
+        // The binding the observer was handed was readable from the store at that moment, not merely afterwards.
+        var durable = Assert.Single(durableAtNotification!);
+        Assert.Equal("activation-1", durable.ActivationId);
+        Assert.Equal(
+            Assert.Single(harness.Observer.Snapshots).Bindings.Single().ExecutableNodeId,
+            durable.ExecutableNodeId);
+    }
+
     [Fact]
     public async Task Deactivation_compensation_prepares_the_projections_before_it_restores_the_slot()
     {
@@ -1142,13 +1171,20 @@ public sealed class WorkflowActivationCoordinatorTests
         public int Calls { get; set; }
         public int? FailOnCall { get; set; }
 
-        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Runs while the observer is being notified. Lets a test read the world <i>at that instant</i> — the only
+        /// way to assert that what the observer was handed is already durable, rather than merely ending up so.
+        /// </summary>
+        public Func<WorkflowTriggerIndexSnapshot, ValueTask>? OnNotifying { get; set; }
+
+        public async ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
             Calls++;
             if (FailOnCall == Calls)
                 throw new InvalidOperationException("the route table refused the projection");
+            if (OnNotifying is { } observe)
+                await observe(snapshot);
             Snapshots.Add(snapshot);
-            return ValueTask.CompletedTask;
         }
     }
 
