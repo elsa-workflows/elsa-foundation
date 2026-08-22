@@ -1,8 +1,8 @@
-using Elsa.Events.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Mediator.Core.Models;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
@@ -10,17 +10,22 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Validations.Core;
-using System.Text.Json;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
+namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
 
-public sealed class ReplaceDraftCommandHandler(
+[Put("drafts/{draftId}")]
+[RequirePermission(WorkflowDesignPermissions.Manage)]
+public sealed class Endpoint(
     IWorkflowDefinitionDraftStore draftStore,
-    IUpdateDraftCommand updateDraftCommand)
-    : ICommandHandler<ReplaceDraft, WorkflowDraftView>
+    IUpdateDraftCommand updateDraftCommand) : ApiEndpoint<ReplaceDraft, WorkflowDraftView>
 {
-    public async Task<WorkflowDraftView> Handle(ReplaceDraft command, CancellationToken cancellationToken)
+    public override void Configure(ApiEndpointOptions options)
+    {
+        options.Operation = "DraftsReplace";
+        options.Accepts = ["application/json"];
+    }
+
+    public override async Task<WorkflowDraftView> HandleAsync(ReplaceDraft command, CancellationToken cancellationToken)
     {
         var current = await draftStore.FindWithLayoutByIdAsync(command.DraftId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), command.DraftId);

@@ -1,27 +1,31 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Events.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
-using Elsa.Mediator.Core.Models;
-using Elsa.Persistence.Core.Design;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Primitives.Exceptions;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
-using System.Text.Json;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
+namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
 
-public sealed class PreflightDraftPromotionRequestHandler(
+[Post("drafts/{draftId}/promotion-preflight")]
+[RequirePermission(WorkflowDesignPermissions.Manage)]
+public sealed class Endpoint(
     IWorkflowDefinitionDraftStore draftStore,
     IWorkflowDefinitionVersionStore versionStore,
-    IInlineEventPublisher inlineEventPublisher)
-    : IRequestHandler<PreflightDraftPromotion, PromotionPreflightAssessmentView>
+    IInlineEventPublisher inlineEventPublisher) : ApiEndpoint<PreflightDraftPromotion, PromotionPreflightAssessmentView>
 {
-    public async Task<PromotionPreflightAssessmentView> Handle(
+    public override void Configure(ApiEndpointOptions options)
+    {
+        options.Operation = "DraftsPromotionPreflight";
+        options.Accepts = ["application/json"];
+    }
+
+    public override async Task<PromotionPreflightAssessmentView> HandleAsync(
         PreflightDraftPromotion request,
         CancellationToken cancellationToken)
     {

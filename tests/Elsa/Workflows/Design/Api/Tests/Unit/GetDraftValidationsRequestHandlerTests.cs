@@ -8,7 +8,8 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
+using ValidationsEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations.Endpoint;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -32,9 +33,9 @@ public sealed class GetDraftValidationsRequestHandlerTests
         var publisher = new ContributingPublisher(
             new ValidationError("n1/inputs/message", "InputOutput/MissingRequired", "Required input 'message' is missing."),
             new ValidationError(ValidationPaths.Workflow, "RootActivity/Missing", "Workflow has no root activity."));
-        var handler = new GetDraftValidationsRequestHandler(new SingleDraftStore(_draft), publisher);
+        var handler = new ValidationsEndpoint(new SingleDraftStore(_draft), publisher);
 
-        var view = await handler.Handle(new GetDraftValidations("draft-1"), CancellationToken.None);
+        var view = await handler.HandleAsync(new GetDraftValidations("draft-1"), CancellationToken.None);
 
         Assert.Equal("draft-1", view.DraftId);
         Assert.Equal(2, view.Errors.Count);
@@ -53,9 +54,9 @@ public sealed class GetDraftValidationsRequestHandlerTests
     [Fact]
     public async Task Returns_an_empty_error_set_for_a_valid_draft()
     {
-        var handler = new GetDraftValidationsRequestHandler(new SingleDraftStore(_draft), new ContributingPublisher());
+        var handler = new ValidationsEndpoint(new SingleDraftStore(_draft), new ContributingPublisher());
 
-        var view = await handler.Handle(new GetDraftValidations("draft-1"), CancellationToken.None);
+        var view = await handler.HandleAsync(new GetDraftValidations("draft-1"), CancellationToken.None);
 
         Assert.Empty(view.Errors);
     }
@@ -63,10 +64,10 @@ public sealed class GetDraftValidationsRequestHandlerTests
     [Fact]
     public async Task Throws_not_found_when_the_draft_does_not_exist()
     {
-        var handler = new GetDraftValidationsRequestHandler(new SingleDraftStore(null), new ContributingPublisher());
+        var handler = new ValidationsEndpoint(new SingleDraftStore(null), new ContributingPublisher());
 
         await Assert.ThrowsAsync<EntityNotFoundException>(
-            () => handler.Handle(new GetDraftValidations("missing"), CancellationToken.None));
+            () => handler.HandleAsync(new GetDraftValidations("missing"), CancellationToken.None));
     }
 
     private sealed class ContributingPublisher(params ValidationError[] contributions) : IInlineEventPublisher

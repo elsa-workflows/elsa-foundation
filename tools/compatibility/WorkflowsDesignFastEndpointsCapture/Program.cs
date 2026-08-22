@@ -33,7 +33,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
 using HistoricalOpenApiEvidenceCapture = Elsa.Workflows.Design.FastEndpointsCapture.HistoricalOpenApiEvidenceCapture;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;

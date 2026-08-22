@@ -1,7 +1,6 @@
 using Elsa.Api.Endpoints;
 using Elsa.Api.Mediator;
 using Elsa.Workflows.Design.Api.Endpoints.Authoring;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 using Elsa.Workflows.Design.Api.Endpoints.Structures;
 using Elsa.Workflows.Design.Api.Endpoints.Versions;
 using Microsoft.AspNetCore.Routing;
@@ -29,7 +28,6 @@ public static class WorkflowsDesignApi
         // metadata, and permission on itself under Endpoints/<Resource>/<Operation>/Endpoint.cs.
         api.MapEndpointsFrom(typeof(WorkflowsDesignApi).Assembly, Constants.RouteConstants.DomainPrefix);
         VersionEndpoints.Map(api);
-        DraftEndpoints.Map(api);
         StructureEndpoints.Map(api);
         AuthoringEndpoints.Map(api);
     }

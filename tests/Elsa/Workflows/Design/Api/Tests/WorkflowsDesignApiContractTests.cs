@@ -34,7 +34,6 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
@@ -181,7 +180,7 @@ public sealed class WorkflowsDesignApiContractTests
     }
 
     [Fact]
-    public async Task Promotion_preflight_deserializes_and_invokes_the_mapped_request_handler()
+    public async Task Promotion_preflight_deserializes_and_assesses_the_route_draft()
     {
         await using var host = await AuthorizationHost.StartAsync();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/design/workflows/drafts/route-draft/promotion-preflight")
@@ -192,9 +191,10 @@ public sealed class WorkflowsDesignApiContractTests
 
         using var response = await host.Client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("route-draft", host.Sender.LastRequest!.DraftId);
-        Assert.Equal("1.2.0", host.Sender.LastRequest.RequestedVersion);
-        Assert.Contains("\"isReady\":true", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("route-draft", host.Domain.LastDraftReadId);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"requestedVersion\":\"1.2.0\"", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"isReady\":true", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -211,7 +211,7 @@ public sealed class WorkflowsDesignApiContractTests
 
         using var response = await host.Client.SendAsync(request);
         Assert.Equal(expected, response.StatusCode);
-        Assert.Null(host.Sender.LastRequest);
+        Assert.Null(host.Domain.LastDraftReadId);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed class WorkflowsDesignApiContractTests
 
         using var response = await host.Client.SendAsync(request);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
-        Assert.Null(host.Sender.LastRequest);
+        Assert.Null(host.Domain.LastDraftReadId);
     }
 
     [Fact]
@@ -301,9 +301,8 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var command = Assert.IsType<DiscardDraft>(host.CommandSender.LastCommand);
-        Assert.Equal("discard-op", command.OperationKey);
-        Assert.Equal("route-draft", command.DraftId);
+        Assert.Equal("discard-op", host.Domain.LastDiscardOperationKey);
+        Assert.Equal("route-draft", host.Domain.LastDiscardDraftId);
     }
 
     [Fact]
@@ -331,9 +330,8 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var command = Assert.IsType<ReplaceDraft>(host.CommandSender.LastCommand);
-        Assert.Equal("replace-op", command.OperationKey);
-        Assert.Equal("route-draft", command.DraftId);
+        Assert.Equal("replace-op", host.Domain.LastDraftUpdateOperationKey);
+        Assert.Equal("route-draft", host.Domain.LastDraftUpdate!.DraftId);
     }
 
     [Fact]
@@ -346,9 +344,9 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var command = Assert.IsType<PromoteDraft>(host.CommandSender.LastCommand);
-        Assert.Equal("promote-op", command.OperationKey);
-        Assert.Equal("route-draft", command.DraftId);
+        Assert.Equal("promote-op", host.Domain.LastPromoteOperationKey);
+        Assert.Equal("route-draft", host.Domain.LastPromoteDraftId);
+        Assert.Equal("1.2.0", host.Domain.LastPromoteRequestedVersion);
     }
 
     [Fact]
@@ -388,13 +386,13 @@ public sealed class WorkflowsDesignApiContractTests
             if (route.Contains("permanent", StringComparison.Ordinal))
                 Assert.Equal("route-definition", host.Domain.LastDeleteDefinitionId);
             else if (route.Contains("drafts", StringComparison.Ordinal))
-                Assert.Equal("route-draft", Assert.IsType<DiscardDraft>(host.CommandSender.LastCommand).DraftId);
+                Assert.Equal("route-draft", host.Domain.LastDiscardDraftId);
             else
                 Assert.Equal("route-definition", host.Domain.LastReadDefinitionId);
         }
         else
         {
-            Assert.Null(host.CommandSender.LastCommand);
+            Assert.Null(host.Domain.LastDiscardDraftId);
             Assert.Null(host.Domain.LastReadDefinitionId);
         }
     }
@@ -411,8 +409,7 @@ public sealed class WorkflowsDesignApiContractTests
         using var nonJson = LifecycleRequest(HttpMethod.Delete, "/design/workflows/drafts/route-draft", "{}", "text/plain");
         using var nonJsonResponse = await host.Client.SendAsync(nonJson);
         Assert.Equal(HttpStatusCode.NoContent, nonJsonResponse.StatusCode);
-        var command = Assert.IsType<DiscardDraft>(host.CommandSender.LastCommand);
-        Assert.Equal("route-draft", command.DraftId);
+        Assert.Equal("route-draft", host.Domain.LastDiscardDraftId);
     }
 
     private static HttpRequestMessage LifecycleRequest(HttpMethod method, string route, string body, string contentType = "application/json")
@@ -547,18 +544,10 @@ public sealed class WorkflowsDesignApiContractTests
 
     internal sealed class DefinitionsRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
     {
-        public PreflightDraftPromotion? LastRequest { get; private set; }
-
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             if (request is ListDefinitions)
                 return Task.FromResult((T)(object)new WorkflowDefinitionListView([]));
-
-            if (request is PreflightDraftPromotion preflight)
-            {
-                LastRequest = preflight;
-                return Task.FromResult((T)(object)new PromotionPreflightAssessmentView(true, "exact", preflight.RequestedVersion, preflight.RequestedVersion, "1.0.0", []));
-            }
 
             if (request is GetDefinition && Scenario == "trusted-not-found")
                 throw new EntityNotFoundException("definition sample was not found");
@@ -569,34 +558,20 @@ public sealed class WorkflowsDesignApiContractTests
         private string Scenario => contextAccessor.HttpContext?.Request.Headers[AuthorizationHost.IdentityHeader].ToString() ?? "";
     }
 
-    internal sealed class DefinitionsCommandSender(IHttpContextAccessor contextAccessor) : ICommandSender
+    internal sealed class DefinitionsCommandSender : ICommandSender
     {
         public object? LastCommand { get; private set; }
-        private string Scenario => contextAccessor.HttpContext?.Request.Headers[AuthorizationHost.IdentityHeader].ToString() ?? "";
 
         public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
         {
             LastCommand = command;
-            return Scenario switch
-            {
-                "trusted-promote-404" => throw new EntityNotFoundException("draft sample was not found"),
-                "trusted-promote-409" => throw new WorkflowDefinitionVersionConflictException("definition sample", "1.0.0"),
-                "trusted-promote-500" => throw new InvalidOperationException("deterministic command failure"),
-                _ => Task.FromResult(default(T)!)
-            };
+            return Task.FromResult(default(T)!);
         }
 
         public Task Send(MediatorCommand command, CancellationToken cancellationToken = default)
         {
             LastCommand = command;
-            return Scenario switch
-            {
-                "trusted-delete-404" => throw new EntityNotFoundException("definition sample was not found"),
-                "trusted-delete-501" => throw new PermanentDeletionUnavailableException("sample"),
-                "trusted-delete-409" => throw new WorkflowDefinitionNotSoftDeletedException("sample"),
-                "trusted-delete-500" => throw new InvalidOperationException("deterministic command failure"),
-                _ => Task.CompletedTask
-            };
+            return Task.CompletedTask;
         }
     }
 

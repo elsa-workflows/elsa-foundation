@@ -1,7 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Models;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
+namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
 
 /// <summary>
 /// Derives the FR-024 validation error set for the current state of the draft with the given id.

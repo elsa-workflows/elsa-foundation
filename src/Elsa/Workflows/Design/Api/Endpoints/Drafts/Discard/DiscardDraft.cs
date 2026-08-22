@@ -1,7 +1,5 @@
-using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Design.Api.Models;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
+namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Discard;
 
 public sealed record DiscardDraft(string? OperationKey, string DraftId) : ICommand;

@@ -1,8 +1,7 @@
-using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Models;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Drafts;
+namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
 
 public sealed record ReplaceDraft(
     string? OperationKey,

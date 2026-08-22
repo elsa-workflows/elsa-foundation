@@ -33,7 +33,6 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 
@@ -582,39 +581,19 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         }
     }
 
-    private sealed class BaselineRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
+    private sealed class BaselineRequestSender : IRequestSender
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            var scenario = contextAccessor.HttpContext?.Request.Headers[WorkflowDesignCompatibilityCases.IdentityHeader].ToString();
-            if (request is PreflightDraftPromotion && scenario == "trusted-preflight")
-                return Task.FromResult((T)(object)new PromotionPreflightAssessmentView(true, "exact", "1.0.0", "1.0.0", "1.0.0", []));
-            return Task.FromResult(default(T)!);
-        }
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
+            Task.FromResult(default(T)!);
     }
 
-    private sealed class BaselineCommandSender(IHttpContextAccessor contextAccessor) : ICommandSender
+    private sealed class BaselineCommandSender : ICommandSender
     {
-        private string Scenario => contextAccessor.HttpContext?.Request.Headers[WorkflowDesignCompatibilityCases.IdentityHeader].ToString() ?? "";
-
         public Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-            Scenario switch
-            {
-                "trusted-promote-404" => throw new EntityNotFoundException("draft sample was not found"),
-                "trusted-promote-409" => throw new WorkflowDefinitionVersionConflictException("definition sample", "1.0.0"),
-                "trusted-promote-500" => throw new InvalidOperationException("deterministic command failure"),
-                _ => Task.FromResult(default(T)!)
-            };
+            Task.FromResult(default(T)!);
 
         public Task Send(ICommand command, CancellationToken cancellationToken = default) =>
-            Scenario switch
-            {
-                "trusted-delete-404" => throw new EntityNotFoundException("definition sample was not found"),
-                "trusted-delete-501" => throw new PermanentDeletionUnavailableException("sample"),
-                "trusted-delete-409" => throw new WorkflowDefinitionNotSoftDeletedException("sample"),
-                "trusted-delete-500" => throw new InvalidOperationException("deterministic command failure"),
-                _ => Task.CompletedTask
-            };
+            Task.CompletedTask;
     }
 
     private sealed class EmptyExpressionToolingProviderResolver : IExpressionToolingProviderResolver

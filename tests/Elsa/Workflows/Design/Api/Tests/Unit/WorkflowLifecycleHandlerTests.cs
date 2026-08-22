@@ -14,7 +14,15 @@ using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using System.Reflection;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Get;
+using GetDraftEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Get.Endpoint;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
+using ReplaceDraftEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace.Endpoint;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote;
+using PromoteDraftEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote.Endpoint;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
+using PreflightEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight.Endpoint;
+using Elsa.Workflows.Design.Api.Endpoints.Versions;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
 using SoftDeleteHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete.Endpoint;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
@@ -52,10 +60,10 @@ public sealed class WorkflowLifecycleHandlerTests
         var desired = new WorkflowDefinitionStateView(
             RootActivity: new ActivityNode("root", "activity-version-1", [], []));
 
-        var replaced = await new ReplaceDraftCommandHandler(drafts, update).Handle(
+        var replaced = await new ReplaceDraftEndpoint(drafts, update).HandleAsync(
             new ReplaceDraft("replace-1", "draft-1", desired, Layout: null),
             CancellationToken.None);
-        var read = await new GetDraftRequestHandler(drafts).Handle(new GetDraft("draft-1"), CancellationToken.None);
+        var read = await new GetDraftEndpoint(drafts).HandleAsync(new GetDraft("draft-1"), CancellationToken.None);
 
         Assert.Equal("draft-1", update.Request!.DraftId);
         Assert.Equal(layout, update.Request.Layout);
@@ -112,9 +120,9 @@ public sealed class WorkflowLifecycleHandlerTests
 
         foreach (var failure in failures)
         {
-            var actual = await Record.ExceptionAsync(() => new PromoteDraftCommandHandler(
+            var actual = await Record.ExceptionAsync(() => new PromoteDraftEndpoint(
                     new ThrowingPromoteDraftCommand(failure),
-                    new NeverRequestSender()).Handle(
+                    new NeverVersionReader()).HandleAsync(
                     new PromoteDraft("operation-1", "draft-1", "1.0.0"),
                     CancellationToken.None));
 
@@ -157,7 +165,7 @@ public sealed class WorkflowLifecycleHandlerTests
         var drafts = new MutableDraftStore(draft, []);
         var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "2.0.0"), identityExists: true);
         var publisher = new RecordingInlineEventPublisher(new ValidationError("$workflow", "Draft/Invalid", "draft is invalid"));
-        var result = await new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+        var result = await new PreflightEndpoint(drafts, versions, publisher).HandleAsync(
             new PreflightDraftPromotion("draft-1", "2.0.0+build.7"),
             CancellationToken.None);
 
@@ -184,7 +192,7 @@ public sealed class WorkflowLifecycleHandlerTests
         var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "1.0.0"), identityExists: false);
         var publisher = new RecordingInlineEventPublisher(null);
 
-        await Assert.ThrowsAsync<EntityNotFoundException>(() => new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => new PreflightEndpoint(drafts, versions, publisher).HandleAsync(
             new PreflightDraftPromotion("synthetic-draft", "1.0.0"), CancellationToken.None));
 
         Assert.Equal("synthetic-draft", drafts.LastRequestedId);
@@ -207,7 +215,7 @@ public sealed class WorkflowLifecycleHandlerTests
         var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", "1.0.0"), identityExists: false);
         var publisher = new RecordingInlineEventPublisher(null);
 
-        var result = await new PreflightDraftPromotionRequestHandler(drafts, versions, publisher).Handle(
+        var result = await new PreflightEndpoint(drafts, versions, publisher).HandleAsync(
             new PreflightDraftPromotion("draft-1", "2.0.0"),
             CancellationToken.None);
 
@@ -229,7 +237,7 @@ public sealed class WorkflowLifecycleHandlerTests
     {
         var (handler, draft, versions, publisher) = CreatePreflight("2.0.0", identityExists: false);
 
-        var result = await handler.Handle(new PreflightDraftPromotion("draft-1", " 3.0.0 "), CancellationToken.None);
+        var result = await handler.HandleAsync(new PreflightDraftPromotion("draft-1", " 3.0.0 "), CancellationToken.None);
 
         Assert.True(result.IsReady);
         Assert.Equal("exact", result.AssignmentMode);
@@ -248,7 +256,7 @@ public sealed class WorkflowLifecycleHandlerTests
     {
         var (handler, draft, versions, publisher) = CreatePreflight("2.0.0", identityExists: false);
 
-        var result = await handler.Handle(new PreflightDraftPromotion("draft-1", requestedVersion), CancellationToken.None);
+        var result = await handler.HandleAsync(new PreflightDraftPromotion("draft-1", requestedVersion), CancellationToken.None);
 
         Assert.False(result.IsReady);
         Assert.Contains(result.Issues, issue => issue.Code == "not-forward");
@@ -257,7 +265,7 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.Equal(1, publisher.PublishCalls);
     }
 
-    private static (PreflightDraftPromotionRequestHandler Handler, WorkflowDefinitionDraft Draft, PreflightVersionStore Versions, RecordingInlineEventPublisher Publisher) CreatePreflight(string latestVersion, bool identityExists)
+    private static (PreflightEndpoint Handler, WorkflowDefinitionDraft Draft, PreflightVersionStore Versions, RecordingInlineEventPublisher Publisher) CreatePreflight(string latestVersion, bool identityExists)
     {
         var draft = new WorkflowDefinitionDraft
         {
@@ -268,7 +276,7 @@ public sealed class WorkflowLifecycleHandlerTests
         };
         var versions = new PreflightVersionStore(new WorkflowDefinitionVersion("definition-1", latestVersion), identityExists);
         var publisher = new RecordingInlineEventPublisher(null);
-        return (new PreflightDraftPromotionRequestHandler(new MutableDraftStore(draft, []), versions, publisher), draft, versions, publisher);
+        return (new PreflightEndpoint(new MutableDraftStore(draft, []), versions, publisher), draft, versions, publisher);
     }
 
     private sealed class MutableDraftStore(WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout)
@@ -368,10 +376,10 @@ public sealed class WorkflowLifecycleHandlerTests
             CancellationToken cancellationToken = default) => Task.FromException(failure);
     }
 
-    private sealed class NeverRequestSender : IRequestSender
+    private sealed class NeverVersionReader : IWorkflowVersionDetailsReader
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
-            where T : notnull => throw new InvalidOperationException("The request sender must not be invoked after a command failure.");
+        public Task<WorkflowDefinitionVersionDetailsView> ReadAsync(string versionId, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The version reader must not be invoked after a command failure.");
     }
 
     private sealed class FixedTimeProvider : TimeProvider
