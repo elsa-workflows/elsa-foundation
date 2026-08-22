@@ -489,6 +489,10 @@ public sealed class DomainManagementApiCompositionTests
             }
 
             builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
+            // The definitions list endpoint owns its handling and reads these stores directly,
+            // so the representative journey needs empty stores rather than a sender fake.
+            builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore, EmptyWorkflowDefinitionStore>();
+            builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore, EmptyWorkflowDefinitionListProjectionStore>();
 
             var app = builder.Build();
             // Every first-party management owner is now an explicit Minimal API mapper.
@@ -566,7 +570,6 @@ public sealed class DomainManagementApiCompositionTests
 
             object response = typeof(T) switch
             {
-                var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
                 var type when type == typeof(ActivityAvailabilityDiagnostics) => new ActivityAvailabilityDiagnostics([], []),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(
@@ -588,5 +591,23 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
+    }
+
+    private sealed class EmptyWorkflowDefinitionStore : Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore
+    {
+        public Task<Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The representative journey only lists definitions.");
+        public Task<Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition?>(null);
+        public Task<IReadOnlyList<Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition>> ListAsync(
+            Elsa.Workflows.Design.Persistence.Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition>>([]);
+    }
+
+    private sealed class EmptyWorkflowDefinitionListProjectionStore : Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore
+    {
+        public Task<IReadOnlyList<Elsa.Workflows.Design.Persistence.Core.Models.WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Workflows.Design.Persistence.Core.Models.WorkflowDefinitionListProjection>>([]);
     }
 }
