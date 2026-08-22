@@ -34,8 +34,13 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 

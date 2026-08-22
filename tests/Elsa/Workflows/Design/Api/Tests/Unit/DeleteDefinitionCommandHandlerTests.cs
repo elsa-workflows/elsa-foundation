@@ -1,12 +1,12 @@
 using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Delete;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 /// <summary>
-/// Behavioral tests for <see cref="DeleteDefinitionCommandHandler"/>: it forwards the target id to the
+/// Behavioral tests for <see cref="Handler"/>: it forwards the target id to the
 /// permanent-delete lifecycle command, which removes the definition together with its versions, current Draft,
 /// and layout. Individual published versions are immutable and have no delete endpoint, so there is no
 /// version-level delete path to test here.
@@ -17,7 +17,7 @@ public sealed class DeleteDefinitionCommandHandlerTests
     public async Task Forwards_id_to_permanent_delete_command()
     {
         var deleteCommand = new RecordingDeleteCommand();
-        var handler = new DeleteDefinitionCommandHandler(deleteCommand);
+        var handler = new Handler(deleteCommand);
 
         await handler.Handle(new DeleteDefinition("delete-request-1", "def-1"), CancellationToken.None);
 

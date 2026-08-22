@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 

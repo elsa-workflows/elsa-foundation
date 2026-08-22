@@ -47,7 +47,7 @@
   "openApiSha256": "cab09ec395c74329bcad1a40346c5912c00fd54c076f588f89bd70c457298dc5",
   "operationCount": 27,
   "registrationCount": 27,
-  "runnerFingerprint": "4d9dbf6776d13a20add3a2e429e5114cf7538a0c0d41c62288062344ec8052dc",
+  "runnerFingerprint": "c4514be3a6324c95c32f323862f4eeea03090fed883b0708c51faa92635d8fd9",
   "runnerIdentity": "checked-in-commit",
   "runnerDependencies": [
     {
@@ -58,7 +58,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
-      "sha256": "aaaf145df99d327a1daf2ae5e44c4ef7fb3853c5fd49907e0cdfd52268de73ed"
+      "sha256": "ac045b27475ca39b0765b6f0c4017b255f1fe172eae37d7d593b4b21703e1514"
     },
     {
       "identity": "checked-in-commit",

@@ -234,6 +234,30 @@ public sealed class ModuleEndpointGroup
             documentedStatus ?? successStatus);
     }
 
+    /// <summary>Maps an options-described operation returning a body. Used by the endpoint-class mapper.</summary>
+    internal IEndpointConventionBuilder MapBody<TRequest, TResponse>(
+        ApiEndpointOptions options,
+        Func<HttpContext, TRequest, CancellationToken, Task<TResponse>> dispatch)
+        where TResponse : notnull =>
+        Map<TRequest>(
+            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
+            typeof(TResponse), options.SuccessStatus, options.DocumentedStatus,
+            async (context, request, cancellationToken) =>
+                await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus));
+
+    /// <summary>Maps an options-described operation returning no content. Used by the endpoint-class mapper.</summary>
+    internal IEndpointConventionBuilder MapNoContent<TRequest>(
+        ApiEndpointOptions options,
+        Func<HttpContext, TRequest, CancellationToken, Task> dispatch) =>
+        Map<TRequest>(
+            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
+            null, StatusCodes.Status204NoContent, options.DocumentedStatus,
+            async (context, request, cancellationToken) =>
+            {
+                await dispatch(context, request, cancellationToken);
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+            });
+
     private static EndpointBodyMode DefaultBodyMode(string method) => method switch
     {
         _ when HttpMethods.IsGet(method) || HttpMethods.IsHead(method) => EndpointBodyMode.None,

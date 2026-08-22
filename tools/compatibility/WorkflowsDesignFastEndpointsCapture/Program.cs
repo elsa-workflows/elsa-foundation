@@ -33,8 +33,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
 using HistoricalOpenApiEvidenceCapture = Elsa.Workflows.Design.FastEndpointsCapture.HistoricalOpenApiEvidenceCapture;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
 
 var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);

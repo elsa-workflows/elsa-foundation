@@ -5,7 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -20,12 +20,12 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class AddDefinitionOperationKeyTests
 {
     private readonly RecordingAddWorkflowDefinitionCommand _persistence = new();
-    private readonly AddDefinitionCommandHandler _handler;
+    private readonly Handler _handler;
 
     public AddDefinitionOperationKeyTests()
     {
         var identities = new SequentialIdentityGenerator();
-        _handler = new AddDefinitionCommandHandler(
+        _handler = new Handler(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
             _persistence);

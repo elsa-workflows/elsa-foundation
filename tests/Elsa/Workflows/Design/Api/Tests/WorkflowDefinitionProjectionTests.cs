@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 
@@ -86,13 +86,13 @@ public sealed class WorkflowDefinitionProjectionTests
 
         public int TotalReadCount => _definitions.ReadCount + _projections.ReadCount;
 
-        public ListDefinitionsRequestHandler CreateHandler()
+        public Handler CreateHandler()
         {
             var services = new ServiceCollection()
                 .AddSingleton<IWorkflowDefinitionStore>(_definitions)
                 .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .BuildServiceProvider();
-            return ActivatorUtilities.CreateInstance<ListDefinitionsRequestHandler>(services);
+            return ActivatorUtilities.CreateInstance<Handler>(services);
         }
     }
 

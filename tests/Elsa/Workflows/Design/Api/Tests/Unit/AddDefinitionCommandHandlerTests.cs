@@ -5,7 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -16,7 +16,7 @@ public sealed class AddDefinitionCommandHandlerTests
     {
         var identities = new SequentialIdentityGenerator();
         var persistence = new RecordingAddWorkflowDefinitionCommand();
-        var handler = new AddDefinitionCommandHandler(
+        var handler = new Handler(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
             persistence);

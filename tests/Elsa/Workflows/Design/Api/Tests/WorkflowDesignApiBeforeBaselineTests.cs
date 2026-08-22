@@ -33,8 +33,9 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 
