@@ -80,7 +80,7 @@ $script:SharedAssemblies = @(
 # mapped to one does not belong here.
 
 $script:RuntimeOnlyProjects = @(
-    'src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj'                                  # ApiSecurity
+    'src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj'                                        # Minimal API host support
     'src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj'                    # Serialization
     'src/Elsa/Events/Elsa.Events.csproj'                                                        # Events
     'src/Elsa/Mediator/Elsa.Mediator.csproj'                                                    # Mediator
@@ -155,7 +155,7 @@ function New-RuntimeOnlyFeatures {
 # self-contained: it never touches the developer's server, port, or database, and it needs no
 # Groundwork deploy step (AutoApplySchemaOnStartup defaults true).
 $script:PublishCapableProjects = @(
-    'src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj'
+    'src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj'
     'src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj'
     'src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj'
     'src/Elsa/Events/Elsa.Events.csproj'
