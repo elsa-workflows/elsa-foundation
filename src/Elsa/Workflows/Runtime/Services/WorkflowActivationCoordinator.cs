@@ -626,8 +626,8 @@ public sealed class WorkflowActivationCoordinator(
     }
 
     /// <summary>
-    /// Puts the retracted activation back: the slot first, then its serving projections, then the observers that
-    /// derive from them.
+    /// Puts the retracted activation back in the same order activation builds it up: projections prepared, then
+    /// the slot, then the projections activated, then the observers that derive from them.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -652,6 +652,16 @@ public sealed class WorkflowActivationCoordinator(
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, command.SlotName);
         var failures = new List<string>();
 
+        // Prepared BEFORE the slot goes back, mirroring activation's prepare -> CAS -> activate. Restoring the
+        // slot first would republish an activation whose projections had just been deleted, so a stimulus landing
+        // in that window would find a live slot serving nothing -- the exact state activation's ordering exists to
+        // make unreachable. Preparation writes rows that are inert until activated, so doing it first is safe even
+        // if the slot never comes back.
+        await CaptureAsync(
+            failures,
+            "Projection preparation",
+            () => PrepareProjectionsAsync(command.Executable, activationId, slotId, CancellationToken.None));
+
         await CaptureAsync(failures, "Authority compensation", async () =>
         {
             // The CAS presents the POST-flip revision: we are undoing our own transition. Ownership is safe to
@@ -673,11 +683,10 @@ public sealed class WorkflowActivationCoordinator(
                     $"Deactivation of activation '{activationId}' failed and the slot authority could not be restored: {compensation.Diagnostic}");
         });
 
-        await CaptureAsync(failures, "Projection compensation", async () =>
-        {
-            await PrepareProjectionsAsync(command.Executable, activationId, slotId, CancellationToken.None);
-            await ActivateProjectionsAsync(activationId, replacedActivationId: null, CancellationToken.None);
-        });
+        await CaptureAsync(
+            failures,
+            "Projection activation",
+            () => ActivateProjectionsAsync(activationId, replacedActivationId: null, CancellationToken.None));
 
         // Observers last, so they are reconciled only once the restored activation is fully serving again.
         await CaptureAsync(

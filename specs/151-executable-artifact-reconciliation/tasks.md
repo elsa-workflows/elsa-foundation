@@ -766,12 +766,17 @@ integrate first, then the FR amendment, then the blockers, then the tail.
 
 ### Worth fixing while in there
 
-- [ ] T141 Deactivation compensation restores the slot **before** the projections; activation does the reverse, for the reason its own comment states. Make the order deliberate and consistent.
+- [x] T141 Deactivation compensation restores the slot **before** the projections; activation does the reverse, for the reason its own comment states. Make the order deliberate and consistent.
+  - **Fixed 2026-08-22.** `CompensateDeactivationAsync` restored the slot first, then re-prepared the projections. That reopens the window activation's `prepare → CAS → activate` ordering exists to close: the slot is live pointing at an activation whose projections were just deleted, so a stimulus arriving then finds a serving definition with no bindings. Compensation now prepares, restores, activates, notifies — the same order, and still best-effort.
+  - Proving it needed a new seam: both orders leave the **same end state**, so the assertion has to be made at the instant the slot moves. `FailingActivationAuthority` gained an `OnActivating` hook; the test snapshots the binding-store call log as the slot is restored and asserts a `prepare:` already happened.
+  - **Mutation-verified**: moving the preparation back after the restore fails the new test.
 - [ ] T142 The three document kinds renamed `publicationId` → `activationId` **in place** need a version bump, so stale rows fail loudly instead of deserializing a null.
 - [ ] T143 Enrol `workflowActivationSlot` in the provider probe — the ledger is currently only plan-verified on SQLite (the GW-QUERY-008 trap).
 - [x] T144 **The `Content-Disposition` CORS fix landed in Workbench but not Foundation.Host** — the host Studio actually calls. **Verified:** Foundation.Host has `AddCors` and no `WithExposedHeaders`. *This is the same half-applied-fix pattern T109 called out in `cec78ff25` — "the one provider that works implies the others do" — repeated by me in T130.*
   - **Fixed 2026-08-22.** `.WithExposedHeaders("Content-Disposition")` added to Foundation.Host's Studio policy, with a comment on both hosts saying they must not drift. **This time the whole set was swept**: every `AddCors` in `src/` now exposes the header — which is the check T130 skipped.
 - [ ] T145 `WorkflowArtifactClosureFactory` reads the whole source-reference table per request; filter at the store.
+  - **Assessed 2026-08-22 — larger than it reads, deliberately not hacked.** The factory's full-table read cannot be narrowed at the store today: `WorkflowExecutableSourceReferencePageQuery` filters by `scope` and `liveOnly` only, and the Groundwork document is indexed `ByCollection`, `ByArtifact`, `ByScope`, `ByExpiresAt`, `ByRetired` — **there is no index on `DefinitionVersionId`**, which is the filter the root lookup needs.
+  - Adding one means a manifest change, a new index, and a document-kind version bump across providers — the same machinery as T142/T143, and its own unit of work rather than a "while you're in there" item. Filtering by `scope: Published` alone would break the 404-vs-409 distinction, which needs references of *any* scope for the version. Recommend splitting this out rather than landing a change that reads the same rows through a narrower API and calls it filtered.
 - [x] T146 The e2e index README says artifact-deployment is RED while the suite's own README says green.
   - **Fixed 2026-08-22.** The index said "Currently RED"; the suite's own README records GREEN (13 assertions, 0 failures, 2026-08-18). The index now states the result and points at the suite README for the two production defects it found while red.
 - [x] T147 `plan.md` has two sections numbered "Test removals (4)".

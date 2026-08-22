@@ -146,6 +146,42 @@ public sealed class WorkflowActivationCoordinatorTests
     /// import it, then publish the design that compiles to the same artifact and you hit it -- which is a natural
     /// thing to try, so it was reachable by hand long before any test looked for it.
     /// </remarks>
+    /// <summary>
+    /// T141: deactivation's compensation rebuilds the activation in the same order activation builds it —
+    /// projections prepared <i>before</i> the slot goes back, never after.
+    /// </summary>
+    /// <remarks>
+    /// Restoring the slot first reopens a window the activation ordering exists to close: the slot is live and
+    /// pointing at an activation whose projections were just deleted, so a stimulus arriving in that window finds
+    /// a serving definition with no bindings. The assertion is made <b>at the instant the slot moves</b> rather
+    /// than afterwards, because both orders leave the same end state and only the intermediate state differs.
+    /// </remarks>
+    [Fact]
+    public async Task Deactivation_compensation_prepares_the_projections_before_it_restores_the_slot()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+
+        // Fail the deactivation's projection removal -- after the slot flipped -- so compensation runs.
+        harness.ResetCalls();
+        harness.Bindings.FailOn["delete:activation-1"] = new InvalidOperationException("binding store unavailable");
+
+        string[]? bindingCallsWhenSlotRestored = null;
+        harness.Authority.OnActivating = request =>
+        {
+            // The only TryActivate left is compensation's; the initial activation already happened above.
+            bindingCallsWhenSlotRestored ??= harness.Bindings.Calls.ToArray();
+            return ValueTask.CompletedTask;
+        };
+
+        var result = await harness.DeactivateAsync("artifact-1", activated.Slot.Revision);
+
+        Assert.False(result.Succeeded);
+        // The compensation ran at all -- otherwise the assertion below would be vacuously true on a null check.
+        Assert.NotNull(bindingCallsWhenSlotRestored);
+        Assert.Contains(bindingCallsWhenSlotRestored!, call => call.StartsWith("prepare:", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task An_explicit_takeover_of_the_same_artifact_still_transfers_ownership()
     {
@@ -1037,6 +1073,12 @@ public sealed class WorkflowActivationCoordinatorTests
         /// <summary>Activation ids whose <c>TryActivate</c> is refused, and <c>"*"</c> to refuse deactivation.</summary>
         public HashSet<string> Refuse { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Runs at the instant a slot transition is applied. Lets a test observe the rest of the world *as the
+        /// slot moves*, which is the only way to assert ordering without a global call log.
+        /// </summary>
+        public Func<WorkflowActivationSlotRequest, ValueTask>? OnActivating { get; set; }
+
         public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
             _inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
 
@@ -1047,6 +1089,8 @@ public sealed class WorkflowActivationCoordinatorTests
         {
             if (Refuse.Contains(request.ActivationId))
                 return await RefusedAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken);
+            if (OnActivating is { } observe)
+                await observe(request);
             return await _inner.TryActivateAsync(request, cancellationToken);
         }
 
