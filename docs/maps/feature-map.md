@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 120
+- Discovered feature classes: 119
 
 ## Features
 
@@ -17,7 +17,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesBpmnRuntimeFeature | direct IShellFeature | Elsa.Activities.Bpmn.Runtime | IShellFeature | [ActivitiesBpmnRuntimeFeature.cs](../../src/Elsa/Activities/Bpmn/Runtime/ActivitiesBpmnRuntimeFeature.cs) |
 | ActivitiesControlFlowDesignFeature | direct IShellFeature | Elsa.Activities.ControlFlow.Design | IShellFeature | [ActivitiesControlFlowDesignFeature.cs](../../src/Elsa/Activities/ControlFlow/Design/ActivitiesControlFlowDesignFeature.cs) |
 | ActivitiesControlFlowRuntimeFeature | direct IShellFeature | Elsa.Activities.ControlFlow.Runtime | IShellFeature | [ActivitiesControlFlowRuntimeFeature.cs](../../src/Elsa/Activities/ControlFlow/Runtime/ActivitiesControlFlowRuntimeFeature.cs) |
-| ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| ActivitiesDesignApiFeature | direct IWebShellFeature | Elsa.Activities.Design.Api | IWebShellFeature | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | ActivitiesDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.Groundwork | IShellFeature | [ActivitiesDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkPersistenceFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
@@ -41,7 +41,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
 | FoundationWorkflowsAgentFeature | direct IShellFeature | Elsa.Agent.Workflows | IShellFeature | [FoundationWorkflowsAgentFeature.cs](../../src/Elsa/Agent/Workflows/FoundationWorkflowsAgentFeature.cs) |
 | ApiCapabilitiesFeature | direct IWebShellFeature | Elsa.Api.Capabilities | IWebShellFeature | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
-| ApiSecurityFeature | direct IShellFeature | Elsa.Api.FastEndpoints | IShellFeature | [ApiSecurityFeature.cs](../../src/Elsa/Api/FastEndpoints/ApiSecurityFeature.cs) |
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | OpenTelemetryFeature | direct IWebShellFeature | Elsa.Diagnostics.OpenTelemetry | IWebShellFeature | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
@@ -105,16 +104,16 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
 | WorkflowsDashboardFeature | direct IWebShellFeature | Elsa.Workflows.Dashboard | IWebShellFeature | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
 | WorkflowsDashboardGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Dashboard.Persistence.Groundwork | IShellFeature | [WorkflowsDashboardGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/WorkflowsDashboardGroundworkPersistenceFeature.cs) |
-| WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
+| WorkflowsDesignApiFeature | direct IWebShellFeature | Elsa.Workflows.Design.Api | IWebShellFeature | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
 | WorkflowsDesignGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Design.Persistence.Groundwork | IShellFeature | [WorkflowsDesignGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkPersistenceFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsExecutionEvidenceFeature | direct IWebShellFeature | Elsa.Workflows.ExecutionEvidence | IWebShellFeature | [WorkflowsExecutionEvidenceFeature.cs](../../src/Elsa/Workflows/ExecutionEvidence/WorkflowsExecutionEvidenceFeature.cs) |
 | WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs) |
-| WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
+| WorkflowsPublishingApiFeature | direct IWebShellFeature | Elsa.Workflows.Publishing.Api | IWebShellFeature | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | PublishingGroundworkFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.Groundwork | IShellFeature | [PublishingGroundworkFeature.cs](../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkFeature.cs) |
-| WorkflowsRuntimeApiFeature | FastEndpoints feature | Elsa.Workflows.Runtime.Api | FastEndpointsFeatureBase | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
+| WorkflowsRuntimeApiFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.Api | IWebShellFeature | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
 | WorkflowsRuntimeCheckpointPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature, IPostConfigureShellServices | [WorkflowsRuntimeCheckpointPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs) |
 | WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | WorkflowsRuntimeAttentionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Attention | IShellFeature | [WorkflowsRuntimeAttentionFeature.cs](../../src/Elsa/Workflows/Runtime/Attention/WorkflowsRuntimeAttentionFeature.cs) |
