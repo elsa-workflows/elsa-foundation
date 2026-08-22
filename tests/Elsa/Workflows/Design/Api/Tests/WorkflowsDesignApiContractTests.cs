@@ -10,9 +10,7 @@ using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Authorization;
-using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -36,6 +34,8 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 

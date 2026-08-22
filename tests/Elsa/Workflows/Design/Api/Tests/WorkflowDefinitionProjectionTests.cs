@@ -1,6 +1,4 @@
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -8,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 

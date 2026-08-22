@@ -1,13 +1,13 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
-using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Tests.Support;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 

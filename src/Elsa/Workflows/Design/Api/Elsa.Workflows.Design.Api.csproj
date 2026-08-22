@@ -17,6 +17,7 @@
 		<ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
 		<ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 		<ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+		<ProjectReference Include="..\..\..\Api\Mediator\Elsa.Api.Mediator.csproj" />
 		<ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
 		<ProjectReference Include="..\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />

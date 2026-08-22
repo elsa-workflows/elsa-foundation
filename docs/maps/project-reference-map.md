@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 154
+- Source projects: 155
 - Test projects: 105
-- Direct project references: 1328
+- Direct project references: 1331
 
 ## Projects
 
@@ -46,6 +46,7 @@ Records direct project references only.
 | [Elsa.Agent.Workflows](../../src/Elsa/Agent/Workflows/Elsa.Agent.Workflows.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core |
 | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | source | Elsa.Api | - | default | - |
 | [Elsa.Api.Capabilities](../../src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj) | source | Elsa.Api | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Api.Mediator](../../src/Elsa/Api/Mediator/Elsa.Api.Mediator.csproj) | source | Elsa.Api | - | default | Elsa.Api.AspNetCore<br>Elsa.Mediator.Core |
 | [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | source | Elsa.Attention | - | default | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | - | default | - |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | - | default | - |
@@ -134,7 +135,7 @@ Records direct project references only.
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/MongoDb/Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.MongoDb<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
-| [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
+| [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Mediator<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.CodeGeneration](../../src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj) | source | Elsa.Workflows | netstandard2.0 | default | - |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Workflows.Primitives |
 | [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | Elsa.Workflows | - | default | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives |
@@ -280,7 +281,7 @@ Records direct project references only.
 |---|---:|---:|
 | Elsa.Activities | 23 | 21 |
 | Elsa.Agent | 5 | 1 |
-| Elsa.Api | 2 | 3 |
+| Elsa.Api | 3 | 3 |
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |

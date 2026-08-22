@@ -1,11 +1,12 @@
 using Elsa.Expressions.Core.Models;
-using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts;
+using Elsa.Workflows.Design.Api.Endpoints.Versions;
 
 namespace Elsa.Workflows.Design.Api;
 

@@ -17,7 +17,6 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Services;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Primitives.Exceptions;
 using FastEndpoints;
@@ -34,6 +33,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MediatorCommand = Elsa.Mediator.Core.Contracts.ICommand;
 using HistoricalOpenApiEvidenceCapture = Elsa.Workflows.Design.FastEndpointsCapture.HistoricalOpenApiEvidenceCapture;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 
 var outputDirectory = args.Length > 1 ? args[1] : "capture-output";
 Directory.CreateDirectory(outputDirectory);

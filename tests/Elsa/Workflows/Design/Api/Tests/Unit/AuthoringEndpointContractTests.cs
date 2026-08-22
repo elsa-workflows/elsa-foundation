@@ -2,7 +2,6 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Api.Tests.Support;
 using Microsoft.AspNetCore.Http.Metadata;
 using Xunit;

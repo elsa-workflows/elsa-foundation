@@ -8,7 +8,7 @@ Records direct test-project references and test source-file inventory; it does n
 
 - Test projects: 105
 - Source projects directly referenced by at least one test project: 160
-- Source projects not directly referenced by test projects: 5
+- Source projects not directly referenced by test projects: 6
 
 ## Test Projects
 
@@ -234,6 +234,7 @@ Records direct test-project references and test source-file inventory; it does n
 
 | Project | Domain |
 |---|---|
+| [Elsa.Api.Mediator](../../src/Elsa/Api/Mediator/Elsa.Api.Mediator.csproj) | Elsa.Api |
 | [Elsa.Expressions.JavaScript.Primitives](../../src/Elsa/Expressions/JavaScript/Primitives/Elsa.Expressions.JavaScript.Primitives.csproj) | Elsa.Expressions |
 | [Elsa.Foundation.Identity.OpenIddict.Behavior](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj) | Elsa.Foundation |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | Elsa.Http |

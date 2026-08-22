@@ -1,10 +1,9 @@
 using System.Text.Json;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Structures;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 

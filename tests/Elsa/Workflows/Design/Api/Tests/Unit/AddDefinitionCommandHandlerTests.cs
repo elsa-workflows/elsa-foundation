@@ -1,12 +1,11 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Persistence.Core.Design;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 

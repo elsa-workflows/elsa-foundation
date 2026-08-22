@@ -13,9 +13,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Authorization;
-using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Api.Tests.Support;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.AspNetCore.Authentication;
@@ -35,6 +33,8 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 

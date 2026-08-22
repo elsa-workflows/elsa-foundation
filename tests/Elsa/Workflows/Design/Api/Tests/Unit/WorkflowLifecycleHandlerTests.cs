@@ -2,10 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -17,6 +14,8 @@ using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using System.Reflection;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
