@@ -92,12 +92,9 @@
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Core\Elsa.Workflows.Design.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Core\Elsa.Workflows.Runtime.Api.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- spec 151 SC-B-001/005: the runtime-only artifact composition guard composes the reconciliation feature and
          drives it on the shared execution harness. -->

@@ -71,37 +71,32 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
             Assert.NotNull(endpoint.Metadata.GetMetadata<EndpointSecurityDispositionMetadata>());
             Assert.NotNull(endpoint.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>());
 
+            // Wire contracts now ship in the owner assembly, so only handler-bearing members are
+            // checked here: a MethodInfo or PropertyInfo from the owner would pin it through
+            // API Explorer, while a contract Type is expected to be owner-local.
             var ownerAssembly = typeof(WorkflowsRuntimeApi).Assembly;
-            var accepts = endpoint.Metadata.GetMetadata<IAcceptsMetadata>();
-            var produces = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>();
-            if (accepts?.RequestType is { } requestType)
-                Assert.NotSame(ownerAssembly, requestType.Assembly);
-            Assert.DoesNotContain(produces, metadata => metadata.Type is not null && ReferenceEquals(metadata.Type.Assembly, ownerAssembly));
-            Assert.DoesNotContain(endpoint.Metadata, metadata => metadata is Type type && ReferenceEquals(type.Assembly, ownerAssembly));
-            Assert.DoesNotContain(endpoint.Metadata, metadata => metadata is MemberInfo member && ReferenceEquals(member.Module.Assembly, ownerAssembly));
+            Assert.DoesNotContain(
+                endpoint.Metadata,
+                metadata => metadata is MemberInfo member and not Type && ReferenceEquals(member.Module.Assembly, ownerAssembly));
             Assert.Equal(typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke)), endpoint.Metadata.GetMetadata<MethodInfo>());
         });
     }
 
     [Fact]
-    public void Runtime_wire_contracts_live_in_stable_api_core_with_legacy_type_forwarders()
+    public void Runtime_wire_contracts_are_exported_by_the_runtime_api_assembly()
     {
-        var coreAssembly = typeof(WorkflowInstanceListView).Assembly;
-        var legacyAssembly = typeof(WorkflowsRuntimeApi).Assembly;
+        var apiAssembly = typeof(WorkflowsRuntimeApi).Assembly;
 
-        Assert.Equal("Elsa.Workflows.Runtime.Api.Core", coreAssembly.GetName().Name);
-        Assert.Same(coreAssembly, typeof(ExecuteWorkflow).Assembly);
-        Assert.Same(coreAssembly, typeof(ActivityExecutionValuePayloadView).Assembly);
+        Assert.Equal("Elsa.Workflows.Runtime.Api", apiAssembly.GetName().Name);
+        Assert.Same(apiAssembly, typeof(WorkflowInstanceListView).Assembly);
+        Assert.Same(apiAssembly, typeof(ExecuteWorkflow).Assembly);
+        Assert.Same(apiAssembly, typeof(ActivityExecutionValuePayloadView).Assembly);
 
+        // Unrelated to the API contract assembly: Runtime.Core still forwards this projection.
         var runtimeAssembly = typeof(RuntimeWorkflowOutputStateProjection).Assembly;
         Assert.Equal("Elsa.Workflows.Runtime.Core", typeof(WorkflowOutputProjection).Assembly.GetName().Name);
         Assert.Contains(typeof(WorkflowOutputProjection), runtimeAssembly.GetForwardedTypes());
         Assert.NotNull(typeof(WorkflowOutputView).GetMethod(nameof(WorkflowOutputView.From), [typeof(WorkflowOutputProjection)]));
-
-        var forwardedTypes = legacyAssembly.GetForwardedTypes();
-        Assert.Contains(typeof(WorkflowInstanceListView), forwardedTypes);
-        Assert.Contains(typeof(ExecuteWorkflow), forwardedTypes);
-        Assert.Contains(typeof(ActivityExecutionValuePayloadView), forwardedTypes);
     }
 
     [Fact]

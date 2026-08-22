@@ -5,17 +5,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Core\**\*.cs" />
-    <Compile Remove="Models\**\*.cs" />
-    <Compile Remove="Requests\**\*.cs" />
-    <Compile Remove="Commands\**\*.cs" />
-    <Compile Include="Models\ActivityExecutionProblemDetails.cs" />
-    <Compile Include="Requests\GetActivityExecutionValuePayload.cs" />
-    <Compile Include="Requests\ListWorkflowInstances.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="Core\Elsa.Workflows.Runtime.Api.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />

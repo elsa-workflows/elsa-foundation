@@ -26,9 +26,8 @@ namespace Elsa.Architecture.Tests;
 public sealed class OpenApiLifetimeBoundaryTests
 {
     [Fact]
-    public void Activities_design_native_openapi_metadata_uses_only_stable_contract_types()
+    public void Activities_design_native_openapi_metadata_uses_only_non_collectible_types()
     {
-        var implementationAssembly = typeof(ActivitiesDesignApi).Assembly;
         var builder = WebApplication.CreateBuilder();
         using var app = builder.Build();
 
@@ -58,15 +57,12 @@ public sealed class OpenApiLifetimeBoundaryTests
                 .Cast<Type>();
 
             Assert.All(acceptedTypes.Concat(responseTypes), type =>
-            {
-                Assert.NotSame(implementationAssembly, type.Assembly);
-                Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly.");
-            });
+                Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly."));
         });
     }
 
     [Fact]
-    public void Publishing_native_openapi_metadata_uses_only_stable_contract_types()
+    public void Publishing_native_openapi_metadata_uses_only_non_collectible_types()
     {
         var ownerAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
         var mapperType = ownerAssembly.GetType("Elsa.Workflows.Publishing.Api.WorkflowsPublishingApi", throwOnError: true)!;
@@ -103,8 +99,7 @@ public sealed class OpenApiLifetimeBoundaryTests
             Assert.All(acceptedTypes.Concat(responseTypes), type =>
             {
                 if (type.Namespace?.StartsWith("Elsa.Workflows.Publishing.Api", StringComparison.Ordinal) == true)
-                    Assert.Equal("Elsa.Workflows.Publishing.Api.Core", type.Assembly.GetName().Name);
-                Assert.NotSame(ownerAssembly, type.Assembly);
+                    Assert.Equal("Elsa.Workflows.Publishing.Api", type.Assembly.GetName().Name);
                 Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly.");
             });
         });

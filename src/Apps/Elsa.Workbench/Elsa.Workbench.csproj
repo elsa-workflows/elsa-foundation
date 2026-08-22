@@ -103,7 +103,6 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Core\Elsa.Workflows.Publishing.Api.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
@@ -139,7 +138,6 @@
 		<ProjectReference Include="..\..\Elsa\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Core\Elsa.Workflows.Design.Api.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />

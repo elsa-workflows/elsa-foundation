@@ -26,7 +26,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/Elsa.Activities.Design.BeforeCapture.csproj",
-      "sha256": "45ef93017492799633c11ccf7d74bb5d6afd02b0e2b185fef24c41a1629c51d9"
+      "sha256": "a305cb0c7b0067a1ca61afd7ea45f2ee318750bb8f487e22ec372e8df5852350"
     },
     {
       "identity": "checked-in-commit",
@@ -64,7 +64,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "7f437bd22ab6f3a27a58d07f3fc866abe7e03c2478720b83103152e606f2cb03",
+  "runnerFingerprint": "c6ded8f84dd4ca159d427551c09f4e780f47592daa198bdd4d7a7c98a446cffd",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "883b691eb8fdd4515b378e0d89b19c2185ea9e00",
   "sourceRelationship": "ancestor-before-migration",

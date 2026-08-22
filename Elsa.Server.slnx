@@ -69,11 +69,8 @@
     <Project Path="src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/">
-    <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Activities/Design/Api/">
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
-    <Project Path="src/Elsa/Activities/Design/Api/Core/Elsa.Activities.Design.Api.Core.csproj" />
+    <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/Core/" />
   <Folder Name="/src/Elsa/Activities/Design/Persistence/">
@@ -283,13 +280,10 @@
     <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/MongoDb/Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/">
+    <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Workflows/Design/Api/">
-    <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
-    <Project Path="src/Elsa/Workflows/Design/Api/Core/Elsa.Workflows.Design.Api.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/Persistence/">
     <Project Path="src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
@@ -306,17 +300,15 @@
     <Project Path="src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Publishing/">
+    <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Workflows/Publishing/Api/">
-    <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
-    <Project Path="src/Elsa/Workflows/Publishing/Api/Core/Elsa.Workflows.Publishing.Api.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Publishing/Persistence/">
     <Project Path="src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
+    <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj" />
@@ -330,10 +322,6 @@
   <Folder Name="/src/Elsa/Workflows/Runtime/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Workflows/Runtime/Api/">
-    <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
-    <Project Path="src/Elsa/Workflows/Runtime/Api/Core/Elsa.Workflows.Runtime.Api.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
@@ -478,6 +466,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Groundwork/" />
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/" />
+  <Folder Name="/tests/Elsa/Groundwork/ProviderEvidenceImporter/">
+    <Project Path="tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/AdapterHost/">
     <Project Path="tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj" />
   </Folder>
