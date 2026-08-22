@@ -185,6 +185,13 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         }
     }
 
+    private sealed class AddVersionCommand : IAddWorkflowDefinitionVersionCommand
+    {
+        public Task<WorkflowDefinitionVersionAdded> Execute(
+            DesignOperationKey operationKey, string definitionId, WorkflowDefinitionState state, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new WorkflowDefinitionVersionAdded(definitionId, "sample-version", "1.0.0"));
+    }
+
     /// <summary>No validation contributors: every draft derives a deterministic empty error set.</summary>
     private sealed class NoOpInlineEventPublisher : Elsa.Events.Core.Contracts.IInlineEventPublisher
     {
@@ -264,6 +271,7 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         services.AddSingleton<IAddWorkflowDefinitionCommand, AddCommand>();
         services.AddSingleton<IUpdateDraftCommand>(sp => new UpdateDraft(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IDiscardDraftCommand>(sp => new DiscardCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
+        services.AddSingleton<IAddWorkflowDefinitionVersionCommand, AddVersionCommand>();
         services.AddSingleton<IPromoteDraftToVersionCommand>(sp => new PromoteCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<Elsa.Events.Core.Contracts.IInlineEventPublisher, NoOpInlineEventPublisher>();
         services.AddSingleton(TimeProvider.System);
