@@ -80,6 +80,32 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
             ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind));
     }
 
+    /// <summary>
+    /// T142: the three kinds whose persisted activation identity was renamed <b>in place</b> advance their
+    /// version, so a document written before the rename is refused instead of read with a null identity.
+    /// </summary>
+    /// <remarks>
+    /// The source reference (above) got this treatment when T033 renamed its field; these three were renamed by
+    /// the same work and did not. Because they kept their old version number, a stale document matched the
+    /// current version exactly and was admitted — then deserialized <c>activationId</c> from a payload that
+    /// still spells <c>publicationId</c>, yielding null. Advancing the version closes that silently, which is
+    /// the whole purpose of the minimum-readable baseline.
+    /// </remarks>
+    [Theory]
+    [InlineData(ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, 3)]
+    [InlineData(ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind, 3)]
+    [InlineData(ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind, 2)]
+    public void Renamed_activation_identity_kinds_declare_a_clean_baseline(string documentKind, int expectedVersion)
+    {
+        Assert.Equal(
+            expectedVersion,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(documentKind));
+        // Equal to current, so nothing older is readable -- the rename is a clean break, not a rolling window.
+        Assert.Equal(
+            expectedVersion,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.MinimumReadableFor(documentKind));
+    }
+
     [Fact]
     public void Workflow_executable_declares_a_clean_v9_baseline()
     {

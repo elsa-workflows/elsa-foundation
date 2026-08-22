@@ -258,6 +258,32 @@ intended outcome — a content change without a version change is exactly what t
 diagnostic is for — and it was weighed against the alternative before being accepted. It will show up
 again in the real-host run against `Elsa.Foundation.Host`; that is expected, not a regression.
 
+### Test removals (6) — §2.21.1, T036, recorded retroactively 2026-08-22 (T148)
+
+**Recorded late, and that is the finding.** The architect review of PR #1330 noted that a deleted fixture had no
+§2.21.1 record. It does not; this repairs that. The reasoning existed — in a code comment, not in the artefact the
+gate requires.
+
+**What was removed** (commit `46e42816d`, "update Groundwork baselines for the activation rename"):
+
+| Removed | What it was |
+| --- | --- |
+| `tests/…/Fixtures/v4/workflowExecutableSourceReference.json` | the golden v4 document for that kind |
+| `src/…/Serialization/WorkflowExecutableSourceReferenceDocumentV4ToV5Upcaster.cs` | the v4→v5 upcaster and its coverage |
+
+**Why.** T033 renamed the persisted activation identity (`publicationId` → `activationId`). A v4 document spells
+the old name, so admitting it deserializes the identity as **null** — the silent default the version boundary
+exists to prevent. T036 advanced the minimum-readable baseline from 4 to the current version and dropped the
+upcaster: a clean break rather than a rolling read window. Pre-1.0, no consumers, and the datastore is reset.
+
+**The objective survives** in `GroundworkRuntimeDocumentFixtureTests.Source_reference_declares_a_clean_v5_baseline`,
+which asserts current == minimum-readable == 5 — i.e. that a v4 document is refused loudly. That is a stronger
+assertion than the upcaster test it replaced, which only proved v4 could be *read*.
+
+**What this record exposed.** Auditing it for T148 showed the same rename had been applied to three further kinds
+**without** the version bump, leaving fixtures whose content had been edited in place to spell `activationId` while
+still filed under the old version. Those were live silent-null paths, fixed under T142.
+
 ### Test removals (5) — §2.21.1, T128, recorded 2026-08-19
 
 One pre-existing test file was deleted by the composite-activity split: `tests/Elsa/Activities/Sequence/Tests/ActivitiesSequenceFeatureTests.cs`, whose single test was `ConfigureServices_RegistersSequenceStructureHandler`.
