@@ -71,7 +71,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         var store = new StubVersionStore(_version);
         var layout = new StubLayoutStore(layout: null);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionRequestHandler(store, layout).Handle(
+        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionRequestHandler(new WorkflowVersionDetailsReader(store, layout)).Handle(
             new GetVersion("draft:synthetic"),
             CancellationToken.None));
 
@@ -80,7 +80,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
     }
 
     private GetVersionRequestHandler NewHandler(WorkflowDefinitionVersionLayout? layout) =>
-        new(new StubVersionStore(_version), new StubLayoutStore(layout));
+        new(new WorkflowVersionDetailsReader(new StubVersionStore(_version), new StubLayoutStore(layout)));
 
     private sealed class StubVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
     {
