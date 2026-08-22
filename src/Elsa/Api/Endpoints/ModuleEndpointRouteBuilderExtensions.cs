@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Routing;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Api.Mediator;
+namespace Elsa.Api.Endpoints;
 
 /// <summary>Entry point for mapping a module's routes onto its mediator requests and commands.</summary>
 public static class ModuleEndpointRouteBuilderExtensions

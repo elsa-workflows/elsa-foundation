@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The mediator half of the shared endpoint layer, kept out of Elsa.Api.AspNetCore so that project
-    keeps its zero-reference footprint: a consumer that maps endpoints without Elsa's mediator does
-    not pay for Elsa.Mediator.Core and its pipeline dependency.
+    The mediator bridge for the endpoint framework in Elsa.Api.Endpoints: endpoint base classes and
+    mapping extensions backed by IRequestSender/ICommandSender. Kept separate so a consumer of the
+    framework without Elsa's mediator pays for neither its contracts nor its pipeline dependency.
   -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\Endpoints\Elsa.Api.Endpoints.csproj" />
     <ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>
 

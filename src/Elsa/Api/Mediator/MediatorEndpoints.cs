@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 

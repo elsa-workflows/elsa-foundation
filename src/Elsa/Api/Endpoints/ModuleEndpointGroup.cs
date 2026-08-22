@@ -1,5 +1,4 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Mediator.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -8,7 +7,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Api.Mediator;
+namespace Elsa.Api.Endpoints;
 
 /// <summary>
 /// Maps a module's routes onto the mediator requests and commands it already defines.
@@ -44,25 +43,6 @@ public sealed class ModuleEndpointGroup
     /// <summary>The stable owning module identifier applied to every endpoint in the group.</summary>
     public string OwnerId { get; }
 
-    /// <summary>Maps a route onto a mediator request that returns a response body.</summary>
-    public IEndpointConventionBuilder MapRequest<TRequest, TResponse>(
-        string method,
-        string pattern,
-        string operation,
-        EndpointBodyMode? bodyMode = null,
-        string[]? accepts = null,
-        int successStatus = StatusCodes.Status200OK)
-        where TRequest : IRequest<TResponse>
-        where TResponse : notnull =>
-        Map<TRequest>(
-            method, pattern, operation, bodyMode, accepts, typeof(TResponse), successStatus, null,
-            async (context, request, cancellationToken) =>
-            {
-                var sender = context.RequestServices.GetRequiredService<IRequestSender>();
-                var response = await sender.Send(request, cancellationToken);
-                await WriteJsonAsync(context, response, successStatus);
-            });
-
     /// <summary>
     /// Maps a route onto an inline handler, for an operation whose contract is not a mediator request.
     /// </summary>
@@ -81,8 +61,7 @@ public sealed class ModuleEndpointGroup
         string[]? accepts = null,
         int successStatus = StatusCodes.Status200OK)
         where TResponse : notnull =>
-        Map<TRequest>(
-            method, pattern, operation, bodyMode, accepts, typeof(TResponse), successStatus, null,
+        MapOperation<TRequest>(            method, pattern, operation, bodyMode, accepts, typeof(TResponse), successStatus, null,
             async (context, request, cancellationToken) =>
             {
                 var response = await handler(context, request, cancellationToken);
@@ -106,7 +85,7 @@ public sealed class ModuleEndpointGroup
         EndpointBodyMode? bodyMode = null,
         string[]? accepts = null,
         int successStatus = StatusCodes.Status200OK) =>
-        Map<TRequest>(method, pattern, operation, bodyMode, accepts, responseType, successStatus, null,
+        MapOperation<TRequest>(method, pattern, operation, bodyMode, accepts, responseType, successStatus, null,
             (context, request, cancellationToken) => handler(context, request, cancellationToken));
 
     /// <summary>Maps a route that takes no request contract onto an inline handler.</summary>
@@ -130,43 +109,11 @@ public sealed class ModuleEndpointGroup
         return Results.Json(value, typeInfo, JsonContentType).ExecuteAsync(context);
     }
 
-    /// <summary>Maps a route onto a mediator command that returns a response body.</summary>
-    public IEndpointConventionBuilder MapCommand<TCommand, TResponse>(
-        string method,
-        string pattern,
-        string operation,
-        EndpointBodyMode? bodyMode = null,
-        string[]? accepts = null,
-        int successStatus = StatusCodes.Status200OK,
-        int? documentedStatus = null)
-        where TCommand : ICommand<TResponse>
-        where TResponse : notnull =>
-        Map<TCommand>(
-            method, pattern, operation, bodyMode, accepts, typeof(TResponse), successStatus, documentedStatus,
-            async (context, command, cancellationToken) =>
-            {
-                var sender = context.RequestServices.GetRequiredService<ICommandSender>();
-                var response = await sender.Send(command, cancellationToken);
-                await WriteJsonAsync(context, response, successStatus);
-            });
-
-    /// <summary>Maps a route onto a mediator command that returns no content.</summary>
-    public IEndpointConventionBuilder MapCommand<TCommand>(
-        string method,
-        string pattern,
-        string operation,
-        EndpointBodyMode? bodyMode = null,
-        string[]? accepts = null)
-        where TCommand : ICommand =>
-        Map<TCommand>(
-            method, pattern, operation, bodyMode, accepts, null, StatusCodes.Status204NoContent, null,
-            async (context, command, cancellationToken) =>
-            {
-                await context.RequestServices.GetRequiredService<ICommandSender>().Send(command, cancellationToken);
-                context.Response.StatusCode = StatusCodes.Status204NoContent;
-            });
-
-    private IEndpointConventionBuilder Map<TMessage>(
+    /// <summary>
+    /// The low-level operation pipeline: bind, dispatch, translate failures, and attach the module
+    /// operation metadata. The typed Map methods and external bridges compose on top of this.
+    /// </summary>
+    public IEndpointConventionBuilder MapOperation<TMessage>(
         string method,
         string pattern,
         string operation,
@@ -239,8 +186,7 @@ public sealed class ModuleEndpointGroup
         ApiEndpointOptions options,
         Func<HttpContext, TRequest, CancellationToken, Task<TResponse>> dispatch)
         where TResponse : notnull =>
-        Map<TRequest>(
-            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
+        MapOperation<TRequest>(            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
             typeof(TResponse), options.SuccessStatus, options.DocumentedStatus,
             async (context, request, cancellationToken) =>
                 await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus));
@@ -249,8 +195,7 @@ public sealed class ModuleEndpointGroup
     internal IEndpointConventionBuilder MapNoContent<TRequest>(
         ApiEndpointOptions options,
         Func<HttpContext, TRequest, CancellationToken, Task> dispatch) =>
-        Map<TRequest>(
-            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
+        MapOperation<TRequest>(            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
             null, StatusCodes.Status204NoContent, options.DocumentedStatus,
             async (context, request, cancellationToken) =>
             {

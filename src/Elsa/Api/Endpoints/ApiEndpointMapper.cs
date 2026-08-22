@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using RouteAttribute = Elsa.Api.AspNetCore.RouteAttribute;
 
-namespace Elsa.Api.Mediator;
+namespace Elsa.Api.Endpoints;
 
 /// <summary>
 /// Maps <see cref="ApiEndpointBase"/> classes onto a module's endpoint group.

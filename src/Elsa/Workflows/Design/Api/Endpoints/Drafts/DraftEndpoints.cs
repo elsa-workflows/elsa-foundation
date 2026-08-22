@@ -1,3 +1,4 @@
+using Elsa.Api.Endpoints;
 using Elsa.Api.Mediator;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
