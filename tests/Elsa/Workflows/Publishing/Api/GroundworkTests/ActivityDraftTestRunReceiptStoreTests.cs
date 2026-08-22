@@ -6,7 +6,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Documents.Store;
 using Xunit;
 
-namespace Elsa.Workflows.Publishing.Api.Tests;
+namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
 
 public sealed class ActivityDraftTestRunReceiptStoreTests
 {

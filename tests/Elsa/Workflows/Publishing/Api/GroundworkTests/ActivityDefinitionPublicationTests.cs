@@ -41,7 +41,7 @@ using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
-namespace Elsa.Workflows.Publishing.Api.Tests;
+namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
 
 public sealed class ActivityDefinitionPublicationTests
 {

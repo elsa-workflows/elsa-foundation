@@ -36,7 +36,7 @@ using Groundwork.Documents.UnitOfWork;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Workflows.Publishing.Api.Tests;
+namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
 
 public sealed class ActivityUpgradeGroundworkTests
 {

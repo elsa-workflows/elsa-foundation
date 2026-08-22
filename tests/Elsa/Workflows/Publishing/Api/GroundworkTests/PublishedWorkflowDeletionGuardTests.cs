@@ -12,7 +12,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
-namespace Elsa.Workflows.Publishing.Api.Tests;
+namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
 
 /// <summary>
 /// The publish-side permanent-deletion preflight: a definition that is still live in the publishing

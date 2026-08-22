@@ -50,7 +50,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
-namespace Elsa.Workflows.Publishing.Api.Tests;
+namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
 
 public sealed class ActivityDraftTestRunTests
 {
