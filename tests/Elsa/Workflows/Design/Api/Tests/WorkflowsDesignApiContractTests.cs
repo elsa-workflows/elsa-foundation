@@ -41,6 +41,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
+using Elsa.Workflows.Design.Api.Tests.Support;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 
@@ -238,10 +239,10 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var command = Assert.IsType<SoftDeleteDefinition>(host.CommandSender.LastCommand);
-        Assert.Equal("soft-op", command.OperationKey);
-        Assert.Equal("route-definition", command.DefinitionId);
-        Assert.Equal("cleanup", command.Reason);
+        Assert.Equal("route-definition", host.Domain.LastReadDefinitionId);
+        Assert.Equal("soft-op", host.Domain.LastSaveOperationKey);
+        Assert.Equal("cleanup", host.Domain.LastSavedDefinition!.DeletedReason);
+        Assert.NotNull(host.Domain.LastSavedDefinition.DeletedAt);
     }
 
     [Fact]
@@ -254,9 +255,10 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var command = Assert.IsType<RestoreDefinition>(host.CommandSender.LastCommand);
-        Assert.Equal("restore-op", command.OperationKey);
-        Assert.Equal("route-definition", command.DefinitionId);
+        Assert.Equal("route-definition", host.Domain.LastReadDefinitionId);
+        Assert.Equal("restore-op", host.Domain.LastSaveOperationKey);
+        Assert.Null(host.Domain.LastSavedDefinition!.DeletedAt);
+        Assert.Null(host.Domain.LastSavedDefinition.DeletedReason);
     }
 
     [Fact]
@@ -269,9 +271,8 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var command = Assert.IsType<DeleteDefinitionPermanently>(host.CommandSender.LastCommand);
-        Assert.Equal("permanent-op", command.OperationKey);
-        Assert.Equal("route-definition", command.DefinitionId);
+        Assert.Equal("permanent-op", host.Domain.LastDeleteOperationKey);
+        Assert.Equal("route-definition", host.Domain.LastDeleteDefinitionId);
     }
 
     [Fact]
@@ -287,7 +288,7 @@ public sealed class WorkflowsDesignApiContractTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Contains("must be soft-deleted", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        Assert.IsType<DeleteDefinitionPermanently>(host.CommandSender.LastCommand);
+        Assert.Equal("route-definition", host.Domain.LastDeleteDefinitionId);
     }
 
     [Fact]
@@ -315,9 +316,9 @@ public sealed class WorkflowsDesignApiContractTests
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var command = Assert.IsType<UpdateDefinitionMetadata>(host.CommandSender.LastCommand);
-        Assert.Equal("update-op", command.OperationKey);
-        Assert.Equal("route-definition", command.DefinitionId);
+        Assert.Equal("route-definition", host.Domain.LastReadDefinitionId);
+        Assert.Equal("update-op", host.Domain.LastSaveOperationKey);
+        Assert.Equal("Updated", host.Domain.LastSavedDefinition!.Name);
     }
 
     [Fact]
@@ -384,17 +385,18 @@ public sealed class WorkflowsDesignApiContractTests
         Assert.Equal(expectedStatus, response.StatusCode);
         if (method == "DELETE")
         {
-            Assert.NotNull(host.CommandSender.LastCommand);
-            var command = host.CommandSender.LastCommand!;
             if (route.Contains("permanent", StringComparison.Ordinal))
-                Assert.Equal("route-definition", Assert.IsType<DeleteDefinitionPermanently>(command).DefinitionId);
+                Assert.Equal("route-definition", host.Domain.LastDeleteDefinitionId);
             else if (route.Contains("drafts", StringComparison.Ordinal))
-                Assert.Equal("route-draft", Assert.IsType<DiscardDraft>(command).DraftId);
+                Assert.Equal("route-draft", Assert.IsType<DiscardDraft>(host.CommandSender.LastCommand).DraftId);
             else
-                Assert.Equal("route-definition", Assert.IsType<SoftDeleteDefinition>(command).DefinitionId);
+                Assert.Equal("route-definition", host.Domain.LastReadDefinitionId);
         }
         else
+        {
             Assert.Null(host.CommandSender.LastCommand);
+            Assert.Null(host.Domain.LastReadDefinitionId);
+        }
     }
 
     [Fact]
@@ -404,7 +406,7 @@ public sealed class WorkflowsDesignApiContractTests
         using var malformed = LifecycleRequest(HttpMethod.Delete, "/design/workflows/definitions/route-definition", "{");
         using var malformedResponse = await host.Client.SendAsync(malformed);
         Assert.Equal(HttpStatusCode.BadRequest, malformedResponse.StatusCode);
-        Assert.Null(host.CommandSender.LastCommand);
+        Assert.Null(host.Domain.LastReadDefinitionId);
 
         using var nonJson = LifecycleRequest(HttpMethod.Delete, "/design/workflows/drafts/route-draft", "{}", "text/plain");
         using var nonJsonResponse = await host.Client.SendAsync(nonJson);
@@ -439,6 +441,7 @@ public sealed class WorkflowsDesignApiContractTests
         public ContractActivityVersionStore ActivityStore { get; } = host.Services.GetRequiredService<ContractActivityVersionStore>();
         public ContractActivityOptionsProvider ActivityProvider { get; } = host.Services.GetRequiredService<ContractActivityOptionsProvider>();
         public AuthorizationProbe AuthorizationProbe { get; } = host.Services.GetRequiredService<AuthorizationProbe>();
+        public DefinitionDomainFakes Domain { get; } = host.Services.GetRequiredService<DefinitionDomainFakes>();
 
         public static async Task<AuthorizationHost> StartAsync()
         {
@@ -465,6 +468,7 @@ public sealed class WorkflowsDesignApiContractTests
                             options.NormalizedAuthenticationTypes = new HashSet<string>([AuthenticationHandler.SchemeName], StringComparer.Ordinal));
                         new WorkflowsDesignApiFeature().ConfigureServices(services);
                         services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
+                        DefinitionDomainFakes.Register(services);
                         services.AddSingleton<DefinitionsRequestSender>();
                         services.AddSingleton<IRequestSender>(services => services.GetRequiredService<DefinitionsRequestSender>());
                         services.AddSingleton<DefinitionsCommandSender>();

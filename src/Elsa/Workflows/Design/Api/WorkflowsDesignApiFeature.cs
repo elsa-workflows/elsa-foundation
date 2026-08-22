@@ -48,6 +48,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddRequestHandlersFrom(assembly);
         // These services back the authoring API and must not depend on the optional validation feature.
         services.AddScopedVariableAuthoring();
+        services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
             ActivatorUtilities.CreateInstance<PersistedExpressionAuthoringContextSource>(

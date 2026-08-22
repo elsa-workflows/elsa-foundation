@@ -491,7 +491,7 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
 
     private sealed record RunnerDependencySnapshot(string Identity, string Path, string Sha256);
 
-    private sealed class WorkflowDesignCompatibilityHost(IHost host) : IAsyncDisposable
+    internal sealed class WorkflowDesignCompatibilityHost(IHost host) : IAsyncDisposable
     {
         public HttpClient Client { get; } = host.GetTestClient();
 
@@ -516,6 +516,7 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
                         new WorkflowsDesignApiFeature().ConfigureServices(services);
                         services.AddSingleton<IExpressionToolingProviderResolver, EmptyExpressionToolingProviderResolver>();
                         services.AddSingleton<IActivityDefinitionVersionStore, BaselineActivityDefinitionVersionStore>();
+                        Support.DefinitionDomainFakes.Register(services);
                         services.AddSingleton<BaselineRequestSender>();
                         services.AddSingleton<IRequestSender>(provider => provider.GetRequiredService<BaselineRequestSender>());
                         services.AddSingleton<ICommandSender, BaselineCommandSender>();
@@ -586,12 +587,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
             var scenario = contextAccessor.HttpContext?.Request.Headers[WorkflowDesignCompatibilityCases.IdentityHeader].ToString();
-            if (request is ListDefinitions && scenario == "trusted-paging")
-                return Task.FromResult((T)(object)new WorkflowDefinitionListView([]));
             if (request is PreflightDraftPromotion && scenario == "trusted-preflight")
                 return Task.FromResult((T)(object)new PromotionPreflightAssessmentView(true, "exact", "1.0.0", "1.0.0", "1.0.0", []));
-            if (request is GetDefinition && scenario == "trusted-not-found")
-                throw new EntityNotFoundException("definition sample was not found");
             return Task.FromResult(default(T)!);
         }
     }

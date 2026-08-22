@@ -16,11 +16,11 @@ using System.Reflection;
 using Xunit;
 using Elsa.Workflows.Design.Api.Endpoints.Drafts;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
-using SoftDeleteHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete.Handler;
+using SoftDeleteHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete.Endpoint;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
-using DeletePermanentlyHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently.Handler;
+using DeletePermanentlyHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently.Endpoint;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
-using RestoreHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore.Handler;
+using RestoreHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore.Endpoint;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -74,26 +74,26 @@ public sealed class WorkflowLifecycleHandlerTests
         var permanent = new RecordingPermanentDeleteCommand(definitions);
         var permanentHandler = new DeletePermanentlyHandler(permanent);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => permanentHandler.Handle(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => permanentHandler.HandleAsync(
             new DeleteDefinitionPermanently("delete-before-soft-delete", definition.Id),
             CancellationToken.None));
 
-        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).Handle(
+        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).HandleAsync(
             new SoftDeleteDefinition("soft-delete-1", definition.Id, "cleanup"),
             CancellationToken.None);
         Assert.Equal(DateTimeOffset.UnixEpoch, definition.DeletedAt);
         Assert.Equal("cleanup", definition.DeletedReason);
 
-        await new RestoreHandler(definitions, save).Handle(
+        await new RestoreHandler(definitions, save).HandleAsync(
             new RestoreDefinition("restore-1", definition.Id),
             CancellationToken.None);
         Assert.Null(definition.DeletedAt);
         Assert.Null(definition.DeletedReason);
 
-        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).Handle(
+        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).HandleAsync(
             new SoftDeleteDefinition("soft-delete-2", definition.Id),
             CancellationToken.None);
-        await permanentHandler.Handle(
+        await permanentHandler.HandleAsync(
             new DeleteDefinitionPermanently("permanent-delete-1", definition.Id),
             CancellationToken.None);
         Assert.Equal(definition.Id, permanent.DefinitionId);
@@ -136,7 +136,7 @@ public sealed class WorkflowLifecycleHandlerTests
         foreach (var failure in failures)
         {
             var actual = await Record.ExceptionAsync(() => new DeletePermanentlyHandler(
-                    new ThrowingPermanentDeleteCommand(failure)).Handle(
+                    new ThrowingPermanentDeleteCommand(failure)).HandleAsync(
                     new DeleteDefinitionPermanently("operation-1", "definition-1"),
                     CancellationToken.None));
 

@@ -24,7 +24,7 @@ public sealed class WorkflowDefinitionProjectionTests
         var fixture = new ProjectionFixture(definitionCount);
         var handler = fixture.CreateHandler();
 
-        var result = (await handler.Handle(
+        var result = (await handler.HandleAsync(
             new ListDefinitions(null, null, null, null, null, "all"),
             CancellationToken.None)).Items.ToArray();
 
@@ -49,7 +49,7 @@ public sealed class WorkflowDefinitionProjectionTests
     public async Task Definition_list_honors_active_deleted_and_all_scopes(string? state, int expectedCount)
     {
         var fixture = new ProjectionFixture(25);
-        var result = await fixture.CreateHandler().Handle(
+        var result = await fixture.CreateHandler().HandleAsync(
             new ListDefinitions(null, null, null, null, null, state),
             CancellationToken.None);
 
@@ -86,13 +86,13 @@ public sealed class WorkflowDefinitionProjectionTests
 
         public int TotalReadCount => _definitions.ReadCount + _projections.ReadCount;
 
-        public Handler CreateHandler()
+        public Endpoint CreateHandler()
         {
             var services = new ServiceCollection()
                 .AddSingleton<IWorkflowDefinitionStore>(_definitions)
                 .AddSingleton<IWorkflowDefinitionListProjectionStore>(_projections)
                 .BuildServiceProvider();
-            return ActivatorUtilities.CreateInstance<Handler>(services);
+            return ActivatorUtilities.CreateInstance<Endpoint>(services);
         }
     }
 

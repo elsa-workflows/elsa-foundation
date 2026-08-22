@@ -16,13 +16,13 @@ public sealed class AddDefinitionCommandHandlerTests
     {
         var identities = new SequentialIdentityGenerator();
         var persistence = new RecordingAddWorkflowDefinitionCommand();
-        var handler = new Handler(
+        var handler = new Endpoint(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
             persistence);
         var layout = new WorkflowDefinitionLayoutRecordView("node-1", 10, 20, 100, 80, null);
 
-        var result = await handler.Handle(
+        var result = await handler.HandleAsync(
             new AddDefinition(
                 "create-request-1",
                 "Rootless workflow",

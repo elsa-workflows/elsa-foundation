@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 public sealed class Handler(
     IWorkflowDefinitionDraftStore draftStore,
     IUpdateDraftCommand updateDraftCommand,
-    IRequestSender requestSender)
+    IWorkflowDefinitionDetailsReader reader)
     : ICommandHandler<UpdateDefinition, WorkflowDefinitionDetailsView>
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(UpdateDefinition command, CancellationToken cancellationToken)
@@ -45,7 +45,7 @@ public sealed class Handler(
                 activityPresentation),
             cancellationToken);
 
-        return await requestSender.Send(new GetDefinition(command.Id), cancellationToken);
+        return await reader.ReadAsync(command.Id, cancellationToken);
     }
 
     private static DesignMetadataRecord ToRecord(WorkflowDefinitionLayoutRecordView view) =>
