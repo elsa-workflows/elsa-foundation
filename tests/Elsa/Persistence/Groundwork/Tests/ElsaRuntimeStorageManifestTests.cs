@@ -1289,6 +1289,60 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
+    public async Task Workflow_activation_slot_declares_scale_bearing_physical_bounded_routes()
+    {
+        var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
+        var unit = declaration.Manifest.StorageUnits.Single(candidate =>
+            candidate.Identity.Value == ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind);
+
+        // The slot id is indexed where it already lives inside the persisted payload, so the ledger gains an
+        // ordered route without a document-shape change.
+        Assert.StartsWith("slot.", ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField, StringComparison.Ordinal);
+
+        var byDefinition = Assert.Single(
+            unit.PhysicalStorage!.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.ListWorkflowActivationSlotsByDefinitionQuery);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowActivationSlotByDefinitionAndSlotId,
+            byDefinition.IndexIdentity);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowActivationSlotDefinitionIdField,
+            Assert.Single(byDefinition.PredicateFields).Path);
+
+        var byActiveActivation = Assert.Single(
+            unit.PhysicalStorage.BoundedQueries,
+            query => query.Identity == ElsaRuntimeStorageManifest.FindWorkflowActivationSlotByActiveActivationQuery);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId,
+            byActiveActivation.IndexIdentity);
+        Assert.Equal(
+            ElsaRuntimeStorageManifest.WorkflowActivationSlotActiveActivationIdField,
+            Assert.Single(byActiveActivation.PredicateFields).Path);
+
+        // Scale-bearing is what enrols both routes in the provider conformance denominators, so the ledger is
+        // exercised on every provider rather than only plan-verified on SQLite.
+        Assert.All(
+            new[] { byDefinition, byActiveActivation },
+            route =>
+            {
+                Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, route.ExecutionClass);
+                Assert.Equal(QueryPagingSupport.Cursor, route.PagingSupport);
+                Assert.Equal(
+                    ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField,
+                    Assert.Single(route.SortFields).Path);
+            });
+
+        var physical = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(unit.PhysicalStorage.Policy).Definition;
+        Assert.All(
+            new[] { byDefinition, byActiveActivation },
+            route => Assert.Contains(physical.Indexes, index => index.LogicalName == route.IndexIdentity));
+        Assert.Contains(
+            physical.ProjectedColumns,
+            column => column.Path == ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField &&
+                      column.Type == PortablePhysicalType.String);
+    }
+
+    [Fact]
     public async Task Workflow_executable_source_reference_declares_physical_bounded_routes()
     {
         var declaration = await new RuntimeGroundworkStorageManifestSource().CreateDeclarationAsync();
@@ -1338,13 +1392,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     {
         var routes = ElsaGroundworkQueryRoutes.All;
 
-        Assert.Equal(44, routes.Count);
+        Assert.Equal(46, routes.Count);
         Assert.Equal(routes.Count, routes.Select(route => route.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(
             7,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.PrimaryIdentityRead));
         Assert.Equal(
-            37,
+            39,
             routes.Count(route => route.Kind == ElsaGroundworkQueryRouteKind.BoundedRoute));
         Assert.All(routes, route => Assert.InRange(route.MaximumResultCount, 1, ElsaGroundworkQueryRoutes.MaximumResultCount));
         Assert.All(

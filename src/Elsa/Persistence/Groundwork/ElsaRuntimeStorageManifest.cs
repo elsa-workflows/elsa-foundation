@@ -607,16 +607,45 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowActivationSlotDefinitionIdField = "workflowDefinitionId";
 
     /// <summary>
-    /// Flat live-activation id. Absent on a cleared slot, and the index excludes missing values, so a
-    /// deactivated slot cannot be found by the "already live elsewhere" guard.
+    /// Flat live-activation id. Absent on a cleared slot, so a deactivated slot cannot be found by the
+    /// "already live elsewhere" guard: the guard always compares against a non-null activation id, which
+    /// no cleared slot can equal whether the serving index omits the missing value or carries it as null.
     /// </summary>
     public const string WorkflowActivationSlotActiveActivationIdField = "activeActivationId";
+
+    /// <summary>
+    /// The slot's own identity, ordering both ledger routes so their pages are cursor-stable.
+    /// </summary>
+    /// <remarks>
+    /// A nested dot-path into the <b>already persisted</b> slot payload. Groundwork index fields are dot-paths
+    /// resolved by walking nested JSON, so indexing it here is an added index over an existing serialized field
+    /// — not a document-shape change — and therefore needs no schema-version bump and no upcaster; pre-existing
+    /// slots are carried into the index by Groundwork's added-index backfill (docs/serialization.md,
+    /// "Adding an index to a live document kind"). Lifting the slot id into the flat envelope, the way
+    /// <see cref="WorkflowActivationSlotDefinitionIdField"/> is lifted, is what would have required the bump.
+    /// </remarks>
+    public const string WorkflowActivationSlotIdField = "slot.slotId";
 
     /// <summary>Index serving the per-definition slot listing.</summary>
     public const string WorkflowActivationSlotByDefinition = "by-definition";
 
     /// <summary>Index enforcing "one activation is live in at most one slot" across definitions.</summary>
     public const string WorkflowActivationSlotByActiveActivation = "by-active-activation";
+
+    /// <summary>Projected column carrying <see cref="WorkflowActivationSlotIdField"/> for the ordered routes.</summary>
+    public const string WorkflowActivationSlotBySlotId = "by-slot-id";
+
+    /// <summary>
+    /// Composite index behind <see cref="ListWorkflowActivationSlotsByDefinitionQuery"/>: the definition id the
+    /// listing filters on, then the slot id it orders and resumes on.
+    /// </summary>
+    public const string WorkflowActivationSlotByDefinitionAndSlotId = "by-definition-and-slot-id";
+
+    /// <summary>
+    /// Composite index behind <see cref="FindWorkflowActivationSlotByActiveActivationQuery"/>: the live
+    /// activation id the guard filters on, then the slot id it orders and resumes on.
+    /// </summary>
+    public const string WorkflowActivationSlotByActiveActivationAndSlotId = "by-active-activation-and-slot-id";
 
     public const string ListWorkflowActivationSlotsByDefinitionQuery = "list-by-definition";
     public const string FindWorkflowActivationSlotByActiveActivationQuery = "find-by-active-activation";

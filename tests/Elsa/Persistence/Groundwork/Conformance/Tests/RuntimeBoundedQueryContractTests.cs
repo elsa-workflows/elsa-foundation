@@ -44,6 +44,8 @@ public sealed class RuntimeBoundedQueryContractTests
         "bookmarkState/list-by-stimulus-type",
         "durableValueState/list-by-workflow-execution",
         "incidentState/page-attention-by-status",
+        "workflowActivationSlot/list-by-definition",
+        "workflowActivationSlot/find-by-active-activation",
         "workflowExecutableSourceReference/page-by-artifact",
         "workflowExecutableSourceReference/page-by-definition-version",
         "workflowExecutableSourceReference/page-all",
@@ -585,7 +587,8 @@ public sealed class RuntimeBoundedQueryContractTests
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
         ElsaRuntimeStorageManifest.ExecutableActivityTemplateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-        ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind
+        ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind
     ];
 
     private static readonly string[] PrimaryReadDocumentKinds =

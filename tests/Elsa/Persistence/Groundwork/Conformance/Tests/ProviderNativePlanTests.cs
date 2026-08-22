@@ -51,7 +51,7 @@ public sealed class ProviderNativePlanTests
             declared.SequenceEqual(covered, StringComparer.Ordinal),
             $"Missing native route scenarios: {string.Join(", ", declared.Except(covered, StringComparer.Ordinal))}. " +
             $"Unexpected native route scenarios: {string.Join(", ", covered.Except(declared, StringComparer.Ordinal))}.");
-        Assert.Equal(80, declared.Length);
+        Assert.Equal(82, declared.Length);
         Assert.DoesNotContain(
             RouteKey(SecretsStorageManifest.SecretDocumentKind, SecretsStorageManifest.SearchFilteredQuery),
             declared);
@@ -188,7 +188,11 @@ public sealed class ProviderNativePlanTests
                 }
             }
 
-            Assert.Equal(69, results.Count);
+            // Every scenario in ScenarioGroupsAsync, proven at acceptance scale. This is the second half of the
+            // catalog denominator: Native_route_catalog_covers_every_current_scale_bearing_manifest_route pins
+            // what is *declared*, this pins what was actually *driven against a provider*. It went stale at 69
+            // when T145 added a scenario without moving it; T143's two activation-ledger scenarios take it to 72.
+            Assert.Equal(72, results.Count);
             Assert.Equal(
                 results.Count,
                 results.Select(result => RouteKey(
@@ -1172,7 +1176,25 @@ public sealed class ProviderNativePlanTests
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.CreatedAtField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowExecutionIdField),
                     new DocumentQueryOrder(ElsaRuntimeStorageManifest.IncidentIdField)
-                ])
+                ]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind,
+                ElsaRuntimeStorageManifest.ListWorkflowActivationSlotsByDefinitionQuery,
+                [
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowActivationSlotDefinitionIdField,
+                        "definition-id")
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField)]),
+            Documents(
+                ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind,
+                ElsaRuntimeStorageManifest.FindWorkflowActivationSlotByActiveActivationQuery,
+                [
+                    Equal(
+                        ElsaRuntimeStorageManifest.WorkflowActivationSlotActiveActivationIdField,
+                        "activation-id")
+                ],
+                [new DocumentQueryOrder(ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField)])
         ];
     }
 

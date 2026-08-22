@@ -3494,7 +3494,7 @@
     },
     {
       "identity": "workflowActivationSlot",
-      "definitionDigest": "0a6cb1033b56898d00c7b217d0c31bba7c8aa7cea143663f30e241f3c7eada9c",
+      "definitionDigest": "9fe973d8ba39db7c9ee298d8b2abe976a430d8048567a6b43bcb606475e54b8e",
       "provisioningMode": "Dynamic",
       "policy": "Explicit(SharedDocuments)",
       "logicalIndexes": [
@@ -3510,6 +3510,22 @@
           "missingValueBehavior": "Excluded"
         },
         {
+          "identity": "by-active-activation-and-slot-id",
+          "fields": [
+            {
+              "path": "activeActivationId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "slot.slotId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
+        },
+        {
           "identity": "by-definition",
           "fields": [
             {
@@ -3519,47 +3535,89 @@
           "valueKind": "Keyword",
           "isUnique": false,
           "missingValueBehavior": "Excluded"
+        },
+        {
+          "identity": "by-definition-and-slot-id",
+          "fields": [
+            {
+              "path": "workflowDefinitionId",
+              "valueKind": "Keyword"
+            },
+            {
+              "path": "slot.slotId",
+              "valueKind": "Keyword"
+            }
+          ],
+          "valueKind": "Keyword",
+          "isUnique": false,
+          "missingValueBehavior": "IncludedAsNull"
         }
       ],
       "boundedQueries": [
         {
           "identity": "find-by-active-activation",
-          "indexIdentity": "by-active-activation",
+          "indexIdentity": "by-active-activation-and-slot-id",
           "operations": [
             "Equal"
           ],
-          "sortSupport": "None",
-          "pagingSupport": "Offset",
-          "executionClass": "Ordinary",
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
           "supportsDisjunction": false,
-          "supportsTotalCount": false,
-          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
-          "sortFields": [],
-          "predicateFields": [],
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "slot.slotId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "activeActivationId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
           "residualPredicateFields": [],
           "resultOperations": [
             "Any",
+            "Count",
             "Documents",
             "First"
           ]
         },
         {
           "identity": "list-by-definition",
-          "indexIdentity": "by-definition",
+          "indexIdentity": "by-definition-and-slot-id",
           "operations": [
             "Equal"
           ],
-          "sortSupport": "None",
-          "pagingSupport": "Offset",
-          "executionClass": "Ordinary",
+          "sortSupport": "Ascending",
+          "pagingSupport": "Cursor",
+          "executionClass": "ScaleBearing",
           "supportsDisjunction": false,
-          "supportsTotalCount": false,
-          "predicateBindingMode": "ImplicitFirstLogicalIndexField",
-          "sortFields": [],
-          "predicateFields": [],
+          "supportsTotalCount": true,
+          "predicateBindingMode": "DeclaredFields",
+          "sortFields": [
+            {
+              "path": "slot.slotId",
+              "direction": "Ascending"
+            }
+          ],
+          "predicateFields": [
+            {
+              "path": "workflowDefinitionId",
+              "operations": [
+                "Equal"
+              ]
+            }
+          ],
           "residualPredicateFields": [],
           "resultOperations": [
             "Any",
+            "Count",
             "Documents",
             "First"
           ]

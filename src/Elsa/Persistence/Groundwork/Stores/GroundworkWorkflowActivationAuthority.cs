@@ -291,8 +291,9 @@ public sealed class GroundworkWorkflowActivationAuthority(
 
     // Ownership and the live-activation guard are hot lookups, so the definition id and the live activation id
     // are lifted to flat top-level fields instead of being reached through a nested payload path — the same
-    // shape the other list-capable runtime bridges use. A cleared slot omits the activation id entirely, which
-    // the index's Excluded missing-value behaviour turns into "not live anywhere".
+    // shape the other list-capable runtime bridges use. A cleared slot omits the activation id entirely, and the
+    // guard only ever asks for equality with a real activation id, so a cleared slot is "not live anywhere"
+    // whatever the serving index does with the missing value.
     private sealed record ActivationSlotDocument(
         string WorkflowDefinitionId,
         string? ActiveActivationId,

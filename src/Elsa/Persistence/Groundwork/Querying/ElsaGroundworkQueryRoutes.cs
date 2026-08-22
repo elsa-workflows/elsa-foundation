@@ -240,6 +240,24 @@ public static class ElsaGroundworkQueryRoutes
             ],
             Equal(ElsaRuntimeStorageManifest.StatusField))),
 
+        // The activation ledger. Both routes are enrolled here rather than left as plain manifest queries so the
+        // four-provider bounded-query probe exercises them: the slot decides which activation is live for a
+        // definition, so a route that only ever ran on SQLite is the GW-QUERY-008 trap.
+        Route("runtime-workflow-activation-slot", "list-by-definition-bounded", ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.ListWorkflowActivationSlotsByDefinitionQuery,
+                ElsaRuntimeStorageManifest.WorkflowActivationSlotByDefinitionAndSlotId,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowActivationSlotDefinitionIdField))),
+        Route("runtime-workflow-activation-slot", "find-by-active-activation-bounded", ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind, Documents(),
+            BoundedOrdered(
+                ElsaRuntimeStorageManifest.FindWorkflowActivationSlotByActiveActivationQuery,
+                ElsaRuntimeStorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId,
+                ElsaGroundworkQueryContinuation.Cursor,
+                [ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField],
+                Equal(ElsaRuntimeStorageManifest.WorkflowActivationSlotActiveActivationIdField))),
+
         Route("runtime-trigger-binding", "list-by-publication-bounded", ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.ListTriggerBindingsByPublicationQuery, ElsaRuntimeStorageManifest.WorkflowTriggerBindingByActivationAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.TriggerBindingIdField], Equal(ElsaRuntimeStorageManifest.ActivationIdField))),
         Route("runtime-trigger-binding", "list-by-stimulus-bounded", ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.ListTriggerBindingsByStimulusAndTypeQuery, ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulusAndType, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.TriggerBindingIdField], Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingStimulusLookupKeyField), Equal(ElsaRuntimeStorageManifest.WorkflowTriggerBindingIsActiveField))),
         Route("runtime-trigger-binding", "list-by-artifact-bounded", ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, Documents(), BoundedOrdered(ElsaRuntimeStorageManifest.ListTriggerBindingsByArtifactQuery, ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifactAndId, ElsaGroundworkQueryContinuation.Cursor, [ElsaRuntimeStorageManifest.TriggerBindingIdField], Equal(ElsaRuntimeStorageManifest.ArtifactIdField))),
@@ -295,6 +313,31 @@ public static class ElsaGroundworkQueryRoutes
                                 UsesCursorPaging: true)),
                     ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind =>
                         PhysicalizeWorkflowExecutableSourceReferences(unit),
+                    ElsaRuntimeStorageManifest.WorkflowActivationSlotDocumentKind =>
+                        PhysicalizeEnvelopeOrderedRoutes(
+                            unit,
+                            Field(
+                                ElsaRuntimeStorageManifest.WorkflowActivationSlotIdField,
+                                ElsaRuntimeStorageManifest.WorkflowActivationSlotBySlotId,
+                                length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength),
+                            new EnvelopeOrderedRoute(
+                                ElsaRuntimeStorageManifest.WorkflowActivationSlotByDefinitionAndSlotId,
+                                [
+                                    Field(
+                                        ElsaRuntimeStorageManifest.WorkflowActivationSlotDefinitionIdField,
+                                        ElsaRuntimeStorageManifest.WorkflowActivationSlotByDefinition,
+                                        length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
+                                ],
+                                UsesCursorPaging: true),
+                            new EnvelopeOrderedRoute(
+                                ElsaRuntimeStorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId,
+                                [
+                                    Field(
+                                        ElsaRuntimeStorageManifest.WorkflowActivationSlotActiveActivationIdField,
+                                        ElsaRuntimeStorageManifest.WorkflowActivationSlotByActiveActivation,
+                                        length: ElsaRuntimeStorageManifest.RuntimeExecutionIdProjectionLength)
+                                ],
+                                UsesCursorPaging: true)),
                     ElsaRuntimeStorageManifest.BookmarkStateDocumentKind =>
                         PhysicalizeWorkflowIdentityRoute(
                             unit,

@@ -129,12 +129,19 @@ already is; only *lifting a new value into the flat envelope* changes the docume
 clean-break steps above. Pre-existing rows are carried into the new index by the Condition 7 backfill below,
 so no re-save is required and no old row is silently invisible to the new filter.
 
-Three runtime kinds have taken this path: `bookmarkState`/`by-stimulus`,
-`activityExecutionState`/`by-parent-activity-execution` (nested `state.parentActivityExecutionId`), and
+Four runtime kinds have taken this path: `bookmarkState`/`by-stimulus`,
+`activityExecutionState`/`by-parent-activity-execution` (nested `state.parentActivityExecutionId`),
 `workflowExecutableSourceReference`/`by-definition-version` (nested `reference.definitionVersionId`, added so
 the artifact-export producer can resolve one definition version instead of reading the whole reference
-table). None bumped its kind's version; all three kept their golden fixtures unchanged, which is the
-wire-safety proof.
+table), and `workflowActivationSlot`/`by-definition-and-slot-id` plus
+`by-active-activation-and-slot-id` (nested `slot.slotId`, added so the activation ledger's two routes order
+and resume on the slot's own identity). None bumped its kind's version; all four kept their golden fixtures
+unchanged, which is the wire-safety proof.
+
+A composite route index may also carry `MissingValueBehavior.IncludedAsNull` where the single-field index it
+supersedes was `Excluded` — the activation ledger's live-activation guard is the case in point. That is not a
+semantic change as long as the route's predicate is an equality against a non-null value: a cleared row now
+sits in the index as null, and no non-null equality can match it.
 
 What an added index *does* change is the physical surface: regenerate the manifest golden
 (`ELSA_UPDATE_GOLDENS=1`), and enrol any new bounded route in the provider conformance denominators
