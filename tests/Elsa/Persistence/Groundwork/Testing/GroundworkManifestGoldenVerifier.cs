@@ -116,7 +116,15 @@ public static class GroundworkManifestGoldenVerifier
             writer.WriteEndObject();
         }
 
-        return Encoding.UTF8.GetString(stream.ToArray()) + Environment.NewLine;
+        // LF, not Environment.NewLine. A golden is compared and hashed byte-for-byte, so a CRLF rendering on
+        // Windows produces a file that differs from the same golden written on CI -- the mismatch then reads as a
+        // content change and says nothing about line endings. .gitattributes pins the checked-in representation;
+        // this pins what regeneration writes, which is the other half. Utf8JsonWriter's own indentation is LF, so
+        // normalizing the trailing newline is sufficient.
+        return Encoding.UTF8.GetString(stream.ToArray()).Replace("
+", "
+") + "
+";
     }
 
     private static void WriteUnit(Utf8JsonWriter writer, StorageUnit unit, string serializedDefinition)
