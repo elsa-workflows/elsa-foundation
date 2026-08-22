@@ -515,10 +515,8 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
                         new WorkflowsDesignApiFeature().ConfigureServices(services);
                         services.AddSingleton<IExpressionToolingProviderResolver, EmptyExpressionToolingProviderResolver>();
                         services.AddSingleton<IActivityDefinitionVersionStore, BaselineActivityDefinitionVersionStore>();
+                        // No mediator senders: every Workflows Design route now owns its handling.
                         Support.DefinitionDomainFakes.Register(services);
-                        services.AddSingleton<BaselineRequestSender>();
-                        services.AddSingleton<IRequestSender>(provider => provider.GetRequiredService<BaselineRequestSender>());
-                        services.AddSingleton<ICommandSender, BaselineCommandSender>();
                     });
                     webHost.Configure(app =>
                     {
@@ -579,21 +577,6 @@ public sealed class WorkflowDesignApiBeforeBaselineTests
 
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(claims), Scheme.Name)));
         }
-    }
-
-    private sealed class BaselineRequestSender : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult(default(T)!);
-    }
-
-    private sealed class BaselineCommandSender : ICommandSender
-    {
-        public Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult(default(T)!);
-
-        public Task Send(ICommand command, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
     }
 
     private sealed class EmptyExpressionToolingProviderResolver : IExpressionToolingProviderResolver

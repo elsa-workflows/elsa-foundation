@@ -1,7 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Models;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Structures;
+namespace Elsa.Workflows.Design.Api.Endpoints.Structures.List;
 
 /// <summary>
 /// Requests the registry of composite-activity structure kinds registered in the active shell.

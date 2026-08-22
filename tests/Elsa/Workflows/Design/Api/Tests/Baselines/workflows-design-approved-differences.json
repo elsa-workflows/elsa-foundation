@@ -550,6 +550,50 @@
     "followUp": "#1417"
   },
   {
+    "endpoint": "/design/workflows/structures",
+    "method": "GET",
+    "case": "list-structures|trusted-success",
+    "facet": "body",
+    "expected": "",
+    "actual": "{\n  \"fingerprint\": \"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\n  \"items\": []\n}",
+    "owner": "Elsa.Workflows.Design.Api",
+    "reason": "Handler logic moved into the endpoint classes. The FastEndpoints-era capture harness faked the mediator sender with a null result, so these success cases pinned an empty sentinel body; the endpoints now produce the real response composed from deterministic domain fakes.",
+    "followUp": "#1417"
+  },
+  {
+    "endpoint": "/design/workflows/structures",
+    "method": "GET",
+    "case": "list-structures|trusted-success",
+    "facet": "headers",
+    "expected": "{}",
+    "actual": "{\n  \"content-type\": \"application/json; charset=utf-8\"\n}",
+    "owner": "Elsa.Workflows.Design.Api",
+    "reason": "Handler logic moved into the endpoint classes. The FastEndpoints-era capture harness faked the mediator sender with a null result, so these success cases pinned an empty sentinel body; the endpoints now produce the real response composed from deterministic domain fakes.",
+    "followUp": "#1417"
+  },
+  {
+    "endpoint": "/design/workflows/structures",
+    "method": "GET",
+    "case": "list-structures|trusted-success",
+    "facet": "json",
+    "expected": "",
+    "actual": "{\n  \"fingerprint\": \"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\n  \"items\": []\n}",
+    "owner": "Elsa.Workflows.Design.Api",
+    "reason": "Handler logic moved into the endpoint classes. The FastEndpoints-era capture harness faked the mediator sender with a null result, so these success cases pinned an empty sentinel body; the endpoints now produce the real response composed from deterministic domain fakes.",
+    "followUp": "#1417"
+  },
+  {
+    "endpoint": "/design/workflows/structures",
+    "method": "GET",
+    "case": "list-structures|trusted-success",
+    "facet": "media-types",
+    "expected": "",
+    "actual": "application/json; charset=utf-8",
+    "owner": "Elsa.Workflows.Design.Api",
+    "reason": "Handler logic moved into the endpoint classes. The FastEndpoints-era capture harness faked the mediator sender with a null result, so these success cases pinned an empty sentinel body; the endpoints now produce the real response composed from deterministic domain fakes.",
+    "followUp": "#1417"
+  },
+  {
     "endpoint": "/design/workflows/versions/ingest",
     "method": "POST",
     "case": "add-version|trusted-success",

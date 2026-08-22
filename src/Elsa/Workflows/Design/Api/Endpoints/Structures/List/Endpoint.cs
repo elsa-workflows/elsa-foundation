@@ -1,14 +1,21 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 
-namespace Elsa.Workflows.Design.Api.Endpoints.Structures;
+namespace Elsa.Workflows.Design.Api.Endpoints.Structures.List;
 
-public sealed class ListActivityStructuresHandler(IEnumerable<IActivityStructureHandler> structureHandlers)
-    : IRequestHandler<ListActivityStructures, ActivityStructuresResponse>
+[Get("structures")]
+[RequirePermission(WorkflowDesignPermissions.Read)]
+public sealed class Endpoint(IEnumerable<IActivityStructureHandler> structureHandlers)
+    : ApiEndpoint<ListActivityStructures, ActivityStructuresResponse>
 {
-    public Task<ActivityStructuresResponse> Handle(
+    public override void Configure(ApiEndpointOptions options) =>
+        options.Operation = "StructuresList";
+
+    public override Task<ActivityStructuresResponse> HandleAsync(
         ListActivityStructures request,
         CancellationToken cancellationToken)
     {

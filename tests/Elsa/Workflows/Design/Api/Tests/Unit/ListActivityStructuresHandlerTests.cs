@@ -3,7 +3,8 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Xunit;
-using Elsa.Workflows.Design.Api.Endpoints.Structures;
+using Elsa.Workflows.Design.Api.Endpoints.Structures.List;
+using StructuresEndpoint = Elsa.Workflows.Design.Api.Endpoints.Structures.List.Endpoint;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -17,7 +18,7 @@ public sealed class ListActivityStructuresHandlerTests
     ];
 
     private static Task<ActivityStructuresResponse> HandleAsync() =>
-        new ListActivityStructuresHandler(Handlers).Handle(new ListActivityStructures(), CancellationToken.None);
+        new StructuresEndpoint(Handlers).HandleAsync(new ListActivityStructures(), CancellationToken.None);
 
     [Fact]
     public async Task Registered_kinds_round_trip_in_ordinal_kind_order()
@@ -67,7 +68,7 @@ public sealed class ListActivityStructuresHandlerTests
             new StubStructureHandler("test.same", "10.0.0", supportsScopedVariables: false, payloadType: null)
         ];
 
-        var response = await new ListActivityStructuresHandler(handlers).Handle(new ListActivityStructures(), CancellationToken.None);
+        var response = await new StructuresEndpoint(handlers).HandleAsync(new ListActivityStructures(), CancellationToken.None);
 
         // Ordinal string ordering: "10.0.0" precedes "2.0.0".
         Assert.Equal(["10.0.0", "2.0.0"], response.Items.Select(item => item.SchemaVersion));

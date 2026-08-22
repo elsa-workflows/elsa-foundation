@@ -433,8 +433,6 @@ public sealed class WorkflowsDesignApiContractTests
     {
         public const string IdentityHeader = "X-Workflow-Design-Identity";
         public HttpClient Client { get; } = host.GetTestClient();
-        public DefinitionsRequestSender Sender { get; } = host.Services.GetRequiredService<DefinitionsRequestSender>();
-        public DefinitionsCommandSender CommandSender { get; } = host.Services.GetRequiredService<DefinitionsCommandSender>();
         public ContractActivityVersionStore ActivityStore { get; } = host.Services.GetRequiredService<ContractActivityVersionStore>();
         public ContractActivityOptionsProvider ActivityProvider { get; } = host.Services.GetRequiredService<ContractActivityOptionsProvider>();
         public AuthorizationProbe AuthorizationProbe { get; } = host.Services.GetRequiredService<AuthorizationProbe>();
@@ -465,11 +463,8 @@ public sealed class WorkflowsDesignApiContractTests
                             options.NormalizedAuthenticationTypes = new HashSet<string>([AuthenticationHandler.SchemeName], StringComparer.Ordinal));
                         new WorkflowsDesignApiFeature().ConfigureServices(services);
                         services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
+                        // No mediator senders: every Workflows Design route now owns its handling.
                         DefinitionDomainFakes.Register(services);
-                        services.AddSingleton<DefinitionsRequestSender>();
-                        services.AddSingleton<IRequestSender>(services => services.GetRequiredService<DefinitionsRequestSender>());
-                        services.AddSingleton<DefinitionsCommandSender>();
-                        services.AddSingleton<ICommandSender>(services => services.GetRequiredService<DefinitionsCommandSender>());
                         services.AddFastEndpoints(options => options.Assemblies = [typeof(DesignRetainedFastEndpointsCanary).Assembly]);
                     });
                     webHost.Configure(app =>
@@ -539,39 +534,6 @@ public sealed class WorkflowsDesignApiContractTests
             var authenticationType = identity == "external-read" ? "ExternalUntrusted" : SchemeName;
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
                 new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType)), SchemeName)));
-        }
-    }
-
-    internal sealed class DefinitionsRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            if (request is ListDefinitions)
-                return Task.FromResult((T)(object)new WorkflowDefinitionListView([]));
-
-            if (request is GetDefinition && Scenario == "trusted-not-found")
-                throw new EntityNotFoundException("definition sample was not found");
-
-            throw new InvalidOperationException($"Unexpected request '{request.GetType().FullName}'.");
-        }
-
-        private string Scenario => contextAccessor.HttpContext?.Request.Headers[AuthorizationHost.IdentityHeader].ToString() ?? "";
-    }
-
-    internal sealed class DefinitionsCommandSender : ICommandSender
-    {
-        public object? LastCommand { get; private set; }
-
-        public Task<T> Send<T>(Elsa.Mediator.Core.Contracts.ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull
-        {
-            LastCommand = command;
-            return Task.FromResult(default(T)!);
-        }
-
-        public Task Send(MediatorCommand command, CancellationToken cancellationToken = default)
-        {
-            LastCommand = command;
-            return Task.CompletedTask;
         }
     }
 
