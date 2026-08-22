@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "root": "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore",
-  "treeSha256": "f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c",
+  "treeSha256": "960e9573bc660c1fd3efe606c14e8f6aa5dc0c61b0afef651eddcc44c38b6251",
   "files": [
     {
       "path": "ApplicationIdentityDbContext.cs",
@@ -13,7 +13,7 @@
     },
     {
       "path": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
-      "sha256": "056dc980e226d2975ddd081ea26fc543d94d4c0ccea632157079d9c8bd2014e4"
+      "sha256": "6e0fd902564aa1f2560b3cd3304d9fd717ed3f9f81b63095a1372cd26f06398b"
     },
     {
       "path": "Entities/TenantMembershipEntity.cs",
