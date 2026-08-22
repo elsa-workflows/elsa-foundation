@@ -120,13 +120,15 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/value-conversion/profiles", "GET"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", "POST"),
         new("/publishing/workflows/preflight", "POST"),
-        new("/publishing/workflows/{definitionId}/slots", "GET"),
-        new("/publishing/workflows/{definitionId}/slots/{slotName}", "GET"),
+        // Spec 151 (T117) moved the slot READS to the runtime owner at runtime/workflows/activation-slots/...;
+        // Publishing keeps only the slot lifecycle commands below.
         new("/publishing/workflows/{definitionId}/slots/{slotName}", "DELETE"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST"),
         new("/publishing/workflows/{definitionId}/policy", "GET"),
         new("/publishing/workflows/{definitionId}/policy", "PUT"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", "POST"),
+        // Spec 151: the portable executable-closure export.
+        new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export", "GET"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs", "POST"),
         new("/publishing/workflows/drafts/test-runs", "POST"),
         new("/publishing/preflight", "POST"),

@@ -51,7 +51,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_frozen_23_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_frozen_22_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,9 +59,9 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(23, manifest.Entries.Count);
+        Assert.Equal(22, manifest.Entries.Count);
         Assert.Equal(
-            PublishingCompatibilityCases.Manifest
+            PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
                 .Order(StringComparer.Ordinal),
             manifest.Entries
@@ -87,15 +87,15 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(23, endpoints.Length);
-        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(22, endpoints.Length);
+        Assert.Equal(22, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
 
         foreach (var endpoint in endpoints)
         {
-            var route = PublishingCompatibilityCases.Manifest.Single(candidate =>
+            var route = PublishingCurrentSurface.Manifest.Single(candidate =>
                 candidate.Endpoint.Method.Value == endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods.Single() &&
                 RouteMatches(candidate.Endpoint.Route.Value, endpoint.RoutePattern.RawText!));
             var name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
@@ -122,9 +122,10 @@ public sealed class PublishingApiContractTests
             var success = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
                 .Single(response => response.StatusCode == StatusCodes.Status200OK);
             var responseType = success.Type?.FullName ?? success.Type?.Name ?? string.Empty;
-            var responseLeaf = route.Response.Contains('<', StringComparison.Ordinal)
-                ? route.Response[(route.Response.LastIndexOf('<') + 1)..^1]
-                : route.Response;
+            var declaredResponse = PublishingCurrentSurface.ResponseFor(route);
+            var responseLeaf = declaredResponse.Contains('<', StringComparison.Ordinal)
+                ? declaredResponse[(declaredResponse.LastIndexOf('<') + 1)..^1]
+                : declaredResponse;
             Assert.Contains(responseLeaf, responseType, StringComparison.Ordinal);
             Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), response =>
                 response.StatusCode == StatusCodes.Status401Unauthorized);
@@ -158,7 +159,7 @@ public sealed class PublishingApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
             .ToArray();
-        Assert.Equal(23, publishingOperations.Length);
+        Assert.Equal(22, publishingOperations.Length);
 
         var before = new CompatibilityEvidenceSet
         {
@@ -192,9 +193,9 @@ public sealed class PublishingApiContractTests
     {
         var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
         var approvals = PublishingApprovalRegistry.Load(approvalsPath);
-        Assert.Equal(46, approvals.Length);
-        Assert.Equal(23, approvals.Count(approval => !approval.Reverse));
-        Assert.Equal(23, approvals.Count(approval => approval.Reverse));
+        Assert.Equal(48, approvals.Length);
+        Assert.Equal(24, approvals.Count(approval => !approval.Reverse));
+        Assert.Equal(24, approvals.Count(approval => approval.Reverse));
         Assert.All(approvals, approval =>
         {
             Assert.Equal("openapi", approval.Case);
@@ -202,7 +203,32 @@ public sealed class PublishingApiContractTests
             Assert.NotEqual(approval.Expected, approval.Actual);
         });
 
-        var first = Assert.Single(approvals.Where(approval => !approval.Reverse).Take(1));
+        // Spec 151 changed the Publishing route set, so the registry now also carries one-sided approvals.
+        // Every one of them is pinned here by endpoint so a route cannot silently appear or disappear.
+        Assert.Equal(
+            ["GET /publishing/workflows/{param}/executable-export"],
+            approvals.Where(approval => !approval.Reverse && approval.Expected == "null")
+                .Select(approval => $"{approval.Method} {approval.Endpoint}")
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["GET /publishing/workflows/{param}/slots", "GET /publishing/workflows/{param}/slots/{param}"],
+            approvals.Where(approval => !approval.Reverse && approval.Actual == "null")
+                .Select(approval => $"{approval.Method} {approval.Endpoint}")
+                .Order(StringComparer.Ordinal));
+        // A one-sided approval must never be one-sided on both ends, and each needs its reverse twin.
+        Assert.All(approvals.Where(approval => approval.Expected == "null" || approval.Actual == "null"), approval =>
+        {
+            Assert.False(approval.Expected == "null" && approval.Actual == "null");
+            Assert.Single(approvals, twin => twin.Reverse != approval.Reverse &&
+                twin.Endpoint == approval.Endpoint && twin.Method == approval.Method &&
+                twin.Expected == approval.Expected && twin.Actual == approval.Actual);
+        });
+
+        // The bite probes below rehydrate both sides into evidence documents, so they need a two-sided
+        // approval; the one-sided route add/remove approvals are pinned by the assertions above instead.
+        var first = Assert.Single(approvals
+            .Where(approval => !approval.Reverse && approval.Expected != "null" && approval.Actual != "null")
+            .Take(1));
         var reverse = Assert.Single(approvals, approval => approval.Reverse &&
             approval.Endpoint == first.Endpoint && approval.Method == first.Method);
         var before = Evidence(first.Expected);
@@ -327,6 +353,7 @@ public sealed class PublishingApiContractTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or

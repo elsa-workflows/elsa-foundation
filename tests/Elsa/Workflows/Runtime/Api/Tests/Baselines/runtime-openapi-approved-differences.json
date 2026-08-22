@@ -1,5 +1,23 @@
 {
   "owner": "Elsa.Workflows.Runtime.Api",
+  "addedRoutes": [
+    {
+      "method": "GET",
+      "path": "/runtime/workflows/activation-slots/{param}",
+      "operationId": "ListActivationSlots",
+      "permission": "WorkflowRuntimeRead",
+      "reason": "Spec 151 (T117) gave the runtime owner the neutral, definition-keyed activation-slot READ surface. Slot reads were previously published by the Publishing owner at publishing/workflows/{definitionId}/slots and were removed there in the same change. The route did not exist when the pre-migration runtime corpus was frozen, so it has no before-side counterpart.",
+      "followUp": "Review the spec 151 executable-artifact reconciliation route-set change before altering the public contract."
+    },
+    {
+      "method": "GET",
+      "path": "/runtime/workflows/activation-slots/{param}/{param}",
+      "operationId": "GetActivationSlot",
+      "permission": "WorkflowRuntimeRead",
+      "reason": "Spec 151 (T117) gave the runtime owner the neutral, definition-keyed activation-slot READ surface. Slot reads were previously published by the Publishing owner at publishing/workflows/{definitionId}/slots/{slotName} and were removed there in the same change. The route did not exist when the pre-migration runtime corpus was frozen, so it has no before-side counterpart.",
+      "followUp": "Review the spec 151 executable-artifact reconciliation route-set change before altering the public contract."
+    }
+  ],
   "differences": [
     {
       "method": "GET",

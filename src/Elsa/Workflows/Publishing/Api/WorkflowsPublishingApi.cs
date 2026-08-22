@@ -44,7 +44,7 @@ public static class WorkflowsPublishingApi
     /// <summary>Longest a single interpolated executable-export filename segment may be before it is truncated.</summary>
     private const int MaximumFileNameSegmentLength = 96;
 
-    /// <summary>Maps all 23 Publishing operations.</summary>
+    /// <summary>Maps all 22 Publishing operations.</summary>
     public static RouteGroupBuilder MapWorkflowsPublishingApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);

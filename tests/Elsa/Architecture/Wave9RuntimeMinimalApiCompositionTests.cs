@@ -47,24 +47,50 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
 {
     private static readonly string BaselineDirectory = Path.Join(AppContext.BaseDirectory, "Baselines");
 
-    [Fact]
-    public async Task Runtime_minimal_mapper_publishes_all_24_routes_with_baseline_openapi_coverage()
+    /// <summary>
+    /// Routes the runtime mapper publishes today: the 24 frozen pre-migration routes plus the reviewed
+    /// additions recorded under <c>addedRoutes</c> in <c>wave9-runtime-openapi-approved-differences.json</c>.
+    /// </summary>
+    private static int RuntimeRouteCount => 24 + ReviewedAddedRoutes().Count;
+
+    /// <summary>
+    /// The reviewed route additions, as "METHOD /normalized/route". Each entry must be absent from the frozen
+    /// before document and present on the live surface; both directions are asserted by
+    /// <see cref="Runtime_added_routes_are_reviewed_absent_before_and_present_after"/>.
+    /// </summary>
+    private static IReadOnlyList<string> ReviewedAddedRoutes()
     {
+        using var document = JsonDocument.Parse(File.ReadAllText(
+            Path.Join(BaselineDirectory, "wave9-runtime-openapi-approved-differences.json")));
+        if (!document.RootElement.TryGetProperty("addedRoutes", out var addedRoutes))
+            return [];
+
+        return addedRoutes.EnumerateArray()
+            .Select(route => $"{route.GetProperty("method").GetString()!.ToUpperInvariant()} {route.GetProperty("path").GetString()}")
+            .ToArray();
+    }
+
+    [Fact]
+    public async Task Runtime_minimal_mapper_publishes_all_26_routes_with_baseline_openapi_coverage()
+    {
+        // The receipt describes the immutable pre-migration capture, so it stays pinned at 24.
         var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "wave9-runtime-before-capture-receipt.json"));
         Assert.Equal(24, receipt.GetProperty("registrationCount").GetInt32());
         Assert.Equal(24, receipt.GetProperty("operationCount").GetInt32());
 
         await using var host = await RuntimeHost.StartAsync();
         var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
-        Assert.Equal(24, openApi.Operations.Count);
+        Assert.Equal(RuntimeRouteCount, openApi.Operations.Count);
 
         var expected = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "wave9-runtime-openapi-fastendpoints.json"));
         Assert.Equal(
-            expected.Operations.Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value)).Order(StringComparer.Ordinal),
+            expected.Operations.Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value))
+                .Concat(ReviewedAddedRoutes())
+                .Order(StringComparer.Ordinal),
             openApi.Operations.Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value)).Order(StringComparer.Ordinal));
 
         var endpoints = host.Endpoints;
-        Assert.Equal(24, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi));
+        Assert.Equal(RuntimeRouteCount, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi));
         Assert.All(endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi), endpoint =>
         {
             Assert.Equal("Elsa.Workflows.Runtime.Api", endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.Owner);
@@ -123,6 +149,46 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     }
 
     [Fact]
+    public async Task Runtime_added_routes_are_reviewed_absent_before_and_present_after()
+    {
+        var before = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "wave9-runtime-openapi-fastendpoints.json"));
+        await using var host = await RuntimeHost.StartAsync();
+        var after = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
+
+        var beforeKeys = before.Operations
+            .Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value))
+            .ToHashSet(StringComparer.Ordinal);
+        var afterKeys = after.Operations
+            .Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value))
+            .ToHashSet(StringComparer.Ordinal);
+        var added = ReviewedAddedRoutes();
+
+        // The registry is exact in both directions: it may not name a route that already existed, it may not
+        // name a route the live surface does not publish, and it must name every route the live surface gained.
+        Assert.Equal(added.Count, added.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(added, route =>
+        {
+            Assert.DoesNotContain(route, beforeKeys);
+            Assert.Contains(route, afterKeys);
+        });
+        Assert.Equal(
+            added.Order(StringComparer.Ordinal),
+            afterKeys.Except(beforeKeys, StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        Assert.Empty(beforeKeys.Except(afterKeys, StringComparer.Ordinal));
+
+        // Every declared addition carries its reviewed attribution.
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
+            Path.Join(BaselineDirectory, "wave9-runtime-openapi-approved-differences.json")));
+        Assert.All(document.RootElement.GetProperty("addedRoutes").EnumerateArray(), route =>
+        {
+            foreach (var name in (string[])["method", "path", "operationId", "permission", "reason", "followUp"])
+                Assert.False(string.IsNullOrWhiteSpace(route.GetProperty(name).GetString()), name);
+            foreach (var property in route.EnumerateObject())
+                Assert.Contains(property.Name, (string[])["method", "path", "operationId", "permission", "reason", "followUp"]);
+        });
+    }
+
+    [Fact]
     public async Task Runtime_openapi_differences_are_consumed_by_pinned_two_sided_approvals()
     {
         var before = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "wave9-runtime-openapi-fastendpoints.json"));
@@ -135,8 +201,19 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         var approvedFacetKeys = RuntimeOpenApiApprovalValidator.Validate(beforeOperations, afterOperations, approvals);
         var consumedFacetKeys = new HashSet<string>(StringComparer.Ordinal);
 
+        // Routes spec 151 added have no before-side counterpart by construction. They are enumerated by the
+        // reviewed addedRoutes registry and checked exactly, in both directions, by
+        // Runtime_added_routes_are_reviewed_absent_before_and_present_after.
+        var addedRoutes = ReviewedAddedRoutes().ToHashSet(StringComparer.Ordinal);
         foreach (var key in beforeOperations.Keys.Union(afterOperations.Keys, StringComparer.Ordinal))
         {
+            if (addedRoutes.Contains(key))
+            {
+                Assert.False(beforeOperations.ContainsKey(key), $"Reviewed added route '{key}' already existed before.");
+                Assert.True(afterOperations.ContainsKey(key), $"Reviewed added route '{key}' is not published.");
+                continue;
+            }
+
             Assert.True(beforeOperations.TryGetValue(key, out var beforeOperation), $"Missing before OpenAPI operation '{key}'.");
             Assert.True(afterOperations.TryGetValue(key, out var afterOperation), $"Missing after OpenAPI operation '{key}'.");
             var routeApprovals = approvals.Where(approval => RuntimeOpenApiApprovalValidator.EndpointKey(approval) == key).ToArray();
@@ -203,7 +280,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         await using var host = await RuntimeHost.StartAsync();
         var runtimeEndpoints = host.Endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi).ToArray();
-        Assert.Equal(24, runtimeEndpoints.Length);
+        Assert.Equal(RuntimeRouteCount, runtimeEndpoints.Length);
         foreach (var endpoint in runtimeEndpoints)
         {
             var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single() ?? HttpMethods.Get;
@@ -223,7 +300,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         await using var host = await RuntimeHost.StartAsync();
         var runtimeEndpoints = host.Endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi).ToArray();
-        Assert.Equal(24, runtimeEndpoints.Length);
+        Assert.Equal(RuntimeRouteCount, runtimeEndpoints.Length);
         foreach (var endpoint in runtimeEndpoints)
         {
             var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single() ?? HttpMethods.Get;

@@ -182,7 +182,7 @@ public sealed class PublishingMinimalApiBindingTests
 
         foreach (var endpoint in routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>())
         {
-            var route = PublishingCompatibilityCases.Manifest.Single(candidate =>
+            var route = PublishingCurrentSurface.Manifest.Single(candidate =>
                 candidate.Endpoint.Method.Value == endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods.Single() &&
                 NormalizeRoute(endpoint.RoutePattern.RawText!) == NormalizeRoute(candidate.Endpoint.Route.Value));
             var accepts = endpoint.Metadata.GetMetadata<IAcceptsMetadata>();
@@ -205,6 +205,7 @@ public sealed class PublishingMinimalApiBindingTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
