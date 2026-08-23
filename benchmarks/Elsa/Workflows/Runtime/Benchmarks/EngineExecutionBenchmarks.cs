@@ -1,3 +1,4 @@
+using Groundwork.Store;
 using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Activities.Flowchart;
@@ -7,7 +8,8 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -15,8 +17,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -429,7 +429,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
 
         assert(run);
 
-        var commits = lease.Queries is null ? (long?)null : await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(lease.Queries);
+        var commits = lease.Store is null ? (long?)null : GroundworkBenchmarkStore.CountCheckpointCommits(lease.Store);
         return (commits, lease.ExecutableReads, dispatchDiagnostics?.Dispatches ?? 0);
     }
 
@@ -450,17 +450,19 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
         var run = await lease.Harness.RunAsync(executableFactory());
         run.AssertWorkflowCompleted();
 
-        var documents = await GroundworkBenchmarkStore.ListCheckpointCommitsAsync(lease.Queries!);
+        var documents = GroundworkBenchmarkStore.ListCheckpointCommits(lease.Store!);
 
         var kinds = documents
             .Select(document =>
             {
-                using var content = JsonDocument.Parse(document.ContentJson);
+                using var content = JsonDocument.Parse(
+                    Convert.ToString(document[ElsaRuntimeV2StorageManifest.ContentField])!);
                 var root = content.RootElement;
                 var commitId =
                     root.TryGetProperty("commitId", out var camel) ? camel.GetString() :
                     root.TryGetProperty("CommitId", out var pascal) ? pascal.GetString() : null;
-                return CommitKindSlug(commitId ?? document.Id);
+                return CommitKindSlug(
+                    commitId ?? Convert.ToString(document[ElsaRuntimeV2StorageManifest.IdField])!);
             })
             .GroupBy(kind => kind, StringComparer.Ordinal)
             .OrderByDescending(group => group.Count())
@@ -579,14 +581,14 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                 CountExecutableReads(services, readCounter);
             })
             .Build(ActivityExecutionIds);
-        return new HarnessLease(harness, store: null, queries: null, databasePath: null, readCounter);
+        return new HarnessLease(harness, store: null, databasePath: null, readCounter: readCounter);
     }
 
     private static async ValueTask<HarnessLease> NewDurableSqliteHarnessAsync(bool coalesce, int? maxSegmentCheckpoints = null, bool fastPathEnabled = true, bool burstCache = true)
     {
         var readCounter = new ExecutableReadCounter();
         var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-engine-bench-{Guid.NewGuid():N}.db");
-        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
+        var opened = GroundworkBenchmarkStore.Open(databasePath);
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
@@ -595,9 +597,9 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
                 // Swap the runtime's in-memory store defaults for the durable Groundwork bridges, backed by the
                 // raw SQLite document store above plus the shared bounded-query adapter. This is the exact wiring
                 // the ActivityDraftTestRun suite uses to drive real end-to-end execution over SQLite.
-                services.AddSingleton<IDocumentStore>(opened.Store);
-                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
-                services.AddGroundworkRuntimeStores();
+                services.AddGroundworkStorageProviderConnection(_ => opened);
+                
+                services.AddGroundworkV2RuntimeStores();
 
                 // Opt into burst-coalescing checkpoint persistence AFTER the durable stores are registered — the
                 // decorator captures the last (durable) registration of each runtime store. Without this call the
@@ -620,7 +622,7 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
             })
             .Build(ActivityExecutionIds);
 
-        return new HarnessLease(harness, opened.Store, opened.Queries, databasePath, readCounter);
+        return new HarnessLease(harness, opened, databasePath, readCounter);
     }
 
     // Wraps the last IWorkflowExecutableStore registration with a shared FindAsync counter (the durable reads the burst
@@ -691,19 +693,15 @@ public sealed class EngineExecutionBenchmarks(ITestOutputHelper output)
     /// <summary>Owns one harness run plus (for the durable variant) its SQLite store and temp database file.</summary>
     private sealed class HarnessLease(
         WorkflowExecutionHarness harness,
-        IDocumentStore? store,
-        IBoundedDocumentStore? queries,
+        IStorageProviderConnection? store,
         string? databasePath,
         ExecutableReadCounter readCounter)
         : IAsyncDisposable
     {
         public WorkflowExecutionHarness Harness { get; } = harness;
 
-        /// <summary>The durable document store, or <c>null</c> for the in-memory harness.</summary>
-        public IDocumentStore? Store { get; } = store;
-
-        /// <summary>Its route-bound query runtime (for commit counting), or <c>null</c> for the in-memory harness.</summary>
-        public IBoundedDocumentStore? Queries { get; } = queries;
+        /// <summary>The durable provider connection, or <c>null</c> for the in-memory harness.</summary>
+        public IStorageProviderConnection? Store { get; } = store;
 
         /// <summary>Durable executable-store FindAsync calls during the run (the reads the burst cache saves).</summary>
         public long ExecutableReads => readCounter.Count;

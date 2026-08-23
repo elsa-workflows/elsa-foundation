@@ -1,3 +1,4 @@
+using Groundwork.Store;
 using System.Text.Json;
 using System.Threading;
 using Elsa.Activities.Flowchart;
@@ -7,7 +8,8 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -16,8 +18,6 @@ using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
@@ -171,16 +171,14 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
     {
         var counters = new Counters();
         var databasePath = Path.Combine(Path.GetTempPath(), $"scratch-{Guid.NewGuid():N}.db");
-        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
-        IDocumentStore store = opened.Store;
+        using var opened = GroundworkBenchmarkStore.Open(databasePath);
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
-                services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
-                services.AddGroundworkRuntimeStores();
+                services.AddGroundworkStorageProviderConnection(_ => opened);
+                services.AddGroundworkV2RuntimeStores();
 
                 var descriptor = services.Last(d => d.ServiceType == typeof(IWorkflowExecutableStore));
                 services.Remove(descriptor);
@@ -223,7 +221,7 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
         var fusedSpansPerRun = dispatchDiagnostics?.FusedSpans ?? 0;
         var inlineCascadePerRun = dispatchDiagnostics?.InlineCascadeDispatches ?? 0;
 
-        var commitCount = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(opened.Queries);
+        var commitCount = GroundworkBenchmarkStore.CountCheckpointCommits(opened);
 
         output.WriteLine($"=== {label} ===");
         output.WriteLine($"durable checkpoint-commit documents/run = {commitCount}");
@@ -233,8 +231,6 @@ public sealed class DurableRoundTripDiagnostics(ITestOutputHelper output)
                          $"lease writes/run ≈ {counters.Acquire + counters.Release + counters.Renew} fsync-scale, vs {commitCount} checkpoint-marker fsyncs.");
 
         await harness.DisposeAsync();
-        if (store is IAsyncDisposable ad) await ad.DisposeAsync();
-        else if (store is IDisposable d) d.Dispose();
         foreach (var p in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             try { File.Delete(p); } catch (IOException) { }
 

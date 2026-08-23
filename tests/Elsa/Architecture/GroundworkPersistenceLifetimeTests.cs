@@ -69,22 +69,6 @@ public sealed class GroundworkPersistenceLifetimeTests
             "IGroundworkStoreSessionSource",
             "This interface aliases the same provider-owned static session source; access selection remains an argument to each invocation and is never retained."),
         new(
-            "src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs",
-            "SqliteGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/SqlServer/DependencyInjection/SqlServerGroundworkDocumentStoreRegistration.cs",
-            "SqlServerGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/PostgreSql/DependencyInjection/PostgreSqlGroundworkDocumentStoreRegistration.cs",
-            "PostgreSqlGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/MongoDb/DependencyInjection/MongoDbGroundworkDocumentStoreRegistration.cs",
-            "MongoDbGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
             "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
             "GroundworkSchemaReadinessTask",
             "The readiness guard is a stateless one-shot Start-phase validator over the application-lifetime session source; it opens no sessions and retains no request context."),

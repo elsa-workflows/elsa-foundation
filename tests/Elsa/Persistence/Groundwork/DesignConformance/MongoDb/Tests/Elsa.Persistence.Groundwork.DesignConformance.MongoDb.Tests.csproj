@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
     <ProjectReference Include="../../Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
-    <ProjectReference Include="../../../../../../../tests/Elsa/Persistence/Groundwork/DesignConformance/Targets/Tests/Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Events/Elsa.Events.csproj" />

@@ -8,7 +8,7 @@ using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
@@ -270,7 +270,7 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     private async Task OpenAndAdmitAsync(CancellationToken cancellationToken)
     {
         _services = BuildServices();
-        await LegacyGroundworkTestHost.InitializeAsync(_services, cancellationToken);
+        await _services.InitializeGroundworkStoreAsync(cancellationToken);
 
         _backgroundEventCancellation = new CancellationTokenSource();
         _backgroundEventTasks = _services.GetServices<IBackgroundTask>().ToArray();

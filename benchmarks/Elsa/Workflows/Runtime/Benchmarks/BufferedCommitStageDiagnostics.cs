@@ -1,3 +1,4 @@
+using Groundwork.Store;
 using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Activities.Flowchart;
@@ -5,7 +6,8 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -14,8 +16,6 @@ using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
@@ -52,8 +52,7 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
     {
         var metrics = new StageMetrics();
         var databasePath = Path.Combine(Path.GetTempPath(), $"buffered-stage-{Guid.NewGuid():N}.db");
-        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
-        IDocumentStore store = opened.Store;
+        using var opened = GroundworkBenchmarkStore.Open(databasePath);
 
         using var tracer = new StageTracer(metrics);
 
@@ -61,9 +60,8 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
-                services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
-                services.AddGroundworkRuntimeStores();
+                services.AddGroundworkStorageProviderConnection(_ => opened);
+                services.AddGroundworkV2RuntimeStores();
 
                 // The committer opens the checkpoint-commit span through IWorkflowEngineTracer; our tracer records the
                 // full committer.CommitAsync duration per commit and the persistence-mode tag it stamps.
@@ -87,7 +85,7 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
         var run = await harness.RunAsync(BuildHotLoop());
         run.AssertWorkflowCompleted();
 
-        var commitCount = await GroundworkBenchmarkStore.CountCheckpointCommitsAsync(opened.Queries);
+        var commitCount = GroundworkBenchmarkStore.CountCheckpointCommits(opened);
 
         output.WriteLine($"=== {label} — stage breakdown (1 run, hot-loop×{HotLoopLength}) ===");
         output.WriteLine($"durable checkpoint-commit documents/run = {commitCount}");
@@ -113,8 +111,6 @@ public sealed class BufferedCommitStageDiagnostics(ITestOutputHelper output)
                          $"({metrics.BufferedCalls} of them buffered at {Avg(metrics.BufferedMs, metrics.BufferedCalls):F4} ms each, no serialization).");
 
         await harness.DisposeAsync();
-        if (store is IAsyncDisposable ad) await ad.DisposeAsync();
-        else if (store is IDisposable d) d.Dispose();
         foreach (var p in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             try { File.Delete(p); } catch (IOException) { }
 

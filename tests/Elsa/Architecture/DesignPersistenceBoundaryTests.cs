@@ -227,7 +227,7 @@ public sealed class DesignPersistenceBoundaryTests
     }
 
     [Fact]
-    public void Every_provider_registration_composes_the_design_families_and_readiness_guard()
+    public void Every_provider_registration_composes_the_design_families_and_a_provider_connection()
     {
         var violations = new List<string>();
         foreach (var (provider, path) in DiscoverProviderRegistrations().OrderBy(x => x.Key, StringComparer.Ordinal))
@@ -236,34 +236,18 @@ public sealed class DesignPersistenceBoundaryTests
             // Design store set + both design manifest sources arrive through the shared families call.
             if (!source.Contains("AddGroundworkUnifiedStoreFamilies(", StringComparison.Ordinal))
                 violations.Add($"{provider}: does not call AddGroundworkUnifiedStoreFamilies (design store set + manifest sources).");
-            // The schema readiness guard is provider-owned; it is wired by the provider's document store.
-            if (!source.Contains($"Add{provider}GroundworkDocumentStore(", StringComparison.Ordinal))
-                violations.Add($"{provider}: does not call Add{provider}GroundworkDocumentStore (readiness guard owner).");
+            // Every lane in that set declares v2 units, and the session source admits them at startup against
+            // the target's connection. A preset that composes the lanes but no connection fails at boot.
+            if (!source.Contains("AddGroundworkStorageProviderConnection(", StringComparison.Ordinal))
+                violations.Add($"{provider}: does not open a Groundwork v2 provider connection.");
         }
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact]
-    public void Every_provider_document_store_registration_wires_the_schema_readiness_guard()
-    {
-        var violations = new List<string>();
-        foreach (var provider in ExpectedProviders.Order(StringComparer.Ordinal))
-        {
-            var path = $"src/Elsa/Persistence/Groundwork/{provider}/DependencyInjection/{provider}GroundworkDocumentStoreRegistration.cs";
-            var full = FullPath(path);
-            if (!File.Exists(full))
-            {
-                violations.Add($"{provider}: missing document store registration at {path}.");
-                continue;
-            }
-
-            if (!ReadSource(full).Contains("AddGroundworkSchemaReadinessGuard(", StringComparison.Ordinal))
-                violations.Add($"{provider}: document store registration does not call AddGroundworkSchemaReadinessGuard.");
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
+    // The readiness guard was the v1 document store's: each provider leaf wired a Start-phase validator over
+    // its own admitted schema. Under v2 the storage session source admits every declared unit itself, so the
+    // guard has no separate owner to assert and the per-provider registration it hung off no longer exists.
 
     [Fact]
     public void The_shared_store_families_registration_composes_both_design_lanes()

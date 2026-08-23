@@ -1,3 +1,4 @@
+using Groundwork.Store;
 using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Activities.Flowchart;
@@ -5,7 +6,8 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -13,8 +15,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
@@ -65,16 +65,14 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
     {
         var metrics = new EnvelopeMetrics();
         var databasePath = Path.Combine(Path.GetTempPath(), $"envelope-stage-{Guid.NewGuid():N}.db");
-        var opened = await GroundworkBenchmarkStore.OpenAsync(databasePath);
-        IDocumentStore store = opened.Store;
+        using var opened = GroundworkBenchmarkStore.Open(databasePath);
 
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
-                services.AddSingleton<IDocumentStore>(store);
-                services.AddSingleton<IBoundedDocumentStore>(opened.Queries);
-                services.AddGroundworkRuntimeStores();
+                services.AddGroundworkStorageProviderConnection(_ => opened);
+                services.AddGroundworkV2RuntimeStores();
 
                 // (a) INNER durable-flush timer: replace the Groundwork checkpoint writer BEFORE coalescing captures it
                 // as CoalescingInner, so it ticks only on a real flushed segment. Its total wall is the pinned
@@ -178,8 +176,6 @@ public sealed class EnvelopeBuildStageDiagnostics(ITestOutputHelper output)
         output.WriteLine($"    pure-construction CPU share ({constructionShare:F2}%); the inter-commit gap is a contaminated upper bound.");
 
         await harness.DisposeAsync();
-        if (store is IAsyncDisposable ad) await ad.DisposeAsync();
-        else if (store is IDisposable d) d.Dispose();
         foreach (var p in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             try { File.Delete(p); } catch (IOException) { }
 

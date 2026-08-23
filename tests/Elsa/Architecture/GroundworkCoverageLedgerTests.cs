@@ -398,11 +398,13 @@ public sealed class GroundworkCoverageLedgerTests
         var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
         var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
+        // The provider drivers moved to v2 with the host composition switch: their package ids are shared
+        // between the two generations, and transitive pinning allows an id only one version repo-wide.
         Assert.Equal(
-            new[] { "Groundwork.Core", "Groundwork.Documents", "Groundwork.MongoDb", "Groundwork.PostgreSql", "Groundwork.SqlServer", "Groundwork.Sqlite" },
+            new[] { "Groundwork.Core", "Groundwork.Documents" },
             packageVersions.Where(pair => pair.Value == CurrentLegacyGroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
         Assert.Equal(
-            new[] { "Groundwork.Kernel", "Groundwork.Query.Model", "Groundwork.Store" },
+            new[] { "Groundwork.Kernel", "Groundwork.MongoDb", "Groundwork.PostgreSql", "Groundwork.Query.Model", "Groundwork.SqlServer", "Groundwork.Sqlite", "Groundwork.Store" },
             packageVersions.Where(pair => pair.Value == CurrentV2GroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
         Assert.All(
             packageVersions,
