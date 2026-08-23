@@ -69,6 +69,11 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         // The workflow-publish + compile engine (compiler + collaborators, publication stores/activator,
         // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via DependsOn.
         services.AddRequestHandlersFrom(assembly);
+        // Endpoint failure rendering and translation, keyed by the owner so hosts composing several
+        // modules keep each module's own problem shapes.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowPublishingProblemWriter>(WorkflowsPublishingApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointExceptionTranslator, Endpoints.WorkflowPublishingExceptionTranslator>(WorkflowsPublishingApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.WorkflowPublishingFaultRenderer>(WorkflowsPublishingApi.OwnerId);
         // Keep the owner serializer contract ready for the Minimal API mapper. The effective host
         // options preserve the former FastEndpoints web defaults while routing Publishing types
         // through generated metadata before any general fallback resolver.
