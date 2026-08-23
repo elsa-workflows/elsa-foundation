@@ -30,14 +30,15 @@ namespace Elsa.Api.Endpoints;
 public sealed class ModuleEndpointGroup
 {
     private readonly IEndpointRouteBuilder _endpoints;
-    private const string JsonContentType = "application/json; charset=utf-8";
+    private readonly string _jsonContentType;
     private readonly JsonSerializerContext _jsonContext;
 
-    internal ModuleEndpointGroup(IEndpointRouteBuilder endpoints, string ownerId, JsonSerializerContext jsonContext)
+    internal ModuleEndpointGroup(IEndpointRouteBuilder endpoints, string ownerId, JsonSerializerContext jsonContext, string jsonContentType)
     {
         _endpoints = endpoints;
         OwnerId = ownerId;
         _jsonContext = jsonContext;
+        _jsonContentType = jsonContentType;
     }
 
     /// <summary>The stable owning module identifier applied to every endpoint in the group.</summary>
@@ -86,7 +87,7 @@ public sealed class ModuleEndpointGroup
         context.Response.StatusCode = statusCode;
         var typeInfo = _jsonContext.GetTypeInfo(typeof(TValue))
                        ?? throw new InvalidOperationException($"No source-generated JSON metadata exists for '{typeof(TValue).FullName}'.");
-        return Results.Json(value, typeInfo, JsonContentType).ExecuteAsync(context);
+        return Results.Json(value, typeInfo, _jsonContentType).ExecuteAsync(context);
     }
 
     /// <summary>
@@ -109,13 +110,31 @@ public sealed class ModuleEndpointGroup
 
         RequestDelegate handler = async context =>
         {
-            var binding = await EndpointRequestBinder.BindAsync<TMessage>(context, jsonOptions, effectiveBodyMode);
+            EndpointBindingResult<TMessage> binding;
+            try
+            {
+                binding = await EndpointRequestBinder.BindAsync<TMessage>(context, jsonOptions, effectiveBodyMode);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // A body that cannot be read (an I/O fault, an unreadable stream) is an infrastructure
+                // failure, and its details must not leak into the response.
+                LogUnexpected(context, exception, typeof(TMessage));
+                await WriteProblemAsync(context,
+                    EndpointProblem.General(StatusCodes.Status500InternalServerError, "Unexpected error occurred"));
+                return;
+            }
+
             if (!binding.Succeeded)
             {
-                // RequiredWithContentType rejects media types with a bare status, before any body is
-                // read, so there is no problem document to write.
+                // The content-type-gated modes reject media types with a bare status, before any body
+                // is read, so there is no problem document to write.
                 if (binding.Failure is EndpointBindingFailure.UnsupportedMediaType &&
-                    effectiveBodyMode is EndpointBodyMode.RequiredWithContentType)
+                    effectiveBodyMode is EndpointBodyMode.RequiredWithContentType or EndpointBodyMode.OptionalWithContentType)
                 {
                     context.Response.StatusCode = StatusCodes.Status415UnsupportedMediaType;
                     return;
@@ -135,14 +154,7 @@ public sealed class ModuleEndpointGroup
             }
             catch (Exception exception)
             {
-                var problem = Translate(context, exception);
-                if (problem is null)
-                {
-                    LogUnexpected(context, exception, typeof(TMessage));
-                    problem = EndpointProblem.General(StatusCodes.Status500InternalServerError, "Unexpected error occurred");
-                }
-
-                await WriteProblemAsync(context, problem);
+                await HandleFailureAsync(context, exception, typeof(TMessage));
             }
         };
 
@@ -220,9 +232,39 @@ public sealed class ModuleEndpointGroup
         _ => EndpointProblem.General(StatusCodes.Status400BadRequest, binding.Message!)
     };
 
-    private static EndpointProblem? Translate(HttpContext context, Exception exception)
+    /// <summary>
+    /// The shared failure path: module-owned fault renderers first, then translation into the
+    /// owner's problem shape, then a sanitized generic failure.
+    /// </summary>
+    private async Task HandleFailureAsync(HttpContext context, Exception exception, Type messageType)
     {
-        foreach (var translator in context.RequestServices.GetServices<IEndpointExceptionTranslator>())
+        foreach (var renderer in FaultRenderers(context))
+        {
+            if (await renderer.TryWriteAsync(context, exception))
+                return;
+        }
+
+        var problem = Translate(context, exception);
+        if (problem is null)
+        {
+            LogUnexpected(context, exception, messageType);
+            problem = EndpointProblem.General(StatusCodes.Status500InternalServerError, "Unexpected error occurred");
+        }
+
+        await WriteProblemAsync(context, problem);
+    }
+
+    // Failure services resolve keyed by the owner first so hosts composing several modules keep each
+    // module's own shapes; the unkeyed registration remains the single-module fallback.
+    private IEnumerable<IEndpointFaultRenderer> FaultRenderers(HttpContext context) =>
+        context.RequestServices.GetKeyedServices<IEndpointFaultRenderer>(OwnerId)
+            .Concat(context.RequestServices.GetServices<IEndpointFaultRenderer>());
+
+    private EndpointProblem? Translate(HttpContext context, Exception exception)
+    {
+        var translators = context.RequestServices.GetKeyedServices<IEndpointExceptionTranslator>(OwnerId)
+            .Concat(context.RequestServices.GetServices<IEndpointExceptionTranslator>());
+        foreach (var translator in translators)
         {
             var problem = translator.Translate(exception);
             if (problem is not null)
@@ -252,14 +294,7 @@ public sealed class ModuleEndpointGroup
             }
             catch (Exception exception)
             {
-                var problem = Translate(context, exception);
-                if (problem is null)
-                {
-                    LogUnexpected(context, exception, typeof(ModuleEndpointGroup));
-                    problem = EndpointProblem.General(StatusCodes.Status500InternalServerError, "Unexpected error occurred");
-                }
-
-                await WriteProblemAsync(context, problem);
+                await HandleFailureAsync(context, exception, typeof(ModuleEndpointGroup));
             }
         };
 
@@ -273,8 +308,12 @@ public sealed class ModuleEndpointGroup
                 successStatus);
     }
 
-    private static Task WriteProblemAsync(HttpContext context, EndpointProblem problem) =>
-        context.RequestServices.GetRequiredService<IEndpointProblemWriter>().WriteAsync(context, problem);
+    private Task WriteProblemAsync(HttpContext context, EndpointProblem problem)
+    {
+        var writer = context.RequestServices.GetKeyedService<IEndpointProblemWriter>(OwnerId)
+                     ?? context.RequestServices.GetRequiredService<IEndpointProblemWriter>();
+        return writer.WriteAsync(context, problem);
+    }
 
     private static void LogUnexpected(HttpContext context, Exception exception, Type messageType) =>
         context.RequestServices.GetRequiredService<ILoggerFactory>()

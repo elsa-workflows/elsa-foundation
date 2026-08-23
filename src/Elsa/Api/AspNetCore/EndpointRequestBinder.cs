@@ -32,7 +32,14 @@ public enum EndpointBodyMode
     RequiredWithContentType,
 
     /// <summary>A JSON body is read when present, and its absence binds from route and query instead.</summary>
-    Optional
+    Optional,
+
+    /// <summary>
+    /// As <see cref="RequiredWithContentType"/> for the media-type gate — a missing or non-JSON
+    /// content type is a bare 415 — but a body that deserializes to <c>null</c> binds from route and
+    /// query instead of being rejected.
+    /// </summary>
+    OptionalWithContentType
 }
 
 /// <summary>The reason a request could not be bound, mapped by the caller to a status code.</summary>
@@ -89,7 +96,7 @@ public static class EndpointRequestBinder
             {
                 // An optional body simply is not there when it is not JSON.
                 EndpointBodyMode.Optional => false,
-                EndpointBodyMode.RequiredWithContentType => !isJson,
+                EndpointBodyMode.RequiredWithContentType or EndpointBodyMode.OptionalWithContentType => !isJson,
                 _ => declared && !isJson
             };
 
@@ -116,7 +123,7 @@ public static class EndpointRequestBinder
                     return new(default, EndpointBindingFailure.MalformedBody, message);
                 }
 
-                if (body is null && bodyMode is EndpointBodyMode.Required)
+                if (body is null && bodyMode is EndpointBodyMode.Required or EndpointBodyMode.RequiredWithContentType)
                     return new(default, EndpointBindingFailure.MissingBody, "A request body is required.");
             }
         }
