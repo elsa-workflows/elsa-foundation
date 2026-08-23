@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 155
 - Test projects: 105
 - Domains: 27
-- Direct cross-domain references: 776
+- Direct cross-domain references: 777
 
 ## Domains
 
@@ -52,7 +52,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Bpmn](../../src/Elsa/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | source | Elsa.Activities | Bpmn | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Bpmn.Interchange](../../src/Elsa/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | source | Elsa.Activities | Bpmn.Interchange | feature/implementation | Elsa.Activities.Bpmn<br>Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Core |
 | [Elsa.Activities.ControlFlow](../../src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj) | source | Elsa.Activities | ControlFlow | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | Design.Api | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.Capabilities<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core |
+| [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Activities | Design.Api | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.Capabilities<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core |
 | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | source | Elsa.Activities | Design.Core | contract | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Persistence.Core](../../src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj) | source | Elsa.Activities | Design.Persistence.Core | contract | Elsa.Activities.Design.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | source | Elsa.Activities | Design.Persistence.Groundwork | feature/implementation | Elsa.Activities.Design.Persistence.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Composition<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Serialization.Core |
@@ -344,6 +344,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.ControlFlow.Tests](../../tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
 | [Elsa.Activities.ControlFlow.Tests](../../tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities | [Elsa.Api.Capabilities](../../src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj) | Elsa.Api |
+| [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | Elsa.Api |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities | [Elsa.Expressions.Core](../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj) | Elsa.Expressions |
 | [Elsa.Activities.Design.Api](../../src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
