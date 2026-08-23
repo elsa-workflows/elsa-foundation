@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace Elsa.Api.AspNetCore;
@@ -66,7 +66,11 @@ public readonly record struct EndpointBindingResult<T>(T? Value, EndpointBinding
 /// </remarks>
 public static class EndpointRequestBinder
 {
-    private static readonly ConcurrentDictionary<Type, ConstructorInfo> Constructors = new();
+    // Weak-keyed on purpose. Contract types ship in each domain's collectible .Api assembly, so a
+    // strong static reference here would root that assembly's load context for host lifetime.
+    // ConditionalWeakTable uses ephemerons, so ConstructorInfo referencing its own declaring Type
+    // does not keep the key alive.
+    private static readonly ConditionalWeakTable<Type, ConstructorInfo> Constructors = new();
 
     public static async ValueTask<EndpointBindingResult<T>> BindAsync<T>(
         HttpContext context,
@@ -117,7 +121,7 @@ public static class EndpointRequestBinder
             }
         }
 
-        var constructor = Constructors.GetOrAdd(typeof(T), SelectConstructor);
+        var constructor = Constructors.GetValue(typeof(T), SelectConstructor);
         var parameters = constructor.GetParameters();
 
         // A contract declared with init-only properties rather than positional parameters is bound by
