@@ -29,27 +29,20 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
     }
 
     [SkippableFact]
-    public Task Host_registers_one_document_store_shared_by_every_lane()
+    public Task Host_registers_one_provider_connection_shared_by_every_lane()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertRegistersOneDocumentStoreSharedByEveryLaneAsync(
+        return UnifiedGroundworkHostContract.AssertRegistersOneProviderConnectionSharedByEveryLaneAsync(
             () => BuildHostAsync());
     }
 
     [SkippableFact]
-    public Task One_database_materializes_and_serves_all_three_lanes()
+    public Task One_database_materializes_and_serves_every_lane()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertOneDatabaseMaterializesAndServesAllThreeLanesAsync(
-            () => BuildHostAsync());
-    }
-
-    [SkippableFact]
-    public Task Workflows_design_reads_run_off_the_unified_database()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertWorkflowsDesignReadsRunOffTheUnifiedDatabaseAsync(
-            () => BuildHostAsync());
+        return UnifiedGroundworkHostContract.AssertOneDatabaseMaterializesAndServesEveryLaneAsync(
+            () => BuildHostAsync(),
+            "default");
     }
 
     [SkippableFact]
@@ -57,7 +50,8 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
         return UnifiedGroundworkHostContract.AssertActivitiesDesignReadsRunOffTheUnifiedDatabaseAsync(
-            () => BuildHostAsync());
+            () => BuildHostAsync(),
+            "default");
     }
 
     [SkippableFact]

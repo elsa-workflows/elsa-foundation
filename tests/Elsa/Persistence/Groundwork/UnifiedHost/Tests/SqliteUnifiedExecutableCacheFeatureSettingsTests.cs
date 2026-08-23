@@ -1,5 +1,3 @@
-using CShells;
-using CShells.Features;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -73,9 +71,7 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
     }
 
     private static SqliteGroundworkUnifiedPersistenceShellFeature NewFeature() =>
-        new(new ShellFeatureContext(
-            new ShellSettings { Id = new ShellId("sqlite-cache-settings") },
-            []));
+        new();
 
     private static void AssertSetting(object feature, string name, object expected)
     {

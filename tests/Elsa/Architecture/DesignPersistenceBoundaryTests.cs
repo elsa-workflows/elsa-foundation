@@ -328,28 +328,6 @@ public sealed class DesignPersistenceBoundaryTests
     }
 
     /// <summary>
-    /// The v1 deployment schema composes host manifests. A direct-v2 design lane contributes none and
-    /// provisions its own schema, so listing it there fails at runtime when the schema validates that every
-    /// selected type is a concrete manifest source. This is the gate that pairs with the lane test above.
-    /// </summary>
-    [Fact]
-    public void The_reference_deployment_schema_selects_no_direct_v2_design_lane()
-    {
-        var schema = ReadSource(FullPath(
-            "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkAllFeaturesDeploymentSchema.cs"));
-
-        var selected = DesignLanes
-            .Select(lane => Path.GetFileNameWithoutExtension(lane.Lane))
-            .Where(laneType => schema.Contains($"typeof({laneType})", StringComparison.Ordinal))
-            .ToArray();
-
-        Assert.True(
-            selected.Length == 0,
-            "The reference deployment schema selects design lanes that contribute no composed manifest: " +
-            $"[{string.Join(", ", selected)}]. Remove them; they declare their own v2 units.");
-    }
-
-    /// <summary>
     /// Negative control: the orphan-replacement parser must flag a <c>RemoveAll&lt;T&gt;</c> with no
     /// matching <c>AddScoped&lt;T&gt;</c>, and must accept a correctly paired replacement.
     /// </summary>

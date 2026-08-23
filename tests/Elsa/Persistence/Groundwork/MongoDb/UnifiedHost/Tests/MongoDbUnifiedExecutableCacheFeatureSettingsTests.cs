@@ -1,5 +1,3 @@
-using CShells;
-using CShells.Features;
 using Elsa.Persistence.Groundwork.MongoDb.Unified;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -57,7 +55,5 @@ public sealed class MongoDbUnifiedExecutableCacheFeatureSettingsTests
     }
 
     private static MongoDbGroundworkUnifiedPersistenceShellFeature NewFeature() =>
-        new(new ShellFeatureContext(
-            new ShellSettings { Id = new ShellId("mongodb-unified-cache-settings") },
-            []));
+        new();
 }

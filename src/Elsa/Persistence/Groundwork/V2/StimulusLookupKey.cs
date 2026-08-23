@@ -9,7 +9,7 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 internal static class StimulusLookupKey
 {
-    public const int Length = ElsaRuntimeStorageManifest.BookmarkStimulusLookupKeyProjectionLength;
+    public const int Length = Runtime.ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength;
 
     public static string FromPair(string stimulusType, string stimulusHash)
     {

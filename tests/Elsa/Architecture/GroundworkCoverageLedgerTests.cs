@@ -10,7 +10,6 @@ public sealed class GroundworkCoverageLedgerTests
 {
     private const string EntryId = "runtime-activity-execution-inspection";
     private const string ExpectedGroundworkVersion = "0.0.1-preview.103";
-    private const string CurrentLegacyGroundworkVersion = "0.0.1-preview.131";
     private const string CurrentV2GroundworkVersion = "0.2.0-preview.1";
     private const string Prior88GroundworkVersion = "0.0.1-preview.88";
     private const string Prior86GroundworkVersion = "0.0.1-preview.86";
@@ -385,8 +384,13 @@ public sealed class GroundworkCoverageLedgerTests
             findings);
     }
 
+    /// <summary>
+    /// Every Groundwork package is on the v2 line. The provider drivers share their package ids with v1 and
+    /// this repo pins transitively, so a single id pulled back to the v1 line would put two incompatible
+    /// drivers in one graph.
+    /// </summary>
     [Fact]
-    public void Pinned_Groundwork_packages_and_tool_match_the_current_takeover_version()
+    public void Pinned_Groundwork_packages_match_the_current_takeover_version()
     {
         var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
             .Descendants("PackageVersion")
@@ -395,21 +399,20 @@ public sealed class GroundworkCoverageLedgerTests
                 element => element.Attribute("Include")!.Value,
                 element => element.Attribute("Version")!.Value,
                 StringComparer.Ordinal);
-        var toolManifest = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoRoot, ".config", "dotnet-tools.json")))!.AsObject();
-        var toolVersion = toolManifest["tools"]!["groundwork.tool"]!["version"]!.GetValue<string>();
 
-        // The provider drivers moved to v2 with the host composition switch: their package ids are shared
-        // between the two generations, and transitive pinning allows an id only one version repo-wide.
         Assert.Equal(
-            new[] { "Groundwork.Core", "Groundwork.Documents" },
-            packageVersions.Where(pair => pair.Value == CurrentLegacyGroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
-        Assert.Equal(
-            new[] { "Groundwork.Kernel", "Groundwork.MongoDb", "Groundwork.PostgreSql", "Groundwork.Query.Model", "Groundwork.SqlServer", "Groundwork.Sqlite", "Groundwork.Store" },
-            packageVersions.Where(pair => pair.Value == CurrentV2GroundworkVersion).Select(pair => pair.Key).Order(StringComparer.Ordinal));
-        Assert.All(
-            packageVersions,
-            pair => Assert.Contains(pair.Value, new[] { CurrentLegacyGroundworkVersion, CurrentV2GroundworkVersion }));
-        Assert.Equal(CurrentLegacyGroundworkVersion, toolVersion);
+            new[]
+            {
+                "Groundwork.Kernel",
+                "Groundwork.MongoDb",
+                "Groundwork.PostgreSql",
+                "Groundwork.Query.Model",
+                "Groundwork.SqlServer",
+                "Groundwork.Sqlite",
+                "Groundwork.Store"
+            },
+            packageVersions.Keys.Order(StringComparer.Ordinal));
+        Assert.All(packageVersions, pair => Assert.Equal(CurrentV2GroundworkVersion, pair.Value));
     }
 
     [Fact]

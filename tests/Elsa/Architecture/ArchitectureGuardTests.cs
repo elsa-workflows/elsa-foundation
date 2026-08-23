@@ -317,6 +317,11 @@ public sealed class ArchitectureGuardTests
         Assert.Equal(256, settings["WorkflowExecutableCacheCapacity"]?.GetValue<int>());
     }
 
+    /// <summary>
+    /// The v1 document query surface is gone from production. The two adapters that used to be carved out of
+    /// this ban — the unit-of-work and scoped document stores — went with it, so nothing under src/Elsa is
+    /// exempt any more: naming one of these types is naming something that no longer exists.
+    /// </summary>
     [Fact]
     public void Groundwork_production_reads_use_only_admitted_bounded_query_APIs()
     {
@@ -324,28 +329,10 @@ public sealed class ArchitectureGuardTests
         var warningsAsErrors = productionTargets.Descendants("WarningsAsErrors").Single().Value;
         Assert.Contains("GW0004", warningsAsErrors.Split(';', StringSplitOptions.RemoveEmptyEntries));
 
-        const string unitOfWorkAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkDocumentUnitOfWorkStore.cs";
-        var unitOfWorkSource = File.ReadAllText(Path.Combine(RepoRoot, unitOfWorkAdapterPath));
-        Assert.Single(Regex.Matches(unitOfWorkSource, @"\bDocumentStoreQuery\b").Cast<Match>());
-        Assert.Equal(3, Regex.Matches(unitOfWorkSource, @"\bPortableDocumentQuery\b").Count);
-        Assert.Single(Regex.Matches(unitOfWorkSource, "Groundwork document unit-of-work adapter does not query documents.").Cast<Match>());
-
-        const string scopedAdapterPath = "src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs";
-        var scopedAdapterSource = File.ReadAllText(Path.Combine(RepoRoot, scopedAdapterPath));
-        Assert.Single(Regex.Matches(scopedAdapterSource, @"\bDocumentStoreQuery\b").Cast<Match>());
-        Assert.Equal(3, Regex.Matches(scopedAdapterSource, @"\bPortableDocumentQuery\b").Count);
-        Assert.Equal(7, Regex.Matches(scopedAdapterSource, @"WithDocumentsAsync\(store => store\.").Count);
-
-        // The two query types are banned only under src/Elsa/**/Groundwork/**, where the two carve-out
-        // adapters above live. The retired-surface names below are banned across the whole of src/Elsa:
-        // nothing outside Groundwork's own adapters has any business naming them at all.
-        var groundworkOnlyPatterns = new[]
+        var forbidden = new[]
         {
             (Name: "DocumentStoreQuery", Pattern: @"\bDocumentStoreQuery\b"),
-            (Name: "PortableDocumentQuery", Pattern: @"\bPortableDocumentQuery\b")
-        };
-        var productionWidePatterns = new[]
-        {
+            (Name: "PortableDocumentQuery", Pattern: @"\bPortableDocumentQuery\b"),
             (Name: "LegacyPhysicalStorageBridge", Pattern: @"\bLegacyPhysicalStorageBridge\b"),
             (Name: "PhysicalizationPolicy.", Pattern: @"\bPhysicalizationPolicy\s*\."),
             (Name: "IndexPhysicalizationPolicy", Pattern: @"\bIndexPhysicalizationPolicy\b"),
@@ -355,23 +342,13 @@ public sealed class ArchitectureGuardTests
         };
 
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa"), "*.cs", SearchOption.AllDirectories)
-            .Select(file => new
+            .SelectMany(file =>
             {
-                File = file,
-                RelativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')
-            })
-            .Where(candidate =>
-                !StringComparer.Ordinal.Equals(candidate.RelativePath, unitOfWorkAdapterPath) &&
-                !StringComparer.Ordinal.Equals(candidate.RelativePath, scopedAdapterPath))
-            .SelectMany(candidate =>
-            {
-                var source = StripCommentsAndStringLiterals(File.ReadAllText(candidate.File));
-                var applicable = candidate.RelativePath.Contains("/Groundwork/", StringComparison.Ordinal)
-                    ? groundworkOnlyPatterns.Concat(productionWidePatterns)
-                    : productionWidePatterns;
-                return applicable
-                    .Where(forbidden => Regex.IsMatch(source, forbidden.Pattern))
-                    .Select(forbidden => $"{candidate.RelativePath}: {forbidden.Name}");
+                var relativePath = Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/');
+                var source = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbidden
+                    .Where(pattern => Regex.IsMatch(source, pattern.Pattern))
+                    .Select(pattern => $"{relativePath}: {pattern.Name}");
             })
             .ToArray();
 

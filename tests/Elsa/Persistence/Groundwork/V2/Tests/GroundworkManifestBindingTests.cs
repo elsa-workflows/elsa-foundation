@@ -1,7 +1,7 @@
 using Elsa.Persistence.Groundwork.Targets;
 using Xunit;
 
-namespace Elsa.Persistence.Groundwork.Composition.Tests;
+namespace Elsa.Persistence.Groundwork.V2.Tests;
 
 /// <summary>
 /// Binding a lane's manifest source to a target is what lets one host admit several physical stores that

@@ -22,14 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="ProviderMatrix/**/*.cs" />
-    <Compile Include="..\Tests\ActivitiesDesignV2BoundaryTests.cs" Link="ActivitiesDesignV2BoundaryTests.cs" />
-    <Compile Include="..\Tests\ActivitiesDesignStorageManifestTests.cs" Link="ActivitiesDesignStorageManifestTests.cs" />
-    <Compile Include="..\Tests\GroundworkActivitiesDesignRegistrationTests.cs" Link="GroundworkActivitiesDesignRegistrationTests.cs" />
+        <Compile Include="..\..\Tests\ActivitiesDesignV2BoundaryTests.cs" Link="ActivitiesDesignV2BoundaryTests.cs" />
+    <Compile Include="..\..\Tests\ActivitiesDesignStorageManifestTests.cs" Link="ActivitiesDesignStorageManifestTests.cs" />
+    <Compile Include="..\..\Tests\GroundworkActivitiesDesignRegistrationTests.cs" Link="GroundworkActivitiesDesignRegistrationTests.cs" />
   </ItemGroup>
 
 </Project>

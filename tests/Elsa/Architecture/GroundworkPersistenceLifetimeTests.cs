@@ -45,38 +45,6 @@ public sealed class GroundworkPersistenceLifetimeTests
     private static readonly LongerLivedException[] LongerLivedExceptions =
     [
         new(
-            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkStorageCompositionRegistration.cs",
-            "IPhysicalSchemaManifestSource",
-            "The deployment schema source is one immutable application-wide value shared by runtime admission and schema tooling; it carries no request context or mutable operation state."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
-            "GroundworkTargetAdmissionInitializer",
-            "One driver admits every declared target once at startup and holds no request context; per-target admission state lives in the provider initializers it drives."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same admission driver through the shell contract."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
-            "IGroundworkTargetAdmission",
-            "Each provider leaf contributes one application-lifetime admission per target; admission runs once at startup and retains no request state."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
-            "GroundworkStoreSessionSource",
-            "The provider publishes one application-lifetime factory over admitted static resources; every invocation returns a fresh access-bound session and the source stores no request context."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
-            "IGroundworkStoreSessionSource",
-            "This interface aliases the same provider-owned static session source; access selection remains an argument to each invocation and is never retained."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
-            "GroundworkSchemaReadinessTask",
-            "The readiness guard is a stateless one-shot Start-phase validator over the application-lifetime session source; it opens no sessions and retains no request context."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same readiness guard through the shell contract."),
-        new(
             "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs",
             "GroundworkOpenTelemetryStore",
             "The diagnostics drain owns one application-lifetime buffered store and provider connection; each write opens and disposes fresh provider sessions and the store retains no request context."),

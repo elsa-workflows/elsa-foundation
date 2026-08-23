@@ -199,11 +199,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Persistence/EFCore/Sqlite/" />
   <Folder Name="/src/Elsa/Persistence/Groundwork/">
-    <Project Path="src/Elsa/Persistence/Groundwork/Composition/Elsa.Persistence.Groundwork.Composition.csproj" />
-    <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
-    <Project Path="src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
-    <Project Path="src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/Groundwork/V2/">
     <Project Path="src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
@@ -388,7 +384,12 @@
   <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj" />
     <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj" />
-    <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/V2/Elsa.Activities.Design.Persistence.Groundwork.V2.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/V2/">
+    <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/V2/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Design/Persistence/Groundwork/V2/ProviderMatrix/">
+    <Project Path="tests/Elsa/Activities/Design/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Runtime/">
     <Project Path="tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj" />
@@ -499,9 +500,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
-    <Project Path="tests/Elsa/Persistence/Groundwork/V2/Testing/Elsa.Persistence.Groundwork.V2.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/V2/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/V2/Testing/Elsa.Persistence.Groundwork.V2.Testing.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/V2/Providers/">
@@ -525,14 +526,8 @@
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Persistence/Groundwork/Composition/">
-    <Project Path="tests/Elsa/Persistence/Groundwork/Composition/Tests/Elsa.Persistence.Groundwork.Composition.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Persistence/Groundwork/Querying/">
-    <Project Path="tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj" />
@@ -604,14 +599,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
     <Project Path="tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
-    <!--
-      Elsa.Workflows.Publishing.Api.GroundworkTests is parked, not deleted. Its three suites still compose the
-      v1 document substrate (InMemoryDocumentStore, GroundworkPhysicalTestStore, Groundwork.Sqlite.Documents),
-      which no longer exists, so it cannot build. It was already red before the v2 host switch; the switch is
-      what unblocks the port. ActivityUpgradeGroundworkTests and ActivityDraftTestRunTests are mechanical now.
-      ActivityDefinitionPublicationTests still asserts the publication-intent machinery the single transaction
-      removed, so its subject needs deciding before anyone ports it. Re-add this line when it builds.
-    -->
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/Groundwork/">

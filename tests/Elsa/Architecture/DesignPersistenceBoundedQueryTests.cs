@@ -14,7 +14,6 @@ public sealed class DesignPersistenceBoundedQueryTests
     /// <summary>Design persistence source directories covered by the bounded-query guarantee.</summary>
     private static readonly string[] GuardedDirectories =
     [
-        "src/Elsa/Persistence/Groundwork/Querying",
         "src/Elsa/Workflows/Design/Persistence/Groundwork",
         "src/Elsa/Activities/Design/Persistence/Groundwork",
         "src/Elsa/Workflows/Publishing/Persistence/Groundwork"

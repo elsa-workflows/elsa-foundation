@@ -1,5 +1,3 @@
-using CShells;
-using CShells.Features;
 using Elsa.Persistence.Groundwork.SqlServer.Unified;
 using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -56,7 +54,5 @@ public sealed class SqlServerUnifiedExecutableCacheFeatureSettingsTests
     }
 
     private static SqlServerGroundworkUnifiedPersistenceShellFeature NewFeature() =>
-        new(new ShellFeatureContext(
-            new ShellSettings { Id = new ShellId("sqlserver-unified-cache-settings") },
-            []));
+        new();
 }
