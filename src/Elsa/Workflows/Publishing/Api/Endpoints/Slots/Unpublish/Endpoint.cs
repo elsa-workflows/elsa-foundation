@@ -1,6 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -24,7 +25,16 @@ public sealed class Endpoint(
 
     public override async Task<PublicationSlotView> HandleAsync(UnpublishPublicationSlotRequest request, CancellationToken cancellationToken)
     {
-        var slot = await sender.Send(new UnpublishPublicationSlot(request.DefinitionId, request.SlotName), cancellationToken);
+        Core.Models.PublicationSlot slot;
+        try
+        {
+            slot = await sender.Send(new UnpublishPublicationSlot(request.DefinitionId, request.SlotName), cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (PublicationSlotViews.IsMissingSlot(exception))
+        {
+            throw new EntityNotFoundException(exception.Message);
+        }
+
         return await PublicationSlotViews.ComposeAsync(slot, publicationStore, cancellationToken);
     }
 }

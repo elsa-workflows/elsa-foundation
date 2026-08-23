@@ -38,14 +38,6 @@ internal sealed class WorkflowPublishingExceptionTranslator : IEndpointException
                 policy.Code == "expected_publication_mismatch" ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest,
                 exception.Message),
         ArgumentException => EndpointProblem.General(StatusCodes.Status400BadRequest, exception.Message),
-        InvalidOperationException missingSlot when IsMissingSlot(missingSlot) =>
-            EndpointProblem.General(StatusCodes.Status404NotFound, exception.Message),
         _ => null
     };
-
-    private static bool IsMissingSlot(InvalidOperationException exception) =>
-        exception.Message.Contains("does not exist", StringComparison.Ordinal) ||
-        exception.Message.Contains("no retired publication", StringComparison.Ordinal) ||
-        exception.Message.Contains("unavailable", StringComparison.Ordinal) ||
-        exception.Message.Contains("no source reference", StringComparison.Ordinal);
 }

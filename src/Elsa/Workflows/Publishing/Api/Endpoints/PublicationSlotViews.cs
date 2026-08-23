@@ -10,6 +10,17 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints;
 /// </summary>
 internal static class PublicationSlotViews
 {
+    /// <summary>
+    /// The slot lifecycle handlers report a missing or unrestorable slot through
+    /// <see cref="InvalidOperationException"/> messages; only the two lifecycle endpoints translate
+    /// those to 404, exactly as the hand-written handlers did.
+    /// </summary>
+    public static bool IsMissingSlot(InvalidOperationException exception) =>
+        exception.Message.Contains("does not exist", StringComparison.Ordinal) ||
+        exception.Message.Contains("no retired publication", StringComparison.Ordinal) ||
+        exception.Message.Contains("unavailable", StringComparison.Ordinal) ||
+        exception.Message.Contains("no source reference", StringComparison.Ordinal);
+
     public static async ValueTask<PublicationSlotView> ComposeAsync(
         PublicationSlot slot,
         IPublicationRecordStore publicationStore,
