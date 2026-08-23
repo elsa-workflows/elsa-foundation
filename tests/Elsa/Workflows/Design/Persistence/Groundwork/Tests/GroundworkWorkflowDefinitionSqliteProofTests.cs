@@ -54,7 +54,11 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
                 DesignGroundworkTestAccess.AccessContext("sqlite-proof"));
 
             var point = await store.FindByIdAsync("sqlite-alpha");
-            var exact = await store.ListAsync(new WorkflowDefinitionFilter { Name = "sqlite alpha" });
+            // Name equality is ordinal, per the four-provider design query contract: a differently-cased
+            // form does not match. The identity and SearchTerm routes below stay case-insensitive -- those
+            // run on persisted search keys, which is what makes folding portable.
+            var miss = await store.ListAsync(new WorkflowDefinitionFilter { Name = "sqlite alpha" });
+            var exact = await store.ListAsync(new WorkflowDefinitionFilter { Name = "SQLite Alpha" });
             source.Queries.Clear();
             var search = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ALP" });
             source.Queries.Clear();
@@ -62,6 +66,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
 
             Assert.NotNull(point);
             Assert.Equal("SQLite Alpha", point!.Name);
+            Assert.Empty(miss);
             Assert.Equal(["sqlite-alpha"], exact.Select(definition => definition.Id));
             Assert.Equal(["sqlite-alpha"], search.Select(definition => definition.Id));
             Assert.Equal(["sqlite-alpha"], byId.Select(definition => definition.Id));
