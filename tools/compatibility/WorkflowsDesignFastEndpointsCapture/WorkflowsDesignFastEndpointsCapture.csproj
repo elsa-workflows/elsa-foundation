@@ -11,7 +11,6 @@
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
-    <ProjectReference Include="../../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="../../../src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="../../../src/Elsa/Expressions/Elsa.Expressions.csproj" />
     <ProjectReference Include="../../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj" />
@@ -20,7 +19,6 @@
     <ProjectReference Include="../../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj" />
     <ProjectReference Include="../../../src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="../../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
-    <ProjectReference Include="../../../src/Elsa/Workflows/Design/Api/Core/Elsa.Workflows.Design.Api.Core.csproj" />
     <ProjectReference Include="../../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />
   </ItemGroup>
 </Project>

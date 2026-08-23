@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
+using Elsa.Workflows.Publishing.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -25,9 +26,8 @@ namespace Elsa.Architecture.Tests;
 public sealed class OpenApiLifetimeBoundaryTests
 {
     [Fact]
-    public void Activities_design_native_openapi_metadata_uses_only_stable_contract_types()
+    public void Activities_design_native_openapi_metadata_uses_only_non_collectible_types()
     {
-        var implementationAssembly = typeof(ActivitiesDesignApi).Assembly;
         var builder = WebApplication.CreateBuilder();
         using var app = builder.Build();
 
@@ -57,8 +57,49 @@ public sealed class OpenApiLifetimeBoundaryTests
                 .Cast<Type>();
 
             Assert.All(acceptedTypes.Concat(responseTypes), type =>
+                Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly."));
+        });
+    }
+
+    [Fact]
+    public void Publishing_native_openapi_metadata_uses_only_non_collectible_types()
+    {
+        var ownerAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
+        var mapperType = ownerAssembly.GetType("Elsa.Workflows.Publishing.Api.WorkflowsPublishingApi", throwOnError: true)!;
+        var mapper = mapperType.GetMethod("MapWorkflowsPublishingApi", BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(mapper);
+
+        var builder = WebApplication.CreateBuilder();
+        using var app = builder.Build();
+        mapper!.Invoke(null, [app]);
+
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources
+            .SelectMany(dataSource => dataSource.Endpoints)
+            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Workflows.Publishing.Api")
+            .ToArray();
+
+        Assert.Equal(23, endpoints.Length);
+        Assert.All(endpoints, endpoint =>
+        {
+            var lifetime = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
+            Assert.Equal(OpenApiLifetimeClassification.SharedContract, lifetime.Classification);
+            Assert.Equal("Elsa.Workflows.Publishing.Api", lifetime.Owner);
+
+            var acceptedTypes = endpoint.Metadata
+                .GetOrderedMetadata<IAcceptsMetadata>()
+                .Select(metadata => metadata.RequestType)
+                .Where(type => type is not null)
+                .Cast<Type>();
+            var responseTypes = endpoint.Metadata
+                .GetOrderedMetadata<IProducesResponseTypeMetadata>()
+                .Select(metadata => metadata.Type)
+                .Where(type => type is not null)
+                .Cast<Type>();
+
+            Assert.All(acceptedTypes.Concat(responseTypes), type =>
             {
-                Assert.NotSame(implementationAssembly, type.Assembly);
+                if (type.Namespace?.StartsWith("Elsa.Workflows.Publishing.Api", StringComparison.Ordinal) == true)
+                    Assert.Equal("Elsa.Workflows.Publishing.Api", type.Assembly.GetName().Name);
                 Assert.False(type.Assembly.IsCollectible, $"OpenAPI contract type '{type}' came from a collectible assembly.");
             });
         });

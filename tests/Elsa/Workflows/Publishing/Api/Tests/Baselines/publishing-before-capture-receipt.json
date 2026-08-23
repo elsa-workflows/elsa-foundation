@@ -1,0 +1,75 @@
+{
+  "capture": "real-fastendpoints-historical-worktree",
+  "captureCommand": "PUBLISHING_BEFORE_COMMIT=cd9fa1743fb982ca60c33384762644b02fdd95ed bash tools/capture-publishing-before.sh",
+  "captureDescription": "git worktree add --detach sourceCommit; execute only checked-in runner content",
+  "caseCount": 74,
+  "categories": [
+    "anonymous",
+    "trusted-success",
+    "binding",
+    "domain",
+    "cancellation"
+  ],
+  "httpSha256": "1a6182737dfac07dbd2681558155be31b36ccddd38fa505a613402a937962e7d",
+  "initialApprovalsSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+  "openApiSha256": "ba42d7c95f52f968a0a3cad3f4837d5a53726cdb4d25386e6f4e8d047b8760b1",
+  "operationCount": 23,
+  "rawOpenApiSha256": "38b9ab5bc6b1b27906fa0af9cb8bf9b1e39b422495e5ebc037e822f6110a9bcc",
+  "registrationCount": 23,
+  "runnerDependencies": [
+    {
+      "identity": "checked-in-commit",
+      "path": "tools/capture-publishing-before.sh",
+      "sha256": "7b3e0f90b15baedecfaa59766c766f708fbbd3411b8e6c48335375c1607ae8fc"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Capture/Elsa.Workflows.Publishing.BeforeCapture.csproj",
+      "sha256": "23f0f8ce0f72f6111b54cbcf703a9f3bdf3e17fc6a6e8db30ed67d710939b35e"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Capture/Program.cs",
+      "sha256": "af95b2ff23eb23cb8aa818ac5f3d7c16a4e84eb714d27f22e7b4948d7a386a18"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityCases.cs",
+      "sha256": "7d3a273ecaf1b4d8b1ec567d7ae93ae9f20c55dbe69800a34ee34e2c5706ec41"
+    },
+    {
+      "identity": "checked-in-commit",
+      "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs",
+      "sha256": "6a88e8a03e46121fbba8268fc926ce3dee846e25d8ab9f919ac5f1ffa9bd784e"
+    },
+    {
+      "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Http/HttpEvidenceCapture.cs",
+      "sha256": "71ae313699ee8f9b16a551a33676bd081fd227bbf9f00afc71ea78a9eb2bac12"
+    },
+    {
+      "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
+      "path": "tests/Elsa/Api/Compatibility/Testing/OpenApi/OpenApiEvidenceCapture.cs",
+      "sha256": "a970762deb2c91b5d2c5df402c6f7f12da3e9d5bfabf019063aa93cc94e62ae7"
+    },
+    {
+      "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Serialization/CompatibilityJson.cs",
+      "sha256": "f2a7574bca741e335b275b25103627d47092caf475b43f311ca6803a4e53bf6c"
+    },
+    {
+      "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
+      "path": "tests/Elsa/Api/Compatibility/Testing/Manifests/EndpointIdentity.cs",
+      "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
+    }
+  ],
+  "runnerFingerprint": "ec6b052ddccb8566b4d778502376781ab6ada57a8d51905007c790ecc8a81fed",
+  "runnerIdentity": "checked-in-commit",
+  "sourceCommit": "cd9fa1743fb982ca60c33384762644b02fdd95ed",
+  "sourceRelationship": "ancestor-before-migration",
+  "volatileFields": [
+    "response-json.traceId",
+    "response-json.preflightToken",
+    "response-header.date"
+  ]
+}

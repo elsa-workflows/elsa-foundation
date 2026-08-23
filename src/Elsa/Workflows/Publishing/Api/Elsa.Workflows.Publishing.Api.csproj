@@ -12,11 +12,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The nested stable Core project owns its generated obj/bin files. Do not let the parent
+         SDK glob compile those generated assembly attributes into the implementation assembly. -->
+    <!-- Public HTTP contracts are compiled by the stable Api.Core seam and reached here through
+         the existing namespaces. The implementation assembly retains only owner-local adapters. -->
     <ProjectReference Include="..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
@@ -28,6 +31,8 @@
     <ProjectReference Include="..\..\Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
   </ItemGroup>
 
 </Project>

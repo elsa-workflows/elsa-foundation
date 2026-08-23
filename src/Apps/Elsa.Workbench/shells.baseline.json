@@ -64,9 +64,6 @@
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
-          },
-          "FastEndpoints": {
-            "EndpointRoutePrefix": ""
           }
         },
         "Configuration": {

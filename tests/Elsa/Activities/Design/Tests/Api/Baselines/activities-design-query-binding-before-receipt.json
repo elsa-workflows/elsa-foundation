@@ -13,7 +13,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Activities/Design/Tests/Api/Capture/QueryBinding/Elsa.Activities.Design.QueryBinding.BeforeCapture.csproj",
-      "sha256": "bfa4a28008b3b0c4495c900b7913395d3fc43c42d2f177fedf1cf23248e145fa"
+      "sha256": "e1e7f4791faf9e1b7c71b8e094f04dea7a2e8572f8dbb209c275359e4a161398"
     },
     {
       "identity": "checked-in-commit",
@@ -51,7 +51,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "1a2863db2483bc655098dd6bf4a372004261ade1357c366679e173230b2ba516",
+  "runnerFingerprint": "e666b2f2f5b003bfdd907db31cba085353e36a7c533d93a6904e228b2c63cd72",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "883b691eb8fdd4515b378e0d89b19c2185ea9e00",
   "sourceRelationship": "ancestor-before-migration",

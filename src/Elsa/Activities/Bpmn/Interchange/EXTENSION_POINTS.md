@@ -37,8 +37,8 @@
 ## Owned HTTP endpoints
 
 - `POST interchange/bpmn/analyze` / `import` / `export` (`Endpoints/BpmnInterchangeEndpoints.cs`),
-  permission-gated by `bpmn-interchange.read` / `bpmn-interchange.manage`, discovered by the
-  FastEndpoints assembly scan via `FastEndpointsFeatureBase`.
+  permission-gated by `bpmn-interchange.read` / `bpmn-interchange.manage`, mapped explicitly by the
+  owner's Minimal API mapper.
 
 ## Consumed contracts
 

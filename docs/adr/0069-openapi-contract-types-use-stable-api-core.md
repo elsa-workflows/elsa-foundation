@@ -1,10 +1,20 @@
 ---
-status: proposed
+status: superseded
 date: 2026-08-16
 decision_context: First-party REST API Consolidation blocker #1392; framework retention reproduced by spec 165
 ---
 
 # OpenAPI contract types use stable API Core assemblies
+
+## Supersession
+
+Superseded on 2026-08-21 by
+[ADR 0070](0070-rest-api-contracts-ship-in-one-assembly-per-domain.md), which collapses each
+`*.Api.Core` assembly back into its `*.Api` implementation assembly. The retention mechanism
+described below is accurate and unchanged; what changed is the judgment that first-party
+unloadability is worth its cost. No host creates a collectible `AssemblyLoadContext`, feature-disable
+never depended on the split, and the pattern could not be extended to third-party modules — the case
+that motivated dynamic loading in the first place.
 
 ## Context
 
@@ -87,4 +97,5 @@ contracts.
 
 - Spec and lifecycle matrix: [`specs/165-unload-safe-openapi`](../../specs/165-unload-safe-openapi/)
 - Decision report: [`docs/reports/unload-safe-openapi-boundary-2026-08.md`](../reports/unload-safe-openapi-boundary-2026-08.md)
+- Publishing owner proof: [`docs/reports/publishing-api-migration-2026-08.md`](../reports/publishing-api-migration-2026-08.md)
 - Parent authoring decision: [ADR 0068](0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md)

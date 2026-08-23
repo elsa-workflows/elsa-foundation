@@ -1,37 +1,31 @@
+using Elsa.Workflows.Publishing.Api.Authorization;
+using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Elsa.Api.FastEndpoints.Abstractions;
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
-using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.Authorization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class PublicationManagementEndpointTests
 {
-    private const string Root = "Elsa.Workflows.Publishing.Api.Endpoints";
-
     public static TheoryData<string, string, string> ManagementEndpoints => new()
     {
-        { "PreflightWorkflowPublicationSnapshotEndpoint", "publishing/workflows/preflight", PermissionNames.WorkflowPublishingRead },
-        { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", PermissionNames.WorkflowPublishingRead },
-        { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", PermissionNames.WorkflowPublishingManage },
-        { "ListPublicationSlotsEndpoint", "publishing/workflows/{definitionId}/slots", PermissionNames.WorkflowPublishingRead },
-        { "GetPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", PermissionNames.WorkflowPublishingRead },
-        { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", PermissionNames.WorkflowPublishingManage },
-        { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", PermissionNames.WorkflowPublishingManage },
-        { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", PermissionNames.WorkflowPublishingRead },
-        { "SetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", PermissionNames.WorkflowPublishingManage }
+        { "PreflightWorkflowPublicationSnapshotEndpoint", "publishing/workflows/preflight", WorkflowPublishingPermissions.Read },
+        { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", WorkflowPublishingPermissions.Read },
+        { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", WorkflowPublishingPermissions.Manage },
+        { "ListPublicationSlotsEndpoint", "publishing/workflows/{definitionId}/slots", WorkflowPublishingPermissions.Read },
+        { "GetPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Read },
+        { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Manage },
+        { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", WorkflowPublishingPermissions.Manage },
+        { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Read },
+        { "SetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Manage }
     };
 
     [Theory]
@@ -41,14 +35,15 @@ public sealed class PublicationManagementEndpointTests
         string route,
         string permission)
     {
-        var definition = ConfiguredDefinition($"{Root}.{endpointName}");
+        var endpoint = PublishingMinimalApiTestSurface.Named(endpointName);
 
-        Assert.Contains(route, definition.Routes);
-        Assert.NotEmpty(definition.PreBuiltUserPolicies!);
-        Assert.All(
-            definition.PreBuiltUserPolicies!,
-            policy => Assert.Equal(ElsaEndpointPermissions.ComposePolicy([permission]), policy));
-        Assert.Null(definition.AnonymousVerbs);
+        Assert.Equal(route, endpoint.RoutePattern.RawText?.TrimStart('/'));
+        var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());
+        var parsed = new PermissionPolicyCodec().Parse(authorization.Policy!);
+        Assert.Equal(PermissionPolicyParseStatus.Valid, parsed.Status);
+        var descriptor = Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor);
+        Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
+        Assert.Equal(PermissionKey.Normalize(permission), Assert.Single(descriptor.Permissions));
     }
 
     [Fact]
@@ -120,54 +115,6 @@ public sealed class PublicationManagementEndpointTests
         Assert.Equal(expected, document.RootElement.GetProperty("action").GetString());
     }
 
-    private static EndpointDefinition ConfiguredDefinition(string endpointTypeName)
-    {
-        var endpointType = typeof(PublishWorkflowRequest).Assembly.GetType(endpointTypeName, throwOnError: true)!;
-        var dependencies = endpointType
-            .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single()
-            .GetParameters()
-            .Select(parameter => ResolveDependency(parameter.ParameterType))
-            .ToArray();
-        var create = typeof(Factory).GetMethods()
-            .Single(method => method.Name == nameof(Factory.Create)
-                              && method.IsGenericMethodDefinition
-                              && method.GetParameters() is [var first, var rest]
-                              && first.ParameterType == typeof(DefaultHttpContext)
-                              && rest.ParameterType == typeof(object[]))
-            .MakeGenericMethod(endpointType);
-
-        // Factory.Create otherwise falls back to FastEndpoints' process-global service resolver. A real
-        // FastEndpoints host in this test assembly can replace and dispose that resolver concurrently.
-        // Supplying request services keeps this configuration-only test independent of that shared state.
-        using var serviceProvider = new ServiceCollection().AddServicesForUnitTesting().BuildServiceProvider();
-        var httpContext = new DefaultHttpContext { RequestServices = serviceProvider };
-        var endpoint = (BaseEndpoint)create.Invoke(null, [httpContext, dependencies])!;
-        endpoint.Configure();
-        return endpoint.Definition;
-    }
-
     private static void AssertProperties(Type type, params string[] properties) =>
         Assert.Equal(properties, type.GetProperties().Select(property => property.Name));
-
-    private static object ResolveDependency(Type type)
-    {
-        if (type == typeof(TimeProvider))
-            return TimeProvider.System;
-        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ILogger<>))
-        {
-            var nullLoggerType = typeof(NullLogger<>).MakeGenericType(type.GenericTypeArguments[0]);
-            return (nullLoggerType.GetProperty(nameof(NullLogger<object>.Instance))?.GetValue(null)
-                    ?? nullLoggerType.GetField(nameof(NullLogger<object>.Instance))?.GetValue(null))!;
-        }
-        if (type.IsInterface)
-            return DispatchProxy.Create(type, typeof(NoopProxy));
-        return RuntimeHelpers.GetUninitializedObject(type);
-    }
-
-    private class NoopProxy : DispatchProxy
-    {
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            throw new InvalidOperationException("A configuration-only endpoint test must not invoke dependencies.");
-    }
 }

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Functional tests for the provider-evidence importer tool. These live here rather than in
+    Elsa.Architecture.Tests because that suite guards architectural invariants of the product and is
+    on the required path for every pull request; a build-time tool's filesystem-heavy tests inflate
+    that gate and blur what a red run means. They stay under tests/ because the CI fast-unit filter
+    is built from `find tests -name '*.csproj'`, so a project outside this tree would silently stop
+    running.
+  -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\tools\groundwork\Elsa.Groundwork.ProviderEvidenceImporter\Elsa.Groundwork.ProviderEvidenceImporter.csproj" />
+  </ItemGroup>
+
+</Project>

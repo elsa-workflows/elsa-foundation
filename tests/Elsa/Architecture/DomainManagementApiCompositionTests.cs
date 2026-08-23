@@ -19,7 +19,6 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
-using Elsa.Api.FastEndpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
@@ -113,6 +112,33 @@ public sealed class DomainManagementApiCompositionTests
         new("/design/activities/upgrade-plans/{planId}/refresh", "POST")
     ];
 
+    private static readonly EndpointIdentity[] ExpectedPublishingRoutes =
+    [
+        new("/publishing/activities", "GET"),
+        new("/publishing/activities/{activityId}/construct", "GET"),
+        new("/publishing/incident-strategies", "GET"),
+        new("/publishing/value-conversion/profiles", "GET"),
+        new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", "POST"),
+        new("/publishing/workflows/preflight", "POST"),
+        new("/publishing/workflows/{definitionId}/slots", "GET"),
+        new("/publishing/workflows/{definitionId}/slots/{slotName}", "GET"),
+        new("/publishing/workflows/{definitionId}/slots/{slotName}", "DELETE"),
+        new("/publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST"),
+        new("/publishing/workflows/{definitionId}/policy", "GET"),
+        new("/publishing/workflows/{definitionId}/policy", "PUT"),
+        new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", "POST"),
+        new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs", "POST"),
+        new("/publishing/workflows/drafts/test-runs", "POST"),
+        new("/publishing/preflight", "POST"),
+        new("/design/activities/drafts/{draftId}/publication-preflight", "POST"),
+        new("/design/activities/drafts/{draftId}/publish", "POST"),
+        new("/design/activities/publications/{idempotencyKey}", "GET"),
+        new("/publishing/activity-drafts/{draftId}/test-runs", "POST"),
+        new("/publishing/activity-test-runs/{testRunId}", "GET"),
+        new("/publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}", "GET"),
+        new("/publishing/activity-test-runs/{testRunId}/cancel", "POST")
+    ];
+
     [Fact]
     public async Task Custom_host_exposes_representative_domain_journeys_without_Elsa_Server()
     {
@@ -169,7 +195,7 @@ public sealed class DomainManagementApiCompositionTests
     }
 
     [Fact]
-    public async Task Combined_host_maps_activities_design_exactly_once_alongside_migrated_and_retained_owners()
+    public async Task Combined_host_maps_activities_design_and_publishing_exactly_once_alongside_migrated_owners()
     {
         await using var host = await CustomManagementHost.StartAsync(includeExpressions: true, allowAnonymous: false);
 
@@ -178,6 +204,10 @@ public sealed class DomainManagementApiCompositionTests
             .Where(entry => string.Equals(entry.Owner, ActivitiesDesignOwner, StringComparison.Ordinal))
             .ToArray();
         var identities = activities.SelectMany(entry => entry.Identities).ToArray();
+        var publishing = manifest.Entries
+            .Where(entry => string.Equals(entry.Owner, "Elsa.Workflows.Publishing.Api", StringComparison.Ordinal))
+            .ToArray();
+        var publishingIdentities = publishing.SelectMany(entry => entry.Identities).ToArray();
 
         Assert.Equal(ExpectedActivitiesDesignRoutes.Length, activities.Length);
         Assert.Equal(ExpectedActivitiesDesignRoutes.Length, identities.Length);
@@ -193,6 +223,20 @@ public sealed class DomainManagementApiCompositionTests
             Assert.NotNull(entry.SecurityDisposition);
         });
 
+        Assert.Equal(ExpectedPublishingRoutes.Length, publishing.Length);
+        Assert.Equal(ExpectedPublishingRoutes.Length, publishingIdentities.Length);
+        Assert.Equal(
+            ExpectedPublishingRoutes.OrderBy(identity => identity.ToString(), StringComparer.Ordinal),
+            publishingIdentities.OrderBy(identity => identity.ToString(), StringComparer.Ordinal));
+        Assert.Equal(ExpectedPublishingRoutes.Length, publishingIdentities.Distinct().Count());
+        Assert.All(publishing, entry =>
+        {
+            Assert.Equal("Minimal API", entry.AuthoringModel);
+            Assert.Equal(EndpointOwnerKind.Module, entry.OwnerKind);
+            Assert.StartsWith("ElsaWorkflowsPublishingApiEndpoints", entry.SourceIdentity, StringComparison.Ordinal);
+            Assert.NotNull(entry.SecurityDisposition);
+        });
+
         Assert.Contains(manifest.Entries, entry =>
             entry.Owner == "Elsa.Workflows.Design.Api" && entry.AuthoringModel == "Minimal API");
         Assert.Contains(manifest.Entries, entry =>
@@ -200,7 +244,7 @@ public sealed class DomainManagementApiCompositionTests
         Assert.Contains(manifest.Entries, entry =>
             entry.Owner == "Elsa.Expressions.Api" && entry.AuthoringModel == "Minimal API");
         Assert.Contains(manifest.Entries, entry =>
-            entry.Owner == "Elsa.Workflows.Publishing.Api" && entry.AuthoringModel == "FastEndpoints");
+            entry.Owner == "Elsa.Workflows.Publishing.Api" && entry.AuthoringModel == "Minimal API");
 
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/activities/catalog");
         await host.AssertJourneyAsync(HttpMethod.Get, "/design/activities/availability/diagnostics");
@@ -279,7 +323,6 @@ public sealed class DomainManagementApiCompositionTests
         builder.Services.AddCShellsAspNetCore(shells => shells
             .WithAssemblies(
                 typeof(FastEndpointsFeature).Assembly,
-                typeof(ApiSecurityFeature).Assembly,
                 typeof(FoundationIdentityAbstractionsFeature).Assembly,
                 typeof(ActivitiesDesignApiFeature).Assembly,
                 typeof(GraphActivitiesDesignFeature).Assembly,
@@ -409,11 +452,6 @@ public sealed class DomainManagementApiCompositionTests
 
     private sealed class CustomManagementHost(WebApplication app, HttpClient client) : IAsyncDisposable
     {
-        private static readonly string[] CommonEndpointTypes =
-        [
-            "Elsa.Workflows.Publishing.Api.Endpoints.PublishWorkflowEndpoint"
-        ];
-
         public HttpClient Client { get; } = client;
         public IServiceProvider Services => app.Services;
         public IReadOnlyList<EndpointDataSource> EndpointDataSources => app.Services.GetServices<EndpointDataSource>()
@@ -444,36 +482,20 @@ public sealed class DomainManagementApiCompositionTests
                 .AddScheme<AuthenticationSchemeOptions, DomainManagementAuthenticationHandler>("DomainManagementTest", _ => { });
             builder.Services.AddAuthorization();
 
-            var endpointTypes = CommonEndpointTypes.ToHashSet(StringComparer.Ordinal);
-            var assemblies = new List<System.Reflection.Assembly>
-            {
-                typeof(ApiCapabilitiesFeature).Assembly,
-                typeof(ActivitiesDesignApiFeature).Assembly,
-                typeof(WorkflowsDesignApiFeature).Assembly,
-                typeof(WorkflowsPublishingApiFeature).Assembly,
-                typeof(WorkflowsRuntimeApiFeature).Assembly
-            };
-
             if (includeExpressions)
             {
                 new ExpressionsFeature().ConfigureServices(builder.Services);
                 new ExpressionsApiFeature().ConfigureServices(builder.Services);
-                assemblies.Add(typeof(ExpressionsApiFeature).Assembly);
             }
 
             builder.Services.AddSingleton<IRequestSender, JourneyRequestSender>();
-            builder.Services.AddFastEndpoints(options =>
-            {
-                options.Assemblies = assemblies.ToArray();
-                options.Filter = type => type.FullName is not null && endpointTypes.Contains(type.FullName);
-            });
 
             var app = builder.Build();
-            // Migrated APIs are explicit Minimal API mappers. They share the same endpoint route
-            // builder with the retained FastEndpoints registration below.
+            // Every first-party management owner is now an explicit Minimal API mapper.
             ApiCapabilitiesApi.MapApiCapabilitiesApi(app);
             ActivitiesDesignApi.MapActivitiesDesignApi(app);
             WorkflowsDesignApi.MapWorkflowsDesignApi(app);
+            WorkflowsPublishingApi.MapWorkflowsPublishingApi(app);
             WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(app);
             if (includeExpressions)
                 ExpressionsApi.MapExpressionsApi(app);
@@ -490,9 +512,6 @@ public sealed class DomainManagementApiCompositionTests
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
-            app.UseFastEndpoints(options => options.Endpoints.Configurator = allowAnonymous
-                ? endpoint => endpoint.AllowAnonymous()
-                : null);
             await app.StartAsync();
             return new CustomManagementHost(app, app.GetTestClient());
         }
