@@ -1,10 +1,11 @@
 using CShells.Features;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -76,8 +77,7 @@ public static class GroundworkSqliteUnifiedRegistration
         ShellFeatureContext context,
         WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup = false,
-        bool skipInspectionWhenPlanUnchanged = false,
-        SqliteGroundworkStoreCacheOptions? storeCacheOptions = null)
+        bool skipInspectionWhenPlanUnchanged = false)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         services.AddGroundworkReferenceDeploymentSchema(context);
@@ -85,8 +85,7 @@ public static class GroundworkSqliteUnifiedRegistration
             connectionString,
             workflowExecutableCacheOptions,
             autoApplyOnStartup,
-            skipInspectionWhenPlanUnchanged,
-            storeCacheOptions);
+            skipInspectionWhenPlanUnchanged);
     }
 
     /// <summary>
@@ -128,24 +127,18 @@ public static class GroundworkSqliteUnifiedRegistration
         string connectionString,
         WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
         bool autoApplyOnStartup,
-        bool skipInspectionWhenPlanUnchanged,
-        SqliteGroundworkStoreCacheOptions? storeCacheOptions = null)
+        bool skipInspectionWhenPlanUnchanged)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddSqliteGroundworkDocumentStore(
-            connectionString,
-            autoApplyOnStartup,
-            skipInspectionWhenPlanUnchanged,
-            storeCacheOptions);
+        services.AddGroundworkStorageProviderConnection(
+            _ => new SqliteProviderFactory().Create(connectionString));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        services.AddGroundworkWorkflowRunHealth(
-            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
-            GroundworkRunHealthDialect.Sqlite);
-        services.AddGroundworkWorkflowPortfolio(
-            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
-            GroundworkRunHealthDialect.Sqlite);
+        // Both tiles read the v2 lanes through the storage session source, so they need no connection
+        // of their own and follow whatever target each lane is bound to.
+        services.AddGroundworkV2WorkflowRunHealth();
+        services.AddGroundworkV2WorkflowPortfolio();
         return services;
     }
 }

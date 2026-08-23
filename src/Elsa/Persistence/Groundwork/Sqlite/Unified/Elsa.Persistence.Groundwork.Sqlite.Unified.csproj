@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- This preset stays closed over the one provider it composes. -->
+    <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Groundwork.Core" />
     <PackageReference Include="Groundwork.Documents" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
@@ -9,10 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
     <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
-    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\V2\Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>

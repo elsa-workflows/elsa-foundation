@@ -1,10 +1,11 @@
 using CShells.Features;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.SqlServer.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.SqlServer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -104,14 +105,13 @@ public static class GroundworkSqlServerUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddSqlServerGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.AddGroundworkStorageProviderConnection(
+            _ => new SqlServerProviderFactory().Create(connectionString));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        services.AddGroundworkWorkflowRunHealth(
-            _ => new Microsoft.Data.SqlClient.SqlConnection(connectionString),
-            GroundworkRunHealthDialect.SqlServer);
-        services.AddGroundworkWorkflowPortfolio(
-            _ => new Microsoft.Data.SqlClient.SqlConnection(connectionString),
-            GroundworkRunHealthDialect.SqlServer);
+        // Both tiles read the v2 lanes through the storage session source, so they need no connection
+        // of their own and follow whatever target each lane is bound to.
+        services.AddGroundworkV2WorkflowRunHealth();
+        services.AddGroundworkV2WorkflowPortfolio();
         return services;
     }
 }

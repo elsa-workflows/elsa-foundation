@@ -12,8 +12,6 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 {
     private const string EnabledProperty = "CacheWorkflowExecutables";
     private const string CapacityProperty = "WorkflowExecutableCacheCapacity";
-    private const string StoreReuseProperty = "ReuseAccessBoundStores";
-    private const string StoreCapacityProperty = "AccessBoundStoreCacheCapacity";
 
     [Fact]
     public void OriginalConnectionStringRegistrationOverloadIsPreserved()
@@ -54,8 +52,11 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 
         AssertSetting(feature, EnabledProperty, true);
         AssertSetting(feature, CapacityProperty, 256);
-        AssertSetting(feature, StoreReuseProperty, true);
-        AssertSetting(feature, StoreCapacityProperty, 256);
+
+        // The access-bound store cache sized the v1 document-store adapters. The v2 substrate binds access
+        // per session, so those two settings went with the substrate rather than being carried forward.
+        Assert.Null(feature.GetType().GetProperty("ReuseAccessBoundStores"));
+        Assert.Null(feature.GetType().GetProperty("AccessBoundStoreCacheCapacity"));
     }
 
     [Fact]

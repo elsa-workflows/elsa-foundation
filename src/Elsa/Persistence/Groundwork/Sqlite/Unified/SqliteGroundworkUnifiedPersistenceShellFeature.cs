@@ -30,7 +30,7 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedP
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "SQLite connection string used by the single Groundwork document store backing every Elsa lane.",
+        Description = "SQLite connection string used by the single Groundwork provider connection backing every Elsa lane.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }
@@ -41,18 +41,8 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedP
         Category = "Persistence")]
     public bool SkipSchemaInspectionWhenPlanUnchanged { get; set; }
 
-    [ManifestSetting(
-        DisplayName = "Reuse access-bound stores",
-        Description = "Reuse immutable, access-bound Groundwork store adapters while each operation continues to own an independent SQLite connection. Enabled by default.",
-        Category = "Performance")]
-    public bool ReuseAccessBoundStores { get; set; } = true;
-
-    [ManifestSetting(
-        DisplayName = "Access-bound store cache capacity",
-        Description = "Maximum number of tenant, scope, and privilege bindings retained by this shell. Old bindings are evicted safely when the bounded cache is full.",
-        Category = "Performance")]
-    public int AccessBoundStoreCacheCapacity { get; set; } =
-        SqliteGroundworkStoreCacheOptions.DefaultCapacity;
+    // The access-bound store cache tuned the v1 document-store adapters. The v2 substrate binds access
+    // per session instead of caching adapters, so there is nothing left for those settings to size.
 
     public override void ConfigureServices(IServiceCollection services) =>
         services.AddGroundworkSqliteUnifiedPersistence(
@@ -60,10 +50,5 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedP
             Context,
             CreateWorkflowExecutableCacheOptions(),
             AutoApplySchemaOnStartup,
-            SkipSchemaInspectionWhenPlanUnchanged,
-            new SqliteGroundworkStoreCacheOptions
-            {
-                Enabled = ReuseAccessBoundStores,
-                Capacity = AccessBoundStoreCacheCapacity
-            });
+            SkipSchemaInspectionWhenPlanUnchanged);
 }

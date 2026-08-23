@@ -673,11 +673,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     StageDelete(
                         ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind,
                         inspectionPhysicalId);
-                    StageDelete(
-                        ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
-                        GroundworkV2ActivityExecutionHierarchyStorageConventions.PhysicalId(
-                            change.State.WorkflowExecutionId,
-                            change.State.ActivityExecutionId));
+                    StageHierarchyDeleteIfPresent(
+                        change.State.WorkflowExecutionId,
+                        change.State.ActivityExecutionId);
                     continue;
                 }
 
@@ -689,11 +687,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 var effectiveScope = EffectiveExecutionScope(change.State.ExecutionScopeId, change.State.Provenance.ExecutionScopeId);
                 if (string.IsNullOrWhiteSpace(effectiveScope))
                 {
-                    StageDelete(
-                        ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind,
-                        GroundworkV2ActivityExecutionHierarchyStorageConventions.PhysicalId(
-                            change.State.WorkflowExecutionId,
-                            change.State.ActivityExecutionId));
+                    StageHierarchyDeleteIfPresent(
+                        change.State.WorkflowExecutionId,
+                        change.State.ActivityExecutionId);
                     continue;
                 }
                 var hierarchy = ActivityExecutionHierarchyProjector.FromInspection(
@@ -705,6 +701,30 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     GroundworkV2ActivityExecutionHierarchyStorageConventions.Values(hierarchy),
                     change.Operation);
             }
+        }
+
+        /// <summary>
+        /// Retracts an activity's hierarchy row, which may never have been written.
+        /// </summary>
+        /// <remarks>
+        /// Hierarchy rows exist only for activities that carry an execution scope, so both call sites here
+        /// are speculative: they retract a row for an activity that may never have had one. A staged delete
+        /// of an absent row comes back <c>NotFound</c> and fails the whole unit of work, so the row has to be
+        /// resolved first. The document substrate this replaced treated the same delete as a no-op, which is
+        /// why the difference only appears now.
+        /// </remarks>
+        private void StageHierarchyDeleteIfPresent(string workflowExecutionId, string activityExecutionId)
+        {
+            var physicalId = GroundworkV2ActivityExecutionHierarchyStorageConventions.PhysicalId(
+                workflowExecutionId,
+                activityExecutionId);
+            if (Open(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind)
+                    .Read(GroundworkRuntimeRowStore.Key(physicalId)) is null)
+            {
+                return;
+            }
+
+            StageDelete(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind, physicalId);
         }
 
         public void ApplyBookmarks()

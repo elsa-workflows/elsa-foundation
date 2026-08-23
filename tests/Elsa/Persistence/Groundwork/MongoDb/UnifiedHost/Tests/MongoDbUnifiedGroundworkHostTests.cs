@@ -24,7 +24,6 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
         services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
 
         var provider = services.BuildServiceProvider();
-        await provider.ApplyMongoDbGroundworkSchemaAsync(connectionString, databaseName);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }

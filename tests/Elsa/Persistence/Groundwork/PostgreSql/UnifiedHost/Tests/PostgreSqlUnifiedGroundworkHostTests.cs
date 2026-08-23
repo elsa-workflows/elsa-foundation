@@ -29,7 +29,6 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
         services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
 
         var provider = services.BuildServiceProvider();
-        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         // A bare provider has no host lifecycle; drive runtime admission after explicit schema application.
         await provider.InitializeGroundworkStoreAsync();
         return provider;

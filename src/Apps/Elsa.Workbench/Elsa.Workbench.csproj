@@ -85,7 +85,6 @@
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Attention\Elsa.Secrets.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<!--
 			WorkflowsDashboard declares DependsOn WorkflowDesignValidations; the validations feature assembly must be in
@@ -112,7 +111,6 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\PostgreSql\Elsa.Persistence.Groundwork.PostgreSql.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />

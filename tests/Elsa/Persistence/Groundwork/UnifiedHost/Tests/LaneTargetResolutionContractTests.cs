@@ -2,10 +2,7 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Targets;
-using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
-using Groundwork.Documents.Store;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
@@ -33,7 +30,7 @@ public sealed class LaneTargetResolutionContractTests
         var failure = Assert.Throws<ArgumentException>(
             () => laneTargets.For(typeof(PublishingGroundworkStorageManifest)));
 
-        Assert.Contains(nameof(IGroundworkStorageManifestSource), failure.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(IGroundworkStorageLane), failure.Message, StringComparison.Ordinal);
         Assert.Contains("a manifest type resolves nothing", failure.Message, StringComparison.Ordinal);
     }
 
@@ -51,30 +48,4 @@ public sealed class LaneTargetResolutionContractTests
             Bound("authoring").For<ActivitiesDesignGroundworkStorageManifestSource>());
     }
 
-    [Fact]
-    public void The_store_resolver_rejects_a_manifest_type_too()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized()));
-        using var provider = services.BuildServiceProvider();
-        var laneStores = new GroundworkLaneStores(provider, Bound("authoring"));
-
-        Assert.Throws<ArgumentException>(() => laneStores.For(typeof(PublishingGroundworkStorageManifest)));
-    }
-
-    [Fact]
-    public void The_store_resolver_reaches_the_bound_target_not_the_default_one()
-    {
-        var designStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
-        var defaultStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.CreatePhysicalized());
-        var services = new ServiceCollection();
-        services.AddKeyedSingleton<IDocumentStore>("authoring", designStore);
-        services.AddKeyedSingleton<IDocumentStore>(GroundworkTargetNames.Default, defaultStore);
-        using var provider = services.BuildServiceProvider();
-
-        var laneStores = new GroundworkLaneStores(provider, Bound("authoring"));
-
-        Assert.Same(designStore, laneStores.For<PublishingGroundworkStorageManifestSource>());
-        Assert.Same(defaultStore, laneStores.For<RuntimeGroundworkStorageManifestSource>());
-    }
 }

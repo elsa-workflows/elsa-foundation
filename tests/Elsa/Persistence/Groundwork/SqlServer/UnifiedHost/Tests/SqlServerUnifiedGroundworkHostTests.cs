@@ -23,7 +23,6 @@ public sealed class SqlServerUnifiedGroundworkHostTests(SqlServerContainerFixtur
         services.AddGroundworkSqlServerUnifiedPersistence(connectionString);
 
         var provider = services.BuildServiceProvider();
-        await provider.ApplySqlServerGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }

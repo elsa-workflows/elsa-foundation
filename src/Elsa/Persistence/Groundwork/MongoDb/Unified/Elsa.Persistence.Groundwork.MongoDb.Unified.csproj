@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <!-- This preset stays closed over the one provider it composes. -->
     <PackageReference Include="Groundwork.MongoDb" />
     <PackageReference Include="MongoDB.Driver" />
     <PackageReference Include="CShells.Abstractions" />
@@ -8,10 +9,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Persistence.Groundwork.MongoDb.csproj" />
     <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
     <ProjectReference Include="..\..\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
-    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\MongoDb\Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb.csproj" />
+    <ProjectReference Include="..\..\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\V2\Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 
 </Project>

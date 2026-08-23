@@ -11,7 +11,6 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -26,7 +25,11 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -36,9 +39,10 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal: <b>one host-selected database backs every Elsa module</b>. The host
-/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which materializes the legacy
-/// provider-level feature manifests into <b>one</b> SQLite document database and points every family's neutral
-/// ports at it. Nothing here is SQLite- or Groundwork-specific except the one host registration call.
+/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which opens <b>one</b> Groundwork
+/// v2 provider connection over a SQLite file, admits every lane's declared storage units into it, and points
+/// every family's neutral ports at it. Nothing here is SQLite- or Groundwork-specific except the one host
+/// registration call.
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
@@ -58,7 +62,6 @@ public class UnifiedGroundworkHostTests
             .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _ = provider.GetRequiredService<TemporarySqliteDatabase>();
-        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -74,24 +77,25 @@ public class UnifiedGroundworkHostTests
         var provider = services
             .AddGroundworkSqliteUnifiedPersistence(connectionString)
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        await provider.ApplySqliteGroundworkSchemaAsync(connectionString);
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
 
     [Fact]
-    public async Task Host_registers_one_document_store_shared_by_every_lane()
+    public async Task Host_registers_one_provider_connection_shared_by_every_lane()
     {
         await using var provider = await BuildHostAsync();
         await using var scope = provider.CreateAsyncScope();
 
-        var store1 = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
-        var store2 = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var connection = scope.ServiceProvider.GetRequiredService<IStorageProviderConnection>();
 
-        // One access-bound adapter instance backs everything within an operation scope.
-        Assert.Same(store1, store2);
+        // The connection is the host's single physical store: one instance, shared by every lane and every
+        // scope. That is the headline claim of this preset, and it is why the lanes can transact together.
+        Assert.Same(connection, scope.ServiceProvider.GetRequiredService<IStorageProviderConnection>());
+        await using var independentScope = provider.CreateAsyncScope();
+        Assert.Same(connection, independentScope.ServiceProvider.GetRequiredService<IStorageProviderConnection>());
 
-        // This legacy composition proves only the families that have not crossed the clean-break boundary.
+        // Runtime resolves off it.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
         // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
@@ -101,9 +105,6 @@ public class UnifiedGroundworkHostTests
         // Design lane ports resolve (scoped).
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
-
-        await using var independentScope = provider.CreateAsyncScope();
-        Assert.NotSame(store1, independentScope.ServiceProvider.GetRequiredService<IDocumentStore>());
     }
 
     [Fact]
@@ -216,33 +217,29 @@ public class UnifiedGroundworkHostTests
     {
         await using var provider = await BuildHostAsync();
         await using var scope = provider.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var sessions = scope.ServiceProvider.GetRequiredService<IGroundworkStorageSessionSource>();
 
-        // A document kind from each lane, written and read back through the single store. Success proves the
-        // union manifest materialized every lane's schema into the one SQLite database.
-        await SaveAsync(store, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1", "workflowExecutionState");
-        await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1", "workflowDefinition");
-        var activityDefinition = new ActivityDefinition
+        // A unit from each lane, written and read back through the one connection. Success proves every
+        // lane admitted its own schema into the same SQLite database.
+        var lanes = new[]
         {
-            Id = "act-1",
-            ActivityTypeKey = "Test.Activity",
-            Category = "Test"
-        };
-        await store.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            activityDefinition.Id,
-            ActivitiesDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(
-                new GroundworkDocument<ActivityDefinition>(
-                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
-                    activityDefinition),
-                GroundworkActivitiesDesignJson.Options)));
-        await SaveAsync(store, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1", "publicationSlot");
+            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind
+        };
 
-        Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1"));
-        Assert.NotNull(await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1"));
-        Assert.NotNull(await store.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, "act-1"));
-        Assert.NotNull(await store.LoadAsync(PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1"));
+        foreach (var unitId in lanes)
+        {
+            var unit = sessions.Unit(unitId);
+            var session = sessions.Open(unitId, StorageAccess.Scoped(new StorageScope("tenant-1")));
+            Assert.Empty(session.Query(new QueryRequest(
+                new TableId(unit.Name),
+                Predicate.AlwaysTrue.Instance,
+                [],
+                Projection.All,
+                Paging.Keyset(1))).Rows);
+        }
     }
 
     [Fact]
@@ -303,16 +300,28 @@ public class UnifiedGroundworkHostTests
     {
         await using var provider = await BuildHostAsync();
         await using var scope = provider.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var sessions = scope.ServiceProvider.GetRequiredService<IGroundworkStorageSessionSource>();
 
-        var definition = new WorkflowDefinition { Id = "wf-42", Name = "Order Processing", Description = "Handles orders" };
-        var document = new GroundworkDocument<WorkflowDefinition>(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection, definition);
-        await store.SaveAsync(new SaveDocumentRequest(
+        // Written straight onto the host's one connection, bypassing the lane's own write path, so the read
+        // below can only succeed if the neutral port really reads this database.
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-42",
+            Name = "Order Processing",
+            Description = "Handles orders",
+            TenantId = "tenant-1"
+        };
+        var session = sessions.Open(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-            definition.Id,
-            WorkflowsDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(document, GroundworkDesignJson.Options)));
+            StorageAccess.Scoped(new StorageScope("tenant-1")));
+        var outcome = session.Upsert(
+            GroundworkDesignStorage.Values(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                definition,
+                GroundworkDesignJson.Options,
+                WorkflowsDesignStorageManifest.WorkflowDefinitionCollection),
+            WriteOptions.Unconditional);
+        Assert.True(outcome.Succeeded, outcome.Status.ToString());
 
         var readStore = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
         var result = await readStore.FindByIdAsync("wf-42");
@@ -343,22 +352,32 @@ public class UnifiedGroundworkHostTests
     {
         await using var provider = await BuildHostAsync();
         await using var scope = provider.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var store = scope.ServiceProvider.GetRequiredService<GroundworkV2ActivityDesignStore>();
 
-        var activity = new ActivityDefinition { Id = "ad-7", ActivityTypeKey = "Acme.SendEmail", Category = "Email", DisplayName = "Send Email" };
-        var document = new GroundworkDocument<ActivityDefinition>(
-            ActivitiesDesignStorageManifest.ActivityDefinitionCollection, activity);
-        await store.SaveAsync(new SaveDocumentRequest(
+        // Written through the lane's own low-level store, so the neutral read below can only succeed if that
+        // port resolves against the same host connection.
+        await store.SaveAsync(new ActivityDesignSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            activity.Id,
+            "ad-7",
             ActivitiesDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(document, GroundworkActivitiesDesignJson.Options)));
+            JsonSerializer.Serialize(
+                new GroundworkV2ActivityDesignDocument<ActivityDefinition>(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                    new ActivityDefinition
+                    {
+                        Id = "ad-7",
+                        TenantId = "tenant-1",
+                        ActivityTypeKey = "Acme.SendEmail",
+                        Category = "Email",
+                        DisplayName = "Send Email"
+                    }),
+                GroundworkActivitiesDesignJson.Options)));
 
         var readStore = scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>();
         var result = await readStore.GetAsync("ad-7");
 
         Assert.NotNull(result);
-        Assert.Equal("Acme.SendEmail", result!.ActivityTypeKey);
+        Assert.Equal("Acme.SendEmail", result.ActivityTypeKey);
     }
 
     [Fact]
@@ -396,13 +415,6 @@ public class UnifiedGroundworkHostTests
         Assert.NotNull(readDraft);
         Assert.Equal("draft-write", readDraft!.Id);
     }
-
-    private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
-        store.SaveAsync(new SaveDocumentRequest(
-            kind,
-            id,
-            "1.0.0",
-            JsonSerializer.Serialize(new { collection, entity = new { id } })));
 
     private sealed class TenantAccessContextAccessor : IPersistenceAccessContextAccessor
     {

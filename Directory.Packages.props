@@ -28,10 +28,17 @@
     <PackageVersion Include="Groundwork.Query.Model" Version="0.2.0-preview.1" />
     <PackageVersion Include="Groundwork.Store" Version="0.2.0-preview.1" />
     <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.131" />
-    <PackageVersion Include="Groundwork.MongoDb" Version="0.0.1-preview.131" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.131" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.131" />
-    <PackageVersion Include="Groundwork.SqlServer" Version="0.0.1-preview.131" />
+    <!--
+      The provider drivers carry the same package ids across Groundwork v1 and v2, and transitive
+      pinning (above) allows a package id only one version across the whole graph. The shipped host
+      composes the v2 provider connection, so these are v2 and the v1 document substrate they used to
+      serve is gone. A project pulling one of these back to 0.0.1-preview.131 puts two incompatible
+      drivers in one graph; there is no supported way to keep both.
+    -->
+    <PackageVersion Include="Groundwork.MongoDb" Version="0.2.0-preview.1" />
+    <PackageVersion Include="Groundwork.PostgreSql" Version="0.2.0-preview.1" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.2.0-preview.1" />
+    <PackageVersion Include="Groundwork.SqlServer" Version="0.2.0-preview.1" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
@@ -59,7 +66,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
@@ -99,7 +106,7 @@
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
-    <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
+    <PackageVersion Include="MongoDB.Driver" Version="3.10.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />

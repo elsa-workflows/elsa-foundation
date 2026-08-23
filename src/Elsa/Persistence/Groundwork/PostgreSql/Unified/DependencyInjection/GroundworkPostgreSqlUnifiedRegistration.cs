@@ -1,10 +1,11 @@
 using CShells.Features;
-using Elsa.Persistence.Groundwork.PostgreSql.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -118,14 +119,13 @@ public static class GroundworkPostgreSqlUnifiedRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddPostgreSqlGroundworkDocumentStore(connectionString, autoApplyOnStartup);
+        services.AddGroundworkStorageProviderConnection(
+            _ => new PostgreSqlProviderFactory().Create(connectionString));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        services.AddGroundworkWorkflowRunHealth(
-            _ => new Npgsql.NpgsqlConnection(connectionString),
-            GroundworkRunHealthDialect.PostgreSql);
-        services.AddGroundworkWorkflowPortfolio(
-            _ => new Npgsql.NpgsqlConnection(connectionString),
-            GroundworkRunHealthDialect.PostgreSql);
+        // Both tiles read the v2 lanes through the storage session source, so they need no connection
+        // of their own and follow whatever target each lane is bound to.
+        services.AddGroundworkV2WorkflowRunHealth();
+        services.AddGroundworkV2WorkflowPortfolio();
         return services;
     }
 }

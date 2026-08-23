@@ -1,10 +1,11 @@
 using CShells.Features;
-using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MongoDB.Driver;
@@ -119,13 +120,15 @@ public static class GroundworkMongoDbUnifiedRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
+        // The v2 provider takes one connection string, so the explicitly named database wins over any
+        // database the caller happened to encode in the string itself.
+        services.AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+            new MongoUrlBuilder(connectionString) { DatabaseName = databaseName }.ToString()));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        // Resolved per lane rather than closed over this preset's single database. The preset is a
-        // one-target default, not a promise that the lanes stay together: a host can bind the design lane to
-        // a second target afterwards, and the tiles have to follow it there instead of quietly counting the
-        // wrong database.
-        services.AddGroundworkMongoDbWorkflowDashboardForLanes();
+        // Both tiles read the v2 lanes through the storage session source, so they need no connection
+        // of their own and follow whatever target each lane is bound to.
+        services.AddGroundworkV2WorkflowRunHealth();
+        services.AddGroundworkV2WorkflowPortfolio();
         return services;
     }
 }

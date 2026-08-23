@@ -28,7 +28,6 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
     <!-- A second real provider leaf, composed only to prove the one-provider-per-host guard (registration-time; no connection). -->
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
