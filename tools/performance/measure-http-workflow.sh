@@ -168,14 +168,19 @@ measure_request() {
 # "no such collation sequence". The snapshot is a throwaway copy, so strip the collation from its
 # schema before counting; only the row count is read, so the weakened comparison semantics that
 # leaves behind do not matter.
+#
+# Use the .dbconfig dot-commands rather than PRAGMA writable_schema: the CLI's defensive mode
+# refuses a direct sqlite_master write with "table sqlite_master may not be modified", and the
+# PRAGMA alone does not lift it. Verified to agree on sqlite3 3.45.1 (ubuntu-24.04, what CI runs)
+# and 3.51.0 (macOS). Both dot-commands echo their setting on stdout, hence the redirect.
 count_checkpoint_commits() {
   local snapshot="$temporary_directory/groundwork-snapshot-$1.db"
   sqlite3 "$groundwork_db" ".timeout 5000" ".backup '$snapshot'" >/dev/null
   sqlite3 "$snapshot" \
-    "PRAGMA writable_schema=ON;
-     UPDATE sqlite_master SET sql = replace(sql, ' COLLATE GROUNDWORK_UTF16_ORDINAL', '')
-      WHERE sql LIKE '%GROUNDWORK_UTF16_ORDINAL%';
-     PRAGMA writable_schema=OFF;" >/dev/null
+    ".dbconfig defensive off" \
+    ".dbconfig writable_schema on" \
+    "UPDATE sqlite_master SET sql = replace(sql, ' COLLATE GROUNDWORK_UTF16_ORDINAL', '')
+      WHERE sql LIKE '%GROUNDWORK_UTF16_ORDINAL%';" >/dev/null
   sqlite3 "$snapshot" "SELECT COUNT(*) FROM runtime_checkpoint_commit;"
 }
 
