@@ -118,6 +118,11 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityFeatureAttributionResolver, ActivityFeatureAttributionResolver>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IBuiltInAuthoringDescriptorProvider, IntrinsicAuthoringDescriptorProvider>());
 
+        // The owner's failure services are keyed so hosts composing several modules keep each
+        // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.ActivitiesDesignProblemWriter>(ActivitiesDesignApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.ActivitiesDesignFaultRenderer>(ActivitiesDesignApi.OwnerId);
+
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);

@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Api.Commands;
+using Elsa.Activities.Design.Api.Endpoints;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
@@ -23,11 +24,17 @@ internal static class ActivitiesDesignJsonOptions
         return options;
     }
 
+    /// <summary>The owner context bound to the effective wire options, shared by the mapper and the failure writers.</summary>
+    internal static ActivitiesDesignJsonContext WireContext { get; } = new(Create());
+
     public static void Configure(JsonSerializerOptions options)
     {
         options.PropertyNameCaseInsensitive = true;
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+        // The former Minimal API JsonResult path wrote with the host HTTP options, whose default
+        // encoder is relaxed; the owner options keep that wire shape.
+        options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
 
         if (!options.TypeInfoResolverChain.Any(resolver => resolver is ActivitiesDesignJsonTypeInfoResolver))
             options.TypeInfoResolverChain.Insert(0, new ActivitiesDesignJsonTypeInfoResolver());
@@ -163,6 +170,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ActivityUpgradeApplyReceiptView))]
 [JsonSerializable(typeof(ActivityProblemDetailsView))]
 [JsonSerializable(typeof(ActivityRecoveryView))]
+[JsonSerializable(typeof(ActivitiesDesignLegacyProblem))]
 
 // Explicit roots for contract types that are commonly nested behind an opaque provider payload,
 // optional values, dictionaries, or a generic response.  These roots also give the completeness
