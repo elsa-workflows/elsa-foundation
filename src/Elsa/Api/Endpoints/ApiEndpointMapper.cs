@@ -72,7 +72,7 @@ public static class ApiEndpointMapper
             EndpointShape.Unbound => (IEndpointConventionBuilder)MapUnboundMethod
                 .MakeGenericMethod(response!)
                 .Invoke(null, [api, type, options])!,
-            EndpointShape.Writing => (IEndpointConventionBuilder)MapWritingMethod
+            EndpointShape.Result => (IEndpointConventionBuilder)MapResultMethod
                 .MakeGenericMethod(request!, response!)
                 .Invoke(null, [api, type, options])!,
             _ => (IEndpointConventionBuilder)MapMethod
@@ -93,7 +93,7 @@ public static class ApiEndpointMapper
         Body,
         NoContent,
         Unbound,
-        Writing
+        Result
     }
 
     private static (EndpointShape shape, Type? request, Type? response)? FindContract(Type type)
@@ -109,8 +109,8 @@ public static class ApiEndpointMapper
                 return (EndpointShape.NoContent, current.GenericTypeArguments[0], null);
             if (definition == typeof(ApiEndpointWithoutRequest<>))
                 return (EndpointShape.Unbound, null, current.GenericTypeArguments[0]);
-            if (definition == typeof(WritingApiEndpoint<,>))
-                return (EndpointShape.Writing, current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
+            if (definition == typeof(ApiEndpointWithResult<,>))
+                return (EndpointShape.Result, current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
         }
 
         return null;
@@ -122,8 +122,8 @@ public static class ApiEndpointMapper
     private static readonly MethodInfo MapUnboundMethod =
         typeof(ApiEndpointMapper).GetMethod(nameof(MapUnboundTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private static readonly MethodInfo MapWritingMethod =
-        typeof(ApiEndpointMapper).GetMethod(nameof(MapWritingTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo MapResultMethod =
+        typeof(ApiEndpointMapper).GetMethod(nameof(MapResultTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static IEndpointConventionBuilder MapTyped<TRequest, TResponse>(
         ModuleEndpointGroup api, Type endpointType, ApiEndpointOptions options, bool noContent)
@@ -164,18 +164,17 @@ public static class ApiEndpointMapper
         });
     }
 
-    private static IEndpointConventionBuilder MapWritingTyped<TRequest, TResponse>(
+    private static IEndpointConventionBuilder MapResultTyped<TRequest, TResponse>(
         ModuleEndpointGroup api, Type endpointType, ApiEndpointOptions options)
         where TResponse : notnull
     {
         var factory = ActivatorUtilities.CreateFactory(endpointType, Type.EmptyTypes);
 
-        return api.MapWritingBody<TRequest>(options, typeof(TResponse), async (context, request, cancellationToken) =>
+        return api.MapResultBody<TRequest, TResponse>(options, async (context, request, cancellationToken) =>
         {
-            var endpoint = (WritingApiEndpoint<TRequest, TResponse>)factory(context.RequestServices, null);
+            var endpoint = (ApiEndpointWithResult<TRequest, TResponse>)factory(context.RequestServices, null);
             endpoint.HttpContext = context;
-            endpoint.ResponseWriter = (response, statusCode) => api.WriteJsonAsync(context, response, statusCode);
-            await endpoint.HandleAsync(request, cancellationToken);
+            return await endpoint.HandleAsync(request, cancellationToken);
         });
     }
 

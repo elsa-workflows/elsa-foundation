@@ -68,26 +68,6 @@ public sealed class ModuleEndpointGroup
                 await WriteJsonAsync(context, response, successStatus);
             });
 
-    /// <summary>
-    /// Maps a route onto an inline handler that writes its own response.
-    /// </summary>
-    /// <remarks>
-    /// For operations whose status code is decided by the result rather than fixed by the route.
-    /// Binding, failure translation, and metadata are shared; only the response write is the
-    /// handler's own, using <see cref="WriteJsonAsync{TValue}"/>.
-    /// </remarks>
-    public IEndpointConventionBuilder MapWritingHandler<TRequest>(
-        string method,
-        string pattern,
-        string operation,
-        Func<HttpContext, TRequest, CancellationToken, Task> handler,
-        Type? responseType = null,
-        EndpointBodyMode? bodyMode = null,
-        string[]? accepts = null,
-        int successStatus = StatusCodes.Status200OK) =>
-        MapOperation<TRequest>(method, pattern, operation, bodyMode, accepts, responseType, successStatus, null,
-            (context, request, cancellationToken) => handler(context, request, cancellationToken));
-
     /// <summary>Maps a route that takes no request contract onto an inline handler.</summary>
     public IEndpointConventionBuilder MapHandler<TResponse>(
         string method,
@@ -199,13 +179,18 @@ public sealed class ModuleEndpointGroup
         MapUnbound(options.Method!, options.Route!, options.Operation!, typeof(TResponse), options.SuccessStatus,
             async context => await WriteJsonAsync(context, await dispatch(context, context.RequestAborted), options.SuccessStatus));
 
-    /// <summary>Maps an options-described operation that writes its own response. Used by the endpoint-class mapper.</summary>
-    internal IEndpointConventionBuilder MapWritingBody<TRequest>(
+    /// <summary>Maps an options-described operation whose status travels with the result. Used by the endpoint-class mapper.</summary>
+    internal IEndpointConventionBuilder MapResultBody<TRequest, TResponse>(
         ApiEndpointOptions options,
-        Type responseType,
-        Func<HttpContext, TRequest, CancellationToken, Task> dispatch) =>
+        Func<HttpContext, TRequest, CancellationToken, Task<EndpointResult<TResponse>>> dispatch)
+        where TResponse : notnull =>
         MapOperation<TRequest>(            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
-            responseType, options.SuccessStatus, options.DocumentedStatus, dispatch);
+            typeof(TResponse), options.SuccessStatus, options.DocumentedStatus,
+            async (context, request, cancellationToken) =>
+            {
+                var result = await dispatch(context, request, cancellationToken);
+                await WriteJsonAsync(context, result.Response, result.StatusCode);
+            });
 
     /// <summary>Maps an options-described operation returning no content. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapNoContent<TRequest>(

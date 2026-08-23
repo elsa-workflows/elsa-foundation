@@ -50,22 +50,16 @@ public abstract class ApiEndpointWithoutRequest<TResponse> : ApiEndpointBase
     public abstract Task<TResponse> HandleAsync(CancellationToken cancellationToken);
 }
 
-/// <summary>An endpoint that binds a request contract and writes its own response.</summary>
+/// <summary>An endpoint that binds a request contract and picks the response status per result.</summary>
 /// <remarks>
-/// For operations whose status code is decided by the result rather than fixed by the route.
-/// <typeparamref name="TResponse"/> documents the response schema; the handler writes the actual
-/// response with <see cref="WriteAsync"/>, which the mapper backs with the owning module's
-/// source-generated serializer metadata.
+/// For operations whose status code is decided by the outcome rather than fixed by the route. The
+/// handler stays a pure function: it returns the response paired with its status, and the mapper
+/// writes it with the owning module's source-generated serializer metadata.
 /// </remarks>
-public abstract class WritingApiEndpoint<TRequest, TResponse> : ApiEndpointBase
+public abstract class ApiEndpointWithResult<TRequest, TResponse> : ApiEndpointBase
     where TResponse : notnull
 {
-    /// <summary>Writes the response body and status. Set before the handler runs, like <see cref="ApiEndpointBase.HttpContext"/>.</summary>
-    public Func<TResponse, int, Task> ResponseWriter { get; set; } = null!;
-
-    protected Task WriteAsync(TResponse response, int statusCode) => ResponseWriter(response, statusCode);
-
-    public abstract Task HandleAsync(TRequest request, CancellationToken cancellationToken);
+    public abstract Task<EndpointResult<TResponse>> HandleAsync(TRequest request, CancellationToken cancellationToken);
 }
 
 /// <summary>The endpoint definition an <see cref="ApiEndpointBase.Configure"/> override refines.</summary>
