@@ -261,7 +261,7 @@ public sealed class GroundworkV2WorkflowSchedulerPoisonStoreTests
             failureCount,
             disposition,
             Now.AddMilliseconds(index),
-            Now.AddMilliseconds(index * 2),
+            Now.AddMilliseconds(index * 2.0),
             disposition == RuntimeSchedulerPoisonDisposition.RetryScheduled
                 ? nextRetryAt ?? Now.AddMinutes(1)
                 : null,

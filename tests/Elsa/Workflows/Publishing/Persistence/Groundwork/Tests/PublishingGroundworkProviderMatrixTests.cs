@@ -28,8 +28,10 @@ public sealed class PublishingGroundworkProviderMatrixTests
             : Environment.GetEnvironmentVariable(EnvironmentVariable(providerName));
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            var required = IsContinuousIntegration() ||
-                           Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
+            // Gate the escalation on the explicit native-matrix opt-in, never on CI alone: this project
+            // starts no containers, so it runs in the container-free lane, which by construction has no
+            // provider connection strings. Demanding them there fails a job that can never supply them.
+            var required = Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true";
             if (required)
                 throw new InvalidOperationException(
                     $"The {providerName} publishing v2 provider proof requires {EnvironmentVariable(providerName)}.");
@@ -116,7 +118,4 @@ public sealed class PublishingGroundworkProviderMatrixTests
 
     private static string EnvironmentVariable(string providerName) =>
         $"GROUNDWORK_V2_{providerName.ToUpperInvariant()}_CONNECTION_STRING";
-
-    private static bool IsContinuousIntegration() =>
-        Environment.GetEnvironmentVariable("CI") is "1" or "true";
 }

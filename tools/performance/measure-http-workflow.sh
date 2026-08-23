@@ -158,10 +158,25 @@ measure_request() {
   fi
 }
 
+# Groundwork v2 gives every storage unit its own table, so the checkpoint-commit count is a plain
+# COUNT(*) over runtime_checkpoint_commit. The v1 substrate kept every kind in groundwork_documents
+# discriminated by document_kind; that table no longer exists.
+#
+# The v2 SQLite tables declare COLLATE GROUNDWORK_UTF16_ORDINAL on their text columns, and that
+# collation is registered in-process by the Groundwork SQLite provider. The sqlite3 CLI does not
+# have it, so every statement against such a table -- COUNT(*) included -- fails to prepare with
+# "no such collation sequence". The snapshot is a throwaway copy, so strip the collation from its
+# schema before counting; only the row count is read, so the weakened comparison semantics that
+# leaves behind do not matter.
 count_checkpoint_commits() {
   local snapshot="$temporary_directory/groundwork-snapshot-$1.db"
   sqlite3 "$groundwork_db" ".timeout 5000" ".backup '$snapshot'" >/dev/null
-  sqlite3 "$snapshot" "SELECT COUNT(*) FROM groundwork_documents WHERE document_kind = 'checkpointCommit';"
+  sqlite3 "$snapshot" \
+    "PRAGMA writable_schema=ON;
+     UPDATE sqlite_master SET sql = replace(sql, ' COLLATE GROUNDWORK_UTF16_ORDINAL', '')
+      WHERE sql LIKE '%GROUNDWORK_UTF16_ORDINAL%';
+     PRAGMA writable_schema=OFF;" >/dev/null
+  sqlite3 "$snapshot" "SELECT COUNT(*) FROM runtime_checkpoint_commit;"
 }
 
 percentile() {
