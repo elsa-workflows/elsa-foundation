@@ -132,11 +132,17 @@ public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesign
                 ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField, filter.Description)));
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
+            // Search is case-insensitive per the design query contract, and Groundwork refuses a
+            // case-insensitive comparison policy that is not backed by a persisted search-key
+            // projection. Comparing the four text fields directly is therefore ordinal, which drops
+            // a differently-cased match. The row already carries one: searchText is derived on write
+            // as the upper-cased type key, category, display name and description, so an upper-cased
+            // needle over it spans all four case-insensitively. The id is not part of that
+            // derivation and keeps its own ordinal term.
             clauses.Add(ActivityDesignQueryClause.AnyOf(
-                ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField, filter.SearchTerm),
-                ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, filter.SearchTerm),
-                ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField, filter.SearchTerm),
-                ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField, filter.SearchTerm),
+                ActivityDesignQueryComparison.Contains(
+                    ActivitiesDesignStorageManifest.ManagementSearchField,
+                    filter.SearchTerm.ToUpperInvariant()),
                 ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionIdField, filter.SearchTerm)));
         }
 

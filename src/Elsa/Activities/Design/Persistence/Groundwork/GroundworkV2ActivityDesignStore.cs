@@ -768,6 +768,7 @@ public sealed class ActivityDesignUnitOfWork(
             : null;
         var values = GroundworkV2ActivityDesignProjection.Values(request, currentVersion, timeProvider.GetUtcNow());
         var unit = units[request.DocumentKind];
+        GroundworkProjectedText.EnsureFits(unit, values, "Activity-design");
         var options = request.ExpectedVersion switch
         {
             null => WriteOptions.Unconditional,

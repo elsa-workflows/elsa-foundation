@@ -86,22 +86,48 @@ public sealed class GroundworkStorageSessionSource(
         foreach (var registration in registry.Registrations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Admit(RequireConnection(registration.TargetName), registration);
+            Admit(RequireConnection(registration.TargetName), registration, revalidate: true);
         }
 
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Applies a unit to its target. <paramref name="revalidate"/> bypasses the admitted-set memo so the
+    /// declaration is checked against the live schema again.
+    /// </summary>
+    /// <remarks>
+    /// The memo exists for <see cref="GetSession"/>, which admits on every session open and must not pay a
+    /// schema round-trip each time. It is wrong for the explicit startup and initialize entry points: those
+    /// are how a host asks whether its store is usable, and a memo answers from the last time it looked
+    /// rather than from the database. Schema that drifted after first admission -- an index dropped by hand,
+    /// a restore from an older dump -- would then be reported ready while every query route that needs the
+    /// missing index is already broken. Applying is idempotent against an unchanged schema, so re-checking
+    /// costs one pass and is what makes readiness mean anything.
+    /// </remarks>
     private void Admit(
         IStorageProviderConnection connection,
-        GroundworkStorageUnitRegistration registration)
+        GroundworkStorageUnitRegistration registration,
+        bool revalidate = false)
     {
         var key = (registration.TargetName, registration.Fingerprint);
         lock (admissionGate)
         {
-            if (admitted.Contains(key))
+            if (!revalidate && admitted.Contains(key))
                 return;
-            connection.Schema.Apply(registration.Unit);
+            try
+            {
+                connection.Schema.Apply(registration.Unit);
+            }
+            catch (Exception exception)
+            {
+                admitted.Remove(key);
+                throw new InvalidOperationException(
+                    $"Groundwork unit '{registration.Unit.Id.Value}' failed admission on target " +
+                    $"'{registration.TargetName}': {exception.Message}",
+                    exception);
+            }
+
             admitted.Add(key);
         }
     }

@@ -56,10 +56,25 @@ public sealed class GroundworkDesignStorage(
             var policy = SearchPolicy(unitId, field);
             var lower = QueryConstant.Of(searchColumn, QuerySearchKeys.Encode(text, policy));
             var successor = QuerySearchKeys.Successor((string)lower.Value!, policy);
-            return new Predicate.Range(
+            var folded = new Predicate.Range(
                 searchColumn,
                 Bound.Inclusive(lower),
                 successor is null ? null : Bound.Exclusive(QueryConstant.Of(searchColumn, successor)));
+
+            // Identity lookup stays purely case-folded: definitionIdSearchKey carries a unique index
+            // under the same policy, so case-insensitive identity is an invariant of the catalog
+            // rather than a laxness to correct.
+            if (IsDefinitionIdField(field))
+                return folded;
+
+            // Text equality is ordinal per the design query contract, but the by-name and
+            // by-description indexes are declared over the projected search keys, not the source
+            // columns. The folded range is therefore the index route, not the answer: on its own it
+            // matches a differently-cased sibling, and an empty term has no successor and so spans
+            // the whole catalog. Keep the range for admission and settle the comparison with an
+            // exact residual on the source column.
+            var exact = Column(unitId, field);
+            return new Predicate.And([folded, new Predicate.Equal(exact, QueryConstant.Of(exact, text))]);
         }
 
         var column = IsCaseInsensitiveField(unitId, field) ? SearchColumn(unitId, field) : Column(unitId, field);
@@ -824,8 +839,12 @@ public sealed class GroundworkDesignStorage(
 
     public sealed class DesignUnitOfWork(IUnitOfWork inner, IReadOnlyDictionary<string, StorageUnit> units) : IDisposable
     {
-        public void Stage(string unitId, StorageValues values, WriteOptions options) =>
-            inner.Stage(RowWrite.ConditionalUpsert(Require(unitId), values, options));
+        public void Stage(string unitId, StorageValues values, WriteOptions options)
+        {
+            var unit = Require(unitId);
+            GroundworkProjectedText.EnsureFits(unit, values, "Workflow-design");
+            inner.Stage(RowWrite.ConditionalUpsert(unit, values, options));
+        }
 
         public void StageDelete(string unitId, string id, WriteOptions options) =>
             inner.Stage(RowWrite.Delete(Require(unitId), Key(id), options));

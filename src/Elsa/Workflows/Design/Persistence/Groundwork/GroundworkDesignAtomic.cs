@@ -323,10 +323,15 @@ public sealed class GroundworkDesignAtomicWrite(
         if (!StringComparer.Ordinal.Equals(marker.OperationKind, request.Operation.OperationKind) ||
             !StringComparer.Ordinal.Equals(marker.OperationKey, request.Operation.OperationKey))
             throw new GroundworkDesignCorruptMarkerException("The design-operation marker identity does not match the requested operation.");
+        // Reusing a stable operation key under a different request fingerprint is a conflict, and
+        // Conflict is a status this API declares. Report it as one rather than throwing: the marker
+        // is left untouched either way, but a caller that wants the outcome as data -- the design
+        // persistence contract asserts a Conflict result carrying no authoritative fingerprint --
+        // cannot recover it from an exception. Command callers are unaffected; every one of them
+        // goes through GroundworkDesignAtomicCommand, which already turns this status into
+        // GroundworkDesignOperationConflictException.
         if (!StringComparer.Ordinal.Equals(marker.RequestFingerprint, request.RequestFingerprint))
-            throw new GroundworkDesignOperationConflictException(
-                request.Operation.OperationKind,
-                request.Operation.OperationKey);
+            return new GroundworkDesignAtomicWriteResult(GroundworkDesignAtomicWriteStatus.Conflict);
         return new GroundworkDesignAtomicWriteResult(status, marker.ResultFingerprint, marker.ResultJson);
     }
 
