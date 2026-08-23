@@ -77,6 +77,14 @@ public sealed class ApiEndpointOptions
     public string[]? Accepts { get; set; }
 
     public EndpointBodyMode? BodyMode { get; set; }
+
+    /// <summary>
+    /// Rejects typed route and query values that fail to parse — or are blank for a non-string
+    /// parameter — with a 400 naming the parameter, instead of falling back to defaults. Opt-in:
+    /// it reproduces a published strict-parsing contract.
+    /// </summary>
+    public bool StrictTypedParsing { get; set; }
+
     public int SuccessStatus { get; set; } = StatusCodes.Status200OK;
 
     /// <summary>The status the OpenAPI document declares, when it deliberately differs from the runtime status.</summary>

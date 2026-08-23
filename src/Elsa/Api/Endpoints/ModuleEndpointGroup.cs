@@ -103,7 +103,8 @@ public sealed class ModuleEndpointGroup
         Type? responseType,
         int successStatus,
         int? documentedStatus,
-        Func<HttpContext, TMessage, CancellationToken, Task> dispatch)
+        Func<HttpContext, TMessage, CancellationToken, Task> dispatch,
+        bool strictTypedParsing = false)
     {
         var effectiveBodyMode = bodyMode ?? DefaultBodyMode(method);
         var jsonOptions = _jsonContext.Options;
@@ -113,7 +114,7 @@ public sealed class ModuleEndpointGroup
             EndpointBindingResult<TMessage> binding;
             try
             {
-                binding = await EndpointRequestBinder.BindAsync<TMessage>(context, jsonOptions, effectiveBodyMode);
+                binding = await EndpointRequestBinder.BindAsync<TMessage>(context, jsonOptions, effectiveBodyMode, strictTypedParsing);
             }
             catch (OperationCanceledException)
             {
@@ -181,7 +182,8 @@ public sealed class ModuleEndpointGroup
         MapOperation<TRequest>(            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
             typeof(TResponse), options.SuccessStatus, options.DocumentedStatus,
             async (context, request, cancellationToken) =>
-                await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus));
+                await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus),
+            options.StrictTypedParsing);
 
     /// <summary>Maps an options-described operation with no request contract. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapUnboundBody<TResponse>(
@@ -202,7 +204,8 @@ public sealed class ModuleEndpointGroup
             {
                 var result = await dispatch(context, request, cancellationToken);
                 await WriteJsonAsync(context, result.Response, result.StatusCode);
-            });
+            },
+            options.StrictTypedParsing);
 
     /// <summary>Maps an options-described operation returning no content. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapNoContent<TRequest>(
@@ -214,7 +217,8 @@ public sealed class ModuleEndpointGroup
             {
                 await dispatch(context, request, cancellationToken);
                 context.Response.StatusCode = StatusCodes.Status204NoContent;
-            });
+            },
+            options.StrictTypedParsing);
 
     private static EndpointBodyMode DefaultBodyMode(string method) => method switch
     {
@@ -227,8 +231,13 @@ public sealed class ModuleEndpointGroup
     {
         EndpointBindingFailure.UnsupportedMediaType =>
             EndpointProblem.General(StatusCodes.Status415UnsupportedMediaType, binding.Message!),
-        EndpointBindingFailure.MalformedBody =>
+        // Body failures both carry the serializer key: the FastEndpoints-era shape these owners
+        // published reported a null body the same way as an unreadable one.
+        EndpointBindingFailure.MalformedBody or EndpointBindingFailure.MissingBody =>
             EndpointProblem.General(StatusCodes.Status400BadRequest, binding.Message!, "serializerErrors"),
+        // A strict typed-value failure names the offending parameter.
+        EndpointBindingFailure.InvalidTypedValue =>
+            EndpointProblem.General(StatusCodes.Status400BadRequest, binding.Message!, binding.Key ?? "generalErrors"),
         _ => EndpointProblem.General(StatusCodes.Status400BadRequest, binding.Message!)
     };
 

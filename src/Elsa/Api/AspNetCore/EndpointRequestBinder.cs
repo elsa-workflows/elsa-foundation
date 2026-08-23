@@ -47,11 +47,15 @@ public enum EndpointBindingFailure
 {
     UnsupportedMediaType,
     MissingBody,
-    MalformedBody
+    MalformedBody,
+
+    /// <summary>A typed route or query value failed strict parsing. Only raised in strict mode.</summary>
+    InvalidTypedValue
 }
 
 /// <summary>The outcome of binding a request, either a value or a failure with a message.</summary>
-public readonly record struct EndpointBindingResult<T>(T? Value, EndpointBindingFailure? Failure, string? Message)
+/// <remarks><paramref name="Key"/> names the offending parameter for failures that have one.</remarks>
+public readonly record struct EndpointBindingResult<T>(T? Value, EndpointBindingFailure? Failure, string? Message, string? Key = null)
 {
     public bool Succeeded => Failure is null;
 }
@@ -79,10 +83,17 @@ public static class EndpointRequestBinder
     // does not keep the key alive.
     private static readonly ConditionalWeakTable<Type, ConstructorInfo> Constructors = new();
 
+    /// <param name="strictTypedParsing">
+    /// When set, a typed route or query value that fails to parse — or is blank for a non-string
+    /// parameter — is a binding failure carrying the parameter name, the raw value, and the target
+    /// type name, instead of silently falling back to the parameter's default. Opt-in because it
+    /// reproduces a published per-module contract; the lenient fallback remains the default.
+    /// </param>
     public static async ValueTask<EndpointBindingResult<T>> BindAsync<T>(
         HttpContext context,
         JsonSerializerOptions jsonOptions,
-        EndpointBodyMode bodyMode)
+        EndpointBodyMode bodyMode,
+        bool strictTypedParsing = false)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(jsonOptions);
@@ -128,13 +139,29 @@ public static class EndpointRequestBinder
             }
         }
 
+        try
+        {
+            return new(BindParameters<T>(body, context, strictTypedParsing), null, null);
+        }
+        catch (StrictTypedValueException strict)
+        {
+            // The reported name is the parameter's camel-cased wire form — the name the query
+            // string documents — not the Pascal-cased constructor parameter it binds into.
+            return new(default, EndpointBindingFailure.InvalidTypedValue,
+                $"Value [{strict.RawValue}] is not valid for a [{strict.TypeName}] property!",
+                JsonNamingPolicy.CamelCase.ConvertName(strict.Name));
+        }
+    }
+
+    private static T BindParameters<T>(object? body, HttpContext context, bool strict)
+    {
         var constructor = Constructors.GetValue(typeof(T), SelectConstructor);
         var parameters = constructor.GetParameters();
 
         // A contract declared with init-only properties rather than positional parameters is bound by
         // assignment: the deserialized body is kept and route values are applied over it.
         if (parameters.Length == 0)
-            return new(BindProperties<T>(body, context), null, null);
+            return BindProperties<T>(body, context, strict);
         var arguments = new object?[parameters.Length];
         var routeValues = context.Request.RouteValues;
         var query = context.Request.Query;
@@ -146,7 +173,7 @@ public static class EndpointRequestBinder
 
             if (TryGetRouteValue(routeValues, name, out var routeValue))
             {
-                arguments[index] = Convert(routeValue, parameter.ParameterType, name);
+                arguments[index] = Convert(routeValue, parameter.ParameterType, name, strict);
                 continue;
             }
 
@@ -158,7 +185,7 @@ public static class EndpointRequestBinder
 
             if (TryGetQueryValue(query, name, out var queryValue))
             {
-                arguments[index] = Convert(queryValue, parameter.ParameterType, name);
+                arguments[index] = Convert(queryValue, parameter.ParameterType, name, strict);
                 continue;
             }
 
@@ -167,10 +194,10 @@ public static class EndpointRequestBinder
                 : DefaultOf(parameter.ParameterType);
         }
 
-        return new((T)constructor.Invoke(arguments), null, null);
+        return (T)constructor.Invoke(arguments);
     }
 
-    private static T BindProperties<T>(object? body, HttpContext context)
+    private static T BindProperties<T>(object? body, HttpContext context, bool strict)
     {
         var instance = body ?? Activator.CreateInstance(typeof(T))!;
         var routeValues = context.Request.RouteValues;
@@ -182,9 +209,9 @@ public static class EndpointRequestBinder
                 continue;
 
             if (TryGetRouteValue(routeValues, property.Name, out var routeValue))
-                property.SetValue(instance, Convert(routeValue, property.PropertyType, property.Name));
+                property.SetValue(instance, Convert(routeValue, property.PropertyType, property.Name, strict));
             else if (body is null && TryGetQueryValue(query, property.Name, out var queryValue))
-                property.SetValue(instance, Convert(queryValue, property.PropertyType, property.Name));
+                property.SetValue(instance, Convert(queryValue, property.PropertyType, property.Name, strict));
         }
 
         return (T)instance;
@@ -236,7 +263,7 @@ public static class EndpointRequestBinder
         return false;
     }
 
-    private static object? Convert(string? value, Type targetType, string parameterName)
+    private static object? Convert(string? value, Type targetType, string parameterName, bool strict)
     {
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
         if (value is null)
@@ -246,26 +273,38 @@ public static class EndpointRequestBinder
             return value;
 
         // A blank query value for a nullable parameter means "absent", matching the previous
-        // per-module helpers, which returned null rather than failing.
+        // per-module helpers, which returned null rather than failing. Strict parsing predates that
+        // leniency: its published contract rejected a blank typed value outright.
         if (value.Length == 0)
-            return DefaultOf(targetType);
+            return strict ? throw new StrictTypedValueException(parameterName, value, underlying.Name) : DefaultOf(targetType);
 
         if (underlying == typeof(bool))
-            return bool.TryParse(value, out var boolean) ? boolean : DefaultOf(targetType);
+            return bool.TryParse(value, out var boolean) ? boolean : Fallback(value, targetType, underlying, parameterName, strict);
         if (underlying == typeof(int))
-            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer) ? integer : DefaultOf(targetType);
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer) ? integer : Fallback(value, targetType, underlying, parameterName, strict);
         if (underlying == typeof(long))
-            return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue) ? longValue : DefaultOf(targetType);
+            return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue) ? longValue : Fallback(value, targetType, underlying, parameterName, strict);
         if (underlying == typeof(Guid))
-            return Guid.TryParse(value, out var guid) ? guid : DefaultOf(targetType);
+            return Guid.TryParse(value, out var guid) ? guid : Fallback(value, targetType, underlying, parameterName, strict);
         if (underlying.IsEnum)
-            return Enum.TryParse(underlying, value, ignoreCase: true, out var parsed) ? parsed : DefaultOf(targetType);
+            return Enum.TryParse(underlying, value, ignoreCase: true, out var parsed) ? parsed : Fallback(value, targetType, underlying, parameterName, strict);
         if (underlying == typeof(DateTimeOffset))
-            return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, out var instant) ? instant : DefaultOf(targetType);
+            return DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, out var instant) ? instant : Fallback(value, targetType, underlying, parameterName, strict);
 
         throw new InvalidOperationException(
             $"Request parameter '{parameterName}' has unsupported type '{targetType.FullName}'. " +
             "Extend EndpointRequestBinder deliberately rather than widening it implicitly.");
+    }
+
+    private static object? Fallback(string value, Type targetType, Type underlying, string parameterName, bool strict) =>
+        strict ? throw new StrictTypedValueException(parameterName, value, underlying.Name) : DefaultOf(targetType);
+
+    /// <summary>Internal control flow only: surfaces as <see cref="EndpointBindingFailure.InvalidTypedValue"/>.</summary>
+    private sealed class StrictTypedValueException(string name, string rawValue, string typeName) : Exception
+    {
+        public string Name { get; } = name;
+        public string RawValue { get; } = rawValue;
+        public string TypeName { get; } = typeName;
     }
 
     private static object? DefaultOf(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
