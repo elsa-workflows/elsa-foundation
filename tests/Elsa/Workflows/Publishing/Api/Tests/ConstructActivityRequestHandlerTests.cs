@@ -6,6 +6,8 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Xunit;
 
+using ConstructEndpoint = Elsa.Workflows.Publishing.Api.Endpoints.Activities.Construct.Endpoint;
+
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ConstructActivityRequestHandlerTests
@@ -22,9 +24,9 @@ public sealed class ConstructActivityRequestHandlerTests
             Inputs = [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null, false)],
             Outputs = [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null, false)]
         };
-        var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]));
+        var handler = new ConstructEndpoint(new FakeActivityVersionStore([version]));
 
-        var view = await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
+        var view = await handler.HandleAsync(new ConstructActivity("v1"), CancellationToken.None);
 
         Assert.Equal("v1", view.ActivityVersionId);
         Assert.Equal(version.DescriptorType, view.DescriptorType);

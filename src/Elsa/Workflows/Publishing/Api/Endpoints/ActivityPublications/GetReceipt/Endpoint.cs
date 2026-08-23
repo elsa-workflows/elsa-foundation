@@ -1,16 +1,16 @@
 using Elsa.Api.AspNetCore;
-using Microsoft.AspNetCore.Builder;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
+using Microsoft.AspNetCore.Builder;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityPublications.GetReceipt;
 
 [Get("/design/activities/publications/{idempotencyKey}")]
 [RequirePermission(WorkflowPublishingPermissions.Read)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetActivityPublicationReceipt, ActivityPublicationReceiptView>
+public sealed class Endpoint(IActivityDefinitionPublisher publisher) : ApiEndpoint<GetActivityPublicationReceipt, ActivityPublicationReceiptView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -19,6 +19,7 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetActivityPub
             new ActivityProblemEndpointMetadata("Activity publication receipt lookup was rejected")));
     }
 
-    public override Task<ActivityPublicationReceiptView> HandleAsync(GetActivityPublicationReceipt request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+    public override async Task<ActivityPublicationReceiptView> HandleAsync(GetActivityPublicationReceipt request, CancellationToken cancellationToken) =>
+        ActivityPublicationReceiptView.From(
+            await publisher.GetReceiptAsync(request.IdempotencyKey, cancellationToken));
 }

@@ -1,16 +1,16 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.RuntimePreflight.Run;
 
 [Post("/publishing/preflight")]
 [RequirePermission(WorkflowPublishingPermissions.Read)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<RunRuntimeRequirementPreflight, RuntimeRequirementPreflightView>
+public sealed class Endpoint(IRuntimeRequirementPreflight preflight) : ApiEndpoint<RunRuntimeRequirementPreflight, RuntimeRequirementPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -21,5 +21,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<RunRuntimeRequ
     }
 
     public override Task<RuntimeRequirementPreflightView> HandleAsync(RunRuntimeRequirementPreflight request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        preflight.RunAsync(request.Scope, request.ArtifactIds, cancellationToken).AsTask();
 }

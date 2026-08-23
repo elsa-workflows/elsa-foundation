@@ -1,16 +1,16 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityTestRuns.Cancel;
 
 [Post("/publishing/activity-test-runs/{testRunId}/cancel")]
 [RequirePermission(WorkflowPublishingPermissions.Manage)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<CancelActivityDraftTestRun, ActivityDraftTestRunView>
+public sealed class Endpoint(IActivityDraftTestRunService testRuns) : ApiEndpoint<CancelActivityDraftTestRun, ActivityDraftTestRunView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -24,5 +24,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<CancelActivity
     }
 
     public override Task<ActivityDraftTestRunView> HandleAsync(CancelActivityDraftTestRun request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        testRuns.CancelAsync(request.TestRunId, cancellationToken);
 }

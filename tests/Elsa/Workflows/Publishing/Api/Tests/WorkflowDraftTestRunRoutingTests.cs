@@ -6,6 +6,8 @@ using System.Net;
 using System.Net.Http.Json;
 using Xunit;
 
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
@@ -19,12 +21,14 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
     private const string DraftPath = "/publishing/workflows/drafts/test-runs";
 
     private readonly RecordingRequestSender _sender = new();
+    private CaptureWorkflowTestRunStarter _starter = null!;
     private PublishingMinimalApiHost _host = null!;
     private HttpClient _client = null!;
 
     public async Task InitializeAsync()
     {
         _host = await PublishingMinimalApiHost.StartAsync(_ => _sender);
+        _starter = _host.App.Services.GetRequiredService<CaptureWorkflowTestRunStarter>();
         _client = _host.Client;
         _client.DefaultRequestHeaders.TryAddWithoutValidation(
             PublishingCompatibilityCases.IdentityHeader,
@@ -50,7 +54,8 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // The versioned handler would have bound versionId = "drafts"; only the draft handler matches here.
-        var request = Assert.IsType<StartWorkflowDraftTestRun>(_sender.LastRequest);
+        Assert.Null(_starter.LastStart);
+        var request = Assert.IsType<StartWorkflowDraftTestRun>(_starter.LastStartDraft);
         Assert.Equal("definition-1", request.DefinitionId);
         Assert.Equal("snapshot-1", request.SnapshotId);
     }
@@ -62,7 +67,8 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         // matcher it can still be confirmed stable across many requests.
         for (var i = 0; i < 20; i++)
         {
-            _sender.LastRequest = null;
+            _starter.LastStart = null;
+            _starter.LastStartDraft = null;
 
             var response = await _client.PostAsJsonAsync(DraftPath, new
             {
@@ -73,7 +79,8 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
             });
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.IsType<StartWorkflowDraftTestRun>(_sender.LastRequest);
+            Assert.Null(_starter.LastStart);
+            Assert.IsType<StartWorkflowDraftTestRun>(_starter.LastStartDraft);
         }
     }
 
@@ -83,7 +90,7 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         var response = await _client.PostAsJsonAsync("/publishing/workflows/version-1/test-runs", new { });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var request = Assert.IsType<StartWorkflowTestRun>(_sender.LastRequest);
+        var request = Assert.IsType<StartWorkflowTestRun>(_starter.LastStart);
         Assert.Equal("version-1", request.VersionId);
     }
 

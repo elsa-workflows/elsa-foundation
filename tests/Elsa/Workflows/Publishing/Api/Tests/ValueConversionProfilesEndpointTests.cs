@@ -18,6 +18,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
 
+using ProfilesEndpoint = Elsa.Workflows.Publishing.Api.Endpoints.ValueConversionProfiles.List.Endpoint;
+
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class ValueConversionProfilesEndpointTests
@@ -59,9 +61,9 @@ public sealed class ValueConversionProfilesEndpointTests
     [Fact]
     public async Task Default_host_surfaces_the_built_in_json_and_xml_profiles()
     {
-        var handler = new ListValueConversionProfilesRequestHandler(BuiltInValueConversionProfileRegistry.Instance);
+        var handler = new ProfilesEndpoint(BuiltInValueConversionProfileRegistry.Instance);
 
-        var response = await handler.Handle(new Requests.ListValueConversionProfiles(), CancellationToken.None);
+        var response = await handler.HandleAsync(new Requests.ListValueConversionProfiles(), CancellationToken.None);
 
         Assert.Equal(
             [("elsa.json", "1"), ("elsa.xml", "1")],
@@ -79,9 +81,9 @@ public sealed class ValueConversionProfilesEndpointTests
             new ValueConversionProfileReference("partner.customer-json", "3"),
             new HashSet<ValueRepresentation> { ValueRepresentation.FormattedContent },
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Acme.Customer" });
-        var handler = new ListValueConversionProfilesRequestHandler(new StubProfileRegistry([hostProfile]));
+        var handler = new ProfilesEndpoint(new StubProfileRegistry([hostProfile]));
 
-        var response = await handler.Handle(new Requests.ListValueConversionProfiles(), CancellationToken.None);
+        var response = await handler.HandleAsync(new Requests.ListValueConversionProfiles(), CancellationToken.None);
 
         var item = Assert.Single(response.Items);
         Assert.Equal("partner.customer-json", item.Profile.Id);

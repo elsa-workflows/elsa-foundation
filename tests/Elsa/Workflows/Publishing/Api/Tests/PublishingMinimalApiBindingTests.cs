@@ -41,8 +41,9 @@ public sealed class PublishingMinimalApiBindingTests
                 """);
 
         Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
-        Assert.IsType<StartWorkflowDraftTestRun>(senderFactory.Sender.LastRequest);
-        Assert.IsNotType<StartWorkflowTestRun>(senderFactory.Sender.LastRequest);
+        var starter = host.App.Services.GetRequiredService<CaptureWorkflowTestRunStarter>();
+        Assert.NotNull(starter.LastStartDraft);
+        Assert.Null(starter.LastStart);
     }
 
     [Fact]
@@ -75,7 +76,8 @@ public sealed class PublishingMinimalApiBindingTests
                 }
                 """);
         Assert.Equal(StatusCodes.Status202Accepted, (int)activity.StatusCode);
-        var run = Assert.IsType<StartActivityDraftTestRun>(senderFactory.Sender.LastRequest);
+        var run = Assert.IsType<StartActivityDraftTestRun>(
+            host.App.Services.GetRequiredService<CaptureActivityTestRunService>().LastStart);
         Assert.Equal("draft-route", run.DraftId);
         Assert.Equal("run-body", run.IdempotencyKey);
     }
@@ -91,7 +93,8 @@ public sealed class PublishingMinimalApiBindingTests
             "{\"expectedDraftRevision\":8}");
 
         Assert.Equal(StatusCodes.Status200OK, (int)response.StatusCode);
-        var request = Assert.IsType<PreflightActivityDraftPublication>(senderFactory.Sender.LastRequest);
+        var request = host.App.Services.GetRequiredService<CaptureActivityPublisher>().LastPreflight;
+        Assert.NotNull(request);
         Assert.Equal("draft-route", request.DraftId);
         Assert.Equal(8, request.ExpectedDraftRevision);
         Assert.Null(request.ExpectedDefinitionHeadVersionId);

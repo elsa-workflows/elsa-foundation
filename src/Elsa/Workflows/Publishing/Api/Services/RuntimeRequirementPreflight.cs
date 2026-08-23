@@ -15,13 +15,22 @@ public sealed class RuntimeRequirementPreflightRequestException(string message) 
 /// selection is a narrowing filter over that retained set; it never turns this endpoint into an arbitrary
 /// artifact-store lookup.
 /// </summary>
+/// <summary>The runtime-requirement preflight operation the endpoint depends on; hosts may substitute a deterministic seam.</summary>
+public interface IRuntimeRequirementPreflight
+{
+    ValueTask<RuntimeRequirementPreflightView> RunAsync(
+        string scope,
+        IReadOnlyList<string>? artifactIds,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class RuntimeRequirementPreflight(
     IWorkflowExecutableSourceReferenceReader sourceReferences,
     IWorkflowExecutableStore workflowExecutables,
     IExecutableActivityTemplateReader activityTemplates,
     IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
     IRuntimeDurableValueStorageDriverRegistry storageDrivers,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider) : IRuntimeRequirementPreflight
 {
     public const string ActiveRetainedArtifactsScope = "ActiveRetainedArtifacts";
 

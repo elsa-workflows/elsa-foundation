@@ -1,16 +1,16 @@
 using Elsa.Api.AspNetCore;
-using Microsoft.AspNetCore.Builder;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
+using Microsoft.AspNetCore.Builder;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityDrafts.Preflight;
 
 [Post("/design/activities/drafts/{draftId}/publication-preflight")]
 [RequirePermission(WorkflowPublishingPermissions.Read)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<PreflightActivityDraftPublication, ActivityPublicationPreflightView>
+public sealed class Endpoint(IActivityDefinitionPublisher publisher) : ApiEndpoint<PreflightActivityDraftPublication, ActivityPublicationPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -22,5 +22,13 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<PreflightActiv
     }
 
     public override Task<ActivityPublicationPreflightView> HandleAsync(PreflightActivityDraftPublication request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        publisher.PreflightAsync(
+            new(
+                request.DraftId,
+                request.ExpectedDraftRevision,
+                request.ExpectedDefinitionHeadVersionId)
+            {
+                Version = request.Version
+            },
+            cancellationToken);
 }

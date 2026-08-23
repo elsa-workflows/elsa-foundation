@@ -38,7 +38,12 @@ public sealed class PublishingMinimalApiBehaviorTests
     {
         var factory = new RecordingRequestSenderFactory();
         await using var host = await PublishingMinimalApiHost.StartAsync(factory.Create);
-        factory.Sender.ActivityIdempotencyKey = "publication/location";
+        var publisher = host.App.Services.GetRequiredService<CaptureActivityPublisher>();
+        publisher.Receipt = ((Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt)CaptureResponseFactory
+            .Create(typeof(Elsa.Workflows.Publishing.Core.Models.ActivityPublicationReceipt))) with
+        {
+            IdempotencyKey = "publication/location"
+        };
 
         using var publication = await SendAsync(
             host.Client,
@@ -197,7 +202,8 @@ public sealed class PublishingMinimalApiBehaviorTests
 
         Assert.Equal(0, observation.StatusCode);
         Assert.StartsWith("Faulted:System.OperationCanceledException", observation.TerminalState, StringComparison.Ordinal);
-        Assert.True(factory.Sender.LastCancellation.CanBeCanceled);
+        Assert.True(host.App.Services.GetRequiredService<CaptureActivityTestRunService>()
+            .LastCancellation.CanBeCanceled);
     }
 
     private static async Task<HttpResponseMessage> PublishWorkflowAsync(HttpClient client, string token)

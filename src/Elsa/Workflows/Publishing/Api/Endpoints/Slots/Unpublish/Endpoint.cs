@@ -1,9 +1,9 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 
@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints.Slots.Unpublish;
 [Delete("/publishing/workflows/{definitionId}/slots/{slotName}")]
 [RequirePermission(WorkflowPublishingPermissions.Manage)]
 public sealed class Endpoint(
-    IRequestSender sender,
+    IPublicationSlotUnpublisher unpublisher,
     IPublicationRecordStore publicationStore) : ApiEndpoint<UnpublishPublicationSlotRequest, PublicationSlotView>
 {
     public override void Configure(ApiEndpointOptions options)
@@ -28,7 +28,7 @@ public sealed class Endpoint(
         Core.Models.PublicationSlot slot;
         try
         {
-            slot = await sender.Send(new UnpublishPublicationSlot(request.DefinitionId, request.SlotName), cancellationToken);
+            slot = await unpublisher.UnpublishAsync(request.DefinitionId, request.SlotName, cancellationToken);
         }
         catch (InvalidOperationException exception) when (PublicationSlotViews.IsMissingSlot(exception))
         {

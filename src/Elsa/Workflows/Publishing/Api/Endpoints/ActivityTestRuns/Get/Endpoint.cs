@@ -1,15 +1,15 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Api.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityTestRuns.Get;
 
 [Get("/publishing/activity-test-runs/{testRunId}")]
 [RequirePermission(WorkflowPublishingPermissions.Manage)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetActivityDraftTestRun, ActivityDraftTestRunView>
+public sealed class Endpoint(IActivityDraftTestRunService testRuns) : ApiEndpoint<GetActivityDraftTestRun, ActivityDraftTestRunView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -19,5 +19,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetActivityDra
     }
 
     public override Task<ActivityDraftTestRunView> HandleAsync(GetActivityDraftTestRun request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        testRuns.GetAsync(request.TestRunId, cancellationToken);
 }

@@ -75,6 +75,7 @@ public sealed class PublishingCompatibilityHost(IHost host) : IAsyncDisposable
                     services.AddSingleton<IWorkflowExecutableCompiler, CaptureWorkflowExecutableCompiler>();
                     new WorkflowsPublishingFeature().ConfigureServices(services);
                     new WorkflowsPublishingApiFeature().ConfigureServices(services);
+                    PublishingDomainSeams.Register(services);
                     services.RemoveAll<TimeProvider>();
                     services.AddSingleton<TimeProvider, CaptureTimeProvider>();
                     services.AddSingleton<IRequestSender, CaptureRequestSender>();
@@ -168,26 +169,12 @@ internal sealed class CaptureRequestSender(IHttpContextAccessor contextAccessor)
             throw new EntityNotFoundException("The deterministic capture entity was not found.");
         if (scenario == "trusted-domain-conflict")
         {
-            if (contextAccessor.HttpContext?.Request.Path.StartsWithSegments("/design/activities") == true)
-                throw new ActivityPublicationRejectedException(
-                    "activity.draft.stale-revision",
-                    "The deterministic activity publication conflict was requested.",
-                    [],
-                    isConflict: true);
             throw new PublicationPolicyResolutionException(
                 "expected_publication_mismatch",
                 "The deterministic publication conflict was requested.");
         }
         if (scenario == "trusted-domain-validation")
             throw new PublicationPolicyResolutionException("invalid_host_policy", "The deterministic publication validation failure was requested.");
-        if (scenario == "trusted-domain-unavailable")
-            throw new RuntimeRequirementPreflightRequestException("The deterministic runtime requirement provider is unavailable.");
-        if (scenario == "trusted-unprocessable")
-            throw new ActivityPublicationRejectedException(
-                "activity.publication.invalid",
-                "The deterministic activity validation failure was requested.",
-                [],
-                isConflict: false);
         if (scenario == "trusted-expression-errors")
             throw new ExpressionPublicationValidationException(new(
                 ExpressionDraftValidationState.Errors,
