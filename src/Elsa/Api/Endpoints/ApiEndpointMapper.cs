@@ -64,12 +64,21 @@ public static class ApiEndpointMapper
         if (string.IsNullOrWhiteSpace(options.Operation))
             throw new InvalidOperationException($"Endpoint '{type.FullName}' declares no operation identifier. Set options.Operation in Configure.");
 
-        var (request, response) = FindContract(type)
-            ?? throw new InvalidOperationException($"Endpoint '{type.FullName}' does not derive from ApiEndpoint<TRequest> or ApiEndpoint<TRequest, TResponse>.");
+        var (shape, request, response) = FindContract(type)
+            ?? throw new InvalidOperationException($"Endpoint '{type.FullName}' does not derive from an ApiEndpoint base.");
 
-        var builder = (IEndpointConventionBuilder)MapMethod
-            .MakeGenericMethod(request, response ?? typeof(object))
-            .Invoke(null, [api, type, options, response is null])!;
+        var builder = shape switch
+        {
+            EndpointShape.Unbound => (IEndpointConventionBuilder)MapUnboundMethod
+                .MakeGenericMethod(response!)
+                .Invoke(null, [api, type, options])!,
+            EndpointShape.Writing => (IEndpointConventionBuilder)MapWritingMethod
+                .MakeGenericMethod(request!, response!)
+                .Invoke(null, [api, type, options])!,
+            _ => (IEndpointConventionBuilder)MapMethod
+                .MakeGenericMethod(request!, response ?? typeof(object))
+                .Invoke(null, [api, type, options, response is null])!
+        };
 
         foreach (var attribute in type.GetCustomAttributes().OfType<IEndpointConventionAttribute>())
             attribute.Apply(builder);
@@ -79,7 +88,15 @@ public static class ApiEndpointMapper
         return builder;
     }
 
-    private static (Type request, Type? response)? FindContract(Type type)
+    private enum EndpointShape
+    {
+        Body,
+        NoContent,
+        Unbound,
+        Writing
+    }
+
+    private static (EndpointShape shape, Type? request, Type? response)? FindContract(Type type)
     {
         for (var current = type.BaseType; current is not null; current = current.BaseType)
         {
@@ -87,9 +104,13 @@ public static class ApiEndpointMapper
                 continue;
             var definition = current.GetGenericTypeDefinition();
             if (definition == typeof(ApiEndpoint<,>))
-                return (current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
+                return (EndpointShape.Body, current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
             if (definition == typeof(ApiEndpoint<>))
-                return (current.GenericTypeArguments[0], null);
+                return (EndpointShape.NoContent, current.GenericTypeArguments[0], null);
+            if (definition == typeof(ApiEndpointWithoutRequest<>))
+                return (EndpointShape.Unbound, null, current.GenericTypeArguments[0]);
+            if (definition == typeof(WritingApiEndpoint<,>))
+                return (EndpointShape.Writing, current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
         }
 
         return null;
@@ -97,6 +118,12 @@ public static class ApiEndpointMapper
 
     private static readonly MethodInfo MapMethod =
         typeof(ApiEndpointMapper).GetMethod(nameof(MapTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo MapUnboundMethod =
+        typeof(ApiEndpointMapper).GetMethod(nameof(MapUnboundTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo MapWritingMethod =
+        typeof(ApiEndpointMapper).GetMethod(nameof(MapWritingTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static IEndpointConventionBuilder MapTyped<TRequest, TResponse>(
         ModuleEndpointGroup api, Type endpointType, ApiEndpointOptions options, bool noContent)
@@ -120,6 +147,35 @@ public static class ApiEndpointMapper
             var endpoint = (ApiEndpoint<TRequest, TResponse>)factory(context.RequestServices, null);
             endpoint.HttpContext = context;
             return await endpoint.HandleAsync(request, cancellationToken);
+        });
+    }
+
+    private static IEndpointConventionBuilder MapUnboundTyped<TResponse>(
+        ModuleEndpointGroup api, Type endpointType, ApiEndpointOptions options)
+        where TResponse : notnull
+    {
+        var factory = ActivatorUtilities.CreateFactory(endpointType, Type.EmptyTypes);
+
+        return api.MapUnboundBody<TResponse>(options, async (context, cancellationToken) =>
+        {
+            var endpoint = (ApiEndpointWithoutRequest<TResponse>)factory(context.RequestServices, null);
+            endpoint.HttpContext = context;
+            return await endpoint.HandleAsync(cancellationToken);
+        });
+    }
+
+    private static IEndpointConventionBuilder MapWritingTyped<TRequest, TResponse>(
+        ModuleEndpointGroup api, Type endpointType, ApiEndpointOptions options)
+        where TResponse : notnull
+    {
+        var factory = ActivatorUtilities.CreateFactory(endpointType, Type.EmptyTypes);
+
+        return api.MapWritingBody<TRequest>(options, typeof(TResponse), async (context, request, cancellationToken) =>
+        {
+            var endpoint = (WritingApiEndpoint<TRequest, TResponse>)factory(context.RequestServices, null);
+            endpoint.HttpContext = context;
+            endpoint.ResponseWriter = (response, statusCode) => api.WriteJsonAsync(context, response, statusCode);
+            await endpoint.HandleAsync(request, cancellationToken);
         });
     }
 

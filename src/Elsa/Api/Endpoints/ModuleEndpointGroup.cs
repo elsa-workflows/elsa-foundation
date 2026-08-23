@@ -191,6 +191,22 @@ public sealed class ModuleEndpointGroup
             async (context, request, cancellationToken) =>
                 await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus));
 
+    /// <summary>Maps an options-described operation with no request contract. Used by the endpoint-class mapper.</summary>
+    internal IEndpointConventionBuilder MapUnboundBody<TResponse>(
+        ApiEndpointOptions options,
+        Func<HttpContext, CancellationToken, Task<TResponse>> dispatch)
+        where TResponse : notnull =>
+        MapUnbound(options.Method!, options.Route!, options.Operation!, typeof(TResponse), options.SuccessStatus,
+            async context => await WriteJsonAsync(context, await dispatch(context, context.RequestAborted), options.SuccessStatus));
+
+    /// <summary>Maps an options-described operation that writes its own response. Used by the endpoint-class mapper.</summary>
+    internal IEndpointConventionBuilder MapWritingBody<TRequest>(
+        ApiEndpointOptions options,
+        Type responseType,
+        Func<HttpContext, TRequest, CancellationToken, Task> dispatch) =>
+        MapOperation<TRequest>(            options.Method!, options.Route!, options.Operation!, options.BodyMode, options.Accepts,
+            responseType, options.SuccessStatus, options.DocumentedStatus, dispatch);
+
     /// <summary>Maps an options-described operation returning no content. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapNoContent<TRequest>(
         ApiEndpointOptions options,
