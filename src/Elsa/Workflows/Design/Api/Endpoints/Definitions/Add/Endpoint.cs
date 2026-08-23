@@ -1,5 +1,4 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Mediator;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core.Design;
@@ -10,6 +9,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 

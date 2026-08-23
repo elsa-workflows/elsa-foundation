@@ -4,7 +4,7 @@
     The endpoint-class framework: self-describing endpoint classes mapped explicitly onto Minimal
     APIs, with binding, failure translation, and unload-safe metadata shared per module. It layers
     on ordinary ASP.NET Core primitives and keeps no process-global state, so a consumer can adopt
-    it without adopting Elsa's mediator; that bridge lives in Elsa.Api.Mediator.
+    it without adopting Elsa's mediator: dispatch backends compose over the public MapOperation pipeline.
   -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

@@ -92,7 +92,6 @@
     <Project Path="src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
     <Project Path="src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
     <Project Path="src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj" />
-    <Project Path="src/Elsa/Api/Mediator/Elsa.Api.Mediator.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Caching/">
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />

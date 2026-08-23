@@ -1,5 +1,4 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Mediator;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core.Design;

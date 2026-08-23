@@ -1,5 +1,4 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Mediator;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;

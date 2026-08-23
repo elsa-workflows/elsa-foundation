@@ -1,5 +1,4 @@
 using Elsa.Api.Endpoints;
-using Elsa.Api.Mediator;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Workflows.Design.Api;
