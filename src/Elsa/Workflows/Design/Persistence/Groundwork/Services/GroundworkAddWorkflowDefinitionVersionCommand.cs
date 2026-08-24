@@ -1,8 +1,8 @@
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -79,6 +79,11 @@ public sealed class GroundworkAddWorkflowDefinitionVersionCommand(
             cancellationToken: cancellationToken,
             beforeAttempt: async token =>
             {
+                // Let EntityNotFoundException through. WorkflowsDesignApi maps it to 404; wrapping it
+                // reached the generic 500 handler instead, so a definition that is merely absent -- or
+                // that belongs to another tenant, which the scope-bound store reports the same way --
+                // was answered as a server error. 404 is also the non-leaking answer for the
+                // cross-tenant case: it says nothing about whether the id exists elsewhere.
                 var definition = await definitionStore.GetAsync(definitionId, token);
                 accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
                 var lastVersion = await versionStore.FindLatestVersionAsync(definitionId, token);

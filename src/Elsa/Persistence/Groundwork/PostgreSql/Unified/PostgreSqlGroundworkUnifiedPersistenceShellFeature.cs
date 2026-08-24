@@ -17,15 +17,10 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistencePostgreSql",
     DisplayName = "Groundwork PostgreSQL Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Safe missing document structures and diagnostic streams can be auto-applied at startup; otherwise apply them through Groundwork.Tool. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
+    Description = "Backs the six provider-level Elsa persistence families with one admission-gated Groundwork PostgreSQL target; Identity remains an explicit host selection. Compose alongside Workflows Runtime Resumption so durable work is re-driven after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
+public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : GroundworkPersistenceShellFeatureBase
 {
-    public PostgreSqlGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)
-        : base(context)
-    {
-    }
-
     public const string DefaultConnectionString = "Host=localhost;Port=5432;Database=elsa;Username=postgres;Password=postgres";
 
     [ManifestSetting(
@@ -38,7 +33,5 @@ public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : GroundworkUnif
     public override void ConfigureServices(IServiceCollection services) =>
         services.AddGroundworkPostgreSqlUnifiedPersistence(
             ValueOrDefault(ConnectionString, DefaultConnectionString),
-            Context,
-            CreateWorkflowExecutableCacheOptions(),
-            AutoApplySchemaOnStartup);
+            CreateWorkflowExecutableCacheOptions());
 }

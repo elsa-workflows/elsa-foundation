@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
     <ProjectReference Include="../../Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
-    <ProjectReference Include="../../../../../../../tests/Elsa/Persistence/Groundwork/DesignConformance/Targets/Tests/Elsa.Persistence.Groundwork.DesignConformance.Targets.Tests.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Events/Elsa.Events.csproj" />
@@ -28,7 +28,6 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj" />
     <!-- A second real provider leaf, composed only to prove the one-provider-per-host guard (registration-time; no connection). -->
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />

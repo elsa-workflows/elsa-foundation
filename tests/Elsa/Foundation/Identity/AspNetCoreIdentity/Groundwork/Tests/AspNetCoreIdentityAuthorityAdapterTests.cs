@@ -204,12 +204,12 @@ public sealed class AspNetCoreIdentityAuthorityAdapterTests
         AspNetCoreIdentityGroundworkStoreFixture fixture,
         string userId)
     {
-        var envelope = await fixture.Documents.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant, userId),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        return JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        return JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
     }
 
     private static AspNetCoreIdentityGroundworkStoreFixture CreateFixture() =>

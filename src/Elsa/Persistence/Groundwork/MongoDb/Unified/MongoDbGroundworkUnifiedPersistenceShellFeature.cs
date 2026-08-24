@@ -17,28 +17,23 @@ namespace Elsa.Persistence.Groundwork.MongoDb.Unified;
 [ShellFeature(
     name: "GroundworkUnifiedPersistenceMongoDb",
     DisplayName = "Groundwork MongoDB Unified Persistence",
-    Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required; safe missing document structures and diagnostic streams can be auto-applied at startup.",
+    Description = "Backs the six provider-level Elsa persistence families with one deployment-owned Groundwork MongoDB target: workflow runtime, secrets, distributed runtime, workflows design, activities design and workflows publishing. Identity remains an explicit host selection. A writable transaction-capable replica set is required.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public class MongoDbGroundworkUnifiedPersistenceShellFeature : GroundworkUnifiedPersistenceShellFeatureBase
+public class MongoDbGroundworkUnifiedPersistenceShellFeature : GroundworkPersistenceShellFeatureBase
 {
-    public MongoDbGroundworkUnifiedPersistenceShellFeature(ShellFeatureContext context)
-        : base(context)
-    {
-    }
-
     public const string DefaultConnectionString = "mongodb://localhost:27017/?replicaSet=rs0";
     public const string DefaultDatabaseName = "elsa";
 
     [ManifestSetting(
         DisplayName = "Connection string",
-        Description = "MongoDB replica-set connection string for the unified Groundwork document store.",
+        Description = "MongoDB replica-set connection string for the single Groundwork provider connection.",
         Category = "Persistence",
         Secret = true)]
     public string? ConnectionString { get; set; }
 
     [ManifestSetting(
         DisplayName = "Database name",
-        Description = "MongoDB database containing the deployment-owned Groundwork physical schema.",
+        Description = "MongoDB database containing the deployment-owned Groundwork schema.",
         Category = "Persistence")]
     public string? DatabaseName { get; set; }
 
@@ -46,7 +41,5 @@ public class MongoDbGroundworkUnifiedPersistenceShellFeature : GroundworkUnified
         services.AddGroundworkMongoDbUnifiedPersistence(
             ValueOrDefault(ConnectionString, DefaultConnectionString),
             ValueOrDefault(DatabaseName, DefaultDatabaseName),
-            Context,
-            CreateWorkflowExecutableCacheOptions(),
-            AutoApplySchemaOnStartup);
+            CreateWorkflowExecutableCacheOptions());
 }

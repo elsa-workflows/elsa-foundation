@@ -124,18 +124,6 @@ public sealed class DiagnosticsPersistenceFeatureTests
     }
 
     [Fact]
-    public void Shared_diagnostic_record_gate_is_a_public_sealed_composition_type()
-    {
-        var gateType = typeof(GroundworkDiagnosticRecordStoreGate);
-
-        Assert.True(gateType.IsPublic);
-        Assert.True(gateType.IsSealed);
-        Assert.DoesNotContain(
-            gateType.Assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>(),
-            attribute => attribute.AssemblyName?.StartsWith("Elsa.Diagnostics.", StringComparison.Ordinal) == true);
-    }
-
-    [Fact]
     public void Groundwork_diagnostics_features_leave_provider_leaf_selection_to_the_host()
     {
         var services = ConfigureDiagnosticsDefaults();

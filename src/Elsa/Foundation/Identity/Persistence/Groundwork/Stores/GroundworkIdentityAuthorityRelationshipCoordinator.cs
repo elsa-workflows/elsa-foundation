@@ -1,8 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -23,15 +22,15 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
     public GroundworkIdentityAuthorityRelationshipCoordinator(GroundworkIdentityAtomicWrite atomicWrite) =>
         _atomicWrite = atomicWrite ?? throw new ArgumentNullException(nameof(atomicWrite));
 
-    internal GroundworkIdentityAuthorityRelationshipCoordinator(IDocumentStore directStore)
-        : this(new GroundworkIdentityAtomicWrite(directStore))
+    internal GroundworkIdentityAuthorityRelationshipCoordinator(GroundworkIdentityRowStore rows)
+        : this(new GroundworkIdentityAtomicWrite(rows))
     {
     }
 
-    public static GroundworkIdentityAuthorityRelationshipCoordinator ForDirectStore(IDocumentStore directStore) =>
-        new(directStore);
+    public static GroundworkIdentityAuthorityRelationshipCoordinator ForRows(GroundworkIdentityRowStore rows) =>
+        new(rows);
 
-    public Task<DocumentStoreWriteResult> AddUserClaimsAsync(
+    public Task<GroundworkIdentityWriteResult> AddUserClaimsAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -49,7 +48,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 claim)).ToArray(),
             cancellationToken);
 
-    public Task<DocumentStoreWriteResult> RemoveUserClaimsAsync(
+    public Task<GroundworkIdentityWriteResult> RemoveUserClaimsAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -66,7 +65,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 IdentityDocumentId.From(tenantId, userId, claim.ClaimType, claim.ClaimValue))).ToArray(),
             cancellationToken);
 
-    public Task<DocumentStoreWriteResult> ReplaceUserClaimAsync(
+    public Task<GroundworkIdentityWriteResult> ReplaceUserClaimAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -91,7 +90,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             ],
             cancellationToken);
 
-    public Task<DocumentStoreWriteResult> SaveUserTokenAsync(
+    public Task<GroundworkIdentityWriteResult> SaveUserTokenAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -109,7 +108,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 token)],
             cancellationToken);
 
-    public Task<DocumentStoreWriteResult> DeleteUserTokenAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteUserTokenAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -127,7 +126,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 IdentityDocumentId.From(tenantId, userId, loginProvider, name))],
             cancellationToken);
 
-    public Task<DocumentStoreWriteResult> RedeemRecoveryCodeAsync(
+    public Task<GroundworkIdentityWriteResult> RedeemRecoveryCodeAsync(
         string tenantId,
         string userId,
         long expectedUserVersion,
@@ -154,7 +153,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             async (unitOfWork, token) =>
             {
                 var userEnvelope = await LoadUserAsync(unitOfWork, tenantId, userId, token);
-                var tokenEnvelope = await unitOfWork.LoadAsync(
+                var tokenEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.UserTokenDocumentKind,
                     tokenId,
                     token);
@@ -177,7 +176,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     updatedToken,
                     tokenEnvelope.Version,
                     token);
-                if (tokenResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!tokenResult.Succeeded)
                     return tokenResult;
 
                 var existingUser = Deserialize<IdentityUserDocument>(userEnvelope);
@@ -197,7 +196,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             cancellationToken).AsTask();
     }
 
-    public Task<DocumentStoreWriteResult> SaveRoleClaimAsync(
+    public Task<GroundworkIdentityWriteResult> SaveRoleClaimAsync(
         string tenantId,
         string roleId,
         long expectedRoleVersion,
@@ -205,7 +204,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         CancellationToken cancellationToken) =>
         MutateRoleClaimAsync("save-role-claim", tenantId, roleId, expectedRoleVersion, claim, delete: false, cancellationToken);
 
-    public Task<DocumentStoreWriteResult> DeleteRoleClaimAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteRoleClaimAsync(
         string tenantId,
         string roleId,
         long expectedRoleVersion,
@@ -213,7 +212,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         CancellationToken cancellationToken) =>
         MutateRoleClaimAsync("delete-role-claim", tenantId, roleId, expectedRoleVersion, claim, delete: true, cancellationToken);
 
-    public Task<DocumentStoreWriteResult> SaveTenantMembershipAsync(
+    public Task<GroundworkIdentityWriteResult> SaveTenantMembershipAsync(
         IdentityTenantMembershipDocument membership,
         long? expectedMembershipVersion,
         bool enforceMembershipVersion,
@@ -233,7 +232,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             cancellationToken,
             returnChildResult: true);
 
-    public Task<DocumentStoreWriteResult> SaveExternalLoginAsync(
+    public Task<GroundworkIdentityWriteResult> SaveExternalLoginAsync(
         IdentityExternalLoginDocument login,
         long? expectedNewOwnerVersion,
         long? expectedLoginVersion,
@@ -261,7 +260,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             mutation,
             async (unitOfWork, token) =>
             {
-                var existingLoginEnvelope = await unitOfWork.LoadAsync(
+                var existingLoginEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.ExternalLoginDocumentKind,
                     loginId,
                     token);
@@ -273,7 +272,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                         throw new InvalidOperationException("The external login belongs to a different tenant.");
                     if (ownershipPolicy is GroundworkExternalLoginOwnershipPolicy.CreateOrSameOwner &&
                         !Same(existingLogin.UserId, login.UserId))
-                        return DocumentStoreWriteResult.ConcurrencyConflict;
+                        return GroundworkIdentityWriteResult.ConcurrencyConflict(loginId);
                 }
 
                 var ownerIds = new[] { existingLogin?.UserId, login.UserId }
@@ -282,7 +281,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     .Distinct(StringComparer.Ordinal)
                     .Order(StringComparer.Ordinal)
                     .ToArray();
-                var owners = new Dictionary<string, DocumentEnvelope>(StringComparer.Ordinal);
+                var owners = new Dictionary<string, GroundworkIdentityRow>(StringComparer.Ordinal);
                 foreach (var ownerId in ownerIds)
                     owners[ownerId] = await LoadUserAsync(unitOfWork, login.TenantId, ownerId, token);
 
@@ -296,10 +295,10 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     login,
                     childExpectedVersion,
                     token);
-                if (loginResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!loginResult.Succeeded)
                     return loginResult;
 
-                DocumentStoreWriteResult? newOwnerResult = null;
+                GroundworkIdentityWriteResult? newOwnerResult = null;
                 foreach (var ownerId in ownerIds)
                 {
                     var ownerEnvelope = owners[ownerId];
@@ -322,7 +321,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                         updated,
                         expectedOwnerVersion,
                         token);
-                    if (ownerResult.Status is not DocumentStoreWriteStatus.Saved)
+                    if (!ownerResult.Succeeded)
                         return ownerResult;
                     if (ownsAfter)
                         newOwnerResult = ownerResult;
@@ -333,7 +332,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             cancellationToken).AsTask();
     }
 
-    public Task<DocumentStoreWriteResult> DeleteExternalLoginAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteExternalLoginAsync(
         string tenantId,
         string userId,
         string loginProvider,
@@ -356,7 +355,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             async (unitOfWork, token) =>
             {
                 var userEnvelope = await LoadUserAsync(unitOfWork, tenantId, userId, token);
-                var loginEnvelope = await unitOfWork.LoadAsync(
+                var loginEnvelope = await unitOfWork.ReadAsync(
                     IdentityStorageManifest.ExternalLoginDocumentKind,
                     loginId,
                     token);
@@ -364,13 +363,13 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 {
                     var existingLogin = Deserialize<IdentityExternalLoginDocument>(loginEnvelope);
                     ValidateUserChild(existingLogin.TenantId, existingLogin.UserId, tenantId, userId);
-                    var deleteResult = await unitOfWork.DeleteAsync(
-                        new DeleteDocumentRequest(
+                    var deleteResult = unitOfWork.Delete(
+                        new GroundworkIdentityRowDelete(
                             IdentityStorageManifest.ExternalLoginDocumentKind,
                             loginId,
-                            loginEnvelope.Version),
+                            GroundworkIdentityRowWriteCondition.IfVersion(loginEnvelope.Version)),
                         token);
-                    if (deleteResult.Status is not DocumentStoreWriteStatus.Deleted)
+                    if (deleteResult.Status is not WriteOutcomeStatus.Deleted)
                         return deleteResult;
                 }
 
@@ -386,7 +385,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             cancellationToken).AsTask();
     }
 
-    public Task<DocumentStoreWriteResult> AddUserRoleAsync(
+    public Task<GroundworkIdentityWriteResult> AddUserRoleAsync(
         string tenantId,
         string userId,
         string roleId,
@@ -395,7 +394,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         CancellationToken cancellationToken) =>
         MutateUserRoleAsync("add-user-role", tenantId, userId, roleId, expectedUserVersion, link, delete: false, cancellationToken);
 
-    public Task<DocumentStoreWriteResult> DeleteUserRoleAsync(
+    public Task<GroundworkIdentityWriteResult> DeleteUserRoleAsync(
         string tenantId,
         string userId,
         string roleId,
@@ -403,7 +402,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         CancellationToken cancellationToken) =>
         MutateUserRoleAsync("delete-user-role", tenantId, userId, roleId, expectedUserVersion, document: null, delete: true, cancellationToken);
 
-    private Task<DocumentStoreWriteResult> MutateUserChildrenAsync(
+    private Task<GroundworkIdentityWriteResult> MutateUserChildrenAsync(
         string operation,
         string tenantId,
         string userId,
@@ -439,19 +438,19 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 var userEnvelope = await LoadUserAsync(unitOfWork, tenantId, userId, token);
                 var user = Deserialize<IdentityUserDocument>(userEnvelope);
                 IReadOnlyCollection<string> ids = GetRegistry(user, registry) ?? [];
-                DocumentStoreWriteResult? childResult = null;
+                GroundworkIdentityWriteResult? childResult = null;
                 foreach (var change in orderedChanges)
                 {
-                    var existing = await unitOfWork.LoadAsync(change.DocumentKind, change.Id, token);
+                    var existing = await unitOfWork.ReadAsync(change.DocumentKind, change.Id, token);
                     if (change.DeleteChild)
                     {
                         if (existing is not null)
                         {
                             ValidateExistingUserChild(existing, tenantId, userId);
-                            childResult = await unitOfWork.DeleteAsync(
-                                new DeleteDocumentRequest(change.DocumentKind, change.Id, existing.Version),
+                            childResult = unitOfWork.Delete(
+                                new GroundworkIdentityRowDelete(change.DocumentKind, change.Id, GroundworkIdentityRowWriteCondition.IfVersion(existing.Version)),
                                 token);
-                            if (childResult.Status is not DocumentStoreWriteStatus.Deleted)
+                            if (childResult.Status is not WriteOutcomeStatus.Deleted)
                                 return childResult;
                         }
 
@@ -470,7 +469,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                         change.Document!,
                         childExpectedVersion,
                         token);
-                    if (childResult.Status is not DocumentStoreWriteStatus.Saved)
+                    if (!childResult.Succeeded)
                         return childResult;
                     ids = AddSorted(ids, change.Id);
                 }
@@ -484,14 +483,14 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     updatedUser,
                     expectedUserVersion ?? userEnvelope.Version,
                     token);
-                if (ownerResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!ownerResult.Succeeded)
                     return ownerResult;
                 return returnChildResult && childResult is not null ? childResult : ownerResult;
             },
             cancellationToken).AsTask();
     }
 
-    private Task<DocumentStoreWriteResult> MutateRoleClaimAsync(
+    private Task<GroundworkIdentityWriteResult> MutateRoleClaimAsync(
         string operation,
         string tenantId,
         string roleId,
@@ -519,16 +518,16 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             {
                 var roleEnvelope = await LoadRoleAsync(unitOfWork, tenantId, roleId, token);
                 var role = Deserialize<IdentityRoleDocument>(roleEnvelope);
-                var existing = await unitOfWork.LoadAsync(IdentityStorageManifest.RoleClaimDocumentKind, claimId, token);
+                var existing = await unitOfWork.ReadAsync(IdentityStorageManifest.RoleClaimDocumentKind, claimId, token);
                 if (delete)
                 {
                     if (existing is not null)
                     {
                         var existingClaim = Deserialize<IdentityRoleClaimDocument>(existing);
                         ValidateRoleChild(existingClaim.TenantId, existingClaim.RoleId, tenantId, roleId);
-                        var deleteResult = await unitOfWork.DeleteAsync(
-                            new DeleteDocumentRequest(IdentityStorageManifest.RoleClaimDocumentKind, claimId, existing.Version), token);
-                        if (deleteResult.Status is not DocumentStoreWriteStatus.Deleted)
+                        var deleteResult = unitOfWork.Delete(
+                            new GroundworkIdentityRowDelete(IdentityStorageManifest.RoleClaimDocumentKind, claimId, GroundworkIdentityRowWriteCondition.IfVersion(existing.Version)), token);
+                        if (deleteResult.Status is not WriteOutcomeStatus.Deleted)
                             return deleteResult;
                     }
                 }
@@ -536,7 +535,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 {
                     var claimResult = await SaveAsync(
                         unitOfWork, IdentityStorageManifest.RoleClaimDocumentKind, claimId, claim, existing?.Version ?? 0, token);
-                    if (claimResult.Status is not DocumentStoreWriteStatus.Saved)
+                    if (!claimResult.Succeeded)
                         return claimResult;
                 }
 
@@ -552,7 +551,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             cancellationToken).AsTask();
     }
 
-    private Task<DocumentStoreWriteResult> MutateUserRoleAsync(
+    private Task<GroundworkIdentityWriteResult> MutateUserRoleAsync(
         string operation,
         string tenantId,
         string userId,
@@ -594,7 +593,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
             {
                 var userEnvelope = await LoadUserAsync(unitOfWork, tenantId, userId, token);
                 var roleEnvelope = await LoadRoleAsync(unitOfWork, tenantId, roleId, token);
-                var linkEnvelope = await unitOfWork.LoadAsync(IdentityStorageManifest.UserRoleDocumentKind, linkId, token);
+                var linkEnvelope = await unitOfWork.ReadAsync(IdentityStorageManifest.UserRoleDocumentKind, linkId, token);
                 if (delete)
                 {
                     if (linkEnvelope is not null)
@@ -603,9 +602,9 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                         ValidateUserChild(existingLink.TenantId, existingLink.UserId, tenantId, userId);
                         if (!Same(existingLink.RoleId, roleId))
                             throw new InvalidOperationException("The existing user-role link belongs to a different role.");
-                        var deleteResult = await unitOfWork.DeleteAsync(
-                            new DeleteDocumentRequest(IdentityStorageManifest.UserRoleDocumentKind, linkId, linkEnvelope.Version), token);
-                        if (deleteResult.Status is not DocumentStoreWriteStatus.Deleted)
+                        var deleteResult = unitOfWork.Delete(
+                            new GroundworkIdentityRowDelete(IdentityStorageManifest.UserRoleDocumentKind, linkId, GroundworkIdentityRowWriteCondition.IfVersion(linkEnvelope.Version)), token);
+                        if (deleteResult.Status is not WriteOutcomeStatus.Deleted)
                             return deleteResult;
                     }
                 }
@@ -614,7 +613,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     var linkResult = await SaveAsync(
                         unitOfWork, IdentityStorageManifest.UserRoleDocumentKind, linkId,
                         document!, linkEnvelope?.Version ?? 0, token);
-                    if (linkResult.Status is not DocumentStoreWriteStatus.Saved)
+                    if (!linkResult.Succeeded)
                         return linkResult;
                 }
 
@@ -631,7 +630,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     updatedUser,
                     expectedUserVersion,
                     token);
-                if (userResult.Status is not DocumentStoreWriteStatus.Saved)
+                if (!userResult.Succeeded)
                     return userResult;
                 var roleResult = await SaveAsync(
                     unitOfWork,
@@ -640,18 +639,18 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                     updatedRole,
                     roleEnvelope.Version,
                     token);
-                return roleResult.Status is DocumentStoreWriteStatus.Saved ? userResult : roleResult;
+                return roleResult.Succeeded ? userResult : roleResult;
             },
             cancellationToken).AsTask();
     }
 
-    private static async Task<DocumentEnvelope> LoadUserAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityRow> LoadUserAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         string tenantId,
         string userId,
         CancellationToken cancellationToken)
     {
-        var envelope = await unitOfWork.LoadAsync(
+        var envelope = await unitOfWork.ReadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, userId),
             cancellationToken)
@@ -661,13 +660,13 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         return envelope;
     }
 
-    private static async Task<DocumentEnvelope> LoadRoleAsync(
-        IDocumentUnitOfWork unitOfWork,
+    private static async Task<GroundworkIdentityRow> LoadRoleAsync(
+        GroundworkIdentityMutationBatch unitOfWork,
         string tenantId,
         string roleId,
         CancellationToken cancellationToken)
     {
-        var envelope = await unitOfWork.LoadAsync(
+        var envelope = await unitOfWork.ReadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, roleId),
             cancellationToken)
@@ -677,21 +676,16 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         return envelope;
     }
 
-    private static Task<DocumentStoreWriteResult> SaveAsync<TDocument>(
-        IDocumentUnitOfWork unitOfWork,
+    private static Task<GroundworkIdentityWriteResult> SaveAsync<TDocument>(
+        GroundworkIdentityMutationBatch unitOfWork,
         string documentKind,
         string id,
         TDocument document,
         long? expectedVersion,
         CancellationToken cancellationToken) =>
-        unitOfWork.SaveAsync(
-            new SaveDocumentRequest(
-                documentKind,
-                id,
-                IdentityStorageManifest.SchemaVersion,
-                Serialize(document),
-                expectedVersion),
-            cancellationToken);
+        Task.FromResult(unitOfWork.Save(
+            GroundworkIdentityDocumentRows.Write(documentKind, id, document, expectedVersion),
+            cancellationToken));
 
     private static void ValidateChildOwner(object document, string tenantId, string userId)
     {
@@ -722,9 +716,9 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
         }
     }
 
-    private static void ValidateExistingUserChild(DocumentEnvelope envelope, string tenantId, string userId)
+    private static void ValidateExistingUserChild(GroundworkIdentityRow envelope, string tenantId, string userId)
     {
-        switch (envelope.DocumentKind)
+        switch (envelope.UnitId)
         {
             case IdentityStorageManifest.UserClaimDocumentKind:
                 var claim = Deserialize<IdentityUserClaimDocument>(envelope);
@@ -740,7 +734,7 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 break;
             default:
                 throw new InvalidOperationException(
-                    $"Unsupported identity user relationship document kind '{envelope.DocumentKind}'.");
+                    $"Unsupported identity user relationship document kind '{envelope.UnitId}'.");
         }
     }
 
@@ -839,11 +833,11 @@ public sealed class GroundworkIdentityAuthorityRelationshipCoordinator
                 $"{IdentityStorageManifest.MaxAggregateRelationshipEntries} entries.");
     }
 
-    private static DocumentStoreWriteResult NotFound(string id) =>
-        new(DocumentStoreWriteStatus.NotFound, Document: null, AuthoritativeId: id);
+    private static GroundworkIdentityWriteResult NotFound(string id) =>
+        GroundworkIdentityWriteResult.NotFound(id);
 
-    private static TDocument Deserialize<TDocument>(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<TDocument>(envelope.ContentJson, IdentityGroundworkJson.Options)!;
+    private static TDocument Deserialize<TDocument>(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<TDocument>(row);
 
     private static string Serialize<TDocument>(TDocument document) =>
         JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);

@@ -17,7 +17,7 @@ public class SecretsGroundworkPersistenceFeature : IShellFeature
 {
         [ManifestSetting(
         DisplayName = "Target",
-        Description = "The Groundwork target this lane's documents live in. Defaults to 'default'.",
+        Description = "The Groundwork v2 target this storage unit lives in. Defaults to 'default'.",
         Category = "Persistence")]
     public string? Target { get; set; }
 

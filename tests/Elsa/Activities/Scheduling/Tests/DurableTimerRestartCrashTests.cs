@@ -4,7 +4,8 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -13,7 +14,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Scheduling.Options;
-using Groundwork.Documents.Store;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +26,8 @@ namespace Elsa.Activities.Scheduling.Tests;
 
 // End-to-end restart/crash coverage for the durable timer chain (W8 / finding E3-2).
 //
-// A single shared IDocumentStore stands in for the durable substrate that survives a process crash.
+// A single SQLite file stands in for the durable substrate that survives a process crash. Each generation
+// opens its own connection to it, exactly as a restarted process would; only the file crosses the restart.
 // Each scenario runs multiple provider generations over the SAME store: the first generation runs a
 // Delay activity to durable suspension (a durable timer + a matching bookmark are persisted), its
 // ServiceProvider is disposed (the "crash"), and a later generation rebuilds honest services over the
@@ -41,8 +44,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task Delay_SuspendsDurably_SurvivesRestart_AndResumesWhenTimerFires()
     {
-        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var store = new InMemoryDocumentStore(manifest);
+        using var store = new TemporaryTimerDatabase();
         var clock = new FakeTimeProvider(T0);
 
         // Generation 1: run the Delay activity to durable suspension. A durable timer (due at T0 + 5s)
@@ -82,8 +84,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery()
     {
-        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var store = new InMemoryDocumentStore(manifest);
+        using var store = new TemporaryTimerDatabase();
         var clock = new FakeTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
@@ -116,8 +117,7 @@ public sealed class DurableTimerRestartCrashTests
     [Fact]
     public async Task DeleteOnDispatched_IsSafe_ResumeSurvivesCrashBeforeDrain_AndConverges()
     {
-        var manifest = ElsaRuntimeStorageManifest.CreatePhysicalized();
-        var store = new InMemoryDocumentStore(manifest);
+        using var store = new TemporaryTimerDatabase();
         var clock = new FakeTimeProvider(T0);
 
         await using (var gen1 = BuildHarness(store, clock))
@@ -153,8 +153,28 @@ public sealed class DurableTimerRestartCrashTests
         }
     }
 
+    /// <summary>The one SQLite file every generation in a scenario opens.</summary>
+    private sealed class TemporaryTimerDatabase : IDisposable
+    {
+        private readonly string path = Path.Combine(
+            Path.GetTempPath(),
+            $"elsa-durable-timer-{Guid.NewGuid():N}.db");
+
+        /// <summary>Opens a connection for one generation. The caller's container owns and closes it.</summary>
+        public IStorageProviderConnection Connect() =>
+            new SqliteProviderFactory().Create($"Data Source={path}");
+
+        public void Dispose()
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
+                if (File.Exists(file))
+                    File.Delete(file);
+        }
+    }
+
     private static WorkflowExecutionHarness BuildHarness(
-        IDocumentStore store,
+        TemporaryTimerDatabase store,
         TimeProvider clock,
         Action<IServiceCollection>? customize = null)
     {
@@ -164,10 +184,10 @@ public sealed class DurableTimerRestartCrashTests
             .WithFeature(services => new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services))
             .ConfigureServices(services =>
             {
-                // Swap the in-memory runtime stores for the Groundwork-backed bridges over the shared
-                // document store so state survives across provider generations (the "restart").
-                services.AddSingleton(store);
-                services.AddGroundworkRuntimeStores();
+                // Each generation owns its own connection to the shared file, so disposing a generation
+                // closes only that connection and the durable rows outlive it.
+                services.AddGroundworkStorageProviderConnection(_ => store.Connect());
+                services.AddGroundworkV2RuntimeStores();
                 // Override the runtime clock so due-time computation and the pump sweep share one
                 // controllable timeline.
                 services.RemoveAll<TimeProvider>();

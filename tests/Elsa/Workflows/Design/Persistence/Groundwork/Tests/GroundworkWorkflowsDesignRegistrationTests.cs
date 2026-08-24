@@ -1,38 +1,35 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Groundwork.Documents.Store;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
-/// <summary>
-/// Verifies <see cref="GroundworkWorkflowsDesignStoreRegistration.AddGroundworkWorkflowsDesignStores"/> wires
-/// every workflow-design read port to its Groundwork (document) implementation and that the registration wins
-/// over a previously-registered (e.g. EF Core) store — the single-provider host-composition contract.
-/// </summary>
-public class GroundworkWorkflowsDesignRegistrationTests
+public sealed class GroundworkWorkflowsDesignRegistrationTests
 {
     private static ServiceProvider BuildProvider(Action<IServiceCollection>? preRegister = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create()));
+        services.AddSingleton<DesignGroundworkTestPersistence>();
+        services.AddSingleton<IGroundworkStorageSessionSource>(sp => sp.GetRequiredService<DesignGroundworkTestPersistence>());
+        services.AddSingleton<IPersistenceAccessContextAccessor>(DesignGroundworkTestAccess.DefaultAccessContextAccessor);
         services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
         services.AddSingleton<IDistributedLockProvider, StubLockProvider>();
         services.AddSingleton<StubEventPublisher>();
@@ -72,9 +69,9 @@ public class GroundworkWorkflowsDesignRegistrationTests
         Assert.IsType<WorkflowDefinitionLookup>(sp.GetRequiredService<IWorkflowDefinitionLookup>());
         Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
         Assert.IsType<DraftOriginator>(sp.GetRequiredService<IDraftOriginator>());
-        Assert.Single(
-            sp.GetServices<IGroundworkStorageManifestSource>(),
-            source => source is GroundworkDesignAtomicWriteStorageManifestSource);
+        var storage = sp.GetRequiredService<GroundworkDesignStorage>();
+        Assert.IsType<GroundworkDesignStorage>(storage);
+        Assert.Equal(5, WorkflowsDesignStorageManifest.CreateUnits().Count);
     }
 
     [Fact]
@@ -92,39 +89,27 @@ public class GroundworkWorkflowsDesignRegistrationTests
     [Fact]
     public void Groundwork_registration_overrides_a_prior_store()
     {
-        using var provider = BuildProvider(services =>
-            services.AddScoped<IWorkflowDefinitionStore, PriorStore>());
+        using var provider = BuildProvider(services => services.AddScoped<IWorkflowDefinitionStore, PriorStore>());
         using var scope = provider.CreateScope();
-
-        var resolved = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>();
-
-        Assert.IsType<GroundworkWorkflowDefinitionStore>(resolved);
+        Assert.IsType<GroundworkWorkflowDefinitionStore>(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
         Assert.Single(scope.ServiceProvider.GetServices<IWorkflowDefinitionStore>());
     }
 
     [Fact]
     public void Groundwork_registration_preserves_a_prior_draft_originator()
     {
-        using var provider = BuildProvider(services =>
-            services.AddScoped<IDraftOriginator, PriorDraftOriginator>());
+        using var provider = BuildProvider(services => services.AddScoped<IDraftOriginator, PriorDraftOriginator>());
         using var scope = provider.CreateScope();
-
-        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
-
-        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.IsType<PriorDraftOriginator>(scope.ServiceProvider.GetRequiredService<IDraftOriginator>());
         Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
     }
 
     [Fact]
     public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
     {
-        using var provider = BuildProvider(services =>
-            services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
+        using var provider = BuildProvider(services => services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
         using var scope = provider.CreateScope();
-
-        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
-
-        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.IsType<PriorDesignAtomicWriter>(scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>());
         Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
     }
 
@@ -136,10 +121,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         services.Replace(ServiceDescriptor.Scoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-
-        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
-
-        Assert.IsType<PriorDesignAtomicWriter>(resolved);
+        Assert.IsType<PriorDesignAtomicWriter>(scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>());
         Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
     }
 
@@ -151,10 +133,7 @@ public class GroundworkWorkflowsDesignRegistrationTests
         services.Replace(ServiceDescriptor.Scoped<IDraftOriginator, PriorDraftOriginator>());
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
-
-        var resolved = scope.ServiceProvider.GetRequiredService<IDraftOriginator>();
-
-        Assert.IsType<PriorDraftOriginator>(resolved);
+        Assert.IsType<PriorDraftOriginator>(scope.ServiceProvider.GetRequiredService<IDraftOriginator>());
         Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
     }
 
@@ -162,90 +141,56 @@ public class GroundworkWorkflowsDesignRegistrationTests
     public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
     {
         var services = new ServiceCollection();
-
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkWorkflowsDesignStores();
 
         foreach (var serviceType in new[]
                  {
-                     typeof(IWorkflowDefinitionStore),
-                     typeof(IWorkflowDefinitionVersionStore),
-                     typeof(IWorkflowDefinitionDraftStore),
-                     typeof(IWorkflowDefinitionListProjectionStore),
-                     typeof(IWorkflowDefinitionVersionLayoutStore),
-                     typeof(IAddWorkflowDefinitionCommand),
-                     typeof(IMaterializeWorkflowDefinitionCommand),
-                     typeof(IAddWorkflowDefinitionVersionCommand),
-                     typeof(IMaterializeWorkflowDefinitionVersionCommand),
-                     typeof(ISaveWorkflowDefinitionCommand),
-                     typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
-                     typeof(ICreateDraftCommand),
-                     typeof(IUpdateDraftCommand),
-                     typeof(IDiscardDraftCommand),
-                     typeof(IPromoteDraftToVersionCommand),
-                     typeof(ISubmitWorkflowDefinitionCommand),
-                     typeof(ICloneDraftFromVersionCommand),
+                     typeof(IWorkflowDefinitionStore), typeof(IWorkflowDefinitionVersionStore), typeof(IWorkflowDefinitionDraftStore),
+                     typeof(IWorkflowDefinitionListProjectionStore), typeof(IWorkflowDefinitionVersionLayoutStore),
+                     typeof(IAddWorkflowDefinitionCommand), typeof(IMaterializeWorkflowDefinitionCommand),
+                     typeof(IAddWorkflowDefinitionVersionCommand), typeof(IMaterializeWorkflowDefinitionVersionCommand),
+                     typeof(ISaveWorkflowDefinitionCommand), typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+                     typeof(ICreateDraftCommand), typeof(IUpdateDraftCommand), typeof(IDiscardDraftCommand),
+                     typeof(IPromoteDraftToVersionCommand), typeof(ISubmitWorkflowDefinitionCommand), typeof(ICloneDraftFromVersionCommand)
                  })
-        {
             AssertScopedOnce(services, serviceType);
-        }
 
         AssertScopedOnce(services, typeof(IDesignAtomicWriter));
         AssertScopedOnce(services, typeof(IDraftOriginator));
-        Assert.Single(services.Where(x =>
-            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(WorkflowsDesignGroundworkStorageManifestSource)));
-        Assert.Single(services.Where(x =>
-            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource)));
+        AssertScopedOnce(services, typeof(GroundworkDesignStorage));
+        Assert.Equal(5, WorkflowsDesignStorageManifest.CreateUnits().Count);
+        Assert.Equal(5, WorkflowsDesignStorageManifest.CreateUnits().Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
     {
-        var registration = Assert.Single(services.Where(x => x.ServiceType == serviceType));
-
+        var registration = Assert.Single(services, x => x.ServiceType == serviceType);
         Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
     }
 
     private sealed class PriorStore : IWorkflowDefinitionStore
     {
-        public Task<Core.Entities.WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<Core.Entities.WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Core.Entities.WorkflowDefinition>> ListAsync(Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class PriorDraftOriginator : IDraftOriginator
     {
-        public Task<string> ExecuteAsync<TRequest>(
-            DesignOperationKey operationKey,
-            string operationKind,
-            TRequest requestMaterial,
-            Func<CancellationToken, Task<DraftOriginationInput>> resolveInput,
-            CancellationToken cancellationToken)
-            where TRequest : notnull =>
-            Task.FromResult("prior-draft");
+        public Task<string> ExecuteAsync<TRequest>(DesignOperationKey operationKey, string operationKind, TRequest requestMaterial, Func<CancellationToken, Task<DraftOriginationInput>> resolveInput, CancellationToken cancellationToken)
+            where TRequest : notnull => Task.FromResult("prior-draft");
     }
 
     private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
     {
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<CancellationToken, Task>? beforeAttempt,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<CancellationToken, Task>? beforeAttempt, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
     {
-        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FakeSystemClock : ISystemClock
@@ -258,7 +203,6 @@ public class GroundworkWorkflowsDesignRegistrationTests
         public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
         public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
-
         private sealed class Handle : IDistributedSynchronizationHandle
         {
             public CancellationToken HandleLostToken => CancellationToken.None;

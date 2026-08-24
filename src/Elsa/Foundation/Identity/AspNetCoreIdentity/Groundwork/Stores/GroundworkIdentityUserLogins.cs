@@ -3,7 +3,6 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
@@ -35,7 +34,7 @@ public sealed partial class GroundworkIdentityUserStore
             ownershipPolicy: GroundworkExternalLoginOwnershipPolicy.CreateOrSameOwner,
             returnOwnerResult: true,
             cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "external-login add"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "external-login add"));
     }
 
     public async Task RemoveLoginAsync(AspNetCoreIdentityUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
@@ -43,13 +42,13 @@ public sealed partial class GroundworkIdentityUserStore
         EnsureUserScope(user);
         var result = await _relationships.DeleteExternalLoginAsync(
             user.TenantId, user.Id, loginProvider, providerKey, RequireExpectedVersion(user), cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "external-login remove"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "external-login remove"));
     }
 
     public async Task<IList<UserLoginInfo>> GetLoginsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var envelopes = await QueryAsync(
+        var envelopes = Query(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityStorageManifest.ListUserLoginsQuery,
             (IdentityStorageManifest.UserLookupKeyField, UserLookupKey(CurrentTenantId(), user.Id)),
@@ -62,7 +61,7 @@ public sealed partial class GroundworkIdentityUserStore
 
     public async Task<AspNetCoreIdentityUser?> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
     {
-        var envelope = await store.LoadAsync(
+        var envelope = rows.Read(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             IdentityCompositeDocumentId.From(CurrentTenantId(), loginProvider, providerKey),
             cancellationToken);
@@ -72,7 +71,7 @@ public sealed partial class GroundworkIdentityUserStore
         return await FindByIdAsync(login.UserId, cancellationToken);
     }
 
-    private static UserLoginInfo MapLogin(DocumentEnvelope envelope)
+    private static UserLoginInfo MapLogin(GroundworkIdentityRow envelope)
     {
         var document = Deserialize<IdentityExternalLoginDocument>(envelope);
         return new UserLoginInfo(

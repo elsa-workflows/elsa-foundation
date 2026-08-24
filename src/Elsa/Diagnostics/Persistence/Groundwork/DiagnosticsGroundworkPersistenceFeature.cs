@@ -1,13 +1,8 @@
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using CShells.Features;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Diagnostics.Persistence.Groundwork;
 
@@ -16,9 +11,8 @@ namespace Elsa.Diagnostics.Persistence.Groundwork;
 /// </summary>
 /// <remarks>
 /// This is the one catalog-discoverable replacement feature for both diagnostics store contracts. It
-/// contributes the document schema and delegates concrete adapter registration to the two domain-owned
-/// Groundwork features. The host-selected provider supplies the diagnostic-record session factory and
-/// selects the matching parameterless deployment source for Groundwork.Tool and runtime admission.
+/// delegates concrete adapter registration to the two domain-owned Groundwork v2 features. The
+/// host-selected provider supplies the shared v2 provider connection; each adapter admits its own units.
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Diagnostics")]
@@ -26,9 +20,8 @@ namespace Elsa.Diagnostics.Persistence.Groundwork;
 [ShellFeature(
     name: "DiagnosticsGroundworkPersistence",
     DisplayName = "Diagnostics Groundwork Persistence",
-    Description = "Replaces both diagnostics stores with Groundwork adapters and contributes their combined document and diagnostic-record schema to the host-selected Groundwork composition and Groundwork.Tool.",
-    DependsOn = new object[] { "DiagnosticsOpenTelemetry", "DiagnosticsStructuredLogs" },
-    Metadata = [GroundworkSchemaFeatureMetadata.Key, GroundworkSchemaFeatureMetadata.Diagnostics])]
+    Description = "Replaces both diagnostics stores with clean-break Groundwork v2 adapters.",
+    DependsOn = new object[] { "DiagnosticsOpenTelemetry", "DiagnosticsStructuredLogs" })]
 public class DiagnosticsGroundworkPersistenceFeature : IShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
@@ -39,23 +32,5 @@ public class DiagnosticsGroundworkPersistenceFeature : IShellFeature
         // cataloged shell features: selecting this one feature makes the two diagnostics replacements atomic.
         new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
         new GroundworkStructuredLogsPersistenceFeature().ConfigureServices(services);
-        services.AddGroundworkManifestSource<DiagnosticsGroundworkStorageManifestSource>();
-    }
-}
-
-/// <summary>
-/// Registers the Diagnostics deployment schema as the one authority for Groundwork.Tool and runtime
-/// readiness/admission. Call this once when a host selects the Diagnostics-only Groundwork composition;
-/// provider registrations may select <see cref="DiagnosticsGroundworkDeploymentSchema"/> directly instead.
-/// </summary>
-public static class DiagnosticsGroundworkDeploymentRegistration
-{
-    public static IServiceCollection AddGroundworkDiagnosticsDeployment(this IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        services.AddGroundworkStorageComposition<DiagnosticsGroundworkDeploymentSchema>();
-        services.TryAddSingleton<global::Groundwork.DiagnosticRecords.IDiagnosticRecordDeploymentManifestSource>(
-            provider => provider.GetRequiredService<DiagnosticsGroundworkDeploymentSchema>());
-        return services;
     }
 }

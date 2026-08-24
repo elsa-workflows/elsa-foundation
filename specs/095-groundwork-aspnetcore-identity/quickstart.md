@@ -1,8 +1,37 @@
 # Quickstart: Groundwork ASP.NET Core Identity Validation
 
-This guide is the executable evidence path for #644. The current candidate targets Groundwork `0.0.1-preview.60`, Docker is available for non-SQLite providers, and the repository-local tool manifest is restored at the same version as the packages.
+## Current clean-break v2 path
 
-> **Evidence status:** Preview.60 provider evidence is accepted for committed candidate `211ab4816b41c153d795c93fc3f72c872ecb4875` (tree `35b19f8b4f37dc4e80dffae8046aa7fb59b306e1`) under immutable generation `1d58175a573d490644823b9242c53fdaf6dd95e8f8378c8db686d8c06f176ba7`. The dated preview.55-preview.59 material below remains historical provenance only. The checked-in EF contract baseline is non-executed; live EF/Groundwork equality and timing remain owned by #646.
+The current candidate targets Groundwork `0.2.0-preview.1`, restored only from the Valence Works
+Feedz feed. It deliberately provides no v1 migration, alias, dual-write, fallback, or compatibility
+path. The executable provider acceptance surface is:
+
+```bash
+dotnet test tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj --filter FullyQualifiedName~AspNetCoreIdentityV2ProviderMatrixTests
+```
+
+SQLite runs locally. With `CI=true`, the same public-v2 scenario provisions PostgreSQL, SQL Server,
+and a transactional MongoDB replica set. It executes the restored 25-objective catalog, all 15
+advertised framework capabilities, native tenant/concurrency behavior, and process restart. Package
+provenance must show only `https://f.feedz.io/valence-works/groundwork/nuget/index.json`.
+
+The current native-plan acceptance is timing-free and runs separately:
+
+```bash
+GW_EXPLAIN_ARTIFACT_DIR="$PWD/TestResults/iam-native-plans" \
+  dotnet test tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj \
+  --filter FullyQualifiedName~Public_iam_routes_use_declared_indexes_at_acceptance_scale
+```
+
+It creates exactly 600,000 physical SQLite rows (100,000 in each of six scale-bearing tables),
+executes the exact ten public IAM routes, and retains eleven optimizer-selected plan artifacts. The
+eleventh execution is the normalized-role lookup required before the role-to-users route. CI uploads
+the raw native index-use evidence as `iam-native-query-plans` and fails if no artifacts are produced.
+
+Everything below this note records earlier #644 evidence. Commands naming deleted v1 conformance
+types or packages are immutable historical provenance and are not current validation instructions.
+
+> **Historical evidence status:** Preview.60 provider evidence was accepted for committed candidate `211ab4816b41c153d795c93fc3f72c872ecb4875` (tree `35b19f8b4f37dc4e80dffae8046aa7fb59b306e1`) under immutable generation `1d58175a573d490644823b9242c53fdaf6dd95e8f8378c8db686d8c06f176ba7`. It is retained as provenance, not as current clean-break evidence. The checked-in EF contract baseline remains non-executed; live comparison and timing remain separately owned.
 
 ## 1. Establish The Exact Baseline
 
@@ -350,7 +379,7 @@ Current manifest `1.0.4` uses the `identityMutationReceipt` physical entity unit
   - Topology truthfulness: accepted. Relational providers and SQLite advertise persistent storage, independent clients, multi-document transactions, and restart support; MongoDB requires a transaction-capable replica-set topology and retains standalone rejection evidence.
   - Native bounded execution: accepted. The 100,000-record T062 verdict proves physical bounded routes for normalized user, normalized email, normalized role, tenant role listing, login, claims, role claims, user roles, role users, logins, tokens, and tenant membership. Runtime calls issue finite `Take` values before materialization where exercised.
   - Schema immutability/readiness: accepted. CLI validate/plan/status/apply coverage proves the Identity manifest can be validated offline/live, planned/applied explicitly, and kept read-only during runtime admission.
-  - Explicit feature selection: accepted. Provider substrate schemas still exclude Identity by default; the public reference composition includes Identity only through `GroundworkAllFeaturesWithIdentityDeploymentSchema`.
+  - Explicit feature selection: accepted. In the final clean-break design, Identity contributes public v2 units directly and the legacy reference schema remains `GroundworkAllFeaturesDeploymentSchema`.
   - Sanitized evidence: accepted. Provider evidence records carry only package/provider/topology/fingerprint/result hashes and sanitized scenario artifacts; connection strings, credentials, tenant identifiers, and raw process/container details are not retained.
 - Open scope after US3: seeding/highest-seam operational readiness and #646 performance handoff remain in US4; polish/landing tasks still need full-candidate validation and Model B PR/merge. This verdict does not claim performance completion or final zero-EF deletion readiness.
 
@@ -429,11 +458,11 @@ Current manifest `1.0.4` uses the `identityMutationReceipt` physical entity unit
 - Documented:
   - explicit `FoundationIdentityAspNetCoreIdentityGroundwork` feature selection;
   - prohibition on dual EF + Groundwork ASP.NET Core Identity authorities;
-  - explicit schema CLI use of `GroundworkAllFeaturesWithIdentityDeploymentSchema`;
+  - explicit schema CLI use of the then-current deployment schema (superseded by direct v2 unit admission);
   - supported provider topology, including MongoDB transaction-capable topology;
   - unsupported capabilities: runtime schema auto-apply, unbounded scans, standalone MongoDB for multi-document Identity guarantees, incomplete seeding, and production password logging.
 - Evidence check:
-  - Command: `rg -n "FoundationIdentityAspNetCoreIdentityGroundwork|GroundworkAllFeaturesWithIdentityDeploymentSchema|MongoDB.*transaction|Unsupported capabilities|runtime schema auto-apply|scoped" src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md EXTENSION_POINTS.md`.
+  - Command: `rg -n "FoundationIdentityAspNetCoreIdentityGroundwork|MongoDB.*transaction|Unsupported capabilities|runtime schema auto-apply|scoped" src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md EXTENSION_POINTS.md`.
   - Result: expected feature/schema/topology/unsupported-capability documentation was found.
 
 ### US4 T078 Opt-In Composition And Dual-Authority Guard Baseline
@@ -596,28 +625,28 @@ Build the public parameterless deployment source that matches the explicitly sel
 ```bash
 dotnet groundwork validate \
   --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithIdentityDeploymentSchema \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <sqlite|sqlserver|postgresql|mongodb> \
   --offline \
   --output json
 
 dotnet groundwork plan \
   --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithIdentityDeploymentSchema \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork status \
   --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithIdentityDeploymentSchema \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --output json
 
 dotnet groundwork apply \
   --manifest-assembly <path>/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithIdentityDeploymentSchema \
+  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesDeploymentSchema \
   --provider <provider> \
   --connection-env GROUNDWORK_DEPLOYMENT_CONNECTION \
   --safe \

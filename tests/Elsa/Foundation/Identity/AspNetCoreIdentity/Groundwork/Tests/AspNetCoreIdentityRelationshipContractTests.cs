@@ -1,7 +1,7 @@
-using System.Security.Claims;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
 
@@ -49,6 +49,35 @@ public sealed class AspNetCoreIdentityRelationshipContractTests
         Assert.Empty(await userStore.GetLoginsAsync(user, CancellationToken.None));
         Assert.Empty(await userStore.GetRolesAsync(user, CancellationToken.None));
         Assert.Null(await userStore.GetTokenAsync(user, token.LoginProvider, token.Name, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Relationship_reads_return_every_admitted_entry_without_silent_truncation()
+    {
+        const int relationshipCount = 501;
+        var fixture = CreateFixture();
+        var users = fixture.UserStore();
+        var roles = fixture.RoleStore();
+        var user = AspNetCoreIdentityScenarioData.CreateIdentityUser(AspNetCoreIdentityScenarioData.PrimaryUser);
+        Assert.True((await users.CreateAsync(user, CancellationToken.None)).Succeeded);
+
+        for (var index = 0; index < relationshipCount; index++)
+        {
+            var suffix = index.ToString("D3");
+            var role = new IdentityRole
+            {
+                Id = $"role-capacity-{suffix}",
+                Name = $"Capacity {suffix}",
+                NormalizedName = $"CAPACITY {suffix}"
+            };
+            Assert.True((await roles.CreateAsync(role, CancellationToken.None)).Succeeded);
+            await users.AddToRoleAsync(user, role.NormalizedName, CancellationToken.None);
+        }
+
+        var materialized = await users.GetRolesAsync(user, CancellationToken.None);
+
+        Assert.Equal(relationshipCount, materialized.Count);
+        Assert.Contains("Capacity 500", materialized);
     }
 
     [Fact]

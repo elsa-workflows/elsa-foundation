@@ -1,13 +1,10 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Groundwork.Querying;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
@@ -26,25 +23,25 @@ public sealed record ActivityManagementProjectionMutation(
 /// after the caller's authoritative and projection requests have committed in one document unit of work.
 /// </summary>
 public sealed class GroundworkActivityManagementProjectionUpdate(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
     IDistributedSynchronizationHandle handle,
-    IReadOnlyList<SaveDocumentRequest> requests,
+    IReadOnlyList<ActivityDesignSaveRequest> requests,
     IReadOnlySet<string> documentKinds) : IAsyncDisposable
 {
-    public IReadOnlyList<SaveDocumentRequest> Requests { get; } = requests;
+    public IReadOnlyList<ActivityDesignSaveRequest> Requests { get; } = requests;
 
     public IReadOnlySet<string> DocumentKinds { get; } = documentKinds;
 
     public Task CommitAsync(
         IReadOnlyCollection<string> authoritativeDocumentKinds,
-        IReadOnlyList<SaveDocumentRequest> authoritativeRequests,
+        IReadOnlyList<ActivityDesignSaveRequest> authoritativeRequests,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(authoritativeDocumentKinds);
         ArgumentNullException.ThrowIfNull(authoritativeRequests);
         var kinds = authoritativeDocumentKinds.Concat(DocumentKinds).Distinct(StringComparer.Ordinal).ToArray();
         var writes = authoritativeRequests.Concat(Requests).ToArray();
-        return store.SaveAllAsync(DocumentCommitScope.Of(kinds), writes, cancellationToken);
+        return store.SaveAllAsync(ActivityDesignCommitScope.Of(kinds), writes, cancellationToken);
     }
 
     public ValueTask DisposeAsync() => handle.DisposeAsync();
@@ -57,9 +54,9 @@ public sealed class GroundworkActivityManagementProjectionUpdate(
 /// to their existing atomic domain commit.
 /// </summary>
 public sealed class GroundworkActivityManagementProjectionWriter(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
     IDistributedLockProvider lockProvider,
-    IBoundedDocumentStore? boundedStore = null)
+    GroundworkV2ActivityDesignStore? boundedStore = null)
 {
     private const string DefinitionKind = ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind;
     private const string DraftKind = ActivitiesDesignStorageManifest.ActivityDraftManagementProjectionDocumentKind;
@@ -89,7 +86,7 @@ public sealed class GroundworkActivityManagementProjectionWriter(
         var handle = await lockProvider.AcquireLockAsync(ProjectionLockKey(store), null, cancellationToken);
         try
         {
-            var reader = boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
+            var reader = boundedStore ?? store as GroundworkV2ActivityDesignStore ?? throw new InvalidOperationException(
                 "Activity-management projection writes require an admitted bounded document-store runtime.");
             var watermarkEnvelope = await store.LoadAsync(
                 WatermarkKind,
@@ -108,7 +105,7 @@ public sealed class GroundworkActivityManagementProjectionWriter(
             var snapshotAt = mutation.ChangedAt >= watermark.AdvancedAt
                 ? mutation.ChangedAt
                 : watermark.AdvancedAt;
-            var requests = new List<SaveDocumentRequest>();
+            var requests = new List<ActivityDesignSaveRequest>();
             var currentDefinitions = new Dictionary<string, Stored<ActivityDefinitionManagementProjectionRevision>?>(StringComparer.Ordinal);
             var currentDrafts = new Dictionary<string, Stored<ActivityDefinitionDraftManagementProjectionRevision>?>(StringComparer.Ordinal);
             var currentVersions = new Dictionary<string, Stored<ActivityDefinitionVersionManagementProjectionRevision>?>(StringComparer.Ordinal);
@@ -288,7 +285,7 @@ public sealed class GroundworkActivityManagementProjectionWriter(
         string collection,
         Stored<T>? current,
         T next,
-        ICollection<SaveDocumentRequest> requests)
+        ICollection<ActivityDesignSaveRequest> requests)
         where T : ActivityManagementProjectionRevision
     {
         if (current is not null)
@@ -426,7 +423,7 @@ public sealed class GroundworkActivityManagementProjectionWriter(
     };
 
     private static async Task<Stored<T>?> FindCurrentAsync<T>(
-        IBoundedDocumentStore reader,
+        GroundworkV2ActivityDesignStore reader,
         string kind,
         string queryIdentity,
         string idPath,
@@ -435,23 +432,28 @@ public sealed class GroundworkActivityManagementProjectionWriter(
         where T : ActivityManagementProjectionRevision
     {
         var envelope = await reader.FirstOrDefaultAsync(
-            new DocumentQuery(
+            new ActivityDesignQuery(
                 kind,
                 queryIdentity,
                 [
-                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(idPath, id)),
-                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+                    ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(idPath, id)),
+                    ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                         ActivitiesDesignStorageManifest.ManagementValidToField,
                         SequenceKey(long.MaxValue)))
                 ],
-                take: 1)
-                .Select(BoundedQueryResultOperation.First),
+                [
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)
+                ],
+                Take: 1)
+                .Select(ActivityDesignQueryResultOperation.First),
             cancellationToken);
         return envelope is null ? null : new(Deserialize<T>(envelope, kind), envelope);
     }
 
     private static async Task<ActivityManagementVersionProjectionReference?> ResolveVersionReferenceAsync(
-        IBoundedDocumentStore reader,
+        GroundworkV2ActivityDesignStore reader,
         string? versionId,
         string expectedDefinitionId,
         string? expectedTenantId,
@@ -491,22 +493,22 @@ public sealed class GroundworkActivityManagementProjectionWriter(
         version.ProviderKey,
         version.ProviderSchemaVersion);
 
-    private static SaveDocumentRequest Save<T>(string kind, string collection, T entity, long expectedVersion)
+    private static ActivityDesignSaveRequest Save<T>(string kind, string collection, T entity, long expectedVersion)
         where T : Elsa.Primitives.Entities.Entity
     {
-        var request = GroundworkDocumentWriter.ToSaveRequest(
+        var request = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
             kind,
             collection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             entity,
             JsonOptions);
-        return new SaveDocumentRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
+        return new ActivityDesignSaveRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
     }
 
-    private static T Deserialize<T>(DocumentEnvelope envelope, string kind)
+    private static T Deserialize<T>(ActivityDesignDocument envelope, string kind)
         where T : Elsa.Primitives.Entities.Entity
     {
-        var document = JsonSerializer.Deserialize<GroundworkDocument<T>>(envelope.ContentJson, JsonOptions);
+        var document = JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<T>>(envelope.ContentJson, JsonOptions);
         return document?.Entity ?? throw new InvalidOperationException(
             $"Document '{envelope.Id}' of kind '{kind}' could not be deserialized as {typeof(T).Name}.");
     }
@@ -590,14 +592,14 @@ public sealed class GroundworkActivityManagementProjectionWriter(
         throw new InvalidOperationException($"Activity {resourceKind} projection '{resourceId}' cannot change definition or tenant ownership.");
     }
 
-    internal static string ProjectionLockKey(IDocumentStore documents)
+    internal static string ProjectionLockKey(GroundworkV2ActivityDesignStore documents)
     {
-        var scope = $"{documents.Access.Kind}:{documents.Access.Scope?.Value ?? "global"}";
+        var scope = "elsa-activities-design";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(scope))).ToLowerInvariant();
         return $"elsa:activities:design:management-projection:{hash}";
     }
 
-    private sealed record Stored<T>(T Entity, DocumentEnvelope Envelope)
+    private sealed record Stored<T>(T Entity, ActivityDesignDocument Envelope)
         where T : Elsa.Primitives.Entities.Entity;
 
     private sealed class NoopSynchronizationHandle : IDistributedSynchronizationHandle

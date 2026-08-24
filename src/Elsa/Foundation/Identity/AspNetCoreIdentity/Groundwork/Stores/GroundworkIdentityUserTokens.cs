@@ -2,7 +2,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 
@@ -27,7 +27,7 @@ public sealed partial class GroundworkIdentityUserStore
             UserLookupKey(user.TenantId, user.Id));
         var result = await _relationships.SaveUserTokenAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user), document, cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-token save"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-token save"));
     }
 
     public async Task RemoveTokenAsync(AspNetCoreIdentityUser user, string loginProvider, string name, CancellationToken cancellationToken)
@@ -35,13 +35,13 @@ public sealed partial class GroundworkIdentityUserStore
         EnsureUserScope(user);
         var result = await _relationships.DeleteUserTokenAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user), loginProvider, name, cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-token remove"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-token remove"));
     }
 
     public async Task<string?> GetTokenAsync(AspNetCoreIdentityUser user, string loginProvider, string name, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var envelope = await store.LoadAsync(
+        var envelope = rows.Read(
             IdentityStorageManifest.UserTokenDocumentKind,
             TokenDocumentId(user.TenantId, user.Id, loginProvider, name),
             cancellationToken);
@@ -63,16 +63,16 @@ public sealed partial class GroundworkIdentityUserStore
         var result = await _relationships.RedeemRecoveryCodeAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user),
             RecoveryCodeTokenProvider, RecoveryCodeTokenName, code, cancellationToken);
-        if (result.Status is DocumentStoreWriteStatus.NotFound)
+        if (result.Status is WriteOutcomeStatus.NotFound)
             return false;
-        if (result.Status is DocumentStoreWriteStatus.ConcurrencyConflict)
+        if (result.Status is WriteOutcomeStatus.ConcurrencyConflict)
         {
             var currentCodes = await GetRecoveryCodesAsync(user, cancellationToken);
             if (!currentCodes.Contains(code))
                 return false;
         }
 
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "recovery-code redeem"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "recovery-code redeem"));
         return true;
     }
 

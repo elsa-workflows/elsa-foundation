@@ -2,21 +2,18 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
-    <ProjectReference Include="..\..\..\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <!-- The deployment schema selects the shared design atomic-write ledger, which lives here. It
+         arrived transitively through Publishing until that lane took the public v2 closure. -->
+    <!-- The preset composes the public v2 runtime family and the distributed runtime that rides on it. -->
+    <ProjectReference Include="..\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
 </Project>

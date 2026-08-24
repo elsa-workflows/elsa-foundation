@@ -8,7 +8,9 @@
     <PackageReference Include="CShells.Abstractions" />
     <!-- The lane's host feature needs the shell-feature and manifest hint attributes. -->
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
@@ -18,9 +20,7 @@
     <ProjectReference Include="..\..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Querying\Elsa.Persistence.Groundwork.Querying.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
   </ItemGroup>

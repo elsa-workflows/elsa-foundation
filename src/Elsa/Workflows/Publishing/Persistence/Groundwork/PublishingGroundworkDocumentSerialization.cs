@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
 
@@ -30,23 +29,23 @@ public sealed class PublishingGroundworkDocumentSerializer(IEnumerable<IPublishi
     public (string SchemaVersion, string ContentJson) Serialize<T>(string documentKind, T document) =>
         (Stamp(CurrentFor(documentKind)), JsonSerializer.Serialize(document, Options));
 
-    public T Deserialize<T>(DocumentEnvelope envelope)
+    public T Deserialize<T>(string documentKind, string id, string schemaVersion, string contentJson)
     {
-        var version = Parse(envelope.DocumentKind, envelope.SchemaVersion);
-        var current = CurrentFor(envelope.DocumentKind);
-        var content = JsonNode.Parse(envelope.ContentJson)?.AsObject()
-            ?? throw new InvalidOperationException($"Publishing document '{envelope.DocumentKind}/{envelope.Id}' is not a JSON object.");
+        var version = Parse(documentKind, schemaVersion);
+        var current = CurrentFor(documentKind);
+        var content = JsonNode.Parse(contentJson)?.AsObject()
+            ?? throw new InvalidOperationException($"Publishing document '{documentKind}/{id}' is not a JSON object.");
         while (version < current)
         {
-            if (!_upcasters.TryGetValue((envelope.DocumentKind, version), out var upcaster))
-                throw new InvalidOperationException($"No publishing upcaster exists for '{envelope.DocumentKind}' v{version} to v{version + 1}.");
+            if (!_upcasters.TryGetValue((documentKind, version), out var upcaster))
+                throw new InvalidOperationException($"No publishing upcaster exists for '{documentKind}' v{version} to v{version + 1}.");
             content = upcaster.Upcast(content);
             version++;
         }
         if (version != current)
-            throw new InvalidOperationException($"Publishing document '{envelope.DocumentKind}' has unsupported future version v{version}; current is v{current}.");
+            throw new InvalidOperationException($"Publishing document '{documentKind}' has unsupported future version v{version}; current is v{current}.");
         return content.Deserialize<T>(Options)
-            ?? throw new InvalidOperationException($"Publishing document '{envelope.DocumentKind}/{envelope.Id}' deserialized to null.");
+            ?? throw new InvalidOperationException($"Publishing document '{documentKind}/{id}' deserialized to null.");
     }
 
     public static int CurrentFor(string documentKind) => CurrentVersions.TryGetValue(documentKind, out var version)

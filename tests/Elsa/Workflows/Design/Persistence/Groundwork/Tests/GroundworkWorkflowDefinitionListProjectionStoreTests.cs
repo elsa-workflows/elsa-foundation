@@ -1,40 +1,28 @@
-using System.Text.Json;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
+using Groundwork.Query.Model;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
 {
+    private static WorkflowDefinitionState EmptyState() => WorkflowDefinitionState.Empty;
+
     [Fact]
     public async Task Lists_current_draft_latest_version_and_version_count_for_every_requested_definition()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
-            Draft("draft-old", "definition-1", 1));
-        await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
-            Draft("draft-current", "definition-1", 2));
-        await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-            Version("version-1", "definition-1", "1.0.0"));
-        await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
-            Version("version-2", "definition-1", "2.0.0"));
-        var bounded = new RecordingBoundedDocumentStore(store);
-
+        using var raw = new DesignGroundworkTestPersistence();
+        raw.RecordQueries = true;
+        raw.SeedDraft(Draft("draft-old", "definition-1", 1));
+        raw.SeedDraft(Draft("draft-current", "definition-1", 2));
+        raw.SeedVersion(Version("version-1", "definition-1", "1.0.0"));
+        raw.SeedVersion(Version("version-2", "definition-1", "2.0.0"));
         var projections = await new GroundworkWorkflowDefinitionListProjectionStore(
-                store,
-                bounded,
-                new FakePayloadSerializer(),
-                GroundworkTestAccess.DefaultAccessContextAccessor)
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor)
             .ListByDefinitionIdsAsync(["definition-1", "definition-2", "definition-1"]);
 
         var populated = Assert.Single(projections, x => x.WorkflowDefinitionId == "definition-1");
@@ -42,94 +30,83 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Equal("version-2", populated.LatestVersionId);
         Assert.Equal("2.0.0", populated.LatestVersion);
         Assert.Equal(2, populated.VersionCount);
-
         var empty = Assert.Single(projections, x => x.WorkflowDefinitionId == "definition-2");
         Assert.Null(empty.DraftId);
         Assert.Null(empty.LatestVersionId);
         Assert.Null(empty.LatestVersion);
         Assert.Equal(0, empty.VersionCount);
 
-        var queries = bounded.Queries.OrderBy(query => query.QueryIdentity, StringComparer.Ordinal).ToArray();
-        Assert.Equal(2, queries.Length);
-        var drafts = queries.Single(query => query.QueryIdentity == WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery);
+        Assert.Equal(2, raw.Queries.Count);
         AssertBatchQuery(
-            drafts,
+            raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.DraftByDefinitionIndex),
+            WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
             WorkflowsDesignStorageManifest.DraftDefinitionIdField,
             ["definition-1", "definition-2"],
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder);
-        var versions = queries.Single(query => query.QueryIdentity == WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery);
+            [
+                WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
+                WorkflowsDesignStorageManifest.DraftCreatedAtField,
+                WorkflowsDesignStorageManifest.DraftIdField
+            ]);
         AssertBatchQuery(
-            versions,
+            raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.VersionByDefinitionIndex),
+            WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
             WorkflowsDesignStorageManifest.VersionDefinitionIdField,
             ["definition-1", "definition-2"],
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder);
+            [
+                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
+                WorkflowsDesignStorageManifest.VersionIdField
+            ]);
     }
 
     [Fact]
     public async Task Oversized_definition_sets_are_partitioned_into_deterministic_bounded_batches()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var bounded = new RecordingBoundedDocumentStore(store);
-        var projections = new GroundworkWorkflowDefinitionListProjectionStore(
-            store,
-            bounded,
-            new FakePayloadSerializer(),
-            GroundworkTestAccess.DefaultAccessContextAccessor);
-        // 450 distinct ids requested in reverse order, with duplicates sprinkled in.
+        using var raw = new DesignGroundworkTestPersistence();
+        raw.RecordQueries = true;
         var requested = Enumerable.Range(0, 450).Select(index => $"definition-{index:D3}").Reverse().ToList();
-        requested.AddRange(requested.Take(10).ToArray());
-
-        var rows = await projections.ListByDefinitionIdsAsync(requested);
-
-        // One row per distinct requested id, in first-seen request order.
+        requested.AddRange(requested.Take(10));
+        var rows = await new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor)
+            .ListByDefinitionIdsAsync(requested);
         Assert.Equal(450, rows.Count);
         Assert.Equal(requested.Distinct(StringComparer.Ordinal), rows.Select(row => row.WorkflowDefinitionId));
-
-        // Each document kind was read in three canonical ordinal batches of at most the declared
-        // membership cardinality — never one oversized request and never a full-kind fetch.
-        foreach (var queryIdentity in new[]
+        Assert.Equal(6, raw.Queries.Count);
+        Assert.All(raw.Queries, query => Assert.Contains(
+            query.IndexName,
+            new[] { WorkflowsDesignStorageManifest.DraftByDefinitionIndex, WorkflowsDesignStorageManifest.VersionByDefinitionIndex }));
+        foreach (var index in new[]
                  {
-                     WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
-                     WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery
+                     WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
+                     WorkflowsDesignStorageManifest.VersionByDefinitionIndex
                  })
         {
-            var batches = bounded.Queries
-                .Where(query => query.QueryIdentity == queryIdentity)
-                .Select(query => Assert.Single(Assert.Single(query.Clauses).Comparisons).Values.Select(value => value!).ToArray())
-                .OrderBy(batch => batch[0], StringComparer.Ordinal)
+            var batches = raw.Queries
+                .Where(query => query.IndexName == index)
+                .Select(query => Assert.IsType<Predicate.In>(query.Request.Where).Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray())
                 .ToArray();
             Assert.Equal(3, batches.Length);
             Assert.Equal([200, 200, 50], batches.Select(batch => batch.Length));
-            Assert.Equal("definition-000", batches[0][0]);
-            Assert.Equal("definition-449", batches[^1][^1]);
+            Assert.Equal("definition-000", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).First());
+            Assert.Equal("definition-449", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).Last());
         }
     }
 
     [Fact]
     public async Task Empty_definition_set_returns_without_provider_io()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var bounded = new RecordingBoundedDocumentStore(store);
-        var projections = await new GroundworkWorkflowDefinitionListProjectionStore(
-                store,
-                bounded,
-                new FakePayloadSerializer(),
-                GroundworkTestAccess.DefaultAccessContextAccessor)
+        using var raw = new DesignGroundworkTestPersistence();
+        var rows = await new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor)
             .ListByDefinitionIdsAsync([]);
-
-        Assert.Empty(projections);
-        Assert.Empty(bounded.Queries);
-    }
-
-    private static async Task SaveAsync<TEntity>(
-        IDocumentStore store,
-        string documentKind,
-        string collection,
-        TEntity entity) where TEntity : Elsa.Primitives.Entities.Entity
-    {
-        var document = new GroundworkDocument<TEntity>(collection, entity);
-        var content = JsonSerializer.Serialize(document, GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer()));
-        await store.SaveAsync(new SaveDocumentRequest(documentKind, entity.Id, WorkflowsDesignStorageManifest.SchemaVersion, content));
+        Assert.Empty(rows);
+        Assert.Equal(0, raw.LoadCount);
+        Assert.Empty(raw.Queries);
     }
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId, int day) => new()
@@ -144,19 +121,17 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
     private static WorkflowDefinitionVersion Version(string id, string definitionId, string version) =>
         new(definitionId, version) { Id = id, State = EmptyState() };
 
-    private static WorkflowDefinitionState EmptyState() => WorkflowDefinitionState.Empty;
-
     private static void AssertBatchQuery(
-        DocumentQuery query,
-        string path,
-        IReadOnlyCollection<string> values,
-        IReadOnlyList<DocumentQueryOrder> order)
+        DesignGroundworkTestPersistence.RecordedQuery query,
+        string index,
+        string predicateColumn,
+        IReadOnlyList<string> values,
+        IReadOnlyList<string> order)
     {
-        Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(path, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.In, comparison.Operator);
-        Assert.Equal(values, comparison.Values.Select(value => value!).ToArray());
-        Assert.Equal(order, query.Order);
+        Assert.Equal(index, query.IndexName);
+        var predicate = Assert.IsType<Predicate.In>(query.Request.Where);
+        Assert.Equal(predicateColumn, predicate.Column.Name);
+        Assert.Equal(values, predicate.Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray());
+        Assert.Equal(order, query.Request.Order.Select(term => term.Column.Name));
     }
 }

@@ -45,85 +45,17 @@ public sealed class GroundworkPersistenceLifetimeTests
     private static readonly LongerLivedException[] LongerLivedExceptions =
     [
         new(
-            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkStorageCompositionRegistration.cs",
-            "IPhysicalSchemaManifestSource",
-            "The deployment schema source is one immutable application-wide value shared by runtime admission and schema tooling; it carries no request context or mutable operation state."),
+            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs",
+            "GroundworkOpenTelemetryStore",
+            "The diagnostics drain owns one application-lifetime buffered store and provider connection; each write opens and disposes fresh provider sessions and the store retains no request context."),
         new(
-            "src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs",
-            "global::Groundwork.DiagnosticRecords.IDiagnosticRecordDeploymentManifestSource",
-            "The diagnostics deployment contract aliases the same immutable application-wide schema value used by runtime admission and schema tooling; it carries no request context or mutable operation state."),
+            "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogsPersistenceFeature.cs",
+            "GroundworkStructuredLogStore",
+            "The diagnostics drain owns one application-lifetime buffered store and provider connection; each operation opens and disposes fresh provider sessions and the store retains no request context."),
         new(
-            "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkReferenceDeploymentSchemaSelector.cs",
-            "IDiagnosticRecordDeploymentManifestSource",
-            "The diagnostics deployment contract aliases the selected immutable application-wide reference schema; it carries no request context or mutable operation state."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
-            "GroundworkTargetAdmissionInitializer",
-            "One driver admits every declared target once at startup and holds no request context; per-target admission state lives in the provider initializers it drives."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
+            "src/Elsa/Persistence/Groundwork/V2/GroundworkStorageUnitRegistration.cs",
             "IShellInitializer",
-            "This application-lifetime alias exposes the same admission driver through the shell contract."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkTargetAdmissionRegistration.cs",
-            "IGroundworkTargetAdmission",
-            "Each provider leaf contributes one application-lifetime admission per target; admission runs once at startup and retains no request state."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
-            "GroundworkStoreSessionSource",
-            "The provider publishes one application-lifetime factory over admitted static resources; every invocation returns a fresh access-bound session and the source stores no request context."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkStoreSessionRegistration.cs",
-            "IGroundworkStoreSessionSource",
-            "This interface aliases the same provider-owned static session source; access selection remains an argument to each invocation and is never retained."),
-        new(
-            "src/Elsa/Persistence/Groundwork/Sqlite/Unified/DependencyInjection/GroundworkSqliteUnifiedRegistration.cs",
-            "IDiagnosticRecordStoreSessionFactory",
-            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
-        new(
-            "src/Elsa/Persistence/Groundwork/SqlServer/Unified/DependencyInjection/GroundworkSqlServerUnifiedRegistration.cs",
-            "IDiagnosticRecordStoreSessionFactory",
-            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
-        new(
-            "src/Elsa/Persistence/Groundwork/PostgreSql/Unified/DependencyInjection/GroundworkPostgreSqlUnifiedRegistration.cs",
-            "IDiagnosticRecordStoreSessionFactory",
-            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
-        new(
-            "src/Elsa/Persistence/Groundwork/MongoDb/Unified/DependencyInjection/GroundworkMongoDbUnifiedRegistration.cs",
-            "IDiagnosticRecordStoreSessionFactory",
-            "The provider publishes one immutable connection-bound factory; every invocation admits the deployment and returns a fresh scope-bound, deterministically disposable diagnostic-record session."),
-        new(
-            "src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs",
-            "SqliteGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/SqlServer/DependencyInjection/SqlServerGroundworkDocumentStoreRegistration.cs",
-            "SqlServerGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/PostgreSql/DependencyInjection/PostgreSqlGroundworkDocumentStoreRegistration.cs",
-            "PostgreSqlGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/MongoDb/DependencyInjection/MongoDbGroundworkDocumentStoreRegistration.cs",
-            "MongoDbGroundworkDocumentStoreInitializer",
-            "The shell initializer owns one provider startup lifecycle and delegates every access-bound runtime operation to scoped sessions."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
-            "GroundworkSchemaReadinessTask",
-            "The readiness guard is a stateless one-shot Start-phase validator over the application-lifetime session source; it opens no sessions and retains no request context."),
-        new(
-            "src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkSchemaReadinessRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same readiness guard through the shell contract."),
-        new(
-            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkDiagnosticRecordDeploymentRegistration.cs",
-            "GroundworkDiagnosticRecordDeploymentInitializer",
-            "The shared shell and host initializer owns one idempotent provider-startup deployment lifecycle and retains no request or diagnostic-record session state."),
-        new(
-            "src/Elsa/Persistence/Groundwork/Unified/DependencyInjection/GroundworkDiagnosticRecordDeploymentRegistration.cs",
-            "IShellInitializer",
-            "This application-lifetime alias exposes the same diagnostic-record deployment initializer through the shell contract.")
+            "This application-lifetime alias exposes the stateless v2 schema-admission source through the shell lifecycle contract; access-bound provider sessions remain operation-local.")
     ];
 
     private static readonly ScopedConsumerRegistration[] ScopedConsumerRegistrations =

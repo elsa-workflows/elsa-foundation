@@ -73,7 +73,7 @@ internal static class GroundworkReplayCursorCodec
 
     private static string BindingHash(StructuredLogStoreBinding binding)
     {
-        var canonical = $"{binding.TenantId.Length}:{binding.TenantId}{binding.ScopeId.Length}:{binding.ScopeId}{binding.StreamId.Length}:{binding.StreamId}";
+        var canonical = StructuredLogsGroundworkStorageSchema.CanonicalBinding(binding);
         return Base64Url(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 

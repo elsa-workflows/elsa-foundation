@@ -63,10 +63,12 @@ material. Replace it only when specializing that complete Groundwork origination
 ## Storage manifest declaration
 
 `WorkflowsDesignGroundworkStorageManifestSource` (feature identity `elsa-workflows-design`) implements
-`IGroundworkStorageManifestSource`. It contributes `WorkflowsDesignStorageManifest.Create()` and
-declares the read ports it owns
-(`IWorkflowDefinitionStore`, `IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionDraftStore`,
-`IWorkflowDefinitionListProjectionStore`, `IWorkflowDefinitionVersionLayoutStore`).
+`IGroundworkStorageLane` and nothing more. The lane declares its storage units directly against the
+public v2 catalog — `AddGroundworkStorageUnit` over `WorkflowsDesignStorageManifest.CreateUnits()` — so
+it contributes no composed host manifest and provisions its own schema. The identity exists because a
+caller spanning lanes has to resolve which target holds this one before it can decide how to commit;
+implementing `IGroundworkStorageManifestSource` instead would pull the lane back into the v1
+document-store closure.
 
 The manifest declares each storage unit's projected columns, logical and physical indexes, and the
 bounded, scale-bearing queries (`BoundedQueryExecutionClass.ScaleBearing`) that the provider admits.
@@ -138,8 +140,8 @@ It:
 
 - swaps every replacement contract in the tables above to its Groundwork implementation
   (`RemoveAll<T>()` then `AddScoped<T, …>()`), enforcing the one-active-provider rule;
-- contributes `WorkflowsDesignGroundworkStorageManifestSource` and the shared
-  `GroundworkDesignAtomicWriteStorageManifestSource` as `IGroundworkStorageManifestSource` enumerables;
+- binds the lane with `AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>()` and
+  declares its v2 units with `AddGroundworkStorageUnit` over `WorkflowsDesignStorageManifest.CreateUnits()`;
 - registers the `IDesignAtomicWriter` and `IDraftOriginator` specialization seams with `TryAddScoped`;
 - registers the default entity factories.
 

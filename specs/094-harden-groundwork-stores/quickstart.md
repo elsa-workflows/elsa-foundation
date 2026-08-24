@@ -99,7 +99,7 @@ Pre-freeze verification restored the exact package/tool family and passed:
 - the focused runtime/IAM-secrets/Identity evidence contract slice (9 passed, four publication-only
   tests explicitly skipped without opt-in); and
 - offline resolution of the reference composition through
-  `GroundworkAllFeaturesWithIdentityDeploymentSchema` for SQLite, PostgreSQL, SQL Server, and MongoDB,
+  the now-single `GroundworkAllFeaturesDeploymentSchema` for SQLite, PostgreSQL, SQL Server, and MongoDB,
   each with status `ready` and zero diagnostics. This preparation check did not include the diagnostics
   manifest sources.
 
@@ -632,7 +632,7 @@ Also run invalid compositions: missing source, duplicate unit, unsupported route
 
 Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped unified leaves register
 `GroundworkAllFeaturesDeploymentSchema` as their six-family runtime authority; hosts that explicitly select
-Groundwork Identity use `GroundworkAllFeaturesWithIdentityDeploymentSchema` instead. Both types live in
+Groundwork Identity now contributes direct public-v2 units and keeps `GroundworkAllFeaturesDeploymentSchema`. The type lives in
 `Elsa.Persistence.Groundwork.ReferenceComposition.dll`:
 
 ```bash

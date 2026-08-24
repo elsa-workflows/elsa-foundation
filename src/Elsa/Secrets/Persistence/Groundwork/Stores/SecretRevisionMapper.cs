@@ -1,12 +1,11 @@
 using Elsa.Secrets.Core.Contracts;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Secrets.Persistence.Groundwork.Stores;
 
 internal static class SecretRevisionMapper
 {
-    public static string Revision(DocumentEnvelope envelope) =>
-        SecretRevisionStamp.FromVersion(envelope.Version).ToString();
+    public static string Revision(long version) => SecretRevisionStamp.FromVersion(version).ToString();
 
     public static bool TryExpectedVersion(string? revision, out long? expectedVersion)
     {
@@ -26,17 +25,18 @@ internal static class SecretRevisionMapper
         return false;
     }
 
-    public static SecretRevisionSaveResult ToResult(DocumentStoreWriteResult result) =>
+    public static SecretRevisionSaveResult ToResult(WriteOutcome result) =>
         result.Status switch
         {
-            DocumentStoreWriteStatus.Saved when result.Document is not null =>
-                new SecretRevisionSaveResult(SecretRevisionSaveStatus.Saved, Revision(result.Document)),
-            DocumentStoreWriteStatus.Saved =>
-                new SecretRevisionSaveResult(SecretRevisionSaveStatus.Saved),
-            DocumentStoreWriteStatus.NotFound =>
+            WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted
+                when result.Version is { } version =>
+                new SecretRevisionSaveResult(SecretRevisionSaveStatus.Saved, Revision(version)),
+            WriteOutcomeStatus.NotFound =>
                 new SecretRevisionSaveResult(SecretRevisionSaveStatus.NotFound),
             _ =>
-                new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict)
+                result.Detail.Status == WriteOutcomeStatus.NotFound
+                    ? new SecretRevisionSaveResult(SecretRevisionSaveStatus.NotFound)
+                    : new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict)
         };
 
     public static SecretRevisionSaveResult InvalidRevision() =>

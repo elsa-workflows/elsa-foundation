@@ -1,138 +1,57 @@
-using CShells.Features;
-using Elsa.Persistence.Groundwork.MongoDb.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.Unified.Composition;
-using Elsa.Persistence.Groundwork.Unified.DependencyInjection;
-using Elsa.Workflows.Dashboard.Persistence.Groundwork.MongoDb;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
-using Groundwork.DiagnosticRecords;
-using Groundwork.MongoDb.DiagnosticRecords;
+using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using MongoDB.Driver;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 
-/// <summary>Materializes the host-selected Elsa store families through one MongoDB provider target.</summary>
+/// <summary>
+/// Backs every provider-level Elsa store family — runtime, distributed runtime, workflows design,
+/// activities design and publishing — with one MongoDB Groundwork target. Identity is selected
+/// explicitly by its own feature.
+/// </summary>
+/// <remarks>
+/// The storage session source admits each lane's declared units against this connection when the host
+/// starts, so there is nothing for a caller to schedule or opt out of.
+/// </remarks>
 public static class GroundworkMongoDbUnifiedRegistration
 {
-    /// <param name="autoApplyOnStartup">Apply safe pending schema operations at startup instead of throwing.</param>
+    /// <param name="services">The host service collection.</param>
+    /// <param name="connectionString">The MongoDB connection string the single provider connection opens.</param>
+    /// <param name="databaseName">The database every lane's collections live in.</param>
     public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        string databaseName,
-        bool autoApplyOnStartup = false) =>
-        services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
+        string databaseName) =>
+        services.AddGroundworkMongoDbUnifiedPersistence(
             connectionString,
             databaseName,
-            new WorkflowExecutableCacheOptions(),
-            autoApplyOnStartup);
+            new WorkflowExecutableCacheOptions());
 
     /// <summary>Registers unified MongoDB persistence with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
         string databaseName,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
-        bool autoApplyOnStartup = false)
-    {
-        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        return services.AddGroundworkMongoDbUnifiedPersistence<GroundworkAllFeaturesDeploymentSchema>(
-            connectionString,
-            databaseName,
-            workflowExecutableCacheOptions,
-            autoApplyOnStartup);
-    }
-
-    /// <summary>Registers the schema selected from the current shell's enabled feature descriptors.</summary>
-    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
-        this IServiceCollection services,
-        string connectionString,
-        string databaseName,
-        ShellFeatureContext context,
-        bool autoApplyOnStartup = false) =>
-        services.AddGroundworkMongoDbUnifiedPersistence(
-            connectionString,
-            databaseName,
-            context,
-            new WorkflowExecutableCacheOptions(),
-            autoApplyOnStartup);
-
-    /// <summary>Registers the current shell schema with explicit executable-cache options.</summary>
-    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence(
-        this IServiceCollection services,
-        string connectionString,
-        string databaseName,
-        ShellFeatureContext context,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
-        bool autoApplyOnStartup = false)
-    {
-        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddGroundworkReferenceDeploymentSchema(context);
-        return services.AddGroundworkMongoDbUnifiedPersistenceCore(
-            connectionString,
-            databaseName,
-            workflowExecutableCacheOptions,
-            autoApplyOnStartup);
-    }
-
-    /// <summary>
-    /// Registers the unified MongoDB substrate against an explicitly selected deployment schema.
-    /// Feature services, including Identity, remain independently selected by the host.
-    /// </summary>
-    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
-        this IServiceCollection services,
-        string connectionString,
-        string databaseName,
-        bool autoApplyOnStartup = false)
-        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new() =>
-        services.AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
-            connectionString,
-            databaseName,
-            new WorkflowExecutableCacheOptions(),
-            autoApplyOnStartup);
-
-    /// <summary>Registers an explicit deployment schema with explicit executable-cache options.</summary>
-    public static IServiceCollection AddGroundworkMongoDbUnifiedPersistence<TDeploymentSource>(
-        this IServiceCollection services,
-        string connectionString,
-        string databaseName,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
-        bool autoApplyOnStartup = false)
-        where TDeploymentSource : GroundworkDeploymentSchemaManifestSource, new()
-    {
-        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddGroundworkReferenceDeploymentSchema<TDeploymentSource>();
-        return services.AddGroundworkMongoDbUnifiedPersistenceCore(
-            connectionString,
-            databaseName,
-            workflowExecutableCacheOptions,
-            autoApplyOnStartup);
-    }
-
-    private static IServiceCollection AddGroundworkMongoDbUnifiedPersistenceCore(
-        this IServiceCollection services,
-        string connectionString,
-        string databaseName,
-        WorkflowExecutableCacheOptions workflowExecutableCacheOptions,
-        bool autoApplyOnStartup)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        services.AddMongoDbGroundworkDocumentStore(connectionString, databaseName, autoApplyOnStartup);
-        services.TryAddSingleton<IDiagnosticRecordDeploymentApplier>(
-            _ => MongoDbDiagnosticRecordStoreFactory.CreateDeploymentApplier(connectionString, databaseName));
-        services.TryAddSingleton<IDiagnosticRecordStoreSessionFactory>(
-            _ => MongoDbDiagnosticRecordStoreFactory.CreateSessionFactory(connectionString, databaseName));
-        services.AddGroundworkDiagnosticRecordDeploymentInitializer(autoApplyOnStartup);
+
+        // The v2 provider takes one connection string, so the explicitly named database wins over any
+        // database the caller happened to encode in the string itself.
+        services.AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+            new MongoUrlBuilder(connectionString) { DatabaseName = databaseName }.ToString()));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
-        // Resolved per lane rather than closed over this preset's single database. The preset is a
-        // one-target default, not a promise that the lanes stay together: a host can bind the design lane to
-        // a second target afterwards, and the tiles have to follow it there instead of quietly counting the
-        // wrong database.
-        services.AddGroundworkMongoDbWorkflowDashboardForLanes();
+        // Both tiles read the v2 lanes through the storage session source, so they need no connection
+        // of their own and follow whatever target each lane is bound to.
+        services.AddGroundworkV2WorkflowRunHealth();
+        services.AddGroundworkV2WorkflowPortfolio();
         return services;
     }
 }

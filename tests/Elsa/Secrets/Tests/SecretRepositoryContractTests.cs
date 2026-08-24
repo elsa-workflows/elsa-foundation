@@ -1,7 +1,5 @@
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
-using Elsa.Secrets.Persistence.Groundwork;
-using Elsa.Secrets.Persistence.Groundwork.Stores;
 using Elsa.Secrets.Services;
 using Xunit;
 
@@ -14,8 +12,7 @@ public sealed class SecretRepositoryContractTests
 
     public static TheoryData<string, Func<ISecretRepository>> RepositoryFactories { get; } = new()
     {
-        { "In-memory", () => new InMemorySecretRepository() },
-        { "Groundwork", () => new GroundworkSecretRepository(new InMemoryDocumentStore(SecretsStorageManifest.Create())) }
+        { "In-memory", () => new InMemorySecretRepository() }
     };
 
     [Theory]

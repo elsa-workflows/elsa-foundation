@@ -13,6 +13,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.TestHost" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
 		<PackageReference Include="xunit" />
 		<PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
@@ -31,7 +32,6 @@
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
-		<ProjectReference Include="..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
 		<ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
 		<ProjectReference Include="..\..\..\..\..\benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
 	</ItemGroup>

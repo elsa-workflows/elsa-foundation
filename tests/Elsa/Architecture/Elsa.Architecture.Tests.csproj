@@ -92,6 +92,8 @@
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

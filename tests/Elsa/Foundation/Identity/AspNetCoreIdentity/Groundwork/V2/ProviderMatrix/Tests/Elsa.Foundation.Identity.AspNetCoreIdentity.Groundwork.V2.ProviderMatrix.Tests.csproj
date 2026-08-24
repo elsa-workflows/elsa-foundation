@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Data.SqlClient" VersionOverride="7.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="MongoDB.Driver" VersionOverride="3.10.0" />
+    <PackageReference Include="Testcontainers.MongoDb" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../../../../../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <ProjectReference Include="../../../../../../../../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../../../src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../Testing/IdentityProcessProbeProtocol.cs" Link="Testing/IdentityProcessProbeProtocol.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityNativeProviderScenario.cs" Link="Fixtures/AspNetCoreIdentityNativeProviderScenario.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityGroundworkAcceptanceFixture.cs" Link="Fixtures/AspNetCoreIdentityGroundworkAcceptanceFixture.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityGroundworkStoreFixture.cs" Link="Fixtures/AspNetCoreIdentityGroundworkStoreFixture.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityScenarioData.cs" Link="Fixtures/AspNetCoreIdentityScenarioData.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityScenarioResult.cs" Link="Fixtures/AspNetCoreIdentityScenarioResult.cs" />
+    <Compile Include="../../../Tests/Fixtures/AspNetCoreIdentityTestPersistence.cs" Link="Fixtures/AspNetCoreIdentityTestPersistence.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <Target Name="CopyIdentityProcessProbeArtifacts" AfterTargets="Build">
+    <RemoveDir Directories="$(TargetDir)IdentityProcessProbe" />
+    <ItemGroup>
+      <_IdentityProcessProbeArtifact Include="$(MSBuildProjectDirectory)/../../../ProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_IdentityProcessProbeArtifact)"
+          DestinationFiles="@(_IdentityProcessProbeArtifact->'$(TargetDir)IdentityProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

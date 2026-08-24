@@ -1,10 +1,10 @@
 # Extension points — Workflows Runtime Distributed Groundwork persistence
 
-The Groundwork document-store bridge that makes the distributed workflow-execution provider durable. It
+The Groundwork v2 row-store adapter that makes the distributed workflow-execution provider durable. It
 replaces the leaf's in-memory placement store and cross-node command transport
 (`InMemoryExecutionPlacementStore`, `InMemoryExecutionCommandTransport`) with Groundwork-backed stores so
 per-execution placement leases and the durable command inbox survive process restarts and are shared across
-nodes through one host-selected document store. The store contracts themselves (`IExecutionPlacementStore`,
+nodes through one host-selected provider connection. The store contracts themselves (`IExecutionPlacementStore`,
 `IExecutionCommandTransport`) are owned by the leaf and catalogued in
 [`Runtime EXTENSION_POINTS`](../../../EXTENSION_POINTS.md); this feature is a concrete,
 overridable persistence provider for them.
@@ -18,39 +18,30 @@ overridable persistence provider for them.
 `AddGroundworkDistributedRuntimeStores()` calls `RemoveAll` for each leaf store contract, then registers the
 Groundwork-backed stores as scoped services. Registration is override-friendly and composition-order-independent
 (the distributed feature registers its in-memory defaults with `TryAddScoped`). The singleton pump and actor provider
-resolve those stores only inside fresh persistence operation scopes. The host selects exactly one provider through
-the SQLite, PostgreSQL, SQL Server, or MongoDB unified registration; that provider materializes the manifest
-snapshot containing `DistributedGroundworkStorageManifest.Create()`. MongoDB must be a writable
+resolve those stores only inside fresh persistence operation scopes. The host selects exactly one public v2 provider
+connection and `AddGroundworkDistributedRuntimeStores()` registers three ordinary scoped storage units. MongoDB must be a writable
 transaction-capable replica set whenever the selected combined host claims checkpoint atomicity.
 
-## Persisted document kinds
+## Persisted storage units
 
-The bridge owns its own `DistributedGroundworkStorageManifest` (identity `elsa-workflows-runtime-distributed`,
-owner `elsa.workflows.runtime.distributed`, schema `1.1.0`), mirroring the Identity/Secrets precedent. The
-document-kind **literals** stay owned by the leaf's `DistributedRuntimeStorageManifest` — wire-safe, stable
-persistence identifiers frozen by committed golden fixtures in the leaf test suite
-(`Fixtures/v1/executionCommandTransport.json`, `Fixtures/v1/executionPlacement.json`).
+The adapter declares fresh v2 units through `DistributedGroundworkStorageManifest.CreateUnits()`. Each row carries
+typed query columns plus one canonical JSON payload for the Elsa domain object. The clean break intentionally has no
+v1 envelope, schema stamp, upcaster, or compatibility path.
 
-| Document kind | Scope | Nested frozen shape | Document id | Declared indexes |
+| Storage unit | Scope | Payload | Primary key | Declared indexes |
 |---|---|---|---|---|
-| `executionPlacement` | Scoped | `ExecutionPlacementLease` (`lease`) | workflow execution id | `placement-by-owner-expiry` |
-| `executionCommandStreamHead` | Scoped | stream-head state | workflow execution id | exact primary-ID read |
-| `executionCommandTransport` | Scoped | `ExecutionCommandTransportItem` (`item`) | `transport:{escaped-execution-id}:{sequence}` | `command-by-execution-sequence`, `pending-command-by-execution-sequence` |
+| `elsa-distributed-execution-placement` (`elsa_distributed_execution_placement`) | Scoped | `ExecutionPlacementLease` | workflow execution id | owner / expiry / workflow execution id |
+| `elsa-distributed-command-stream-head` (`elsa_distributed_command_stream_head`) | Scoped | stream-head state | workflow execution id | exact primary-ID read |
+| `elsa-distributed-command-transport` (`elsa_distributed_command_transport`) | Scoped | `ExecutionCommandTransportItem` | `transport:{escaped-execution-id}:{sequence}` | workflow execution / sequence ascending; workflow execution ascending / sequence descending |
 
-The wrapping documents add only index plumbing (constant collection partition, lifted execution id); the
-nested lease/item is the frozen v1 wire shape, unchanged and drift-test-protected.
-
-The exact scale-bearing bounded-route identities are `list-owned-live-placements`,
-`lease-visible-commands-by-execution`, `list-visible-command-executions`, and
-`count-pending-commands-by-execution`. They run only through the admitted physical route; no descriptive
-“bounded” alias or client-side fallback is a supported route identity.
+The public query model expresses owner/expiry, visibility/sequence, latest-per-execution, total-count, and page
+bounds directly against those declarations.
 
 ## Concurrency model
 
-Every mutation is a storage-level compare-and-swap through the provider's `ExpectedVersion` contract
-(Groundwork spec 014 amendment): first-claims and sends create with `ExpectedVersion = 0` (create-only —
-the provider refuses the loser of a concurrent race at its storage layer), renewals/leases CAS on the loaded
-envelope version, and release/ack CAS-delete. Transport document ids embed the per-execution sequence, so
+Every mutation is a storage-level compare-and-swap through v2 `WriteOptions`: first claims and sends are create-only —
+the provider refuses the loser of a concurrent race at its storage layer — renewals/leases CAS on the loaded
+row version, and release/ack CAS-delete. Transport row ids embed the per-execution sequence, so
 duplicate sequence allocation collides on the id and the loser retries with the next number — sequences are
 strictly unique and monotonic per execution, enforced by the store. Placement is still routing, not the
 correctness backstop: W5 single-writer fencing at checkpoint commit remains the double-execution guard.
@@ -58,20 +49,13 @@ correctness backstop: W5 single-writer fencing at checkpoint commit remains the 
 ## Capability admission and actor fencing
 
 The distributed runtime's process-local default implements `IWorkflowExecutionLeaseFencingCapability` as
-unavailable. This Groundwork leaf replaces it, but returns available only after
-`GroundworkProviderCapabilityAdmission` has published a successful selected-provider snapshot for the exact
-runtime `checkpointCommit` / `runtime-checkpoint-commit` path with `AtomicCommit` and observed
-`multi-document-transactions` topology. Configuration, package support, or a route admitted for another provider
-cannot enable the actor's `LeaseFencing` capability. The provider remains unavailable when startup admission
-fails, so the actor contract cannot advertise a fence it cannot prove.
+unavailable. This Groundwork leaf replaces it and reports available only when the selected v2 connection advertises
+`AtomicCommit`; command sequence-head advancement and row insertion then execute in one exact two-unit UOW.
 
 ## Schema evolution
 
-Both nested document shapes are frozen by the leaf's golden-fixture drift tests. Evolving a shape requires,
-in the same change: bump `DistributedGroundworkStorageManifest.SchemaVersion`, add a reader/upcaster for the
-old stamp in `DistributedGroundworkDocuments` (reads currently fail loudly on any non-current stamp),
-regenerate the leaf fixture (`ELSA_DISTRIBUTED_FIXTURE_REGEN=1`) as a NEW versioned fixture, and keep the old
-fixtures so historical documents still load.
+Catalogs are fresh for the v2 clean break. Future declaration changes use Groundwork's ordinary schema fingerprint
+and apply/verify lifecycle; they do not introduce a v1 data bridge.
 
 ## Cross-references
 

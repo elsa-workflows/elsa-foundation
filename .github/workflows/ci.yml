@@ -112,7 +112,131 @@ jobs:
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
       - name: Test (fast unit tests, no containers)
+        env:
+          GW_EXPLAIN_ARTIFACT_DIR: ${{ github.workspace }}/TestResults/iam-native-plans
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
+
+      - name: Upload IAM native query plans
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam-native-query-plans
+          path: TestResults/iam-native-plans/**/*.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  groundwork-v2-native-provider-matrix:
+    name: Groundwork v2 native provider matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Start transactional native databases
+        run: |
+          docker run --detach --name groundwork-v2-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-postgresql pg_isready -U postgres > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
+
+          sqlserver_ephemeral="$(openssl rand -hex 20)A1!"
+          echo "::add-mask::$sqlserver_ephemeral"
+          docker run --detach --name groundwork-v2-sqlserver --publish 1433:1433 \
+            --env ACCEPT_EULA=Y --env MSSQL_SA_PASSWORD="$sqlserver_ephemeral" \
+            mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "$sqlserver_ephemeral" -C -Q 'select 1' > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-sqlserver
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING=Server=127.0.0.1,1433;User Id=sa;Password=$sqlserver_ephemeral;TrustServerCertificate=True;Encrypt=False;Initial Catalog=master" >> "$GITHUB_ENV"
+
+          docker run --detach --name groundwork-v2-mongodb --publish 27017:27017 mongo:7.0.24 \
+            mongod --replSet groundworkv2 --bind_ip_all
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep -q 1; then
+              break
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-mongodb
+              exit 1
+            fi
+            sleep 1
+          done
+          docker exec groundwork-v2-mongodb mongosh --quiet --eval \
+            "rs.initiate({_id:'groundworkv2',members:[{_id:0,host:'127.0.0.1:27017'}]})"
+          for attempt in {1..60}; do
+            if docker exec groundwork-v2-mongodb mongosh --quiet --eval 'rs.status().myState' | grep -q 1; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs groundwork-v2-mongodb
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Restore Groundwork v2 runtime native proofs
+        run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      - name: Test current Groundwork v2 runtime families on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_runtime?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests'
+          -p:WarningsNotAsErrors=NU1603
+
+      - name: Restore the publishing v2 provider proof
+        run: dotnet restore tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # This project starts no containers, so the container-free lane also runs it -- and there its three
+      # non-SQLite cases skip, because that lane has no connection strings to give them. Running it here
+      # too is what makes the postgresql, sqlserver and mongodb cases actual evidence instead of a
+      # permanent skip; GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX turns a missing string into a
+      # failure, so this step cannot quietly degrade back into skipping.
+      - name: Prove the publishing v2 catalog on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_publishing?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~PublishingGroundworkProviderMatrixTests'
+          -p:WarningsNotAsErrors=NU1603
 
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
@@ -173,11 +297,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # The EF surface ratchet inspects project.assets.json for every repository project, not only
-      # the architecture test dependency graph. Restore the product solution and the intentionally
-      # out-of-solution historical evidence projects so the gate fails closed on real missing assets.
-      - name: Restore repository graph for architecture ratchets
-        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
+      # The EF surface ratchet inspects project.assets.json for every repository project, including
+      # deliberately out-of-solution frozen-oracle projects. Use the fail-closed discovery driver;
+      # a solution restore is not proof that every repository project was restored.
+      - name: Restore every repository project for architecture ratchets
+        run: bash tools/architecture/restore-zero-ef-certification.sh --force-evaluate --receipt artifacts/zero-ef/restore-receipt.json
 
       - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
@@ -190,6 +314,7 @@ jobs:
     name: Alert on a red main
     needs:
       - build-and-test
+      - groundwork-v2-native-provider-matrix
       - groundwork-fast
     if: ${{ failure() && github.event_name == 'push' }}
     permissions:

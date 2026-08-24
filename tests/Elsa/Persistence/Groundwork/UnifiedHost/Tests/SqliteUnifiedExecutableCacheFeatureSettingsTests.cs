@@ -1,5 +1,3 @@
-using CShells;
-using CShells.Features;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -12,8 +10,6 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 {
     private const string EnabledProperty = "CacheWorkflowExecutables";
     private const string CapacityProperty = "WorkflowExecutableCacheCapacity";
-    private const string StoreReuseProperty = "ReuseAccessBoundStores";
-    private const string StoreCapacityProperty = "AccessBoundStoreCacheCapacity";
 
     [Fact]
     public void OriginalConnectionStringRegistrationOverloadIsPreserved()
@@ -54,8 +50,11 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 
         AssertSetting(feature, EnabledProperty, true);
         AssertSetting(feature, CapacityProperty, 256);
-        AssertSetting(feature, StoreReuseProperty, true);
-        AssertSetting(feature, StoreCapacityProperty, 256);
+
+        // The access-bound store cache sized the v1 document-store adapters. The v2 substrate binds access
+        // per session, so those two settings went with the substrate rather than being carried forward.
+        Assert.Null(feature.GetType().GetProperty("ReuseAccessBoundStores"));
+        Assert.Null(feature.GetType().GetProperty("AccessBoundStoreCacheCapacity"));
     }
 
     [Fact]
@@ -72,9 +71,7 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
     }
 
     private static SqliteGroundworkUnifiedPersistenceShellFeature NewFeature() =>
-        new(new ShellFeatureContext(
-            new ShellSettings { Id = new ShellId("sqlite-cache-settings") },
-            []));
+        new();
 
     private static void AssertSetting(object feature, string name, object expected)
     {

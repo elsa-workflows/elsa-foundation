@@ -24,6 +24,61 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public async Task Per_invocation_fixture_setup_runs_before_the_timing_window()
+    {
+        var events = new List<string>();
+        var operation = new PreparedOperation(events);
+
+        await ProcessMeasurement.InvokeOnceForTestAsync(
+            operation,
+            7,
+            () => events.Add("timer-start"),
+            CancellationToken.None);
+
+        Assert.Equal(["prepare:7", "timer-start", "invoke:7"], events);
+    }
+
+    [Theory]
+    [InlineData(99, 30, true)]
+    [InlineData(100, 29, true)]
+    [InlineData(100, 30, false)]
+    public void Steady_state_counts_only_measured_operation_time(
+        int operationCount,
+        int measuredSeconds,
+        bool expected)
+    {
+        var protocol = BenchmarkProtocol.Acceptance;
+
+        var actual = ProcessMeasurement.ShouldContinueForTest(
+            operationCount,
+            TimeSpan.FromSeconds(measuredSeconds),
+            protocol);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void Authoritative_metrics_require_an_exact_round_trip_for_every_latency_sample()
+    {
+        var latencies = new[] { 1d, 2d, 3d };
+        var missing = new OperationSample("read", 3, 30, .1, 2, 2.9, 2.98, latencies);
+        var mismatched = missing with
+        {
+            RoundTrips = 4,
+            RawRoundTrips = [1, 1, 1]
+        };
+        var complete = missing with
+        {
+            RoundTrips = 4,
+            RawRoundTrips = [1, 2, 1]
+        };
+
+        Assert.False(Statistics.HasAuthoritativeRawMetrics(missing));
+        Assert.False(Statistics.HasAuthoritativeRawMetrics(mismatched));
+        Assert.True(Statistics.HasAuthoritativeRawMetrics(complete));
+    }
+
+    [Fact]
     public void Host_fingerprint_is_opaque_and_repository_provenance_rejects_false_or_dirty_heads()
     {
         Assert.Matches("^[0-9a-f]{64}$", HostFingerprint.CaptureSha256());
@@ -561,6 +616,10 @@ public sealed class ProtocolAndGateTests
                     Statistics.Percentile(raw, 95),
                     Statistics.Percentile(raw, 99),
                     raw)
+                {
+                    RoundTrips = raw.Length,
+                    RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
+                }
             ];
         return new ProcessArtifact(
             2,
@@ -578,7 +637,10 @@ public sealed class ProtocolAndGateTests
                     request.NativePlanContentSha256,
                     NativeRoutes(request.MeasurementSetId))),
             operations,
-            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, request.HostFingerprintSha256, "2026-07-24T00:00:00Z"));
+            new MachineMetadata("test-os", "test-runtime", "X64", "X64", 1, request.HostFingerprintSha256, "2026-07-24T00:00:00Z"))
+        {
+            RoundTripInstrumentation = request.ProcessKind == ProcessKind.Measured ? "test-observer" : null
+        };
     }
 
     private static void WriteArtifact(string outputDirectory, RunRequest request)
@@ -641,5 +703,20 @@ public sealed class ProtocolAndGateTests
         public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Correctness must not run for a mismatched host.");
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class PreparedOperation(List<string> events) : IBenchmarkOperation
+    {
+        public string Id => "prepared";
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken)
+        {
+            events.Add($"prepare:{invocation}");
+            return Task.CompletedTask;
+        }
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken)
+        {
+            events.Add($"invoke:{invocation}");
+            return Task.CompletedTask;
+        }
     }
 }

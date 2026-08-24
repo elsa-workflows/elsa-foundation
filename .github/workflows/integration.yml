@@ -51,10 +51,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history, as ci.yml has. AspNetCoreIdentityProviderEvidenceTests resolves checked-in
-          # provenance by commit SHA (`<sha>^{tree}`), which a depth-1 clone cannot see: it fails with
-          # `git exited with code 128: ambiguous argument ... unknown revision`. This job was the only
-          # one taking the shallow default.
+          # Full history, as ci.yml has. Checked-in provider evidence resolves provenance by commit SHA
+          # (`<sha>^{tree}`), which a depth-1 clone cannot see; this job was the only one taking the
+          # shallow default.
           fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4

@@ -1,6 +1,7 @@
+using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Api.Models;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -8,6 +9,14 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public class ActivityExecutionHierarchyTests
 {
+    [Fact]
+    public void Hierarchy_persistence_contract_does_not_claim_layout_projection_ownership()
+    {
+        Assert.DoesNotContain(
+            typeof(IActivityExecutionHierarchyReader).GetMethods(),
+            method => StringComparer.Ordinal.Equals(method.Name, "FindLayoutAsync"));
+    }
+
     [Fact]
     public async Task Pages_TenThousand_Descendants_At_A_Fixed_Watermark_With_Iterative_Depths()
     {
@@ -151,12 +160,54 @@ public class ActivityExecutionHierarchyTests
         var firstHost = new HmacActivityExecutionHierarchyCursorCodec(options);
         var secondHost = new HmacActivityExecutionHierarchyCursorCodec(options);
         var state = new ActivityExecutionHierarchyCursorState(
-            "tenant:a", "structure", "wf", "outer", [], 100, 42, 12, "child");
+            "tenant:a", "structure", "wf", "outer", [], 100, 42, 12, "child",
+            RootSnapshotFingerprint: "root-fingerprint");
 
         var decoded = secondHost.Decode(firstHost.Encode(state));
         Assert.Equal(state.TenantScope, decoded.TenantScope);
         Assert.Equal(state.CommittedThroughSequence, decoded.CommittedThroughSequence);
         Assert.Equal(state.LastActivityExecutionId, decoded.LastActivityExecutionId);
+        Assert.Equal(state.RootSnapshotFingerprint, decoded.RootSnapshotFingerprint);
+    }
+
+    [Fact]
+    public void Hmac_cursor_rejects_tampering_wrong_keys_and_schema_changes()
+    {
+        var codec = new HmacActivityExecutionHierarchyCursorCodec(Options.Create(
+            new ActivityExecutionHierarchyCursorOptions
+            {
+                SigningKey = "groundwork-v2-hierarchy-cursor-key-32-bytes"
+            }));
+        var state = new ActivityExecutionHierarchyCursorState(
+            "tenant:tenant-a",
+            "structure",
+            "wf",
+            "root",
+            [],
+            1,
+            3,
+            2,
+            "child",
+            RootSnapshotFingerprint: "root-fingerprint");
+        var encoded = codec.Encode(state);
+
+        var tampered = encoded[..^1] + (encoded[^1] == 'A' ? "B" : "A");
+        var tamperException = Assert.IsType<ActivityExecutionHierarchyCursorException>(
+            Xunit.Record.Exception(() => codec.Decode(tampered)));
+        Assert.Equal(ActivityExecutionHierarchyCursorFailure.Invalid, tamperException.Failure);
+
+        var wrongKey = new HmacActivityExecutionHierarchyCursorCodec(Options.Create(
+            new ActivityExecutionHierarchyCursorOptions
+            {
+                SigningKey = "different-v2-hierarchy-cursor-key-32-bytes"
+            }));
+        var wrongKeyException = Assert.IsType<ActivityExecutionHierarchyCursorException>(
+            Xunit.Record.Exception(() => wrongKey.Decode(encoded)));
+        Assert.Equal(ActivityExecutionHierarchyCursorFailure.Invalid, wrongKeyException.Failure);
+
+        var schemaException = Assert.IsType<ActivityExecutionHierarchyCursorException>(
+            Xunit.Record.Exception(() => codec.Decode(codec.Encode(state with { SchemaVersion = 2 }))));
+        Assert.Equal(ActivityExecutionHierarchyCursorFailure.Invalid, schemaException.Failure);
     }
 
     [Fact]

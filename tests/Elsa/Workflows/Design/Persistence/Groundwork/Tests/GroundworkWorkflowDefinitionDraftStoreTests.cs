@@ -1,169 +1,163 @@
 using System.Text.Json;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
-/// <summary>
-/// Proves the Groundwork (document) <see cref="GroundworkWorkflowDefinitionDraftStore"/> round-trips the rich
-/// draft (authored <c>State</c> via the payload serializer, navigation/shadow members excluded) and resolves a
-/// draft by its owning definition — the same behaviour as the relational adapter.
-/// </summary>
-public class GroundworkWorkflowDefinitionDraftStoreTests
+public sealed class GroundworkWorkflowDefinitionDraftStoreTests
 {
-    private const string SchemaVersion = WorkflowsDesignStorageManifest.SchemaVersion;
     private static readonly FakePayloadSerializer Payloads = new();
 
-    private static async Task<(GroundworkWorkflowDefinitionDraftStore Store, InMemoryDocumentStore Raw, RecordingBoundedDocumentStore Bounded)> SeededAsync(
-        params WorkflowDefinitionDraft[] drafts)
+    private static WorkflowDefinitionDraft Draft(string id, string definitionId, DateTimeOffset? timestamp = null) => new()
     {
-        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var bounded = new RecordingBoundedDocumentStore(raw);
-        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        Id = id,
+        WorkflowDefinitionId = definitionId,
+        CreatedAt = timestamp ?? default,
+        LastModifiedAt = timestamp ?? default,
+        State = new WorkflowDefinitionState([], null, [], [], null)
+    };
 
-        foreach (var draft in drafts)
-        {
-            var envelope = new GroundworkDocument<WorkflowDefinitionDraft>(
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection, draft);
-            var content = JsonSerializer.Serialize(envelope, options);
-            await raw.SaveAsync(new SaveDocumentRequest(
-                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, draft.Id, SchemaVersion, content));
-        }
-
+    private static (GroundworkWorkflowDefinitionDraftStore Store, DesignGroundworkTestPersistence Raw) Seeded(
+        params (WorkflowDefinitionDraft Draft, IReadOnlyCollection<DesignMetadataRecord>? Layout, IReadOnlyCollection<ActivityPresentationRecord>? Presentation)[] values)
+    {
+        var raw = new DesignGroundworkTestPersistence();
+        raw.RecordQueries = true;
+        foreach (var value in values)
+            raw.SeedDraft(value.Draft, value.Layout, value.Presentation);
         return (new GroundworkWorkflowDefinitionDraftStore(
-            raw,
-            bounded,
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
             Payloads,
-            GroundworkTestAccess.DefaultAccessContextAccessor), raw, bounded);
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor), raw);
     }
-
-    private static WorkflowDefinitionDraft Draft(string id, string definitionId, DateTimeOffset? timestamp = null) =>
-        new()
-        {
-            Id = id,
-            WorkflowDefinitionId = definitionId,
-            CreatedAt = timestamp ?? default,
-            LastModifiedAt = timestamp ?? default,
-            State = new WorkflowDefinitionState([], null, [], [], null),
-        };
 
     [Fact]
     public async Task FindByWorkflowDefinitionId_round_trips_state()
     {
-        var (store, _, bounded) = await SeededAsync(Draft("d1", "def1"), Draft("d2", "def2"));
-
-        var result = await store.FindByWorkflowDefinitionIdAsync("def1");
-
-        Assert.NotNull(result);
-        Assert.Equal("d1", result!.Id);
-        Assert.NotNull(result.State);
-        Assert.Null(result.WorkflowDefinition);
-        var query = Assert.Single(bounded.Queries);
-        Assert.Equal(WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery, query.QueryIdentity);
-        Assert.Equal(BoundedQueryResultOperation.First, query.ResultOperation);
-        AssertComparison(query, WorkflowsDesignStorageManifest.DraftDefinitionIdField, QueryComparisonOperator.Equal, ["def1"]);
-        Assert.Equal(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftOrder,
-            query.Order);
+        var (store, raw) = Seeded((Draft("d1", "def1"), null, null), (Draft("d2", "def2"), null, null));
+        using (raw)
+        {
+            var result = await store.FindByWorkflowDefinitionIdAsync("def1");
+            Assert.NotNull(result);
+            Assert.Equal("d1", result!.Id);
+            Assert.NotNull(result.State);
+            Assert.Null(result.WorkflowDefinition);
+            var query = Assert.Single(raw.Queries);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftByDefinitionIndex, query.IndexName);
+            Assert.Equal(
+                [
+                    WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
+                    WorkflowsDesignStorageManifest.DraftCreatedAtField,
+                    WorkflowsDesignStorageManifest.DraftIdField
+                ],
+                query.Request.Order.Select(term => term.Column.Name));
+            var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
+            Assert.Equal("def1", predicate.Value.Value);
+        }
     }
 
     [Fact]
     public async Task FindByWorkflowDefinitionId_returns_null_when_absent()
     {
-        var (store, _, _) = await SeededAsync(Draft("d1", "def1"));
-        Assert.Null(await store.FindByWorkflowDefinitionIdAsync("other"));
+        var (store, raw) = Seeded((Draft("d1", "def1"), null, null));
+        using (raw) Assert.Null(await store.FindByWorkflowDefinitionIdAsync("other"));
     }
 
     [Fact]
     public async Task ListByWorkflowDefinitionId_uses_the_declared_bounded_route()
     {
-        var (store, _, bounded) = await SeededAsync(Draft("d1", "def1"), Draft("d2", "def2"));
-
-        var result = await store.ListByWorkflowDefinitionIdAsync("def1");
-
-        Assert.Equal(["d1"], result.Select(x => x.Id));
-        var query = Assert.Single(bounded.Queries);
-        Assert.Equal(WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery, query.QueryIdentity);
-        Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
-        AssertComparison(query, WorkflowsDesignStorageManifest.DraftDefinitionIdField, QueryComparisonOperator.Equal, ["def1"]);
+        var (store, raw) = Seeded((Draft("d1", "def1"), null, null), (Draft("d2", "def2"), null, null));
+        using (raw)
+        {
+            Assert.Equal(["d1"], (await store.ListByWorkflowDefinitionIdAsync("def1")).Select(x => x.Id));
+            var query = Assert.Single(raw.Queries);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftByDefinitionIndex, query.IndexName);
+            Assert.Equal(
+                [
+                    WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                    WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
+                    WorkflowsDesignStorageManifest.DraftCreatedAtField,
+                    WorkflowsDesignStorageManifest.DraftIdField
+                ],
+                query.Request.Order.Select(term => term.Column.Name));
+            var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
+            Assert.Equal("def1", predicate.Value.Value);
+        }
     }
 
     [Fact]
     public async Task Current_draft_uses_the_declared_identity_tie_break()
     {
         var timestamp = DateTimeOffset.UnixEpoch.AddDays(1);
-        var first = Draft("draft-a", "def1", timestamp);
-        var second = Draft("draft-b", "def1", timestamp);
-        var (store, _, _) = await SeededAsync(first, second);
-
-        var result = await store.FindByWorkflowDefinitionIdAsync("def1");
-
-        Assert.Equal("draft-b", result?.Id);
+        var (store, raw) = Seeded((Draft("draft-a", "def1", timestamp), null, null), (Draft("draft-b", "def1", timestamp), null, null));
+        using (raw) Assert.Equal("draft-b", (await store.FindByWorkflowDefinitionIdAsync("def1"))?.Id);
     }
 
     [Fact]
     public async Task Legacy_document_with_extra_Errors_property_deserializes_via_the_primary_path_and_retains_layout()
     {
-        // Documents written before validation errors became derived state may still carry an
-        // "errors" property. The primary-path deserializer must accept the unknown member (STJ's
-        // default unmapped-member handling ignores it) rather than failing over to the legacy path
-        // and losing the Layout — this pins the behaviour the draft-document code comment relies on.
-        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
-
         var layout = new[] { new DesignMetadataRecord("root", 1, 2, 3, 4) };
-        // Primary-shape document (collection/entity/layout) plus an extra top-level "errors" member,
-        // serialized through the same options the store uses so the entity/State project correctly.
-        var content = JsonSerializer.Serialize(new
+        var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("d1", "def1");
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var content = JsonSerializer.SerializeToElement(new
         {
             collection = WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
-            entity = Draft("d1", "def1"),
+            entity = draft,
             layout,
-            errors = new[] { new { path = "$workflow", type = "Legacy/Error", message = "stale" } },
+            errors = new[] { new { path = "$workflow", type = "Legacy/Error", message = "stale" } }
         }, options);
-        await raw.SaveAsync(new SaveDocumentRequest(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "d1", SchemaVersion, content));
-
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
+            layout);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.ContentField] = content;
+        raw.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, new StorageValues(row));
         var store = new GroundworkWorkflowDefinitionDraftStore(
-            raw,
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
             Payloads,
-            GroundworkTestAccess.DefaultAccessContextAccessor);
-        var draftWithLayout = await store.FindWithLayoutByIdAsync("d1");
-
-        Assert.NotNull(draftWithLayout);
-        Assert.Equal("def1", draftWithLayout!.Draft.WorkflowDefinitionId);
-        Assert.Equal(layout.Single(), draftWithLayout.Layout.Single());
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+        using (raw)
+        {
+            Assert.Equal(layout, await store.FindLayoutByDraftIdAsync("d1"));
+        }
     }
 
     [Fact]
-    public async Task Stored_document_omits_persistence_artifacts()
+    public async Task FindWithLayout_returns_the_single_rich_document_projection()
     {
-        var (_, raw, _) = await SeededAsync(Draft("d1", "def1"));
-
-        var json = (await raw.LoadAsync(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "d1"))!.ContentJson;
-
-        Assert.Contains("\"state\"", json);
-        Assert.DoesNotContain("stateSource", json);
-        Assert.DoesNotContain("rowNumber", json);
-        Assert.DoesNotContain("workflowDefinition\"", json); // navigation excluded (distinct from workflowDefinitionId)
+        var layout = new[] { new DesignMetadataRecord("root", 1, 2, 3, 4) };
+        var (store, raw) = Seeded((Draft("d1", "def1"), layout, null));
+        using (raw)
+        {
+            var result = await store.FindWithLayoutByIdAsync("d1");
+            Assert.NotNull(result);
+            Assert.Equal("d1", result!.Draft.Id);
+            Assert.Equal(layout, result.Layout);
+        }
     }
 
-    private static void AssertComparison(
-        DocumentQuery query,
-        string path,
-        QueryComparisonOperator operation,
-        IReadOnlyCollection<string> values)
+    [Fact]
+    public void Stored_document_omits_persistence_artifacts()
     {
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(path, comparison.Path);
-        Assert.Equal(operation, comparison.Operator);
-        Assert.Equal(values, comparison.Values.Select(value => value!).ToArray());
+        var (_, raw) = Seeded((Draft("d1", "def1"), null, null));
+        using (raw)
+        {
+            var values = Assert.Single(raw.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind));
+            var json = ((JsonElement)values.Values[WorkflowsDesignStorageManifest.ContentField]!).GetRawText();
+            Assert.Contains("\"state\"", json);
+            Assert.DoesNotContain("stateSource", json);
+            Assert.DoesNotContain("rowNumber", json);
+            Assert.DoesNotContain("workflowDefinition\"", json);
+        }
     }
 }

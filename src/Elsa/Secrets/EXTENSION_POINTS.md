@@ -5,27 +5,20 @@ The `Elsa.Secrets` package provides default services and shell feature registrat
 ## Groundwork persistence — host selection
 
 `Elsa.Secrets.Persistence.Groundwork` is the first-party durable replacement for `ISecretRepository`; the
-contracts in this package remain Groundwork-free. A host selects it through a Groundwork unified provider feature
-(`AddGroundworkSqliteUnifiedPersistence`, `AddGroundworkPostgreSqlUnifiedPersistence`,
-`AddGroundworkSqlServerUnifiedPersistence`, or `AddGroundworkMongoDbUnifiedPersistence`) or through the matching
-shell feature. The selected provider contributes one admitted `IDocumentStore`; this feature contributes the
-Secrets manifest and replaces the repository as a scoped service. See the
-[storage-composition contract](../../../specs/094-harden-groundwork-stores/contracts/storage-composition.md)
-for host-selected manifest/deployment-source rules.
+contracts in this package remain Groundwork-free. Register a Groundwork v2 provider connection and call
+`AddGroundworkSecretsStore()`. The feature contributes one scoped, optimistic `StorageUnit` and replaces the
+repository as a scoped service. A named target can be supplied when a host routes Secrets to a dedicated store.
 
-`SecretsStorageManifest` (`elsa-secrets`, schema `1.3.0`) declares one `secret` document kind backed by the
-physical entity table `secrets`. It is `TenancyPolicy.Scoped`: name, list, and point reads always use the
-access-bound storage scope, never a scope value supplied in secret JSON. `list-filtered` is the exact
-scale-bearing bounded-route identity. `list-unfiltered` and `search-filtered` are explicitly ordinary bounded
-routes; the latter has provider-bound substring residual predicates and is not advertised as a scale-bearing
-indexed scan. A missing route, unsupported predicate, or failed schema admission is a readiness failure—there is
-no client-side whole-collection fallback.
+`SecretsGroundworkStorageSchema` declares the fresh `elsa-secrets` unit. Tenant id and normalized secret name form
+its key, searchable/filterable values are projected into typed columns, and the complete secret is retained in a
+JSON payload. Every repository operation opens an explicit tenant-scoped v2 session. Reads, writes, counts,
+ordering, paging, active-version filtering, and revision preconditions execute through the public Groundwork v2
+Store and Query APIs.
 
-All four production provider leaves use the same manifest and runtime composition. SQL Server and PostgreSQL
-require their real container-backed host paths; MongoDB requires the transaction-capable replica-set topology
-when a selected combined host also claims multi-document atomic behavior. The current package family, including
-`Groundwork.Tool`, is `0.0.1-preview.72`; use the same selected deployment source for runtime admission and CLI
-validation/plan/status/apply.
+Substring search is the one deliberate non-indexed route. It carries the owned, expiring
+`GW-SCAN-ELSA-SECRETS-SUBSTRING` acceptance instead of silently falling back to client materialization. There is no
+v1 document manifest, legacy tenant backfill, wire-format bridge, or migration path: this integration is a clean
+break intended for a fresh store.
 
 ## Service Overrides
 

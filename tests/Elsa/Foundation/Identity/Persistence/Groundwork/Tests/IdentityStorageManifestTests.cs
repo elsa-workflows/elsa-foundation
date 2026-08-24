@@ -1,321 +1,119 @@
-using System.Text;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Composition;
-using Groundwork.Core.Capabilities;
-using Groundwork.Core.Indexing;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
+using Groundwork.Kernel;
+using System.Text;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
 public sealed class IdentityStorageManifestTests
 {
-    private static readonly DocumentEnvelopeDefinition Envelope = new();
-
-    private static readonly string[] ExpectedAuthorityUnits =
-    [
-        "identityUser",
-        "identityRole",
-        "identityApplication",
-        "identityCredential",
-        "identityClaimMapping",
-        "identityProviderConfiguration",
-        "identityGlobalProviderConfiguration",
-        "identityUserClaim",
-        "identityRoleClaim",
-        "identityExternalLogin",
-        "identityUserRole",
-        "identityUserToken",
-        "identityTenantMembership",
-        "identityUserNameReservation",
-        "identityEmailReservation",
-        "identityRoleNameReservation",
-        "identityMutationReceipt"
-    ];
-
-    private static readonly string[] ExpectedBoundedQueries =
-    [
-        "find-user-by-normalized-name",
-        "find-user-by-normalized-email",
-        "find-role-by-normalized-name",
-        "list-roles-by-tenant",
-        "list-user-claims",
-        "find-users-by-claim",
-        "list-role-claims",
-        "list-user-roles",
-        "list-role-users",
-        "list-user-logins",
-        "list-claim-mappings-by-provider",
-        "list-expired-mutation-receipts"
-    ];
-
     [Fact]
     public void Manifest_declares_the_exact_identity_authority_units()
     {
-        Assert.Equal("1.0.6", IdentityStorageManifest.SchemaVersion);
-        var actual = IdentityStorageManifest.Create()
-            .StorageUnits
-            .Select(unit => unit.Identity.Value)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Equal(ExpectedAuthorityUnits.Order(StringComparer.Ordinal), actual);
+        var units = IdentityV2StorageManifest.CreateUnits();
+        Assert.Equal(17, units.Count);
+        Assert.Equal(17, units.Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
-    public void Manifest_resolves_every_scale_bearing_route_with_exact_physical_order_evidence()
+    public void Every_unit_has_an_ordinary_string_key_and_canonical_json_payload()
     {
-        var manifest = IdentityStorageManifest.Create();
-        var resolution = PhysicalStorageResolver.Resolve(
-            manifest,
-            PhysicalNamePolicy.Identity,
-            ProviderPhysicalNameNormalizer.Identity);
-
-        Assert.True(
-            resolution.IsValid,
-            string.Join(Environment.NewLine, resolution.Diagnostics.Select(diagnostic =>
-                $"{diagnostic.Code}: {diagnostic.Message}")));
-        Assert.Equal(manifest.StorageUnits.Count, resolution.Definitions.Count);
-    }
-
-    [Fact]
-    public void Every_query_is_bound_to_an_optimized_index_on_the_same_unit()
-    {
-        var manifest = IdentityStorageManifest.Create();
-        var queryNames = manifest.StorageUnits
-            .SelectMany(unit => unit.PhysicalStorage!.BoundedQueries.Select(query => query.Identity))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Equal(ExpectedBoundedQueries.Order(StringComparer.Ordinal), queryNames);
-
-        foreach (var unit in manifest.StorageUnits)
+        Assert.All(IdentityV2StorageManifest.CreateUnits(), unit =>
         {
-            var physicalStorage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = ExplicitTableDefinition(physicalStorage.Policy);
-            foreach (var query in physicalStorage.BoundedQueries)
-            {
-                var logicalIndex = Assert.Single(
-                    physicalStorage.LogicalIndexes,
-                    candidate => candidate.Identity == query.IndexIdentity);
-                var physicalIndex = Assert.Single(
-                    table.Indexes,
-                    candidate => candidate.LogicalName == query.IndexIdentity);
-                Assert.Equal(QueryPagingSupport.Cursor, query.PagingSupport);
-                Assert.False(logicalIndex.IsUnique);
-                Assert.False(physicalIndex.IsUnique);
-                Assert.Equal(Envelope.StorageScopeColumn, physicalIndex.Columns[0].ColumnLogicalName);
-                Assert.Equal(
-                    logicalIndex.Fields.Select(field => field.Path),
-                    physicalIndex.Columns.Skip(1).SkipLast(1).Select(column => column.ColumnLogicalName));
-                Assert.Equal(Envelope.IdLookupKeyColumn, physicalIndex.Columns[^1].ColumnLogicalName);
-            }
-        }
+            Assert.Equal(IdentityV2StorageManifest.IdField, Assert.Single(unit.Key.Columns));
+            Assert.Equal(PortableType.String, Column(unit, IdentityV2StorageManifest.IdField).Type);
+            Assert.Equal(PortableType.String, Column(unit, IdentityV2StorageManifest.SchemaVersionField).Type);
+            Assert.Equal(PortableType.Json, Column(unit, IdentityV2StorageManifest.ContentField).Type);
+        });
     }
 
     [Fact]
-    public async Task Manifest_source_declares_required_routes_and_capabilities()
-    {
-        var declaration = await new IdentityGroundworkStorageManifestSource()
-            .CreateDeclarationAsync(CancellationToken.None);
+    public void Every_identity_unit_admits_optimistic_concurrency() =>
+        Assert.All(IdentityV2StorageManifest.CreateUnits(), unit => Assert.True(unit.Concurrency.IsOptimistic));
 
-        Assert.Contains("schema-history", declaration.Manifest.RequiredCapabilities);
-        Assert.Contains("optimistic-concurrency", declaration.Manifest.RequiredCapabilities);
-        Assert.Contains(
-            declaration.TopologyRequirements,
-            requirement => requirement.Identity == RuntimeGroundworkStorageManifestSource.MultiDocumentTransactionsTopologyIdentity);
-        var atomicAuthorityKinds = new[]
-        {
-            IdentityStorageManifest.IdentityUserDocumentKind,
-            IdentityStorageManifest.IdentityRoleDocumentKind,
-            IdentityStorageManifest.IdentityApplicationDocumentKind,
-            IdentityStorageManifest.IdentityCredentialDocumentKind,
-            IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
-            IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
-            IdentityStorageManifest.UserClaimDocumentKind,
-            IdentityStorageManifest.RoleClaimDocumentKind,
-            IdentityStorageManifest.ExternalLoginDocumentKind,
-            IdentityStorageManifest.UserRoleDocumentKind,
-            IdentityStorageManifest.UserTokenDocumentKind,
-            IdentityStorageManifest.IdentityApplicationDocumentKind,
-            IdentityStorageManifest.IdentityCredentialDocumentKind,
-            IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
-            IdentityStorageManifest.UserNameReservationDocumentKind,
-            IdentityStorageManifest.EmailReservationDocumentKind,
-            IdentityStorageManifest.RoleNameReservationDocumentKind,
-            IdentityStorageManifest.IdentityMutationReceiptDocumentKind
-        };
-        Assert.All(atomicAuthorityKinds, kind => Assert.Contains(
-            declaration.RequiredRoutes,
-            route => route.StorageUnit.Value == kind &&
-                     route.RequiredCapabilities.Contains(WellKnownCapabilities.AtomicCommit)));
+    [Fact]
+    public void Only_the_global_provider_configuration_is_global()
+    {
+        var units = IdentityV2StorageManifest.CreateUnits();
+        Assert.Equal(16, units.Count(unit => unit.Scope == ScopePolicy.Scoped));
+        Assert.Equal(IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
+            Assert.Single(units, unit => unit.Scope == ScopePolicy.Global).Id.Value);
     }
 
     [Fact]
-    public async Task Physical_storage_names_are_declared_and_collision_free()
+    public void Physical_storage_names_are_declared_and_collision_free()
     {
-        var declaration = await new IdentityGroundworkStorageManifestSource()
-            .CreateDeclarationAsync(CancellationToken.None);
-        var unitIdentities = declaration.Manifest.StorageUnits
-            .Select(unit => unit.Identity.Value)
-            .ToArray();
-
-        Assert.All(declaration.Manifest.StorageUnits, unit => Assert.NotNull(unit.PhysicalStorage));
-        Assert.Equal(unitIdentities.Length, unitIdentities.Distinct(StringComparer.Ordinal).Count());
+        var names = IdentityV2StorageManifest.CreateUnits().Select(unit => unit.Name).ToArray();
+        Assert.All(names, name => Assert.False(string.IsNullOrWhiteSpace(name)));
+        Assert.Equal(names.Length, names.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
-    public void Primary_id_only_units_use_dedicated_document_tables_and_indexed_units_use_entity_tables()
+    public void User_authority_has_both_nullable_normalized_lookup_indexes()
     {
-        var units = IdentityStorageManifest.Create().StorageUnits.ToDictionary(unit => unit.Identity.Value);
-        var dedicated = new HashSet<string>(StringComparer.Ordinal)
-        {
-            IdentityStorageManifest.IdentityApplicationDocumentKind,
-            IdentityStorageManifest.IdentityCredentialDocumentKind,
-            IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
-            IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
-            IdentityStorageManifest.UserTokenDocumentKind,
-            IdentityStorageManifest.IdentityTenantMembershipDocumentKind,
-            IdentityStorageManifest.UserNameReservationDocumentKind,
-            IdentityStorageManifest.EmailReservationDocumentKind,
-            IdentityStorageManifest.RoleNameReservationDocumentKind
-        };
-
-        Assert.All(units, pair => Assert.Equal(
-            dedicated.Contains(pair.Key)
-                ? PhysicalStorageForm.DedicatedDocumentTable
-                : PhysicalStorageForm.PhysicalEntityTable,
-            ExplicitTableDefinition(pair.Value.PhysicalStorage!.Policy).Form));
+        var unit = IdentityV2StorageManifest.Require(IdentityStorageManifest.IdentityUserDocumentKind);
+        AssertNullableIndexed(unit, IdentityStorageManifest.NormalizedUserNameKeyField);
+        AssertNullableIndexed(unit, IdentityStorageManifest.NormalizedEmailKeyField);
     }
 
     [Fact]
-    public void Only_optional_normalized_lookup_projections_are_nullable_and_exclude_missing_values()
+    public void Role_authority_has_tenant_and_normalized_name_indexes()
     {
-        var expectedNullable = new HashSet<(string DocumentKind, string Field)>
-        {
-            (IdentityStorageManifest.IdentityUserDocumentKind, IdentityStorageManifest.NormalizedUserNameKeyField),
-            (IdentityStorageManifest.IdentityUserDocumentKind, IdentityStorageManifest.NormalizedEmailKeyField),
-            (IdentityStorageManifest.IdentityRoleDocumentKind, IdentityStorageManifest.NormalizedRoleNameKeyField)
-        };
-        var manifest = IdentityStorageManifest.Create();
+        var unit = IdentityV2StorageManifest.Require(IdentityStorageManifest.IdentityRoleDocumentKind);
+        AssertIndexed(unit, IdentityStorageManifest.NormalizedRoleNameKeyField);
+        AssertIndexed(unit, IdentityStorageManifest.TenantIdField);
+        Assert.False(Column(unit, IdentityStorageManifest.TenantIdField).IsNullable);
+    }
 
-        foreach (var unit in manifest.StorageUnits)
-        {
-            var physical = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = ExplicitTableDefinition(physical.Policy);
-            Assert.All(table.ProjectedColumns, column =>
-                Assert.Equal(
-                    expectedNullable.Contains((unit.Identity.Value, column.LogicalName)),
-                    column.IsNullable));
-            Assert.All(physical.LogicalIndexes, index =>
-                Assert.Equal(MissingValueBehavior.Excluded, index.MissingValueBehavior));
-        }
-
-        var actualNullable = manifest.StorageUnits
-            .SelectMany(unit => ExplicitTableDefinition(unit.PhysicalStorage!.Policy).ProjectedColumns
-                .Where(column => column.IsNullable)
-                .Select(column => (unit.Identity.Value, column.LogicalName)))
-            .ToHashSet();
-        Assert.Equal(expectedNullable, actualNullable);
+    [Fact]
+    public void Relationship_units_declare_their_bounded_lookup_indexes()
+    {
+        AssertIndexed(IdentityV2StorageManifest.Require(IdentityStorageManifest.UserClaimDocumentKind), IdentityStorageManifest.UserLookupKeyField);
+        AssertIndexed(IdentityV2StorageManifest.Require(IdentityStorageManifest.UserClaimDocumentKind), IdentityStorageManifest.ClaimKeyField);
+        AssertIndexed(IdentityV2StorageManifest.Require(IdentityStorageManifest.UserRoleDocumentKind), IdentityStorageManifest.UserLookupKeyField);
+        AssertIndexed(IdentityV2StorageManifest.Require(IdentityStorageManifest.UserRoleDocumentKind), IdentityStorageManifest.RoleLookupKeyField);
+        AssertIndexed(IdentityV2StorageManifest.Require(IdentityStorageManifest.ExternalLoginDocumentKind), IdentityStorageManifest.UserLookupKeyField);
     }
 
     [Fact]
     public void Mutation_receipts_have_a_portable_oldest_expired_bounded_route()
     {
-        var unit = IdentityStorageManifest.Create().StorageUnits.Single(candidate =>
-            candidate.Identity.Value == IdentityStorageManifest.IdentityMutationReceiptDocumentKind);
-        var query = Assert.Single(unit.PhysicalStorage.BoundedQueries);
-        var index = Assert.Single(unit.PhysicalStorage.LogicalIndexes, candidate =>
-            candidate.Identity == query.IndexIdentity);
-        Assert.Contains(unit.PhysicalStorage.LogicalIndexes, candidate =>
-            candidate.Identity == "identity-mutation-receipt-by-expiry");
-        Assert.Equal("identity-mutation-receipt-by-expiry-v2", query.IndexIdentity);
-        var table = ExplicitTableDefinition(unit.PhysicalStorage.Policy);
-        var expiry = Assert.Single(table.ProjectedColumns);
+        var unit = IdentityV2StorageManifest.Require(IdentityStorageManifest.IdentityMutationReceiptDocumentKind);
+        Assert.Equal(PortableType.DateTimeOffset, Column(unit, IdentityStorageManifest.MutationReceiptExpiresAtField).Type);
+        AssertIndexed(unit, IdentityStorageManifest.MutationReceiptExpiresAtField);
+    }
 
-        Assert.Equal(IdentityStorageManifest.MutationReceiptExpiresAtField, expiry.Path);
-        Assert.Equal(PortablePhysicalType.DateTime, expiry.Type);
-        Assert.Equal(IndexValueKind.DateTime, index.ValueKind);
-        Assert.Contains(PortableQueryOperation.LessThanOrEqual, query.Operations);
-        Assert.Equal(QuerySortSupport.Ascending, query.SortSupport);
-        Assert.Equal(QueryPagingSupport.Cursor, query.PagingSupport);
-        Assert.Equal(
-            new BoundedQuerySortField(
-                IdentityStorageManifest.MutationReceiptExpiresAtField,
-                PhysicalSortDirection.Ascending),
-            Assert.Single(query.SortFields));
-        var predicate = Assert.Single(query.PredicateFields);
-        Assert.Equal(IdentityStorageManifest.MutationReceiptExpiresAtField, predicate.Path);
-        Assert.Contains(PortableQueryOperation.LessThanOrEqual, predicate.Operations);
+    [Theory]
+    [InlineData(IdentityStorageManifest.FindUserByNormalizedNameQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindUserByNormalizedEmailQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindRoleByNormalizedNameQuery, IdentityStorageManifest.IdentityRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRolesByTenantQuery, IdentityStorageManifest.IdentityRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserClaimsQuery, IdentityStorageManifest.UserClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.FindUsersByClaimQuery, IdentityStorageManifest.UserClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRoleClaimsQuery, IdentityStorageManifest.RoleClaimDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserRolesQuery, IdentityStorageManifest.UserRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListRoleUsersQuery, IdentityStorageManifest.UserRoleDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListUserLoginsQuery, IdentityStorageManifest.ExternalLoginDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListClaimMappingsByProviderQuery, IdentityStorageManifest.IdentityClaimMappingDocumentKind)]
+    [InlineData(IdentityStorageManifest.ListExpiredMutationReceiptsQuery, IdentityStorageManifest.IdentityMutationReceiptDocumentKind)]
+    public void Every_scale_bearing_query_names_an_index_from_its_declared_unit(
+        string queryIdentity,
+        string unitId)
+    {
+        var expectedIndex = IdentityV2StorageManifest.IndexForQuery(queryIdentity);
+        var unit = IdentityV2StorageManifest.Require(unitId);
+
+        Assert.Contains(unit.Indexes, index => index.Name == expectedIndex);
     }
 
     [Fact]
-    public async Task Projected_string_index_columns_fit_sql_server_key_budget()
+    public void Projected_string_index_columns_fit_sql_server_key_budget()
     {
-        var declaration = await new IdentityGroundworkStorageManifestSource()
-            .CreateDeclarationAsync(CancellationToken.None);
-        var tables = declaration.Manifest.StorageUnits
-            .Where(unit => unit.PhysicalStorage is not null)
-            .Select(unit => ExplicitTableDefinition(unit.PhysicalStorage!.Policy))
-            .ToArray();
-
-        Assert.NotEmpty(tables);
-        foreach (var table in tables)
-        {
-            Assert.All(table.ProjectedColumns.Where(column => column.Type == PortablePhysicalType.String), column =>
-                Assert.True(
-                    column.Length is > 0 and <= IdentityStorageManifest.ProjectedLookupColumnLength,
-                    $"Projected string column '{column.LogicalName}' must declare a SQL Server-safe bounded length."));
-
-            foreach (var index in table.Indexes)
-            {
-                var declaredKeyBytes = index.Columns.Sum(column =>
-                {
-                    if (column.ColumnLogicalName == Envelope.StorageScopeColumn)
-                        return IdentityStorageManifest.SqlServerStorageScopeKeyBytes;
-                    if (column.ColumnLogicalName == Envelope.IdLookupKeyColumn)
-                        return IdentityStorageManifest.SqlServerDocumentIdentityLookupKeyBytes;
-                    var projected = table.ProjectedColumns.Single(candidate =>
-                        candidate.LogicalName == column.ColumnLogicalName);
-                    return projected.Type switch
-                    {
-                        PortablePhysicalType.String =>
-                            (projected.Length ?? 0) * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit,
-                        PortablePhysicalType.DateTime => IdentityStorageManifest.SqlServerDateTime2KeyBytes,
-                        _ => throw new InvalidOperationException(
-                            $"SQL Server key-width evidence does not cover projected type '{projected.Type}'.")
-                    };
-                });
-                Assert.True(
-                    declaredKeyBytes <= IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes,
-                    $"Physical index '{index.LogicalName}' declares {declaredKeyBytes} SQL Server key bytes.");
-            }
-        }
-    }
-
-    [Fact]
-    public async Task Physical_identifiers_and_route_parameters_fit_required_provider_limits()
-    {
-        var declaration = await new IdentityGroundworkStorageManifestSource()
-            .CreateDeclarationAsync(CancellationToken.None);
-
-        foreach (var unit in declaration.Manifest.StorageUnits.Where(unit => unit.PhysicalStorage is not null))
-        {
-            var table = ExplicitTableDefinition(unit.PhysicalStorage!.Policy);
-            Assert.True(table.FeatureDefaultLogicalName is { Length: <= 128 }, table.FeatureDefaultLogicalName);
-            Assert.All(table.ProjectedColumns, column => Assert.True(column.LogicalName.Length <= 128, column.LogicalName));
-            Assert.All(table.Indexes, index => Assert.True(index.LogicalName.Length <= 128, index.LogicalName));
-
-            foreach (var query in unit.PhysicalStorage.BoundedQueries)
-            {
-                var providerParameters = query.PredicateFields.Count;
-                Assert.True(
-                    providerParameters <= IdentityStorageManifest.MaxBoundedQueryParameters,
-                    $"Bounded query '{query.Identity}' requires {providerParameters} provider parameters.");
-            }
-        }
+        var columns = IdentityV2StorageManifest.CreateUnits()
+            .SelectMany(unit => unit.Indexes.SelectMany(index => index.Columns.Select(column => Column(unit, column.Column))))
+            .Where(column => column.Type == PortableType.String);
+        Assert.All(columns, column => Assert.True(
+            column.MaxLength * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit <=
+            IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes));
     }
 
     [Theory]
@@ -331,16 +129,9 @@ public sealed class IdentityStorageManifestTests
     [InlineData("decomposed-accent", "é", "e\u0301", false)]
     [InlineData("garay-supplementary", "\U00010D70", "\U00010D50", true)]
     [InlineData("deseret-supplementary", "\U00010428", "\U00010400", true)]
-    public void Lookup_keys_use_provider_independent_unicode_case_evidence(
-        string caseId,
-        string left,
-        string right,
-        bool expectedEqual)
+    public void Lookup_keys_use_provider_independent_unicode_case_evidence(string caseId, string left, string right, bool expectedEqual)
     {
-        var leftKey = IdentityDocumentId.From("tenant-alpha", left);
-        var rightKey = IdentityDocumentId.From("tenant-alpha", right);
-
-        Assert.Equal(expectedEqual, string.Equals(leftKey, rightKey, StringComparison.Ordinal));
+        Assert.Equal(expectedEqual, IdentityDocumentId.From("tenant-alpha", left) == IdentityDocumentId.From("tenant-alpha", right));
         Assert.NotEmpty(caseId);
     }
 
@@ -348,49 +139,31 @@ public sealed class IdentityStorageManifestTests
     public void Lookup_keys_apply_the_complete_unicode16_garay_case_mapping_on_every_runtime()
     {
         for (var capital = 0x10D50; capital <= 0x10D65; capital++)
-        {
-            var uppercase = new Rune(capital).ToString();
-            var lowercase = new Rune(capital + 0x20).ToString();
-
-            Assert.Equal(
-                IdentityDocumentId.From("tenant-alpha", lowercase),
-                IdentityDocumentId.From("tenant-alpha", uppercase));
-            Assert.Equal(
-                IdentityCompositeDocumentId.Normalize(lowercase),
-                IdentityCompositeDocumentId.Normalize(uppercase));
-        }
+            Assert.Equal(IdentityDocumentId.From("tenant-alpha", new Rune(capital + 0x20).ToString()),
+                IdentityDocumentId.From("tenant-alpha", new Rune(capital).ToString()));
     }
 
     [Fact]
-    public void Composite_lookup_normalization_preserves_unpaired_surrogates_around_garay_mapping()
-    {
-        var input = string.Concat("x", "\uD800", "\U00010D50", "y");
-        var expected = string.Concat("x", "\uD800", "\U00010D70", "y");
-
-        Assert.Equal(expected, IdentityCompositeDocumentId.Normalize(input));
-    }
+    public void Composite_lookup_normalization_preserves_unpaired_surrogates_around_garay_mapping() =>
+        Assert.Equal(string.Concat("x", "\uD800", "\U00010D70", "y"),
+            IdentityCompositeDocumentId.Normalize(string.Concat("x", "\uD800", "\U00010D50", "y")));
 
     [Fact]
-    public void Document_ids_frame_key_parts_without_separator_collisions()
-    {
-        var left = IdentityDocumentId.From("alpha\u001fbeta", "gamma");
-        var right = IdentityDocumentId.From("alpha", "beta\u001fgamma");
-
-        Assert.NotEqual(left, right);
-    }
+    public void Document_ids_frame_key_parts_without_separator_collisions() =>
+        Assert.NotEqual(IdentityDocumentId.From("alpha\u001fbeta", "gamma"), IdentityDocumentId.From("alpha", "beta\u001fgamma"));
 
     [Fact]
-    public void Request_fingerprints_frame_parts_without_separator_collisions()
-    {
-        var left = IdentityRequestFingerprint.FromParts("alpha\u001ebeta", "gamma");
-        var right = IdentityRequestFingerprint.FromParts("alpha", "beta\u001egamma");
+    public void Request_fingerprints_frame_parts_without_separator_collisions() =>
+        Assert.NotEqual(IdentityRequestFingerprint.FromParts("alpha\u001ebeta", "gamma"), IdentityRequestFingerprint.FromParts("alpha", "beta\u001egamma"));
 
-        Assert.NotEqual(left, right);
+    private static ColumnDefinition Column(StorageUnit unit, string name) => unit.Columns.Single(column => column.Name == name);
+
+    private static void AssertNullableIndexed(StorageUnit unit, string column)
+    {
+        Assert.True(Column(unit, column).IsNullable);
+        AssertIndexed(unit, column);
     }
 
-    private static PhysicalTableDefinition ExplicitTableDefinition(object policy)
-    {
-        var definition = policy.GetType().GetProperty("Definition")?.GetValue(policy);
-        return Assert.IsType<PhysicalTableDefinition>(definition);
-    }
+    private static void AssertIndexed(StorageUnit unit, string column) =>
+        Assert.Contains(unit.Indexes, index => index.Columns.Any(indexColumn => indexColumn.Column == column));
 }

@@ -209,19 +209,18 @@ The stack composes Elsa.Workbench with unified Postgres persistence (via the mou
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
 ```
 
-Expected tables:
+Groundwork gives every storage unit its own table, named after the unit, so `\dt` lists one per
+unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions`,
+`elsa_workflow_definition_drafts`, `elsa_workflow_definition_versions` and their siblings, and the
+runtime lane contributes the `runtime_*` family (`runtime_workflow_execution_state`,
+`runtime_checkpoint_commit`, and so on). Groundwork keeps its own bookkeeping in
+`__groundwork_schema_history` and `__groundwork_search_key_algorithms`.
 
-```
- public | groundwork_document_indexes | table | elsa
- public | groundwork_documents        | table | elsa
- public | groundwork_schema_history   | table | elsa
-```
-
-To see what has been persisted:
+To confirm a workflow you designed actually landed:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa \
-  -c "SELECT document_kind, count(*) FROM groundwork_documents GROUP BY document_kind;"
+  -c "SELECT count(*) FROM elsa_workflow_definitions;"
 ```
 
 For the full explanation of the demo composition (which persistence lanes are included/omitted and

@@ -6,16 +6,15 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Groundwork.DiagnosticRecords" />
-    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Composition\Elsa.Persistence.Groundwork.Composition.csproj" />
-    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
 </Project>

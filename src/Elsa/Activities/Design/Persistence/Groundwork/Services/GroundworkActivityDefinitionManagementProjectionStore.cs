@@ -1,17 +1,16 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Querying;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
 /// <summary>Provider-bound reader for stable temporal Activity Definition management summaries.</summary>
 public sealed class GroundworkActivityDefinitionManagementProjectionStore(
-    IDocumentStore store,
-    IBoundedDocumentStore boundedStore,
+    GroundworkV2ActivityDesignStore store,
+    GroundworkV2ActivityDesignStore boundedStore,
     IPersistenceAccessContextAccessor accessContextAccessor) : IActivityDefinitionManagementProjectionStore
 {
     private static readonly JsonSerializerOptions JsonOptions = GroundworkActivitiesDesignJson.Options;
@@ -40,17 +39,17 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         var clauses = CommonClauses(query, snapshot.Sequence);
         if (query.Authority is { } authority)
         {
-            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ManagementAuthorityField,
                 Convert.ToInt32(authority, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture))));
         }
         if (!string.IsNullOrWhiteSpace(query.ProviderKey))
         {
-            clauses.Add(DocumentQueryClause.AnyOf(
-                DocumentQueryComparison.Equal(
+            clauses.Add(ActivityDesignQueryClause.AnyOf(
+                ActivityDesignQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.ManagementHeadProviderField,
                     query.ProviderKey.Trim()),
-                DocumentQueryComparison.Equal(
+                ActivityDesignQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.ManagementRecommendationProviderField,
                     query.ProviderKey.Trim())));
         }
@@ -74,20 +73,20 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         var snapshot = await ResolveSnapshotAsync(snapshotSequence, cancellationToken);
         var query = new ActivityManagementProjectionPageQuery(tenantId, snapshot.Sequence, 0, 1);
         var clauses = CommonClauses(query, snapshot.Sequence);
-        clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+        clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
             ActivitiesDesignStorageManifest.DefinitionIdField,
             definitionId)));
         var envelope = await boundedStore.FirstOrDefaultAsync(
-            new DocumentQuery(
+            new ActivityDesignQuery(
                 ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind,
                 ActivitiesDesignStorageManifest.ManagementDefinitionsQuery,
                 clauses,
                 [
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
                 ],
-                take: 1)
-                .Select(global::Groundwork.Core.PhysicalStorage.BoundedQueryResultOperation.First),
+                Take: 1)
+                .Select(ActivityDesignQueryResultOperation.First),
             cancellationToken);
         return envelope is null
             ? null
@@ -106,12 +105,12 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
         var snapshot = await ResolveSnapshotAsync(query.SnapshotSequence, cancellationToken);
         var clauses = CommonClauses(query, snapshot.Sequence);
-        clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+        clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
             ActivitiesDesignStorageManifest.DefinitionIdField,
             definitionId)));
         if (query.DraftStatus is { } status)
         {
-            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ManagementDraftStatusField,
                 Convert.ToInt32(status, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture))));
         }
@@ -135,12 +134,12 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
         var snapshot = await ResolveSnapshotAsync(query.SnapshotSequence, cancellationToken);
         var clauses = CommonClauses(query, snapshot.Sequence);
-        clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+        clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
             ActivitiesDesignStorageManifest.DefinitionIdField,
             definitionId)));
         if (query.VersionLifecycle is { } lifecycle)
         {
-            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ManagementVersionLifecycleField,
                 Convert.ToInt32(lifecycle, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture))));
         }
@@ -159,18 +158,18 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         string queryIdentity,
         ActivityManagementProjectionPageQuery query,
         ActivityManagementSnapshot snapshot,
-        IReadOnlyList<DocumentQueryClause> clauses,
+        IReadOnlyList<ActivityDesignQueryClause> clauses,
         CancellationToken cancellationToken)
         where T : ActivityManagementProjectionRevision
     {
         var result = await boundedStore.QueryAsync(
-            new DocumentQuery(
+            new ActivityDesignQuery(
                 kind,
                 queryIdentity,
                 clauses,
                 [
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementSortField),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ManagementValidFromField)
                 ],
                 query.Offset,
                 query.Limit),
@@ -222,42 +221,42 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
         return new ActivityManagementSnapshot(snapshot.Sequence, snapshot.AsOf);
     }
 
-    private static List<DocumentQueryClause> CommonClauses(
+    private static List<ActivityDesignQueryClause> CommonClauses(
         ActivityManagementProjectionPageQuery query,
         long sequence)
     {
         var snapshotKey = GroundworkActivityManagementProjectionWriter.SequenceKey(sequence);
         var visibility = query.TenantId is null
-            ? DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            ? ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ManagementVisibilityField,
                 "*"))
-            : DocumentQueryClause.AnyOf(
-                DocumentQueryComparison.Equal(ActivitiesDesignStorageManifest.ManagementVisibilityField, "*"),
-                DocumentQueryComparison.Equal(ActivitiesDesignStorageManifest.ManagementVisibilityField, query.TenantId));
-        var clauses = new List<DocumentQueryClause>
+            : ActivityDesignQueryClause.AnyOf(
+                ActivityDesignQueryComparison.Equal(ActivitiesDesignStorageManifest.ManagementVisibilityField, "*"),
+                ActivityDesignQueryComparison.Equal(ActivitiesDesignStorageManifest.ManagementVisibilityField, query.TenantId));
+        var clauses = new List<ActivityDesignQueryClause>
         {
             visibility,
-            DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+            ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.LessThanOrEqual(
                 ActivitiesDesignStorageManifest.ManagementValidFromField,
                 snapshotKey)),
-            DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
+            ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.GreaterThan(
                 ActivitiesDesignStorageManifest.ManagementValidToField,
                 snapshotKey))
         };
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Contains(
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Contains(
                 ActivitiesDesignStorageManifest.ManagementSearchField,
                 query.Search.Trim().ToUpperInvariant())));
         }
         return clauses;
     }
 
-    private static void AddProviderClause(ICollection<DocumentQueryClause> clauses, string? providerKey)
+    private static void AddProviderClause(ICollection<ActivityDesignQueryClause> clauses, string? providerKey)
     {
         if (!string.IsNullOrWhiteSpace(providerKey))
         {
-            clauses.Add(DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ManagementProviderField,
                 providerKey.Trim())));
         }
@@ -272,10 +271,10 @@ public sealed class GroundworkActivityDefinitionManagementProjectionStore(
             throw new ArgumentOutOfRangeException(nameof(query.Limit));
     }
 
-    private static T Deserialize<T>(DocumentEnvelope envelope, string kind)
+    private static T Deserialize<T>(ActivityDesignDocument envelope, string kind)
         where T : Elsa.Primitives.Entities.Entity
     {
-        var document = JsonSerializer.Deserialize<GroundworkDocument<T>>(envelope.ContentJson, JsonOptions);
+        var document = JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<T>>(envelope.ContentJson, JsonOptions);
         return document?.Entity ?? throw new InvalidOperationException(
             $"Document '{envelope.Id}' of kind '{kind}' could not be deserialized as {typeof(T).Name}.");
     }

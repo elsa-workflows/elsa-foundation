@@ -1,7 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
-using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
@@ -9,120 +8,140 @@ using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
-using Groundwork.Core.Intents;
-using Groundwork.Core.Manifests;
-using Groundwork.Documents.Store;
+using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Groundwork.Store;
+using Groundwork.Kernel;
 using Xunit;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
-/// <summary>
-/// Verifies <see cref="GroundworkActivitiesDesignStoreRegistration.AddGroundworkActivitiesDesignStores"/> wires
-/// every activity-design read port to its Groundwork (document) implementation and that the registration wins
-/// over a previously-registered (e.g. EF Core) store — the single-provider host-composition contract.
-/// </summary>
-public class GroundworkActivitiesDesignRegistrationTests
+public sealed class GroundworkActivitiesDesignRegistrationTests
 {
     [Fact]
     public void Fork_receipt_is_append_only_and_candidate_retention_is_an_admitted_bounded_query()
     {
-        var manifest = ActivitiesDesignStorageManifest.Create();
-        var receipt = manifest.StorageUnits.Single(x =>
-            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind);
-        var candidate = manifest.StorageUnits.Single(x =>
-            x.Identity.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
 
-        Assert.Equal(LifecyclePolicy.AppendOnly, receipt.Lifecycle);
-        Assert.Contains(candidate.PhysicalStorage!.BoundedQueries, x =>
-            x.Identity == ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery);
+        var registry = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .ImplementationInstance as GroundworkStorageUnitRegistry;
+        Assert.NotNull(registry);
+        Assert.Contains(registry!.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityForkReceiptDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind);
     }
 
-    private static ServiceProvider BuildProvider(Action<IServiceCollection>? preRegister = null)
+    [Fact]
+    public void Registration_publishes_every_current_v2_unit_with_scope_and_concurrency_declarations()
     {
         var services = new ServiceCollection();
-        var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        services.AddSingleton<IDocumentStore>(documents);
-        services.AddSingleton<IBoundedDocumentStore>(
-            new GroundworkReusableActivityStoreTests.ActivityDesignTestBoundedDocumentStore(documents));
-        services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
-        services.AddSingleton<ISystemClock, FakeClock>();
-        services.AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>();
-        preRegister?.Invoke(services);
         services.AddGroundworkActivitiesDesignStores();
-        return services.BuildServiceProvider();
+
+        var registry = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .ImplementationInstance as GroundworkStorageUnitRegistry;
+        Assert.NotNull(registry);
+        Assert.Equal(ActivitiesDesignStorageManifest.CreateUnits().Count, registry!.Registrations.Count);
+        Assert.Equal(
+            registry.Registrations.Count,
+            registry.Registrations.Select(registration => registration.Unit.Id.Value)
+                .Distinct(StringComparer.Ordinal).Count());
+        Assert.All(registry.Registrations, registration =>
+        {
+            Assert.Equal(ScopePolicy.Scoped, registration.Unit.Scope);
+            Assert.True(registration.Unit.Concurrency.IsOptimistic);
+            Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, registration.Unit.SchemaVersion);
+        });
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
+        Assert.Contains(registry.Registrations, registration =>
+            registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind);
+    }
+
+    [Fact]
+    public void Registration_exposes_one_scoped_factory_for_each_public_v2_alias()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
+
+        Assert.Equal(AliasContracts.Length, services.Count(descriptor => AliasContracts.Contains(descriptor.ServiceType)));
+        Assert.All(AliasContracts, serviceType =>
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            Assert.NotNull(descriptor.ImplementationFactory);
+        });
+    }
+
+    [Fact]
+    public void Registration_resolves_activity_adapters_with_the_shared_v2_audit_executor()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<GroundworkActivityDefinitionStore>(
+            scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>());
+        Assert.IsType<GroundworkV2ActivityDesignStore>(
+            scope.ServiceProvider.GetRequiredService<GroundworkV2ActivityDesignStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<GroundworkPrivilegedQueryAuditExecutor>());
+        Assert.Same(
+            scope.ServiceProvider.GetRequiredService<GroundworkPrivilegedQueryAuditSink>(),
+            scope.ServiceProvider.GetRequiredService<IGroundworkPrivilegedQueryAuditSink>());
     }
 
     [Fact]
     public void Registers_read_ports_commands_and_lookup_as_groundwork_implementations()
     {
-        using var provider = BuildProvider();
-        using var scope = provider.CreateScope();
-        var sp = scope.ServiceProvider;
+        var services = new ServiceCollection();
+        services.AddGroundworkActivitiesDesignStores();
 
-        Assert.IsType<GroundworkActivityDefinitionStore>(sp.GetRequiredService<IActivityDefinitionStore>());
-        Assert.IsType<GroundworkActivityDefinitionVersionStore>(sp.GetRequiredService<IActivityDefinitionVersionStore>());
-        Assert.IsType<GroundworkAddActivityDefinitionCommand>(sp.GetRequiredService<IAddActivityDefinitionCommand>());
-        Assert.IsType<GroundworkAddActivityDefinitionVersionCommand>(sp.GetRequiredService<IAddActivityDefinitionVersionCommand>());
-        Assert.IsType<ActivityDefinitionLookup>(sp.GetRequiredService<IActivityDefinitionLookup>());
-        Assert.IsType<GroundworkActivityAvailabilitySettingsStore>(sp.GetRequiredService<IActivityAvailabilitySettingsStore>());
-        var reusable = Assert.IsType<GroundworkReusableActivityStores>(sp.GetRequiredService<IActivityDefinitionAuthoringStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionDraftStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionVersionPublicationStore>());
-        Assert.IsType<GroundworkRecommendedActivityDefinitionPickerStore>(
-            sp.GetRequiredService<IRecommendedActivityDefinitionPickerStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityDefinitionLayoutStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityDraftValidationStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityForkStore>());
-        Assert.Same(reusable, sp.GetRequiredService<IActivityDirectDependencyStore>());
-        var projection = Assert.IsType<GroundworkActivityDependencyProjection>(sp.GetRequiredService<IActivityDependencyProjectionStore>());
-        Assert.Same(projection, sp.GetRequiredService<IActivityDependencyProjectionRebuilder>());
-        var upgradePlans = Assert.IsType<GroundworkActivityUpgradePlanStore>(sp.GetRequiredService<IActivityUpgradePlanStore>());
-        Assert.Same(upgradePlans, sp.GetRequiredService<IActivityUpgradeApplyReceiptStore>());
-        Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDefinitionCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<ISaveActivityForkCandidateCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IPruneActivityForkCandidatesCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IApplyActivityForkCandidateCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IUpdateActivityDefinitionPresentationCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<ICreateActivityDraftCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IReplaceActivityDraftCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IDiscardActivityDraftCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IStoreActivityDraftValidationCommand>());
-        Assert.Same(reusable, sp.GetRequiredService<IChangeActivityVersionLifecycleCommand>());
-        Assert.IsType<GroundworkDesignAtomicWrite>(sp.GetRequiredService<IDesignAtomicWriter>());
-        Assert.Single(
-            sp.GetServices<IGroundworkStorageManifestSource>(),
-            source => source is GroundworkDesignAtomicWriteStorageManifestSource);
+        AssertImplementation<IActivityDefinitionStore, GroundworkActivityDefinitionStore>(services);
+        AssertImplementation<IActivityDefinitionVersionStore, GroundworkActivityDefinitionVersionStore>(services);
+        AssertImplementation<IAddActivityDefinitionCommand, GroundworkAddActivityDefinitionCommand>(services);
+        AssertImplementation<IAddActivityDefinitionVersionCommand, GroundworkAddActivityDefinitionVersionCommand>(services);
+        AssertImplementation<IActivityAvailabilitySettingsStore, GroundworkActivityAvailabilitySettingsStore>(services);
+        AssertImplementation<IActivityDefinitionManagementProjectionStore, GroundworkActivityDefinitionManagementProjectionStore>(services);
+        AssertImplementation<IActivityDefinitionLookup, ActivityDefinitionLookup>(services);
+        AssertImplementation<IDesignAtomicWriter, GroundworkDesignAtomicWrite>(services);
+
+        foreach (var contract in AliasContracts)
+            AssertAlias(services, contract);
+
+        AssertScopedOnce<GroundworkReusableActivityStores>(services);
+        AssertScopedOnce<GroundworkRecommendedActivityDefinitionPickerStore>(services);
+        AssertScopedOnce<GroundworkActivityManagementProjectionWriter>(services);
+        AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
+        AssertScopedOnce<GroundworkActivityDependencyProjection>(services);
+        AssertScopedOnce<GroundworkActivityUpgradePlanStore>(services);
     }
 
     [Fact]
     public void Groundwork_registration_overrides_a_prior_store()
     {
-        using var provider = BuildProvider(services =>
-            services.AddScoped<IActivityDefinitionStore, PriorStore>());
-        using var scope = provider.CreateScope();
+        var services = new ServiceCollection();
+        services.AddScoped<IActivityDefinitionStore, PriorStore>();
+        services.AddGroundworkActivitiesDesignStores();
 
-        var resolved = scope.ServiceProvider.GetRequiredService<IActivityDefinitionStore>();
-
-        Assert.IsType<GroundworkActivityDefinitionStore>(resolved);
-        Assert.Single(scope.ServiceProvider.GetServices<IActivityDefinitionStore>());
+        AssertImplementation<IActivityDefinitionStore, GroundworkActivityDefinitionStore>(services);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IActivityDefinitionStore));
     }
 
     [Fact]
     public void Groundwork_registration_preserves_a_prior_design_atomic_writer()
     {
-        using var provider = BuildProvider(services =>
-            services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
-        using var scope = provider.CreateScope();
+        var services = new ServiceCollection();
+        services.AddScoped<IDesignAtomicWriter, PriorDesignAtomicWriter>();
+        services.AddGroundworkActivitiesDesignStores();
 
-        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
-
-        Assert.IsType<PriorDesignAtomicWriter>(resolved);
-        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IDesignAtomicWriter));
+        Assert.Equal(typeof(PriorDesignAtomicWriter), descriptor.ImplementationType);
     }
 
     [Fact]
@@ -131,20 +150,15 @@ public class GroundworkActivitiesDesignRegistrationTests
         var services = new ServiceCollection();
         services.AddGroundworkActivitiesDesignStores();
         services.Replace(ServiceDescriptor.Scoped<IDesignAtomicWriter, PriorDesignAtomicWriter>());
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
 
-        var resolved = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
-
-        Assert.IsType<PriorDesignAtomicWriter>(resolved);
-        Assert.Single(scope.ServiceProvider.GetServices<IDesignAtomicWriter>());
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(IDesignAtomicWriter));
+        Assert.Equal(typeof(PriorDesignAtomicWriter), descriptor.ImplementationType);
     }
 
     [Fact]
     public void Repeated_registration_keeps_shared_scoped_adapters_registered_once()
     {
         var services = new ServiceCollection();
-
         services.AddGroundworkActivitiesDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 
@@ -155,61 +169,75 @@ public class GroundworkActivitiesDesignRegistrationTests
                      typeof(IAddActivityDefinitionCommand),
                      typeof(IAddActivityDefinitionVersionCommand),
                      typeof(IActivityDefinitionManagementProjectionStore),
-                     typeof(IActivityDefinitionAuthoringStore),
-                     typeof(IActivityDefinitionDraftStore),
-                     typeof(IActivityDefinitionVersionPublicationStore),
-                     typeof(IRecommendedActivityDefinitionPickerStore),
-                     typeof(IActivityDefinitionLayoutStore),
-                     typeof(IActivityDraftValidationStore),
-                     typeof(IActivityForkStore),
-                     typeof(IActivityDirectDependencyStore),
-                     typeof(IActivityDependencyProjectionStore),
-                     typeof(IActivityDependencyProjectionRebuilder),
-                     typeof(IActivityUpgradePlanStore),
-                     typeof(IActivityUpgradeApplyReceiptStore),
-                     typeof(ICreateActivityDefinitionCommand),
-                     typeof(ISaveActivityForkCandidateCommand),
-                     typeof(IPruneActivityForkCandidatesCommand),
-                     typeof(IApplyActivityForkCandidateCommand),
-                     typeof(IUpdateActivityDefinitionPresentationCommand),
-                     typeof(ICreateActivityDraftCommand),
-                     typeof(IUpdateActivityDraftPresentationCommand),
-                     typeof(ICreateActivityDraftConflictCopyCommand),
-                     typeof(IReplaceActivityDraftCommand),
-                     typeof(IApplyActivityContractProposalCommand),
-                     typeof(IDiscardActivityDraftCommand),
-                     typeof(IStoreActivityDraftValidationCommand),
-                     typeof(IChangeActivityVersionLifecycleCommand),
-                     typeof(ISetActivityDefinitionRecommendationCommand),
+                     typeof(IActivityDefinitionLookup),
+                     typeof(IDesignAtomicWriter)
                  })
-        {
-            AssertScopedOnce(services, serviceType);
-        }
+            Assert.Single(services, descriptor => descriptor.ServiceType == serviceType);
 
-        AssertScopedOnce<IDesignAtomicWriter>(services);
         AssertScopedOnce<GroundworkReusableActivityStores>(services);
         AssertScopedOnce<GroundworkRecommendedActivityDefinitionPickerStore>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionWriter>(services);
         AssertScopedOnce<GroundworkActivityManagementProjectionRetention>(services);
         AssertScopedOnce<GroundworkActivityDependencyProjection>(services);
         AssertScopedOnce<GroundworkActivityUpgradePlanStore>(services);
-        Assert.Single(services, x =>
-            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(ActivitiesDesignGroundworkStorageManifestSource));
-        Assert.Single(services, x =>
-            x.ServiceType == typeof(IGroundworkStorageManifestSource) &&
-            x.ImplementationType == typeof(GroundworkDesignAtomicWriteStorageManifestSource));
+        foreach (var contract in AliasContracts)
+            AssertAlias(services, contract);
     }
 
-    private static void AssertScopedOnce<TService>(IServiceCollection services)
-        => AssertScopedOnce(services, typeof(TService));
+    private static void AssertImplementation<TContract, TImplementation>(IServiceCollection services)
+        where TContract : class
+        where TImplementation : class, TContract
+    {
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == typeof(TContract));
+        Assert.Equal(typeof(TImplementation), descriptor.ImplementationType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+    }
+
+    private static void AssertScopedOnce<TService>(IServiceCollection services) =>
+        AssertScopedOnce(services, typeof(TService));
 
     private static void AssertScopedOnce(IServiceCollection services, Type serviceType)
     {
-        var registration = Assert.Single(services, x => x.ServiceType == serviceType);
-
-        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
     }
+
+    private static void AssertAlias(IServiceCollection services, Type serviceType)
+    {
+        var descriptor = Assert.Single(services, candidate => candidate.ServiceType == serviceType);
+        Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        Assert.NotNull(descriptor.ImplementationFactory);
+    }
+
+    private static readonly Type[] AliasContracts =
+    [
+        typeof(IActivityDefinitionAuthoringStore),
+        typeof(IActivityDefinitionDraftStore),
+        typeof(IActivityDefinitionVersionPublicationStore),
+        typeof(IRecommendedActivityDefinitionPickerStore),
+        typeof(IActivityDefinitionLayoutStore),
+        typeof(IActivityDraftValidationStore),
+        typeof(IActivityForkStore),
+        typeof(IActivityDirectDependencyStore),
+        typeof(ICreateActivityDefinitionCommand),
+        typeof(ISaveActivityForkCandidateCommand),
+        typeof(IPruneActivityForkCandidatesCommand),
+        typeof(IApplyActivityForkCandidateCommand),
+        typeof(IUpdateActivityDefinitionPresentationCommand),
+        typeof(ICreateActivityDraftCommand),
+        typeof(IUpdateActivityDraftPresentationCommand),
+        typeof(ICreateActivityDraftConflictCopyCommand),
+        typeof(IReplaceActivityDraftCommand),
+        typeof(IApplyActivityContractProposalCommand),
+        typeof(IDiscardActivityDraftCommand),
+        typeof(IStoreActivityDraftValidationCommand),
+        typeof(IChangeActivityVersionLifecycleCommand),
+        typeof(ISetActivityDefinitionRecommendationCommand),
+        typeof(IActivityDependencyProjectionStore),
+        typeof(IActivityDependencyProjectionRebuilder),
+        typeof(IActivityUpgradePlanStore),
+        typeof(IActivityUpgradeApplyReceiptStore)
+    ];
 
     private sealed class PriorStore : IActivityDefinitionStore
     {
@@ -225,20 +253,12 @@ public class GroundworkActivitiesDesignRegistrationTests
         public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
             GroundworkDesignAtomicWriteRequest request,
             Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
             GroundworkDesignAtomicWriteRequest request,
             Func<CancellationToken, Task>? beforeAttempt,
             Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
-
-    private sealed class FakeClock : ISystemClock
-    {
-        public DateTimeOffset UtcNow => new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    }
-
 }

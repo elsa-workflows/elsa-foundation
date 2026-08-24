@@ -1,11 +1,11 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
-public sealed class GroundworkActivityAvailabilitySettingsStore(IDocumentStore store) : IActivityAvailabilitySettingsStore
+public sealed class GroundworkActivityAvailabilitySettingsStore(GroundworkV2ActivityDesignStore store) : IActivityAvailabilitySettingsStore
 {
     public async Task<ActivityAvailabilitySettings?> LoadAsync(string scope, CancellationToken cancellationToken = default)
     {
@@ -32,7 +32,7 @@ public sealed class GroundworkActivityAvailabilitySettingsStore(IDocumentStore s
         var content = JsonSerializer.Serialize(document, GroundworkActivitiesDesignJson.Options);
 
         await store.SaveAsync(
-            new SaveDocumentRequest(
+            new ActivityDesignSaveRequest(
                 ActivitiesDesignStorageManifest.ActivityAvailabilitySettingsDocumentKind,
                 settings.Scope,
                 ActivitiesDesignStorageManifest.SchemaVersion,

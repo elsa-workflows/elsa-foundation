@@ -1,32 +1,21 @@
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Workflows.Publishing.Core.Contracts;
+using Groundwork.Kernel;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
 
-/// <summary>Contributes the publishing family's durable Groundwork declaration.</summary>
-public sealed class PublishingGroundworkStorageManifestSource : IGroundworkStorageManifestSource
+/// <summary>
+/// Names the publishing lane and publishes its v2 units to the host's public Groundwork catalog.
+/// <para>
+/// The lane declares its storage units directly, so it contributes no composed host manifest. It still
+/// carries an identity because a publication spans design, publishing and runtime, and the command has to
+/// resolve which target holds each lane before it can decide how to commit.
+/// </para>
+/// </summary>
+public sealed class PublishingGroundworkStorageManifestSource : IGroundworkStorageLane
 {
-    public string FeatureIdentity => "elsa-workflows-publishing";
+    public const string FeatureIdentity = GroundworkPublishingStorage.FeatureIdentity;
 
-    public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var manifest = PublishingGroundworkStorageManifest.Create();
+    string IGroundworkStorageLane.FeatureIdentity => FeatureIdentity;
 
-        return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
-            FeatureIdentity,
-            manifest,
-            [
-                typeof(IPublicationSlotStore),
-                typeof(IPublicationRecordStore),
-                typeof(IPublicationPolicyStore),
-                typeof(IPublicationProjectionIntentStore),
-                typeof(IPublicationSnapshotReviewStore),
-                typeof(IActivityDraftTestRunStore)
-            ],
-            [],
-            [],
-            []));
-    }
+    public IReadOnlyList<StorageUnit> CreateUnits() => PublishingGroundworkStorageManifest.CreateUnits();
 }

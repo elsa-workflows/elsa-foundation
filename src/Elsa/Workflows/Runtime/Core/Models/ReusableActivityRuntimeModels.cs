@@ -1,9 +1,9 @@
+using Elsa.Activities.Runtime.Core.Models;
 using System.Buffers.Binary;
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Elsa.Activities.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -337,7 +337,8 @@ public sealed record ActivityExecutionHierarchyCursorState(
     long LastExecutionSequence,
     string LastActivityExecutionId,
     int SchemaVersion = 1,
-    string? ProviderContinuation = null);
+    string? ProviderContinuation = null,
+    string? RootSnapshotFingerprint = null);
 
 public sealed record ActivityExecutionCursorFailureMetadata(
     string CursorClass,

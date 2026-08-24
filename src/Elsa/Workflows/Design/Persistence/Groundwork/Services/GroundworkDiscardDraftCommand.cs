@@ -1,19 +1,18 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkDiscardDraftCommand(
     IDistributedLockProvider lockProvider,
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IDeferredEventPublisher deferredEventPublisher,
@@ -30,7 +29,7 @@ public sealed class GroundworkDiscardDraftCommand(
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(draftId);
         var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
+            storage,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
@@ -49,7 +48,7 @@ public sealed class GroundworkDiscardDraftCommand(
                     var document = await documents.FindByIdAsync(draftId, token);
                     if (document is null)
                         return new DiscardDraftResult(draftId, null, false);
-                    await context.DeleteAsync(documents.ToDeleteRequest(draftId), token);
+                    await context.DeleteAsync(documents.ToDeleteRequest(draftId, document.Version), token);
                     return new DiscardDraftResult(
                         draftId,
                         document.Entity.WorkflowDefinitionId,

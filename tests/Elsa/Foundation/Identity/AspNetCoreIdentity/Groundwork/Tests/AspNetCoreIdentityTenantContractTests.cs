@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Testing;
 using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
@@ -12,9 +11,9 @@ public sealed class AspNetCoreIdentityTenantContractTests
     [Fact]
     public async Task Same_normalized_user_name_and_email_can_exist_in_different_tenants_and_resolve_in_scope()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
-        var tenantA = CreateFixture(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant, documents, requireUniqueEmail: true).UserStore();
-        var tenantB = CreateFixture(AspNetCoreIdentityScenarioData.Ids.SecondaryTenant, documents, requireUniqueEmail: true).UserStore();
+        var persistence = new AspNetCoreIdentityTestPersistence();
+        var tenantA = CreateFixture(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant, persistence, requireUniqueEmail: true).UserStore();
+        var tenantB = CreateFixture(AspNetCoreIdentityScenarioData.Ids.SecondaryTenant, persistence, requireUniqueEmail: true).UserStore();
         var userA = AspNetCoreIdentityScenarioData.CreateIdentityUser(AspNetCoreIdentityScenarioData.PrimaryUser);
         var userB = AspNetCoreIdentityScenarioData.CreateIdentityUser(CrossTenantUser());
 
@@ -35,9 +34,9 @@ public sealed class AspNetCoreIdentityTenantContractTests
     [Fact]
     public async Task Wrong_scope_loads_do_not_disclose_existing_users_or_roles()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
-        var tenantA = CreateFixture(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant, documents);
-        var tenantB = CreateFixture(AspNetCoreIdentityScenarioData.Ids.SecondaryTenant, documents);
+        var persistence = new AspNetCoreIdentityTestPersistence();
+        var tenantA = CreateFixture(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant, persistence);
+        var tenantB = CreateFixture(AspNetCoreIdentityScenarioData.Ids.SecondaryTenant, persistence);
         var user = AspNetCoreIdentityScenarioData.CreateIdentityUser(AspNetCoreIdentityScenarioData.PrimaryUser);
         var role = AspNetCoreIdentityScenarioData.CreateIdentityRole(AspNetCoreIdentityScenarioData.PrimaryRole);
 
@@ -64,11 +63,11 @@ public sealed class AspNetCoreIdentityTenantContractTests
     [Fact]
     public async Task Same_owner_ids_in_different_tenants_do_not_cross_relationship_or_reverse_routes()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var tenantAId = AspNetCoreIdentityScenarioData.Ids.PrimaryTenant;
         var tenantBId = AspNetCoreIdentityScenarioData.Ids.SecondaryTenant;
-        var tenantA = CreateFixture(tenantAId, documents);
-        var tenantB = CreateFixture(tenantBId, documents);
+        var tenantA = CreateFixture(tenantAId, persistence);
+        var tenantB = CreateFixture(tenantBId, persistence);
         var userA = SharedIdUser(tenantAId, "tenant-a-user");
         var userB = SharedIdUser(tenantBId, "tenant-b-user");
         var roleA = SharedIdRole("tenant-a-role");
@@ -104,11 +103,11 @@ public sealed class AspNetCoreIdentityTenantContractTests
     [Fact]
     public async Task Relationship_and_token_methods_reject_a_user_from_another_tenant_scope()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var tenantAId = AspNetCoreIdentityScenarioData.Ids.PrimaryTenant;
         var tenantBId = AspNetCoreIdentityScenarioData.Ids.SecondaryTenant;
-        var tenantA = CreateFixture(tenantAId, documents);
-        var tenantB = CreateFixture(tenantBId, documents);
+        var tenantA = CreateFixture(tenantAId, persistence);
+        var tenantB = CreateFixture(tenantBId, persistence);
         var foreign = SharedIdUser(tenantAId, "foreign-user");
         var tenantARole = SharedIdRole("tenant-a-role");
         var tenantBRole = SharedIdRole("tenant-b-role");
@@ -139,9 +138,9 @@ public sealed class AspNetCoreIdentityTenantContractTests
 
     private static AspNetCoreIdentityGroundworkStoreFixture CreateFixture(
         string tenantId,
-        InMemoryDocumentStore? documents = null,
+        AspNetCoreIdentityTestPersistence? persistence = null,
         bool requireUniqueEmail = false) =>
-        new(tenantId, documents, requireUniqueEmail);
+        new(tenantId, persistence, requireUniqueEmail);
 
     private static AspNetCoreIdentityScenarioData.User CrossTenantUser() =>
         AspNetCoreIdentityScenarioData.Users.Single(user => user.Id == AspNetCoreIdentityScenarioData.Ids.CrossTenantUser);

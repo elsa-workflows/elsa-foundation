@@ -1,11 +1,10 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Core.Scoping;
-using Groundwork.Core.Transactions;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Elsa.Persistence.Groundwork.Composition;
+using Groundwork.Kernel;
+using Groundwork.Store;
+using System.Text.Json;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Tests;
 
@@ -117,6 +116,96 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
+    public async Task Legacy_role_list_refuses_overflow_and_names_the_paged_contract()
+    {
+        var persistence = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.RoleStore(persistence);
+        for (var index = 0; index <= IdentityStorageManifest.MaxAggregateRelationshipEntries; index++)
+        {
+            var suffix = index.ToString("D3");
+            await store.SaveAsync(IdentityGroundworkFixtures.Role() with
+            {
+                Id = $"role-overflow-{suffix}",
+                Name = $"Overflow {suffix}"
+            });
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.ListAsync("tenant-1"));
+
+        Assert.Contains(nameof(IPagedRoleStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Legacy_claim_mapping_list_refuses_overflow_and_names_the_paged_contract()
+    {
+        var persistence = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ClaimMappingStore(persistence);
+        for (var index = 0; index <= IdentityStorageManifest.MaxAggregateRelationshipEntries; index++)
+        {
+            var suffix = index.ToString("D3");
+            await store.SaveAsync(IdentityGroundworkFixtures.ClaimMappingRule() with
+            {
+                Id = $"claim-overflow-{suffix}",
+                Order = index
+            });
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.ListForProviderAsync("tenant-1", "google"));
+
+        Assert.Contains(nameof(IPagedClaimMappingStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Legacy_external_identity_list_refuses_overflow_and_names_the_paged_contract()
+    {
+        var persistence = IdentityGroundworkFixtures.NewDocumentStore();
+        var store = IdentityGroundworkFixtures.ExternalIdentityStore(persistence);
+        await IdentityGroundworkFixtures.UserStore(persistence).SaveAsync(IdentityGroundworkFixtures.User());
+        for (var index = 0; index < IdentityStorageManifest.MaxAggregateRelationshipEntries; index++)
+        {
+            var suffix = index.ToString("D3");
+            await store.SaveAsync(IdentityGroundworkFixtures.ExternalIdentity() with
+            {
+                ProviderSubject = $"subject-overflow-{suffix}"
+            });
+        }
+
+        // Admission prevents a supported caller from creating entry 513. Seed one structurally
+        // valid provider row to prove a corrupted/pre-existing set cannot be silently truncated.
+        var overflow = IdentityGroundworkFixtures.ExternalIdentity() with
+        {
+            ProviderSubject = "subject-overflow-512"
+        };
+        var overflowDocument = new IdentityExternalLoginDocument(
+            IdentityCompositeDocumentId.Normalize(overflow.TenantId),
+            IdentityCompositeDocumentId.Normalize(overflow.UserId),
+            IdentityCompositeDocumentId.Normalize(overflow.Provider),
+            IdentityCompositeDocumentId.Normalize(overflow.ProviderSubject),
+            IdentityDocumentId.From(overflow.TenantId, overflow.Provider, overflow.ProviderSubject),
+            null,
+            overflow,
+            IdentityDocumentId.From(overflow.TenantId, overflow.UserId));
+        var seeded = persistence.Rows(IdentityGroundworkFixtures.Accessor()).Save(
+            new GroundworkIdentityRowWrite(
+                IdentityStorageManifest.ExternalLoginDocumentKind,
+                overflowDocument.LoginKey,
+                JsonSerializer.Serialize(overflowDocument, IdentityGroundworkJson.Options),
+                new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    [IdentityStorageManifest.UserLookupKeyField] = overflowDocument.UserLookupKey
+                },
+                GroundworkIdentityRowWriteCondition.CreateOnly));
+        Assert.True(seeded.Succeeded, seeded.Message);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.ListForUserAsync("tenant-1", "user-1"));
+
+        Assert.Contains(nameof(IPagedExternalIdentityStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ProviderConfiguration_RoundTrips_Tenant_And_Global_Records()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
@@ -172,7 +261,7 @@ public sealed class IdentityGroundworkStoreTests
     }
 
     [Fact]
-    public async Task Save_Is_An_Upsert()
+    public async Task Role_Save_replaces_an_existing_record_without_a_revision_contract()
     {
         var docStore = IdentityGroundworkFixtures.NewDocumentStore();
         var store = IdentityGroundworkFixtures.RoleStore(docStore);
@@ -201,120 +290,96 @@ public sealed class IdentityGroundworkStoreTests
     [Fact]
     public async Task Explicit_tenant_mismatch_fails_before_provider_io()
     {
-        var documentStore = new ThrowingDocumentStore();
-        var store = IdentityGroundworkFixtures.UserStore(documentStore, "tenant-a");
+        var source = new ThrowingSessionSource();
+        var access = IdentityGroundworkFixtures.Accessor("tenant-a");
+        var store = new GroundworkUserStore(new GroundworkIdentityRowStore(source, access), access);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.FindAsync("tenant-b", "user-1"));
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, documentStore.CallCount);
+        Assert.Equal(0, source.OpenCalls);
     }
 
     [Fact]
     public async Task Application_tenant_mismatch_fails_before_provider_io()
     {
-        var documentStore = new ThrowingDocumentStore();
-        var store = IdentityGroundworkFixtures.ApplicationStore(documentStore, "tenant-a");
+        var source = new ThrowingSessionSource();
+        var access = IdentityGroundworkFixtures.Accessor("tenant-a");
+        var store = new GroundworkApplicationStore(new GroundworkIdentityRowStore(source, access), access);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.FindAsync("tenant-b", "app-1"));
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, documentStore.CallCount);
+        Assert.Equal(0, source.OpenCalls);
     }
 
     [Fact]
     public async Task Credential_tenant_mismatch_fails_before_provider_io()
     {
-        var documentStore = new ThrowingDocumentStore();
-        var store = IdentityGroundworkFixtures.CredentialStore(documentStore, "tenant-a");
+        var source = new ThrowingSessionSource();
+        var access = IdentityGroundworkFixtures.Accessor("tenant-a");
+        var store = new GroundworkCredentialStore(new GroundworkIdentityRowStore(source, access), access);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.FindAsync("tenant-b", "credential-1"));
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, documentStore.CallCount);
+        Assert.Equal(0, source.OpenCalls);
     }
 
     [Fact]
     public async Task ClaimMapping_tenant_mismatch_fails_before_provider_io()
     {
-        var documentStore = new ThrowingDocumentStore();
-        var store = IdentityGroundworkFixtures.ClaimMappingStore(documentStore, "tenant-a");
+        var source = new ThrowingSessionSource();
+        var access = IdentityGroundworkFixtures.Accessor("tenant-a");
+        var store = new GroundworkClaimMappingStore(new GroundworkIdentityRowStore(source, access), access);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.ListForProviderAsync("tenant-b", "google"));
 
         Assert.DoesNotContain("tenant-a", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("tenant-b", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, documentStore.CallCount);
+        Assert.Equal(0, source.OpenCalls);
     }
 
     [Fact]
     public async Task ProviderConfiguration_global_write_requires_privileged_global_access_before_provider_io()
     {
-        var documentStore = new ThrowingDocumentStore();
-        var store = IdentityGroundworkFixtures.ProviderConfigurationStore(documentStore, "tenant-a");
+        var source = new ThrowingSessionSource();
+        var access = IdentityGroundworkFixtures.Accessor("tenant-a");
+        var store = new GroundworkProviderConfigurationStore(new GroundworkIdentityRowStore(source, access), access);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.SaveAsync(IdentityGroundworkFixtures.GlobalProviderConfiguration()));
 
         Assert.Contains("privileged global", exception.Message, StringComparison.Ordinal);
-        Assert.Equal(0, documentStore.CallCount);
+        Assert.Equal(0, source.OpenCalls);
     }
 
-    private sealed class ThrowingDocumentStore : IDocumentStore
+    private sealed class ThrowingSessionSource : IGroundworkStorageSessionSource
     {
-        public DocumentStoreAccess Access =>
-            DocumentStoreAccess.Scoped(new StorageScope("tenant-a"));
+        private readonly IReadOnlyDictionary<string, StorageUnit> units = IdentityV2StorageManifest.CreateUnits()
+            .ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
 
-        public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
+        public int OpenCalls { get; private set; }
 
-        public int CallCount { get; private set; }
-
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) => Fail<DocumentStoreWriteResult>();
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) => Fail<DocumentEnvelope?>();
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) => Fail<DocumentStoreWriteResult>();
-
-#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) => Fail<IReadOnlyList<DocumentEnvelope>>();
-
-        public Task<DocumentQueryResult> QueryAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => Fail<DocumentQueryResult>();
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => Fail<DocumentEnvelope?>();
-
-        public Task<bool> AnyAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => Fail<bool>();
-#pragma warning restore GW0004
-
-        public Task<IDocumentUnitOfWork> BeginAsync(
-            DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) => Fail<IDocumentUnitOfWork>();
-
-        private Task<T> Fail<T>()
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
-            CallCount++;
+            OpenCalls++;
             throw new InvalidOperationException("Provider I/O must not be reached.");
         }
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) => throw new InvalidOperationException("Provider I/O must not be reached.");
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
     }
 }

@@ -9,7 +9,6 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
@@ -20,10 +19,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Publishing.Core.Contracts;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 
@@ -32,8 +28,9 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 /// mutation. Opaque activity manifests are delegated to their provider-owned reference rewriter.
 /// </summary>
 public sealed class GroundworkActivityUpgradePlanStore(
-    IDocumentStore store,
-    IBoundedDocumentStore boundedStore,
+    GroundworkV2ActivityDesignStore designStore,
+    GroundworkDesignStorage workflowStorage,
+    GroundworkPublishingStorage publishingStorage,
     IPayloadSerializer payloadSerializer,
     IActivityDependencyProjectionStore dependencyProjection,
     GroundworkActivityDependencyProjection dependencyProjectionWriter,
@@ -49,7 +46,8 @@ public sealed class GroundworkActivityUpgradePlanStore(
     IEnumerable<IActivityProviderReferenceRewriter> activityRewriters,
     IIdentityGenerator identityGenerator,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter,
-    IDistributedLockProvider lockProvider) :
+    IDistributedLockProvider lockProvider,
+    TimeProvider? timeProvider = null) :
     IActivityUpgradeDiscoverySource,
     IActivityUpgradePlanMutationStore,
     IActivityUpgradePublishedDraftResolver
@@ -205,7 +203,8 @@ public sealed class GroundworkActivityUpgradePlanStore(
         await RecheckPlanBindingAsync(plan, cancellationToken);
         await RecheckTargetsAsync(plan.Replacements, cancellationToken);
         await using var applyLocks = await AcquireApplyLocksAsync(plan, cancellationToken);
-        var requests = new List<SaveDocumentRequest>();
+        var requests = new List<ActivityDesignSaveRequest>();
+        var workflowRequests = new List<GroundworkDesignSaveRequest>();
         var scopes = new HashSet<string>(StringComparer.Ordinal)
         {
             ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
@@ -227,10 +226,10 @@ public sealed class GroundworkActivityUpgradePlanStore(
                     await StageActivityDraftCloneAsync(step, requests, scopes, applied, changedActivityDrafts, appliedAt, cancellationToken);
                     break;
                 case ActivityUpgradeAction.UpdateDraft when step.Target.Kind == "WorkflowDraft":
-                    await StageWorkflowDraftUpdateAsync(step, requests, scopes, applied, appliedAt, cancellationToken);
+                    await StageWorkflowDraftUpdateAsync(step, workflowRequests, scopes, applied, appliedAt, cancellationToken);
                     break;
                 case ActivityUpgradeAction.CloneWorkflowVersion:
-                    await StageWorkflowDraftCloneAsync(step, requests, scopes, applied, appliedAt, cancellationToken);
+                    await StageWorkflowDraftCloneAsync(step, workflowRequests, scopes, applied, appliedAt, cancellationToken);
                     break;
                 default:
                     throw new ActivityUpgradeApplyException(422, "activity.upgrade.step-unsupported", $"Upgrade step '{step.StepId}' is unsupported.");
@@ -326,6 +325,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 plan,
                 scopes,
                 requests,
+                workflowRequests,
                 managementProjection,
                 cancellationToken);
         }
@@ -337,36 +337,56 @@ public sealed class GroundworkActivityUpgradePlanStore(
         return result;
     }
 
+    /// <summary>
+    /// Commits the upgrade as one act across both design catalogs. The plan binding and its targets are
+    /// rechecked inside the transaction, so nothing they assert can change between the check and the
+    /// commit — which is the whole point of applying an upgrade atomically rather than draft by draft.
+    /// <para>
+    /// Activity and workflow rows are projected by their own lanes and staged into the same transaction.
+    /// A host that splits those catalogs across databases is refused when it opens.
+    /// </para>
+    /// </summary>
     private async Task CommitWithFinalValidationAsync(
         ActivityUpgradePlan plan,
         IReadOnlyCollection<string> authoritativeScopes,
-        IReadOnlyList<SaveDocumentRequest> authoritativeRequests,
+        IReadOnlyList<ActivityDesignSaveRequest> activityRequests,
+        IReadOnlyList<GroundworkDesignSaveRequest> workflowRequests,
         GroundworkActivityManagementProjectionUpdate? managementProjection,
         CancellationToken cancellationToken)
     {
         var scopes = authoritativeScopes
             .Concat(managementProjection?.DocumentKinds ?? Enumerable.Empty<string>())
+            .Concat(workflowRequests.Select(request => request.UnitId))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var requests = authoritativeRequests
+        var staged = activityRequests
             .Concat(managementProjection?.Requests ?? [])
-            .ToList();
+            .ToArray();
 
         try
         {
-            await using var unitOfWork = await store.BeginAsync(DocumentCommitScope.Of(scopes), cancellationToken);
+            using var transaction = publishingStorage.BeginUnitOfWork(scopes);
             await RecheckPlanBindingAsync(plan, cancellationToken);
             await RecheckTargetsAsync(plan.Replacements, cancellationToken);
 
-            foreach (var request in requests)
+            var design = new ActivityDesignUnitOfWork(transaction.Inner, transaction.Units, timeProvider: timeProvider);
+            foreach (var request in staged)
+                design.StageSave(request);
+            foreach (var request in workflowRequests)
             {
-                var result = await unitOfWork.SaveAsync(request, cancellationToken);
-                if (result.Status != DocumentStoreWriteStatus.Saved)
-                    throw Stale($"Snapshot '{request.DocumentKind}/{request.Id}' changed before the atomic commit.");
+                transaction.Stage(
+                    request.UnitId,
+                    request.Values,
+                    request.ExpectedVersion is { } version ? WriteOptions.IfVersion(version) : WriteOptions.CreateOnly);
             }
-            await unitOfWork.CommitAsync(cancellationToken);
+
+            await design.CommitAsync(cancellationToken);
         }
-        catch (DocumentAtomicWriteException)
+        catch (ActivityDesignWriteConflictException)
+        {
+            throw Stale("One or more upgrade snapshots changed before the atomic commit.");
+        }
+        catch (BatchWriteException)
         {
             throw Stale("One or more upgrade snapshots changed before the atomic commit.");
         }
@@ -558,12 +578,12 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 }
             case "WorkflowDraft":
                 {
-                    var envelope = await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, owner.DraftId!, cancellationToken);
-                    if (envelope is null)
+                    var entry = workflowStorage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, owner.DraftId!);
+                    if (entry is null)
                         return null;
-                    var document = DeserializeWorkflowDraft(envelope);
-                    var head = await FindWorkflowHeadAsync(document.Entity.WorkflowDefinitionId, cancellationToken);
-                    return new(owner with { DefinitionId = document.Entity.WorkflowDefinitionId, Revision = envelope.Version, TenantId = document.Entity.TenantId }, head, document.Entity.SourceVersionId, direct, [path], blocked);
+                    var draft = workflowStorage.MapDraft(entry, _workflowJson);
+                    var head = await FindWorkflowHeadAsync(draft.WorkflowDefinitionId, cancellationToken);
+                    return new(owner with { DefinitionId = draft.WorkflowDefinitionId, Revision = entry.Entry.Version, TenantId = draft.TenantId }, head, draft.SourceVersionId, direct, [path], blocked);
                 }
             case "WorkflowVersion" when allowClone:
                 {
@@ -579,7 +599,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
 
     private async Task StageActivityDraftUpdateAsync(
         ActivityUpgradeStep step,
-        ICollection<SaveDocumentRequest> requests,
+        ICollection<ActivityDesignSaveRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
         ICollection<ActivityDefinitionDraft> managementDrafts,
@@ -619,7 +639,7 @@ public sealed class GroundworkActivityUpgradePlanStore(
 
     private async Task StageActivityDraftCloneAsync(
         ActivityUpgradeStep step,
-        ICollection<SaveDocumentRequest> requests,
+        ICollection<ActivityDesignSaveRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
         ICollection<ActivityDefinitionDraft> managementDrafts,
@@ -689,26 +709,30 @@ public sealed class GroundworkActivityUpgradePlanStore(
 
     private async Task StageWorkflowDraftUpdateAsync(
         ActivityUpgradeStep step,
-        ICollection<SaveDocumentRequest> requests,
+        ICollection<GroundworkDesignSaveRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var envelope = await RequiredAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, step.Target.DraftId!, cancellationToken);
-        var document = DeserializeWorkflowDraft(envelope);
-        if (envelope.Version != step.ExpectedRevision || !StringComparer.Ordinal.Equals(await FindWorkflowHeadAsync(document.Entity.WorkflowDefinitionId, cancellationToken), step.ExpectedDefinitionHeadVersionId))
+        var entry = RequiredWorkflowAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, step.Target.DraftId!);
+        var (draft, layout, _) = workflowStorage.MapDraftFull(entry, _workflowJson);
+        var document = new WorkflowDraftDocument(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
+            draft,
+            layout);
+        if (entry.Entry.Version != step.ExpectedRevision || !StringComparer.Ordinal.Equals(await FindWorkflowHeadAsync(draft.WorkflowDefinitionId, cancellationToken), step.ExpectedDefinitionHeadVersionId))
             throw Stale("The workflow draft revision or definition head changed.");
-        document.Entity.State = RewriteWorkflow(document.Entity.State, step.Replacements, cancellationToken);
-        document.Entity.LastModifiedAt = now;
-        requests.Add(SaveWorkflowDraft(document, envelope.Version));
+        draft.State = RewriteWorkflow(draft.State, step.Replacements, cancellationToken);
+        draft.LastModifiedAt = now;
+        requests.Add(SaveWorkflowDraft(document, entry.Entry.Version ?? 0));
         scopes.Add(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
-        applied.Add(new("WorkflowDraft", document.Entity.Id, document.Entity.WorkflowDefinitionId, envelope.Version + 1, false, document.Entity.SourceVersionId));
+        applied.Add(new("WorkflowDraft", draft.Id, draft.WorkflowDefinitionId, (entry.Entry.Version ?? 0) + 1, false, draft.SourceVersionId));
     }
 
     private async Task StageWorkflowDraftCloneAsync(
         ActivityUpgradeStep step,
-        ICollection<SaveDocumentRequest> requests,
+        ICollection<GroundworkDesignSaveRequest> requests,
         ISet<string> scopes,
         ICollection<ActivityUpgradeAppliedDraft> applied,
         DateTimeOffset now,
@@ -887,14 +911,11 @@ public sealed class GroundworkActivityUpgradePlanStore(
                 }
             case "WorkflowDraft":
                 {
-                    var envelope = await store.LoadAsync(
-                        WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-                        expected.DraftId!,
-                        cancellationToken);
-                    if (envelope is null)
+                    var entry = workflowStorage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, expected.DraftId!);
+                    if (entry is null)
                         return null;
-                    var draft = DeserializeWorkflowDraft(envelope).Entity;
-                    return new(expected.Kind, draft.WorkflowDefinitionId, DraftId: draft.Id, Revision: envelope.Version, TenantId: draft.TenantId);
+                    var draft = workflowStorage.MapDraft(entry, _workflowJson);
+                    return new(expected.Kind, draft.WorkflowDefinitionId, DraftId: draft.Id, Revision: entry.Entry.Version, TenantId: draft.TenantId);
                 }
             default:
                 return null;
@@ -979,63 +1000,58 @@ public sealed class GroundworkActivityUpgradePlanStore(
     private static string PathKey(IReadOnlyList<ActivityDefinitionReference> path) =>
         string.Join('\u001f', path.Select(ReferenceKey));
 
-    private async Task<DocumentEnvelope> RequiredAsync(string kind, string id, CancellationToken cancellationToken) =>
-        await store.LoadAsync(kind, id, cancellationToken) ?? throw Stale($"Required snapshot '{kind}/{id}' is unavailable.");
+    private async Task<ActivityDesignDocument> RequiredAsync(string kind, string id, CancellationToken cancellationToken) =>
+        await designStore.LoadAsync(kind, id, cancellationToken) ?? throw Stale($"Required snapshot '{kind}/{id}' is unavailable.");
 
-    private async Task<DocumentEnvelope> RequiredActivityByIndexAsync<TEntity>(
+    private GroundworkDesignEntry RequiredWorkflowAsync(string kind, string id) =>
+        workflowStorage.Read(kind, id) ?? throw Stale($"Required snapshot '{kind}/{id}' is unavailable.");
+
+    private async Task<ActivityDesignDocument> RequiredActivityByIndexAsync<TEntity>(
         string kind,
         string queryIdentity,
         string fieldPath,
         string value,
         CancellationToken cancellationToken) where TEntity : Entity
     {
-        var matches = await boundedStore.QueryAsync(
-            new DocumentQuery(
+        var matches = await designStore.QueryAsync(
+            new ActivityDesignQuery(
                 kind,
                 queryIdentity,
-                [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(fieldPath, value))],
                 // The by-key routes declare their order as (key field, document id); present that same order.
                 [
-                    new DocumentQueryOrder(fieldPath, PhysicalSortDirection.Ascending),
-                    new DocumentQueryOrder(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
+                    new ActivityDesignQueryOrder(fieldPath),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.EntityIdField)
                 ],
-                take: 2),
+                Take: 2),
             cancellationToken);
         return matches.Documents.Count == 1
             ? matches.Documents[0]
             : throw Stale($"Expected one '{kind}' snapshot for '{value}'.");
     }
 
-    private static TEntity DeserializeActivity<TEntity>(DocumentEnvelope envelope) where TEntity : Entity =>
-        JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, ActivityJson)?.Entity
-        ?? throw new InvalidOperationException($"Activity document '{envelope.Id}' is unreadable.");
+    private static TEntity DeserializeActivity<TEntity>(ActivityDesignDocument document) where TEntity : Entity =>
+        JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<TEntity>>(document.ContentJson, ActivityJson)?.Entity
+        ?? throw new InvalidOperationException($"Activity document '{document.Id}' is unreadable.");
 
-    private WorkflowDraftDocument DeserializeWorkflowDraft(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<WorkflowDraftDocument>(envelope.ContentJson, _workflowJson)
-        ?? throw new InvalidOperationException($"Workflow draft '{envelope.Id}' is unreadable.");
+    private static ActivityDesignSaveRequest SaveActivity<TEntity>(string kind, string collection, TEntity entity, long expectedVersion) where TEntity : Entity =>
+        GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
+            kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, ActivityJson)
+            with { ExpectedVersion = expectedVersion };
 
-    private static SaveDocumentRequest SaveActivity<TEntity>(string kind, string collection, TEntity entity, long expectedVersion) where TEntity : Entity
-    {
-        var request = GroundworkDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, ActivityJson);
-        return new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
-    }
+    private static ActivityDesignSaveRequest SaveSimple<T>(string kind, string id, T value, long expectedVersion) =>
+        new(kind, id, ActivitiesDesignStorageManifest.SchemaVersion, JsonSerializer.Serialize(value, ActivityJson), expectedVersion);
 
-    private static SaveDocumentRequest SaveSimple<T>(string kind, string id, T value, long expectedVersion)
-    {
-        var request = JsonDocumentStoreExtensions.ToSaveDocumentRequest(kind, id, ActivitiesDesignStorageManifest.SchemaVersion, value, ActivityJson);
-        return new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
-    }
-
-    private SaveDocumentRequest SaveWorkflowDraft(WorkflowDraftDocument document, long expectedVersion)
-    {
-        var request = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+    private GroundworkDesignSaveRequest SaveWorkflowDraft(WorkflowDraftDocument document, long expectedVersion) =>
+        new(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
-            document.Entity.Id,
-            WorkflowsDesignStorageManifest.SchemaVersion,
-            document,
-            _workflowJson);
-        return new(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
-    }
+            GroundworkDesignStorage.Values(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                document.Entity,
+                _workflowJson,
+                document.Collection,
+                document.Layout),
+            expectedVersion);
 
     private static ActivityDiagnostic Diagnostic(string code, string message, string kind, string id) => new(
         code, ActivityDiagnosticSeverity.Error, message, new ActivityDiagnosticSubject(kind, id));

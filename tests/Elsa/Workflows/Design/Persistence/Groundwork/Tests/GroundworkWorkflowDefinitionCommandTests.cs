@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
@@ -18,10 +17,9 @@ using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
-using Groundwork.Core.Queries;
-using Groundwork.Core.Transactions;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Elsa.Persistence.Groundwork.Composition;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -33,7 +31,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     // Shared arrange graph: one document store, one lock provider, one hook publisher, and one
     // identity generator per test instance. Every command/store below composes over these, so tests
     // read as intent (seed → act → derive) instead of repeating the wiring (CLAUDE.md clean-tests).
-    private readonly InMemoryDocumentStore _store = new(WorkflowsDesignStorageManifest.Create());
+    private readonly DesignGroundworkTestPersistence _store = new();
     private readonly InMemoryLockProvider _locks = new();
     private readonly HookEventPublisher _events = new();
     private readonly SequentialIdentityGenerator _identities = new();
@@ -42,22 +40,26 @@ public class GroundworkWorkflowDefinitionCommandTests
         GroundworkTestAccess.DefaultAccessContextAccessor;
     private int _operationSequence;
 
-    private GroundworkDesignAtomicWrite AtomicWrite() => new(_store);
+    private GroundworkDesignStorage Storage(IGroundworkStorageSessionSource? source = null) =>
+        new(source ?? _store, _accessContext);
+
+    private GroundworkDesignAtomicWrite AtomicWrite(IGroundworkStorageSessionSource? source = null) =>
+        new(Storage(source));
 
     private DesignOperationKey NextKey() => new($"test-operation-{++_operationSequence}");
 
     private IDraftOriginator DraftOriginator(
-        IDocumentStore? store = null,
+        IGroundworkStorageSessionSource? store = null,
         IPayloadSerializer? payloadSerializer = null,
         IDeferredEventPublisher? deferredEventPublisher = null)
     {
-        var documents = store ?? _store;
+        var storage = Storage(store);
         var payloads = payloadSerializer ?? Payloads;
         return new DraftOriginator(
             _identities,
             _locks,
-            documents,
-            new GroundworkDesignAtomicWrite(documents),
+            storage,
+            new GroundworkDesignAtomicWrite(storage),
             payloads,
             _events,
             deferredEventPublisher ?? _events,
@@ -71,7 +73,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     private GroundworkUpdateDraftCommand UpdateCommand(IActivityStructureService? activityStructureService = null) =>
         new(
             _locks,
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
             _events,
@@ -80,22 +82,22 @@ public class GroundworkWorkflowDefinitionCommandTests
             _accessContext,
             activityStructureService ?? new EmptyActivityStructureService());
 
-    private GroundworkWorkflowDefinitionVersionStore VersionStore(IDocumentStore? store = null)
+    private GroundworkWorkflowDefinitionVersionStore VersionStore(IGroundworkStorageSessionSource? store = null)
     {
-        var documents = store ?? _store;
-        return new(documents, new GroundworkWorkflowDefinitionStore(documents), Payloads);
+        var storage = Storage(store);
+        return new(store ?? _store, new GroundworkWorkflowDefinitionStore(store ?? _store, _accessContext), Payloads, _accessContext);
     }
 
-    private GroundworkPromoteDraftToVersionCommand PromoteCommand(IDocumentStore? store = null)
+    private GroundworkPromoteDraftToVersionCommand PromoteCommand(IGroundworkStorageSessionSource? store = null)
     {
-        var documents = store ?? _store;
+        var storage = Storage(store);
         return new(
             _locks,
-            documents,
-            new GroundworkDesignAtomicWrite(documents),
+            storage,
+            new GroundworkDesignAtomicWrite(storage),
             Payloads,
             _events,
-            VersionStore(documents),
+            VersionStore(store),
             _identities,
             _clock,
             _accessContext);
@@ -110,9 +112,9 @@ public class GroundworkWorkflowDefinitionCommandTests
 
     // Draft store reads only the draft/layout document; it never derives validation errors, so no
     // publisher is threaded through it (the gate is invoked directly on the publisher below).
-    private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(_store, Payloads, _accessContext);
+    private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(Storage(), Payloads, _accessContext);
 
-    private GroundworkWorkflowDefinitionVersionLayoutStore VersionLayoutStore() => new(_store);
+    private GroundworkWorkflowDefinitionVersionLayoutStore VersionLayoutStore() => new(_store, _accessContext);
 
     // Permanent deletion is only available to a host that composes a publication check (#1283), so the
     // arrange stands one in and tests vary the additional vetoes layered on top of it.
@@ -120,10 +122,10 @@ public class GroundworkWorkflowDefinitionCommandTests
         IWorkflowDefinitionStore? definitions = null,
         params IWorkflowDefinitionPermanentDeletionGuard[] guards) =>
         new(
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
-            definitions ?? new GroundworkWorkflowDefinitionStore(_store),
+            definitions ?? new GroundworkWorkflowDefinitionStore(_store, _accessContext),
             DraftStore(),
             VersionStore(),
             VersionLayoutStore(),
@@ -266,12 +268,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         var deferredEventCount = _events.DeferredEvents.Count;
         Assert.Equal(deferredEventsBeforeClone + 2, deferredEventCount);
 
-        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-            sourceLayout!.Id));
-        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            sourceVersionId));
+        _store.DeleteRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind, sourceLayout!.Id);
+        _store.DeleteRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, sourceVersionId);
         var beginCount = _store.BeginCount;
         var saveCount = _store.SaveCount;
         var deleteCount = _store.DeleteCount;
@@ -287,7 +285,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.Equal(deferredEventCount, _events.DeferredEvents.Count);
         Assert.DoesNotContain(
             _store.Snapshot(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind),
-            document => document.Id == sourceVersionId);
+            document => StringComparer.Ordinal.Equals(
+                document.Values[WorkflowsDesignStorageManifest.IdField]?.ToString(), sourceVersionId));
         Assert.NotNull(await DraftStore().FindByIdAsync(cloneId));
     }
 
@@ -346,12 +345,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         var operationKey = NextKey();
 
         var cloneId = await clone.Execute(operationKey, sourceVersionId, callerCancellation.Token);
-        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-            sourceLayout!.Id));
-        await _store.DeleteAsync(GroundworkDocumentWriter.ToDeleteRequest(
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            sourceVersionId));
+        _store.DeleteRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind, sourceLayout!.Id);
+        _store.DeleteRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, sourceVersionId);
         var identityCount = _identities.GenerateCount;
         var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(cloneId);
         var draftLockCount = _locks.AcquireCounts[draftLockKey];
@@ -417,10 +412,10 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task Materialize_definition_rolls_back_provider_failures_and_propagates_cancellation()
     {
-        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        using var raw = new DesignGroundworkTestPersistence();
         var providerFailure = new IOException("provider unavailable");
         var failing = new GroundworkMaterializeWorkflowDefinitionCommand(
-            new GroundworkDesignAtomicWrite(new ThrowingDocumentStore(raw, GroundworkDocumentStoreOperation.Begin, providerFailure)),
+            new GroundworkDesignAtomicWrite(Storage(new ThrowingSource(raw, providerFailure))),
             _clock,
             _accessContext);
 
@@ -437,13 +432,13 @@ public class GroundworkWorkflowDefinitionCommandTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new GroundworkMaterializeWorkflowDefinitionCommand(
-            new GroundworkDesignAtomicWrite(_store),
+            AtomicWrite(),
             _clock,
             _accessContext).Execute(
             NextKey(),
             new WorkflowDefinition { Id = "definition-cancelled", Name = "Cancelled" },
             cancellation.Token));
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-cancelled"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store, _accessContext).FindByIdAsync("definition-cancelled"));
     }
 
     [Fact]
@@ -462,7 +457,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var updateKey = NextKey();
         await UpdateCommand().Execute(updateKey, new UpdateDraftRequest(draftId, EmptyState(), []), CancellationToken.None);
         await UpdateCommand().Execute(updateKey, new UpdateDraftRequest(draftId, EmptyState(), []), CancellationToken.None);
-        var discard = new GroundworkDiscardDraftCommand(_locks, _store, AtomicWrite(), Payloads, _events, _accessContext);
+        var discard = new GroundworkDiscardDraftCommand(_locks, Storage(), AtomicWrite(), Payloads, _events, _accessContext);
         var discardKey = NextKey();
         await discard.Execute(discardKey, draftId, CancellationToken.None);
         await discard.Execute(discardKey, draftId, CancellationToken.None);
@@ -508,8 +503,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         var deferredEvents = new CancellationAwareDeferredEventPublisher();
         var command = new GroundworkUpdateDraftCommand(
             _locks,
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store),
+            new GroundworkDesignAtomicWrite(Storage(store)),
             Payloads,
             _events,
             deferredEvents,
@@ -537,8 +532,8 @@ public class GroundworkWorkflowDefinitionCommandTests
         var deferredEvents = new CancellationAwareDeferredEventPublisher();
         var command = new GroundworkDiscardDraftCommand(
             _locks,
-            store,
-            new GroundworkDesignAtomicWrite(store),
+            Storage(store),
+            new GroundworkDesignAtomicWrite(Storage(store)),
             Payloads,
             deferredEvents,
             _accessContext);
@@ -750,7 +745,7 @@ public class GroundworkWorkflowDefinitionCommandTests
             WorkflowDefinitionId = definition.Id,
             State = EmptyState()
         };
-        await new GroundworkAddWorkflowDefinitionCommand(_store, AtomicWrite(), Payloads, _clock, _accessContext).Execute(
+        await new GroundworkAddWorkflowDefinitionCommand(Storage(), AtomicWrite(), Payloads, _clock, _accessContext).Execute(
             NextKey(),
             definition,
             draft,
@@ -778,7 +773,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var versionId = await promote.Execute(operationKey, draftId, CancellationToken.None);
         var discard = new GroundworkDiscardDraftCommand(
             _locks,
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
             _events,
@@ -802,7 +797,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     public async Task DiscardDraft_deletes_the_embedded_draft_document()
     {
         var draftId = await CreateCommand().Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var discard = new GroundworkDiscardDraftCommand(_locks, _store, AtomicWrite(), Payloads, _events, _accessContext);
+        var discard = new GroundworkDiscardDraftCommand(_locks, Storage(), AtomicWrite(), Payloads, _events, _accessContext);
 
         await discard.Execute(NextKey(), draftId, CancellationToken.None);
 
@@ -814,14 +809,14 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var definition = new WorkflowDefinition { Id = "definition-1", Name = "Original" };
         await MaterializeDefinition(definition);
-        var command = new GroundworkSaveWorkflowDefinitionCommand(_store, AtomicWrite(), _clock, _accessContext);
+        var command = new GroundworkSaveWorkflowDefinitionCommand(Storage(), AtomicWrite(), _clock, _accessContext);
         definition.Name = "Updated";
         var createdAt = definition.CreatedAt;
         _clock.Advance();
 
         await command.Execute(NextKey(), definition, CancellationToken.None);
 
-        var read = await new GroundworkWorkflowDefinitionStore(_store).GetAsync("definition-1");
+        var read = await new GroundworkWorkflowDefinitionStore(_store, _accessContext).GetAsync("definition-1");
         Assert.Equal("Updated", read.Name);
         Assert.Equal(createdAt, read.CreatedAt);
         Assert.True(read.LastModifiedAt > read.CreatedAt);
@@ -831,7 +826,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     public async Task SaveWorkflowDefinition_rejects_explicit_wrong_tenant_before_lookup_or_staging()
     {
         var command = new GroundworkSaveWorkflowDefinitionCommand(
-            _store,
+            Storage(),
             AtomicWrite(),
             _clock,
             GroundworkTestAccess.AccessContext("tenant-a"));
@@ -865,7 +860,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         await delete.Execute(NextKey(), "definition-1", CancellationToken.None);
 
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-1"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store, _accessContext).FindByIdAsync("definition-1"));
         Assert.Null(await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1"));
         Assert.Empty(await DraftStore().ListByWorkflowDefinitionIdAsync("definition-1"));
         Assert.NotEqual(draftId, secondDraftId);
@@ -876,7 +871,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_rejects_an_active_definition()
     {
-        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        var definitions = new GroundworkWorkflowDefinitionStore(_store, _accessContext);
         await MaterializeDefinition(new WorkflowDefinition { Id = "definition-active", Name = "Keep me" });
         var delete = PermanentDeleteCommand(definitions);
 
@@ -901,7 +896,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_refuses_when_a_deletion_guard_vetoes()
     {
-        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        var definitions = new GroundworkWorkflowDefinitionStore(_store, _accessContext);
         await MaterializeDefinition(new WorkflowDefinition { Id = "definition-published", Name = "Still live", DeletedAt = _clock.UtcNow });
         var guard = new VetoingDeletionGuard();
         var delete = PermanentDeleteCommand(definitions, guard);
@@ -916,12 +911,12 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_refuses_when_no_publication_check_is_composed()
     {
-        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        var definitions = new GroundworkWorkflowDefinitionStore(_store, _accessContext);
         await MaterializeDefinition(new WorkflowDefinition { Id = "definition-unverifiable", Name = "Still live", DeletedAt = _clock.UtcNow });
         // An unrelated veto is not a publication check, so it does not make the delete verifiable (#1283).
         var guard = new VetoingDeletionGuard();
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
             definitions,
@@ -945,10 +940,10 @@ public class GroundworkWorkflowDefinitionCommandTests
         // The guards parameter is optional; a composition that supplies nothing must land on the same refusal as one
         // that supplies only non-publication vetoes, not on accidental permission.
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
-            new GroundworkWorkflowDefinitionStore(_store),
+            new GroundworkWorkflowDefinitionStore(_store, _accessContext),
             DraftStore(),
             VersionStore(),
             VersionLayoutStore(),
@@ -969,10 +964,10 @@ public class GroundworkWorkflowDefinitionCommandTests
         var operationKey = NextKey();
         await PermanentDeleteCommand().Execute(operationKey, "definition-replayed", CancellationToken.None);
         var designOnly = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
-            new GroundworkWorkflowDefinitionStore(_store),
+            new GroundworkWorkflowDefinitionStore(_store, _accessContext),
             DraftStore(),
             VersionStore(),
             VersionLayoutStore(),
@@ -980,7 +975,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         await designOnly.Execute(operationKey, "definition-replayed", CancellationToken.None);
 
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-replayed"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store, _accessContext).FindByIdAsync("definition-replayed"));
     }
 
     [Fact]
@@ -1003,7 +998,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var command = new GroundworkSubmitWorkflowDefinitionCommand(
             _identities,
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
             new EmptyActivityStructureService(),
@@ -1012,7 +1007,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         var submitted = await command.Execute(NextKey(), "Definition", null, MinimalState(), CancellationToken.None);
 
-        var definition = await new GroundworkWorkflowDefinitionStore(_store).GetAsync(submitted.DefinitionId);
+        var definition = await new GroundworkWorkflowDefinitionStore(_store, _accessContext).GetAsync(submitted.DefinitionId);
         var draft = await DraftStore().FindByIdAsync(submitted.DraftId);
         var version = await VersionStore().GetAsync(submitted.VersionId);
         var layout = await VersionLayoutStore().FindByVersionIdAsync(submitted.VersionId);
@@ -1033,7 +1028,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var activityStructure = new MutableActivityStructureService();
         var command = new GroundworkSubmitWorkflowDefinitionCommand(
             _identities,
-            _store,
+            Storage(),
             AtomicWrite(),
             Payloads,
             activityStructure,
@@ -1097,7 +1092,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         }
     }
 
-    private sealed class SequentialIdentityGenerator : IIdentityGenerator
+    private sealed class SequentialIdentityGenerator : Elsa.Primitives.Contracts.IIdentityGenerator
     {
         private int _next;
 
@@ -1201,190 +1196,133 @@ public class GroundworkWorkflowDefinitionCommandTests
         public bool SupportsScopedVariables(ActivityNode activity) => false;
     }
 
-    private sealed class AcknowledgementLostAfterCommitDocumentStore(
-        IDocumentStore inner,
-        CancellationTokenSource callerCancellation) : IDocumentStore
+    private sealed class ThrowingSource(IGroundworkStorageSessionSource inner, Exception failure)
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
-        private int _ledgerLoads;
-
-        public bool ReconciliationUsedFreshToken { get; private set; }
-        public global::Groundwork.Documents.Scoping.DocumentStoreAccess Access => inner.Access;
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
-        {
-            if (documentKind == GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind &&
-                Interlocked.Increment(ref _ledgerLoads) > 1)
-            {
-                ReconciliationUsedFreshToken = !cancellationToken.IsCancellationRequested;
-            }
-
-            return inner.LoadAsync(documentKind, id, cancellationToken);
-        }
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<global::Groundwork.Documents.Store.DocumentQueryResult> QueryAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) => inner.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public async Task<IDocumentUnitOfWork> BeginAsync(
-            DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) =>
-            new AcknowledgementLostAfterCommitUnitOfWork(
-                await inner.BeginAsync(scope, cancellationToken),
-                callerCancellation);
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => throw failure;
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
+            inner.BeginUnitOfWork(access, options, unitIds, targetName);
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
-    private sealed class VersionSaveConflictDocumentStore(IDocumentStore inner) : IDocumentStore, IBoundedDocumentStore
+    private sealed class AcknowledgementLostAfterCommitDocumentStore(
+        IGroundworkStorageSessionSource inner,
+        CancellationTokenSource callerCancellation) : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
+    {
+        private int ledgerLoads;
+
+        public bool ReconciliationUsedFreshToken { get; private set; }
+
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
+        {
+            if (unitId == WorkflowsDesignStorageManifest.DesignOperationDocumentKind &&
+                Interlocked.Increment(ref ledgerLoads) > 1)
+                ReconciliationUsedFreshToken = true;
+            return inner.Open(unitId, access, targetName);
+        }
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
+            new AcknowledgementLostAfterCommitUnitOfWork(
+                inner.BeginUnitOfWork(access, options, unitIds, targetName), callerCancellation);
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
+    }
+
+    private sealed class VersionSaveConflictDocumentStore(IGroundworkStorageSessionSource inner)
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
         public bool VersionSaveWasRejected { get; set; }
-        public global::Groundwork.Documents.Scoping.DocumentStoreAccess Access => inner.Access;
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
 
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => inner.Open(unitId, access, targetName);
 
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // Required IDocumentStore compatibility members on the test double.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<global::Groundwork.Documents.Store.DocumentQueryResult> QueryAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            global::Groundwork.Documents.Store.PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public Task<DocumentQueryResult> QueryAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            ((IBoundedDocumentStore)inner).QueryAsync(query, cancellationToken);
-
-        public Task<long> CountAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            ((IBoundedDocumentStore)inner).CountAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            ((IBoundedDocumentStore)inner).FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            ((IBoundedDocumentStore)inner).AnyAsync(query, cancellationToken);
-
-        public async Task<IDocumentUnitOfWork> BeginAsync(
-            DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) =>
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
             new VersionSaveConflictUnitOfWork(
-                await inner.BeginAsync(scope, cancellationToken),
-                this);
+                inner.BeginUnitOfWork(access, options, unitIds, targetName), this);
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
     }
 
     private sealed class VersionSaveConflictUnitOfWork(
-        IDocumentUnitOfWork inner,
-        VersionSaveConflictDocumentStore owner) : IDocumentUnitOfWork
+        IUnitOfWork inner,
+        VersionSaveConflictDocumentStore owner) : IUnitOfWork
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default)
+        public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+
+        public void Stage(RowWrite write)
         {
-            if (request.DocumentKind ==
-                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            if (write.Unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind &&
+                write.Mode != RowWriteMode.Delete)
             {
                 owner.VersionSaveWasRejected = true;
-                return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
+                var id = write.Values?.Values[WorkflowsDesignStorageManifest.IdField]?.ToString()
+                         ?? throw new InvalidOperationException("Version write has no id.");
+                inner.Stage(RowWrite.Delete(
+                    write.Unit,
+                    GroundworkDesignStorage.Key(id),
+                    WriteOptions.IfVersion(1)));
+                return;
             }
-
-            return inner.SaveAsync(request, cancellationToken);
+            inner.Stage(write);
         }
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) =>
-            inner.CommitAsync(cancellationToken);
-
-        public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-            inner.RollbackAsync(cancellationToken);
-
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
+        public BatchWriteSummary Commit() => inner.Commit();
+        public BatchWriteReport CommitWithOutcomes() => inner.CommitWithOutcomes();
+        public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) => inner.CommitWithOutcomesAsync(cancellationToken);
+        public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) => inner.CommitAsync(cancellationToken);
+        public void Rollback() => inner.Rollback();
+        public void Dispose() => inner.Dispose();
     }
 
     private sealed class AcknowledgementLostAfterCommitUnitOfWork(
-        IDocumentUnitOfWork inner,
-        CancellationTokenSource callerCancellation) : IDocumentUnitOfWork
+        IUnitOfWork inner,
+        CancellationTokenSource callerCancellation) : IUnitOfWork
     {
-        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
+        public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+        public void Stage(RowWrite write) => inner.Stage(write);
 
-        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        public BatchWriteSummary Commit()
         {
-            await inner.CommitAsync(cancellationToken);
-            await callerCancellation.CancelAsync();
-            throw new DocumentCommitAcknowledgementUncertainException(
-                [GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind]);
+            var result = inner.Commit();
+            callerCancellation.Cancel();
+            throw new GroundworkDesignUncertainCommitException("The provider acknowledged the commit only uncertainly.");
         }
 
-        public Task RollbackAsync(CancellationToken cancellationToken = default) => inner.RollbackAsync(cancellationToken);
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
+        public BatchWriteReport CommitWithOutcomes()
+        {
+            var result = inner.CommitWithOutcomes();
+            if (result.IsSuccessful)
+            {
+                callerCancellation.Cancel();
+                throw new GroundworkDesignUncertainCommitException("The provider acknowledged the commit only uncertainly.");
+            }
+            return result;
+        }
+
+        public async ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitWithOutcomesAsync(cancellationToken);
+            if (result.IsSuccessful)
+            {
+                await callerCancellation.CancelAsync();
+                throw new GroundworkDesignUncertainCommitException("The provider acknowledged the commit only uncertainly.");
+            }
+            return result;
+        }
+
+        public async ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default)
+        {
+            var result = await inner.CommitAsync(cancellationToken);
+            await callerCancellation.CancelAsync();
+            throw new GroundworkDesignUncertainCommitException("The provider acknowledged the commit only uncertainly.");
+        }
+
+        public void Rollback() => inner.Rollback();
+        public void Dispose() => inner.Dispose();
     }
 }
