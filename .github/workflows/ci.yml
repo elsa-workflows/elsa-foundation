@@ -218,6 +218,26 @@ jobs:
           --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests'
           -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore the publishing v2 provider proof
+        run: dotnet restore tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # This project starts no containers, so the container-free lane also runs it -- and there its three
+      # non-SQLite cases skip, because that lane has no connection strings to give them. Running it here
+      # too is what makes the postgresql, sqlserver and mongodb cases actual evidence instead of a
+      # permanent skip; GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX turns a missing string into a
+      # failure, so this step cannot quietly degrade back into skipping.
+      - name: Prove the publishing v2 catalog on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_publishing?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~PublishingGroundworkProviderMatrixTests'
+          -p:WarningsNotAsErrors=NU1603
+
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:

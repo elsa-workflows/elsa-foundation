@@ -7,25 +7,21 @@ exercise the real HTTP + persistence + runtime-pump path that unit/integration t
 
 ## Prerequisites
 
-Build the server, deploy the complete reference-composition schema to the fresh SQLite database, then start the
-server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
+Build and start the server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
 
 ```bash
 dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj
-dotnet tool run groundwork -- apply \
-  --manifest-assembly src/Apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-  --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
-  --provider sqlite \
-  --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
-  --output json \
-  --safe
 dotnet run --project src/Apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
+**There is no separate schema-deployment step any more.** Under Groundwork v2 the storage session source
+admits every composed lane's units at startup, so the server creates and validates its own schema when it
+boots. `.config/dotnet-tools.json` is empty and the old `dotnet tool run groundwork -- apply` command --
+along with the `GroundworkAllFeaturesWithDiagnosticsDeploymentSchema` it deployed -- went with the v1
+substrate.
+
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
 everything the core flow needs (design + publishing + runtime APIs, identity, `GroundworkUnifiedPersistenceSqlite`).
-Run schema deployment while the server is stopped. The manifest assembly must come from the server output directory,
-where all feature assemblies needed by the complete deployment schema are colocated.
 
 ## Running these tests — READ THIS (agents included)
 
@@ -33,9 +29,8 @@ where all feature assemblies needed by the complete deployment schema are coloca
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
   (`elsa-groundwork.db*`, `elsa.sqlite.db*`, `*.schema.lock` under `src/Apps/Elsa.Workbench/`; stop the server /
-  free port 5095 first), then re-run the Groundwork schema deployment command above before starting the server.
-  Old documents carry an older schema version a newer build refuses to read, which surfaces as spurious `500`s
-  on publish.
+  free port 5095 first), then start the server, which re-admits the schema from empty. Old rows carry an older
+  schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
   require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed

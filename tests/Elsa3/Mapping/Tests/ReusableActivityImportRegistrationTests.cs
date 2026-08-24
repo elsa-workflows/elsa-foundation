@@ -119,6 +119,26 @@ public sealed class ReusableActivityImportRegistrationTests
     }
 
     [Fact]
+    public void Groundwork_provider_feature_depends_on_the_activity_design_lane_it_resolves_from()
+    {
+        // Groundwork_provider_feature_builds_and_resolves_every_owned_registration registers the harness
+        // store as a singleton, so it cannot see that this feature never supplies
+        // GroundworkV2ActivityDesignStore itself. That store is a required constructor dependency of
+        // GroundworkActivityManagementProjectionWriter and of the import command, so the pairing has to
+        // be declared rather than assumed -- otherwise selecting this feature alone composes a shell
+        // that only fails once those services resolve.
+        var featureAttribute = typeof(Elsa3ImportActivitiesGroundworkFeature)
+            .GetCustomAttributes(inherit: false)
+            .Single(x => x.GetType().Name == "ShellFeatureAttribute");
+        var dependencies = (IEnumerable<object>?)featureAttribute.GetType()
+            .GetProperty("DependsOn")
+            ?.GetValue(featureAttribute) ?? [];
+
+        Assert.Contains(dependencies, x =>
+            StringComparer.Ordinal.Equals(x?.ToString(), "ActivitiesDesignGroundworkPersistence"));
+    }
+
+    [Fact]
     public async Task Single_definition_importer_routes_reusable_sources_to_collection_import()
     {
         var mapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(null!, null!, null!);

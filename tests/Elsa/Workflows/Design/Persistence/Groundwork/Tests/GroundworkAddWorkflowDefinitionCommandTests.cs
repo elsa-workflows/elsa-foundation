@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Groundwork.Store;
 using Xunit;
+using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -95,7 +96,9 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             GroundworkTestAccess.AccessContext("tenant-a"));
         var savesBeforeAttempt = store.SaveCount;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        // A definition outside the current tenant is invisible to the scope-bound store, so this is a
+        // not-found -- which WorkflowsDesignApi answers as 404. It must not surface as a server error.
+        await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             command.Execute(new DesignOperationKey("request-1"), "def-1", WorkflowDefinitionState.Empty));
 
         Assert.Equal(savesBeforeAttempt, store.SaveCount);

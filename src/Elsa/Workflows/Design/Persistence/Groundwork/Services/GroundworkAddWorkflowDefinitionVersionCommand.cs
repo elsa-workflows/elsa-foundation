@@ -79,16 +79,12 @@ public sealed class GroundworkAddWorkflowDefinitionVersionCommand(
             cancellationToken: cancellationToken,
             beforeAttempt: async token =>
             {
-                WorkflowDefinition definition;
-                try
-                {
-                    definition = await definitionStore.GetAsync(definitionId, token);
-                }
-                catch (EntityNotFoundException exception) when (accessContextAccessor.Current.Scope is not null)
-                {
-                    throw new InvalidOperationException(
-                        $"Workflow definition '{definitionId}' is not available in the current persistence scope.", exception);
-                }
+                // Let EntityNotFoundException through. WorkflowsDesignApi maps it to 404; wrapping it
+                // reached the generic 500 handler instead, so a definition that is merely absent -- or
+                // that belongs to another tenant, which the scope-bound store reports the same way --
+                // was answered as a server error. 404 is also the non-leaking answer for the
+                // cross-tenant case: it says nothing about whether the id exists elsewhere.
+                var definition = await definitionStore.GetAsync(definitionId, token);
                 accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
                 var lastVersion = await versionStore.FindLatestVersionAsync(definitionId, token);
                 var nextVersion = WorkflowVersionNumbering.NextMajor(lastVersion?.Version);
