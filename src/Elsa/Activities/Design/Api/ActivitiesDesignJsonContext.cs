@@ -158,6 +158,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ReusableActivityVersionLifecycleView))]
 [JsonSerializable(typeof(ActivityContractProposalView))]
 [JsonSerializable(typeof(ActivityContractProposalChangeView))]
+[JsonSerializable(typeof(ActivityContractProposalFingerprintSnapshot))]
 [JsonSerializable(typeof(ActivityVersionDiffView))]
 [JsonSerializable(typeof(ActivityVersionDiffIdentityView))]
 [JsonSerializable(typeof(ActivityVersionProviderDiffView))]
