@@ -388,6 +388,9 @@
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Api/" />
+  <Folder Name="/tests/Elsa/Api/Endpoints/">
+    <Project Path="tests/Elsa/Api/Endpoints/Tests/Elsa.Api.Endpoints.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Api/Compatibility/" />
   <Folder Name="/tests/Elsa/Api/Compatibility/Testing/">
     <Project Path="tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj" />

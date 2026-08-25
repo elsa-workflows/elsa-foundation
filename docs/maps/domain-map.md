@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 148
-- Test projects: 106
+- Test projects: 107
 - Domains: 27
 - Direct cross-domain references: 691
 
@@ -17,7 +17,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 |---|---:|---:|---|
 | Elsa.Activities | 23 | 23 | contract<br>feature/implementation<br>test |
 | Elsa.Agent | 5 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Api | 3 | 3 | feature/implementation<br>test |
+| Elsa.Api | 3 | 4 | feature/implementation<br>test |
 | Elsa.Architecture | 0 | 1 | test |
 | Elsa.Attention | 2 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
@@ -222,6 +222,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Api.Capabilities.Tests](../../tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj) | test | Elsa.Api | Capabilities.Tests | test | Elsa.Api.Capabilities<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Oidc |
 | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | test | Elsa.Api | Compatibility.Testing | test | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Api.Compatibility.Testing.Tests](../../tests/Elsa/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj) | test | Elsa.Api | Compatibility.Testing.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Api.Endpoints.Tests](../../tests/Elsa/Api/Endpoints/Tests/Elsa.Api.Endpoints.Tests.csproj) | test | Elsa.Api | Endpoints.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | Tests | test | Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Graph.Design<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Compatibility.Testing<br>Elsa.Attention.Api<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Groundwork.ProviderEvidenceImporter<br>Elsa.Http<br>Elsa.Http.Core<br>Elsa.Mediator<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.ExecutionEvidence<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript<br>Elsa3.Activities.Design.Import<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Attention.Api.Tests](../../tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | test | Elsa.Attention | Api.Tests | test | Elsa.Attention.Api |
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | Core.Tests | test | Elsa.Attention.Core |
