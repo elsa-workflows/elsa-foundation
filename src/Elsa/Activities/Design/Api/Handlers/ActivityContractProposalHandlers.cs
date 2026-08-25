@@ -297,6 +297,13 @@ public sealed class ActivityContractProposalService(
         return new(change.ChangeId, change.Operation, change.MemberKind, change.ReferenceKey, input, output, outcome);
     }
 
+    // Serializing the fingerprint payload with fresh Web-default options would cache this
+    // assembly's type metadata in the process-shared Web-defaults serializer cache and root the
+    // collectible module context. The owner context avoids that; it is bound to plain Web defaults
+    // (strict encoder, no wire converters) because the fingerprint bytes are a frozen contract.
+    private static readonly ActivitiesDesignJsonContext FingerprintContext =
+        new(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
     private static string ComputeFingerprint(
         string draftId,
         long revision,
@@ -306,16 +313,16 @@ public sealed class ActivityContractProposalService(
         IReadOnlyList<ActivityContractProposalChange> changes,
         IReadOnlyList<ActivityDiagnostic> diagnostics)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            draftId,
-            revision,
-            providerKey,
-            providerSchemaVersion,
-            manifestFingerprint,
-            changes,
-            diagnostics
-        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(
+            new ActivityContractProposalFingerprintSnapshot(
+                draftId,
+                revision,
+                providerKey,
+                providerSchemaVersion,
+                manifestFingerprint,
+                changes,
+                diagnostics),
+            FingerprintContext.ActivityContractProposalFingerprintSnapshot);
         return $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
     }
 

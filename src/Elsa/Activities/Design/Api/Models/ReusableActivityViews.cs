@@ -298,6 +298,20 @@ public sealed record ActivityContractProposalView(
     IReadOnlyList<ActivityContractProposalChangeView> Changes,
     IReadOnlyList<ActivityDiagnostic> Diagnostics);
 
+/// <summary>
+/// The exact payload hashed into <see cref="ActivityContractProposalView.ProposalFingerprint"/>.
+/// Property names and order must keep producing the bytes of the original anonymous-type payload:
+/// the fingerprint is wire-visible and clients replay it on apply.
+/// </summary>
+internal sealed record ActivityContractProposalFingerprintSnapshot(
+    string DraftId,
+    long Revision,
+    string ProviderKey,
+    string ProviderSchemaVersion,
+    string ManifestFingerprint,
+    IReadOnlyList<ActivityContractProposalChange> Changes,
+    IReadOnlyList<ActivityDiagnostic> Diagnostics);
+
 public sealed record ActivityDraftValidationView(
     string DraftId,
     long Revision,
