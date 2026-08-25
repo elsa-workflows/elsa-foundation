@@ -238,6 +238,25 @@ jobs:
           --filter 'FullyQualifiedName~PublishingGroundworkProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore the publishing API Groundwork proof
+        run: dotnet restore tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # The suite that owns the draft-test-run receipt store runs on the in-memory and SQLite providers in
+      # the container-free lane, which pins behaviour but is not evidence about the other three. This step
+      # is what makes its postgresql, sqlserver and mongodb cases real: create-only receipt writes and the
+      # idempotency-key lookup are provider behaviour, not API shape.
+      - name: Prove the draft-test-run receipt store on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_draft_runs?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~ActivityDraftTestRunProviderMatrixTests'
+          -p:WarningsNotAsErrors=NU1603
+
   # Feature 094 container-free ratchets. The whole architecture project runs so a
   # renamed or newly added gate cannot silently fall out of a brittle test filter.
   groundwork-fast:
