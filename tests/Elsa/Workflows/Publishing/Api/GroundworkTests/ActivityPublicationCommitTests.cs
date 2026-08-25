@@ -121,13 +121,21 @@ public sealed class ActivityPublicationCommitTests
     }
 
     /// <summary>
-    /// A tenant publishing an authorized global resource commits under its own operation scope while the
-    /// resource itself stays global. Both halves are asserted: the receipt acquires the caller's tenant,
-    /// and the design entities it publishes do not — they are <c>TenantEntity</c>, so a publication that
-    /// stamped the operation's tenant onto them would silently make a global activity tenant-owned.
+    /// A tenant publishing an authorized global resource must not make that resource theirs. The design
+    /// entities are <c>TenantEntity</c>, so a publication that stamped the operation's tenant onto them
+    /// would silently convert a global activity into a tenant-owned one; the receipt, which is the
+    /// operation's own record, does carry the tenant.
+    ///
+    /// <para>
+    /// This asserts <b>tenant ownership on the entities</b>, not the physical storage scope the rows land
+    /// in. The command does not choose a scope — it inherits whatever
+    /// <c>IPersistenceAccessContextAccessor</c> its stores were built with, which here is the operation's
+    /// own scope — so a test at this seam cannot say anything about global physical placement, and this
+    /// one does not claim to. That belongs to a host-composition test, not to the commit command.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task Publication_uses_the_tenant_operation_scope_for_an_authorized_global_resource()
+    public async Task Publication_does_not_make_a_global_resource_tenant_owned()
     {
         await using var harness = await Harness.CreateAsync(operationTenantId: "tenant-a", scope: "tenant-a");
 
@@ -140,7 +148,7 @@ public sealed class ActivityPublicationCommitTests
         Assert.NotNull(receipt);
         Assert.Equal("tenant-a", receipt!.TenantId);
 
-        // The resource is not. Nothing the publication wrote may acquire the operation's tenant.
+        // The resource is not the tenant's. Nothing the publication wrote may acquire the operation's tenant.
         Assert.NotNull(harness.LoadDesign(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "version-1"));
         var authoring = harness.Design<ActivityDefinitionAuthoringState>(
             ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,

@@ -68,7 +68,7 @@ These are now in `tests/Elsa/Workflows/Publishing/Api/GroundworkTests/ActivityPu
 | One transaction leaves design version, runtime template, source reference and receipt all present | `Publication_commits_design_runtime_and_publishing_together` |
 | The authoring head and recommended version advance, and the draft becomes `Published`, in that same commit | `Publication_advances_the_authoring_head_and_publishes_the_draft` |
 | Authoring is resolved by definition, not by document id | `Publication_finds_authoring_by_definition_when_its_document_id_differs` |
-| A tenant publishing an authorized global resource commits under its own operation scope, and the resource stays global | `Publication_uses_the_tenant_operation_scope_for_an_authorized_global_resource` |
+| A tenant's publication does not make a global resource tenant-owned | `Publication_does_not_make_a_global_resource_tenant_owned` |
 | A failure inside the transaction leaves **no** part of the publication behind | `A_failure_inside_the_transaction_leaves_no_partial_publication` |
 
 The last is the one with no substitute anywhere, and it is built to avoid the way this test usually goes
