@@ -46,6 +46,19 @@ point the child process reports its own reading, and the benchmark's own startup
 drift. So the honest statement is that every repeat was *launched* under 4.0 and *measured* between 3.88
 and 4.31, not that every repeat started below 4.0.
 
+The gate is an **external procedure, not part of the instrument** — the benchmark records load but does
+not enforce quiet — so it is written out here to be reproducible:
+
+```bash
+# Wait for the one-minute load average to fall below 4.0, then run one repeat.
+until [ "$(sysctl -n vm.loadavg | awk '{print ($2 < 4.0)}')" = 1 ]; do sleep 15; done
+dotnet test benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj \
+  -c Release --no-build \
+  --filter "FullyQualifiedName~ConcurrencyScalingCurve_SharedWriterHeadroom" \
+  --logger "console;verbosity=detailed"
+# Then settle below 4.5 before the next repeat, so each starts from a comparable baseline.
+```
+
 This gating is not ceremony. An earlier unpaced set drove load from 3.4 to 25 through its own repeats and
 swung the N=16 shared cell from 3725 ms to 8207 ms and back to 3780 ms — a 2.2× spread attributable
 entirely to ambient load. That is the same quiet-machine distortion that produced spec 115's original

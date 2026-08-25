@@ -347,11 +347,17 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
                     {
                         result = await MeasureAsync(backend, shape, concurrency, warmup: false);
                     }
-                    catch (Exception exception)
+                    catch (Exception exception) when (exception is not OutOfMemoryException)
                     {
                         // A level that faults is itself a result: past some depth the drain's ownership
                         // heartbeat starves behind the same writer it is queued on. Record and continue so the
-                        // rest of the curve survives.
+                        // rest of the curve survives. The catch stays broad because the fault surfaces as a
+                        // different exception type per backend and the threshold moves with host load, so
+                        // naming one type would abort the sweep on the others.
+                        //
+                        // OutOfMemoryException is excluded deliberately. It says the host ran out of room,
+                        // not that this level congested, and every cell measured after it would be describing
+                        // a starved machine. Recording it as a FAULTED level would publish that as a finding.
                         output.WriteLine($"{concurrency,4} | {backend,-15} | FAULTED — {exception.GetType().Name}: {exception.Message}");
                         continue;
                     }
