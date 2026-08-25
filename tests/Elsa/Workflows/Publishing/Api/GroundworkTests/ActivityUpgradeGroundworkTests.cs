@@ -96,7 +96,7 @@ public sealed class ActivityUpgradeGroundworkTests
         Assert.All(projection.Items, x => Assert.Equal("old", x.Dependency.VersionId));
     }
 
-    [Fact(Skip = "Blocked on #1430: the v2 rebuild coordinator queries a routed lane with no predicate and throws for every caller. Remove this Skip with the fix.")]
+    [Fact]
     public async Task Full_rebuild_converges_an_ordinary_workflow_edit_at_a_new_watermark()
     {
         await using var harness = await Harness.CreateAsync(workflowExpectedRevision: 1);
@@ -113,7 +113,7 @@ public sealed class ActivityUpgradeGroundworkTests
         Assert.Contains(after.Items, x => x.Owner.Kind == "ActivityDraft" && x.Dependency.VersionId == "old");
     }
 
-    [Fact(Skip = "Blocked on #1430: the v2 rebuild coordinator queries a routed lane with no predicate and throws for every caller. Remove this Skip with the fix.")]
+    [Fact]
     public async Task Full_rebuild_includes_parent_structure_owned_outcome_usage()
     {
         await using var harness = await Harness.CreateAsync(workflowExpectedRevision: 1);

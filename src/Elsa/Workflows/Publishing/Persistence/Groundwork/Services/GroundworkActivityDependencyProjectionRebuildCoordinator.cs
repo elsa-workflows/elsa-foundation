@@ -110,7 +110,6 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind;
         foreach (var entry in ListWorkflows(
                      unit,
-                     WorkflowsDesignStorageManifest.DraftDefinitionIdField,
                      [
                          designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField),
                          designStorage.Order(unit, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, descending: true),
@@ -138,7 +137,6 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
         foreach (var entry in ListWorkflows(
                      unit,
-                     WorkflowsDesignStorageManifest.VersionDefinitionIdField,
                      [
                          designStorage.Order(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField),
                          designStorage.Order(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField),
@@ -217,19 +215,18 @@ public sealed class GroundworkActivityDependencyProjectionRebuildCoordinator(
         ActivityDesignQueryPager.QueryAllAsync(activityStore, kind, queryIdentity, [], order, cancellationToken);
 
     /// <summary>
-    /// Walks a workflow-design route end to end. The unbounded range over the route's leading column is
-    /// how a clause-free traversal is spelled in the public v2 query model: it admits every row the index
-    /// covers, in the index's own order, rather than asking the provider for an unrouted scan.
+    /// Walks a workflow-design route end to end. The clause-free predicate is how an exhaustive traversal
+    /// is spelled in the public v2 query model: it admits every row the named index covers, in that index's
+    /// own order, rather than asking the provider for an unrouted scan.
     /// </summary>
     private IReadOnlyList<GroundworkDesignEntry> ListWorkflows(
         string unitId,
-        string leadingField,
         IReadOnlyList<OrderTerm> order,
         string index,
         CancellationToken cancellationToken) =>
         designStorage.Query(
             unitId,
-            new Predicate.Range(designStorage.Column(unitId, leadingField), null, null),
+            Predicate.AlwaysTrue.Instance,
             order,
             index,
             cancellationToken: cancellationToken);
