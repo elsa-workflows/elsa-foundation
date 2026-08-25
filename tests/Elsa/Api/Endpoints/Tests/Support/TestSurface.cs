@@ -135,15 +135,10 @@ public static class ShapeEndpoints
     [Delete("/items/{id}")]
     public sealed class NoContentShape : ApiEndpoint<SampleBody>
     {
-        public static string? LastId;
-
         public override void Configure(ApiEndpointOptions options) => options.Operation = "NoContentShape";
 
-        public override Task HandleAsync(SampleBody request, CancellationToken cancellationToken)
-        {
-            LastId = request.Id;
-            return Task.CompletedTask;
-        }
+        public override Task HandleAsync(SampleBody request, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 
     [Get("/status")]

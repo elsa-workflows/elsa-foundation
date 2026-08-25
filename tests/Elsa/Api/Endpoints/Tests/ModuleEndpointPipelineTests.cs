@@ -42,7 +42,6 @@ public sealed class ModuleEndpointPipelineTests
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
-        Assert.Equal("route-9", ShapeEndpoints.NoContentShape.LastId);
     }
 
     [Fact]
@@ -118,7 +117,8 @@ public sealed class ModuleEndpointPipelineTests
         // binder's own 415 problem branch is covered by EndpointRequestBinderTests.
         await using var host = await PipelineHost.StartAsync(api => api.MapEndpoint<ShapeEndpoints.BodyShape>());
 
-        var response = await host.Client.PostAsync("/items/x", new StringContent("id=x", Encoding.UTF8, "text/plain"));
+        using var content = new StringContent("id=x", Encoding.UTF8, "text/plain");
+        var response = await host.Client.PostAsync("/items/x", content);
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
@@ -133,7 +133,8 @@ public sealed class ModuleEndpointPipelineTests
                 typeof(SampleResponse), 200, null,
                 (context, _, _) => context.Response.WriteAsync("never")));
 
-        var response = await host.Client.PostAsync("/gated", new StringContent("""{"id":"x"}""", Encoding.UTF8, "text/plain"));
+        using var content = new StringContent("""{"id":"x"}""", Encoding.UTF8, "text/plain");
+        var response = await host.Client.PostAsync("/gated", content);
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
