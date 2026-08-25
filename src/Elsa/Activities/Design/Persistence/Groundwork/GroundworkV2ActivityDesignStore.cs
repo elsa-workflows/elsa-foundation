@@ -575,8 +575,10 @@ public sealed class GroundworkV2ActivityDesignStore(
             "point-read" =>
                 [new RoutePredicateRule(ActivitiesDesignStorageManifest.IdField, ActivityDesignComparisonKind.Equal)],
             "list-by-definition" =>
-                [new RoutePredicateRule(ActivitiesDesignStorageManifest.DefinitionIdField,
-                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+                query.Clauses.Count == 0
+                    ? []
+                    : [new RoutePredicateRule(ActivitiesDesignStorageManifest.DefinitionIdField,
+                        ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
             "list-by-head-version" =>
                 [new RoutePredicateRule(ActivitiesDesignStorageManifest.HeadVersionIdField,
                     ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
@@ -587,8 +589,10 @@ public sealed class GroundworkV2ActivityDesignStore(
                 [new RoutePredicateRule(ActivitiesDesignStorageManifest.DefinitionVersionIdField,
                     ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
             "list-by-owner-version" =>
-                [new RoutePredicateRule(ActivitiesDesignStorageManifest.OwnerVersionIdField,
-                    ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
+                query.Clauses.Count == 0
+                    ? []
+                    : [new RoutePredicateRule(ActivitiesDesignStorageManifest.OwnerVersionIdField,
+                        ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
             "list-by-dependency-version" =>
                 [new RoutePredicateRule(ActivitiesDesignStorageManifest.DependencyVersionIdField,
                     ActivityDesignComparisonKind.Equal, ActivityDesignComparisonKind.In)],
