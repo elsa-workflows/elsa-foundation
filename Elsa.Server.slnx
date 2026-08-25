@@ -589,6 +589,7 @@
     <Project Path="tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
+    <Project Path="tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj" />
     <Project Path="tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/" />

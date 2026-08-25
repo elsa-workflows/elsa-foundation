@@ -198,7 +198,11 @@ public sealed class ActivityDraftTestRunService(
             now);
 
         await activityTemplates.SaveAsync(compilation.Template, cancellationToken);
-        await sourceReferences.SaveAsync(templateReference, cancellationToken);
+        // The reference id is content-addressed by the template hash, so a rerun of an unchanged draft
+        // resolves to the reference the first run already created. Source references are create-only, so
+        // reuse that one: recreating it is what made every second test run of a draft throw.
+        if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
+            await sourceReferences.SaveAsync(templateReference, cancellationToken);
 
         var origin = new ActivityInvocationOrigin([
             new(ActivityInvocationOriginSegmentKind.WorkflowRoot, $"activity-test-wrapper:{definition.Id}"),
