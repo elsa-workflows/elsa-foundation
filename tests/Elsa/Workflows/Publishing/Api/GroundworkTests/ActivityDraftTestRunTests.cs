@@ -291,8 +291,9 @@ public sealed class ActivityDraftTestRunTests
         var authoring = AuthoringState.Create();
         // Hold both requests at the point where each has seen the reference as absent, then release them
         // together. Left to chance the window is far too narrow to hit, and a test that cannot reproduce
-        // the interleaving cannot show the difference between handling it and getting away with it.
-        using var bothObservedAbsent = new RendezvousOnMissingReference(participants: 2);
+        // the interleaving cannot show the difference between handling it and getting away with it. The
+        // first request yields at the gate, which is what lets the second one start and join it.
+        var bothObservedAbsent = new RendezvousOnMissingReference(participants: 2);
         await using var provider = BuildProvider(
             CreateCatalog(),
             TimeProvider.System,
@@ -302,11 +303,9 @@ public sealed class ActivityDraftTestRunTests
         // Both requests are the first use of this template, so both observe the content-addressed source
         // reference as absent and race to create it. Only one create-only write can win; the loser is a
         // valid test run and must proceed against the winner's reference rather than being rejected.
-        // Task.Run so both are dispatched before either blocks: the rendezvous is a blocking wait, and a
-        // caller that reached it inline would stop the second request from ever being issued.
         var runs = await Task.WhenAll(
-            Task.Run(() => StartAsync(provider, authoring.Draft.Revision, "concurrent-first-a")),
-            Task.Run(() => StartAsync(provider, authoring.Draft.Revision, "concurrent-first-b")));
+            StartAsync(provider, authoring.Draft.Revision, "concurrent-first-a"),
+            StartAsync(provider, authoring.Draft.Revision, "concurrent-first-b"));
 
         Assert.All(runs, run => Assert.Null(run.Failure));
         Assert.Equal(2, runs.Select(run => run.TestRunId).Distinct(StringComparer.Ordinal).Count());
@@ -1131,23 +1130,38 @@ public sealed class ActivityDraftTestRunTests
     /// <summary>
     /// Releases its participants only once every one of them has arrived, so the create-only race is forced
     /// rather than hoped for. It opens once and stays open: only the first use of a template races.
+    ///
+    /// The wait is asynchronous, and has to be. A blocking wait holds a thread-pool thread while it waits,
+    /// and on a two-core CI runner the first arrival then starves the second request that is supposed to
+    /// join it — the rendezvous times out and the test fails for reasons that have nothing to do with the
+    /// code under test. Awaiting a gate task holds no thread, so the participants meet on any core count.
     /// </summary>
-    private sealed class RendezvousOnMissingReference(int participants) : IDisposable
+    private sealed class RendezvousOnMissingReference(int participants)
     {
-        private readonly CountdownEvent countdown = new(participants);
+        private readonly TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrived;
 
-        public void ArriveAndWait()
+        public async Task ArriveAsync()
         {
-            if (countdown.IsSet)
+            if (gate.Task.IsCompleted)
                 return;
 
-            countdown.Signal();
-            // A generous bound rather than an indefinite wait: if the interleaving cannot be reached the
-            // test should fail on its assertions, not hang the suite.
-            countdown.Wait(TimeSpan.FromSeconds(30));
-        }
+            if (Interlocked.Increment(ref arrived) >= participants)
+                gate.TrySetResult();
 
-        public void Dispose() => countdown.Dispose();
+            // Bounded so a harness fault cannot hang the suite. Reaching the bound means the interleaving
+            // this test exists to force never happened, so it fails loudly rather than passing vacuously.
+            try
+            {
+                await gate.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            }
+            catch (TimeoutException)
+            {
+                throw new InvalidOperationException(
+                    $"Only {Volatile.Read(ref arrived)} of {participants} requests reached the source-reference " +
+                    "rendezvous, so the create-only race was never forced and this run proves nothing.");
+            }
+        }
     }
 
     private sealed class RendezvousSourceReferenceStore(
@@ -1160,7 +1174,7 @@ public sealed class ActivityDraftTestRunTests
         {
             var reference = await inner.FindAsync(sourceReferenceId, cancellationToken);
             if (reference is null)
-                rendezvous.ArriveAndWait();
+                await rendezvous.ArriveAsync();
             return reference;
         }
 
