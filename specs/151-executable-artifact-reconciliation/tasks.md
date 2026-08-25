@@ -847,3 +847,50 @@ integrate first, then the FR amendment, then the blockers, then the tail.
   - **Open gap, stated in the review rather than hidden**: the two e2e suites have not been re-run since the endpoints were converted, and they exercise `executable-export` and `activation-slots` directly.
 
 **Approved as recorded, no action:** ADR 0043 partial supersession · the slot move to Runtime · keeping `IWorkflowArtifactExportTarget` · T121/T122/T128 removals · all three "deliberately not done" items.
+
+## Phase 10 - Groundwork v2 port (main at f2b88192e)
+
+`main` replaced the persistence platform this spec is built on: 175 files deleted and 78 added under
+`Persistence/Groundwork`, and zero matches on `main` for `IGroundworkDocumentStore`,
+`BoundedDocumentStore` or `GroundworkDocumentStore`. Merging yields 73 conflicts of which 40 are `UD`
+(modified by us, deleted by them). Full analysis and the resolved open questions:
+[groundwork-v2-port-scope.md](groundwork-v2-port-scope.md).
+
+Sequencing note: T157 and T158 shape everything in the build group, and T167 is deliberately last -
+it is the item most likely to need a conversation rather than code.
+
+### Decisions and blockers
+
+- [ ] T157 **Lane ownership: re-apply T117 on v2 - the activation slot stays runtime-owned.** Architect decision (Joey, 2026-08-24). `main`'s v2 still carries `GroundworkPublicationSlotStore` and `GroundworkPublicationProjectionIntentStore` on the publishing side, so this is a re-application against a lane that was just re-migrated, not a fresh move. Encode the decision here so the build tasks below can assume it.
+- [ ] T158 **[BLOCKED - Groundwork owner] Establish whether the CAS/`Revision` contract is expressible on `GroundworkStorageTransaction`.** v1 gave the authority document-level concurrency; v2 is row-based with a session/transaction model (`GroundworkStorageTransaction`, `GroundworkStorageSessionGate`). `TakeOver` and the revision check must be re-expressed in that model, not transliterated, and whether v2 offers the primitive is not answerable from outside the package. **T162 cannot start until this is answered.**
+
+### Verify what survived main's port
+
+- [ ] T159 **Diff each already-ported v2 store against our v1 version and list the missing spec-151 deltas.** `main` ported `WorkflowTriggerBinding`, `RecurringTriggerSchedule`, `WorkflowExecutableSourceReference`, `WorkflowExecutable` and `ExecutableActivityTemplate` from the **pre-151** v1, so our deltas are probably absent: the `Source` and `Revision` fields, T145's store-side filtering, and the bounded-read shapes. Cheap, and it sharpens every estimate below - do it before starting the build group.
+
+### Build the activation ledger on v2
+
+- [ ] T160 **`GroundworkV2WorkflowActivationSlotStorageConventions`** - row values, projected lookup fields, deserialize. Follow `GroundworkV2WorkflowTriggerBindingStorageConventions` as the template (~170 lines). Projections must cover both reads the ledger serves: by-definition and by-active-activation.
+- [ ] T161 **`GroundworkV2WorkflowActivationSlotStore`** (~750 lines, same template).
+- [ ] T162 **Activation authority on v2 semantics.** `IWorkflowActivationAuthority` with `WorkflowActivationOwnershipIntent.TakeOver` and the revision check, expressed on v2's transaction model. **Blocked on T158.**
+- [ ] T163 **Activation projection state and store on v2** - the v1 pair is `GroundworkActivationProjectionState` + `GroundworkActivationProjectionStore` (the latter renamed from `GroundworkPublicationProjectionStore` in this spec).
+- [ ] T164 **Manifest and registration**: activation-slot fields and storage unit in `ElsaRuntimeV2StorageManifest`, wired through `GroundworkV2RuntimeRegistration`.
+
+### Re-express the guarantees
+
+- [ ] T165 **Declare the activation-slot read shapes to the provider admission layer (option A).** Architect decision (Joey, 2026-08-24). v2 changed the *kind* of guarantee: per `DesignPersistenceBoundedQueryTests`, "certification of newly written scale-bearing paths is owned by the provider admission layer (undeclared shapes fail before I/O)". Where v1's T143 proved native execution after the fact, v2 makes it structural - an undeclared shape does not execute. This replaces the four deleted `ElsaGroundworkQueryRoutes` entries.
+- [ ] T166 **Token ratchet over the activation-slot sources (option C).** Mirror `DesignPersistenceBoundedQueryTests`: fail if a load-all or client-evaluation token appears in the activation-slot lane. Cheap, runs on a laptop, and stops T165's guarantee being quietly undone. **Option B - enrolling the reads in the container-backed provider plan contract suite - was rejected for now**: strongest evidence, but it is the suite that currently hangs locally (#1422). Reconsider only if T158's conversation establishes that admission does not cover these shapes.
+- [ ] T167 **Re-apply T117 against v2's publishing lane.** Slot reads move to the runtime authority; reconcile with `main`'s v2 `GroundworkPublicationSlotStore` and `GroundworkPublicationProjectionIntentStore`. Largest semantic item in the port; sequenced last on purpose. `Test-PublishingLifecycle` already reads `runtime/workflows/activation-slots/{definitionId}/default` and is the fastest check that the move landed.
+
+### Delete rather than port
+
+- [ ] T168 **Retire the document-versioning work - v2 makes it unnecessary.** v2 carries one manifest-level `SchemaVersion` and `main` has zero upcaster or document-version files. Delete rather than port: T142's per-kind version bumps, `ElsaRuntimeDocumentVersions`, `GroundworkRuntimeDocumentSerializer`, the V4-to-V5 upcaster, and the `v3/` and `v5/` fixtures with their bridge tests. Record the removals under §2.21.1 - these are deletions of *our own* tests made obsolete by a platform change, which is a different case from removing coverage.
+- [ ] T169 **Drop the `ActivitiesDesignStorageManifest` nullability fix (`d539b591f`) and confirm the reported regression is moot.** v2 deletes the auto-physicalization block that fix patched - `main`'s file is 275 lines against our ~1,090 - so the `GW-SCHEMA-003` upgrade break very likely disappears with the port. **Tell the Groundwork owner before he spends time on it**; the PR comment currently asks him to fix it.
+
+### Tests and acceptance
+
+- [ ] T170 **Rebase the tests covering ported entities onto v2 fixtures** - 31 of the 73 conflicts are tests, and they divide the same way as the source: rebase, rewrite, or delete with T168.
+- [ ] T171 **Write the activation-ledger tests against the v2 store**, including the CAS/revision behaviour once T158 is settled.
+- [ ] T172 **Refresh the manifest goldens** (`Goldens/runtime.json`, `Goldens/publishing.json`) as v2 leaves them.
+- [ ] T173 **Acceptance: both e2e suites, then the deployment-mode suites.** Per [main-integration.md](../../docs/agents/main-integration.md), unit tests alone do not establish that a platform change is safe. `Test-RuntimeOnlyArtifactDeployment` (22/22 before the port) is the one that proves the runtime-only engine still reconciles; `Test-ArtifactBasedDeployment` (13/13) covers the Workbench path.
+

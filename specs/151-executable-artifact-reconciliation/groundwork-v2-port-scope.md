@@ -1,6 +1,6 @@
 # Spec 151 → Groundwork v2: port scope
 
-**Status:** scoping only — no work started. Written 2026-08-24 against `main` at `f2b88192e`, branch `1304-executable-artifact-reconciliation` at `bcfe7e9ef`.
+**Status:** scoped; open questions resolved except (3), which is with the Groundwork owner. Tasks converged as Phase 10 in [tasks.md](tasks.md). Written 2026-08-24 against `main` at `f2b88192e`, branch `1304-executable-artifact-reconciliation` at `bcfe7e9ef`.
 
 ## Why this document exists
 
@@ -117,12 +117,19 @@ Genuinely good news; this is spec-151 work that v2 makes unnecessary:
 
 The two e2e suites are unaffected by the model change — they drive HTTP — but they are the acceptance gate for the port, and `Test-RuntimeOnlyArtifactDeployment` in particular proves the runtime-only engine still reconciles.
 
-## Open questions — decisions needed before tasks
+## Open questions — resolved 2026-08-24
 
-1. **Does the activation slot belong in v2's runtime manifest, or does the publishing lane keep slots and the runtime authority read across?** T117 answered this for v1; v2's lane split may change the answer.
-2. **What replaces the GW-QUERY-008 native-plan guarantee** for the activation-slot reads under v2's projection model, and which suite proves it?
-3. **Is the CAS/`Revision` contract expressible on `GroundworkStorageTransaction`**, or does the authority need something v2 does not yet offer? This one may need the Groundwork owner.
-4. **Does the frozen-EF-oracle ratchet still apply** once the design-lane manifest is v2's?
+**1. Lane ownership of the activation slot — RESOLVED: re-apply T117.** The slot stays runtime-owned and the authority remains the single writer, as in v1. `main`'s v2 still carries `GroundworkPublicationSlotStore` and `GroundworkPublicationProjectionIntentStore` on the publishing side, so the port has to re-apply the move against a lane that was just re-migrated. This is the largest semantic item in the port and is sequenced last on purpose.
+
+**2. The native-plan guarantee under v2 — RESOLVED: provider admission (A) plus a token ratchet (C).** v2 changed the kind of guarantee rather than dropping it. In `main`'s own words, in `DesignPersistenceBoundedQueryTests`: *"certification of newly written scale-bearing paths is owned by the provider admission layer (undeclared shapes fail before I/O) and the provider plan contract suite."* v1 proved after the fact that a read ran natively; v2 makes it structural — an undeclared shape does not execute at all.
+
+- **A. Declare the activation-slot read shapes to the provider admission layer.** This is the real guarantee and the mechanism v2 is designed around: a client-materialising slot read cannot ship, because it fails before I/O.
+- **C. Add a token ratchet** mirroring `DesignPersistenceBoundedQueryTests`, failing if a load-all or client-evaluation token appears in the activation-slot sources. Cheap, runs on a laptop, and stops the guarantee being quietly undone.
+- **B (rejected for now): enrolling the slot reads in the provider plan contract suite.** Strongest evidence and closest to what T143 did in v1, but it is the container-backed suite that currently hangs locally (#1422). Held in reserve: add it only if the Groundwork owner says admission does not cover the shapes the ledger needs — a natural part of the question 3 conversation, since both concern what v2 guarantees at the storage boundary.
+
+**3. Is the CAS/`Revision` contract expressible on `GroundworkStorageTransaction`? — OPEN, owned by the Groundwork owner.** v1 gave the authority document-level concurrency; v2 is row-based with a session/transaction model. The `TakeOver` intent and revision check must be re-expressed in that model rather than transliterated, and whether v2 offers the primitive is not answerable from outside the package. Tasks depending on this are marked blocked.
+
+**4. Does the frozen-EF-oracle ratchet still apply? — WITHDRAWN; the question conflated two things.** The ratchet covers `Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore` — identity EF Core, not the Groundwork design lane — and Groundwork v2 does not touch it. `main` has modified neither the ratchet, its baseline, nor that csproj, so T153 and its baseline update stand unchanged and merge cleanly.
 
 ## Recommended sequencing
 
