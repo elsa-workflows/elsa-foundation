@@ -4,6 +4,78 @@ The Groundwork document-store bridge that persists Elsa runtime state (bookmarks
 
 This catalog covers the **schema-versioning** seams added so persisted runtime state can evolve without silently breaking suspended workflows. See [`../../../../docs/serialization.md`](../../../../docs/serialization.md) (**Schema evolution**) for the contract and the sanctioned-exception rationale.
 
+## v2 public composition ports
+
+The v2 adapter boundary is provider-neutral. Elsa features contribute declared storage units and
+resolve these ports; the selected provider owns physical connections, schema admission, and native
+capability evidence. These ports are the clean-break replacement boundary; they must not be used to
+reintroduce a v1 compatibility or migration path.
+
+### `IGroundworkStorageSessionSource` *(Composition contract — `Elsa.Persistence.Groundwork`)*
+
+- **Kind:** provider-neutral adapter port; one singleton source serves every composed target.
+- **Role:** opens a non-owning `IStorageSession` for a declared unit and explicit `StorageAccess`,
+  begins a provider-owned `IUnitOfWork` over declared units, and returns the declared `StorageUnit`
+  definition. `targetName` selects a named physical store; omitting it selects `default`.
+- **Register:** `services.AddGroundworkStorageUnit(unit, targetName?)` creates the singleton
+  `GroundworkStorageSessionSource` and aliases it as this interface. A provider connection must be
+  registered with `AddGroundworkStorageProviderConnection` before startup admission or the first
+  operation.
+- **Lifetime and ownership:** the source is a singleton and is registered for both `IHostedService`
+  and CShells `IShellInitializer`, so plain-host and shell startup admit the same declarations.
+  Sessions are non-owning views held valid by the provider connection; the source does not dispose
+  the connection. The service provider owns a connection registered through the public connection
+  helper and disposes it after its sessions. Unit-of-work instances own their transaction and must be
+  disposed by the caller.
+- **Refusal behavior:** opening an undeclared unit, selecting a target without a connection, using
+  invalid access, or beginning a unit of work with no unit fails descriptively. The source admits each
+  target/unit schema fingerprint once; it never silently substitutes another target or a host-wide
+  union.
+
+### `IGroundworkStorageCapabilitySource` *(Composition contract — `Elsa.Persistence.Groundwork`)*
+
+- **Kind:** read-only provider-capability port; one snapshot per selected target.
+- **Role:** exposes the selected connection's `CapabilityDescriptor` values after the provider has
+  been selected. Runtime adapters use this evidence for atomic-commit and other capability gates;
+  configuration intent or an unselected provider is not evidence.
+- **Default:** the shipped `GroundworkStorageSessionSource` implements this port alongside
+  `IGroundworkStorageSessionSource`. A custom source must publish the same provider-admitted,
+  target-specific snapshot before claiming a capability.
+- **Lifetime:** follows the singleton source/connection lifetime. The returned list is a read-only
+  snapshot; callers do not acquire or dispose provider resources through this interface.
+- **Refusal behavior:** a source must refuse claims that are absent from the selected target's
+  admitted capabilities. Capability checks must fail readiness or the operation with an actionable
+  error; they must not fall back to configuration, another target, or a weaker query/transaction
+  path.
+
+### `AddGroundworkStorageProviderConnection` *(Composition registration — `Elsa.Persistence.Groundwork`)*
+
+- **Role:** publishes one host-selected `IStorageProviderConnection` for a target, either from a
+  factory or an already-created instance. The default target is available through keyed and ordinary
+  resolution; named targets are keyed only.
+- **Ownership:** factory registrations are lazy singletons and the service provider owns the returned
+  connection. Caller-supplied instance registrations remain caller-owned; the caller must keep the
+  instance alive for the composition lifetime and dispose it after the service provider. The
+  connection owns the non-owning sessions opened from it.
+- **Refusal behavior:** null services, factories, or connections are rejected; registering a second
+  connection for the same target is rejected unless it is the exact same instance registration.
+  Give each physical store a distinct target name. This helper never creates a provider, infers a
+  connection string, or silently replaces an existing target.
+
+### `AddGroundworkStorageUnit` and `GroundworkStorageUnitRegistry` *(Composition declarations — `Elsa.Persistence.Groundwork`)*
+
+- **Role:** features contribute provider-neutral `StorageUnit` declarations, optionally bound to a
+  target. The singleton registry keys each declaration by `(target, unit id)`, exposes stable ordered
+  registrations to the session source, and retains the schema fingerprint used for admission.
+- **Composition:** an exact repeat of the same unit shape is idempotent. A second declaration with
+  the same target/unit identity but a different schema is a composition error and is rejected before
+  provider startup. `Require` rejects an undeclared unit rather than inventing one.
+- **Lifetime:** the registry and session source are singleton composition state; provider connections
+  remain the owner of physical resources. Declaring a unit also installs the hosted/shell admission
+  hooks once, so repeated feature registration cannot create competing sources.
+- **Target rule:** target names are normalized before identity and admission. A declaration bound to
+  one target is never served by another target's connection, even when both use the same provider.
+
 ## Target selection — host composition
 
 A Groundwork **target** is one admitted physical store: an opaque, operator-chosen name, the provider leaf

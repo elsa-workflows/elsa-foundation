@@ -1,100 +1,90 @@
-using Elsa.Persistence.Core.Queries;
-using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Groundwork.Documents.Store;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
-/// <summary>
-/// Groundwork (document) implementation of <see cref="IWorkflowDefinitionVersionStore"/>, the document-store
-/// implementation of the version-store contract. It translates each closed
-/// <see cref="Query{TEntity}"/> shape to an explicitly admitted Groundwork route and executes it through one
-/// access-bound store session.
-/// <para>
-/// This is the first <b>rich</b> design aggregate on the document path: its authored
-/// <c>WorkflowDefinitionState</c> is serialized via <see cref="IPayloadSerializer"/> (the same serializer
-/// the EF handlers use), and the owning definition is fetched with an explicit <b>second read</b> rather than
-/// a relational join — exactly what <see cref="IWorkflowDefinitionVersionStore.GetWithDefinitionAsync"/>
-/// models for non-relational providers.
-/// </para>
-/// </summary>
-public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefinitionVersionStore
+/// <summary>Public Groundwork v2 implementation of the workflow-definition-version read port.</summary>
+public sealed class GroundworkWorkflowDefinitionVersionStore(
+    IGroundworkStorageSessionSource sessions,
+    IWorkflowDefinitionStore definitions,
+    IPayloadSerializer payloadSerializer,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    string? targetName = null) : IWorkflowDefinitionVersionStore
 {
-    private readonly GroundworkNamedQueryAccess<WorkflowDefinitionVersion> _reads;
-    private readonly IWorkflowDefinitionStore _definitions;
+    private readonly GroundworkDesignStorage storage = new(sessions, accessContextAccessor, targetName);
+    private readonly System.Text.Json.JsonSerializerOptions json =
+        GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 
-    public GroundworkWorkflowDefinitionVersionStore(
-        IDocumentStore store,
-        IWorkflowDefinitionStore definitions,
-        IPayloadSerializer payloadSerializer,
-        IBoundedDocumentStore? boundedStore = null,
-        IGroundworkStoreSessionFactory? sessions = null)
-    {
-        _reads = new GroundworkNamedQueryAccess<WorkflowDefinitionVersion>(
-            store,
-            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-            boundedStore,
-            sessions,
-            DesignPersistenceDomain.Workflow,
-            "workflow definition version");
-        _definitions = definitions;
-    }
-
-    public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default)
-        => await FindByIdAsync(versionId, cancellationToken)
-           ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
+    public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
+        await FindByIdAsync(versionId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
 
     public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.LoadAsync(versionId, token),
-            cancellationToken);
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var entry = storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, versionId);
+        return Task.FromResult(entry is null ? null : storage.MapVersion(entry, json));
+    }
 
     public async Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
     {
-        var version = await FindByIdAsync(versionId, cancellationToken)
-                      ?? throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
-
-        // Non-relational providers satisfy the owning-definition load with an explicit second aggregate read
-        // instead of a join — the document stores no embedded navigation copy.
-        version.Definition = await _definitions.GetAsync(version.DefinitionId, cancellationToken);
+        var version = await GetAsync(versionId, cancellationToken);
+        version.Definition = await definitions.GetAsync(version.DefinitionId, cancellationToken);
         return version;
     }
 
-    public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.FirstOrDefaultAsync(
-                WorkflowsDesignStorageManifest.FindLatestVersionQuery,
-                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
-                    .OrderByDescending(x => x.SemVerSortKey),
-                WorkflowsDesignStorageManifest.WorkflowDefinitionLatestVersionOrder,
-                token),
-            cancellationToken);
+    public async Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
+        var rows = storage.Query(
+            unit,
+            storage.Equal(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField, definitionId),
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, descending: true),
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionIdField, descending: true)
+            ],
+            WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
+            cancellationToken: cancellationToken);
+        return rows.Select(row => storage.MapVersion(row, json)).FirstOrDefault();
+    }
 
-    public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.QueryAsync(
-                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
-                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId),
-                WorkflowsDesignStorageManifest.WorkflowDefinitionVersionOrder,
-                token),
-            cancellationToken);
+    public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(
+        string definitionId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
+        var rows = storage.Query(
+            unit,
+            storage.Equal(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField, definitionId),
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionIdField)
+            ],
+            WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
+            cancellationToken: cancellationToken);
+        return Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(
+            rows.Select(row => storage.MapVersion(row, json)).ToArray());
+    }
 
     public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.AnyAsync(
-                WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
-                Query<WorkflowDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId)
-                    .And(x => x.SemVerSortKey, QueryOp.Equal, semVerSortKey),
-                token),
-            cancellationToken);
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
+        return Task.FromResult(storage.Any(
+            unit,
+            new Predicate.And([
+                storage.Equal(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField, definitionId),
+                storage.Equal(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, semVerSortKey)
+            ]),
+            WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex,
+            cancellationToken: cancellationToken));
+    }
 }

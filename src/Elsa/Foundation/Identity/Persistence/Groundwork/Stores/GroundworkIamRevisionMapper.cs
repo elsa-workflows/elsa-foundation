@@ -1,12 +1,12 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
 internal static class GroundworkIamRevisionMapper
 {
-    public static string Revision(DocumentEnvelope envelope) =>
-        IdentityRevisionStamp.FromVersion(envelope.Version).ToString();
+    public static string Revision(GroundworkIdentityRow row) =>
+        IdentityRevisionStamp.FromVersion(row.Version).ToString();
 
     public static bool TryExpectedVersion(string? revision, out long? expectedVersion)
     {
@@ -26,14 +26,16 @@ internal static class GroundworkIamRevisionMapper
         return false;
     }
 
-    public static IamRevisionSaveResult ToResult(DocumentStoreWriteResult result) =>
+    public static IamRevisionSaveResult ToResult(GroundworkIdentityWriteResult result) =>
         result.Status switch
         {
-            DocumentStoreWriteStatus.Saved when result.Document is not null =>
-                new IamRevisionSaveResult(IamRevisionSaveStatus.Saved, Revision(result.Document)),
-            DocumentStoreWriteStatus.Saved =>
+            _ when result.Succeeded && result.Version is { } version =>
+                new IamRevisionSaveResult(
+                    IamRevisionSaveStatus.Saved,
+                    IdentityRevisionStamp.FromVersion(version).ToString()),
+            _ when result.Succeeded =>
                 new IamRevisionSaveResult(IamRevisionSaveStatus.Saved),
-            DocumentStoreWriteStatus.NotFound =>
+            WriteOutcomeStatus.NotFound =>
                 new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound),
             _ =>
                 new IamRevisionSaveResult(IamRevisionSaveStatus.Conflict)

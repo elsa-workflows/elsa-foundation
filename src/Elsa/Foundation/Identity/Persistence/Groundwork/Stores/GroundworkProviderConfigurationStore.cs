@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -12,34 +10,34 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// privileged global access for writes.
 /// </summary>
 public sealed class GroundworkProviderConfigurationStore(
-    IDocumentStore store,
+    GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor) : IProviderConfigurationStore, IRevisionAwareProviderConfigurationStore
 {
-    public async ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
+    public ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureGlobalAccess();
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
             IdentityCompositeDocumentId.Normalize(provider),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
-    public async ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(
+    public ValueTask<ProviderConfigurationRecord?> FindForTenantAsync(
         string tenantId,
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
     public async ValueTask SaveAsync(
@@ -49,35 +47,35 @@ public sealed class GroundworkProviderConfigurationStore(
         await SaveCoreAsync(configuration, expectedVersion: null, cancellationToken);
     }
 
-    public async ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(
+    public ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureGlobalAccess();
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind,
             IdentityCompositeDocumentId.Normalize(provider),
             cancellationToken);
 
-        return envelope is null
+        return ValueTask.FromResult(row is null
             ? null
-            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
-    public async ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(
+    public ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindForTenantWithRevisionAsync(
         string tenantId,
         string provider,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityProviderConfigurationDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, provider),
             cancellationToken);
 
-        return envelope is null
+        return ValueTask.FromResult(row is null
             ? null
-            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+            : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
@@ -92,7 +90,7 @@ public sealed class GroundworkProviderConfigurationStore(
         return GroundworkIamRevisionMapper.ToResult(result);
     }
 
-    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+    private ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
         ProviderConfigurationRecord configuration,
         long? expectedVersion,
         CancellationToken cancellationToken)
@@ -107,25 +105,21 @@ public sealed class GroundworkProviderConfigurationStore(
             configuration.TenantId is null ? null : IdentityCompositeDocumentId.Normalize(configuration.TenantId),
             IdentityCompositeDocumentId.Normalize(configuration.Provider),
             configuration);
-        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
         var documentKind = configuration.TenantId is null
             ? IdentityStorageManifest.IdentityGlobalProviderConfigurationDocumentKind
             : IdentityStorageManifest.IdentityProviderConfigurationDocumentKind;
         var documentId = configuration.TenantId is null
             ? IdentityCompositeDocumentId.Normalize(configuration.Provider)
             : IdentityCompositeDocumentId.From(configuration.TenantId, configuration.Provider);
-        return await store.SaveAsync(
-            new SaveDocumentRequest(
+        return ValueTask.FromResult(rows.Save(
+            GroundworkIdentityDocumentRows.Write(
                 documentKind,
                 documentId,
-                IdentityStorageManifest.SchemaVersion,
-                content,
+                document,
                 expectedVersion),
-            cancellationToken);
+            cancellationToken));
     }
 
-    private static ProviderConfigurationRecord Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IdentityProviderConfigurationDocument>(
-            envelope.ContentJson,
-            IdentityGroundworkJson.Options)!.Configuration;
+    private static ProviderConfigurationRecord Map(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<IdentityProviderConfigurationDocument>(row).Configuration;
 }

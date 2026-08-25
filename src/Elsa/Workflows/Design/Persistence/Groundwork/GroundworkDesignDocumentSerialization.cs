@@ -1,35 +1,84 @@
+using System.Reflection;
 using System.Text.Json;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Primitives.Entities;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
 
-/// <summary>
-/// JSON serialization settings for the <b>rich</b> workflow-design Groundwork documents (those carrying
-/// authored <see cref="WorkflowDefinitionState"/>). It applies the shared
-/// <see cref="GroundworkDocumentSerialization"/> domain-projection model with the workflow-design specifics:
-/// the authored <see cref="WorkflowDefinitionState"/> is delegated to <see cref="IPayloadSerializer"/>, and the
-/// EF shadow <c>StateSource</c>, navigation (<c>Definition</c>/<c>WorkflowDefinition</c>) and relational
-/// <c>RowNumber</c> members are excluded from the document.
-/// </summary>
+/// <summary>JSON options for the public-v2 workflow-design payload rows.</summary>
 public static class GroundworkDesignDocumentSerialization
 {
     private static readonly string[] ExcludedMembers =
     [
-        nameof(Entity.RowNumber),
+        "RowNumber",
         "StateSource",
         "Definition",
         "WorkflowDefinition",
+        "WorkflowDefinitionVersion",
+        "WorkflowDefinitionDraft"
     ];
 
-    private static readonly Type[] PayloadDelegatedTypes =
-    [
-        typeof(WorkflowDefinitionState),
-    ];
+    public static JsonSerializerOptions Create(IPayloadSerializer payloadSerializer)
+    {
+        ArgumentNullException.ThrowIfNull(payloadSerializer);
+        var options = CreateOptions();
+        options.Converters.Add(new PayloadDelegatingConverterFactory(payloadSerializer));
+        return options;
+    }
 
-    /// <summary>Creates options for the rich workflow-design entities, bound to the host's payload serializer.</summary>
-    public static JsonSerializerOptions Create(IPayloadSerializer payloadSerializer) =>
-        GroundworkDocumentSerialization.Create(payloadSerializer, ExcludedMembers, PayloadDelegatedTypes);
+    private static JsonSerializerOptions CreateOptions() => new(JsonSerializerDefaults.Web)
+    {
+        TypeInfoResolver = new GroundworkDesignTypeInfoResolver()
+    };
+
+    private sealed class GroundworkDesignTypeInfoResolver : IJsonTypeInfoResolver
+    {
+        private readonly DefaultJsonTypeInfoResolver inner = new();
+
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
+        {
+            var typeInfo = inner.GetTypeInfo(type, options);
+            if (typeInfo?.Kind != JsonTypeInfoKind.Object)
+                return typeInfo;
+            foreach (var property in typeInfo.Properties)
+            {
+                if (ExcludedMembers.Contains(property.Name, StringComparer.OrdinalIgnoreCase) ||
+                    property.AttributeProvider is PropertyInfo member &&
+                    ExcludedMembers.Contains(member.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    property.ShouldSerialize = static (_, _) => false;
+                }
+            }
+            return typeInfo;
+        }
+    }
+
+    private sealed class PayloadDelegatingConverterFactory(IPayloadSerializer payloadSerializer) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(WorkflowDefinitionState);
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+            new PayloadDelegatingConverter(payloadSerializer);
+    }
+
+    private sealed class PayloadDelegatingConverter(IPayloadSerializer payloadSerializer)
+        : JsonConverter<WorkflowDefinitionState>
+    {
+        public override WorkflowDefinitionState Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            return payloadSerializer.Deserialize<WorkflowDefinitionState>(document.RootElement);
+        }
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            WorkflowDefinitionState value,
+            JsonSerializerOptions options) =>
+            payloadSerializer.SerializeToElement(value).WriteTo(writer);
+    }
 }

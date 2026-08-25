@@ -74,16 +74,9 @@ jobs:
       - name: Build server
         run: dotnet build src/Apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
-      - name: Deploy fresh SQLite schema
-        run: |
-          rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db*
-          dotnet tool run groundwork -- apply \
-            --manifest-assembly src/Apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Persistence.Groundwork.ReferenceComposition.dll \
-            --manifest-type Elsa.Persistence.Groundwork.ReferenceComposition.GroundworkAllFeaturesWithDiagnosticsDeploymentSchema \
-            --provider sqlite \
-            --connection 'Data Source=src/Apps/Elsa.Workbench/elsa-groundwork.db' \
-            --output json \
-            --safe
+      # The server admits its own schema at startup; this only guarantees it starts from an empty database.
+      - name: Discard the previous SQLite database
+        run: rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db*
 
       - name: Start server
         run: |

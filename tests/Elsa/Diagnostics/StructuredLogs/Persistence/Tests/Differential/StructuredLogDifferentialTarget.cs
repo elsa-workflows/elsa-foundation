@@ -3,7 +3,9 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
-using Groundwork.Sqlite.DiagnosticRecords;
+using Groundwork.Kernel;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.Tests.Differential;
@@ -119,17 +121,20 @@ internal abstract class StructuredLogDifferentialTarget : IAsyncDisposable
 
     private sealed class GroundworkTarget() : StructuredLogDifferentialTarget("groundwork.sqlite")
     {
-        private SqliteDiagnosticRecordStore? _provider;
+        private SqliteProviderConnection? _connection;
         private GroundworkStructuredLogStore? _store;
 
-        public override async Task<IStructuredLogStore> OpenAsync()
+        public override Task<IStructuredLogStore> OpenAsync()
         {
-            _provider = await SqliteDiagnosticRecordStoreFactory.CreateAsync(
-                $"Data Source={DatabasePath}",
-                GroundworkStructuredLogStore.CreateStreamDefinition(Binding.StreamId));
-            _store = new(_provider, Options.Create(new StructuredLogsOptions()), Binding);
+            _connection = (SqliteProviderConnection)new SqliteProviderFactory().Create($"Data Source={DatabasePath}");
+            var unit = StructuredLogsGroundworkStorageSchema.CreateUnit();
+            _connection.Schema.Apply(unit);
+            var session = _connection.OpenSession(
+                unit,
+                StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(Binding)));
+            _store = new(session, Options.Create(new StructuredLogsOptions()), Binding);
             _store.Start();
-            return _store;
+            return Task.FromResult<IStructuredLogStore>(_store);
         }
 
         public override async Task CloseAsync()
@@ -141,15 +146,18 @@ internal abstract class StructuredLogDifferentialTarget : IAsyncDisposable
                 _store = null;
             }
 
-            _provider = null;
+            _connection?.Dispose();
+            _connection = null;
         }
 
         public override Task AbandonAsync()
         {
-            // The provider store holds no disposable session of its own, so dropping both references is
-            // the closest analogue to process loss that this stack exposes.
+            // Drop the store without completing its drain, then release the provider connection. This
+            // models process loss while also releasing the v2 provider's process-local schema lock so
+            // the same file can be reopened by the probe.
             _store = null;
-            _provider = null;
+            _connection?.Dispose();
+            _connection = null;
             return Task.CompletedTask;
         }
     }

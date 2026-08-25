@@ -1,8 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Reconciliation;
@@ -13,10 +8,10 @@ using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
-using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
@@ -28,9 +23,25 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Events;
-using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+// These fixtures sit between the design lane and the v1 querying lane, which still declare
+// same-named atomic-write types. The design lane is the one under test here.
+using IDesignAtomicWriter = Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter;
+using GroundworkDesignAtomicWriteRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteRequest;
+using GroundworkDesignOperationIdentity = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignOperationIdentity;
+using GroundworkDocumentWriter = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDocumentWriter;
+using GroundworkDesignAtomicWriteResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteResult;
+using GroundworkDesignAtomicWriteContext = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteContext;
+using GroundworkDesignAtomicWriteStageResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStageResult;
+using GroundworkDesignSaveRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignSaveRequest;
+using GroundworkDesignAtomicCommand = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicCommand;
+using GroundworkDesignAtomicWriteStatus = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStatus;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests;
 
@@ -58,7 +69,6 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
     public string Provider => "groundwork-sqlserver";
     public int RestartCount { get; private set; }
     public int BoundScopeCount { get; private set; }
-    public GroundworkSchemaEvidence SchemaEvidence { get; private set; } = null!;
 
     /// <summary>The applied target database's connection string, for leaf-local plan capture.</summary>
     internal string SqlServerConnectionString => _connectionString;
@@ -75,8 +85,6 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
 
         var connectionString = await container.CreateDesignDatabaseAsync(cancellationToken);
         var fixture = new SqlServerDesignPersistenceContractFixture(telemetry, connectionString);
-        fixture.SchemaEvidence = await GroundworkSchemaCli.ApplyFreshAsync(connectionString, cancellationToken);
-        telemetry.RecordSchema(fixture.SchemaEvidence);
         await fixture.OpenAndAdmitAsync(cancellationToken);
         return fixture;
     }
@@ -108,17 +116,13 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
         await OpenAndAdmitAsync(cancellationToken);
     }
 
-    public async Task ValidateReadinessAsync(CancellationToken cancellationToken = default)
-    {
-        var validation = await GroundworkSchemaCli.RunAsync(
-            "validate",
-            _connectionString,
-            cancellationToken);
-        if (validation.ExitCode != 0)
-            throw validation.ToException("Groundwork live schema validation failed");
-        if (!string.Equals(validation.Report.GetProperty("outcome").GetString(), "ready", StringComparison.OrdinalIgnoreCase))
-            throw validation.ToException("Groundwork live schema validation did not report ready");
-    }
+    /// <summary>
+    /// Re-runs admission. Under v2 that is what readiness means: the storage session source applies every
+    /// declared unit and throws if the target cannot carry them, so a second pass over a ready database is
+    /// an idempotent no-op and a broken one fails here.
+    /// </summary>
+    public Task ValidateReadinessAsync(CancellationToken cancellationToken = default) =>
+        _services.InitializeGroundworkStoreAsync(cancellationToken);
 
     public Task StageActivityReconciliationCandidatesAsync(
         string storageScope,
@@ -209,22 +213,19 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
         cancellationToken.ThrowIfCancellationRequested();
 
         using var scope = CreateScope(storageScope);
-        var store = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
+        var storage = scope.ServiceProvider.GetRequiredService<GroundworkDesignStorage>();
         var identities = AtomicityDocumentIdentities.Create(storageScope, AtomicitySnapshotOperationKey);
-        var definition = await store.LoadAsync(
+        var definition = storage.Read(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-            identities.DefinitionId,
-            cancellationToken);
-        var version = await store.LoadAsync(
+            identities.DefinitionId);
+        var version = storage.Read(
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-            identities.VersionId,
-            cancellationToken);
-        var marker = await store.LoadAsync(
-            GroundworkDesignAtomicWriteStorageManifest.DesignOperationDocumentKind,
-            MarkerId(AtomicitySnapshotOperationKey),
-            cancellationToken);
+            identities.VersionId);
+        var marker = storage.Read(
+            WorkflowsDesignStorageManifest.DesignOperationDocumentKind,
+            MarkerId(AtomicitySnapshotOperationKey));
         var visibleParts = new[] { definition, version }.Count(x => x is not null);
-        var markerResultFingerprint = marker is null ? null : MarkerResultFingerprint(marker.ContentJson);
+        var markerResultFingerprint = marker is null ? null : MarkerResultFingerprint(Content(marker));
 
         return new DesignAtomicitySnapshot(
             VisibleAggregatePartCount: visibleParts,
@@ -233,7 +234,7 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
             PostCommitOutcomeCount: marker is not null && _postCommitAtomicOutcomes.ContainsKey(
                 OutcomeKey(storageScope, AtomicitySnapshotOperationKey)) ? 1 : 0,
             CanonicalAggregateStateFingerprint: definition is not null && version is not null
-                ? Digest($"{definition.ContentJson}\n{version.ContentJson}")
+                ? Digest($"{Content(definition)}\n{Content(version)}")
                 : null,
             AuthoritativeDurableResultFingerprint: markerResultFingerprint);
     }
@@ -251,8 +252,7 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
     private async Task OpenAndAdmitAsync(CancellationToken cancellationToken)
     {
         _services = BuildServices();
-        foreach (var initializer in _services.GetServices<IShellInitializer>())
-            await initializer.InitializeAsync(cancellationToken);
+        await _services.InitializeGroundworkStoreAsync(cancellationToken);
 
         _backgroundEventCancellation = new CancellationTokenSource();
         _backgroundEventTasks = _services.GetServices<IBackgroundTask>().ToArray();
@@ -300,11 +300,9 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
         services.AddDesignPersistencePublicationDeletionGuard();
-        services.AddGroundworkSqlServerUnifiedPersistence(_connectionString, autoApplyOnStartup: false);
+        services.AddGroundworkSqlServerUnifiedPersistence(_connectionString);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
-        services.AddScoped<IEventHandler<GroundworkStorageComposing>>(
-            _ => new GroundworkTargetCaptureHandler<GroundworkStorageComposing>(_events));
         services.AddScoped<IEventHandler<DraftValidating>>(
             _ => new GroundworkTargetCaptureHandler<DraftValidating>(_events));
         services.AddScoped<IEventHandler<DraftCreated>, GroundworkTargetDraftCreatedCaptureHandler>();
@@ -315,7 +313,7 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
-    private static SaveDocumentRequest DefinitionSave(AtomicityDocumentIdentities identities, string storageScope)
+    private static GroundworkDesignSaveRequest DefinitionSave(AtomicityDocumentIdentities identities, string storageScope)
     {
         var definition = new WorkflowDefinition
         {
@@ -335,7 +333,7 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
         { ExpectedVersion = 0 };
     }
 
-    private static SaveDocumentRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
+    private static GroundworkDesignSaveRequest VersionSave(AtomicityDocumentIdentities identities, string storageScope)
     {
         var version = new WorkflowDefinitionVersion(identities.DefinitionId, "1.0.0")
         {
@@ -395,22 +393,29 @@ internal sealed class SqlServerDesignPersistenceContractFixture : IDesignPersist
             identities.VersionId
         });
 
-    private static string MarkerId(string operationKey)
-    {
-        var framed = string.Concat(
-            "elsa-design-operation:v1|",
-            Encoding.UTF8.GetByteCount(AtomicityOperationKind), ":", AtomicityOperationKind, "|",
-            Encoding.UTF8.GetByteCount(operationKey), ":", operationKey);
-        return $"design-operation-v1-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(framed)))}";
-    }
+    /// <summary>Mirrors the design lane's own marker identity so the snapshot reads the row it writes.</summary>
+    private static string MarkerId(string operationKey) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Concat("elsa-design-operation:v1", '\u001f', AtomicityOperationKind, '\u001f', operationKey))));
 
     private static string? MarkerResultFingerprint(string contentJson)
     {
         using var marker = JsonDocument.Parse(contentJson);
-        return marker.RootElement.TryGetProperty("authoritativeResultFingerprint", out var value)
+        return marker.RootElement.TryGetProperty("resultFingerprint", out var value)
             ? value.GetString()
             : null;
     }
+
+    /// <summary>Reads a row's JSON payload, which a provider may hand back as text or as an element.</summary>
+    private static string Content(GroundworkDesignEntry entry) =>
+        entry.Entry.Values.Values[WorkflowsDesignStorageManifest.ContentField] switch
+        {
+            string text => text,
+            JsonElement element => element.GetRawText(),
+            JsonDocument document => document.RootElement.GetRawText(),
+            var other => throw new InvalidOperationException(
+                $"Design-operation marker content was '{other?.GetType().Name ?? "null"}', not JSON.")
+        };
 
     private static string Digest(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
@@ -707,27 +712,16 @@ internal sealed class GroundworkTargetReconciliationHandler(
     }
 }
 
-internal sealed record GroundworkSchemaEvidence(string TargetFingerprint, string PlanFingerprint);
 
 internal sealed class GroundworkBaselineTelemetry
 {
     private readonly object _sync = new();
     private readonly List<string> _eventTypes = [];
-    private GroundworkSchemaEvidence? _schema;
     private int _restartCount;
     private int _boundScopeCount;
     private int _candidateCount;
     private int _reconciliationPassCount;
 
-    public void RecordSchema(GroundworkSchemaEvidence schema)
-    {
-        lock (_sync)
-        {
-            if (_schema is not null && _schema != schema)
-                throw new InvalidOperationException("Groundwork schema fingerprints drifted within one baseline run.");
-            _schema = schema;
-        }
-    }
 
     public void RecordRestart() => Interlocked.Increment(ref _restartCount);
     public void RecordBoundScope() => Interlocked.Increment(ref _boundScopeCount);
@@ -739,158 +733,4 @@ internal sealed class GroundworkBaselineTelemetry
         lock (_sync)
             _eventTypes.Add(eventType.FullName ?? eventType.Name);
     }
-}
-
-internal static class GroundworkSchemaCli
-{
-    private const string ConnectionEnvironmentVariable = "ELSA_DESIGN_GROUNDWORK_SQLSERVER_CONNECTION";
-    private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(2);
-
-    public static async Task<GroundworkSchemaEvidence> ApplyFreshAsync(
-        string connectionString,
-        CancellationToken cancellationToken)
-    {
-        var offline = await RunAsync("validate", null, cancellationToken, "--offline");
-        if (offline.ExitCode != 0)
-            throw offline.ToException("Groundwork offline schema validation failed");
-
-        var plan = await RunAsync("plan", connectionString, cancellationToken);
-        if (plan.ExitCode != 2)
-            throw plan.ToException("A fresh Groundwork SQL Server target did not report a pending plan");
-
-        var apply = await RunAsync("apply", connectionString, cancellationToken, "--safe");
-        if (apply.ExitCode != 0)
-            throw apply.ToException("Groundwork safe schema apply failed");
-
-        return new(
-            apply.Report.GetProperty("target").GetProperty("fingerprint").GetString()
-            ?? throw new InvalidOperationException("Groundwork apply omitted the target fingerprint."),
-            apply.Report.GetProperty("planFingerprint").GetString()
-            ?? plan.Report.GetProperty("planFingerprint").GetString()
-            ?? throw new InvalidOperationException("Groundwork apply omitted the plan fingerprint."));
-    }
-
-    public static async Task<GroundworkCliResult> RunAsync(
-        string command,
-        string? connectionString,
-        CancellationToken cancellationToken,
-        params string[] extraArguments)
-    {
-        var start = new ProcessStartInfo("dotnet")
-        {
-            WorkingDirectory = FindRepositoryRoot(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in new[]
-                 {
-                     "tool", "run", "groundwork", "--", command,
-                     "--manifest-assembly", typeof(GroundworkAllFeaturesDeploymentSchema).Assembly.Location,
-                     "--manifest-type", typeof(GroundworkAllFeaturesDeploymentSchema).FullName!,
-                     "--provider", "sqlserver",
-                     "--output", "json"
-                 })
-            start.ArgumentList.Add(argument);
-        if (connectionString is not null)
-        {
-            start.Environment[ConnectionEnvironmentVariable] = connectionString;
-            start.ArgumentList.Add("--connection-env");
-            start.ArgumentList.Add(ConnectionEnvironmentVariable);
-        }
-        foreach (var argument in extraArguments)
-            start.ArgumentList.Add(argument);
-
-        using var process = Process.Start(start)
-                            ?? throw new InvalidOperationException("Could not start the Groundwork schema tool.");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(CommandTimeout);
-
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-            var output = await outputTask;
-            var error = await errorTask;
-            try
-            {
-                using var document = JsonDocument.Parse(output);
-                return new(process.ExitCode, document.RootElement.Clone(), error);
-            }
-            catch (JsonException exception)
-            {
-                throw new InvalidOperationException(
-                    $"Groundwork schema tool emitted invalid JSON (exit {process.ExitCode}); stderr digest {Digest(error)}.",
-                    exception);
-            }
-        }
-        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new TimeoutException(
-                $"Groundwork schema tool command '{command}' exceeded its {CommandTimeout.TotalSeconds:0}-second timeout.",
-                exception);
-        }
-        finally
-        {
-            await TerminateAndReapAsync(process);
-        }
-    }
-
-    public static string ToolPackageVersion()
-    {
-        using var manifest = JsonDocument.Parse(
-            File.ReadAllText(Path.Join(FindRepositoryRoot(), ".config", "dotnet-tools.json")));
-        return manifest.RootElement
-                   .GetProperty("tools")
-                   .GetProperty("groundwork.tool")
-                   .GetProperty("version")
-                   .GetString()
-               ?? throw new InvalidOperationException("The Groundwork tool manifest omits its package version.");
-    }
-
-    private static async Task TerminateAndReapAsync(Process process)
-    {
-        if (!process.HasExited)
-        {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // The process exited between HasExited and Kill.
-            }
-        }
-
-        try
-        {
-            await process.WaitForExitAsync(CancellationToken.None);
-        }
-        catch (InvalidOperationException)
-        {
-            // The process has no associated operating-system handle left to reap.
-        }
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null && !File.Exists(Path.Join(current.FullName, "Elsa.Server.slnx")))
-            current = current.Parent;
-        return current?.FullName
-               ?? throw new InvalidOperationException("Could not locate the repository root for Groundwork.Tool.");
-    }
-
-    private static string Digest(string value) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
-}
-
-internal sealed record GroundworkCliResult(int ExitCode, JsonElement Report, string StandardError)
-{
-    public Exception ToException(string message) =>
-        new InvalidOperationException($"{message} (exit {ExitCode}; stderr digest {Digest(StandardError)}).");
-
-    private static string Digest(string value) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 }

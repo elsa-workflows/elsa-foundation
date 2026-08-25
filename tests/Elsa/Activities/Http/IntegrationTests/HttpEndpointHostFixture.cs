@@ -11,7 +11,9 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Models;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
@@ -32,8 +34,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
+using Groundwork.Query.Model;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
@@ -106,10 +109,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         return StartAsync(
             services =>
             {
-                new SqliteGroundworkRuntimePersistenceShellFeature
-                {
-                    ConnectionString = connectionString
-                }.ConfigureServices(services);
+                services.AddGroundworkStorageProviderConnection(
+                    _ => new SqliteProviderFactory().Create(connectionString));
+                new GroundworkWorkflowRuntimeFeature().ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {
@@ -223,8 +225,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             })
             .Build();
 
-        if (groundworkSqliteConnectionString is not null)
-            await host.Services.ApplySqliteGroundworkSchemaAsync(groundworkSqliteConnectionString);
+        // v2 admits every declared unit through the storage session source when the host starts, so there
+        // is no separate schema-application step here any more.
         await host.StartAsync();
 
         RunStartupTasks(host.Services);
@@ -816,18 +818,36 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
     {
-        var result = await Services.GetRequiredService<IBoundedDocumentStore>()
-            .QueryAsync(
-                new DocumentQuery(
-                    ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-                    ElsaRuntimeStorageManifest.ListCheckpointCommitsQuery,
-                    [
-                        DocumentQueryClause.Of(
-                            DocumentQueryComparison.Equal(
-                                ElsaRuntimeStorageManifest.CollectionField,
-                                ElsaRuntimeStorageManifest.CheckpointCommitCollection))
-                    ]));
-        return checked((int)result.TotalCount);
+        await using var scope = Services.CreateAsyncScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IGroundworkStorageSessionSource>();
+        var unit = sessions.Unit(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind);
+        var access = GroundworkStorageAccessMapper.Map(
+            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current,
+            unit.Scope,
+            "elsa-http-integration-tests");
+        var table = new TableId(unit.Name);
+        var collection = new ColumnRef(
+            table,
+            ElsaRuntimeV2StorageManifest.CollectionField,
+            QueryType.String,
+            isNullable: true,
+            maxLength: 128);
+        var id = new ColumnRef(table, ElsaRuntimeV2StorageManifest.IdField, QueryType.String, false, 128);
+        var result = sessions
+            .Open(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access)
+            .Query(new QueryRequest(
+                table,
+                new Predicate.Equal(
+                    collection,
+                    QueryConstant.Of(
+                        collection,
+                        ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind)),
+                [new OrderTerm(id, OrderDirection.Ascending, NullOrder.Last)],
+                Projection.ColumnsOnly(id),
+                Paging.Keyset(1),
+                ResultShape.TotalCount.Instance));
+        return checked((int)(result.TotalCount ?? throw new InvalidOperationException(
+            "Groundwork checkpoint-commit count did not return its provider-side total.")));
     }
 
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>

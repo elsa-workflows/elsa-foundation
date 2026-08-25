@@ -436,12 +436,12 @@ internal sealed class GroundworkPersistenceReconciler
         Map("iam", "IRevisionAwareProviderConfigurationStore", "iam-provider-configuration-global", "IdentityGlobalProviderConfigurationDocumentKind"),
         Map("iam", "ITenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
         Map("iam", "IRevisionAwareTenantMembershipStore", "iam-tenant-membership", "IdentityTenantMembershipDocumentKind"),
-        Map("secrets", "ISecretRepository", "secrets-repository", "SecretDocumentKind"),
-        Map("secrets", "IRevisionAwareSecretRepository", "secrets-repository", "SecretDocumentKind"),
-        Map("secrets", "IPagedSecretRepository", "secrets-repository", "SecretDocumentKind"),
-        Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "ExecutionPlacementDocumentKind"),
-        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandTransportDocumentKind"),
-        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "ExecutionCommandStreamHeadDocumentKind")
+        Map("secrets", "ISecretRepository", "secrets-repository", "UnitId"),
+        Map("secrets", "IRevisionAwareSecretRepository", "secrets-repository", "UnitId"),
+        Map("secrets", "IPagedSecretRepository", "secrets-repository", "UnitId"),
+        Map("distributed-runtime", "IExecutionPlacementStore", "distributed-execution-placement", "PlacementUnitId"),
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "CommandTransportUnitId"),
+        Map("distributed-runtime", "IExecutionCommandTransport", "distributed-command-transport", "CommandStreamHeadUnitId")
     ];
 
     private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
@@ -456,7 +456,8 @@ internal sealed class GroundworkPersistenceReconciler
         new("runtime", "DesignOperationDocumentKind", "#641/T030"),
         // The design lane's post-commit intent outbox. Infrastructure for forward convergence of a
         // cross-target publication, not a store behind a public persistence contract.
-        new("runtime", "DesignPostCommitIntentDocumentKind", "#1171")
+        new("runtime", "DesignPostCommitIntentDocumentKind", "#1171"),
+        new("runtime", "WorkflowRunHealthStateDocumentKind", "#269/shared-runtime-v2")
     ];
 
     private static GroundworkPersistenceRowMapping Map(

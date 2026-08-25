@@ -51,47 +51,13 @@ public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopo
         Assert.Empty(collections);
     }
 
-    [SkippableFact]
-    public async Task Schema_tool_is_topology_agnostic_so_runtime_admission_is_the_sole_transaction_gate()
-    {
-        Skip.IfNot(container.IsAvailable, container.SkipReason ?? "Docker unavailable.");
-
-        var connectionString = container.ConnectionString;
-        var databaseName = container.CreateDesignDatabaseName();
-
-        // Empirical division of responsibility: the Groundwork schema tool validates the manifest and
-        // physical-schema target only — it does NOT probe MongoDB deployment topology or transaction
-        // capability. It therefore reports even a standalone (non-transactional) MongoDB target as
-        // schema "ready". This is precisely why the runtime-admission gate exercised above
-        // (MongoDbGroundworkRuntimeAdmission) is the sole, authoritative transaction-topology guard:
-        // the schema CLI does not stand in for it.
-        var validation = await GroundworkSchemaCli.RunAsync(
-            "validate",
-            connectionString,
-            databaseName,
-            CancellationToken.None);
-
-        Assert.Equal(0, validation.ExitCode);
-        Assert.Equal("ready", validation.Report.GetProperty("outcome").GetString());
-        Assert.Equal(
-            "groundwork-mongodb",
-            validation.Report.GetProperty("provider").GetProperty("name").GetString());
-
-        // Schema-only validation creates no collections; nothing is written against the standalone.
-        using var client = new MongoClient(connectionString);
-        var database = client.GetDatabase(databaseName);
-        var collections = await (await database.ListCollectionNamesAsync(cancellationToken: CancellationToken.None))
-            .ToListAsync(CancellationToken.None);
-        Assert.Empty(collections);
-    }
-
     private static ServiceProvider BuildServices(string connectionString, string databaseName)
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger<>));
         services.AddSingleton<ISystemClock>(new DesignPersistenceFixtureData.FixedSystemClock(DesignPersistenceFixtureData.Epoch));
         services.AddSingleton<IPayloadSerializer, DesignPersistenceFixtureData.DeterministicPayloadSerializer>();
-        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName, autoApplyOnStartup: false);
+        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 }

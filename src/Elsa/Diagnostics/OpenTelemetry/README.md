@@ -3,7 +3,9 @@
 Collects OpenTelemetry signals — traces, metrics, and logs — pushed by the host's OTLP exporter over **OTLP/HTTP protobuf**, normalizes them into a queryable diagnostics store, and exposes them to Elsa Studio over HTTP query endpoints and a Server-Sent Events (SSE) live stream. It is a **server** shell feature. Storage, ingestion, redaction, and the live feed are each isolated behind separate `.Core` contracts so a durable backend or external transport can replace one role without touching the rest.
 
 Feature name (manifest / appsettings key): **`DiagnosticsOpenTelemetry`**.
-The current first-party durable/reference-host composition feature is **`DiagnosticsGroundworkPersistence`**. `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remains temporarily for comparison, oracle, and compatibility work; it has not been removed.
+The first-party durable composition feature is **`DiagnosticsGroundworkPersistence`**. It is a clean-break
+Groundwork v2 consumer: the host must register one v2 `IStorageProviderConnection`, and the feature admits its
+own units. It does not read, export, import, or dual-write the previous diagnostic-record/document layout.
 
 ## What this feature provides
 
@@ -13,7 +15,7 @@ The current first-party durable/reference-host composition feature is **`Diagnos
   - **`IOtlpRequestAuthenticator`** — scoped request authentication and trusted source-context construction. A host can replace the default API-key/loopback implementation with per-source credential validation and authoritative workspace/application/environment claims.
   - **`OtlpHttpIngestionHandler`** — the single public OTLP/HTTP request handler shared by the explicit ASP.NET Core route mapper and the retained collector composition.
   - **`InMemoryOpenTelemetryStore`** → `IOpenTelemetryStore` — capacity-bounded ring buffers per signal (traces, spans, metric points, log records, resources). On every write it also marks the batch's resource as seen in the source registry (so resource and storage views stay populated). Registered with `TryAddSingleton` so a persistence feature can override it — **any override must also populate `IOpenTelemetrySourceRegistry`**, or the resources/storage views go empty.
-  - **`GroundworkOpenTelemetryStore`** → `IOpenTelemetryStore` (via the aggregate `DiagnosticsGroundworkPersistence` feature) — the active first-party durable history adapter for resources, traces, spans, metric instruments, metric points, and logs. The aggregate installs the concrete Groundwork OpenTelemetry feature, replaces the default store, and contributes its diagnostic-record streams and document schema to the combined Groundwork deployment manifest.
+  - **`GroundworkOpenTelemetryStore`** → `IOpenTelemetryStore` (via the aggregate `DiagnosticsGroundworkPersistence` feature) — the active first-party durable history adapter for resources, traces, spans, metric instruments, metric points, and logs. The aggregate installs the concrete Groundwork OpenTelemetry feature and replaces the default store; the adapter declares and admits its own Groundwork v2 units through the host-selected provider connection.
   - **`InMemoryOpenTelemetryLiveFeed`** → `IOpenTelemetryLiveFeed` — an independent bounded channel per live subscriber (in-process fan-out) with the same backpressure/drop model as the Structured Logs feed; a slow consumer's overflow is dropped and surfaced in-band as a `dropped` signal.
   - **`OpenTelemetryRedactor`** → `IOpenTelemetryRedactor` — strips sensitive attribute values (by name) and masks sensitive text patterns (by regex) on ingestion.
   - **`OpenTelemetrySourceRegistry`** → `IOpenTelemetrySourceRegistry` — tracks the most-recently-seen telemetry resources. Populated by the store on each write (not by the ingestor); read by the resource and storage query endpoints.
@@ -77,29 +79,30 @@ The contribution contract itself does not provide persistence, retries, de-dupli
 
 ## Groundwork persistence
 
-Without a persistence feature, `InMemoryOpenTelemetryStore` remains the default. The reference `Elsa.Workbench`
-composition selects `DiagnosticsGroundworkPersistence` alongside the diagnostics domain features. That aggregate
-atomically installs the two concrete Groundwork persistence features; the OpenTelemetry feature replaces
-`IOpenTelemetryStore` with `GroundworkOpenTelemetryStore`, contributes its immutable signal streams, and joins
-the shared document schema in Groundwork's deployment manifest.
+Without a persistence feature, `InMemoryOpenTelemetryStore` remains the default. A v2 host registers its
+provider connection with `AddGroundworkStorageProviderConnection(...)`, then selects
+`DiagnosticsGroundworkPersistence` alongside the diagnostics domain features. The aggregate atomically installs
+the two concrete Groundwork v2 adapters; the OpenTelemetry adapter replaces `IOpenTelemetryStore` with
+`GroundworkOpenTelemetryStore` and admits its immutable signal units directly. There is no shared legacy
+deployment manifest and no mixed v1/v2 runtime path.
 
 The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storage backend; persistence affects
 query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the
 OTEL SSE stream still has no `Last-Event-ID` resume.
 
 `Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and
-`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remain intact as temporary comparison, oracle, and
-compatibility implementations. #646 must finish the retained performance measurement before #647 deletes the
-EF diagnostics surface; this documentation does not claim that deletion or a performance verdict.
+`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remain only as the frozen before-side benchmark/oracle until
+the measured cutover deletes them. They are not a migration path, compatibility bridge, fallback, or component
+of a v2 host.
 
-Operators who still need that temporary path enable
+The frozen benchmark host enables
 `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry`. It replaces
 `IOpenTelemetryStore` with `EfCoreOpenTelemetryStore`, disables generic EF command/query machinery, routes
 the diagnostics DbContext's logging to `NullLoggerFactory` to prevent capture feedback, and uses a singleton
 `IDbContextFactory<OpenTelemetryDbContext>`. The SQLite provider runs migrations before starting the bounded
 drain; graceful shell termination flushes that drain before the DbContext factory is disposed, with async
 store disposal as the fallback when shell terminators do not run. This retained path is not selected by the
-reference `Elsa.Workbench` composition.
+v2 composition.
 
 ## Deferred (kept behind contracts/options)
 

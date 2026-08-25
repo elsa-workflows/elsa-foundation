@@ -2,24 +2,27 @@
 
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.2.0-preview.1</GroundworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
-    <PackageReference Include="coverlet.collector" />
-    <PackageReference Include="Groundwork.Core" />
-    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" PrivateAssets="all" />
+    <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Query.Model" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Store" Version="$(GroundworkVersion)" />
+    <PackageReference Include="Groundwork.Sqlite" Version="$(GroundworkVersion)" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
-    <Using Include="Elsa.Persistence.Groundwork.Testing" />
   </ItemGroup>
 
 </Project>

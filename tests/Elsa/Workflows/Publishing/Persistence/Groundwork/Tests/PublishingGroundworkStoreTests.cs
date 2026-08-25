@@ -1,11 +1,10 @@
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
-using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Scoping;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.Tests;
@@ -17,29 +16,48 @@ public sealed class PublishingGroundworkStoreTests
     [Fact]
     public async Task Snapshot_review_rejects_explicit_wrong_tenant_before_store_io()
     {
-        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
+        var opens = new List<string>();
         var reviews = new GroundworkPublicationSnapshotReviewStore(
-            documents,
-            new PublishingGroundworkDocumentSerializer(),
-            GroundworkTestAccess.AccessContext("tenant-a"),
-            new PublishingTestBoundedDocumentStore(documents));
+            new RecordingSessionSource(persistence.Sessions, [], opens),
+            persistence.Access("tenant-a"),
+            new PublishingGroundworkDocumentSerializer());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             reviews.TryAddAsync(Review("review-wrong-scope", Now) with { TenantId = "tenant-b" }).AsTask());
 
-        Assert.Equal(0, documents.SaveCount);
-        Assert.Empty(documents.Snapshot(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind));
+        Assert.Empty(opens);
+        Assert.Null(await reviews.FindAsync("review-wrong-scope"));
+    }
+
+    [Fact]
+    public async Task Activity_publication_receipt_find_rejects_wrong_tenant_before_store_io()
+    {
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
+        var opens = new List<string>();
+        var receipts = new GroundworkActivityPublicationReceiptStore(
+            new RecordingSessionSource(persistence.Sessions, [], opens),
+            persistence.Access("tenant-a"),
+            new PublishingGroundworkDocumentSerializer());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            receipts.FindAsync("tenant-b", "idempotency-key").AsTask());
+
+        Assert.Empty(opens);
     }
 
     [Fact]
     public async Task EqualityLookupsUseTheirDeclaredBoundedQueryIdentitiesAndPaths()
     {
-        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
-        var queries = new RecordingBoundedDocumentStore();
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
+        var queries = new List<QueryRequest>();
+        var indexHints = new List<string>();
+        var source = new RecordingSessionSource(persistence.Sessions, queries, indexHints: indexHints);
+        var access = persistence.Access();
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var slots = new GroundworkPublicationSlotStore(documents, serializer, queries);
-        var publications = new GroundworkPublicationRecordStore(documents, serializer, queries);
-        var intents = new GroundworkPublicationProjectionIntentStore(documents, serializer, queries);
+        var slots = new GroundworkPublicationSlotStore(source, access, serializer);
+        var publications = new GroundworkPublicationRecordStore(source, access, serializer);
+        var intents = new GroundworkPublicationProjectionIntentStore(source, access, serializer);
 
         await slots.ListByDefinitionAsync("definition-1");
         await slots.TryActivateAsync("definition-1", "default", "publication-1", 0, Now);
@@ -47,47 +65,39 @@ public sealed class PublishingGroundworkStoreTests
         await intents.ListByPublicationAsync("publication-1");
 
         Assert.Collection(
-            queries.Observed,
-            query => AssertQuery(
-                query,
-                "publishingPublicationSlot",
-                "list-by-definition",
-                "workflowDefinitionId",
-                "definition-1"),
-            query => AssertQuery(
-                query,
-                "publishingPublicationSlot",
-                "find-by-active-publication",
-                "slot.activePublicationId",
-                "publication-1"),
-            query => AssertQuery(
-                query,
-                "publishingPublicationRecord",
-                "list-by-slot",
-                "slotId",
-                "definition-1:default"),
-            query => AssertQuery(
-                query,
-                "publishingProjectionIntent",
-                "list-by-publication",
-                "publicationId",
-                "publication-1"));
+            queries,
+            query => AssertQuery(query, PublishingGroundworkStorageManifest.WorkflowDefinitionIdField, "definition-1"),
+            query => AssertQuery(query, PublishingGroundworkStorageManifest.ActivePublicationIdField, "publication-1"),
+            query => AssertQuery(query, PublishingGroundworkStorageManifest.SlotIdField, "definition-1:default"),
+            query => AssertQuery(query, PublishingGroundworkStorageManifest.PublicationIdField, "publication-1"));
+        Assert.Equal(
+            [
+                PublishingGroundworkStorageManifest.SlotByDefinitionIndex,
+                PublishingGroundworkStorageManifest.SlotByActivePublicationIndex,
+                PublishingGroundworkStorageManifest.RecordBySlotIndex,
+                PublishingGroundworkStorageManifest.IntentByPublicationIndex
+            ],
+            indexHints);
     }
 
     [Fact]
     public async Task DeleteExpiredUsesItsDeclaredPredicateOrderingAndBound()
     {
-        var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
-        var queries = new RecordingBoundedDocumentStore();
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
+        var queries = new List<QueryRequest>();
         var reviews = new GroundworkPublicationSnapshotReviewStore(
-            documents,
-            new PublishingGroundworkDocumentSerializer(),
-            GroundworkTestAccess.DefaultAccessContextAccessor,
-            queries);
+            new RecordingSessionSource(persistence.Sessions, queries),
+            persistence.Access(),
+            new PublishingGroundworkDocumentSerializer());
 
         await reviews.DeleteExpiredAsync(Now, 17);
 
-        AssertDeleteExpiredQuery(Assert.Single(queries.Observed), Now, 17);
+        var query = Assert.Single(queries);
+        Assert.Equal(PublishingGroundworkStorageManifest.ExpiresAtField, Assert.IsType<Predicate.Range>(query.Where).Column.Name);
+        Assert.Equal(
+            [PublishingGroundworkStorageManifest.ExpiresAtField, PublishingGroundworkStorageManifest.IdField],
+            query.Order.Select(term => term.Column.Name));
+        Assert.Equal(17, query.Paging.Limit);
     }
 
     [Theory]
@@ -95,9 +105,8 @@ public sealed class PublishingGroundworkStoreTests
     [InlineData("sqlite")]
     public async Task StoresEnforceCasAndSurviveAdapterRestart(string provider)
     {
-        await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
-        var serializer = new PublishingGroundworkDocumentSerializer();
-        var stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync(provider);
+        var stores = Stores.Create(persistence);
 
         var initial = await stores.Slots.TryActivateAsync("definition-1", "default", "publication-current", 0, Now);
         Assert.True(initial.Succeeded);
@@ -132,8 +141,8 @@ public sealed class PublishingGroundworkStoreTests
             PublicationProjectionIntentStatus.Pending);
         Assert.True(claimed.Succeeded);
 
-        await fixture.RestartAsync();
-        stores = Stores.Create(fixture.Store, fixture.Queries, serializer);
+        persistence.Restart();
+        stores = Stores.Create(persistence);
 
         var slot = await stores.Slots.FindAsync("definition-1", "default");
         Assert.Equal(2, slot!.Revision);
@@ -149,17 +158,34 @@ public sealed class PublishingGroundworkStoreTests
     [Theory]
     [InlineData("memory")]
     [InlineData("sqlite")]
+    public async Task Concurrent_different_slots_cannot_authorize_the_same_publication(string provider)
+    {
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync(provider);
+        var stores = Stores.Create(persistence);
+
+        var transitions = await Task.WhenAll(
+            stores.Slots.TryActivateAsync("definition-1", "red", "publication-shared", 0, Now).AsTask(),
+            stores.Slots.TryActivateAsync("definition-1", "blue", "publication-shared", 0, Now).AsTask());
+
+        Assert.Single(transitions, transition => transition.Succeeded);
+        var rejected = Assert.Single(transitions, transition => !transition.Succeeded);
+        Assert.Equal("publication_already_active", rejected.Failure?.Code);
+        Assert.Single(await stores.Slots.ListByDefinitionAsync("definition-1"));
+    }
+
+    [Theory]
+    [InlineData("memory")]
+    [InlineData("sqlite")]
     public async Task SnapshotReviewsAreCrossReplicaSingleUseAndCleanupIsBounded(string provider)
     {
-        await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
-        var serializer = new PublishingGroundworkDocumentSerializer();
-        var firstReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync(provider);
+        var firstReplica = ReviewStore(persistence);
         var review = Review("token-1", Now.AddMinutes(15));
 
         Assert.True(await firstReplica.TryAddAsync(review));
-        await fixture.RestartAsync();
-        firstReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
-        var secondReplica = ReviewStore(fixture.Store, fixture.Queries, serializer);
+        persistence.Restart();
+        firstReplica = ReviewStore(persistence);
+        var secondReplica = ReviewStore(persistence);
         Assert.Equal(review, await secondReplica.FindAsync(review.PreflightToken));
 
         var consumers = await Task.WhenAll(
@@ -176,15 +202,50 @@ public sealed class PublishingGroundworkStoreTests
         Assert.NotNull(await firstReplica.FindAsync("000-active"));
     }
 
-    private static GroundworkPublicationSnapshotReviewStore ReviewStore(
-        IDocumentStore store,
-        IBoundedDocumentStore queries,
-        PublishingGroundworkDocumentSerializer serializer) =>
-        new(
-            store,
-            serializer,
-            GroundworkTestAccess.AccessContext("tenant-a"),
-            queries);
+    [Fact]
+    public async Task NativeSqliteListAndDrainShapesTraverseMoreThanOneProviderPage()
+    {
+        await using var persistence = await PublishingV2TestPersistence.CreateAsync("sqlite");
+        var stores = Stores.Create(persistence);
+        const int count = 300;
+
+        for (var index = 0; index < count; index++)
+        {
+            var suffix = index.ToString("D4");
+            Assert.True((await stores.Slots.TryActivateAsync(
+                "definition-1", $"bulk-{suffix}", $"publication-slot-{suffix}", 0, Now)).Succeeded);
+            await stores.Publications.SaveAsync(BulkPublication($"publication-record-{suffix}", "definition-1:bulk"));
+            await stores.Intents.SaveAsync(new PublicationProjectionIntent(
+                $"intent-{suffix}", "bulk-publication", PublicationProjectionKinds.TriggerBindings,
+                PublicationProjectionOperation.Prepare, PublicationProjectionIntentStatus.Pending, 0, null, null));
+            Assert.True(await stores.Reviews.TryAddAsync(Review($"expired-{suffix}", Now.AddMinutes(-1))));
+            Assert.True((await stores.DraftRuns.TryCreateAsync(BulkDraftTestRun($"draft-{suffix}", Now.AddMinutes(-1)))).Created);
+        }
+
+        Assert.Equal(count, (await stores.Slots.ListByDefinitionAsync("definition-1")).Count);
+        Assert.Equal(count, (await stores.Publications.ListBySlotAsync("definition-1:bulk")).Count);
+        Assert.Equal(count, (await stores.Intents.ListByPublicationAsync("bulk-publication")).Count);
+        Assert.Equal(count, await stores.Reviews.DeleteExpiredAsync(Now, count));
+        Assert.Equal(count, await stores.DraftRuns.DeleteExpiredAsync(Now, count));
+    }
+
+    [Fact]
+    public void Active_publication_index_is_sparse_and_unique()
+    {
+        var unit = PublishingGroundworkStorageManifest.Require(
+            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind);
+        var index = Assert.Single(unit.Indexes, index =>
+            index.Name == PublishingGroundworkStorageManifest.SlotByActivePublicationIndex);
+
+        Assert.True(index.IsUnique);
+        Assert.Equal(MissingValueBehavior.Excluded, index.MissingValues);
+        Assert.Equal(
+            [PublishingGroundworkStorageManifest.ActivePublicationIdField],
+            index.Columns.Select(column => column.Column));
+    }
+
+    private static GroundworkPublicationSnapshotReviewStore ReviewStore(PublishingV2TestPersistence persistence) =>
+        new(persistence.Sessions, persistence.Access("tenant-a"), new PublishingGroundworkDocumentSerializer());
 
     private static PublicationSnapshotReview Review(string token, DateTimeOffset expiresAt) => new(
         token, "sha256:candidate", "definition-1", PublicationAction.Replace, "default",
@@ -205,133 +266,132 @@ public sealed class PublishingGroundworkStoreTests
         null,
         null);
 
-    private static void AssertQuery(
-        DocumentQuery query,
-        string documentKind,
-        string queryIdentity,
-        string path,
-        string value)
-    {
-        Assert.Equal(documentKind, query.DocumentKind);
-        Assert.Equal(queryIdentity, query.QueryIdentity);
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(path, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.Equal, comparison.Operator);
-        Assert.Equal(value, Assert.Single(comparison.Values));
-    }
+    private static PublicationRecord BulkPublication(string id, string slotId) => new(
+        id,
+        slotId,
+        "definition-1",
+        "version-1",
+        $"artifact-{id}",
+        $"reference-{id}",
+        0,
+        PublicationStatus.Candidate,
+        Now,
+        null,
+        null,
+        null,
+        "bulk");
 
-    private static void AssertDeleteExpiredQuery(DocumentQuery query, DateTimeOffset expiresAtOrBefore, int maxCount)
+    private static void AssertQuery(QueryRequest query, string field, string value)
     {
-        Assert.Equal(PublishingGroundworkStorageManifest.SnapshotReviewDocumentKind, query.DocumentKind);
-        Assert.Equal(PublishingGroundworkStorageManifest.DeleteExpiredQuery, query.QueryIdentity);
-        var comparison = Assert.Single(Assert.Single(query.Clauses).Comparisons);
-        Assert.Equal(PublishingGroundworkStorageManifest.ExpiresAtField, comparison.Path);
-        Assert.Equal(QueryComparisonOperator.LessThanOrEqual, comparison.Operator);
-        Assert.Equal(expiresAtOrBefore, DateTimeOffset.Parse(Assert.Single(comparison.Values)!));
-        var order = Assert.Single(query.Order);
-        Assert.Equal(PublishingGroundworkStorageManifest.ExpiresAtField, order.Path);
-        Assert.Equal(global::Groundwork.Core.PhysicalStorage.PhysicalSortDirection.Ascending, order.Direction);
-        Assert.Equal(maxCount, query.Take);
+        var equality = Assert.IsType<Predicate.Equal>(query.Where);
+        Assert.Equal(field, equality.Column.Name);
+        Assert.Equal(value, equality.Value.Value);
     }
 
     private sealed record Stores(
         GroundworkPublicationSlotStore Slots,
         GroundworkPublicationRecordStore Publications,
         GroundworkPublicationPolicyStore Policies,
-        GroundworkPublicationProjectionIntentStore Intents)
+        GroundworkPublicationProjectionIntentStore Intents,
+        GroundworkPublicationSnapshotReviewStore Reviews,
+        GroundworkActivityDraftTestRunStore DraftRuns)
     {
-        public static Stores Create(
-            IDocumentStore store,
-            IBoundedDocumentStore queries,
-            PublishingGroundworkDocumentSerializer serializer)
+        public static Stores Create(PublishingV2TestPersistence persistence)
         {
-            return new Stores(
-                new GroundworkPublicationSlotStore(store, serializer, queries),
-                new GroundworkPublicationRecordStore(store, serializer, queries),
-                new GroundworkPublicationPolicyStore(store, serializer),
-                new GroundworkPublicationProjectionIntentStore(store, serializer, queries));
+            var serializer = new PublishingGroundworkDocumentSerializer();
+            var access = persistence.Access();
+            return new(
+                new GroundworkPublicationSlotStore(persistence.Sessions, access, serializer),
+                new GroundworkPublicationRecordStore(persistence.Sessions, access, serializer),
+                new GroundworkPublicationPolicyStore(persistence.Sessions, access, serializer),
+                new GroundworkPublicationProjectionIntentStore(persistence.Sessions, access, serializer),
+                new GroundworkPublicationSnapshotReviewStore(persistence.Sessions, access, serializer),
+                new GroundworkActivityDraftTestRunStore(persistence.Sessions, access, serializer));
         }
     }
 
-    private sealed class PublishingStoreFixture(
-        string provider,
-        string? sqlitePath,
-        IDocumentStore store,
-        IBoundedDocumentStore queries) : IAsyncDisposable
+    private static ActivityDraftTestRunReceipt BulkDraftTestRun(string draftId, DateTimeOffset expiresAt)
     {
-        private static readonly ProviderIdentity SqliteProvider = new("publishing-groundwork-sqlite-tests", "1.0.0");
-        public IDocumentStore Store { get; private set; } = store;
-
-        /// <summary>
-        /// The bounded surface paired with <see cref="Store"/>: the in-memory double's evaluator for the memory
-        /// lane, and the provider's own route-bound query runtime for the SQLite lane.
-        /// </summary>
-        public IBoundedDocumentStore Queries { get; private set; } = queries;
-
-        public static async Task<PublishingStoreFixture> CreateAsync(string provider)
-        {
-            if (provider == "memory")
-            {
-                var documents = new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create());
-                return new PublishingStoreFixture(
-                    provider,
-                    null,
-                    documents,
-                    new PublishingTestBoundedDocumentStore(documents));
-            }
-
-            var path = Path.Combine(Path.GetTempPath(), $"elsa-publishing-{Guid.NewGuid():N}.db");
-            var fixture = new PublishingStoreFixture(provider, path, null!, null!);
-            await fixture.OpenSqliteAsync();
-            return fixture;
-        }
-
-        public async Task RestartAsync()
-        {
-            if (provider == "memory")
-                return;
-            await OpenSqliteAsync();
-        }
-
-        private async Task OpenSqliteAsync()
-        {
-            var manifest = PublishingGroundworkStorageManifest.Create();
-            // Pooling=False so disposing the store releases the OS file handle immediately; otherwise a pooled
-            // SQLite connection keeps the temp .db open and the cleanup File.Delete throws IOException on Windows.
-            var opened = await GroundworkPhysicalTestStores.OpenSqliteAsync(
-                $"Data Source={sqlitePath};Pooling=False",
-                manifest,
-                SqliteProvider,
-                DocumentStoreAccess.Scoped(new StorageScope("default")));
-            Store = opened.Store;
-            Queries = opened.Queries;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            if (sqlitePath is not null && File.Exists(sqlitePath))
-                File.Delete(sqlitePath);
-            return ValueTask.CompletedTask;
-        }
+        const string tenantId = "tenant-a";
+        const string idempotencyKey = "bulk-key";
+        var operationScope = ActivityDraftTestRunIdentity.CreateOperationScope(tenantId);
+        return new ActivityDraftTestRunReceipt(
+            ActivityDraftTestRunIdentity.CreateTestRunId(operationScope, draftId, idempotencyKey),
+            operationScope,
+            ActivityDraftTestRunIdentity.HashIdempotencyKey(idempotencyKey),
+            draftId,
+            1,
+            "definition-1",
+            tenantId,
+            tenantId,
+            $"fingerprint-{draftId}",
+            ActivityDraftTestRunIdentity.CreateWorkflowExecutionId(operationScope, draftId, idempotencyKey),
+            ActivityDraftTestRunReceiptStatus.Preparing,
+            null,
+            null,
+            null,
+            null,
+            Now,
+            Now,
+            expiresAt,
+            expiresAt,
+            ActivityDraftTestRunCancellationStatus.Available,
+            1);
     }
 
-    private sealed class RecordingBoundedDocumentStore : IBoundedDocumentStore
+    private sealed class RecordingSessionSource(
+        IGroundworkStorageSessionSource inner,
+        ICollection<QueryRequest> requests,
+        ICollection<string>? opens = null,
+        ICollection<string>? indexHints = null) : IGroundworkStorageSessionSource
     {
-        public List<DocumentQuery> Observed { get; } = [];
-
-        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default)
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
-            Observed.Add(query);
-            return Task.FromResult(new DocumentQueryResult([], 0));
+            opens?.Add(unitId);
+            return new RecordingSession(inner.Open(unitId, access, targetName), requests, indexHints);
         }
 
-        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) => inner.BeginUnitOfWork(access, options, unitIds, targetName);
 
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+    }
 
-        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+    private sealed class RecordingSession(
+        IStorageSession inner,
+        ICollection<QueryRequest> requests,
+        ICollection<string>? indexHints) : IStorageSession, IConcurrencyStorageSession
+    {
+        public RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
+            : this(inner, requests, null)
+        {
+        }
+
+        public StorageUnit Unit => inner.Unit;
+        public StorageAccess Access => inner.Access;
+        public StoredEntry? Read(StorageKey key) => inner.Read(key);
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+        {
+            requests.Add(request);
+            if (options?.SelectedIndex is { } selectedIndex)
+                indexHints?.Add(selectedIndex);
+            return inner.Query(request, options);
+        }
+        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+
+        // The publishing stores write through the concurrency seam, so a session that hides it would
+        // change what is under test from "which route did this read take" to "does the double compile".
+        public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions options) =>
+            inner is IConcurrencyStorageSession concurrency
+                ? concurrency.ConditionalUpsert(values, options)
+                : throw new NotSupportedException("The recorded session has no optimistic concurrency.");
     }
 }

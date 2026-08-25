@@ -1,19 +1,18 @@
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Groundwork.Documents.Store;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IWorkflowDefinitionStore definitionStore,
@@ -33,10 +32,11 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(payloadSerializer);
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId);
         var guards = deletionGuards?.ToArray() ?? [];
 
-        List<DeleteDocumentRequest>? deletes = null;
+        List<GroundworkDesignDeleteRequest>? deletes = null;
         PermanentDeleteResult? resolvedResult = null;
         var outcome = await GroundworkDesignAtomicCommand.ExecuteAsync(
             atomicWrite,
@@ -82,17 +82,23 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                 foreach (var guard in guards)
                     await guard.EnsureCanDeleteAsync(definitionId, token);
 
-                var resolvedDeletes = new List<DeleteDocumentRequest>();
+                var resolvedDeletes = new List<GroundworkDesignDeleteRequest>();
                 var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, token);
                 foreach (var draft in drafts)
                     accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
                 if (drafts.Count > 0)
                 {
-                    var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
-                        store,
-                        GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-                        accessContextAccessor);
-                    resolvedDeletes.AddRange(drafts.Select(draft => draftDocuments.ToDeleteRequest(draft.Id)));
+                    foreach (var draft in drafts)
+                    {
+                        var current = storage.Read(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                            draft.Id) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draft.Id);
+                        resolvedDeletes.Add(new GroundworkDesignDeleteRequest(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+                            draft.Id,
+                            storage.Version(current) ?? throw new InvalidDataException(
+                                $"Draft '{draft.Id}' did not return a provider version.")));
+                    }
                 }
 
                 var versions = await versionStore.ListByDefinitionAsync(definitionId, token);
@@ -103,19 +109,37 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                     if (layout is not null)
                     {
                         accessContextAccessor.Current.EnsureTenantScope(layout.TenantId);
-                        resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                        var currentLayout = storage.Read(
                             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
-                            layout.Id));
+                            layout.Id) ?? throw EntityNotFoundException.ForEntity(
+                                typeof(WorkflowDefinitionVersionLayout), layout.Id);
+                        resolvedDeletes.Add(new GroundworkDesignDeleteRequest(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
+                            layout.Id,
+                            storage.Version(currentLayout) ?? throw new InvalidDataException(
+                                $"Layout '{layout.Id}' did not return a provider version.")));
                     }
 
-                    resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                    var currentVersion = storage.Read(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
-                        version.Id));
+                        version.Id) ?? throw EntityNotFoundException.ForEntity(
+                            typeof(WorkflowDefinitionVersion), version.Id);
+                    resolvedDeletes.Add(new GroundworkDesignDeleteRequest(
+                        WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+                        version.Id,
+                        storage.Version(currentVersion) ?? throw new InvalidDataException(
+                            $"Version '{version.Id}' did not return a provider version.")));
                 }
 
-                resolvedDeletes.Add(GroundworkDocumentWriter.ToDeleteRequest(
+                var currentDefinition = storage.Read(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    definitionId));
+                    definitionId) ?? throw EntityNotFoundException.ForEntity(
+                        typeof(WorkflowDefinition), definitionId);
+                resolvedDeletes.Add(new GroundworkDesignDeleteRequest(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                    definitionId,
+                    storage.Version(currentDefinition) ?? throw new InvalidDataException(
+                        $"Definition '{definitionId}' did not return a provider version.")));
                 deletes = resolvedDeletes;
                 resolvedResult = new PermanentDeleteResult(
                     definitionId,

@@ -1,343 +1,97 @@
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
-using Groundwork.Core.Indexing;
-using Groundwork.Core.Intents;
-using Groundwork.Core.Manifests;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
+using Groundwork.Kernel;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 
-/// <summary>
-/// Declares explicit physical storage and finite compiled routes for the durable distributed-runtime stores.
-/// Mutations remain provider-atomic document operations; scale-bearing placement and transport discovery executes
-/// predicates, stable ordering, latest-per-execution selection, counting, and limits at the provider seam.
-/// </summary>
+/// <summary>Fresh Groundwork v2 declarations for the distributed runtime stores.</summary>
+/// <remarks>
+/// The distributed family deliberately owns ordinary v2 rows rather than a v1 document
+/// manifest. Scoping and optimistic concurrency are part of each unit declaration, while
+/// bounded reads are expressed by the public query model at the store boundary.
+/// </remarks>
 public static class DistributedGroundworkStorageManifest
 {
-    public const string SchemaVersion = "1.1.0";
+    public const string PlacementUnitId = "elsa-distributed-execution-placement";
+    public const string PlacementUnitName = "elsa_distributed_execution_placement";
+    public const string CommandTransportUnitId = "elsa-distributed-command-transport";
+    public const string CommandTransportUnitName = "elsa_distributed_command_transport";
+    public const string CommandStreamHeadUnitId = "elsa-distributed-command-stream-head";
+    public const string CommandStreamHeadUnitName = "elsa_distributed_command_stream_head";
 
-    public const string PlacementsTable = "execution_placements";
-    public const string CommandStreamHeadsTable = "execution_command_stream_heads";
-    public const string CommandTransportTable = "execution_command_transport";
-
-    public const string PlacementByOwnerExpiryIndex = "placement-by-owner-expiry";
-    public const string CommandByExecutionSequenceIndex = "command-by-execution-sequence";
-    public const string PendingCommandByExecutionSequenceIndex = "pending-command-by-execution-sequence";
+    public const string PlacementByOwnerExpiryIndex = "elsa_distributed_placement_owner_expiry";
+    public const string CommandByExecutionSequenceIndex = "elsa_distributed_command_execution_sequence";
+    public const string PendingCommandByExecutionSequenceIndex = "elsa_distributed_command_pending_execution_sequence";
+    // transport:{escaped execution id}:{Int64 sequence}; every UTF-16 code unit may expand to %XX.
+    public const int TransportItemIdMaximumLength = 10 + (DistributedRuntimeIdentityConstraints.MaximumLength * 3) + 1 + 19;
 
     public const string WorkflowExecutionIdField = "workflowExecutionId";
-    public const string WorkflowExecutionIdKeyField = "workflowExecutionIdKey";
+    public const string TransportItemIdField = "transportItemId";
     public const string OwnerIdField = "ownerId";
-    public const string OwnerIdComparisonKeyField = "ownerIdComparisonKey";
-    public const string OwnerIdLookupKeyField = "ownerIdLookupKey";
+    public const string PlacementTokenField = "placementToken";
+    public const string AcquiredAtField = "acquiredAt";
     public const string ExpiresAtField = "expiresAt";
     public const string VisibleAtField = "visibleAt";
+    public const string EnqueuedAtField = "enqueuedAt";
     public const string LeaseOwnerIdField = "leaseOwnerId";
     public const string LeaseTokenField = "leaseToken";
     public const string SequenceField = "sequence";
     public const string LastSequenceField = "lastSequence";
-    public const string CollectionField = "collection";
+    public const string PayloadField = "payload";
 
+    // Stable identities retained for diagnostics and query evidence. v2 queries carry their
+    // actual shape in QueryRequest; they are not v1 provider route declarations.
     public const string ListOwnedPlacementsQuery = "list-owned-live-placements";
     public const string LeaseVisibleCommandsQuery = "lease-visible-commands-by-execution";
     public const string ListPendingExecutionIdsQuery = "list-visible-command-executions";
     public const string CountPendingCommandsQuery = "count-pending-commands-by-execution";
 
-    public static StorageManifest Create() => new StorageManifest(
-        new StorageManifestIdentity("elsa-workflows-runtime-distributed"),
-        new StorageManifestOwner("elsa.workflows.runtime.distributed"),
-        new StorageManifestVersion(SchemaVersion),
-        [
-            PlacementUnit(),
-            CommandStreamHeadUnit(),
-            CommandTransportUnit()
-        ],
-        new HashSet<string> { "schema-history", "optimistic-concurrency" },
-        [])
-    {
-        // Physical storage is declared per unit above; the manifest still declares the shared Groundwork
-        // document envelope itself instead of having a physicalization wrapper inject it.
-        SharedDocumentStorages = [SharedDocumentsStorage.Definition]
-    };
+    public static IReadOnlyList<StorageUnit> CreateUnits() =>
+    [
+        CreatePlacementUnit(),
+        CreateCommandStreamHeadUnit(),
+        CreateCommandTransportUnit()
+    ];
 
-    private static StorageUnit PlacementUnit()
-    {
-        var envelope = new DocumentEnvelopeDefinition();
-        var logicalIndex = new LogicalIndexDeclaration(
-            PlacementByOwnerExpiryIndex,
-            [
-                new IndexField(OwnerIdLookupKeyField),
-                new IndexField(ExpiresAtField, IndexValueKind.DateTime),
-                new IndexField(WorkflowExecutionIdKeyField)
-            ],
-            IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.IncludedAsNull);
-        var table = PhysicalTableDefinition.PhysicalEntityTable(
-            PlacementsTable,
-            [
-                OrdinalKeyProjection(WorkflowExecutionIdKeyField),
-                OrdinalKeyProjection(OwnerIdComparisonKeyField),
-                StringProjection(OwnerIdLookupKeyField, length: 64),
-                new ProjectedColumnDefinition(
-                    ExpiresAtField,
-                    ExpiresAtField,
-                    PortablePhysicalType.DateTime,
-                    IsNullable: false)
-            ],
-            envelope,
-            [
-                new PhysicalIndexDefinition(
-                    logicalIndex.Identity,
-                    [
-                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-                        new PhysicalIndexColumnDefinition(OwnerIdLookupKeyField, 1),
-                        new PhysicalIndexColumnDefinition(ExpiresAtField, 2),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdKeyField, 3)
-                    ])
-            ]);
-        var query = new BoundedQueryDeclaration(
-            ListOwnedPlacementsQuery,
-            logicalIndex.Identity,
-            new HashSet<PortableQueryOperation>
-            {
-                PortableQueryOperation.Equal,
-                PortableQueryOperation.GreaterThan
-            },
-            QuerySortSupport.Ascending,
-            QueryPagingSupport.None,
-            BoundedQueryExecutionClass.ScaleBearing,
-            sortFields:
-            [
-                new BoundedQuerySortField(OwnerIdLookupKeyField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(ExpiresAtField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(WorkflowExecutionIdKeyField, PhysicalSortDirection.Ascending)
-            ],
-            predicateFields:
-            [
-                new BoundedQueryPredicateField(
-                    OwnerIdLookupKeyField,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal }),
-                new BoundedQueryPredicateField(
-                    ExpiresAtField,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.GreaterThan })
-            ],
-            residualPredicateFields:
-            [
-                new BoundedQueryResidualPredicateField(
-                    OwnerIdComparisonKeyField,
-                    IndexValueKind.String,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
-            ]);
+    public static StorageUnit CreatePlacementUnit() =>
+        StorageUnit.Declare(PlacementUnitId, PlacementUnitName)
+            .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
+            .String(OwnerIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
+            .Int64(PlacementTokenField, column => column.Required())
+            .Timestamp(AcquiredAtField, column => column.Required())
+            .Timestamp(ExpiresAtField, column => column.Required())
+            .Json(PayloadField, column => column.Required())
+            .Key(WorkflowExecutionIdField)
+            .Index(PlacementByOwnerExpiryIndex, OwnerIdField, ExpiresAtField, WorkflowExecutionIdField)
+            .OptimisticConcurrency()
+            .Scoped()
+            .Build();
 
-        return Unit(
-            DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind,
-            "Execution placement lease",
-            table,
-            [logicalIndex],
-            [query]);
-    }
+    public static StorageUnit CreateCommandStreamHeadUnit() =>
+        StorageUnit.Declare(CommandStreamHeadUnitId, CommandStreamHeadUnitName)
+            .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
+            .Int64(LastSequenceField, column => column.Required())
+            .Json(PayloadField, column => column.Required())
+            .Key(WorkflowExecutionIdField)
+            .OptimisticConcurrency()
+            .Scoped()
+            .Build();
 
-    private static StorageUnit CommandTransportUnit()
-    {
-        var envelope = new DocumentEnvelopeDefinition();
-        var logicalIndex = new LogicalIndexDeclaration(
-            CommandByExecutionSequenceIndex,
-            [
-                new IndexField(WorkflowExecutionIdKeyField),
-                new IndexField(SequenceField, IndexValueKind.Number)
-            ],
-            IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.IncludedAsNull);
-        var pendingIndex = new LogicalIndexDeclaration(
-            PendingCommandByExecutionSequenceIndex,
-            [
-                new IndexField(CollectionField),
-                new IndexField(WorkflowExecutionIdKeyField),
-                new IndexField(SequenceField, IndexValueKind.Number)
-            ],
-            IndexValueKind.Keyword,
-            isUnique: false,
-            MissingValueBehavior.IncludedAsNull);
-        var table = PhysicalTableDefinition.PhysicalEntityTable(
-            CommandTransportTable,
-            [
-                StringProjection(CollectionField, length: 128),
-                OrdinalKeyProjection(WorkflowExecutionIdKeyField),
-                new ProjectedColumnDefinition(
-                    VisibleAtField,
-                    VisibleAtField,
-                    PortablePhysicalType.DateTime,
-                    IsNullable: false),
-                StringProjection(LeaseOwnerIdField, length: 64),
-                new ProjectedColumnDefinition(
-                    LeaseTokenField,
-                    LeaseTokenField,
-                    PortablePhysicalType.Int64,
-                    IsNullable: false),
-                new ProjectedColumnDefinition(
-                    SequenceField,
-                    SequenceField,
-                    PortablePhysicalType.Int64,
-                    IsNullable: false)
-            ],
-            envelope,
-            [
-                new PhysicalIndexDefinition(
-                    logicalIndex.Identity,
-                    [
-                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdKeyField, 1),
-                        new PhysicalIndexColumnDefinition(SequenceField, 2)
-                    ]),
-                new PhysicalIndexDefinition(
-                    pendingIndex.Identity,
-                    [
-                        new PhysicalIndexColumnDefinition(envelope.StorageScopeColumn, 0),
-                        new PhysicalIndexColumnDefinition(CollectionField, 1),
-                        new PhysicalIndexColumnDefinition(WorkflowExecutionIdKeyField, 2),
-                        new PhysicalIndexColumnDefinition(
-                            SequenceField,
-                            3,
-                            PhysicalSortDirection.Descending)
-                    ])
-            ]);
-        var lease = new BoundedQueryDeclaration(
-            LeaseVisibleCommandsQuery,
-            logicalIndex.Identity,
-            new HashSet<PortableQueryOperation>
-            {
-                PortableQueryOperation.Equal,
-                PortableQueryOperation.LessThanOrEqual
-            },
-            QuerySortSupport.Ascending,
-            QueryPagingSupport.None,
-            BoundedQueryExecutionClass.ScaleBearing,
-            sortFields:
-            [
-                new BoundedQuerySortField(SequenceField, PhysicalSortDirection.Ascending)
-            ],
-            predicateFields:
-            [
-                new BoundedQueryPredicateField(
-                    WorkflowExecutionIdKeyField,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
-            ],
-            residualPredicateFields:
-            [
-                new BoundedQueryResidualPredicateField(
-                    VisibleAtField,
-                    IndexValueKind.DateTime,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual })
-            ]);
-        var pendingExecutions = new BoundedQueryDeclaration(
-            ListPendingExecutionIdsQuery,
-            pendingIndex.Identity,
-            new HashSet<PortableQueryOperation>
-            {
-                PortableQueryOperation.Equal,
-                PortableQueryOperation.LessThanOrEqual
-            },
-            QuerySortSupport.Both,
-            QueryPagingSupport.None,
-            BoundedQueryExecutionClass.ScaleBearing,
-            sortFields:
-            [
-                new BoundedQuerySortField(WorkflowExecutionIdKeyField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(SequenceField, PhysicalSortDirection.Descending)
-            ],
-            predicateFields:
-            [
-                new BoundedQueryPredicateField(
-                    CollectionField,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
-            ],
-            residualPredicateFields:
-            [
-                new BoundedQueryResidualPredicateField(
-                    VisibleAtField,
-                    IndexValueKind.DateTime,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.LessThanOrEqual })
-            ],
-            latestPerKeyPath: WorkflowExecutionIdKeyField);
-        var count = new BoundedQueryDeclaration(
-            CountPendingCommandsQuery,
-            logicalIndex.Identity,
-            new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
-            QuerySortSupport.None,
-            QueryPagingSupport.None,
-            BoundedQueryExecutionClass.ScaleBearing,
-            supportsTotalCount: true,
-            predicateFields:
-            [
-                new BoundedQueryPredicateField(
-                    WorkflowExecutionIdKeyField,
-                    new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal })
-            ],
-            resultOperations: new HashSet<BoundedQueryResultOperation>
-            {
-                BoundedQueryResultOperation.Count
-            });
-
-        return Unit(
-            DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind,
-            "Execution command transport item",
-            table,
-            [logicalIndex, pendingIndex],
-            [lease, pendingExecutions, count]);
-    }
-
-    private static StorageUnit CommandStreamHeadUnit()
-    {
-        var envelope = new DocumentEnvelopeDefinition();
-        var table = PhysicalTableDefinition.PhysicalEntityTable(
-            CommandStreamHeadsTable,
-            [
-                OrdinalKeyProjection(WorkflowExecutionIdKeyField),
-                new ProjectedColumnDefinition(
-                    LastSequenceField,
-                    LastSequenceField,
-                    PortablePhysicalType.Int64,
-                    IsNullable: false)
-            ],
-            envelope,
-            []);
-
-        return Unit(
-            DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind,
-            "Execution command stream head",
-            table,
-            [],
-            []);
-    }
-
-    private static StorageUnit Unit(
-        string documentKind,
-        string label,
-        PhysicalTableDefinition table,
-        IReadOnlyList<LogicalIndexDeclaration> indexes,
-        IReadOnlyList<BoundedQueryDeclaration> queries) =>
-        StorageUnit.Create(
-            new StorageUnitIdentity(documentKind),
-            label,
-            StorageIntent.PortableDocument(),
-            LifecyclePolicy.Mutable,
-            IdentityPolicy.StringId(),
-            TenancyPolicy.Scoped,
-            ConcurrencyPolicy.Optimistic(),
-            SerializationPolicy.Json(),
-            new StorageUnitPhysicalStorage(
-                StorageUnitProvisioningMode.Declared,
-                PhysicalStoragePolicy.Explicit(table),
-                indexes,
-                queries));
-
-    private static ProjectedColumnDefinition OrdinalKeyProjection(string path) =>
-        StringProjection(
-            path,
-            checked(DistributedRuntimeIdentityConstraints.MaximumLength * 4));
-
-    private static ProjectedColumnDefinition StringProjection(string path, int length) =>
-        new(path, path, PortablePhysicalType.String, Length: length, IsNullable: false);
+    public static StorageUnit CreateCommandTransportUnit() =>
+        StorageUnit.Declare(CommandTransportUnitId, CommandTransportUnitName)
+            .String(TransportItemIdField, TransportItemIdMaximumLength, column => column.Required())
+            .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
+            .Int64(SequenceField, column => column.Required())
+            .Timestamp(EnqueuedAtField, column => column.Required())
+            .Timestamp(VisibleAtField, column => column.Required())
+            .String(LeaseOwnerIdField, DistributedRuntimeIdentityConstraints.MaximumLength)
+            .Int64(LeaseTokenField, column => column.Required())
+            .Json(PayloadField, column => column.Required())
+            .Key(TransportItemIdField)
+            .Index(CommandByExecutionSequenceIndex, WorkflowExecutionIdField, SequenceField)
+            .Index(PendingCommandByExecutionSequenceIndex, index => index
+                .Ascending(WorkflowExecutionIdField)
+                .Descending(SequenceField))
+            .OptimisticConcurrency()
+            .Scoped()
+            .Build();
 }

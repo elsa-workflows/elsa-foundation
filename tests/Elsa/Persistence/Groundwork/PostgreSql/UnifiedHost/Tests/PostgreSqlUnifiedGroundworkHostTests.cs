@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Persistence.Groundwork.Testing;
@@ -20,60 +19,36 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests;
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync(bool withIdentity = false)
+    private async Task<ServiceProvider> BuildHostAsync()
     {
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        if (withIdentity)
-        {
-            services.AddGroundworkPostgreSqlUnifiedPersistence<GroundworkAllFeaturesWithIdentityDeploymentSchema>(
-                connectionString);
-            services.AddFoundationAspNetCoreIdentityGroundwork();
-        }
-        else
-        {
-            services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
-        }
+        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
 
         var provider = services.BuildServiceProvider();
-        await provider.ApplyPostgreSqlGroundworkSchemaAsync(connectionString);
         // A bare provider has no host lifecycle; drive runtime admission after explicit schema application.
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
 
     [SkippableFact]
-    public Task Host_registers_one_document_store_shared_by_every_lane()
+    public Task Host_registers_one_provider_connection_shared_by_every_lane()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertRegistersOneDocumentStoreSharedByEveryLaneAsync(
+        return UnifiedGroundworkHostContract.AssertRegistersOneProviderConnectionSharedByEveryLaneAsync(
             () => BuildHostAsync());
     }
 
     [SkippableFact]
-    public Task Explicit_identity_schema_and_feature_admit_and_resolve_on_the_unified_PostgreSQL_target()
+    public Task One_database_materializes_and_serves_every_lane()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertExplicitIdentitySchemaAndFeatureAdmitAndResolveAsync(BuildHostAsync);
-    }
-
-    [SkippableFact]
-    public Task One_database_materializes_and_serves_all_three_lanes()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertOneDatabaseMaterializesAndServesAllThreeLanesAsync(
-            () => BuildHostAsync());
-    }
-
-    [SkippableFact]
-    public Task Workflows_design_reads_run_off_the_unified_database()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        return UnifiedGroundworkHostContract.AssertWorkflowsDesignReadsRunOffTheUnifiedDatabaseAsync(
-            () => BuildHostAsync());
+        return UnifiedGroundworkHostContract.AssertOneDatabaseMaterializesAndServesEveryLaneAsync(
+            () => BuildHostAsync(),
+            "default");
     }
 
     [SkippableFact]
@@ -81,7 +56,8 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
         return UnifiedGroundworkHostContract.AssertActivitiesDesignReadsRunOffTheUnifiedDatabaseAsync(
-            () => BuildHostAsync());
+            () => BuildHostAsync(),
+            "default");
     }
 
     [SkippableFact]

@@ -2,106 +2,41 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Exceptions;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
 using Xunit;
+
+#pragma warning disable CS0618
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
-/// <summary>
-/// Proves the Groundwork (document) <see cref="GroundworkActivityDefinitionVersionStore"/> — the most complex
-/// rich design aggregate on the document path — round-trips the authored projection collections (via the
-/// payload serializer) and the native <c>DescriptorPayload</c> JSON, resolves the owning definition with an
-/// explicit second read, and excludes the EF shadow / navigation members; the same behaviour as the
-/// relational adapter.
-/// </summary>
-public class GroundworkActivityDefinitionVersionStoreTests
+public sealed class GroundworkActivityDefinitionVersionStoreTests
 {
-    private const string SchemaVersion = ActivitiesDesignStorageManifest.SchemaVersion;
     private static readonly FakePayloadSerializer Payloads = new();
-
-    private static async Task<(
-        GroundworkActivityDefinitionVersionStore Store,
-        InMemoryDocumentStore Raw,
-        RecordingBoundedDocumentStore Bounded)> SeededAsync(
-        ActivityDefinition[] definitions,
-        params ActivityDefinitionVersion[] versions)
-    {
-        var raw = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var versionOptions = GroundworkActivitiesDesignDocumentSerialization.Create(Payloads);
-
-        foreach (var definition in definitions)
-        {
-            var envelope = new GroundworkDocument<ActivityDefinition>(
-                ActivitiesDesignStorageManifest.ActivityDefinitionCollection, definition);
-            await raw.SaveAsync(new SaveDocumentRequest(
-                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, definition.Id, SchemaVersion,
-                JsonSerializer.Serialize(envelope, GroundworkActivitiesDesignJson.Options)));
-        }
-
-        foreach (var version in versions)
-        {
-            var envelope = new GroundworkDocument<ActivityDefinitionVersion>(
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection, version);
-            await raw.SaveAsync(new SaveDocumentRequest(
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, version.Id, SchemaVersion,
-                JsonSerializer.Serialize(envelope, versionOptions)));
-        }
-
-        var definitionStore = new GroundworkActivityDefinitionStore(raw);
-        var bounded = new RecordingBoundedDocumentStore(raw);
-        return (
-            new GroundworkActivityDefinitionVersionStore(raw, definitionStore, Payloads, bounded),
-            raw,
-            bounded);
-    }
-
-    private static ActivityDefinition Definition(string id, string typeKey = "Acme.Send") =>
-        new() { Id = id, ActivityTypeKey = typeKey, Category = "General", DisplayName = typeKey };
-
-    private static ActivityDefinitionVersion Version(string id, string definitionId, string version = "1.0.0", bool withFacet = false) =>
-        new(version, definitionId)
-        {
-            Id = id,
-            DescriptorType = "Acme.SendActivity",
-            DescriptorPayload = JsonSerializer.SerializeToElement(new { kind = "send", retries = 3 }),
-            SourceKind = "Json",
-            SourceId = "asset-1",
-            DesignFacets = withFacet
-                ? [new ActivityDesignFacet("layout", "1.0", JsonSerializer.SerializeToElement(new { x = 1 }))]
-                : [],
-        };
 
     [Fact]
     public async Task Get_round_trips_descriptor_payload_and_facets()
     {
-        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1", withFacet: true));
-
-        var result = await store.GetAsync("v1");
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1", withFacet: true));
+        var result = await VersionStore(harness).GetAsync("v1");
 
         Assert.Equal("Acme.SendActivity", result.DescriptorType);
         Assert.Equal(3, result.DescriptorPayload.GetProperty("retries").GetInt32());
-        var facet = Assert.Single(result.DesignFacets);
-        Assert.Equal("layout", facet.Kind);
-        Assert.Null(result.Definition); // navigation not embedded
+        Assert.Equal("layout", Assert.Single(result.DesignFacets).Kind);
+        Assert.Null(result.Definition);
     }
 
     [Fact]
     public async Task Get_throws_when_absent()
     {
-        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
-        await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetAsync("missing"));
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => VersionStore(harness).GetAsync("missing"));
     }
 
     [Fact]
     public async Task GetWithDefinition_loads_owning_definition_via_second_read()
     {
-        var (store, _, _) = await SeededAsync([Definition("def1", "Acme.Send")], Version("v1", "def1"));
-
-        var result = await store.GetWithDefinitionAsync("v1");
+        using var harness = await SeededAsync([Definition("def1", "Acme.Send")], Version("v1", "def1"));
+        var result = await VersionStore(harness).GetWithDefinitionAsync("v1");
 
         Assert.NotNull(result.Definition);
         Assert.Equal("def1", result.Definition!.Id);
@@ -111,22 +46,17 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task GetWithDefinition_throws_EntityNotFound_when_absent()
     {
-        // GetWithDefinitionAsync must use the same not-found convention as GetAsync (and the
-        // 404-mapping infrastructure / FindVersion assume) rather than ArgumentException (issue #417 item 8).
-        var (store, _, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
-
-        await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetWithDefinitionAsync("missing"));
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => VersionStore(harness).GetWithDefinitionAsync("missing"));
     }
 
     [Fact]
     public async Task FindByDefinitionAndSortKey_matches_precomputed_key()
     {
-        var v1 = Version("v1", "def1", "1.0.0");
         var v2 = Version("v2", "def1", "2.0.0");
-        var (store, _, _) = await SeededAsync([Definition("def1")], v1, v2);
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"), v2);
 
-        var result = await store.FindByDefinitionAndSortKeyAsync("def1", v2.SemVerSortKey);
-
+        var result = await VersionStore(harness).FindByDefinitionAndSortKeyAsync("def1", v2.SemVerSortKey);
         Assert.NotNull(result);
         Assert.Equal("v2", result!.Id);
     }
@@ -134,34 +64,28 @@ public class GroundworkActivityDefinitionVersionStoreTests
     [Fact]
     public async Task ListByDefinition_returns_only_matching_definition()
     {
-        var (store, _, _) = await SeededAsync(
+        using var harness = await SeededAsync(
             [Definition("def1"), Definition("def2")],
             Version("v1", "def1"), Version("v2", "def1"), Version("v3", "def2"));
 
-        var result = await store.ListByDefinitionAsync("def1");
-
+        var result = await VersionStore(harness).ListByDefinitionAsync("def1");
         Assert.Equal(2, result.Count);
-        Assert.All(result, v => Assert.Equal("def1", v.DefinitionId));
+        Assert.All(result, version => Assert.Equal("def1", version.DefinitionId));
     }
 
     [Fact]
     public async Task List_returns_every_version()
     {
-        var (store, _, _) = await SeededAsync(
-            [Definition("def1"), Definition("def2")],
-            Version("v1", "def1"), Version("v2", "def2"));
-
-        var result = await store.ListAsync();
-
-        Assert.Equal(2, result.Count);
+        using var harness = await SeededAsync(
+            [Definition("def1"), Definition("def2")], Version("v1", "def1"), Version("v2", "def2"));
+        Assert.Equal(2, (await VersionStore(harness).ListAsync()).Count);
     }
 
     [Fact]
     public async Task Stored_document_omits_persistence_artifacts()
     {
-        var (_, raw, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
-
-        var json = (await raw.LoadAsync(
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        var json = (await harness.Store.LoadAsync(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "v1"))!.ContentJson;
 
         Assert.Contains("\"descriptorPayload\"", json);
@@ -170,37 +94,109 @@ public class GroundworkActivityDefinitionVersionStoreTests
         Assert.DoesNotContain("outputsSource", json);
         Assert.DoesNotContain("designFacetsSource", json);
         Assert.DoesNotContain("rowNumber", json);
-        Assert.DoesNotContain("\"definition\"", json); // navigation excluded
+        Assert.DoesNotContain("\"definition\"", json);
     }
 
     [Fact]
     public async Task Version_reads_use_the_compound_named_routes_and_empty_batches_do_no_io()
     {
-        var version = Version("v1", "def1");
-        var (store, _, bounded) = await SeededAsync([Definition("def1")], version);
-
-        await store.FindByDefinitionAndSortKeyAsync("def1", version.SemVerSortKey);
-        var first = Assert.Single(bounded.Queries);
-        Assert.Equal(
-            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery,
-            first.QueryIdentity);
-        Assert.Equal(BoundedQueryResultOperation.First, first.ResultOperation);
-
-        bounded.Queries.Clear();
-        await store.ListByDefinitionIdsAsync(["def1", "def1"]);
-        Assert.All(
-            bounded.Queries,
-            query =>
-            {
-                Assert.Equal(
-                    ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
-                    query.QueryIdentity);
-                Assert.Equal(BoundedQueryResultOperation.Documents, query.ResultOperation);
-                Assert.Equal(ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder, query.Order);
-            });
-
-        bounded.Queries.Clear();
+        using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+        var store = VersionStore(harness);
+        Assert.NotNull(await store.FindByDefinitionAndSortKeyAsync("def1", Version("v1", "def1").SemVerSortKey));
         Assert.Empty(await store.ListByDefinitionIdsAsync([]));
-        Assert.Empty(bounded.Queries);
     }
+
+    [Fact]
+    public async Task ListByDefinitionIds_preserves_input_scope_and_deterministic_version_order()
+    {
+        using var harness = await SeededAsync(
+            [Definition("def1"), Definition("def2")],
+            Version("v2", "def1", "2.0.0"),
+            Version("v1", "def1", "1.0.0"),
+            Version("v3", "def2", "3.0.0"));
+        var result = await VersionStore(harness).ListByDefinitionIdsAsync(["def2", "def1", "def1"]);
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal(["v1", "v2", "v3"], result.Select(version => version.Id));
+        Assert.Equal(["def1", "def1", "def2"], result.Select(version => version.DefinitionId));
+        Assert.All(result, version => Assert.Equal("Json", version.SourceKind));
+    }
+
+    [Fact]
+    public async Task FindByDefinitionAndSortKey_returns_null_for_a_different_definition()
+    {
+        var version = Version("v1", "def1");
+        using var harness = await SeededAsync([Definition("def1"), Definition("def2")], version);
+        var result = await VersionStore(harness).FindByDefinitionAndSortKeyAsync(
+            "def2", version.SemVerSortKey);
+
+        Assert.Null(result);
+        Assert.Single(harness.QueryRequests);
+        Assert.Equal(1, harness.QueryRequests[0].Paging.Limit);
+    }
+
+    [Fact]
+    public async Task Long_valid_prerelease_sort_keys_round_trip_and_remain_findable()
+    {
+        var version = Version("v-long", "def1", $"1.2.3-{new string('a', 80)}");
+        Assert.True(version.SemVerSortKey.Length > 64);
+        Assert.True(version.SemVerSortKey.Length <= 128);
+        using var harness = await SeededAsync([Definition("def1")], version);
+
+        var store = VersionStore(harness);
+        var found = await store.FindByDefinitionAndSortKeyAsync("def1", version.SemVerSortKey);
+        Assert.NotNull(found);
+        Assert.Equal(version.Version, found!.Version);
+    }
+
+    private static GroundworkActivityDefinitionVersionStore VersionStore(ActivityDesignV2TestHarness harness) =>
+        new(harness.Store, new GroundworkActivityDefinitionStore(harness.Store), Payloads);
+
+    private static async Task<ActivityDesignV2TestHarness> SeededAsync(
+        ActivityDefinition[] definitions,
+        params ActivityDefinitionVersion[] versions)
+    {
+        var harness = ActivityDesignV2TestHarness.Create();
+        foreach (var definition in definitions)
+            await harness.SaveAsync(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
+                definition,
+                GroundworkActivitiesDesignJson.Options);
+        var options = GroundworkActivitiesDesignDocumentSerialization.Create(Payloads);
+        foreach (var version in versions)
+            await harness.SaveAsync(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
+                version,
+                options);
+        return harness;
+    }
+
+    private static ActivityDefinition Definition(string id, string typeKey = "Acme.Send") => new()
+    {
+        Id = id,
+        ActivityTypeKey = typeKey,
+        Category = "General",
+        DisplayName = typeKey,
+        TenantId = "tenant-a"
+    };
+
+    private static ActivityDefinitionVersion Version(
+        string id,
+        string definitionId,
+        string version = "1.0.0",
+        bool withFacet = false) => new(version, definitionId)
+    {
+        Id = id,
+        DescriptorType = "Acme.SendActivity",
+        DescriptorPayload = JsonSerializer.SerializeToElement(new { kind = "send", retries = 3 }),
+        SourceKind = "Json",
+        SourceId = "asset-1",
+        DesignFacets = withFacet
+            ? [new ActivityDesignFacet("layout", "1.0", JsonSerializer.SerializeToElement(new { x = 1 }))]
+            : []
+    };
 }
+
+#pragma warning restore CS0618

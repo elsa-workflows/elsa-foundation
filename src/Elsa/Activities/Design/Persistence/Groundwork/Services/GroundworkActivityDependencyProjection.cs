@@ -1,10 +1,8 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Persistence.Groundwork.Querying;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
@@ -19,14 +17,14 @@ public sealed record ActivityDependencyProjectionOwnerChange(
     IReadOnlyList<ActivityUpgradeOccurrenceReplacement> Replacements,
     IReadOnlyList<ActivityDependencyItem>? ResultItems = null);
 
-public sealed record ActivityDependencyProjectionPreparedUpdate(SaveDocumentRequest Request);
+public sealed record ActivityDependencyProjectionPreparedUpdate(ActivityDesignSaveRequest Request);
 
 /// <summary>
 /// Rebuildable mixed-owner dependency projection. Authoritative activity publication edges remain
 /// separate; this document can be dropped and reconstructed from activity/workflow versions and drafts.
 /// </summary>
 public sealed class GroundworkActivityDependencyProjection(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
     IActivityDefinitionVersionPublicationStore publications) :
     IActivityDependencyProjectionStore,
     IActivityDependencyProjectionRebuilder
@@ -61,15 +59,15 @@ public sealed class GroundworkActivityDependencyProjection(
             AsOf = rebuild.AsOf,
             Items = rebuild.Items.OrderBy(ItemSortKey, StringComparer.Ordinal).ToList()
         };
-        var save = GroundworkDocumentWriter.ToSaveRequest(
+        var save = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDependencyProjectionCollection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             state,
             JsonOptions);
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind),
-            [new SaveDocumentRequest(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing?.Version ?? 0)],
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind),
+            [new ActivityDesignSaveRequest(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing?.Version ?? 0)],
             cancellationToken);
     }
 
@@ -91,7 +89,7 @@ public sealed class GroundworkActivityDependencyProjection(
 
     /// <summary>
     /// Prepares, but does not commit, the next projection document. Publishing bridges add the
-    /// returned CAS request to the same <see cref="DocumentCommitScope"/> as their source mutation,
+    /// returned CAS request to the same <see cref="ActivityDesignCommitScope"/> as their source mutation,
     /// preventing a successful source write with a stale derived view.
     /// </summary>
     public async Task<ActivityDependencyProjectionPreparedUpdate> PrepareUpdateAsync(
@@ -161,7 +159,7 @@ public sealed class GroundworkActivityDependencyProjection(
             AsOf = asOf,
             Items = items.OrderBy(ItemSortKey, StringComparer.Ordinal).ToList()
         };
-        var save = GroundworkDocumentWriter.ToSaveRequest(
+        var save = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDependencyProjectionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDependencyProjectionCollection,
             ActivitiesDesignStorageManifest.SchemaVersion,
@@ -268,9 +266,9 @@ public sealed class GroundworkActivityDependencyProjection(
         IReadOnlyList<ActivityDefinitionReference> Path,
         IReadOnlySet<string> VisitedVersions);
 
-    private static ActivityDependencyProjectionState Deserialize(DocumentEnvelope envelope)
+    private static ActivityDependencyProjectionState Deserialize(ActivityDesignDocument envelope)
     {
-        var document = JsonSerializer.Deserialize<GroundworkDocument<ActivityDependencyProjectionState>>(envelope.ContentJson, JsonOptions);
+        var document = JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<ActivityDependencyProjectionState>>(envelope.ContentJson, JsonOptions);
         return document?.Entity ?? throw new InvalidOperationException($"Dependency projection document '{envelope.Id}' is unreadable.");
     }
 

@@ -47,7 +47,11 @@ public sealed partial class PackageVersions
         var projectName = Path.GetFileNameWithoutExtension(projectPath);
 
         return PackageReferenceElementPattern.Matches(File.ReadAllText(projectPath))
-            .Select(match => (Id: Attribute(match.Value, "Include"), Version: Attribute(match.Value, "Version")))
+            .Select(match => (
+                Id: Attribute(match.Value, "Include"),
+                Version: Attribute(match.Value, "VersionOverride") is { Length: > 0 } versionOverride
+                    ? versionOverride
+                    : Attribute(match.Value, "Version")))
             .Where(reference => reference.Id.Length > 0)
             .Select(reference => (reference.Id, Version: Resolve(reference.Id, reference.Version, projectName)))
             .Select(reference => $"{reference.Id} {reference.Version}")

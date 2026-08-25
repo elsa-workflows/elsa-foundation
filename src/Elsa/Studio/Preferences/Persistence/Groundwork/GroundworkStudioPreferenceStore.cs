@@ -1,41 +1,48 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Elsa.Persistence.Groundwork.Scoping;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 
 namespace Elsa.Studio.Preferences.Persistence.Groundwork;
 
-public sealed class GroundworkStudioPreferenceStore(IGroundworkStoreSessionFactory sessions) : IStudioPreferenceStore
+public sealed class GroundworkStudioPreferenceStore(
+    IGroundworkStorageSessionSource sessions,
+    string? targetName = null) : IStudioPreferenceStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+    public ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
     {
-        var envelope = await WithGlobalStoreAsync(
-            (store, token) => store.LoadAsync(StudioPreferencesStorageManifest.DocumentKind, CreateId(key), token),
-            cancellationToken);
-        return envelope is null ? null : Map(envelope);
+        cancellationToken.ThrowIfCancellationRequested();
+        var session = sessions.Open(StudioPreferencesGroundworkStorageSchema.UnitId, StorageAccess.Global, targetName);
+        var entry = session.Read(new StorageKey(new Dictionary<string, object?>
+        {
+            [StudioPreferencesGroundworkStorageSchema.IdField] = CreateId(key)
+        }));
+        return ValueTask.FromResult<StudioPreferenceDocument?>(entry is null ? null : Map(entry));
     }
 
-    public async ValueTask<StudioPreferenceStoreWriteResult> WriteAsync(
+    public ValueTask<StudioPreferenceStoreWriteResult> WriteAsync(
         StudioPreferenceKey key,
         StudioPreferenceWrite write,
         StudioPreferenceWriteCondition condition,
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken = default)
     {
-        var expectedVersion = condition.Kind switch
+        cancellationToken.ThrowIfCancellationRequested();
+        var options = condition.Kind switch
         {
-            StudioPreferenceWriteConditionKind.MustNotExist => 0,
-            StudioPreferenceWriteConditionKind.RevisionMatches when TryParseRevision(condition.Revision, out var version) => version,
-            _ => -1
+            StudioPreferenceWriteConditionKind.MustNotExist => WriteOptions.CreateOnly,
+            StudioPreferenceWriteConditionKind.RevisionMatches when TryParseRevision(condition.Revision, out var version) =>
+                WriteOptions.IfVersion(version),
+            _ => null
         };
 
-        if (expectedVersion < 0)
-            return new(StudioPreferenceStoreWriteStatus.Conflict);
+        if (options is null)
+            return ValueTask.FromResult(new StudioPreferenceStoreWriteResult(StudioPreferenceStoreWriteStatus.Conflict));
 
         var value = new StoredPreference(
             key.SubjectId,
@@ -45,40 +52,52 @@ public sealed class GroundworkStudioPreferenceStore(IGroundworkStoreSessionFacto
             write.SchemaVersion,
             write.Value.Clone(),
             updatedAt);
-        var result = await WithGlobalStoreAsync(
-            (store, token) => store.SaveAsync(
-                new SaveDocumentRequest(
-                    StudioPreferencesStorageManifest.DocumentKind,
-                    CreateId(key),
-                    StudioPreferencesStorageManifest.SchemaVersion,
-                    JsonSerializer.Serialize(value, JsonOptions),
-                    ExpectedVersion: expectedVersion),
-                token),
-            cancellationToken);
-
-        return result.Status switch
+        var session = sessions.Open(StudioPreferencesGroundworkStorageSchema.UnitId, StorageAccess.Global, targetName);
+        if (session is not IConcurrencyStorageSession concurrency)
         {
-            DocumentStoreWriteStatus.Saved => new(StudioPreferenceStoreWriteStatus.Saved, Map(result.Document!)),
-            DocumentStoreWriteStatus.NotFound => new(StudioPreferenceStoreWriteStatus.NotFound),
-            _ => new(StudioPreferenceStoreWriteStatus.Conflict)
+            throw new NotSupportedException(
+                "The selected Groundwork provider does not support the conditional write required by Studio Preferences.");
+        }
+        var result = concurrency.ConditionalUpsert(
+            new StorageValues(new Dictionary<string, object?>
+            {
+                [StudioPreferencesGroundworkStorageSchema.IdField] = CreateId(key),
+                [StudioPreferencesGroundworkStorageSchema.PayloadField] = JsonSerializer.Serialize(value, JsonOptions)
+            }),
+            options);
+
+        if (result.Succeeded && result.Version is { } savedVersion)
+        {
+            return ValueTask.FromResult(new StudioPreferenceStoreWriteResult(
+                StudioPreferenceStoreWriteStatus.Saved,
+                Map(value, savedVersion)));
+        }
+
+        return ValueTask.FromResult<StudioPreferenceStoreWriteResult>(result.Detail.Status == WriteOutcomeStatus.NotFound
+            ? new(StudioPreferenceStoreWriteStatus.NotFound)
+            : new(StudioPreferenceStoreWriteStatus.Conflict));
+    }
+
+    private static StudioPreferenceDocument Map(StoredEntry entry)
+    {
+        if (!entry.Values.Values.TryGetValue(StudioPreferencesGroundworkStorageSchema.PayloadField, out var payload))
+            throw new JsonException("The Studio preference payload is missing.");
+        var json = payload switch
+        {
+            string text => text,
+            JsonElement element => element.GetRawText(),
+            JsonDocument document => document.RootElement.GetRawText(),
+            _ => throw new JsonException("The Studio preference payload is not JSON.")
         };
-    }
-
-    private static StudioPreferenceDocument Map(DocumentEnvelope envelope)
-    {
-        var stored = JsonSerializer.Deserialize<StoredPreference>(envelope.ContentJson, JsonOptions)
+        var stored = JsonSerializer.Deserialize<StoredPreference>(json, JsonOptions)
                      ?? throw new JsonException("The Studio preference document is empty.");
-        return new(stored.Namespace, stored.SchemaVersion, $"rev-{envelope.Version}", stored.Value.Clone(), stored.UpdatedAt);
+        if (entry.Version is not { } version)
+            throw new JsonException("The Studio preference row has no optimistic revision.");
+        return Map(stored, version);
     }
 
-    private async ValueTask<TResult> WithGlobalStoreAsync<TResult>(
-        Func<IDocumentStore, CancellationToken, Task<TResult>> operation,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        await using var session = await sessions.CreateOrdinaryGlobalAsync(cancellationToken);
-        return await operation(session.DocumentStore, cancellationToken);
-    }
+    private static StudioPreferenceDocument Map(StoredPreference stored, long version) =>
+        new(stored.Namespace, stored.SchemaVersion, $"rev-{version}", stored.Value.Clone(), stored.UpdatedAt);
 
     private static string CreateId(StudioPreferenceKey key)
     {

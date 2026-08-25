@@ -8,13 +8,12 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Tests.OpenIddict;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -47,15 +46,15 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
     public const string BearerRoute = "/acceptance/bearer";
 
     private readonly IHost _host;
-    private readonly InMemoryDocumentStore _documents;
+    private readonly IdentityV2TestPersistence _persistence;
 
     private AspNetCoreIdentityGroundworkHttpFixture(
         IHost host,
-        InMemoryDocumentStore documents,
+        IdentityV2TestPersistence persistence,
         IReadOnlyCollection<ServiceDescriptor> serviceDescriptors)
     {
         _host = host;
-        _documents = documents;
+        _persistence = persistence;
         ServiceDescriptors = serviceDescriptors;
     }
 
@@ -69,7 +68,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
         Action<IServiceCollection>? configureServices = null)
     {
         var databaseSuffix = Guid.NewGuid().ToString("n");
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new IdentityV2TestPersistence();
         var serviceDescriptors = Array.Empty<ServiceDescriptor>();
         var host = new HostBuilder()
             .UseEnvironment(Environments.Development)
@@ -81,8 +80,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     services.AddLogging();
                     services.AddRouting();
                     services.AddAuthorization();
-                    services.AddSingleton<IDocumentStore>(documents);
-                    services.AddSingleton<IBoundedDocumentStore>(documents);
+                    services.AddSingleton<IStorageProviderConnection>(persistence.Connection);
                     services.AddPersistenceCore(AspNetCoreIdentityGroundworkHttpFixture.PrimaryTenant);
                     services.AddFoundationIdentityOpenIddict(
                         options => options.IsDevelopmentOrDemo = true,
@@ -130,7 +128,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
             await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
 
         await host.StartAsync();
-        var fixture = new AspNetCoreIdentityGroundworkHttpFixture(host, documents, serviceDescriptors);
+        var fixture = new AspNetCoreIdentityGroundworkHttpFixture(host, persistence, serviceDescriptors);
         await fixture.SeedAsync();
         return fixture;
     }
@@ -152,37 +150,13 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
             ResourceOwnership.Foundation,
             new HashSet<string>(),
             new HashSet<string>());
-        var document = new IdentityUserDocument(
-            IdentityCompositeDocumentId.Normalize(tenantId),
-            IdentityCompositeDocumentId.Normalize(userId),
-            IdentityCompositeDocumentId.Normalize(normalizedUserName),
-            IdentityCompositeDocumentId.Normalize(normalizedEmail),
-            IdentityDocumentId.From(tenantId, normalizedUserName),
-            IdentityDocumentId.From(tenantId, normalizedEmail),
-            user,
-            new IdentityUserFrameworkState(
-                userId,
-                tenantId,
-                userName,
-                normalizedUserName,
-                Email,
-                normalizedEmail,
-                EmailConfirmed: true,
-                PasswordHash: null,
-                SecurityStamp: "ambiguous-security",
-                ConcurrencyStamp: "ambiguous-revision",
-                PhoneNumber: null,
-                PhoneNumberConfirmed: false,
-                TwoFactorEnabled: false,
-                LockoutEnd: null,
-                LockoutEnabled: true,
-                AccessFailedCount: 0,
-                "Ambiguous Email Ada"));
-        await _documents.SaveAsync(new SaveDocumentRequest(
-            IdentityStorageManifest.IdentityUserDocumentKind,
-            IdentityCompositeDocumentId.From(tenantId, userId),
-            IdentityStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(document, IdentityGroundworkJson.Options)));
+        await using var scope = Services.CreateAsyncScope();
+        var access = scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>();
+        if (access.Current.Scope != new PersistenceScope(tenantId))
+            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>()
+                .Bind(PersistenceAccessContext.Scoped(new PersistenceScope(tenantId)));
+        var rows = scope.ServiceProvider.GetRequiredService<GroundworkIdentityRowStore>();
+        await new GroundworkUserStore(rows, access).SaveAsync(user);
     }
 
     public async Task SeedSecondaryTenantUserAsync() =>
@@ -199,6 +173,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
     {
         await _host.StopAsync();
         _host.Dispose();
+        _persistence.Dispose();
     }
 
     private async Task SeedAsync() =>

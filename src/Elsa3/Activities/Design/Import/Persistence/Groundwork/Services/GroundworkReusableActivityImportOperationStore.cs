@@ -1,13 +1,14 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
-using Groundwork.Documents.Store;
 
 namespace Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 
 public sealed class GroundworkReusableActivityImportOperationStore(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
     IPersistenceAccessContextAccessor accessContextAccessor)
     : IReusableActivityImportOperationStore
 {
@@ -21,17 +22,17 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         EnsureCurrentScope(collection.AccessScope, hideMismatch: false);
         try
         {
-            var result = await store.SaveAsync(
-                new(
+            await store.SaveAsync(
+                new ActivityDesignSaveRequest(
                     Elsa3ImportStorageManifest.CollectionDocumentKind,
                     collection.Handle,
                     Elsa3ImportStorageManifest.SchemaVersion,
                     JsonSerializer.Serialize(new CollectionDocument(collection), Json),
-                    0),
+                    ExpectedVersion: 0),
                 cancellationToken);
-            return result.Status == DocumentStoreWriteStatus.Saved;
+            return true;
         }
-        catch (DocumentAtomicWriteException)
+        catch (ActivityDesignWriteConflictException)
         {
             return false;
         }
@@ -55,10 +56,10 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         EnsureCurrentScope(accessScope, hideMismatch: true);
         try
         {
-            var envelope = await store.LoadAsync(Elsa3ImportStorageManifest.CollectionDocumentKind, handle, cancellationToken);
-            if (envelope is null)
+            var document = await store.LoadAsync(Elsa3ImportStorageManifest.CollectionDocumentKind, handle, cancellationToken);
+            if (document is null)
                 return null;
-            var collection = JsonSerializer.Deserialize<CollectionDocument>(envelope.ContentJson, Json)?.Collection
+            var collection = JsonSerializer.Deserialize<CollectionDocument>(document.ContentJson, Json)?.Collection
                              ?? throw new JsonException("Collection document is empty.");
             return SameScope(collection.AccessScope, accessScope) ? collection : null;
         }
@@ -87,10 +88,10 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         var receiptId = Elsa3ImportStorageManifest.ReceiptId(idempotencyKey, accessScope);
         try
         {
-            var envelope = await store.LoadAsync(Elsa3ImportStorageManifest.ReceiptDocumentKind, receiptId, cancellationToken);
-            if (envelope is null)
+            var document = await store.LoadAsync(Elsa3ImportStorageManifest.ReceiptDocumentKind, receiptId, cancellationToken);
+            if (document is null)
                 return null;
-            var receipt = JsonSerializer.Deserialize<ReceiptDocument>(envelope.ContentJson, Json)?.Receipt
+            var receipt = JsonSerializer.Deserialize<ReceiptDocument>(document.ContentJson, Json)?.Receipt
                           ?? throw new JsonException("Receipt document is empty.");
             return SameScope(receipt.AccessScope, accessScope) ? receipt : null;
         }
@@ -108,16 +109,16 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         }
     }
 
-    internal static SaveDocumentRequest SaveReceipt(ReusableActivityImportReceipt receipt)
+    internal static ActivityDesignSaveRequest SaveReceipt(ReusableActivityImportReceipt receipt)
     {
         try
         {
-            return new(
+            return new ActivityDesignSaveRequest(
                 Elsa3ImportStorageManifest.ReceiptDocumentKind,
                 receipt.ReceiptId,
                 Elsa3ImportStorageManifest.SchemaVersion,
                 JsonSerializer.Serialize(new ReceiptDocument(receipt), Json),
-                0);
+                ExpectedVersion: 0);
         }
         catch (Exception exception)
         {
@@ -125,11 +126,11 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         }
     }
 
-    internal static ReusableActivityImportReceipt ReadReceipt(DocumentEnvelope envelope)
+    internal static ReusableActivityImportReceipt ReadReceipt(ActivityDesignDocument document)
     {
         try
         {
-            return JsonSerializer.Deserialize<ReceiptDocument>(envelope.ContentJson, Json)?.Receipt
+            return JsonSerializer.Deserialize<ReceiptDocument>(document.ContentJson, Json)?.Receipt
                    ?? throw new JsonException("Receipt document is empty.");
         }
         catch (ReusableActivityImportPersistenceException)
@@ -138,7 +139,7 @@ public sealed class GroundworkReusableActivityImportOperationStore(
         }
         catch (Exception exception)
         {
-            throw new ReusableActivityImportPersistenceException("deserialize receipt", envelope.Id, exception);
+            throw new ReusableActivityImportPersistenceException("deserialize receipt", document.Id, exception);
         }
     }
 

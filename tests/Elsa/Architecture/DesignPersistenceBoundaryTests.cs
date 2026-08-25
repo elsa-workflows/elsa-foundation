@@ -20,10 +20,11 @@ namespace Elsa.Architecture.Tests;
 /// </item>
 /// <item>
 /// Every one of the four Groundwork providers composes the complete design surface — the shared design
-/// store families, both design manifest sources, the design atomic writer, and the schema readiness
-/// guard — so a new provider cannot be added without design registration and a design store cannot be
-/// added without every provider picking it up. This is asserted from the registration sources by
-/// enumeration rather than a hardcoded roster wherever feasible.
+/// store families, both design lane bindings and their direct v2 storage-unit declarations, the design
+/// atomic writer, and the schema readiness guard — so a new provider cannot be added without design
+/// registration and a design store cannot be added without every provider picking it up. This is
+/// asserted from the registration sources by enumeration rather than a hardcoded roster wherever
+/// feasible.
 /// </item>
 /// </list>
 /// This suite deliberately does <b>not</b> tighten the EF surface ratchet to zero; the design EF projects
@@ -35,16 +36,6 @@ public sealed class DesignPersistenceBoundaryTests
     // ---------------------------------------------------------------------------------------------
     // Part 1 — core-to-Groundwork negative dependency
     // ---------------------------------------------------------------------------------------------
-
-    /// <summary>
-    /// Whether a lane registration binds <paramref name="contract"/>, in either spelling: the plain
-    /// container call, or the target-bound registrar that replaced it (lane.Replace/TryAdd/Alias).
-    /// </summary>
-    private static bool RegistersContract(string registration, string contract) =>
-        registration.Contains($"AddScoped<{contract}", StringComparison.Ordinal)
-        || registration.Contains($"Replace<{contract},", StringComparison.Ordinal)
-        || registration.Contains($"TryAdd<{contract},", StringComparison.Ordinal)
-        || registration.Contains($"Alias<{contract},", StringComparison.Ordinal);
 
     /// <summary>
     /// The design contract cores the catalog treats as provider-neutral. Discovery is by convention
@@ -177,35 +168,46 @@ public sealed class DesignPersistenceBoundaryTests
         new HashSet<string>(["Sqlite", "SqlServer", "PostgreSql", "MongoDb"], StringComparer.Ordinal);
 
     /// <summary>
-    /// The design registration methods and the tokens each must contain: its own family manifest
-    /// source, the shared design atomic-write manifest source, and the design atomic writer.
+    /// The design registration methods and the tokens each must contain: the lane binding that lets a
+    /// cross-lane caller resolve its target, the direct v2 storage-unit declarations, and the design
+    /// atomic writer.
     /// </summary>
     private static readonly (string RelativePath, string[] RequiredTokens)[] DesignRegistrationSurfaces =
     [
         (
             "src/Elsa/Workflows/Design/Persistence/Groundwork/DependencyInjection/GroundworkWorkflowsDesignStoreRegistration.cs",
             [
-                "Manifest<WorkflowsDesignGroundworkStorageManifestSource>",
-                "Manifest<GroundworkDesignAtomicWriteStorageManifestSource>",
+                "AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>",
+                "AddGroundworkStorageUnit(",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ]),
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs",
             [
-                "Manifest<ActivitiesDesignGroundworkStorageManifestSource>",
-                "Manifest<GroundworkDesignAtomicWriteStorageManifestSource>",
+                "AddGroundworkStorageLane<ActivitiesDesignGroundworkStorageManifestSource>",
+                "AddGroundworkStorageUnit(",
                 "IDesignAtomicWriter, GroundworkDesignAtomicWrite"
             ])
     ];
 
-    private static readonly (string ManifestSource, string Registration)[] DesignManifestToRegistration =
+    /// <summary>
+    /// Each direct-v2 lane: its lane type, the storage manifest whose units it publishes, and the
+    /// registration that binds the lane and declares those units.
+    /// </summary>
+    private static readonly (string Lane, string Manifest, string Registration)[] DesignLanes =
     [
         (
             "src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkStorageManifestSource.cs",
+            "WorkflowsDesignStorageManifest",
             "src/Elsa/Workflows/Design/Persistence/Groundwork/DependencyInjection/GroundworkWorkflowsDesignStoreRegistration.cs"),
         (
             "src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkStorageManifestSource.cs",
-            "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs")
+            "ActivitiesDesignStorageManifest",
+            "src/Elsa/Activities/Design/Persistence/Groundwork/DependencyInjection/GroundworkActivitiesDesignStoreRegistration.cs"),
+        (
+            "src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkStorageManifestSource.cs",
+            "PublishingGroundworkStorageManifest",
+            "src/Elsa/Workflows/Publishing/Persistence/Groundwork/DependencyInjection/GroundworkPublishingStoreRegistration.cs")
     ];
 
     private const string StoreFamiliesRegistration =
@@ -225,7 +227,7 @@ public sealed class DesignPersistenceBoundaryTests
     }
 
     [Fact]
-    public void Every_provider_registration_composes_the_design_families_and_readiness_guard()
+    public void Every_provider_registration_composes_the_design_families_and_a_provider_connection()
     {
         var violations = new List<string>();
         foreach (var (provider, path) in DiscoverProviderRegistrations().OrderBy(x => x.Key, StringComparer.Ordinal))
@@ -234,34 +236,18 @@ public sealed class DesignPersistenceBoundaryTests
             // Design store set + both design manifest sources arrive through the shared families call.
             if (!source.Contains("AddGroundworkUnifiedStoreFamilies(", StringComparison.Ordinal))
                 violations.Add($"{provider}: does not call AddGroundworkUnifiedStoreFamilies (design store set + manifest sources).");
-            // The schema readiness guard is provider-owned; it is wired by the provider's document store.
-            if (!source.Contains($"Add{provider}GroundworkDocumentStore(", StringComparison.Ordinal))
-                violations.Add($"{provider}: does not call Add{provider}GroundworkDocumentStore (readiness guard owner).");
+            // Every lane in that set declares v2 units, and the session source admits them at startup against
+            // the target's connection. A preset that composes the lanes but no connection fails at boot.
+            if (!source.Contains("AddGroundworkStorageProviderConnection(", StringComparison.Ordinal))
+                violations.Add($"{provider}: does not open a Groundwork v2 provider connection.");
         }
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact]
-    public void Every_provider_document_store_registration_wires_the_schema_readiness_guard()
-    {
-        var violations = new List<string>();
-        foreach (var provider in ExpectedProviders.Order(StringComparer.Ordinal))
-        {
-            var path = $"src/Elsa/Persistence/Groundwork/{provider}/DependencyInjection/{provider}GroundworkDocumentStoreRegistration.cs";
-            var full = FullPath(path);
-            if (!File.Exists(full))
-            {
-                violations.Add($"{provider}: missing document store registration at {path}.");
-                continue;
-            }
-
-            if (!ReadSource(full).Contains("AddGroundworkSchemaReadinessGuard(", StringComparison.Ordinal))
-                violations.Add($"{provider}: document store registration does not call AddGroundworkSchemaReadinessGuard.");
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
+    // The readiness guard was the v1 document store's: each provider leaf wired a Start-phase validator over
+    // its own admitted schema. Under v2 the storage session source admits every declared unit itself, so the
+    // guard has no separate owner to assert and the per-provider registration it hung off no longer exists.
 
     [Fact]
     public void The_shared_store_families_registration_composes_both_design_lanes()
@@ -304,19 +290,38 @@ public sealed class DesignPersistenceBoundaryTests
             Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
+    /// <summary>
+    /// A design lane declares its storage units directly against the public v2 catalog, so it must be
+    /// identity-only: it carries a feature identity a cross-lane caller can resolve a target from, and it
+    /// publishes the same manifest its registration declares units from. It must contribute no composed
+    /// host manifest — implementing the manifest-source seam would pull the lane back into the v1
+    /// document-store closure, and would put it in a deployment schema that no longer describes it.
+    /// </summary>
     [Fact]
-    public void Every_manifest_declared_contract_is_registered_by_its_lane()
+    public void Every_design_lane_is_identity_only_and_publishes_the_manifest_its_registration_declares()
     {
         var violations = new List<string>();
-        foreach (var (manifestSourcePath, registrationPath) in DesignManifestToRegistration)
+        foreach (var (lanePath, manifest, registrationPath) in DesignLanes)
         {
-            var declared = ExtractDeclaredContracts(ReadSource(FullPath(manifestSourcePath)));
+            var lane = ReadSource(FullPath(lanePath));
             var registration = ReadSource(FullPath(registrationPath));
+            var laneType = Path.GetFileNameWithoutExtension(lanePath);
 
-            Assert.NotEmpty(declared);
-            violations.AddRange(declared
-                .Where(contract => !RegistersContract(registration, contract))
-                .Select(contract => $"{manifestSourcePath}: declares '{contract}' but {Path.GetFileName(registrationPath)} does not register it."));
+            if (!lane.Contains(": IGroundworkStorageLane", StringComparison.Ordinal))
+                violations.Add($"{lanePath}: does not implement IGroundworkStorageLane, so its target cannot be resolved.");
+            if (lane.Contains("IGroundworkStorageManifestSource", StringComparison.Ordinal) ||
+                lane.Contains("CreateDeclarationAsync", StringComparison.Ordinal))
+            {
+                violations.Add(
+                    $"{lanePath}: contributes a composed host manifest. A direct-v2 lane is identity-only.");
+            }
+
+            if (!lane.Contains($"{manifest}.CreateUnits()", StringComparison.Ordinal))
+                violations.Add($"{lanePath}: does not publish {manifest}.CreateUnits().");
+            if (!registration.Contains($"AddGroundworkStorageLane<{laneType}>", StringComparison.Ordinal))
+                violations.Add($"{registrationPath}: does not bind lane '{laneType}' to a target.");
+            if (!registration.Contains($"{manifest}.CreateUnits()", StringComparison.Ordinal))
+                violations.Add($"{registrationPath}: does not declare units from {manifest}.");
         }
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
@@ -367,9 +372,6 @@ public sealed class DesignPersistenceBoundaryTests
     private static readonly Regex AddScopedPattern =
         new(@"AddScoped<\s*(?<type>[A-Za-z0-9_.]+)\s*(?:,[^>]*)?>", RegexOptions.Compiled);
 
-    private static readonly Regex DeclaredContractPattern =
-        new(@"typeof\(\s*(?<type>I[A-Za-z0-9_.]+)\s*\)", RegexOptions.Compiled);
-
     /// <summary>Every contract removed by a replacement that lacks a matching scoped implementation.</summary>
     private static IReadOnlyList<string> FindOrphanReplacements(string source)
     {
@@ -381,13 +383,6 @@ public sealed class DesignPersistenceBoundaryTests
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
-
-    private static IReadOnlyList<string> ExtractDeclaredContracts(string source) =>
-        DeclaredContractPattern.Matches(source)
-            .Select(match => match.Groups["type"].Value)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
 
     private static readonly Regex ProviderRegistrationPattern =
         new(@"Groundwork(?<provider>Sqlite|SqlServer|PostgreSql|MongoDb)UnifiedRegistration\.cs$", RegexOptions.Compiled);

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Test support for the public v2 catalog. Separate from Elsa.Persistence.Groundwork.Testing because that
+    project pins the provider packages at the versions its v1 helpers compile against; the two cannot share
+    a reference set, and the split is the lane boundary rather than an accident.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.2.0-preview.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+  </ItemGroup>
+
+</Project>

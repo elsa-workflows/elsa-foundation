@@ -6,9 +6,10 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
+using Groundwork.Store;
+using Groundwork.Testing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -120,14 +121,15 @@ public sealed class AspNetCoreIdentitySeederContractTests
     [Fact]
     public async Task Two_instance_groundwork_seeding_converges_for_100_races_without_logging_the_password()
     {
-        const string userName = "admin";
         var password = CreateFixtureCredential();
-        const string roleName = "administrator";
-
+        using var documents = new AspNetCoreIdentityTestPersistence(
+            new SerializingStorageProviderConnection(
+                new InMemoryProviderFactory().Create($"identity-seeding:{Guid.NewGuid():N}")));
+        var logs = new CapturingLoggerProvider();
         for (var iteration = 0; iteration < 100; iteration++)
         {
-            var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
-            var logs = new CapturingLoggerProvider();
+            var userName = $"admin-{iteration}";
+            var roleName = $"administrator-{iteration}";
             await using var first = BuildSeedProvider(documents, logs, userName, password, roleName);
             await using var second = BuildSeedProvider(documents, logs, userName, password, roleName);
 
@@ -145,7 +147,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
             Assert.NotNull(user);
 
             var roles = await sp.GetRequiredService<ElsaRoleStore>().ListAsync(user!.TenantId);
-            var adminRole = Assert.Single(roles.Where(role => string.Equals(role.Name, roleName, StringComparison.OrdinalIgnoreCase)));
+            var adminRole = Assert.Single(roles, role => string.Equals(role.Name, roleName, StringComparison.OrdinalIgnoreCase));
             Assert.Contains(IdentitySeedCoordinator.AllAccessPermission, adminRole.Permissions);
             Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, adminRole.Permissions);
 
@@ -158,9 +160,9 @@ public sealed class AspNetCoreIdentitySeederContractTests
             Assert.Equal(TenantMembershipStatus.Active, membership!.Status);
             Assert.Contains(adminRole.Id, membership.RoleIds);
 
-            Assert.Single(documents.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
-            Assert.Single(documents.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind));
-            Assert.Single(documents.Snapshot(IdentityStorageManifest.IdentityTenantMembershipDocumentKind));
+            Assert.Equal(iteration + 1, documents.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind, user.TenantId).Count);
+            Assert.Equal(iteration + 1, documents.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind, user.TenantId).Count);
+            Assert.Equal(iteration + 1, documents.Snapshot(IdentityStorageManifest.IdentityTenantMembershipDocumentKind, user.TenantId).Count);
             Assert.DoesNotContain(logs.Messages, message => message.Contains(password, StringComparison.Ordinal));
         }
     }
@@ -171,7 +173,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     public async Task Development_seed_fails_before_writes_outside_development_and_never_logs_the_secret(string environmentName)
     {
         var password = CreateFixtureCredential();
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(
             documents,
@@ -194,7 +196,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     public async Task Development_seed_fails_closed_when_host_environment_is_unavailable()
     {
         var password = CreateFixtureCredential();
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(
             documents,
@@ -217,7 +219,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     {
         const string userName = "admin";
         var password = CreateFixtureCredential();
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(
             documents,
@@ -239,7 +241,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     public async Task Invalid_password_policy_fails_before_role_user_or_membership_writes()
     {
         const string password = "short";
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(documents, logs, "admin", password, "administrator");
 
@@ -255,7 +257,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     public async Task Production_seed_logs_neither_username_nor_password()
     {
         var secret = string.Concat("Fixture", "Value", "1");
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(
             documents,
@@ -274,7 +276,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     public async Task Password_validator_diagnostics_cannot_echo_the_configured_secret()
     {
         var password = CreateFixtureCredential();
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var documents = new AspNetCoreIdentityTestPersistence();
         var logs = new CapturingLoggerProvider();
         await using var provider = BuildSeedProvider(
             documents,
@@ -327,7 +329,7 @@ public sealed class AspNetCoreIdentitySeederContractTests
     }
 
     private static ServiceProvider BuildSeedProvider(
-        InMemoryDocumentStore documents,
+        AspNetCoreIdentityTestPersistence documents,
         ILoggerProvider loggerProvider,
         string userName,
         string password,
@@ -342,8 +344,8 @@ public sealed class AspNetCoreIdentitySeederContractTests
         services.AddLogging(builder => builder.AddProvider(loggerProvider));
         if (registerEnvironment)
             services.AddSingleton<IHostEnvironment>(new TestHostEnvironment(environmentName));
-        services.AddSingleton<IDocumentStore>(documents);
-        services.AddSingleton<IBoundedDocumentStore>(documents);
+        services.AddSingleton<IStorageProviderConnection>(
+            new NonDisposingStorageProviderConnection(documents.Connection));
         services.AddFoundationAspNetCoreIdentityGroundwork(new IdentitySeedOptions
         {
             UserName = userName,
@@ -359,11 +361,12 @@ public sealed class AspNetCoreIdentitySeederContractTests
         return services.BuildServiceProvider();
     }
 
-    private static void AssertSeedAuthorityIsEmpty(InMemoryDocumentStore documents)
+    private static void AssertSeedAuthorityIsEmpty(AspNetCoreIdentityTestPersistence documents)
     {
-        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind));
-        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
-        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityTenantMembershipDocumentKind));
+        var tenant = AspNetCoreIdentityScenarioData.Ids.PrimaryTenant;
+        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityRoleDocumentKind, tenant));
+        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind, tenant));
+        Assert.Empty(documents.Snapshot(IdentityStorageManifest.IdentityTenantMembershipDocumentKind, tenant));
     }
 
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment

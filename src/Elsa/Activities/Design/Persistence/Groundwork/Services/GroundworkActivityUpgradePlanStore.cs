@@ -1,15 +1,13 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Persistence.Groundwork.Querying;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
-public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
+public sealed class GroundworkActivityUpgradePlanStore(GroundworkV2ActivityDesignStore store) :
     IActivityUpgradePlanStore,
     IActivityUpgradeApplyReceiptStore
 {
@@ -35,14 +33,14 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
                 return;
             throw new InvalidOperationException($"Activity upgrade plan '{plan.PlanId}' is immutable.");
         }
-        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        var save = ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
             plan.PlanId,
             ActivitiesDesignStorageManifest.SchemaVersion,
             new UpgradePlanDocument(ActivitiesDesignStorageManifest.ActivityUpgradePlanCollection, plan),
             JsonOptions);
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind),
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind),
             [save],
             cancellationToken);
     }
@@ -73,15 +71,15 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
                 SuccessorPlanId = successorPlanId
             }
         };
-        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        var save = ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind,
             planId,
             ActivitiesDesignStorageManifest.SchemaVersion,
             linked,
             JsonOptions);
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind),
-            [new(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind),
+            [new ActivityDesignSaveRequest(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
             cancellationToken);
     }
 
@@ -116,21 +114,21 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(receipt);
-        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        var save = ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
             receipt.ReceiptId,
             ActivitiesDesignStorageManifest.SchemaVersion,
             new ApplyReceiptDocument(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptCollection, receipt),
-            JsonOptions);
+            JsonOptions) with { ExpectedVersion = 0 };
         try
         {
             await store.SaveAllAsync(
-                DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
+                ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
                 [save],
                 cancellationToken);
             return true;
         }
-        catch (DocumentAtomicWriteException)
+        catch (ActivityDesignWriteConflictException)
         {
             return false;
         }
@@ -162,7 +160,7 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
             Revision = document.Receipt.Revision + 1,
             LeaseExpiresAt = leaseExpiresAt
         };
-        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        var save = ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
             receipt.ReceiptId,
             ActivitiesDesignStorageManifest.SchemaVersion,
@@ -171,12 +169,12 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
         try
         {
             await store.SaveAllAsync(
-                DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
-                [new(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
+                ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
+                [new ActivityDesignSaveRequest(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
                 cancellationToken);
             return reclaimed;
         }
-        catch (DocumentAtomicWriteException)
+        catch (ActivityDesignWriteConflictException)
         {
             return null;
         }
@@ -212,20 +210,20 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
                 RejectionCode = errorCode
             }
         };
-        var save = JsonDocumentStoreExtensions.ToSaveDocumentRequest(
+        var save = ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind,
             receipt.ReceiptId,
             ActivitiesDesignStorageManifest.SchemaVersion,
             rejected,
             JsonOptions);
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
-            [new(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind),
+            [new ActivityDesignSaveRequest(save.DocumentKind, save.Id, save.SchemaVersion, save.ContentJson, existing.Version)],
             cancellationToken);
     }
 
     // The original physical manifest projects the standard `entity.id` path. Upgrade plans and
-    // receipts predate the shared GroundworkDocument<TEntity> envelope, so keep their wire shape and
+    // receipts predate the shared GroundworkV2ActivityDesignDocument<TEntity> envelope, so keep their wire shape and
     // add the same identity projection instead of changing an already-applied physical column in place.
     private sealed record UpgradePlanDocument(string Collection, ActivityUpgradePlan Plan)
     {
@@ -238,6 +236,17 @@ public sealed class GroundworkActivityUpgradePlanStore(IDocumentStore store) :
     }
 
     private sealed record ActivityUpgradeDocumentIdentity(string Id);
+
+    private static ActivityDesignSaveRequest ToSaveRequest<T>(
+        string kind,
+        string id,
+        string schemaVersion,
+        T value,
+        JsonSerializerOptions options) => new(
+        kind,
+        id,
+        schemaVersion,
+        JsonSerializer.Serialize(value, options));
 
     private static bool SamePlan(ActivityUpgradePlan left, ActivityUpgradePlan right) =>
         JsonNode.DeepEquals(

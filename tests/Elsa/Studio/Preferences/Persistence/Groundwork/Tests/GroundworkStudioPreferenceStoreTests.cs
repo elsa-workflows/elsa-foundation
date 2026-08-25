@@ -1,18 +1,13 @@
 using System.Text.Json;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.Scoping;
-using Elsa.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.Testing;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
-using Groundwork.Core.Queries;
-using Groundwork.Core.Scoping;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
+using Groundwork.Kernel;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Elsa.Studio.Preferences.Persistence.Groundwork.Tests;
@@ -20,164 +15,179 @@ namespace Elsa.Studio.Preferences.Persistence.Groundwork.Tests;
 public sealed class GroundworkStudioPreferenceStoreTests
 {
     [Fact]
-    public async Task RoundTripsGlobalDocumentAndEnforcesCas()
-    {
-        var store = CreateInMemoryStore();
-        var key = new StudioPreferenceKey("user-1", "tenant-1", "studio-1", "dashboard");
-
-        var created = await store.WriteAsync(key, new(1, Json("{\"size\":\"wide\"}")), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
-        Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, created.Status);
-        Assert.Equal("rev-1", created.Document!.Revision);
-
-        var stale = await store.WriteAsync(key, new(1, Json("{}")), StudioPreferenceWriteCondition.Matches("rev-0"), DateTimeOffset.UtcNow);
-        Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, stale.Status);
-
-        var updated = await store.WriteAsync(key, new(1, Json("{}")), StudioPreferenceWriteCondition.Matches("rev-1"), DateTimeOffset.UtcNow);
-        Assert.Equal("rev-2", updated.Document!.Revision);
-        Assert.Equal("rev-2", (await store.FindAsync(key))!.Revision);
-    }
-
-    [Fact]
-    public async Task CompositeIdentityDoesNotCollideAcrossScopeBoundaries()
-    {
-        var store = CreateInMemoryStore();
-        var first = new StudioPreferenceKey("ab", "c", "host", "dashboard");
-        var second = new StudioPreferenceKey("a", "bc", "host", "dashboard");
-
-        await store.WriteAsync(first, new(1, Json("{\"owner\":1}")), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
-        Assert.Null(await store.FindAsync(second));
-    }
-
-    [Fact]
-    public async Task ProductionSqliteCompositionUsesAnExplicitOrdinaryGlobalSessionAndPreservesPreferenceIsolation()
+    public async Task PublicV2StoreRoundTripsGlobalRowsAndEnforcesCas()
     {
         await using var database = new TemporarySqliteDatabase();
-        var endpointContext = new FixedAccessContextAccessor(
-            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1")));
+        using var connection = new SqliteProviderFactory().Create(database.ConnectionString);
         var services = new ServiceCollection()
-            .AddLogging()
-            .AddScoped<IPersistenceAccessContextAccessor>(_ => endpointContext);
-        await using var provider = services
-            .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
-            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        await provider.ApplySqliteGroundworkSchemaAsync(database.ConnectionString);
-        await provider.InitializeGroundworkStoreAsync();
+            .AddGroundworkStorageProviderConnection(connection)
+            .AddGroundworkStudioPreferences();
+        await using var provider = services.BuildServiceProvider();
+        await StartAsync(provider);
         await using var scope = provider.CreateAsyncScope();
-
-        var ambientStore = scope.ServiceProvider.GetRequiredService<IDocumentStore>();
         var store = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
         var key = new StudioPreferenceKey("user-1", "tenant-1", "studio-1", "dashboard");
-
-        var ambientFailure = await Assert.ThrowsAsync<InvalidStorageScopeAccessException>(() =>
-            ambientStore.LoadAsync(StudioPreferencesStorageManifest.DocumentKind, "unreachable"));
-        Assert.Equal(StorageScopeRejectionReason.GlobalAccessRequired, ambientFailure.Rejection.Reason);
-
-        Assert.Null(await store.FindAsync(key));
 
         var created = await store.WriteAsync(
             key,
             new(1, Json("{\"size\":\"wide\"}")),
             StudioPreferenceWriteCondition.MustNotExist,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.Parse("2026-08-16T00:00:00Z"));
         Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, created.Status);
         Assert.Equal("rev-1", created.Document!.Revision);
 
+        var stale = await store.WriteAsync(
+            key,
+            new(1, Json("{}")),
+            StudioPreferenceWriteCondition.Matches("rev-0"),
+            DateTimeOffset.UtcNow);
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, stale.Status);
+
         var updated = await store.WriteAsync(
             key,
-            new(1, Json("{\"size\":\"medium\"}")),
-            StudioPreferenceWriteCondition.Matches(created.Document.Revision),
-            DateTimeOffset.UtcNow);
+            new(2, Json("{\"size\":\"medium\"}")),
+            StudioPreferenceWriteCondition.Matches("rev-1"),
+            DateTimeOffset.Parse("2026-08-16T01:00:00Z"));
         Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, updated.Status);
         Assert.Equal("rev-2", updated.Document!.Revision);
 
-        var conflict = await store.WriteAsync(
-            key,
-            new(1, Json("{\"size\":\"small\"}")),
-            StudioPreferenceWriteCondition.Matches(created.Document.Revision),
-            DateTimeOffset.UtcNow);
-        Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, conflict.Status);
-        Assert.Equal("rev-2", (await store.FindAsync(key))!.Revision);
-
-        var otherSubject = key with { SubjectId = "user-2" };
-        var otherTenant = key with { TenantId = "tenant-2" };
-        var otherHost = key with { StudioHostId = "studio-2" };
-        foreach (var isolatedKey in new[] { otherSubject, otherTenant, otherHost })
-        {
-            var saved = await store.WriteAsync(
-                isolatedKey,
-                new(1, Json("{\"size\":\"small\"}")),
-                StudioPreferenceWriteCondition.MustNotExist,
-                DateTimeOffset.UtcNow);
-            Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, saved.Status);
-            Assert.Equal("small", (await store.FindAsync(isolatedKey))!.Value.GetProperty("size").GetString());
-        }
-
-        Assert.Equal("medium", (await store.FindAsync(key))!.Value.GetProperty("size").GetString());
-        Assert.Empty(scope.ServiceProvider.GetRequiredService<GroundworkPrivilegedAccessSink>().Snapshot());
+        var loaded = await store.FindAsync(key);
+        Assert.Equal("rev-2", loaded!.Revision);
+        Assert.Equal(2, loaded.SchemaVersion);
+        Assert.Equal("medium", loaded.Value.GetProperty("size").GetString());
     }
 
     [Fact]
-    public void UnifiedManifestIncludesStudioPreferences()
+    public async Task CompositeIdentityIsInjectiveAndRevisionMatchOnMissingIsNotFound()
     {
-        Assert.Contains(
-            new GroundworkAllFeaturesDeploymentSchema().CreateManifest().StorageUnits,
-            x => x.Identity.Value == StudioPreferencesStorageManifest.DocumentKind);
+        await using var database = new TemporarySqliteDatabase();
+        using var connection = new SqliteProviderFactory().Create(database.ConnectionString);
+        var services = new ServiceCollection()
+            .AddGroundworkStorageProviderConnection(connection)
+            .AddGroundworkStudioPreferences();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
+        var first = new StudioPreferenceKey("ab", "c", "host", "dashboard");
+        var second = new StudioPreferenceKey("a", "bc", "host", "dashboard");
+
+        await store.WriteAsync(
+            first,
+            new(1, Json("{\"owner\":1}")),
+            StudioPreferenceWriteCondition.MustNotExist,
+            DateTimeOffset.UtcNow);
+
+        Assert.Null(await store.FindAsync(second));
+        var missing = await store.WriteAsync(
+            second,
+            new(1, Json("{}")),
+            StudioPreferenceWriteCondition.Matches("rev-1"),
+            DateTimeOffset.UtcNow);
+        Assert.Equal(StudioPreferenceStoreWriteStatus.NotFound, missing.Status);
+    }
+
+    [Fact]
+    public async Task NamedTargetNeverFallsBackToDefaultConnection()
+    {
+        await using var defaultDatabase = new TemporarySqliteDatabase();
+        await using var namedDatabase = new TemporarySqliteDatabase();
+        using var defaultConnection = new SqliteProviderFactory().Create(defaultDatabase.ConnectionString);
+        using var namedConnection = new SqliteProviderFactory().Create(namedDatabase.ConnectionString);
+        var services = new ServiceCollection()
+            .AddGroundworkStorageProviderConnection(defaultConnection)
+            .AddGroundworkStorageProviderConnection(namedConnection, "studio")
+            .AddGroundworkStudioPreferences("studio");
+        await using var provider = services.BuildServiceProvider();
+        await StartAsync(provider);
+
+        Assert.NotNull(namedConnection.Catalog.ReadIndexes(
+            new StorageUnitId(StudioPreferencesGroundworkStorageSchema.UnitId)));
+        Assert.ThrowsAny<Exception>(() =>
+            defaultConnection.OpenSession(StudioPreferencesGroundworkStorageSchema.CreateUnit(), StorageAccess.Global)
+                .Read(new StorageKey(new Dictionary<string, object?>
+                {
+                    [StudioPreferencesGroundworkStorageSchema.IdField] = new string('0', 64)
+                })));
+    }
+
+    [Fact]
+    public void ConflictingDeclarationsFailBeforeProviderResolution()
+    {
+        var registry = new GroundworkStorageUnitRegistry();
+        registry.Declare(StudioPreferencesGroundworkStorageSchema.CreateUnit());
+        var conflict = StudioPreferencesGroundworkStorageSchema.CreateUnit() with { Name = "other_physical_name" };
+
+        var error = Assert.Throws<InvalidOperationException>(() => registry.Declare(conflict));
+        Assert.Contains("declared twice", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConflictingTargetConnectionsFailDuringComposition()
+    {
+        await using var firstDatabase = new TemporarySqliteDatabase();
+        await using var secondDatabase = new TemporarySqliteDatabase();
+        using var first = new SqliteProviderFactory().Create(firstDatabase.ConnectionString);
+        using var second = new SqliteProviderFactory().Create(secondDatabase.ConnectionString);
+        var services = new ServiceCollection().AddGroundworkStorageProviderConnection(first, "studio");
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            services.AddGroundworkStorageProviderConnection(second, "studio"));
+
+        Assert.Contains("already has a v2 provider connection", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConnectionFactoryIsLazySharedAndOwnedByTheServiceProvider()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        IStorageProviderConnection? created = null;
+        var factoryCalls = 0;
+        var services = new ServiceCollection().AddGroundworkStorageProviderConnection(_ =>
+        {
+            factoryCalls++;
+            return created = new SqliteProviderFactory().Create(database.ConnectionString);
+        });
+
+        await using (var provider = services.BuildServiceProvider())
+        {
+            var unkeyed = provider.GetRequiredService<IStorageProviderConnection>();
+            var keyed = provider.GetRequiredKeyedService<IStorageProviderConnection>("default");
+
+            Assert.Same(unkeyed, keyed);
+            Assert.Same(created, unkeyed);
+            Assert.Equal(1, factoryCalls);
+        }
+
+        Assert.Throws<ObjectDisposedException>(() =>
+            created!.OpenSession(StudioPreferencesGroundworkStorageSchema.CreateUnit(), StorageAccess.Global));
+    }
+
+    [Fact]
+    public void ProductionAssemblyHasNoGroundworkV1DocumentDependency()
+    {
+        var references = typeof(GroundworkStudioPreferenceStore).Assembly.GetReferencedAssemblies();
+        Assert.DoesNotContain(references, reference => reference.Name is "Groundwork.Core" or "Groundwork.Documents");
+    }
+
+    private static async Task StartAsync(IServiceProvider provider)
+    {
+        foreach (var hosted in provider.GetServices<IHostedService>())
+            await hosted.StartAsync(CancellationToken.None);
     }
 
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
-    private static GroundworkStudioPreferenceStore CreateInMemoryStore()
-    {
-        var source = new TestSessionSource(new InMemoryDocumentStore(
-            StudioPreferencesStorageManifest.Create(),
-            DocumentStoreAccess.Global));
-        var context = new FixedAccessContextAccessor(
-            PersistenceAccessContext.Scoped(new PersistenceScope("tenant-1")));
-        return new GroundworkStudioPreferenceStore(new GroundworkStoreSessionFactory(context, source));
-    }
-
-    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
-
-    private sealed class TestSessionSource(IDocumentStore store) : IGroundworkStoreSessionSource
-    {
-        public ValueTask<GroundworkStoreSessionResources> OpenAsync(
-            DocumentStoreAccess access,
-            CancellationToken cancellationToken = default)
-        {
-            Assert.Equal(DocumentStoreAccess.Global, access);
-            return ValueTask.FromResult(new GroundworkStoreSessionResources(store, new EmptyBoundedStore()));
-        }
-    }
-
-    private sealed class EmptyBoundedStore : IBoundedDocumentStore
-    {
-        public Task<DocumentQueryResult> QueryAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<long> CountAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<bool> AnyAsync(DocumentQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
-
     private sealed class TemporarySqliteDatabase : IAsyncDisposable
     {
-        private readonly string _path = Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
+        private readonly string path = Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-v2-{Guid.NewGuid():N}.db");
 
-        public string ConnectionString => $"Data Source={_path}";
+        public string ConnectionString => $"Data Source={path}";
 
         public ValueTask DisposeAsync()
         {
-            File.Delete(_path);
-            File.Delete($"{_path}-shm");
-            File.Delete($"{_path}-wal");
+            File.Delete(path);
+            File.Delete($"{path}-shm");
+            File.Delete($"{path}-wal");
             return ValueTask.CompletedTask;
         }
     }

@@ -23,7 +23,7 @@ public sealed partial class GroundworkIdentityUserStore
             RequireExpectedVersion(user),
             document,
             cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-role add"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-role add"));
     }
 
     public async Task RemoveFromRoleAsync(AspNetCoreIdentityUser user, string roleName, CancellationToken cancellationToken)
@@ -34,13 +34,13 @@ public sealed partial class GroundworkIdentityUserStore
             return;
         var result = await _relationships.DeleteUserRoleAsync(
             user.TenantId, user.Id, role.Id, RequireExpectedVersion(user), cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-role remove"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-role remove"));
     }
 
     public async Task<IList<string>> GetRolesAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var envelopes = await QueryAsync(
+        var envelopes = Query(
             IdentityStorageManifest.UserRoleDocumentKind,
             IdentityStorageManifest.ListUserRolesQuery,
             (IdentityStorageManifest.UserLookupKeyField, UserLookupKey(CurrentTenantId(), user.Id)),
@@ -61,7 +61,7 @@ public sealed partial class GroundworkIdentityUserStore
         var role = await FindRoleByNormalizedNameAsync(roleName, cancellationToken);
         if (role is null)
             return false;
-        var envelope = await store.LoadAsync(
+        var envelope = rows.Read(
             IdentityStorageManifest.UserRoleDocumentKind,
             IdentityDocumentId.From(user.TenantId, user.Id, role.Id),
             cancellationToken);
@@ -73,7 +73,7 @@ public sealed partial class GroundworkIdentityUserStore
         var role = await FindRoleByNormalizedNameAsync(roleName, cancellationToken);
         if (role is null)
             return [];
-        var envelopes = await QueryAsync(
+        var envelopes = Query(
             IdentityStorageManifest.UserRoleDocumentKind,
             IdentityStorageManifest.ListRoleUsersQuery,
             (IdentityStorageManifest.RoleLookupKeyField, RoleLookupKey(CurrentTenantId(), role.Id)),

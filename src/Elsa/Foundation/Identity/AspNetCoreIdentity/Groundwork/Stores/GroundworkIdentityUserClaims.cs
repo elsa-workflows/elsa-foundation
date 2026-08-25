@@ -3,7 +3,6 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 
@@ -12,7 +11,7 @@ public sealed partial class GroundworkIdentityUserStore
     public async Task<IList<Claim>> GetClaimsAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
     {
         EnsureUserScope(user);
-        var envelopes = await QueryAsync(
+        var envelopes = Query(
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityStorageManifest.ListUserClaimsQuery,
             (IdentityStorageManifest.UserLookupKeyField, UserLookupKey(CurrentTenantId(), user.Id)),
@@ -38,7 +37,7 @@ public sealed partial class GroundworkIdentityUserStore
             return;
         var result = await _relationships.AddUserClaimsAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user), documents, cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-claim add"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-claim add"));
     }
 
     public async Task ReplaceClaimAsync(AspNetCoreIdentityUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
@@ -49,7 +48,7 @@ public sealed partial class GroundworkIdentityUserStore
             ClaimKey(user.TenantId, newClaim), UserLookupKey(user.TenantId, user.Id));
         var result = await _relationships.ReplaceUserClaimAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user), claim.Type, claim.Value, replacement, cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-claim replace"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-claim replace"));
     }
 
     public async Task RemoveClaimsAsync(AspNetCoreIdentityUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
@@ -60,12 +59,12 @@ public sealed partial class GroundworkIdentityUserStore
             return;
         var result = await _relationships.RemoveUserClaimsAsync(
             user.TenantId, user.Id, RequireExpectedVersion(user), removals, cancellationToken);
-        ApplyRevisionStamp(user, RequireSavedEnvelope(result, "user-claim remove"));
+        ApplyRevisionStamp(user, RequireSavedRow(result, "user-claim remove"));
     }
 
     public async Task<IList<AspNetCoreIdentityUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
     {
-        var claims = await QueryAsync(
+        var claims = Query(
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityStorageManifest.FindUsersByClaimQuery,
             (IdentityStorageManifest.ClaimKeyField, ClaimKey(CurrentTenantId(), claim)),
@@ -86,7 +85,7 @@ public sealed partial class GroundworkIdentityUserStore
         return users;
     }
 
-    private static Claim MapUserClaim(DocumentEnvelope envelope)
+    private static Claim MapUserClaim(GroundworkIdentityRow envelope)
     {
         var document = Deserialize<IdentityUserClaimDocument>(envelope);
         return new Claim(document.ClaimType, document.ClaimValue ?? string.Empty);

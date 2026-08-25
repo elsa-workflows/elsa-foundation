@@ -1,8 +1,6 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Persistence.Core;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -11,21 +9,21 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 /// <c>tenantId:applicationId</c> document id so tenant isolation is enforced before provider I/O.
 /// </summary>
 public sealed class GroundworkApplicationStore(
-    IDocumentStore store,
+    GroundworkIdentityRowStore rows,
     IPersistenceAccessContextAccessor accessContextAccessor) : IApplicationStore, IRevisionAwareApplicationStore
 {
-    public async ValueTask<ApplicationRecord?> FindAsync(
+    public ValueTask<ApplicationRecord?> FindAsync(
         string tenantId,
         string applicationId,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityApplicationDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, applicationId),
             cancellationToken);
 
-        return envelope is null ? null : Map(envelope);
+        return ValueTask.FromResult(row is null ? null : Map(row));
     }
 
     public async ValueTask SaveAsync(ApplicationRecord application, CancellationToken cancellationToken = default)
@@ -33,20 +31,20 @@ public sealed class GroundworkApplicationStore(
         await SaveCoreAsync(application, expectedVersion: null, cancellationToken);
     }
 
-    public async ValueTask<IamRevisionedRecord<ApplicationRecord>?> FindWithRevisionAsync(
+    public ValueTask<IamRevisionedRecord<ApplicationRecord>?> FindWithRevisionAsync(
         string tenantId,
         string applicationId,
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var envelope = await store.LoadAsync(
+        var row = rows.Read(
             IdentityStorageManifest.IdentityApplicationDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, applicationId),
             cancellationToken);
 
-        return envelope is null
+        return ValueTask.FromResult(row is null
             ? null
-            : new IamRevisionedRecord<ApplicationRecord>(Map(envelope), GroundworkIamRevisionMapper.Revision(envelope));
+            : new IamRevisionedRecord<ApplicationRecord>(Map(row), GroundworkIamRevisionMapper.Revision(row)));
     }
 
     public async ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(
@@ -61,7 +59,7 @@ public sealed class GroundworkApplicationStore(
             await SaveCoreAsync(application, expectedVersion, cancellationToken));
     }
 
-    private async ValueTask<DocumentStoreWriteResult> SaveCoreAsync(
+    private ValueTask<GroundworkIdentityWriteResult> SaveCoreAsync(
         ApplicationRecord application,
         long? expectedVersion,
         CancellationToken cancellationToken)
@@ -73,19 +71,15 @@ public sealed class GroundworkApplicationStore(
             IdentityCompositeDocumentId.Normalize(application.TenantId),
             IdentityCompositeDocumentId.Normalize(application.Id),
             application);
-        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        return await store.SaveAsync(
-            new SaveDocumentRequest(
+        return ValueTask.FromResult(rows.Save(
+            GroundworkIdentityDocumentRows.Write(
                 IdentityStorageManifest.IdentityApplicationDocumentKind,
                 IdentityCompositeDocumentId.From(application.TenantId, application.Id),
-                IdentityStorageManifest.SchemaVersion,
-                content,
+                document,
                 expectedVersion),
-            cancellationToken);
+            cancellationToken));
     }
 
-    private static ApplicationRecord Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IdentityApplicationDocument>(
-            envelope.ContentJson,
-            IdentityGroundworkJson.Options)!.Application;
+    private static ApplicationRecord Map(GroundworkIdentityRow row) =>
+        GroundworkIdentityDocumentRows.Deserialize<IdentityApplicationDocument>(row).Application;
 }

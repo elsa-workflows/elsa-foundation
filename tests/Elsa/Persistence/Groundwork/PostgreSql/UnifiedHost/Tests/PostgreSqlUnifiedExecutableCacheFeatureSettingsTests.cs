@@ -1,5 +1,3 @@
-using CShells;
-using CShells.Features;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -68,9 +66,7 @@ public sealed class PostgreSqlUnifiedExecutableCacheFeatureSettingsTests
     }
 
     private static PostgreSqlGroundworkUnifiedPersistenceShellFeature NewFeature() =>
-        new(new ShellFeatureContext(
-            new ShellSettings { Id = new ShellId("postgresql-cache-settings") },
-            []));
+        new();
 
     private static void AssertSetting(object feature, string name, object expected)
     {

@@ -115,7 +115,7 @@ public abstract class TwoNodeAcceptanceTests
     }
 
     [Fact]
-    public async Task DispatchWorkflowChildStart_CommittedOnOneNode_ConvergesAfterBothNodesRestart()
+    public virtual async Task DispatchWorkflowChildStart_CommittedOnOneNode_ConvergesAfterBothNodesRestart()
     {
         var clusterState = CreateClusterState();
         CommittedDispatch dispatch;

@@ -5,11 +5,10 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Endpoints;
 using Elsa3.Activities.Design.Import.Models;
@@ -17,11 +16,7 @@ using Elsa3.Activities.Design.Import.Persistence.Groundwork;
 using Elsa3.Activities.Design.Import.Persistence.Groundwork.Services;
 using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Models;
-using Groundwork.Core.Queries;
-using Groundwork.Core.Transactions;
-using Groundwork.Documents.Scoping;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Store;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -90,7 +85,7 @@ public sealed class ReusableActivityImportOperationTests
             ReusableActivityImportFixtures.Reference("missing-ref", targetVersionId: "absent-v1"));
         var harness = Harness();
         var upload = await harness.Service.UploadAsync(Json(a, b, missing), null, Scope);
-        var savesBefore = harness.Store.SaveCount;
+        var savesBefore = harness.HarnessStore.SaveCount;
 
         var first = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 2, Scope);
         var second = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 2, 2, Scope);
@@ -102,7 +97,7 @@ public sealed class ReusableActivityImportOperationTests
         Assert.Equal(2, first.Processed);
         Assert.Equal(2, first.NextOffset);
         Assert.True(second.IsComplete);
-        Assert.Equal(savesBefore, harness.Store.SaveCount);
+        Assert.Equal(savesBefore, harness.HarnessStore.SaveCount);
         var cycle = Assert.Single(first.Diagnostics.Where(x => x.Code == ReusableActivityImportDiagnosticCodes.DependencyCycle));
         Assert.Equal(["a-v1", "b-v1", "a-v1"], cycle.Cycle);
         Assert.Equal(Elsa3MigrationPathSegmentKind.SourceVersion, cycle.PathSegments[0].Kind);
@@ -170,9 +165,15 @@ public sealed class ReusableActivityImportOperationTests
             Assert.NotNull(source.ActivityDefinitionId);
             Assert.NotNull(source.ActivityVersionNavigationIdentity);
         });
-        Assert.Single(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
-        Assert.Equal(2, harness.Store.Snapshot("activityDefinition").Count);
-        Assert.Equal(2, harness.Store.Snapshot("workflowDefinition").Count);
+        Assert.Single(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Equal(2, harness.HarnessStore.Snapshot("activityDefinition").Count);
+        Assert.Equal(2, harness.HarnessStore.Snapshot("workflowDefinition").Count);
+        var atomicUnits = harness.HarnessStore.Sessions.BegunUnitIds.Last(units =>
+            units.Contains("workflowDefinitionVersion", StringComparer.Ordinal));
+        Assert.Contains("activityDefinition", atomicUnits, StringComparer.Ordinal);
+        Assert.Contains("elsa3ReusableImportReceipt", atomicUnits, StringComparer.Ordinal);
+        Assert.Contains("workflowDefinition", atomicUnits, StringComparer.Ordinal);
+        Assert.Equal(atomicUnits.Count, atomicUnits.Distinct(StringComparer.Ordinal).Count());
 
         await Assert.ThrowsAsync<ReusableActivityImportIdempotencyConflictException>(async () =>
             await harness.Service.ApplyAsync(
@@ -183,6 +184,41 @@ public sealed class ReusableActivityImportOperationTests
                 Scope));
         await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
             await harness.Service.GetStatusAsync("operation-1", new("tenant-b", "user-a")));
+    }
+
+    [Fact]
+    public async Task Replayed_receipt_rejects_selection_fingerprint_drift_without_mutating_real_workflow_catalog()
+    {
+        var original = ReusableActivityImportFixtures.Workflow(
+            "fingerprint", "fingerprint-v1", 1, true,
+            ReusableActivityImportFixtures.Leaf("original"));
+        var changed = ReusableActivityImportFixtures.Workflow(
+            "fingerprint", "fingerprint-v1", 1, true,
+            ReusableActivityImportFixtures.Leaf("changed"));
+        using var harness = Harness();
+
+        var originalUpload = await harness.Service.UploadAsync(Json(original), null, Scope);
+        var originalPlan = await harness.Service.AnalyzeAsync(originalUpload.CollectionHandle, 0, 10, Scope);
+        await harness.Service.ApplyAsync(
+            originalUpload.CollectionHandle,
+            originalPlan.PlanId,
+            ["fingerprint-v1"],
+            "fingerprint-key",
+            Scope);
+        var workflowRows = harness.HarnessStore.Snapshot("workflowDefinitionVersion").Count;
+
+        var changedUpload = await harness.Service.UploadAsync(Json(changed), null, Scope);
+        var changedPlan = await harness.Service.AnalyzeAsync(changedUpload.CollectionHandle, 0, 10, Scope);
+        await Assert.ThrowsAsync<ReusableActivityImportIdempotencyConflictException>(async () =>
+            await harness.Service.ApplyAsync(
+                changedUpload.CollectionHandle,
+                changedPlan.PlanId,
+                ["fingerprint-v1"],
+                "fingerprint-key",
+                Scope));
+
+        Assert.Equal(workflowRows, harness.HarnessStore.Snapshot("workflowDefinitionVersion").Count);
+        Assert.Single(harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.ReceiptDocumentKind));
     }
 
     [Theory]
@@ -232,11 +268,11 @@ public sealed class ReusableActivityImportOperationTests
             Assert.Equal(ReusableActivityImportResourceDisposition.Reused, v1Receipt.ActivityVersionDisposition);
         }
 
-        Assert.Single(harness.Store.Snapshot("activityDefinition"));
-        Assert.Equal(2, harness.Store.Snapshot("activityDefinitionVersion").Count);
-        Assert.Single(harness.Store.Snapshot("activityDefinitionAuthoringState"));
-        Assert.Equal(2, harness.Store.Snapshot("workflowDefinitionVersion").Count);
-        Assert.Equal(2, harness.Store.Snapshot("elsa3ReusableImportReceipt").Count);
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinition"));
+        Assert.Equal(2, harness.HarnessStore.Snapshot("activityDefinitionVersion").Count);
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinitionAuthoringState"));
+        Assert.Equal(2, harness.HarnessStore.Snapshot("workflowDefinitionVersion").Count);
+        Assert.Equal(2, harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt").Count);
         Assert.Equal(v2Receipt.ActivityDefinitionVersionId, CurrentManagementProjection(harness.Store).HeadVersionId);
     }
 
@@ -255,9 +291,8 @@ public sealed class ReusableActivityImportOperationTests
             2,
             true,
             ReusableActivityImportFixtures.Leaf("root-v2"));
-        var inner = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var store = new FailingAtomicDocumentStore(inner);
-        var service = Harness(store, store, inner).Service;
+        using var harness = Harness();
+        var service = harness.Service;
         var upload = await service.UploadAsync(Json(v1, v2), null, Scope);
         var analysis = await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
         var first = await service.ApplyAsync(
@@ -267,7 +302,7 @@ public sealed class ReusableActivityImportOperationTests
             "atomic-first",
             Scope);
         var v1Receipt = Assert.Single(first.Sources);
-        store.FailOnDocumentKind = ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind;
+        harness.HarnessStore.Sessions.FailOnUnit = ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind;
 
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await service.ApplyAsync(
@@ -277,11 +312,11 @@ public sealed class ReusableActivityImportOperationTests
                 "atomic-second",
                 Scope));
 
-        Assert.Single(inner.Snapshot("activityDefinitionVersion"));
-        Assert.Single(inner.Snapshot("workflowDefinitionVersion"));
-        Assert.Single(inner.Snapshot("elsa3ReusableImportReceipt"));
-        Assert.Equal(v1Receipt.ActivityDefinitionVersionId, CurrentAuthoring(inner).HeadVersionId);
-        Assert.Equal(v1Receipt.ActivityDefinitionVersionId, CurrentManagementProjection(inner).HeadVersionId);
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinitionVersion"));
+        Assert.Single(harness.HarnessStore.Snapshot("workflowDefinitionVersion"));
+        Assert.Single(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Equal(v1Receipt.ActivityDefinitionVersionId, CurrentAuthoring(harness.Store).HeadVersionId);
+        Assert.Equal(v1Receipt.ActivityDefinitionVersionId, CurrentManagementProjection(harness.Store).HeadVersionId);
     }
 
     [Fact]
@@ -317,12 +352,12 @@ public sealed class ReusableActivityImportOperationTests
                 "unrelated-activity",
                 Scope));
 
-        Assert.Empty(harness.Store.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind));
-        Assert.Empty(harness.Store.Snapshot("activityDefinitionVersion"));
-        Assert.Empty(harness.Store.Snapshot("activityDefinitionAuthoringState"));
-        Assert.Empty(harness.Store.Snapshot("workflowDefinition"));
-        Assert.Empty(harness.Store.Snapshot("workflowDefinitionVersion"));
-        Assert.Empty(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Empty(harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinitionVersion"));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinitionAuthoringState"));
+        Assert.Empty(harness.HarnessStore.Snapshot("workflowDefinition"));
+        Assert.Empty(harness.HarnessStore.Snapshot("workflowDefinitionVersion"));
+        Assert.Empty(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
     }
 
     [Fact]
@@ -338,7 +373,7 @@ public sealed class ReusableActivityImportOperationTests
         var upload = await harness.Service.UploadAsync(Json(source), null, Scope);
         var analysis = await harness.Service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope);
         var item = Assert.Single(analysis.Items);
-        await SaveWorkflowDefinitionAsync(harness.Store, new()
+        await SaveWorkflowDefinitionAsync(harness.HarnessStore.WorkflowStorage, new()
         {
             Id = item.WorkflowDefinitionId,
             TenantId = Scope.TenantId,
@@ -356,11 +391,11 @@ public sealed class ReusableActivityImportOperationTests
                 "unrelated-workflow",
                 Scope));
 
-        Assert.Empty(harness.Store.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind));
-        Assert.Empty(harness.Store.Snapshot("workflowDefinitionVersion"));
-        Assert.Empty(harness.Store.Snapshot("activityDefinition"));
-        Assert.Empty(harness.Store.Snapshot("activityDefinitionVersion"));
-        Assert.Empty(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Empty(harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind));
+        Assert.Empty(harness.HarnessStore.Snapshot("workflowDefinitionVersion"));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinition"));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinitionVersion"));
+        Assert.Empty(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
     }
 
     [Fact]
@@ -386,8 +421,8 @@ public sealed class ReusableActivityImportOperationTests
 
         Assert.NotEqual(receiptA.ReceiptId, receiptB.ReceiptId);
         Assert.Equal(receiptA.Sources[0].ActivityDefinitionId, receiptB.Sources[0].ActivityDefinitionId);
-        Assert.Single(a.Store.Snapshot("activityDefinition"));
-        Assert.Single(b.Store.Snapshot("activityDefinition"));
+        Assert.Single(a.HarnessStore.Snapshot("activityDefinition"));
+        Assert.Single(b.HarnessStore.Snapshot("activityDefinition"));
         await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
             await a.Service.GetStatusAsync("same-key", tenantB));
     }
@@ -403,12 +438,8 @@ public sealed class ReusableActivityImportOperationTests
             ReusableActivityImportFixtures.Leaf("root"));
         var userA = new ReusableActivityImportAccessScope("tenant-shared", "user-a");
         var userB = new ReusableActivityImportAccessScope("tenant-shared", "user-b");
-        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var harness = Harness(
-            store,
-            store,
-            store,
-            GroundworkTestAccess.AccessContext("tenant-shared"));
+        using var harness = Harness(scope: new("tenant-shared", "user-a"));
+        var store = harness.Store;
         var uploadA = await harness.Service.UploadAsync(Json(source), null, userA);
         var uploadB = await harness.Service.UploadAsync(Json(source), null, userB);
         var analysisA = await harness.Service.AnalyzeAsync(uploadA.CollectionHandle, 0, 10, userA);
@@ -467,13 +498,13 @@ public sealed class ReusableActivityImportOperationTests
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.WorkflowDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityDefinitionDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityVersionDisposition);
-        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.CollectionDocumentKind).Count);
-        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.ReceiptDocumentKind).Count);
-        Assert.Equal(2, store.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind).Count);
-        Assert.Single(store.Snapshot("activityDefinition"));
-        Assert.Single(store.Snapshot("activityDefinitionVersion"));
-        Assert.Single(store.Snapshot("workflowDefinition"));
-        Assert.Single(store.Snapshot("workflowDefinitionVersion"));
+        Assert.Equal(2, harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.CollectionDocumentKind).Count);
+        Assert.Equal(2, harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.ReceiptDocumentKind).Count);
+        Assert.Equal(2, harness.HarnessStore.Snapshot(Elsa3ImportStorageManifest.DefinitionBindingDocumentKind).Count);
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinition"));
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinitionVersion"));
+        Assert.Single(harness.HarnessStore.Snapshot("workflowDefinition"));
+        Assert.Single(harness.HarnessStore.Snapshot("workflowDefinitionVersion"));
     }
 
     [Fact]
@@ -498,11 +529,10 @@ public sealed class ReusableActivityImportOperationTests
     [Fact]
     public async Task Operation_store_wraps_storage_and_malformed_documents_and_rejects_scope_mismatch()
     {
-        var inner = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var accessor = GroundworkTestAccess.AccessContext(Scope.TenantId!);
-        var throwing = new GroundworkReusableActivityImportOperationStore(
-            new ThrowingDocumentStore(inner, throwOnLoad: true),
-            accessor);
+        using var harness = Harness();
+        harness.HarnessStore.Sessions.ThrowOnRead = true;
+        var accessor = harness.Access;
+        var throwing = new GroundworkReusableActivityImportOperationStore(harness.HarnessStore.Store, accessor);
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await throwing.FindCollectionAsync("handle", Scope));
         var now = DateTimeOffset.Parse("2026-07-17T10:00:00Z");
@@ -519,26 +549,17 @@ public sealed class ReusableActivityImportOperationTests
                     1,
                     true,
                     ReusableActivityImportFixtures.Leaf("root"))));
-        var saveFailure = new GroundworkReusableActivityImportOperationStore(
-            new ThrowingDocumentStore(inner, throwOnSave: true),
-            accessor);
+        harness.HarnessStore.Sessions.ThrowOnRead = false;
+        harness.HarnessStore.Sessions.ThrowOnCommit = true;
+        var saveFailure = new GroundworkReusableActivityImportOperationStore(harness.HarnessStore.Store, accessor);
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await saveFailure.TryCreateCollectionAsync(collection));
 
-        await inner.SaveAsync(new SaveDocumentRequest(
-            "elsa3ReusableImportCollection",
-            "malformed-collection",
-            "1.0.0",
-            "{",
-            0));
+        harness.HarnessStore.Sessions.ThrowOnCommit = false;
+        harness.HarnessStore.InsertRaw("elsa3ReusableImportCollection", "malformed-collection", "{");
         var receiptId = Elsa3.Activities.Design.Import.Persistence.Groundwork.Elsa3ImportStorageManifest.ReceiptId("bad", Scope);
-        await inner.SaveAsync(new SaveDocumentRequest(
-            "elsa3ReusableImportReceipt",
-            receiptId,
-            "1.0.0",
-            "{\"receipt\":null}",
-            0));
-        var store = new GroundworkReusableActivityImportOperationStore(inner, accessor);
+        harness.HarnessStore.InsertRaw("elsa3ReusableImportReceipt", receiptId, "{\"receipt\":null}");
+        var store = new GroundworkReusableActivityImportOperationStore(harness.HarnessStore.Store, accessor);
 
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await store.FindCollectionAsync("malformed-collection", Scope));
@@ -583,8 +604,8 @@ public sealed class ReusableActivityImportOperationTests
                 "collision-second",
                 Scope));
 
-        Assert.Single(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
-        Assert.Single(harness.Store.Snapshot("activityDefinitionVersion"));
+        Assert.Single(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Single(harness.HarnessStore.Snapshot("activityDefinitionVersion"));
     }
 
     [Fact]
@@ -619,12 +640,14 @@ public sealed class ReusableActivityImportOperationTests
             IdempotencyKey = "race-key"
         };
 
-        var serializerFailureStore = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
+        using var serializerHarness = ReusableActivityImportV2TestHarness.Create();
         var serializerFailure = new GroundworkReusableActivityImportCommand(
-            serializerFailureStore,
+            serializerHarness.Store,
+            serializerHarness.WorkflowStorage,
+            serializerHarness.Sessions,
             new ThrowingPayloadSerializer(),
-            new GroundworkActivityManagementProjectionWriter(serializerFailureStore, new ImmediateLockProvider(), serializerFailureStore),
-            GroundworkTestAccess.AccessContext(Scope.TenantId!));
+            new GroundworkActivityManagementProjectionWriter(serializerHarness.Store, new ImmediateLockProvider(), serializerHarness.Store),
+            serializerHarness.Access);
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
             await serializerFailure.CommitAsync(mutation));
 
@@ -636,7 +659,7 @@ public sealed class ReusableActivityImportOperationTests
             harness.Service.ApplyAsync(upload.CollectionHandle, analysis.PlanId, ["race-v1"], "same-race", Scope).AsTask());
 
         Assert.Equal(attempts[0].ReceiptId, attempts[1].ReceiptId);
-        Assert.Single(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Single(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
         Assert.Contains(attempts, x => x.Status == ReusableActivityImportReceiptStatus.Applied);
     }
 
@@ -654,9 +677,9 @@ public sealed class ReusableActivityImportOperationTests
         await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await harness.Service.ApplyAsync(upload.CollectionHandle, analysis.PlanId, ["b-v1"], "open", Scope));
 
-        Assert.Empty(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
-        Assert.Empty(harness.Store.Snapshot("activityDefinition"));
-        Assert.Empty(harness.Store.Snapshot("workflowDefinition"));
+        Assert.Empty(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinition"));
+        Assert.Empty(harness.HarnessStore.Snapshot("workflowDefinition"));
     }
 
     [Fact]
@@ -700,8 +723,8 @@ public sealed class ReusableActivityImportOperationTests
             await harness.Service.ApplyAsync(upload.CollectionHandle, analysis.PlanId, ["valid-v1"], new string('x', 201), Scope));
         await Assert.ThrowsAsync<ReusableActivityImportNotFoundException>(async () =>
             await harness.Service.GetStatusAsync("missing", Scope));
-        Assert.Empty(harness.Store.Snapshot("elsa3ReusableImportReceipt"));
-        Assert.Empty(harness.Store.Snapshot("activityDefinition"));
+        Assert.Empty(harness.HarnessStore.Snapshot("elsa3ReusableImportReceipt"));
+        Assert.Empty(harness.HarnessStore.Snapshot("activityDefinition"));
     }
 
     private static HarnessState Harness(
@@ -711,29 +734,15 @@ public sealed class ReusableActivityImportOperationTests
     {
         scope ??= Scope;
         clock ??= new(DateTimeOffset.Parse("2026-07-17T10:00:00Z"));
-        var store = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var accessContext = scope.TenantId is null
-            ? new FixedAccessContextAccessor(PersistenceAccessContext.Global)
-            : GroundworkTestAccess.AccessContext(scope.TenantId);
-        return Harness(store, store, store, accessContext, clock, maximumBytes);
-    }
-
-    private static HarnessState Harness(
-        IDocumentStore store,
-        IBoundedDocumentStore boundedStore,
-        InMemoryDocumentStore snapshotStore,
-        IPersistenceAccessContextAccessor? accessContext = null,
-        MutableTimeProvider? clock = null,
-        long maximumBytes = 64 * 1024)
-    {
-        clock ??= new(DateTimeOffset.Parse("2026-07-17T10:00:00Z"));
-        accessContext ??= GroundworkTestAccess.AccessContext(Scope.TenantId!);
-        var operationStore = new GroundworkReusableActivityImportOperationStore(store, accessContext);
+        var harnessStore = ReusableActivityImportV2TestHarness.Create(scope.TenantId ?? "tenant-a");
+        var operationStore = new GroundworkReusableActivityImportOperationStore(harnessStore.Store, harnessStore.Access);
         var command = new GroundworkReusableActivityImportCommand(
-            store,
+            harnessStore.Store,
+            harnessStore.WorkflowStorage,
+            harnessStore.Sessions,
             Serializer(),
-            new GroundworkActivityManagementProjectionWriter(store, new ImmediateLockProvider(), boundedStore),
-            accessContext,
+            new GroundworkActivityManagementProjectionWriter(harnessStore.Store, new ImmediateLockProvider(), harnessStore.Store),
+            harnessStore.Access,
             clock);
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
@@ -747,50 +756,51 @@ public sealed class ReusableActivityImportOperationTests
         });
         return new(
             new ReusableActivityImportOperationService(operationStore, importer, options, clock),
-            snapshotStore);
+            harnessStore);
     }
 
     private static async Task SaveActivityDefinitionAsync(
-        IDocumentStore store,
+        GroundworkV2ActivityDesignStore store,
         ActivityDefinition definition)
     {
-        var request = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+        var request = GroundworkV2ActivityDesignDocumentWriter.ToTenantScopedSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             definition,
             GroundworkActivitiesDesignJson.Options,
-            GroundworkTestAccess.AccessContext(Scope.TenantId!).Current);
+            PersistenceAccessContext.Scoped(new PersistenceScope(Scope.TenantId!)));
         await store.SaveAsync(request with { ExpectedVersion = 0 });
     }
 
     private static async Task SaveWorkflowDefinitionAsync(
-        IDocumentStore store,
+        GroundworkDesignStorage storage,
         WorkflowDefinition definition)
     {
-        var request = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+        var values = GroundworkDesignStorage.Values(
             "workflowDefinition",
-            "workflowDefinition",
-            "1.0.0",
             definition,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web),
-            GroundworkTestAccess.AccessContext(Scope.TenantId!).Current);
-        await store.SaveAsync(request with { ExpectedVersion = 0 });
+            GroundworkDesignDocumentSerialization.Create(Serializer()),
+            "workflowDefinition");
+        using var unit = storage.BeginUnitOfWork(["workflowDefinition"]);
+        unit.Stage("workflowDefinition", values, WriteOptions.CreateOnly);
+        var result = unit.Commit();
+        Assert.True(result.IsSuccessful);
     }
 
-    private static ActivityDefinitionAuthoringState CurrentAuthoring(InMemoryDocumentStore store) =>
+    private static ActivityDefinitionAuthoringState CurrentAuthoring(GroundworkV2ActivityDesignStore store) =>
         ReadGroundworkEntity<ActivityDefinitionAuthoringState>(
             Assert.Single(store.Snapshot(ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind)));
 
     private static ActivityDefinitionManagementProjectionRevision CurrentManagementProjection(
-        InMemoryDocumentStore store) =>
+        GroundworkV2ActivityDesignStore store) =>
         store.Snapshot(ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind)
             .Select(ReadGroundworkEntity<ActivityDefinitionManagementProjectionRevision>)
             .Single(x => x.ValidToSequenceExclusive == long.MaxValue);
 
-    private static TEntity ReadGroundworkEntity<TEntity>(DocumentEnvelope envelope)
+    private static TEntity ReadGroundworkEntity<TEntity>(ActivityDesignDocument envelope)
         where TEntity : Elsa.Primitives.Entities.Entity =>
-        JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(
+        JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<TEntity>>(
             envelope.ContentJson,
             GroundworkActivitiesDesignJson.Options)!.Entity;
 
@@ -817,12 +827,13 @@ public sealed class ReusableActivityImportOperationTests
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
-    private sealed record HarnessState(IReusableActivityImportOperationService Service, InMemoryDocumentStore Store);
-
-    private sealed class FixedAccessContextAccessor(PersistenceAccessContext current)
-        : IPersistenceAccessContextAccessor
+    private sealed record HarnessState(
+        IReusableActivityImportOperationService Service,
+        ReusableActivityImportV2TestHarness HarnessStore) : IDisposable
     {
-        public PersistenceAccessContext Current { get; } = current;
+        public GroundworkV2ActivityDesignStore Store => HarnessStore.Store;
+        public MutableImportAccess Access => HarnessStore.Access;
+        public void Dispose() => HarnessStore.Dispose();
     }
 
     private sealed class ExhaustedOperationStore : IReusableActivityImportOperationStore
@@ -883,166 +894,6 @@ public sealed class ReusableActivityImportOperationTests
         public T Deserialize<T>(string serializedData) => throw Failure();
         public T Deserialize<T>(JsonElement serializedData) => throw Failure();
         public JsonSerializerOptions GetOptions() => throw Failure();
-    }
-
-    private sealed class FailingAtomicDocumentStore
-        : IDocumentStore, IBoundedDocumentStore
-    {
-        private readonly InMemoryDocumentStore inner;
-
-        public FailingAtomicDocumentStore(InMemoryDocumentStore inner)
-        {
-            this.inner = inner;
-        }
-
-        public string? FailOnDocumentKind { get; set; }
-        public DocumentStoreAccess Access => inner.Access;
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(
-            SaveDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(
-            string documentKind,
-            string id,
-            CancellationToken cancellationToken = default) =>
-            inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(
-            DeleteDocumentRequest request,
-            CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentQueryResult> QueryAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.AnyAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public Task<DocumentQueryResult> QueryAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<long> CountAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.CountAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            DocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.AnyAsync(query, cancellationToken);
-
-        public async Task<IDocumentUnitOfWork> BeginAsync(
-            DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) =>
-            new FailingUnitOfWork(
-                await inner.BeginAsync(scope, cancellationToken),
-                () => FailOnDocumentKind);
-
-        private sealed class FailingUnitOfWork(
-            IDocumentUnitOfWork inner,
-            Func<string?> failOnDocumentKind) : IDocumentUnitOfWork
-        {
-            public Task<DocumentStoreWriteResult> SaveAsync(
-                SaveDocumentRequest request,
-                CancellationToken cancellationToken = default) =>
-                StringComparer.Ordinal.Equals(request.DocumentKind, failOnDocumentKind())
-                    ? Task.FromException<DocumentStoreWriteResult>(new IOException("atomic projection failpoint"))
-                    : inner.SaveAsync(request, cancellationToken);
-
-            public Task<DocumentStoreWriteResult> DeleteAsync(
-                DeleteDocumentRequest request,
-                CancellationToken cancellationToken = default) =>
-                inner.DeleteAsync(request, cancellationToken);
-
-            public Task<DocumentEnvelope?> LoadAsync(
-                string documentKind,
-                string id,
-                CancellationToken cancellationToken = default) =>
-                inner.LoadAsync(documentKind, id, cancellationToken);
-
-            public Task CommitAsync(CancellationToken cancellationToken = default) =>
-                inner.CommitAsync(cancellationToken);
-
-            public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-                inner.RollbackAsync(cancellationToken);
-
-            public ValueTask DisposeAsync() => inner.DisposeAsync();
-        }
-    }
-
-    private sealed class ThrowingDocumentStore(
-        InMemoryDocumentStore inner,
-        bool throwOnLoad = false,
-        bool throwOnSave = false) : IDocumentStore
-    {
-        public DocumentStoreAccess Access => inner.Access;
-        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
-
-        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
-            throwOnSave
-                ? Task.FromException<DocumentStoreWriteResult>(new IOException("save failed"))
-                : inner.SaveAsync(request, cancellationToken);
-
-        public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
-            throwOnLoad
-                ? Task.FromException<DocumentEnvelope?>(new IOException("load failed"))
-                : inner.LoadAsync(documentKind, id, cancellationToken);
-
-        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(request, cancellationToken);
-
-#pragma warning disable GW0004 // Required IDocumentStore compatibility members; the portable query surface is retired but still abstract.
-        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(
-            DocumentStoreQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-
-        public Task<DocumentEnvelope?> FirstOrDefaultAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.FirstOrDefaultAsync(query, cancellationToken);
-
-        public Task<bool> AnyAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.AnyAsync(query, cancellationToken);
-
-        public Task<DocumentQueryResult> QueryAsync(
-            PortableDocumentQuery query,
-            CancellationToken cancellationToken = default) =>
-            inner.QueryAsync(query, cancellationToken);
-#pragma warning restore GW0004
-
-        public Task<IDocumentUnitOfWork> BeginAsync(
-            DocumentCommitScope scope,
-            CancellationToken cancellationToken = default) =>
-            inner.BeginAsync(scope, cancellationToken);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider

@@ -6,7 +6,6 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
 
@@ -33,14 +32,14 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
 
         Assert.True((await userStore.DeleteAsync(user, CancellationToken.None)).Succeeded);
 
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserClaimDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, claim.Type, claim.Value));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.ExternalLoginDocumentKind, IdentityCompositeDocumentId.From(user.TenantId, login.LoginProvider, login.ProviderKey));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserRoleDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, role.Id));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserTokenDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, token.LoginProvider, token.Name));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserNameReservationDocumentKind, IdentityDocumentId.From(user.TenantId, user.NormalizedUserName));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserClaimDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, claim.Type, claim.Value));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.ExternalLoginDocumentKind, IdentityCompositeDocumentId.From(user.TenantId, login.LoginProvider, login.ProviderKey));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserRoleDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, role.Id));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserTokenDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, token.LoginProvider, token.Name));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserNameReservationDocumentKind, IdentityDocumentId.From(user.TenantId, user.NormalizedUserName));
         Assert.DoesNotContain(
             IdentityDocumentId.From(user.TenantId, user.Id, role.Id),
-            (await LoadRoleDocumentAsync(fixture.Documents, user.TenantId, role.Id)).UserLinkIds ?? []);
+            (await LoadRoleDocumentAsync(fixture, user.TenantId, role.Id)).UserLinkIds ?? []);
     }
 
     [Fact]
@@ -61,7 +60,7 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             userStore.AddToRoleAsync(staleUser!, role.NormalizedName!, CancellationToken.None));
 
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserRoleDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, role.Id));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserRoleDocumentKind, IdentityDocumentId.From(user.TenantId, user.Id, role.Id));
     }
 
     [Fact]
@@ -84,11 +83,11 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         Assert.True((await roleStore.DeleteAsync(role, CancellationToken.None)).Succeeded);
 
         var linkId = IdentityDocumentId.From(user.TenantId, user.Id, role.Id);
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.IdentityRoleDocumentKind, IdentityCompositeDocumentId.From(user.TenantId, role.Id));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserRoleDocumentKind, linkId);
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.RoleClaimDocumentKind, IdentityDocumentId.From(user.TenantId, role.Id, claim.Type, claim.Value));
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.RoleNameReservationDocumentKind, IdentityDocumentId.From(user.TenantId, role.NormalizedName));
-        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture.Documents, user)).RoleLinkIds ?? []);
+        await AssertMissingAsync(fixture, IdentityStorageManifest.IdentityRoleDocumentKind, IdentityCompositeDocumentId.From(user.TenantId, role.Id));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserRoleDocumentKind, linkId);
+        await AssertMissingAsync(fixture, IdentityStorageManifest.RoleClaimDocumentKind, IdentityDocumentId.From(user.TenantId, role.Id, claim.Type, claim.Value));
+        await AssertMissingAsync(fixture, IdentityStorageManifest.RoleNameReservationDocumentKind, IdentityDocumentId.From(user.TenantId, role.NormalizedName));
+        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture, user)).RoleLinkIds ?? []);
     }
 
     [Fact]
@@ -107,8 +106,8 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         await userStore.AddToRoleAsync(user, role.NormalizedName!, CancellationToken.None);
 
         var linkId = IdentityDocumentId.From(user.TenantId, user.Id, role.Id);
-        Assert.Contains(linkId, (await LoadUserDocumentAsync(fixture.Documents, user)).RoleLinkIds ?? []);
-        Assert.Contains(linkId, (await LoadRoleDocumentAsync(fixture.Documents, user.TenantId, role.Id)).UserLinkIds ?? []);
+        Assert.Contains(linkId, (await LoadUserDocumentAsync(fixture, user)).RoleLinkIds ?? []);
+        Assert.Contains(linkId, (await LoadRoleDocumentAsync(fixture, user.TenantId, role.Id)).UserLinkIds ?? []);
         Assert.NotEqual(originalStamp, user.ConcurrencyStamp);
     }
 
@@ -128,9 +127,9 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         await userStore.RemoveFromRoleAsync(user, role.NormalizedName!, CancellationToken.None);
 
         var linkId = IdentityDocumentId.From(user.TenantId, user.Id, role.Id);
-        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture.Documents, user)).RoleLinkIds ?? []);
-        Assert.DoesNotContain(linkId, (await LoadRoleDocumentAsync(fixture.Documents, user.TenantId, role.Id)).UserLinkIds ?? []);
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserRoleDocumentKind, linkId);
+        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture, user)).RoleLinkIds ?? []);
+        Assert.DoesNotContain(linkId, (await LoadRoleDocumentAsync(fixture, user.TenantId, role.Id)).UserLinkIds ?? []);
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserRoleDocumentKind, linkId);
     }
 
     [Fact]
@@ -150,8 +149,8 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
             store.AddClaimsAsync(stale, [AspNetCoreIdentityScenarioData.CreateClaim(claim)], CancellationToken.None));
 
         var claimId = IdentityDocumentId.From(source.TenantId, source.Id, claim.Type, claim.Value);
-        await AssertMissingAsync(fixture.Documents, IdentityStorageManifest.UserClaimDocumentKind, claimId);
-        Assert.DoesNotContain(claimId, (await LoadUserDocumentAsync(fixture.Documents, source)).ClaimIds ?? []);
+        await AssertMissingAsync(fixture, IdentityStorageManifest.UserClaimDocumentKind, claimId);
+        Assert.DoesNotContain(claimId, (await LoadUserDocumentAsync(fixture, source)).ClaimIds ?? []);
     }
 
     [Fact]
@@ -175,7 +174,7 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         var afterLogin = user.ConcurrencyStamp;
         await store.SetTokenAsync(user, "provider-z", "token-z", "secret", CancellationToken.None);
 
-        var document = await LoadUserDocumentAsync(fixture.Documents, user);
+        var document = await LoadUserDocumentAsync(fixture, user);
         Assert.NotEqual(initialStamp, afterClaims);
         Assert.NotEqual(afterClaims, afterLogin);
         Assert.NotEqual(afterLogin, user.ConcurrencyStamp);
@@ -201,10 +200,10 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
             other, login.LoginProvider, login.ProviderKey, CancellationToken.None));
 
         var linkId = IdentityCompositeDocumentId.From(owner.TenantId, login.LoginProvider, login.ProviderKey);
-        Assert.NotNull(await fixture.Documents.LoadAsync(
+        Assert.NotNull(await fixture.LoadAsync(
             IdentityStorageManifest.ExternalLoginDocumentKind, linkId, CancellationToken.None));
-        Assert.Contains(linkId, (await LoadUserDocumentAsync(fixture.Documents, owner)).LoginIds ?? []);
-        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture.Documents, other)).LoginIds ?? []);
+        Assert.Contains(linkId, (await LoadUserDocumentAsync(fixture, owner)).LoginIds ?? []);
+        Assert.DoesNotContain(linkId, (await LoadUserDocumentAsync(fixture, other)).LoginIds ?? []);
     }
 
     [Fact]
@@ -227,19 +226,19 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         Assert.Single(attempts, exception => exception is null);
         Assert.Single(attempts, exception => exception is InvalidOperationException);
         var loginId = IdentityCompositeDocumentId.From(first.TenantId, login.LoginProvider, login.ProviderKey);
-        var loginEnvelope = await fixture.Documents.LoadAsync(
+        var loginEnvelope = await fixture.LoadAsync(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             loginId,
             CancellationToken.None);
         Assert.NotNull(loginEnvelope);
         var loginDocument = JsonSerializer.Deserialize<IdentityExternalLoginDocument>(
-            loginEnvelope!.ContentJson,
+            loginEnvelope!.CanonicalJson,
             IdentityGroundworkJson.Options)!;
         var winner = string.Equals(loginDocument.UserId, first.Id, StringComparison.Ordinal) ? first : second;
         var loser = ReferenceEquals(winner, first) ? second : first;
 
-        Assert.Contains(loginId, (await LoadUserDocumentAsync(fixture.Documents, winner)).LoginIds ?? []);
-        Assert.DoesNotContain(loginId, (await LoadUserDocumentAsync(fixture.Documents, loser)).LoginIds ?? []);
+        Assert.Contains(loginId, (await LoadUserDocumentAsync(fixture, winner)).LoginIds ?? []);
+        Assert.DoesNotContain(loginId, (await LoadUserDocumentAsync(fixture, loser)).LoginIds ?? []);
         Assert.Equal(winner.Id, (await firstStore.FindByLoginAsync(
             login.LoginProvider,
             login.ProviderKey,
@@ -274,39 +273,36 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         var rejectedClaim = new Claim("capacity", "rejected-at-513");
         Assert.True((await store.CreateAsync(user, CancellationToken.None)).Succeeded);
 
-        var envelope = await fixture.Documents.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, user.Id),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        var document = JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        var document = JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
         var atLimit = document with
         {
             ClaimIds = Enumerable.Range(0, IdentityStorageManifest.MaxAggregateRelationshipEntries - 1)
                 .Select(index => $"existing-{index:D4}")
                 .ToArray()
         };
-        var saved = await fixture.Documents.SaveAsync(
-            new SaveDocumentRequest(
-                envelope.DocumentKind,
-                envelope.Id,
-                IdentityStorageManifest.SchemaVersion,
-                JsonSerializer.Serialize(atLimit, IdentityGroundworkJson.Options),
-                envelope.Version),
-            CancellationToken.None);
-        Assert.Equal(DocumentStoreWriteStatus.Saved, saved.Status);
+        var saved = fixture.Save(
+            envelope.UnitId,
+            envelope.Id,
+            JsonSerializer.Serialize(atLimit, IdentityGroundworkJson.Options),
+            envelope.Version);
+        Assert.True(saved.Succeeded);
         user = (await store.FindByIdAsync(user.Id, CancellationToken.None))!;
 
         await store.AddClaimsAsync(user, [acceptedClaim], CancellationToken.None);
         Assert.Equal(
             IdentityStorageManifest.MaxAggregateRelationshipEntries,
-            (await LoadUserDocumentAsync(fixture.Documents, user)).ClaimIds?.Count);
+            (await LoadUserDocumentAsync(fixture, user)).ClaimIds?.Count);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.AddClaimsAsync(user, [rejectedClaim], CancellationToken.None));
 
         await AssertMissingAsync(
-            fixture.Documents,
+            fixture,
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityDocumentId.From(user.TenantId, user.Id, rejectedClaim.Type, rejectedClaim.Value));
     }
@@ -326,12 +322,12 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
             sharedValueOrName);
         Assert.True((await store.CreateAsync(user, CancellationToken.None)).Succeeded);
 
-        var envelope = await fixture.Documents.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, user.Id),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        var document = JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        var document = JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
         var seeded = document with
         {
             ClaimIds =
@@ -341,16 +337,11 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
                     .Select(index => $"existing-{index:D4}")
             ]
         };
-        Assert.Equal(
-            DocumentStoreWriteStatus.Saved,
-            (await fixture.Documents.SaveAsync(
-                new SaveDocumentRequest(
-                    envelope.DocumentKind,
-                    envelope.Id,
-                    IdentityStorageManifest.SchemaVersion,
-                    JsonSerializer.Serialize(seeded, IdentityGroundworkJson.Options),
-                    envelope.Version),
-                CancellationToken.None)).Status);
+        Assert.True(fixture.Save(
+            envelope.UnitId,
+            envelope.Id,
+            JsonSerializer.Serialize(seeded, IdentityGroundworkJson.Options),
+            envelope.Version).Succeeded);
         user = (await store.FindByIdAsync(user.Id, CancellationToken.None))!;
 
         await store.SetTokenAsync(
@@ -364,7 +355,7 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.AddClaimsAsync(user, [rejected], CancellationToken.None));
         await AssertMissingAsync(
-            fixture.Documents,
+            fixture,
             IdentityStorageManifest.UserClaimDocumentKind,
             IdentityDocumentId.From(user.TenantId, user.Id, rejected.Type, rejected.Value));
     }
@@ -381,12 +372,12 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         Assert.True((await roles.CreateAsync(role, CancellationToken.None)).Succeeded);
         var linkId = IdentityDocumentId.From(user.TenantId, user.Id, role.Id);
 
-        var envelope = await fixture.Documents.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, role.Id),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        var document = JsonSerializer.Deserialize<IdentityRoleDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        var document = JsonSerializer.Deserialize<IdentityRoleDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
         var seeded = document with
         {
             ClaimIds =
@@ -396,16 +387,11 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
                     .Select(index => $"existing-role-{index:D4}")
             ]
         };
-        Assert.Equal(
-            DocumentStoreWriteStatus.Saved,
-            (await fixture.Documents.SaveAsync(
-                new SaveDocumentRequest(
-                    envelope.DocumentKind,
-                    envelope.Id,
-                    IdentityStorageManifest.SchemaVersion,
-                    JsonSerializer.Serialize(seeded, IdentityGroundworkJson.Options),
-                    envelope.Version),
-                CancellationToken.None)).Status);
+        Assert.True(fixture.Save(
+            envelope.UnitId,
+            envelope.Id,
+            JsonSerializer.Serialize(seeded, IdentityGroundworkJson.Options),
+            envelope.Version).Succeeded);
         user = (await users.FindByIdAsync(user.Id, CancellationToken.None))!;
         await users.AddToRoleAsync(user, role.NormalizedName!, CancellationToken.None);
         role = (await roles.FindByIdAsync(role.Id, CancellationToken.None))!;
@@ -414,7 +400,7 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             roles.AddClaimAsync(role, rejected, CancellationToken.None));
         await AssertMissingAsync(
-            fixture.Documents,
+            fixture,
             IdentityStorageManifest.RoleClaimDocumentKind,
             IdentityDocumentId.From(user.TenantId, role.Id, rejected.Type, rejected.Value));
     }
@@ -428,42 +414,32 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
         Assert.True((await store.CreateAsync(user, CancellationToken.None)).Succeeded);
         var childId = IdentityDocumentId.From(user.TenantId, "foreign", "claim", "value");
         var foreignChild = new IdentityUserClaimDocument(user.TenantId, "foreign", "claim", "value", childId);
-        Assert.Equal(
-            DocumentStoreWriteStatus.Saved,
-            (await fixture.Documents.SaveAsync(
-                new SaveDocumentRequest(
-                    IdentityStorageManifest.UserClaimDocumentKind,
-                    childId,
-                    IdentityStorageManifest.SchemaVersion,
-                    JsonSerializer.Serialize(foreignChild, IdentityGroundworkJson.Options),
-                    0),
-                CancellationToken.None)).Status);
+        Assert.True(fixture.Save(
+            IdentityStorageManifest.UserClaimDocumentKind,
+            childId,
+            JsonSerializer.Serialize(foreignChild, IdentityGroundworkJson.Options),
+            0).Succeeded);
 
-        var ownerEnvelope = await fixture.Documents.LoadAsync(
+        var ownerEnvelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, user.Id),
             CancellationToken.None);
         Assert.NotNull(ownerEnvelope);
-        var owner = JsonSerializer.Deserialize<IdentityUserDocument>(ownerEnvelope!.ContentJson, IdentityGroundworkJson.Options)!;
-        Assert.Equal(
-            DocumentStoreWriteStatus.Saved,
-            (await fixture.Documents.SaveAsync(
-                new SaveDocumentRequest(
-                    ownerEnvelope.DocumentKind,
-                    ownerEnvelope.Id,
-                    IdentityStorageManifest.SchemaVersion,
-                    JsonSerializer.Serialize(owner with { ClaimIds = [childId] }, IdentityGroundworkJson.Options),
-                    ownerEnvelope.Version),
-                CancellationToken.None)).Status);
+        var owner = JsonSerializer.Deserialize<IdentityUserDocument>(ownerEnvelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
+        Assert.True(fixture.Save(
+            ownerEnvelope.UnitId,
+            ownerEnvelope.Id,
+            JsonSerializer.Serialize(owner with { ClaimIds = [childId] }, IdentityGroundworkJson.Options),
+            ownerEnvelope.Version).Succeeded);
         user = (await store.FindByIdAsync(user.Id, CancellationToken.None))!;
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.DeleteAsync(user, CancellationToken.None));
 
-        Assert.NotNull(await fixture.Documents.LoadAsync(
+        Assert.NotNull(await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, user.Id),
             CancellationToken.None));
-        Assert.NotNull(await fixture.Documents.LoadAsync(
+        Assert.NotNull(await fixture.LoadAsync(
             IdentityStorageManifest.UserClaimDocumentKind,
             childId,
             CancellationToken.None));
@@ -472,26 +448,26 @@ public sealed class AspNetCoreIdentityAtomicityContractTests
     private static AspNetCoreIdentityGroundworkStoreFixture CreateFixture() =>
         new(AspNetCoreIdentityScenarioData.Ids.PrimaryTenant);
 
-    private static async Task AssertMissingAsync(IDocumentStore store, string documentKind, string id) =>
-        Assert.Null(await store.LoadAsync(documentKind, id, CancellationToken.None));
+    private static async Task AssertMissingAsync(AspNetCoreIdentityGroundworkStoreFixture fixture, string documentKind, string id) =>
+        Assert.Null(await fixture.LoadAsync(documentKind, id, CancellationToken.None));
 
-    private static async Task<IdentityUserDocument> LoadUserDocumentAsync(IDocumentStore store, AspNetCoreIdentityUser user)
+    private static async Task<IdentityUserDocument> LoadUserDocumentAsync(AspNetCoreIdentityGroundworkStoreFixture fixture, AspNetCoreIdentityUser user)
     {
-        var envelope = await store.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityUserDocumentKind,
             IdentityCompositeDocumentId.From(user.TenantId, user.Id),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        return JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        return JsonSerializer.Deserialize<IdentityUserDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
     }
 
-    private static async Task<IdentityRoleDocument> LoadRoleDocumentAsync(IDocumentStore store, string tenantId, string roleId)
+    private static async Task<IdentityRoleDocument> LoadRoleDocumentAsync(AspNetCoreIdentityGroundworkStoreFixture fixture, string tenantId, string roleId)
     {
-        var envelope = await store.LoadAsync(
+        var envelope = await fixture.LoadAsync(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             IdentityCompositeDocumentId.From(tenantId, roleId),
             CancellationToken.None);
         Assert.NotNull(envelope);
-        return JsonSerializer.Deserialize<IdentityRoleDocument>(envelope!.ContentJson, IdentityGroundworkJson.Options)!;
+        return JsonSerializer.Deserialize<IdentityRoleDocument>(envelope!.CanonicalJson, IdentityGroundworkJson.Options)!;
     }
 }

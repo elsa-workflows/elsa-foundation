@@ -246,6 +246,10 @@ internal static class EfCoreSurfaceBaseline
 
 internal sealed class EfCoreSurfaceScanner
 {
+    private static bool IsHistoricalEvidenceCaptureProject(string relativePath) =>
+        relativePath.Contains("/Capture/", StringComparison.Ordinal) &&
+        Path.GetFileNameWithoutExtension(relativePath).EndsWith(".BeforeCapture", StringComparison.Ordinal);
+
     private static readonly HashSet<string> RestoreDriverPaths = new(StringComparer.Ordinal)
     {
         "tools/architecture/restore-zero-ef-certification.sh",
@@ -456,8 +460,12 @@ internal sealed class EfCoreSurfaceScanner
                 .Where(IsEfPackage)
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
+        // Baseline-first migrations keep an executable capture harness beside their frozen fixtures. Those
+        // projects are deliberately absent from the solution (ArchitectureGuardTests exempts them from the
+        // domain-tree checks for the same reason), so a full solution restore never produces assets for
+        // them and their absence is not an incomplete restore.
         var projectsMissingAssets = inventoryProjects
-            .Where(project => !project.HasAssets)
+            .Where(project => !project.HasAssets && !IsHistoricalEvidenceCaptureProject(project.RelativePath))
             .Select(project => project.RelativePath)
             .Sorted();
         var sharedBuildPackages = SharedBuildEfPackageReferences();

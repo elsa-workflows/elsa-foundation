@@ -1,5 +1,5 @@
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -9,13 +9,12 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 public sealed class GroundworkSubmitWorkflowDefinitionCommand(
     IIdentityGenerator identityGenerator,
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IActivityStructureService activityStructureService,
@@ -82,7 +81,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
         };
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
+            storage,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         var now = clock.UtcNow;
@@ -96,7 +95,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
             WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
             WorkflowsDesignStorageManifest.SchemaVersion,
             definition,
-            GroundworkDesignJson.Options,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor.Current,
             persistenceDomain: DesignPersistenceDomain.Workflow) with
         { ExpectedVersion = 0 };
@@ -115,7 +114,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
             WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
             WorkflowsDesignStorageManifest.SchemaVersion,
             versionLayout,
-            GroundworkDesignJson.Options,
+            GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor.Current,
             persistenceDomain: DesignPersistenceDomain.Workflow) with
         { ExpectedVersion = 0 };

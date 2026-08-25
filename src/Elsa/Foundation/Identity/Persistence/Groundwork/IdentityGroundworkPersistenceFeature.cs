@@ -1,6 +1,5 @@
 using CShells.Features;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,8 +11,7 @@ namespace Elsa.Foundation.Identity.Persistence.Groundwork;
 [ShellFeature(
     name: "IdentityGroundworkPersistence",
     DisplayName = "Identity Groundwork Persistence",
-    Description = "Replaces the default in-memory identity stores with Groundwork-backed, durable stores so users, roles, external identities, and tenant memberships survive restarts.",
-    Metadata = [GroundworkSchemaFeatureMetadata.Key, GroundworkSchemaFeatureMetadata.Identity]
+    Description = "Replaces the default in-memory identity stores with Groundwork-backed, durable stores so users, roles, external identities, and tenant memberships survive restarts."
 )]
 public class IdentityGroundworkPersistenceFeature : IShellFeature
 {

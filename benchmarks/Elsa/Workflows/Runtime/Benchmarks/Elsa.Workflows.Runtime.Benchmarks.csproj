@@ -23,19 +23,17 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Groundwork.Core" />
-    <PackageReference Include="Groundwork.Documents" />
     <PackageReference Include="Groundwork.Sqlite" />
+    <PackageReference Include="Groundwork.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Shared in-process execution harness (real agent/dispatcher/scheduler-drainer). -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\..\tests\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- Flowchart activity + feature + structure models for the root composite. -->
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <!-- Durable Groundwork runtime store bridges + SQLite document store + storage manifest. -->
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <!-- Public test-support: RuntimeTestBoundedDocumentStore + GroundworkTestAccess (bounded-query
          adapter + access bindings for driving the runtime stores over a raw SQLite document store). -->

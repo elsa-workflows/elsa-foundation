@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Constants;
@@ -5,14 +6,8 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -28,10 +23,10 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 /// single-unit provider cannot safely execute the multi-kind authoring commands exposed by this adapter.
 /// </summary>
 public sealed class GroundworkReusableActivityStores(
-    IDocumentStore store,
+    GroundworkV2ActivityDesignStore store,
     ISystemClock clock,
     IDistributedLockProvider lockProvider,
-    IBoundedDocumentStore boundedStore,
+    GroundworkV2ActivityDesignStore boundedStore,
     GroundworkActivityManagementProjectionWriter managementProjectionWriter) :
     IActivityDefinitionAuthoringStore,
     IActivityDefinitionDraftStore,
@@ -83,11 +78,11 @@ public sealed class GroundworkReusableActivityStores(
         var states = new List<ActivityDefinitionAuthoringState>();
         foreach (var batch in GroundworkMembershipBatches.Create(definitionIds))
         {
-            var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+            var documents = await ActivityDesignQueryPager.QueryAllAsync(
                 boundedStore,
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
                 ListByDefinitionQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.In(ActivitiesDesignStorageManifest.DefinitionIdField, batch))],
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.In(ActivitiesDesignStorageManifest.DefinitionIdField, batch))],
                 ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
                 cancellationToken);
             states.AddRange(documents.Select(x => Deserialize<ActivityDefinitionAuthoringState>(
@@ -209,7 +204,7 @@ public sealed class GroundworkReusableActivityStores(
 
         var publicationDocuments = await TraverseAsync<ActivityDefinitionVersionPublication>(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind,
-            ListByDefinitionQuery,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
             ActivitiesDesignStorageManifest.ByDefinitionDocumentOrder,
             cancellationToken);
         var publications = publicationDocuments
@@ -220,7 +215,7 @@ public sealed class GroundworkReusableActivityStores(
 
         var edgeDocuments = await TraverseAsync<ActivityDependencyEdge>(
             ActivitiesDesignStorageManifest.ActivityDependencyEdgeDocumentKind,
-            ListByOwnerVersionQuery,
+            ActivitiesDesignStorageManifest.ListAllDocumentsQuery,
             ActivitiesDesignStorageManifest.ByOwnerVersionDocumentOrder,
             cancellationToken);
         var fingerprint = Fingerprint(edgeDocuments, publicationDocuments);
@@ -333,21 +328,24 @@ public sealed class GroundworkReusableActivityStores(
         if (maximumCount is < 1 or > 500)
             throw new ArgumentOutOfRangeException(nameof(maximumCount));
         var result = await boundedStore.QueryAsync(
-            new DocumentQuery(
+            new ActivityDesignQuery(
                 ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityForkCandidateExpiredQuery,
-                [DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.LessThanOrEqual(
                     ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField,
                     ActivityForkCandidateIdentity.RetentionKey(retainBefore)))],
-                null,
+                [
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityForkCandidateRetentionField),
+                    new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)
+                ],
                 0,
                 maximumCount),
             cancellationToken);
         if (result.Documents.Count == 0)
             return 0;
         await store.WriteAllAsync(
-            DocumentCommitScope.Of(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind),
-            result.Documents.Select(x => DocumentWriteOperation.Delete(new DeleteDocumentRequest(
+            ActivityDesignCommitScope.Of(ActivitiesDesignStorageManifest.ActivityForkCandidateDocumentKind),
+            result.Documents.Select(x => ActivityDesignWriteOperation.Delete(new ActivityDesignDeleteRequest(
                 x.DocumentKind,
                 x.Id,
                 x.Version))).ToArray(),
@@ -791,7 +789,7 @@ public sealed class GroundworkReusableActivityStores(
             throw Conflict($"Validation identity for draft '{validation.DraftId}' revision {validation.Revision} does not match.");
 
         await store.SaveAllAsync(
-            DocumentCommitScope.Of(
+            ActivityDesignCommitScope.Of(
                 ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDraftValidationDocumentKind),
             [
@@ -855,7 +853,7 @@ public sealed class GroundworkReusableActivityStores(
 
         publication.Entity.Lifecycle = request.Lifecycle;
         publication.Entity.LastModifiedAt = clock.UtcNow;
-        var requests = new List<SaveDocumentRequest>
+        var requests = new List<ActivityDesignSaveRequest>
         {
             Save(ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationDocumentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionPublicationCollection, publication.Entity, publication.Envelope.Version)
         };
@@ -923,7 +921,7 @@ public sealed class GroundworkReusableActivityStores(
 
         authoring.Entity.RecommendedVersionId = request.RecommendedVersionId;
         authoring.Entity.LastModifiedAt = request.ChangedAt;
-        var requests = new List<SaveDocumentRequest>
+        var requests = new List<ActivityDesignSaveRequest>
         {
             Save(
                 ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
@@ -1021,11 +1019,11 @@ public sealed class GroundworkReusableActivityStores(
     private async Task<IReadOnlyList<Stored<TEntity>>> TraverseAsync<TEntity>(
         string kind,
         string queryIdentity,
-        IReadOnlyList<DocumentQueryOrder> order,
+        IReadOnlyList<ActivityDesignQueryOrder> order,
         CancellationToken cancellationToken)
         where TEntity : Entity
     {
-        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             kind,
             queryIdentity,
@@ -1041,11 +1039,11 @@ public sealed class GroundworkReusableActivityStores(
         string activityTypeKey,
         CancellationToken cancellationToken)
     {
-        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                 ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField,
                 activityTypeKey))],
             ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder,
@@ -1072,11 +1070,11 @@ public sealed class GroundworkReusableActivityStores(
             ActivitiesDesignStorageManifest.ByDependencyVersionIndex => ("list-by-dependency-version", ActivitiesDesignStorageManifest.DependencyVersionIdField),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The activity-design query index is not declared.")
         };
-        var documents = await BoundedDocumentQueryPager.QueryAllOffsetAsync(
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
             boundedStore,
             kind,
             queryIdentity,
-            [DocumentQueryClause.Of(DocumentQueryComparison.Equal(fieldPath, value))],
+            [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(fieldPath, value))],
             IndexHeadOrder(fieldPath),
             cancellationToken);
         return documents.Select(x => Deserialize<TEntity>(x, kind)).ToArray();
@@ -1084,31 +1082,31 @@ public sealed class GroundworkReusableActivityStores(
 
     // A by-key route leads its declared order with the index key field, then the document id; every scoped
     // read and every zero-clause traversal on that route must present that same deterministic order.
-    private static IReadOnlyList<DocumentQueryOrder> IndexHeadOrder(string keyField) =>
+    private static IReadOnlyList<ActivityDesignQueryOrder> IndexHeadOrder(string keyField) =>
     [
-        new(keyField, PhysicalSortDirection.Ascending),
-        new(ActivitiesDesignStorageManifest.EntityIdField, PhysicalSortDirection.Ascending)
+        new(keyField, false),
+        new(ActivitiesDesignStorageManifest.EntityIdField, false)
     ];
 
-    private static Stored<TEntity> Deserialize<TEntity>(DocumentEnvelope envelope, string kind)
+    private static Stored<TEntity> Deserialize<TEntity>(ActivityDesignDocument envelope, string kind)
         where TEntity : Entity
     {
-        var document = JsonSerializer.Deserialize<GroundworkDocument<TEntity>>(envelope.ContentJson, JsonOptions);
+        var document = JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<TEntity>>(envelope.ContentJson, JsonOptions);
         return document?.Entity is { } entity
             ? new Stored<TEntity>(entity, envelope)
             : throw new InvalidOperationException($"Document '{envelope.Id}' of kind '{kind}' could not be deserialized as {typeof(TEntity).Name}.");
     }
 
-    private static SaveDocumentRequest Save<TEntity>(string kind, string collection, TEntity entity, long expectedVersion)
+    private static ActivityDesignSaveRequest Save<TEntity>(string kind, string collection, TEntity entity, long expectedVersion)
         where TEntity : Entity
     {
-        var request = GroundworkDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, JsonOptions);
-        return new SaveDocumentRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
+        var request = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(kind, collection, ActivitiesDesignStorageManifest.SchemaVersion, entity, JsonOptions);
+        return new ActivityDesignSaveRequest(request.DocumentKind, request.Id, request.SchemaVersion, request.ContentJson, expectedVersion);
     }
 
     private async Task CommitWithManagementProjectionAsync(
         IReadOnlyCollection<string> documentKinds,
-        IReadOnlyList<SaveDocumentRequest> requests,
+        IReadOnlyList<ActivityDesignSaveRequest> requests,
         ActivityManagementProjectionMutation mutation,
         CancellationToken cancellationToken)
     {
@@ -1340,7 +1338,7 @@ public sealed class GroundworkReusableActivityStores(
 
     private static KeyNotFoundException Missing(string message) => new(message);
 
-    private sealed record Stored<TEntity>(TEntity Entity, DocumentEnvelope Envelope) where TEntity : Entity;
+    private sealed record Stored<TEntity>(TEntity Entity, ActivityDesignDocument Envelope) where TEntity : Entity;
 
     private sealed record TraversedEdge(ActivityDependencyEdge Edge, int Depth, DependencyPathNode Path);
 

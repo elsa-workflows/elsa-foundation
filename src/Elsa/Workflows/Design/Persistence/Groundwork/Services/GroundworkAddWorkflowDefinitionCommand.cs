@@ -1,12 +1,11 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -14,7 +13,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 /// Creates a workflow definition and its first logical draft as one replay-safe Groundwork transition.
 /// </summary>
 public sealed class GroundworkAddWorkflowDefinitionCommand(
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     ISystemClock clock,
@@ -97,7 +96,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(
             persistenceDomain: DesignPersistenceDomain.Workflow);
 
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
+            storage,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         var draftSave = draftDocuments.ToSaveRequest(

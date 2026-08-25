@@ -1,7 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
-using Groundwork.Documents.Store;
 using System.Text.Json;
 using Xunit;
 
@@ -12,43 +11,28 @@ public sealed class GroundworkActivityUpgradePlanStoreTests
     [Fact]
     public async Task Upgrade_documents_preserve_the_applied_entity_identity_projection_and_wire_shape()
     {
-        var documents = new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create());
-        var store = new GroundworkActivityUpgradePlanStore(documents);
+        using var harness = ActivityDesignV2TestHarness.Create();
+        var store = new GroundworkActivityUpgradePlanStore(harness.Store);
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var plan = new ActivityUpgradePlan(
-            "plan-1",
-            now,
-            now.AddHours(1),
-            ActivityUpgradePlanStatus.Ready,
-            [],
-            [],
-            [],
-            []);
+            "plan-1", now, now.AddHours(1), ActivityUpgradePlanStatus.Ready, [], [], [], [], TenantId: "tenant-a");
         var receipt = new ActivityUpgradeApplyReceipt(
-            "receipt-1",
-            plan.PlanId,
-            "stage-1",
-            "idempotency-key-hash",
-            "request-fingerprint",
-            null,
-            "access-profile-fingerprint",
-            ActivityUpgradeApplyReceiptStatus.Preparing,
-            now,
-            now,
-            1,
+            "receipt-1", plan.PlanId, "stage-1", "idempotency-key-hash", "request-fingerprint", "tenant-a",
+            "access-profile-fingerprint", ActivityUpgradeApplyReceiptStatus.Preparing, now, now, 1,
             LeaseExpiresAt: now.AddMinutes(5));
 
         await store.SaveAsync(plan);
         Assert.True(await store.TryCreateAsync(receipt));
 
-        using var planJson = JsonDocument.Parse(Assert.Single(documents.Snapshot(
-            ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind)).ContentJson);
-        using var receiptJson = JsonDocument.Parse(Assert.Single(documents.Snapshot(
-            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind)).ContentJson);
+        using var planJson = JsonDocument.Parse((await harness.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityUpgradePlanDocumentKind, plan.PlanId))!.ContentJson);
+        using var receiptJson = JsonDocument.Parse((await harness.Store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityUpgradeApplyReceiptDocumentKind, receipt.ReceiptId))!.ContentJson);
         Assert.Equal(plan.PlanId, planJson.RootElement.GetProperty("entity").GetProperty("id").GetString());
         Assert.Equal(plan.PlanId, planJson.RootElement.GetProperty("plan").GetProperty("planId").GetString());
         Assert.Equal(receipt.ReceiptId, receiptJson.RootElement.GetProperty("entity").GetProperty("id").GetString());
         Assert.Equal(receipt.ReceiptId, receiptJson.RootElement.GetProperty("receipt").GetProperty("receiptId").GetString());
+
         var persistedPlan = await store.FindAsync(plan.PlanId);
         var persistedReceipt = await ((IActivityUpgradeApplyReceiptStore)store).FindAsync(receipt.ReceiptId);
         Assert.Equal(plan.PlanId, persistedPlan!.PlanId);
@@ -63,5 +47,16 @@ public sealed class GroundworkActivityUpgradePlanStoreTests
         Assert.Equal(receipt.PlanId, persistedReceipt.PlanId);
         Assert.Equal(receipt.Status, persistedReceipt.Status);
         Assert.Equal(receipt.Revision, persistedReceipt.Revision);
+
+        var duplicate = receipt with
+        {
+            Status = ActivityUpgradeApplyReceiptStatus.Rejected,
+            Revision = receipt.Revision + 1,
+            UpdatedAt = now.AddMinutes(1)
+        };
+        Assert.False(await store.TryCreateAsync(duplicate));
+        var authoritative = await ((IActivityUpgradeApplyReceiptStore)store).FindAsync(receipt.ReceiptId);
+        Assert.Equal(receipt.Status, authoritative!.Status);
+        Assert.Equal(receipt.Revision, authoritative.Revision);
     }
 }

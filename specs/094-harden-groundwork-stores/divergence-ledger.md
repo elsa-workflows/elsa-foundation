@@ -58,21 +58,33 @@ topology identifier, which no driver could report — see
 
 Executable form: `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Differential/`.
 Surface digest (dimension + compared-fact + recorded-divergence names, never observed values):
-`378e6e62c559c70e0256420e9f8a34627f6089aefec7e37e5d5a23a06f217704`.
+`059d367a79cd2381abd484b665f4afa8eb8968350c1270d82cb426dfb4bf876d`.
 
-**Result: 38 facts compared across 6 dimensions; zero divergences.**
+**Result: 38 facts compared across 6 dimensions; one recorded divergence, `ContractIsGroundwork`.**
 
 | dimension | facts compared | verdict | disposition | testDisposition |
 |---|---|---|---|---|
 | `concurrency-conflict-shape` | 4 | `equivalent` | — | `RemovePending` |
-| `producer-ordering` | 6 | `equivalent` | — | `RemovePending` |
+| `producer-ordering` | 6 | **`divergent`** (1) | `ContractIsGroundwork` | `RemovePending` |
 | `null-and-default-materialization` | 13 | `equivalent` | — | `RemovePending` |
 | `rollback-visibility` | 5 | `equivalent` | — | `RemovePending` |
 | `restart-observation` | 6 | `equivalent` | — | `RemovePending` |
 | `idempotent-replay` | 4 | `equivalent` | — | `RemovePending` |
 
-Zero divergences is a finding, not an absence of one: it is the evidence that deleting
-`EfCoreStructuredLogStore` forfeits no observed behaviour at this seam, on this provider.
+One deliberate divergence is recorded below; the other 37 compared facts agree. This is the evidence
+that deleting `EfCoreStructuredLogStore` forfeits no *contractual* behaviour at this seam, while the v2
+provider-authoritative sequence remains an intentional clean-break change.
+
+### Recorded divergence — provider-authoritative sequence high-water
+
+| fact | efObserved | groundworkObserved |
+|---|---|---|
+| `high-water-vs-max-logical-sequence` | `equal` | `above` |
+
+**Disposition `ContractIsGroundwork`.** Groundwork v2 assigns the persisted/public sequence at the
+provider boundary and retains its lifetime high-water after trimming and restart. EF's equality follows
+the legacy caller-assigned display sequence, which is not stable under concurrent writers and is not the
+v2 identity contract.
 
 ### Dimension notes
 
@@ -83,10 +95,11 @@ Zero divergences is a finding, not an absence of one: it is the evidence that de
   guarantee holds identically. Contract-level concurrency conflict is exercised at the OpenTelemetry
   seam instead, where catalog upserts use Groundwork document concurrency.
 - **`producer-ordering`** — two concurrent producers, 25 appends each. Both stacks: no loss, no
-  duplication, per-producer order preserved, and the high-water mark equal to the maximum *logical*
-  `Sequence` rather than the record count. That last point is contract-correct — `Sequence` is
-  caller-assigned display metadata that concurrent writers may duplicate; durable ordering is the
-  replay cursor.
+  duplication, and per-producer order preserved. EF's high-water equals the maximum caller-assigned
+  *logical* `Sequence`; Groundwork's high-water is above it because v2 persists the provider-generated
+  sequence as the public `StructuredLogEntry.Sequence`. The latter is the clean-break contract: durable
+  ordering and lifetime high-water use one provider-authoritative cursor, while the incoming display
+  sequence is not an identity claim.
 - **`null-and-default-materialization`** — a fully populated entry and a fully sparse one. All 13
   facts preserved on both stacks, including nested exception stack traces, scope text, properties, and
   the distinction between an empty message and a null `EventId`.
@@ -101,7 +114,7 @@ Zero divergences is a finding, not an absence of one: it is the evidence that de
   idempotency clause concerns a store's *internal* commit retry after acknowledgement loss, which
   neither stack exposes without a failure-injecting provider double. This differential does not cover
   that clause. Same-stack coverage exists on both sides
-  (`GroundworkStructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); a shared
+  (`GroundworkV2StructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); a shared
   differential probe for it is open follow-up.
 
 ## `IOpenTelemetryStore` — SQLite, recorded 2026-08-03
@@ -424,7 +437,7 @@ not currently referenced.
    all:
    - **Groundwork** acknowledges across a provider boundary (`IDiagnosticRecordStore`), so a decorator
      can commit and then drop the acknowledgement — `AcknowledgementLosingStore` in
-     `GroundworkStructuredLogStoreTests` already does exactly this.
+     `GroundworkV2StructuredLogStoreTests` already does exactly this.
    - **EF** acknowledges through a private in-process `TaskCompletionSource` completed immediately after
      `SaveChangesAsync`. Its only injection point, `FaultInjectingFactory`, intercepts *context
      creation* — strictly pre-commit. There is no post-commit, pre-acknowledgement seam to decorate.
@@ -435,7 +448,7 @@ not currently referenced.
    solely to compare a store scheduled for deletion is not worth the change either.
 
    Same-stack coverage exists on both sides and is unaffected
-   (`GroundworkStructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); what does not exist,
+   (`GroundworkV2StructuredLogStoreTests`, `EfCoreStructuredLogStoreResilienceTests`); what does not exist,
    and cannot without changing EF, is a *differential* over this clause.
 2. The four non-SQLite providers have no EF comparand and are covered by Groundwork conformance only.
    That is strictly less evidence than a differential and must not be reported as equivalent assurance.

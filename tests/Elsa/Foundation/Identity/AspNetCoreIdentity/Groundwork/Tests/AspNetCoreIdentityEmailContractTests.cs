@@ -3,8 +3,6 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.Fixtures;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Groundwork.Testing;
-using Groundwork.Documents.Store;
 using Microsoft.AspNetCore.Identity;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
@@ -24,16 +22,16 @@ public sealed class AspNetCoreIdentityEmailContractTests
         var result = await store.CreateAsync(second, CancellationToken.None);
 
         Assert.True(result.Succeeded);
-        Assert.Empty(fixture.Documents.Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
+        Assert.Empty(fixture.Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
     }
 
     [Fact]
     public async Task Unique_policy_linearizes_one_hundred_independent_same_email_creates()
     {
-        var inner = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var fixture = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            inner,
+            persistence,
             requireUniqueEmail: true);
         var results = await Task.WhenAll(Enumerable.Range(0, 100).Select(index =>
         {
@@ -50,16 +48,18 @@ public sealed class AspNetCoreIdentityEmailContractTests
         Assert.All(
             results.Where(result => !result.Succeeded),
             duplicate => Assert.Contains(duplicate.Errors, error => error.Code == nameof(IdentityErrorDescriber.DuplicateEmail)));
-        Assert.Single(inner.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
-        Assert.Single(inner.Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.IdentityUserDocumentKind));
+        Assert.Single(fixture.Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
     }
 
     [Fact]
     public async Task Ambiguous_normalized_email_lookup_returns_null()
     {
         var fixture = CreateFixture();
-        await SaveUserDocumentAsync(fixture.Documents, User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserOne));
-        await SaveUserDocumentAsync(fixture.Documents, User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserTwo));
+        var first = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserOne));
+        var second = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserTwo));
+        Assert.True((await fixture.UserStore().CreateAsync(first, CancellationToken.None)).Succeeded);
+        Assert.True((await fixture.UserStore().CreateAsync(second, CancellationToken.None)).Succeeded);
 
         Assert.Null(await fixture.UserStore().FindByEmailAsync("SHARED@EXAMPLE.TEST", CancellationToken.None));
     }
@@ -82,14 +82,12 @@ public sealed class AspNetCoreIdentityEmailContractTests
         var staleResult = await store.UpdateAsync(stale, CancellationToken.None);
 
         Assert.False(staleResult.Succeeded);
-        Assert.Null(await fixture.Documents.LoadAsync(
+        Assert.Null(fixture.Read(
             IdentityStorageManifest.EmailReservationDocumentKind,
-            IdentityDocumentId.From(user.TenantId, stale.NormalizedEmail),
-            CancellationToken.None));
-        Assert.NotNull(await fixture.Documents.LoadAsync(
+            IdentityDocumentId.From(user.TenantId, stale.NormalizedEmail!)));
+        Assert.NotNull(fixture.Read(
             IdentityStorageManifest.EmailReservationDocumentKind,
-            IdentityDocumentId.From(user.TenantId, user.NormalizedEmail),
-            CancellationToken.None));
+            IdentityDocumentId.From(user.TenantId, user.NormalizedEmail!)));
     }
 
     [Fact]
@@ -104,23 +102,22 @@ public sealed class AspNetCoreIdentityEmailContractTests
 
         Assert.True((await store.DeleteAsync(user, CancellationToken.None)).Succeeded);
 
-        Assert.Null(await fixture.Documents.LoadAsync(
+        Assert.Null(fixture.Read(
             IdentityStorageManifest.EmailReservationDocumentKind,
-            IdentityDocumentId.From(user.TenantId, user.NormalizedEmail),
-            CancellationToken.None));
+            IdentityDocumentId.From(user.TenantId, user.NormalizedEmail!)));
     }
 
     [Fact]
     public async Task Unique_to_nonunique_transition_allows_duplicate_update_and_delete_without_taking_the_owners_reservation()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var unique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: true).UserStore();
         var nonunique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: false).UserStore();
         var owner = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserOne));
         var duplicate = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserTwo));
@@ -133,34 +130,32 @@ public sealed class AspNetCoreIdentityEmailContractTests
         Assert.True((await nonunique.DeleteAsync(duplicate, CancellationToken.None)).Succeeded);
 
         var reservationId = IdentityDocumentId.From(owner.TenantId, owner.NormalizedEmail);
-        var reservation = await documents.LoadAsync(
-            IdentityStorageManifest.EmailReservationDocumentKind,
-            reservationId,
-            CancellationToken.None);
+        var reservation = new AspNetCoreIdentityGroundworkStoreFixture(
+            AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
+            persistence).Read(IdentityStorageManifest.EmailReservationDocumentKind, reservationId);
         Assert.NotNull(reservation);
         var stored = JsonSerializer.Deserialize<IdentityEmailReservationDocument>(
-            reservation!.ContentJson,
+            reservation!.CanonicalJson,
             IdentityGroundworkJson.Options);
         Assert.Equal(owner.Id, stored?.UserId);
 
         Assert.True((await nonunique.DeleteAsync(owner, CancellationToken.None)).Succeeded);
-        Assert.Null(await documents.LoadAsync(
-            IdentityStorageManifest.EmailReservationDocumentKind,
-            reservationId,
-            CancellationToken.None));
+        Assert.Null(new AspNetCoreIdentityGroundworkStoreFixture(
+            AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
+            persistence).Read(IdentityStorageManifest.EmailReservationDocumentKind, reservationId));
     }
 
     [Fact]
     public async Task Nonunique_same_email_update_preserves_owned_reservation_against_a_later_unique_create()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var unique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: true).UserStore();
         var nonunique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: false).UserStore();
         var owner = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserOne));
         var competitor = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserTwo));
@@ -170,13 +165,12 @@ public sealed class AspNetCoreIdentityEmailContractTests
         Assert.True((await nonunique.UpdateAsync(owner, CancellationToken.None)).Succeeded);
 
         var reservationId = IdentityDocumentId.From(owner.TenantId, owner.NormalizedEmail);
-        var reservation = await documents.LoadAsync(
-            IdentityStorageManifest.EmailReservationDocumentKind,
-            reservationId,
-            CancellationToken.None);
+        var reservation = new AspNetCoreIdentityGroundworkStoreFixture(
+            AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
+            persistence).Read(IdentityStorageManifest.EmailReservationDocumentKind, reservationId);
         Assert.NotNull(reservation);
         var stored = JsonSerializer.Deserialize<IdentityEmailReservationDocument>(
-            reservation!.ContentJson,
+            reservation!.CanonicalJson,
             IdentityGroundworkJson.Options);
         Assert.Equal(owner.Id, stored?.UserId);
 
@@ -189,14 +183,14 @@ public sealed class AspNetCoreIdentityEmailContractTests
     [Fact]
     public async Task Nonunique_to_unique_transition_has_one_owner_and_releases_the_key_for_the_loser()
     {
-        var documents = new InMemoryDocumentStore(IdentityStorageManifest.Create());
+        var persistence = new AspNetCoreIdentityTestPersistence();
         var nonunique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: false).UserStore();
         var unique = new AspNetCoreIdentityGroundworkStoreFixture(
             AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
-            documents,
+            persistence,
             requireUniqueEmail: true).UserStore();
         var first = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserOne));
         var second = AspNetCoreIdentityScenarioData.CreateIdentityUser(User(AspNetCoreIdentityScenarioData.Ids.AmbiguousEmailUserTwo));
@@ -213,7 +207,9 @@ public sealed class AspNetCoreIdentityEmailContractTests
 
         Assert.True((await unique.DeleteAsync(first, CancellationToken.None)).Succeeded);
         Assert.True((await unique.UpdateAsync(second, CancellationToken.None)).Succeeded);
-        Assert.Single(documents.Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
+        Assert.Single(new AspNetCoreIdentityGroundworkStoreFixture(
+            AspNetCoreIdentityScenarioData.Ids.PrimaryTenant,
+            persistence).Snapshot(IdentityStorageManifest.EmailReservationDocumentKind));
     }
 
     private static AspNetCoreIdentityGroundworkStoreFixture CreateFixture() =>
@@ -221,47 +217,5 @@ public sealed class AspNetCoreIdentityEmailContractTests
 
     private static AspNetCoreIdentityScenarioData.User User(string id) =>
         AspNetCoreIdentityScenarioData.Users.Single(user => user.Id == id);
-
-    private static async Task SaveUserDocumentAsync(IDocumentStore store, AspNetCoreIdentityScenarioData.User source)
-    {
-        var user = AspNetCoreIdentityScenarioData.CreateIdentityUser(source);
-        var document = new IdentityUserDocument(
-            IdentityCompositeDocumentId.Normalize(source.TenantId),
-            IdentityCompositeDocumentId.Normalize(source.Id),
-            IdentityCompositeDocumentId.Normalize(source.NormalizedUserName),
-            IdentityCompositeDocumentId.Normalize(source.NormalizedEmail),
-            ScopedLookupKey(source.TenantId, source.NormalizedUserName),
-            ScopedLookupKey(source.TenantId, source.NormalizedEmail),
-            AspNetCoreIdentityScenarioData.CreateUserRecord(source),
-            new IdentityUserFrameworkState(
-                user.Id,
-                user.TenantId,
-                user.UserName,
-                user.NormalizedUserName,
-                user.Email,
-                user.NormalizedEmail,
-                user.EmailConfirmed,
-                user.PasswordHash,
-                user.SecurityStamp,
-                user.ConcurrencyStamp,
-                user.PhoneNumber,
-                user.PhoneNumberConfirmed,
-                user.TwoFactorEnabled,
-                user.LockoutEnd,
-                user.LockoutEnabled,
-                user.AccessFailedCount,
-                user.DisplayName));
-        var content = JsonSerializer.Serialize(document, IdentityGroundworkJson.Options);
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                IdentityStorageManifest.IdentityUserDocumentKind,
-                IdentityCompositeDocumentId.From(source.TenantId, source.Id),
-                IdentityStorageManifest.SchemaVersion,
-                content),
-            CancellationToken.None);
-    }
-
-    private static string? ScopedLookupKey(string tenantId, string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : IdentityDocumentId.From(tenantId, value);
 
 }

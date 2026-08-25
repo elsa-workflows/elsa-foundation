@@ -1,8 +1,8 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
@@ -11,7 +11,6 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
@@ -23,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class DraftOriginator(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
-    IDocumentStore store,
+    GroundworkDesignStorage storage,
     IDesignAtomicWriter atomicWrite,
     IPayloadSerializer payloadSerializer,
     IInlineEventPublisher inlineEventPublisher,
@@ -46,7 +45,7 @@ public sealed class DraftOriginator(
         ArgumentNullException.ThrowIfNull(resolveInput);
 
         var documents = new GroundworkWorkflowDefinitionDraftDocumentStore(
-            store,
+            storage,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         DraftOriginationInput? input = null;

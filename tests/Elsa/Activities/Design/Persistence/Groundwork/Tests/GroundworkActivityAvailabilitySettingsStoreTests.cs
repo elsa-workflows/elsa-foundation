@@ -7,21 +7,21 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 
 public sealed class GroundworkActivityAvailabilitySettingsStoreTests
 {
-    private readonly GroundworkActivityAvailabilitySettingsStore _store =
-        new(new InMemoryDocumentStore(ActivitiesDesignStorageManifest.Create()));
-
     [Fact]
     public async Task LoadAsync_ReturnsNullWhenNoSettingsExist()
     {
-        var settings = await _store.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope);
+        using var harness = ActivityDesignV2TestHarness.Create();
+        var store = new GroundworkActivityAvailabilitySettingsStore(harness.Store);
 
-        Assert.Null(settings);
+        Assert.Null(await store.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope));
     }
 
     [Fact]
     public async Task SaveAsync_RoundTripsHostDefaultSettings()
     {
-        await _store.SaveAsync(new ActivityAvailabilitySettings
+        using var harness = ActivityDesignV2TestHarness.Create();
+        var store = new GroundworkActivityAvailabilitySettingsStore(harness.Store);
+        await store.SaveAsync(new ActivityAvailabilitySettings
         {
             Mode = ActivityAvailabilityManagementMode.Only,
             Rules = new ActivityAvailabilityRuleSet
@@ -31,12 +31,11 @@ public sealed class GroundworkActivityAvailabilitySettingsStoreTests
             }
         });
 
-        var settings = await _store.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope);
-
+        var settings = await store.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope);
         Assert.NotNull(settings);
         Assert.Equal(ActivityAvailabilitySettings.HostDefaultScope, settings.Scope);
         Assert.Equal(ActivityAvailabilityManagementMode.Only, settings.Mode);
-        Assert.Equal(new[] { "Elsa.Test.Activity", "Elsa.Missing.Activity" }, settings.Rules.ActivityTypes);
-        Assert.Equal(new[] { "Core", "MissingSet" }, settings.Rules.Sets);
+        Assert.Equal(["Elsa.Test.Activity", "Elsa.Missing.Activity"], settings.Rules.ActivityTypes);
+        Assert.Equal(["Core", "MissingSet"], settings.Rules.Sets);
     }
 }

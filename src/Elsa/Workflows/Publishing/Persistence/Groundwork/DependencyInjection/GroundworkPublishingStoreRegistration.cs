@@ -1,10 +1,7 @@
-using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
-using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.Services;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -12,13 +9,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 
 /// <summary>
-/// Registers the Publishing stores against one named Groundwork target.
+/// Registers the publishing ports against public Groundwork v2 storage units.
 /// <para>
-/// Publishing straddles the design and runtime lanes: it reads design material and writes runtime
-/// executables. Its own documents (publication slots, records, policies, receipts) live in the target named
-/// here. Reusable-activity publication commits design, runtime, and publishing kinds together, so those
-/// lanes' targets have to agree for that path; plain workflow publish is already a compensating sequence and
-/// works across targets.
+/// Publishing owns its own documents — publication slots, records, policies, projection intents, snapshot
+/// reviews and receipts — in the target named here. A reusable-activity publication also writes design and
+/// runtime material: the design rows and the publishing receipt commit together in one v2 transaction, and
+/// the runtime rows follow as a replayable post-commit intent, so the path behaves the same whether or not
+/// the lanes share a database.
 /// </para>
 /// </summary>
 public static class GroundworkPublishingStoreRegistration
@@ -29,25 +26,31 @@ public static class GroundworkPublishingStoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         services.AddPersistenceCore();
-        var lane = services.GroundworkLane(targetName);
+        services.AddGroundworkStorageLane<PublishingGroundworkStorageManifestSource>(targetName);
+        foreach (var unit in PublishingGroundworkStorageManifest.CreateUnits())
+            services.AddGroundworkStorageUnit(unit, targetName);
 
-        lane.Manifest<PublishingGroundworkStorageManifestSource>();
         services.TryAddSingleton<PublishingGroundworkDocumentSerializer>();
+        services.TryAddScoped(provider => new GroundworkPublishingStorage(
+            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+            targetName));
 
-        lane.Replace<IPublicationSlotStore, GroundworkPublicationSlotStore>();
-        lane.Replace<IPublicationRecordStore, GroundworkPublicationRecordStore>();
-        lane.Replace<IPublicationPolicyStore, GroundworkPublicationPolicyStore>();
-        lane.Replace<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>();
-        lane.Replace<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>();
-        lane.Replace<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>();
-        lane.Replace<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>();
-
-        // Answers for the receipt intent a split publication records in the design commit. Registered
-        // unkeyed: it addresses the publishing lane through GroundworkLaneStores rather than being handed a
-        // store, because the design lane's redrive resolves it and has no business knowing this target.
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<
-            IDesignPostCommitIntentDeliverer,
-            ActivityPublicationReceiptIntentDeliverer>());
+        ReplaceScoped<IPublicationSlotStore, GroundworkPublicationSlotStore>(services);
+        ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
+        ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
+        ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);
+        ReplaceScoped<IPublicationSnapshotReviewStore, GroundworkPublicationSnapshotReviewStore>(services);
+        ReplaceScoped<IActivityPublicationReceiptStore, GroundworkActivityPublicationReceiptStore>(services);
+        ReplaceScoped<IActivityDraftTestRunStore, GroundworkActivityDraftTestRunStore>(services);
         return services;
+    }
+
+    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        services.RemoveAll<TService>();
+        services.AddScoped<TService, TImplementation>();
     }
 }

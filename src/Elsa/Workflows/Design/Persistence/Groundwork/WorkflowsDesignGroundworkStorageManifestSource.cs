@@ -1,31 +1,21 @@
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Groundwork.Kernel;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
 
-/// <summary>Contributes the workflows-design family's durable Groundwork declaration.</summary>
-public sealed class WorkflowsDesignGroundworkStorageManifestSource : IGroundworkStorageManifestSource
+/// <summary>
+/// Names the workflows-design lane and publishes its v2 units to the host's public Groundwork catalog.
+/// <para>
+/// The lane declares its storage units directly, so it contributes no composed host manifest. It still
+/// carries an identity because operations spanning design, runtime and publishing have to resolve which
+/// target holds each lane before they can decide how to commit.
+/// </para>
+/// </summary>
+public sealed class WorkflowsDesignGroundworkStorageManifestSource : IGroundworkStorageLane
 {
-    public string FeatureIdentity => "elsa-workflows-design";
+    public const string FeatureIdentity = "elsa-workflows-design";
 
-    public ValueTask<GroundworkStorageManifestDeclaration> CreateDeclarationAsync(
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var manifest = WorkflowsDesignStorageManifest.Create();
+    string IGroundworkStorageLane.FeatureIdentity => FeatureIdentity;
 
-        return ValueTask.FromResult(new GroundworkStorageManifestDeclaration(
-            FeatureIdentity,
-            manifest,
-            [
-                typeof(IWorkflowDefinitionStore),
-                typeof(IWorkflowDefinitionVersionStore),
-                typeof(IWorkflowDefinitionDraftStore),
-                typeof(IWorkflowDefinitionListProjectionStore),
-                typeof(IWorkflowDefinitionVersionLayoutStore)
-            ],
-            [],
-            [],
-            []));
-    }
+    public IReadOnlyList<StorageUnit> CreateUnits() => WorkflowsDesignStorageManifest.CreateUnits();
 }

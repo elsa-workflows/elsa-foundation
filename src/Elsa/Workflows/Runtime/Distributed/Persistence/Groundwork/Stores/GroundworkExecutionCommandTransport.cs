@@ -1,48 +1,27 @@
 using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
-using Groundwork.Core.Text;
-using Groundwork.Documents.Store;
-using Groundwork.Documents.UnitOfWork;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 
-/// <summary>
-/// Durable <see cref="IExecutionCommandTransport"/> backed by the portable <see cref="IDocumentStore"/> (W27). Each
-/// queued command is one document (document id = transport item id, a composite of the escaped workflow execution id
-/// and the per-execution sequence), so the cross-node inbox survives process death and a survivor re-leases and
-/// re-drives stranded items on failover.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>Sequence allocation.</b> <see cref="SendAsync"/> advances one per-execution stream-head document under
-/// provider-level <c>ExpectedVersion</c> compare-and-swap, then atomically commits the advanced head and create-only
-/// command item in one document unit of work. The transport never scans the execution backlog to discover max
-/// sequence; contention is decided by the stream-head CAS, and losers re-read the head and retry.
-/// </para>
-/// <para>
-/// <b>Lease/ack.</b> Delivery is at-least-once with ack-based visibility leases, exactly like the in-memory
-/// transport: leasing stamps the item behind <c>ExpectedVersion</c> CAS (a concurrent leaser wins at the storage
-/// layer and the loser skips), and only the live lease holder presenting the matching claim token may ack — an ack CAS-deletes and is refused when the
-/// lease expired and another node re-leased. The persisted <see cref="ExecutionCommandTransportItem"/> is the frozen
-/// v1 <c>executionCommandTransport</c> golden fixture shape; the wrapping document lifts the collection,
-/// workflow-comparison key, visibility, and sequence fields required by the declared physical routes.
-/// </para>
-/// </remarks>
+/// <summary>Durable, scoped command inbox backed solely by Groundwork v2 sessions and queries.</summary>
 public sealed class GroundworkExecutionCommandTransport(
-    IDocumentStore store,
+    IGroundworkStorageSessionSource sessions,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IBoundedDocumentStore? boundedStore = null) : IExecutionCommandTransport
+    string? targetName = null) : IExecutionCommandTransport
 {
-    private const string Kind = DistributedRuntimeStorageManifest.ExecutionCommandTransportDocumentKind;
-    private const string StreamHeadKind = DistributedRuntimeStorageManifest.ExecutionCommandStreamHeadDocumentKind;
     private const int MaxCreateAttempts = 16;
 
-    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-        $"Command-transport queries for '{Kind}' require an admitted bounded document-store runtime.");
-
-    public async ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default)
+    public async ValueTask<ExecutionCommandTransportItem> SendAsync(
+        string workflowExecutionId,
+        WorkflowExecutionCommandEnvelope envelope,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentNullException.ThrowIfNull(envelope);
@@ -51,266 +30,223 @@ public sealed class GroundworkExecutionCommandTransport(
 
         for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
-            var (streamHeadId, sequence, streamHeadExpectedVersion) = await LoadNextSequenceAsync(workflowExecutionId, cancellationToken);
-            var transportItemId = ComposeTransportItemId(workflowExecutionId, sequence);
+            var headSession = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+            var headKey = Key(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, workflowExecutionId);
+            var currentHead = headSession.Read(headKey);
+            var head = currentHead is null ? null : Deserialize<StreamHead>(currentHead.Values.Values);
+            if (head is not null && !StringComparer.Ordinal.Equals(head.WorkflowExecutionId, workflowExecutionId))
+            {
+                throw new InvalidOperationException(
+                    $"Command stream head '{workflowExecutionId}' belongs to workflow execution '{head.WorkflowExecutionId}', not '{workflowExecutionId}'.");
+            }
+            var currentSequence = head?.LastSequence ?? 0;
+            var sequence = checked(currentSequence + 1);
             var item = new ExecutionCommandTransportItem(
-                transportItemId: transportItemId,
-                workflowExecutionId: workflowExecutionId,
-                envelope: envelope,
-                sequence: sequence,
-                enqueuedAt: now);
+                ComposeTransportItemId(workflowExecutionId, sequence),
+                workflowExecutionId,
+                envelope,
+                sequence,
+                now);
+            var headValues = Values(workflowExecutionId, sequence, DistributedGroundworkDocuments.Serialize(new StreamHead(workflowExecutionId, sequence)));
+            var itemValues = Values(item);
+            var headWrite = currentHead?.Version is { } version
+                ? RowWrite.ConditionalUpsert(sessions.Unit(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId, targetName), headValues, WriteOptions.IfVersion(version))
+                : RowWrite.ConditionalUpsert(sessions.Unit(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId, targetName), headValues, WriteOptions.CreateOnly);
+            var itemWrite = RowWrite.Insert(
+                sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName),
+                itemValues,
+                WriteOptions.CreateOnly);
 
-            await using var unitOfWork = await store.BeginAsync(DocumentCommitScope.Of(StreamHeadKind, Kind), cancellationToken);
-            var headSave = await unitOfWork.SaveAsync(
-                new SaveDocumentRequest(
-                    StreamHeadKind,
-                    streamHeadId,
-                    DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(StreamHeadDocument.Create(StreamHeadKind, workflowExecutionId, sequence)),
-                    ExpectedVersion: streamHeadExpectedVersion),
-                cancellationToken);
-            if (headSave.Status != DocumentStoreWriteStatus.Saved)
+            using var unitOfWork = sessions.BeginUnitOfWork(
+                Access(),
+                BatchWriteOptions.Exact,
+                [DistributedGroundworkStorageManifest.CommandStreamHeadUnitId, DistributedGroundworkStorageManifest.CommandTransportUnitId],
+                targetName);
+            unitOfWork.Stage(headWrite);
+            unitOfWork.Stage(itemWrite);
+            BatchWriteReport report;
+            try
             {
-                if (IsSequenceContention(headSave.Status))
+                report = await unitOfWork.CommitWithOutcomesAsync(cancellationToken);
+            }
+            catch (BatchWriteException exception)
+            {
+                if (IsContention(exception.Outcomes.FirstOrDefault(outcome => ReferenceEquals(outcome.Write, headWrite))?.Outcome.Status))
                     continue;
-
-                throw new InvalidOperationException(
-                    $"Advancing command stream head '{streamHeadId}' failed with status '{headSave.Status}'.");
+                throw;
             }
 
-            var itemSave = await unitOfWork.SaveAsync(
-                new SaveDocumentRequest(
-                    Kind,
-                    transportItemId,
-                    DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(TransportItemDocument.From(Kind, item)),
-                    ExpectedVersion: 0),
-                cancellationToken);
-            if (itemSave.Status != DocumentStoreWriteStatus.Saved)
-            {
-                throw new InvalidOperationException(
-                    $"Creating command transport item '{transportItemId}' after stream-head allocation failed with status '{itemSave.Status}'.");
-            }
-
-            await unitOfWork.CommitAsync(cancellationToken);
-            return item;
+            if (report.IsSuccessful)
+                return item;
+            var headOutcome = report.Outcomes.FirstOrDefault(outcome => ReferenceEquals(outcome.Write, headWrite));
+            if (IsContention(headOutcome?.Outcome.Status))
+                continue;
+            throw new InvalidOperationException($"Appending command '{item.TransportItemId}' failed in the atomic Groundwork unit of work.");
         }
 
-        throw new InvalidOperationException(
-            $"Sending a command to workflow execution '{workflowExecutionId}' did not settle after {MaxCreateAttempts} stream-head compare-and-swap attempts.");
+        throw new InvalidOperationException($"Sending a command to workflow execution '{workflowExecutionId}' did not settle after {MaxCreateAttempts} stream-head compare-and-swap attempts.");
     }
 
-    private async Task<(string StreamHeadId, long Sequence, long ExpectedVersion)> LoadNextSequenceAsync(string workflowExecutionId, CancellationToken cancellationToken)
-    {
-        var streamHeadId = ComposeStreamHeadId(workflowExecutionId);
-        var envelope = await store.LoadAsync(StreamHeadKind, streamHeadId, cancellationToken);
-        if (envelope is null)
-            return (streamHeadId, 1, 0);
-
-        var head = DistributedGroundworkDocuments.Deserialize<StreamHeadDocument>(envelope);
-        if (!string.Equals(head.WorkflowExecutionId, workflowExecutionId, StringComparison.Ordinal))
-            throw new InvalidOperationException($"Command stream head '{streamHeadId}' belongs to workflow execution '{head.WorkflowExecutionId}', not '{workflowExecutionId}'.");
-
-        return (streamHeadId, head.LastSequence + 1, envelope.Version);
-    }
-
-    private static bool IsSequenceContention(DocumentStoreWriteStatus status) =>
-        status is DocumentStoreWriteStatus.ConcurrencyConflict or DocumentStoreWriteStatus.NotFound;
-
-    public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(
+        string workflowExecutionId,
+        string ownerId,
+        DateTimeOffset now,
+        TimeSpan leaseDuration,
+        int maxItems,
+        CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
         cancellationToken.ThrowIfCancellationRequested();
-
         if (leaseDuration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseDuration), "Lease duration must be positive.");
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
 
-        var leaseExpiresAt = now + leaseDuration;
-        var leased = new List<ExecutionCommandTransportItem>();
-
-        foreach (var (item, version) in await LoadVisibleItemsAsync(workflowExecutionId, now, maxItems, cancellationToken))
+        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
+            new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
+            new Predicate.And([
+                Equal(Columns.WorkflowExecutionId, workflowExecutionId),
+                new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now)))
+            ]),
+            [new OrderTerm(Columns.Sequence, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.All,
+            Paging.Keyset(maxItems)));
+        var leased = new List<ExecutionCommandTransportItem>(Math.Min(maxItems, result.Rows.Count));
+        var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
+        foreach (var row in result.Rows)
         {
-            // The lease stamp is guarded by the loaded envelope version, so a concurrent leaser wins at the
-            // storage layer and the loser skips the item instead of double-holding it.
-            var leasedItem = item.Lease(ownerId, leaseExpiresAt);
-            var result = await store.SaveAsync(
-                new SaveDocumentRequest(
-                    Kind,
-                    item.TransportItemId,
-                    DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(TransportItemDocument.From(Kind, leasedItem)),
-                    ExpectedVersion: version),
-                cancellationToken);
-
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                leased.Add(leasedItem);
-
-            // A lost compare-and-swap means another node leased or acked the item between our read and write; skip it.
+            var itemId = StringValue(row, DistributedGroundworkStorageManifest.TransportItemIdField);
+            var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, itemId));
+            if (entry is null)
+                continue;
+            var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
+            if (!item.IsVisible(now))
+                continue;
+            var next = item.Lease(ownerId, now + leaseDuration);
+            var options = WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException("The command row has no optimistic revision."));
+            var outcome = ConditionalUpsert(session, Values(next), options);
+            if (outcome.Succeeded)
+                leased.Add(next);
         }
-
-        return leased;
+        return ValueTask.FromResult<IReadOnlyList<ExecutionCommandTransportItem>>(leased);
     }
 
-    public async ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default)
+    public ValueTask<bool> AckAsync(
+        string workflowExecutionId,
+        string transportItemId,
+        string ownerId,
+        long leaseToken,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         ArgumentException.ThrowIfNullOrWhiteSpace(transportItemId);
         DistributedRuntimeIdentityConstraints.Validate(ownerId, nameof(ownerId));
         if (leaseToken <= 0)
-            throw new ArgumentOutOfRangeException(nameof(leaseToken), "Lease token must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(leaseToken));
         cancellationToken.ThrowIfCancellationRequested();
-
-        var envelope = await store.LoadAsync(Kind, transportItemId, cancellationToken);
-        if (envelope is null)
-            return false;
-
-        var item = DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item;
-        if (!string.Equals(item.WorkflowExecutionId, workflowExecutionId, StringComparison.Ordinal))
-            return false;
-
-        // Only the node that currently holds a live lease may ack. If the lease expired and another node re-leased
-        // it, the superseded node's ack is refused so the survivor stays responsible for the command.
-        if (!string.Equals(item.LeasedByOwnerId, ownerId, StringComparison.Ordinal) ||
-            item.LeaseToken != leaseToken ||
-            item.IsVisible(now))
-            return false;
-
-        // CAS-delete on the loaded envelope version: if the item moved (re-leased by a survivor) between our read
-        // and this delete, the delete conflicts and the ack is refused.
-        var result = await store.DeleteAsync(
-            new DeleteDocumentRequest(Kind, transportItemId, ExpectedVersion: envelope.Version),
-            cancellationToken);
-        return result.Status == DocumentStoreWriteStatus.Deleted;
+        var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
+        var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, transportItemId));
+        if (entry is null)
+            return ValueTask.FromResult(false);
+        var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
+        if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) ||
+            item.LeaseToken != leaseToken || item.IsVisible(now))
+            return ValueTask.FromResult(false);
+        var outcome = session.Delete(
+            Key(DistributedGroundworkStorageManifest.TransportItemIdField, transportItemId),
+            WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException("The command row has no optimistic revision.")));
+        return ValueTask.FromResult(outcome.Status == WriteOutcomeStatus.Deleted);
     }
 
-    public async ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(
-        DateTimeOffset now,
-        int maxItems,
-        CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default)
     {
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
         cancellationToken.ThrowIfCancellationRequested();
-
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                    Kind,
-                    DistributedGroundworkStorageManifest.ListPendingExecutionIdsQuery,
-                    [
-                        DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                            DistributedGroundworkStorageManifest.CollectionField,
-                            Kind)),
-                        DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
-                            DistributedGroundworkStorageManifest.VisibleAtField,
-                            now.ToString("O")))
-                    ],
-                    [
-                        new DocumentQueryOrder(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField),
-                        new DocumentQueryOrder(
-                            DistributedGroundworkStorageManifest.SequenceField,
-                            global::Groundwork.Core.PhysicalStorage.PhysicalSortDirection.Descending)
-                    ],
-                    take: maxItems)
-                .LatestPerKey(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField),
-            cancellationToken);
-
-        return result.Documents
-            .Select(envelope => DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).WorkflowExecutionId)
-            .ToArray();
+        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
+            new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
+            new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now))),
+            [new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last), new OrderTerm(Columns.Sequence, OrderDirection.Descending, NullOrder.Last)],
+            Projection.All,
+            Paging.Keyset(maxItems),
+            new LatestPerKey(Columns.WorkflowExecutionId, Columns.EnqueuedAt)));
+        IReadOnlyCollection<string> ids = result.Rows.Select(row => StringValue(row, DistributedGroundworkStorageManifest.WorkflowExecutionIdField)).Distinct(StringComparer.Ordinal).ToArray();
+        return ValueTask.FromResult(ids);
     }
 
-    public async ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
-
-        var count = await BoundedStore.CountAsync(
-            CountQuery(workflowExecutionId)
-                .Select(global::Groundwork.Core.PhysicalStorage.BoundedQueryResultOperation.Count),
-            cancellationToken);
-        return checked((int)count);
+        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
+            new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
+            Equal(Columns.WorkflowExecutionId, workflowExecutionId),
+            [],
+            Projection.All,
+            Paging.None,
+            ResultShape.TotalCount.Instance));
+        return ValueTask.FromResult(checked((int)(result.TotalCount ?? result.Rows.Count)));
     }
 
-    private async Task<IReadOnlyList<(ExecutionCommandTransportItem Item, long Version)>> LoadVisibleItemsAsync(
-        string workflowExecutionId,
-        DateTimeOffset now,
-        int take,
-        CancellationToken cancellationToken)
+    private IStorageSession Session(string unitId) => sessions.Open(unitId, Access(), targetName);
+
+    private StorageAccess Access() => StorageAccess.Scoped(new StorageScope(
+        accessContextAccessor.Current.Scope?.Value ?? throw new InvalidOperationException("Groundwork distributed stores require a scoped persistence access context.")));
+
+    private static StorageKey Key(string field, string value) => new(new Dictionary<string, object?> { [field] = value });
+
+    private static StorageValues Values(string workflowExecutionId, long sequence, string payload) => new(new Dictionary<string, object?>
     {
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                Kind,
-                DistributedGroundworkStorageManifest.LeaseVisibleCommandsQuery,
-                [
-                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
-                        OrdinalKey(workflowExecutionId))),
-                    DocumentQueryClause.Of(DocumentQueryComparison.LessThanOrEqual(
-                        DistributedGroundworkStorageManifest.VisibleAtField,
-                        now.ToString("O")))
-                ],
-                [new DocumentQueryOrder(DistributedGroundworkStorageManifest.SequenceField)],
-                take: take),
-            cancellationToken);
+        [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = workflowExecutionId,
+        [DistributedGroundworkStorageManifest.LastSequenceField] = sequence,
+        [DistributedGroundworkStorageManifest.PayloadField] = payload
+    });
 
-        return result.Documents
-            .Select(envelope => (DistributedGroundworkDocuments.Deserialize<TransportItemDocument>(envelope).Item, envelope.Version))
-            .ToArray();
-    }
-
-    private static DocumentQuery CountQuery(string workflowExecutionId) => new(
-        Kind,
-        DistributedGroundworkStorageManifest.CountPendingCommandsQuery,
-        [DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-            DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField,
-            OrdinalKey(workflowExecutionId)))]);
-
-    // The document id embeds the escaped execution id and the sequence so a duplicate sequence allocation collides
-    // on the id and is refused by the store. Escaping ('%' then ':') keeps a separator inside an execution id from
-    // forging another execution's item id; case is preserved because execution ids are ordinal.
-    private static string ComposeTransportItemId(string workflowExecutionId, long sequence) =>
-        $"transport:{workflowExecutionId.Replace("%", "%25").Replace(":", "%3A")}:{sequence}";
-
-    private static string ComposeStreamHeadId(string workflowExecutionId) =>
-        $"transport-head:{workflowExecutionId.Replace("%", "%25").Replace(":", "%3A")}";
-
-    private sealed record StreamHeadDocument(
-        string Collection,
-        string WorkflowExecutionId,
-        string WorkflowExecutionIdKey,
-        long LastSequence)
+    private static StorageValues Values(ExecutionCommandTransportItem item) => new(new Dictionary<string, object?>
     {
-        public static StreamHeadDocument Create(string collection, string workflowExecutionId, long lastSequence) => new(
-            collection,
-            workflowExecutionId,
-            OrdinalKey(workflowExecutionId),
-            lastSequence);
-    }
+        [DistributedGroundworkStorageManifest.TransportItemIdField] = item.TransportItemId,
+        [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = item.WorkflowExecutionId,
+        [DistributedGroundworkStorageManifest.SequenceField] = item.Sequence,
+        [DistributedGroundworkStorageManifest.EnqueuedAtField] = item.EnqueuedAt,
+        [DistributedGroundworkStorageManifest.VisibleAtField] = item.LeaseExpiresAt ?? DateTimeOffset.MinValue,
+        [DistributedGroundworkStorageManifest.LeaseOwnerIdField] = item.LeasedByOwnerId,
+        [DistributedGroundworkStorageManifest.LeaseTokenField] = item.LeaseToken ?? 0,
+        [DistributedGroundworkStorageManifest.PayloadField] = DistributedGroundworkDocuments.Serialize(item)
+    });
 
-    // The lifted collection, workflow comparison key, visibility, and sequence fields serve the declared physical
-    // routes; the nested item remains the frozen v1 executionCommandTransport wire shape.
-    private sealed record TransportItemDocument(
-        string Collection,
-        string WorkflowExecutionId,
-        string WorkflowExecutionIdKey,
-        DateTimeOffset VisibleAt,
-        string LeaseOwnerId,
-        long LeaseToken,
-        long Sequence,
-        ExecutionCommandTransportItem Item)
+    private static T Deserialize<T>(IReadOnlyDictionary<string, object?> values) =>
+        DistributedGroundworkDocuments.Deserialize<T>(values, DistributedGroundworkStorageManifest.PayloadField);
+
+    private static string StringValue(IReadOnlyDictionary<string, object?> row, string field) => row[field] switch
     {
-        public static TransportItemDocument From(string collection, ExecutionCommandTransportItem item) => new(
-            collection,
-            item.WorkflowExecutionId,
-            OrdinalKey(item.WorkflowExecutionId),
-            item.LeaseExpiresAt ?? DateTimeOffset.MinValue,
-            item.LeasedByOwnerId ?? string.Empty,
-            item.LeaseToken ?? 0,
-            item.Sequence,
-            item);
+        string value => value,
+        _ => throw new InvalidOperationException($"The Groundwork row field '{field}' is not a string.")
+    };
+
+    private static Predicate Equal(ColumnRef column, object value) => new Predicate.Equal(column, QueryConstant.Of(column, value));
+
+    private static WriteOutcome ConditionalUpsert(IStorageSession session, StorageValues values, WriteOptions options)
+    {
+        if (session is not IConcurrencyStorageSession concurrency)
+            throw new NotSupportedException("The selected Groundwork provider does not support command compare-and-swap.");
+        return concurrency.ConditionalUpsert(values, options);
     }
 
-    private static string OrdinalKey(string value) =>
-        PortableStringComparison.CreateOrdinal(value);
+    private static bool IsContention(WriteOutcomeStatus? status) => status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.UniqueViolation or WriteOutcomeStatus.NotFound or WriteOutcomeStatus.Superseded;
+
+    private static string ComposeTransportItemId(string workflowExecutionId, long sequence) => $"transport:{Escape(workflowExecutionId)}:{sequence}";
+    private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
+
+    private sealed record StreamHead(string WorkflowExecutionId, long LastSequence);
+
+    private static class Columns
+    {
+        private static readonly TableId Table = new(DistributedGroundworkStorageManifest.CommandTransportUnitName);
+        internal static ColumnRef WorkflowExecutionId { get; } = String(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, false);
+        internal static ColumnRef VisibleAt { get; } = new(Table, DistributedGroundworkStorageManifest.VisibleAtField, QueryType.DateTimeOffset, false);
+        internal static ColumnRef Sequence { get; } = new(Table, DistributedGroundworkStorageManifest.SequenceField, QueryType.Int64, false);
+        internal static ColumnRef EnqueuedAt { get; } = new(Table, DistributedGroundworkStorageManifest.EnqueuedAtField, QueryType.DateTimeOffset, false);
+        private static ColumnRef String(string name, bool nullable) => new(Table, name, QueryType.String, nullable, DistributedRuntimeIdentityConstraints.MaximumLength);
+    }
 }

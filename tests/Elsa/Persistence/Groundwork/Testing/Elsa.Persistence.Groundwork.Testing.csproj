@@ -1,35 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Test-support library (not a test project): the shared in-memory Groundwork IDocumentStore
-       test double consumed by the Groundwork-backed store test suites across several domains. -->
+  <!-- Test-support library (not a test project): shared helpers for the Groundwork-backed suites.
+       The v1 document-store doubles it used to carry went with the document substrate itself. -->
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.Core" />
-    <PackageReference Include="Groundwork.Documents" />
-    <PackageReference Include="Groundwork.MongoDb" />
-    <PackageReference Include="Groundwork.PostgreSql" />
-    <PackageReference Include="Groundwork.Sqlite" />
-    <PackageReference Include="Groundwork.SqlServer" />
     <PackageReference Include="CShells.Abstractions" />
-    <PackageReference Include="Microsoft.Data.SqlClient" />
-    <PackageReference Include="Microsoft.Data.Sqlite" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="MongoDB.Driver" />
-    <PackageReference Include="Npgsql" />
     <PackageReference Include="Testcontainers.MongoDb" />
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\MongoDb\Elsa.Persistence.Groundwork.MongoDb.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Elsa.Persistence.Groundwork.PostgreSql.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\SqlServer\Elsa.Persistence.Groundwork.SqlServer.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Elsa.Persistence.Groundwork.Sqlite.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,153 +1,201 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
-using Elsa.Persistence.Groundwork.Scoping;
 using Elsa.Primitives.Exceptions;
-using Groundwork.Core.Queries;
-using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
 
-/// <summary>
-/// Groundwork (document) implementation of <see cref="IActivityDefinitionStore"/>, the document-store
-/// implementation of the definition-store contract. It binds each closed
-/// <see cref="Query{TEntity}"/> shape to an explicitly admitted Groundwork route and executes it through one
-/// access-bound store session, without collection enumeration or client-side filtering.
-/// </summary>
-public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
+/// <summary>v2 Groundwork activity-definition store backed solely by the public row/query APIs.</summary>
+public sealed class GroundworkActivityDefinitionStore(GroundworkV2ActivityDesignStore store) : IActivityDefinitionStore
 {
-    private readonly GroundworkNamedQueryAccess<ActivityDefinition> _reads;
-
-    public GroundworkActivityDefinitionStore(
-        IDocumentStore store,
-        IBoundedDocumentStore? boundedStore = null,
-        IGroundworkStoreSessionFactory? sessions = null)
-    {
-        _reads = new GroundworkNamedQueryAccess<ActivityDefinition>(
-            store,
-            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            GroundworkActivitiesDesignJson.Options,
-            boundedStore,
-            sessions,
-            DesignPersistenceDomain.Activity,
-            "activity definition");
-    }
-
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
-        => await _reads.ExecuteAsync(
-               acrossScopes: false,
-               (executor, token) => executor.LoadAsync(id, token),
-               cancellationToken)
-           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
+    {
+        try
+        {
+            return Deserialize<ActivityDefinition>(await store.LoadAsync(
+                       ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, id, cancellationToken))
+                   ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
+        }
+        catch (DesignPersistenceException)
+        {
+            throw;
+        }
+        catch (JsonException exception)
+        {
+            throw new DesignPersistenceException(
+                DesignPersistenceDomain.Activity,
+                DesignPersistenceFailureKind.Serialization,
+                "load",
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                exception);
+        }
+        catch (IOException exception)
+        {
+            throw new DesignPersistenceException(
+                DesignPersistenceDomain.Activity,
+                DesignPersistenceFailureKind.Provider,
+                "load",
+                ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+                exception);
+        }
+    }
 
-    public Task<ActivityDefinition?> FindAsync(
+    public async Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        var document = await store.FirstOrDefaultAsync(
+            CreateQuery(filter), cancellationToken, filter.TenantAgnostic == true);
+        return Deserialize<ActivityDefinition>(document);
+    }
+
+    public async Task<IReadOnlyList<ActivityDefinition>> ListAsync(
         ActivityDefinitionFilter filter,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        var route = SelectRoute(filter);
-        return _reads.ExecuteAsync(
-            filter.TenantAgnostic == true,
-            (executor, token) => executor.FirstOrDefaultAsync(
-                route.Identity,
-                filter.ToQuery(),
-                route.Order,
-                token),
-            cancellationToken);
+        var query = CreateQuery(filter);
+        var documents = await ActivityDesignQueryPager.QueryAllAsync(
+            store,
+            query.DocumentKind,
+            query.Identity,
+            query.Clauses,
+            query.Order,
+            cancellationToken,
+            filter.TenantAgnostic == true);
+        return documents
+            .Select(Deserialize<ActivityDefinition>)
+            .Where(definition => definition is not null)
+            .Cast<ActivityDefinition>()
+            .ToArray();
     }
 
-    public Task<IReadOnlyList<ActivityDefinition>> ListAsync(
-        ActivityDefinitionFilter filter,
+    public async Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(
+        string id,
+        string activityTypeKey,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(filter);
-        var route = SelectRoute(filter);
-        return _reads.ExecuteAsync(
-            filter.TenantAgnostic == true,
-            (executor, token) => executor.QueryAsync(
-                route.Identity,
-                filter.ToQuery(),
-                route.Order,
-                token),
-            cancellationToken);
-    }
+        var byId = Deserialize<ActivityDefinition>(await store.LoadAsync(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, id, cancellationToken));
+        if (byId is not null)
+            return byId;
 
-    public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            async (executor, token) =>
-            {
-                var byId = await executor.LoadAsync(id, token);
-                return byId ?? await executor.FirstOrDefaultAsync(
-                    ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
-                    Query<ActivityDefinition>.Where(x => x.ActivityTypeKey, QueryOp.Equal, activityTypeKey),
-                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder,
-                    token);
-            },
-            cancellationToken);
-
-    public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default)
-        => _reads.ExecuteAsync(
-            acrossScopes: false,
-            (executor, token) => executor.AnyAsync(
+        var document = await store.FirstOrDefaultAsync(
+            CreateQuery(
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))],
                 ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
-                Query<ActivityDefinition>.Where(x => x.ActivityTypeKey, QueryOp.Equal, activityTypeKey),
-                token),
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder),
             cancellationToken);
+        return Deserialize<ActivityDefinition>(document);
+    }
 
-    private static DefinitionRoute SelectRoute(ActivityDefinitionFilter filter)
+    public async Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default)
+        => await FindByActivityTypeKeyAsync(activityTypeKey, cancellationToken) is not null;
+
+    private async Task<ActivityDefinition?> FindByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken)
     {
+        var document = await store.FirstOrDefaultAsync(
+            CreateQuery(
+                [ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                    ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, activityTypeKey))],
+                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder),
+            cancellationToken);
+        return Deserialize<ActivityDefinition>(document);
+    }
+
+    private static ActivityDesignQuery CreateQuery(ActivityDefinitionFilter filter)
+    {
+        var clauses = new List<ActivityDesignQueryClause>();
+        if (filter.Id is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionIdField, filter.Id)));
+        if (filter.Ids is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.In(
+                ActivitiesDesignStorageManifest.ActivityDefinitionIdField, filter.Ids.Cast<object?>())));
+        if (filter.ActivityTypeKey is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, filter.ActivityTypeKey)));
+        if (filter.ActivityTypeKeys is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.In(
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyField, filter.ActivityTypeKeys.Cast<object?>())));
+        if (filter.Category is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionCategoryField, filter.Category)));
+        if (filter.DisplayName is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameField, filter.DisplayName)));
+        if (filter.Description is not null)
+            clauses.Add(ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Contains(
+                ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionField, filter.Description)));
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
-            return new(
-                ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionSearchOrder);
+            // Search is case-insensitive per the design query contract, and Groundwork refuses a
+            // case-insensitive comparison policy that is not backed by a persisted search-key
+            // projection. Comparing the four text fields directly is therefore ordinal, which drops
+            // a differently-cased match. The row already carries one: searchText is derived on write
+            // as the upper-cased type key, category, display name and description, so an upper-cased
+            // needle over it spans all four case-insensitively. The id is not part of that
+            // derivation and keeps its own ordinal term.
+            clauses.Add(ActivityDesignQueryClause.AnyOf(
+                ActivityDesignQueryComparison.Contains(
+                    ActivitiesDesignStorageManifest.ManagementSearchField,
+                    filter.SearchTerm.ToUpperInvariant()),
+                ActivityDesignQueryComparison.Contains(ActivitiesDesignStorageManifest.ActivityDefinitionIdField, filter.SearchTerm)));
         }
 
-        if (filter.Id is not null || filter.Ids is not null)
-        {
-            return new(
-                ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionIdOrder);
-        }
-
-        if (filter.ActivityTypeKey is not null || filter.ActivityTypeKeys is not null)
-        {
-            return new(
-                ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder);
-        }
-
-        if (filter.Category is not null)
-        {
-            return new(
-                ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionCategoryOrder);
-        }
-
-        if (filter.DisplayName is not null)
-        {
-            return new(
-                ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder);
-        }
-
-        if (filter.Description is not null)
-        {
-            return new(
-                ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery,
-                ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionOrder);
-        }
-
-        return new(
-            ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
-            ActivitiesDesignStorageManifest.ActivityDefinitionIdOrder);
+        var (identity, order) = SelectRoute(filter);
+        return CreateQuery(clauses, identity, order);
     }
 
-    private sealed record DefinitionRoute(
-        string Identity,
-        IReadOnlyList<DocumentQueryOrder> Order);
+    private static ActivityDesignQuery CreateQuery(
+        IReadOnlyList<ActivityDesignQueryClause> clauses,
+        string identity,
+        IReadOnlyList<ActivityDesignQueryOrder> order)
+    {
+        return new(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
+            identity,
+            clauses,
+            order);
+    }
+
+    private static (string Identity, IReadOnlyList<ActivityDesignQueryOrder> Order) SelectRoute(ActivityDefinitionFilter filter)
+    {
+        // Route selection mirrors the public named-query contract: the most selective supplied
+        // identity chooses both the physical index admission and the deterministic tie-break order;
+        // remaining filters are residual predicates on that route.
+        if (filter.Id is not null)
+            return (ActivitiesDesignStorageManifest.FindActivityDefinitionByIdQuery,
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+        if (filter.Ids is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByIdQuery,
+                [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+        if (filter.ActivityTypeKey is not null || filter.ActivityTypeKeys is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByTypeKeyQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionTypeKeyOrder);
+        if (filter.Category is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByCategoryQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionCategoryOrder);
+        if (filter.DisplayName is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByDisplayNameQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder);
+        if (filter.Description is not null)
+            return (ActivitiesDesignStorageManifest.ListActivityDefinitionsByDescriptionQuery,
+                ActivitiesDesignStorageManifest.ActivityDefinitionDescriptionOrder);
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+            return (ActivitiesDesignStorageManifest.SearchActivityDefinitionsQuery,
+                [new(ActivitiesDesignStorageManifest.ActivityDefinitionIdField)]);
+
+        return (ActivitiesDesignStorageManifest.ListAllActivityDefinitionsQuery,
+            ActivitiesDesignStorageManifest.ActivityDefinitionDisplayNameOrder);
+    }
+
+    private static T? Deserialize<T>(ActivityDesignDocument? document) where T : Elsa.Primitives.Entities.Entity
+        => document is null
+            ? null
+            : JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<T>>(
+                document.ContentJson, GroundworkActivitiesDesignJson.Options)?.Entity;
 }

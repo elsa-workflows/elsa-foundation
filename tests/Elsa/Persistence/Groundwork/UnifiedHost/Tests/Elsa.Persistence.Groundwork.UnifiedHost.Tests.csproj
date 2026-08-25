@@ -9,15 +9,15 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
-    <PackageReference Include="Groundwork.Core" />
-    <PackageReference Include="Groundwork.Documents" />
+    <PackageReference Include="Groundwork.Kernel" />
+    <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Store" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="CShells" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\SqlServer\Unified\Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
@@ -25,8 +25,6 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <!-- The portfolio split tests build a payload serializer directly. -->
@@ -35,23 +33,10 @@
     <!-- The deployment-shape tests compose the publishing feature itself: it contributes the publication check
          that permanent definition deletion depends on. -->
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
-    <ProjectReference Include="..\..\ProcessProbe\Elsa.Persistence.Groundwork.ProcessProbe.csproj"
-                      ReferenceOutputAssembly="false" />
   </ItemGroup>
-
-  <Target Name="CopyGroundworkProcessProbeArtifacts" AfterTargets="Build">
-    <RemoveDir Directories="$(TargetDir)GroundworkProcessProbe" />
-    <ItemGroup>
-      <_GroundworkProcessProbeArtifact Include="$(MSBuildProjectDirectory)/../../ProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_GroundworkProcessProbeArtifact)"
-          DestinationFiles="@(_GroundworkProcessProbeArtifact->'$(TargetDir)GroundworkProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

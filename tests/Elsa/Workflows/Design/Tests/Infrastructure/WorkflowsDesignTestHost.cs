@@ -6,7 +6,6 @@ using Elsa.Locking.Core;
 using Elsa.Persistence.Core.Design;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.Unified.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
@@ -17,6 +16,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations;
+using Groundwork.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -87,9 +87,9 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         new EventsFeature().ConfigureServices(services);
 
         // Production SQLite Groundwork unified persistence: registers the workflows-design (and
-        // activities-design) stores + commands over one physical document store. autoApplyOnStartup
+        // activities-design) stores + commands over one provider connection. The storage session source
         // applies the pending schema in-process during IShellInitializer, so no external CLI is needed.
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString, autoApplyOnStartup: true);
+        services.AddGroundworkSqliteUnifiedPersistence(connectionString);
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
 
@@ -102,18 +102,6 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
 
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-
-        // The Groundwork storage-composition factory publishes GroundworkStorageComposing through the
-        // registered IInlineEventPublisher to gather each manifest source's schema declaration. The
-        // capturing publisher only records events, so route this one composition event to the real
-        // GroundworkStorageCompositionHandler (the production pipeline would dispatch it the same way).
-        eventPublisher.Subscribe<GroundworkStorageComposing>(async composing =>
-        {
-            using var scope = provider.CreateScope();
-            await scope.ServiceProvider
-                .GetRequiredService<GroundworkStorageCompositionHandler>()
-                .Handle(composing, CancellationToken.None);
-        });
 
         foreach (var initializer in provider.GetServices<IShellInitializer>())
             await initializer.InitializeAsync(cancellationToken);

@@ -11,7 +11,16 @@ program unit 1). This unit **measures only — it optimizes nothing.** Two indep
 2. **Fresh-database schema admission applies a deterministic 963 DDL operations** for the reference SQLite
    `GroundworkAllFeaturesDeploymentSchema`, on one connection, inside that first request. A warm restart applies
    **0** (idempotent). This number is load-independent (asserted by `ColdStartSchemaOperationCountTests`) and is
-   materially higher than the ~581 previously reputed.
+materially higher than the ~581 previously reputed.
+
+### Clean-break update — 17 August 2026
+
+The historical July capture below remains the v1 before-state. During the Groundwork v2 clean break, Distributed,
+Secrets, and Studio Preferences moved to independently admitted v2 units. The shrinking transitional v1 target now
+contains only Runtime, Workflows Design, Activities Design, the design atomic-write ledger, and Publishing. A fresh
+SQLite admission for that exact five-family target applies **898 operations** and a warm restart applies **0**;
+`ColdStartSchemaOperationCountTests` pins the current value. This is a composition change, not a claim that the
+July eight-family baseline was measured incorrectly.
 
 ## Load caveat (read first)
 

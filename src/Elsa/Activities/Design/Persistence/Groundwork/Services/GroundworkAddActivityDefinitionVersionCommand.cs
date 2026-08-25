@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Persistence.Groundwork;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -8,7 +9,6 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
-using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 
@@ -58,7 +58,7 @@ public sealed class GroundworkAddActivityDefinitionVersionCommand(
             async (context, token) =>
             {
                 await context.SaveAsync(
-                    GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    GroundworkV2ActivityDesignDocumentWriter.ToTenantScopedSaveRequest(
                         ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
                         ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
                         ActivitiesDesignStorageManifest.SchemaVersion,

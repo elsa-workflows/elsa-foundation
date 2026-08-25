@@ -1,181 +1,151 @@
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
-using Groundwork.Core.Text;
-using Groundwork.Documents.Store;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Store;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 
-/// <summary>
-/// Durable <see cref="IExecutionPlacementStore"/> backed by the portable <see cref="IDocumentStore"/> (W27). One
-/// document per workflow execution (document id = workflow execution id) holds the current placement lease, so
-/// placement routing survives process death and a survivor can take over when the lease expires.
-/// </summary>
-/// <remarks>
-/// Every mutation is a storage-level compare-and-swap: claims over an existing document save with
-/// <c>ExpectedVersion</c> = the loaded envelope version, first claims create with <c>ExpectedVersion</c> = 0
-/// (create-only — the provider refuses the insert when a concurrent claimant wins first), and release CAS-deletes.
-/// A lost race re-reads and re-evaluates, so two nodes can never both hold a live lease — the same exact guarantee
-/// the in-memory store gets from its process-local lock, here enforced by the document store's own storage layer.
-/// The persisted <see cref="ExecutionPlacementLease"/> shape is the frozen v1 <c>executionPlacement</c> golden
-/// fixture; the wrapping document lifts the route fields needed by the physical owner/expiry index.
-/// </remarks>
+/// <summary>Scoped, optimistic-concurrency placement authority backed by Groundwork v2.</summary>
 public sealed class GroundworkExecutionPlacementStore(
-    IDocumentStore store,
-    IBoundedDocumentStore? boundedStore = null) : IExecutionPlacementStore
+    IGroundworkStorageSessionSource sessions,
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    string? targetName = null) : IExecutionPlacementStore
 {
-    private const string Kind = DistributedRuntimeStorageManifest.ExecutionPlacementDocumentKind;
     private const int MaxCasAttempts = 8;
 
-    private IBoundedDocumentStore BoundedStore => boundedStore ?? store as IBoundedDocumentStore ?? throw new InvalidOperationException(
-        $"Placement queries for '{Kind}' require an admitted bounded document-store runtime.");
-
-    public async ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
-
-        var envelope = await store.LoadAsync(Kind, workflowExecutionId, cancellationToken);
-        return envelope is null ? null : DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease;
+        var entry = Session().Read(Key(workflowExecutionId));
+        return ValueTask.FromResult(entry is null ? null : Deserialize(entry.Values.Values));
     }
 
-    public async ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default)
+    public ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(claim);
         cancellationToken.ThrowIfCancellationRequested();
 
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
         {
-            var envelope = await store.LoadAsync(Kind, claim.WorkflowExecutionId, cancellationToken);
-            var current = envelope is null ? null : DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease;
+            var session = Session();
+            var key = Key(claim.WorkflowExecutionId);
+            var current = session.Read(key);
+            var currentLease = current is null ? null : Deserialize(current.Values.Values);
+            if (currentLease is not null && !currentLease.IsExpired(now) &&
+                !StringComparer.Ordinal.Equals(currentLease.OwnerId, claim.OwnerId))
+            {
+                return ValueTask.FromResult(new ExecutionPlacementClaimResult(ExecutionPlacementClaimOutcome.Denied, currentLease));
+            }
 
-            // A live lease held by another node blocks the claim; placement stays with the current owner.
-            if (current is not null && !current.IsExpired(now) && !StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId))
-                return new ExecutionPlacementClaimResult(ExecutionPlacementClaimOutcome.Denied, current);
-
-            var outcome = current is not null && StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId) && !current.IsExpired(now)
+            var outcome = currentLease is not null &&
+                          StringComparer.Ordinal.Equals(currentLease.OwnerId, claim.OwnerId) &&
+                          !currentLease.IsExpired(now)
                 ? ExecutionPlacementClaimOutcome.Renewed
                 : ExecutionPlacementClaimOutcome.Granted;
-
-            var lease = new ExecutionPlacementLease(
-                workflowExecutionId: claim.WorkflowExecutionId,
-                ownerId: claim.OwnerId,
-                placementToken: (current?.PlacementToken ?? 0) + 1,
-                acquiredAt: claim.RequestedAt,
-                expiresAt: claim.ExpiresAt);
-
-            // Storage-level compare-and-swap: ExpectedVersion 0 claims first creation (create-only — the provider
-            // refuses the loser of a concurrent first claim), and the loaded envelope version guards every
-            // subsequent transition so a concurrent claim/renewal/release forces a re-read instead of a clobber.
-            var result = await store.SaveAsync(
-                new SaveDocumentRequest(
-                    Kind,
-                    claim.WorkflowExecutionId,
-                    DistributedGroundworkStorageManifest.SchemaVersion,
-                    DistributedGroundworkDocuments.Serialize(ExecutionPlacementDocument.From(Kind, lease)),
-                    ExpectedVersion: envelope?.Version ?? 0),
-                cancellationToken);
-
-            if (result.Status == DocumentStoreWriteStatus.Saved)
-                return new ExecutionPlacementClaimResult(outcome, lease);
-
-            // Lost the compare-and-swap (a concurrent claim, renewal, or release moved the document); re-read and
-            // re-evaluate against the winner's state.
+            var lease = new ExecutionPlacementLease(claim.WorkflowExecutionId, claim.OwnerId, (currentLease?.PlacementToken ?? 0) + 1, claim.RequestedAt, claim.ExpiresAt);
+            var options = current?.Version is { } version ? WriteOptions.IfVersion(version) : WriteOptions.CreateOnly;
+            var result = ConditionalUpsert(session, Values(lease), options);
+            if (result.Succeeded)
+                return ValueTask.FromResult(new ExecutionPlacementClaimResult(outcome, lease));
+            if (!IsContention(result.Status))
+                throw new InvalidOperationException($"Placement claim for workflow execution '{claim.WorkflowExecutionId}' failed with status '{result.Status}'.");
         }
 
-        throw new InvalidOperationException(
-            $"Placement claim for workflow execution '{claim.WorkflowExecutionId}' did not settle after {MaxCasAttempts} compare-and-swap attempts.");
+        throw new InvalidOperationException($"Placement claim for workflow execution '{claim.WorkflowExecutionId}' did not settle after {MaxCasAttempts} compare-and-swap attempts.");
     }
 
-    public async ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
+    public ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(lease);
         cancellationToken.ThrowIfCancellationRequested();
 
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
         {
-            var envelope = await store.LoadAsync(Kind, lease.WorkflowExecutionId, cancellationToken);
-            if (envelope is null)
-                return;
+            var session = Session();
+            var key = Key(lease.WorkflowExecutionId);
+            var current = session.Read(key);
+            if (current is null)
+                return ValueTask.CompletedTask;
+            var currentLease = Deserialize(current.Values.Values);
+            if (!StringComparer.Ordinal.Equals(currentLease.OwnerId, lease.OwnerId) || currentLease.PlacementToken != lease.PlacementToken)
+                return ValueTask.CompletedTask;
 
-            var current = DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease;
-
-            // Release only when the stored lease still matches the caller's owner id and placement token, so a
-            // superseded holder cannot clear a newer owner's placement. A no-op otherwise.
-            if (!StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) || current.PlacementToken != lease.PlacementToken)
-                return;
-
-            var result = await store.DeleteAsync(
-                new DeleteDocumentRequest(Kind, lease.WorkflowExecutionId, ExpectedVersion: envelope.Version),
-                cancellationToken);
-            if (result.Status is DocumentStoreWriteStatus.Deleted or DocumentStoreWriteStatus.NotFound)
-                return;
-
-            // Lost the compare-and-swap (a concurrent claim renewed the lease); re-read — the next iteration will
-            // observe the newer owner/token and no-op.
+            var version = current.Version ?? throw new InvalidOperationException("The placement row has no optimistic revision.");
+            var result = session.Delete(key, WriteOptions.IfVersion(version));
+            if (result.Status is WriteOutcomeStatus.Deleted or WriteOutcomeStatus.NotFound)
+                return ValueTask.CompletedTask;
+            if (!IsContention(result.Status))
+                throw new InvalidOperationException($"Releasing placement '{lease.WorkflowExecutionId}' failed with status '{result.Status}'.");
         }
+
+        return ValueTask.CompletedTask;
     }
 
-    public async ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
-        ExecutionPlacementLeaseListRequest request,
-        CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(ExecutionPlacementLeaseListRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-
-        var result = await BoundedStore.QueryAsync(
-            new DocumentQuery(
-                Kind,
-                DistributedGroundworkStorageManifest.ListOwnedPlacementsQuery,
-                [
-                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        DistributedGroundworkStorageManifest.OwnerIdLookupKeyField,
-                        OwnerLookupKey(request.OwnerId))),
-                    DocumentQueryClause.Of(DocumentQueryComparison.Equal(
-                        DistributedGroundworkStorageManifest.OwnerIdComparisonKeyField,
-                        OrdinalKey(request.OwnerId))),
-                    DocumentQueryClause.Of(DocumentQueryComparison.GreaterThan(
-                        DistributedGroundworkStorageManifest.ExpiresAtField,
-                        request.Now.ToString("O")))
-                ],
-                [
-                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.OwnerIdLookupKeyField),
-                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.ExpiresAtField),
-                    new DocumentQueryOrder(DistributedGroundworkStorageManifest.WorkflowExecutionIdKeyField)
-                ],
-                take: request.Take),
-            cancellationToken);
-
-        return result.Documents
-            .Select(envelope => DistributedGroundworkDocuments.Deserialize<ExecutionPlacementDocument>(envelope).Lease)
-            .ToArray();
+        var result = Session().Query(new QueryRequest(
+            new TableId(DistributedGroundworkStorageManifest.PlacementUnitName),
+            new Predicate.And([
+                Equal(Columns.OwnerId, request.OwnerId),
+                new Predicate.Range(Columns.ExpiresAt, Bound.Exclusive(QueryConstant.Of(Columns.ExpiresAt, request.Now)), null)
+            ]),
+            [new OrderTerm(Columns.ExpiresAt, OrderDirection.Ascending, NullOrder.Last), new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.All,
+            Paging.Keyset(request.Take)));
+        IReadOnlyList<ExecutionPlacementLease> leases = result.Rows.Select(Deserialize).ToArray();
+        return ValueTask.FromResult(leases);
     }
 
-    // The lifted owner, expiry, and workflow fields serve the declared physical route; the nested lease remains the
-    // frozen v1 executionPlacement wire shape.
-    private sealed record ExecutionPlacementDocument(
-        string Collection,
-        string WorkflowExecutionId,
-        string WorkflowExecutionIdKey,
-        string OwnerId,
-        string OwnerIdComparisonKey,
-        string OwnerIdLookupKey,
-        DateTimeOffset ExpiresAt,
-        ExecutionPlacementLease Lease)
+    private IStorageSession Session() => sessions.Open(
+        DistributedGroundworkStorageManifest.PlacementUnitId,
+        StorageAccess.Scoped(new StorageScope(RequireScope())),
+        targetName);
+
+    private string RequireScope() => accessContextAccessor.Current.Scope?.Value ??
+        throw new InvalidOperationException("Groundwork distributed stores require a scoped persistence access context.");
+
+    private static StorageKey Key(string workflowExecutionId) => new(new Dictionary<string, object?>
     {
-        public static ExecutionPlacementDocument From(string collection, ExecutionPlacementLease lease) => new(
-            collection,
-            lease.WorkflowExecutionId,
-            OrdinalKey(lease.WorkflowExecutionId),
-            lease.OwnerId,
-            OrdinalKey(lease.OwnerId),
-            OwnerLookupKey(lease.OwnerId),
-            lease.ExpiresAt,
-            lease);
+        [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = workflowExecutionId
+    });
+
+    private static StorageValues Values(ExecutionPlacementLease lease) => new(new Dictionary<string, object?>
+    {
+        [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = lease.WorkflowExecutionId,
+        [DistributedGroundworkStorageManifest.OwnerIdField] = lease.OwnerId,
+        [DistributedGroundworkStorageManifest.PlacementTokenField] = lease.PlacementToken,
+        [DistributedGroundworkStorageManifest.AcquiredAtField] = lease.AcquiredAt,
+        [DistributedGroundworkStorageManifest.ExpiresAtField] = lease.ExpiresAt,
+        [DistributedGroundworkStorageManifest.PayloadField] = DistributedGroundworkDocuments.Serialize(lease)
+    });
+
+    private static ExecutionPlacementLease Deserialize(IReadOnlyDictionary<string, object?> values) =>
+        DistributedGroundworkDocuments.Deserialize<ExecutionPlacementLease>(values, DistributedGroundworkStorageManifest.PayloadField);
+
+    private static Predicate Equal(ColumnRef column, object value) => new Predicate.Equal(column, QueryConstant.Of(column, value));
+
+    private static WriteOutcome ConditionalUpsert(IStorageSession session, StorageValues values, WriteOptions options)
+    {
+        if (session is not IConcurrencyStorageSession concurrency)
+            throw new NotSupportedException("The selected Groundwork provider does not support placement compare-and-swap.");
+        return concurrency.ConditionalUpsert(values, options);
     }
 
-    private static string OrdinalKey(string value) =>
-        PortableStringComparison.CreateOrdinal(value);
+    private static bool IsContention(WriteOutcomeStatus status) => status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.UniqueViolation or WriteOutcomeStatus.NotFound or WriteOutcomeStatus.Superseded;
 
-    private static string OwnerLookupKey(string value) =>
-        PortableStringComparison.CreateHash(OrdinalKey(value));
+    private static class Columns
+    {
+        private static readonly TableId Table = new(DistributedGroundworkStorageManifest.PlacementUnitName);
+        internal static ColumnRef WorkflowExecutionId { get; } = String(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, false);
+        internal static ColumnRef OwnerId { get; } = String(DistributedGroundworkStorageManifest.OwnerIdField, false);
+        internal static ColumnRef ExpiresAt { get; } = new(Table, DistributedGroundworkStorageManifest.ExpiresAtField, QueryType.DateTimeOffset, false);
+
+        private static ColumnRef String(string name, bool nullable) => new(Table, name, QueryType.String, nullable, DistributedRuntimeIdentityConstraints.MaximumLength);
+    }
 }

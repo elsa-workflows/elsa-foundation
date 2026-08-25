@@ -1,4 +1,3 @@
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.Groundwork.Stores;
@@ -13,10 +12,11 @@ public static class GroundworkSecretsStoreRegistration
         this IServiceCollection services,
         string? targetName = null)
     {
-        var lane = services.GroundworkLane(targetName);
-        lane.Manifest<SecretsGroundworkStorageManifestSource>();
-        lane.Replace<ISecretRepository, GroundworkSecretRepository>();
-        lane.TryAdd<ILegacySecretTenantBackfill, LegacySecretTenantBackfill>();
+        services.AddGroundworkStorageUnit(SecretsGroundworkStorageSchema.CreateUnit(), targetName);
+        services.RemoveAll<ISecretRepository>();
+        services.AddScoped<ISecretRepository>(provider => new GroundworkSecretRepository(
+            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+            targetName));
         return services;
     }
 }

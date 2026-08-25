@@ -1,10 +1,7 @@
-using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Scoping;
-using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -21,19 +18,13 @@ public static class GroundworkIdentityStoresRegistration
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
         services.AddPersistenceCore();
-        services.AddGroundworkManifestSource<IdentityGroundworkStorageManifestSource>();
+        foreach (var unit in IdentityV2StorageManifest.CreateUnits())
+            services.AddGroundworkStorageUnit(unit);
         services.TryAddSingleton<IdentityMutationReceiptCleanupCoordinator>();
-        services.TryAddScoped(serviceProvider =>
-        {
-            var sessionFactory = serviceProvider.GetService<IGroundworkStoreSessionFactory>();
-            return sessionFactory is not null
-                ? new GroundworkIdentityAtomicWrite(
-                    sessionFactory,
-                    serviceProvider.GetRequiredService<IdentityMutationReceiptCleanupCoordinator>())
-                : new GroundworkIdentityAtomicWrite(
-                    serviceProvider.GetRequiredService<IDocumentStore>(),
-                    serviceProvider.GetRequiredService<IdentityMutationReceiptCleanupCoordinator>());
-        });
+        services.TryAddScoped<GroundworkIdentityRowStore>();
+        services.TryAddScoped(serviceProvider => new GroundworkIdentityAtomicWrite(
+            serviceProvider.GetRequiredService<GroundworkIdentityRowStore>(),
+            serviceProvider.GetRequiredService<IdentityMutationReceiptCleanupCoordinator>()));
         services.TryAddScoped<GroundworkIdentityAuthorityRelationshipCoordinator>();
         services.TryAddScoped<GroundworkIdentityAuthorityAggregateCoordinator>();
 

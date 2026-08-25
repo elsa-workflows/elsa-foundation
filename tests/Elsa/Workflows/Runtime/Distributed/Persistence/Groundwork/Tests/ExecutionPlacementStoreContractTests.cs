@@ -1,65 +1,45 @@
-using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
 
-/// <summary>
-/// Contract-parity suite for <c>IExecutionPlacementStore</c>: the same behavioral assertions run against the leaf's
-/// in-memory store, the Groundwork bridge over the shared in-memory document-store double, and the Groundwork
-/// bridge over the real SQLite provider — proving the durable stores are true drop-ins behind the frozen contract.
-/// </summary>
+/// <summary>Runs the placement contract against the product in-memory store and the public v2 SQLite adapter.</summary>
 public sealed class ExecutionPlacementStoreContractTests
 {
     private const string ExecutionId = "wf-1";
     private const string NodeA = "node-a";
     private const string NodeB = "node-b";
-
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 9, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
 
     public static TheoryData<string> Providers => new()
     {
         DistributedStoreHarness.InMemory,
-        DistributedStoreHarness.GroundworkMemory,
         DistributedStoreHarness.GroundworkSqlite
     };
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task Claim_OnUnplacedExecution_GrantsWithTokenOne(string provider)
+    public async Task ClaimGrantRenewAndFindHaveContractParity(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
 
-        var result = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
+        var granted = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
+        var renewed = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now.AddSeconds(10)), Now.AddSeconds(10));
 
-        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, result.Outcome);
-        Assert.Equal(NodeA, result.Lease.OwnerId);
-        Assert.Equal(1, result.Lease.PlacementToken);
-
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, granted.Outcome);
+        Assert.Equal(1, granted.Lease.PlacementToken);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Renewed, renewed.Outcome);
+        Assert.Equal(2, renewed.Lease.PlacementToken);
         var found = await harness.PlacementStore.FindAsync(ExecutionId);
-        Assert.Equal(NodeA, found!.OwnerId);
-        Assert.Equal(1, found.PlacementToken);
+        Assert.Equal(renewed.Lease.OwnerId, found!.OwnerId);
+        Assert.Equal(renewed.Lease.PlacementToken, found.PlacementToken);
+        Assert.Equal(renewed.Lease.ExpiresAt, found.ExpiresAt);
     }
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task Claim_ByCurrentOwner_RenewsWithStrictlyGreaterToken(string provider)
-    {
-        await using var harness = await DistributedStoreHarness.CreateAsync(provider);
-        await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
-
-        var later = Now.AddSeconds(10);
-        var renewal = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, later), later);
-
-        Assert.Equal(ExecutionPlacementClaimOutcome.Renewed, renewal.Outcome);
-        Assert.Equal(NodeA, renewal.Lease.OwnerId);
-        Assert.Equal(2, renewal.Lease.PlacementToken);
-    }
-
-    [Theory]
-    [MemberData(nameof(Providers))]
-    public async Task Claim_AgainstLiveForeignLease_IsDeniedWithoutMutation(string provider)
+    public async Task LiveForeignClaimIsDeniedWithoutMutation(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
         var granted = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
@@ -67,21 +47,19 @@ public sealed class ExecutionPlacementStoreContractTests
         var denied = await harness.PlacementStore.TryClaimAsync(Claim(NodeB, Now.AddSeconds(1)), Now.AddSeconds(1));
 
         Assert.Equal(ExecutionPlacementClaimOutcome.Denied, denied.Outcome);
-        Assert.Equal(NodeA, denied.Lease.OwnerId);
+        Assert.Equal(granted.Lease.OwnerId, denied.Lease.OwnerId);
         Assert.Equal(granted.Lease.PlacementToken, denied.Lease.PlacementToken);
-
-        var found = await harness.PlacementStore.FindAsync(ExecutionId);
-        Assert.Equal(NodeA, found!.OwnerId);
+        Assert.Equal(NodeA, (await harness.PlacementStore.FindAsync(ExecutionId))!.OwnerId);
     }
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task Claim_AgainstExpiredForeignLease_GrantsWithGreaterToken(string provider)
+    public async Task ExpiredForeignClaimTakesOverWithGreaterToken(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
         await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
-
         var afterExpiry = Now + LeaseDuration + TimeSpan.FromSeconds(1);
+
         var takeover = await harness.PlacementStore.TryClaimAsync(Claim(NodeB, afterExpiry), afterExpiry);
 
         Assert.Equal(ExecutionPlacementClaimOutcome.Granted, takeover.Outcome);
@@ -91,51 +69,37 @@ public sealed class ExecutionPlacementStoreContractTests
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task Release_MatchingOwnerAndToken_Unplaces(string provider)
-    {
-        await using var harness = await DistributedStoreHarness.CreateAsync(provider);
-        var granted = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
-
-        await harness.PlacementStore.ReleaseAsync(granted.Lease);
-
-        Assert.Null(await harness.PlacementStore.FindAsync(ExecutionId));
-    }
-
-    [Theory]
-    [MemberData(nameof(Providers))]
-    public async Task Release_WithStaleToken_IsANoOp(string provider)
+    public async Task MatchingReleaseDeletesButStaleReleaseDoesNot(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
         var first = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now), Now);
         var renewed = await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now.AddSeconds(5)), Now.AddSeconds(5));
 
-        // The stale (superseded) lease must not clear the newer one.
         await harness.PlacementStore.ReleaseAsync(first.Lease);
+        Assert.Equal(renewed.Lease.PlacementToken, (await harness.PlacementStore.FindAsync(ExecutionId))!.PlacementToken);
 
-        var found = await harness.PlacementStore.FindAsync(ExecutionId);
-        Assert.Equal(renewed.Lease.PlacementToken, found!.PlacementToken);
+        await harness.PlacementStore.ReleaseAsync(renewed.Lease);
+        Assert.Null(await harness.PlacementStore.FindAsync(ExecutionId));
     }
 
     [Theory]
     [MemberData(nameof(Providers))]
-    public async Task ListOwned_ReturnsOnlyLiveOwnerLeasesInEarliestExpiryOrderWithinTheRequestedBound(string provider)
+    public async Task ListOwnedFiltersOwnerAndExpiryThenAppliesStableBound(string provider)
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(provider);
         await harness.PlacementStore.TryClaimAsync(Claim(NodeA, Now, "wf-later"), Now);
-        await harness.PlacementStore.TryClaimAsync(
-            new ExecutionPlacementClaim("wf-first", NodeA, Now, Now.AddSeconds(10)),
-            Now);
-        await harness.PlacementStore.TryClaimAsync(
-            new ExecutionPlacementClaim("wf-expired", NodeA, Now, Now.AddSeconds(1)),
-            Now);
+        await harness.PlacementStore.TryClaimAsync(new("wf-first", NodeA, Now, Now.AddSeconds(10)), Now);
+        await harness.PlacementStore.TryClaimAsync(new("wf-expired", NodeA, Now, Now.AddSeconds(1)), Now);
         await harness.PlacementStore.TryClaimAsync(Claim(NodeB, Now, "wf-foreign"), Now);
 
-        var leases = await harness.PlacementStore.ListOwnedAsync(
-            new ExecutionPlacementLeaseListRequest(NodeA, Now.AddSeconds(2), take: 1));
+        var leases = await harness.PlacementStore.ListOwnedAsync(new(NodeA, Now.AddSeconds(2), take: 1));
 
         Assert.Equal("wf-first", Assert.Single(leases).WorkflowExecutionId);
     }
 
-    private static ExecutionPlacementClaim Claim(string ownerId, DateTimeOffset requestedAt, string executionId = ExecutionId) =>
+    private static ExecutionPlacementClaim Claim(
+        string ownerId,
+        DateTimeOffset requestedAt,
+        string executionId = ExecutionId) =>
         new(executionId, ownerId, requestedAt, requestedAt + LeaseDuration);
 }

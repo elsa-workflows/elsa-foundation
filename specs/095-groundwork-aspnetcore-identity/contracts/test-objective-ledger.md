@@ -2,7 +2,12 @@
 
 ## Rule
 
-The EF project remains a frozen temporary oracle during #644. Frozen means no new EF behavior, schema, migration, package, dependency edge, or test objective. Existing test cases are not deleted or behaviorally rewritten in this unit. Compile-preserving moves/refactors needed to share provider-neutral inputs or results are allowed only with an identical complete pre/post oracle digest. Each valid objective gains a shared/Groundwork replacement before #647. A later deletion requires an exact architect-approved row here or in spec 094 research.
+The EF project remains a source-only frozen temporary oracle. Frozen means no new EF behavior, schema,
+migration, package, dependency edge, or test objective. The 2026-08-17 project-owner direction is an
+explicit clean break: every still-valid behavior gains a public-v2 replacement, while v1 storage-shape,
+unconditional-upsert, migration, fallback, alias, and compatibility objectives are retired. The exact
+25-objective replacement denominator is enforced by `AspNetCoreIdentityV2AcceptanceCatalog`; provider
+execution is owned by `AspNetCoreIdentityV2ProviderMatrixTests`.
 
 ## Current Objectives
 
@@ -40,7 +45,7 @@ Namespace: `Elsa.Foundation.Identity.Tests.AspNetCoreIdentity`.
 | Exact current identity | Objective | #644 disposition / replacement gate |
 |---|---|---|
 | `EfCoreIdentityStoreTests.User_RoundTrips_By_Id_And_Email_With_Roles_And_Permissions` | User fields, role IDs, and direct permissions round-trip by ID and case-insensitive email. | Preserve unchanged; add framework and Elsa-adapter Groundwork contracts in T018/T021/T031/T036. Pending #647 deletion. |
-| `EfCoreIdentityStoreTests.User_Save_Is_An_Upsert` | A second save with the same ID overwrites unconditionally. | Do not reproduce. Replacement is create-only plus expected-version update and stale conflict in T040/T044/T046. Keep unchanged as oracle-only evidence. **Pending explicit architect approval before #647 removes it.** |
+| `EfCoreIdentityStoreTests.User_Save_Is_An_Upsert` | A second save with the same ID overwrites unconditionally. | Retired by the 2026-08-17 clean-break decision. Replacement is create-only plus expected-version update and stale conflict in `AspNetCoreIdentityConcurrencyContractTests` and the native v2 provider matrix. |
 | `EfCoreIdentityStoreTests.Role_RoundTrips_By_Id_And_Lists_By_Tenant` | Role fields/permissions round-trip, list is tenant-local, and wrong-tenant lookup returns null. | Preserve unchanged; replace with T019/T021/T025/T031/T036. Pending #647 deletion. |
 | `EfCoreIdentityStoreTests.ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User` | External identity fields round-trip by subject and list for owner. | Preserve unchanged; replace with T020/T021/T027/T032/T036. Pending #647 deletion. |
 | `EfCoreIdentityStoreTests.TenantMembership_RoundTrips` | Membership status, role IDs, and direct permissions round-trip. | Preserve unchanged; replace with revision-aware T021/T032/T044. Pending #647 deletion. |
@@ -56,7 +61,7 @@ Namespace: `Elsa.Foundation.Identity.Persistence.Groundwork.Tests`.
 | `IdentityGroundworkStoreTests.Role_Lists_By_Tenant_And_Survives_Restart` | Tenant-local role list survives a fresh store instance. | Preserve in T019/T021/T031 and T058–T063. |
 | `IdentityGroundworkStoreTests.ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User` | External identity round-trips by subject and owner list. | Preserve in T020/T021/T027/T032 and T058–T063. |
 | `IdentityGroundworkStoreTests.TenantMembership_RoundTrips_And_Survives_Restart` | Membership fields survive a fresh store instance. | Preserve in T021/T032 and T058–T063. |
-| `IdentityGroundworkStoreTests.Save_Is_An_Upsert` | A repeated role save overwrites without expected revision. | Do not reproduce; replace with create-only and expected-version role contracts in T019/T040/T044/T046. Keep visible until an exact deletion approval/replacement row is recorded. |
+| `IdentityGroundworkStoreTests.Role_Save_replaces_an_existing_record_without_a_revision_contract` | The domain-level non-revisioned `IRoleStore.SaveAsync` replaces the current role row. | Retain as an explicit v2 domain API contract, not as v1 compatibility. Revision-aware and ASP.NET Identity mutation paths separately prove create-only/CAS conflicts. |
 | `IdentityGroundworkStoreTests.Explicit_tenant_mismatch_fails_before_provider_io` | Explicit tenant mismatch fails without provider I/O or identifier disclosure. | Preserve and broaden to every operation family in T039/T045/T053. |
 
 ### Legacy Groundwork Durable-Shape Fixtures
@@ -137,11 +142,11 @@ The authoritative member and operation lists are in [identity-store-contract.md]
 - native bounded route evidence;
 - architecture rejection of new EF surface, duplicate authority, load-all, and false capability registration.
 
-## Approval Record Format For #647
-
-Before deleting an existing test, append:
+## Clean-break approval record
 
 | Exact test identity | Original objective | Why objective is invalid or replacement evidence | Replacement test/evidence | Architect | Decision | Date |
 |---|---|---|---|---|---|---|
-
-No inferred or blanket approval is recorded here. The unconditional-upsert row remains a deliberate visible blocker until an architect explicitly approves its revision-aware replacement.
+| `EfCoreIdentityStoreTests.User_Save_Is_An_Upsert` | Unconditional repeated-save overwrite | Conflicts with fail-closed create-only/CAS semantics and the explicit no-migration clean break. | `AspNetCoreIdentityConcurrencyContractTests`; `AspNetCoreIdentityV2ProviderMatrixTests` | Project owner | Retire | 2026-08-17 |
+| `IdentityGroundworkStoreTests.Role_Save_replaces_an_existing_record_without_a_revision_contract` | Domain `IRoleStore.SaveAsync` replacement semantics | This is a current v2 domain contract rather than a v1 data or compatibility path; the separate revision-aware surface remains fail-closed. | `IdentityGroundworkStoreTests`; `AspNetCoreIdentityRoleStoreContractTests`; `AspNetCoreIdentityConcurrencyContractTests` | Project owner | Retain | 2026-08-17 |
+| `IdentityGroundworkDocumentFixtureTests.Fixture_Matches_What_The_Store_Writes_Today` | Preserve v1 serialized fixture shape | V1 storage shape is explicitly out of scope; deterministic v2 manifest/serialization is the new authority. | `IdentityStorageManifestTests`; public-v2 provider matrices | Project owner | Retire | 2026-08-17 |
+| `IdentityGroundworkDocumentFixtureTests.Committed_Fixture_Loads_Through_The_Store_Under_The_Legacy_Stamp` | Load committed v1 fixtures | Historical compatibility and migration are explicitly forbidden by the clean-break direction. | Clean-room Feedz package consumer and public-v2 process restart matrix | Project owner | Retire | 2026-08-17 |

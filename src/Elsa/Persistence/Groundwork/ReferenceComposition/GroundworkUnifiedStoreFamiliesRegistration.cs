@@ -1,10 +1,8 @@
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Persistence.Groundwork.DependencyInjection;
-using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
-using Elsa.Studio.Preferences.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
-using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,9 +35,11 @@ public static class GroundworkUnifiedStoreFamiliesRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
 
-        services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions, targetName);
-        services.AddGroundworkSecretsStore(targetName);
-        services.AddGroundworkStudioPreferences(targetName);
+        services.AddGroundworkV2RuntimeStores(workflowExecutableCacheOptions, targetName);
+        // The distributed runtime was held out of this preset while runtime was still a document
+        // store, because composing it would have started v2 schema admission on a host that had no
+        // v2 provider connection. Every lane here is v2 now and the provider leaves supply that
+        // connection, so it composes with the rest.
         services.AddGroundworkDistributedRuntimeStores(targetName);
         services.AddGroundworkWorkflowsDesignStores(targetName);
         services.AddGroundworkActivitiesDesignStores(targetName);

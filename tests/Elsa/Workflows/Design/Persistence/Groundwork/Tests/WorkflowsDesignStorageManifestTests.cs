@@ -1,9 +1,4 @@
-using Groundwork.Core.Capabilities;
-using Groundwork.Core.Indexing;
-using Groundwork.Core.Manifests;
-using Groundwork.Core.PhysicalStorage;
-using Groundwork.Core.Queries;
-using Groundwork.Core.SchemaEvolution;
+using Groundwork.Kernel;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -13,225 +8,210 @@ public sealed class WorkflowsDesignStorageManifestTests
     [Fact]
     public void Manifest_compiles_all_workflow_design_routes_to_scoped_physical_entity_tables()
     {
-        var manifest = WorkflowsDesignStorageManifest.Create();
-        var resolution = PhysicalStorageResolver.Resolve(
-            manifest,
-            PhysicalNamePolicy.Identity,
-            ProviderPhysicalNameNormalizer.Identity);
+        var units = WorkflowsDesignStorageManifest.CreateUnits();
 
-        Assert.True(
-            resolution.IsValid,
-            string.Join(Environment.NewLine, resolution.Diagnostics.Select(diagnostic => diagnostic.Message)));
-        Assert.Equal(4, resolution.Definitions.Count);
-        Assert.All(resolution.Definitions, definition =>
+        Assert.Equal(
+            ["workflowDefinition", "workflowDefinitionDraft", "workflowDefinitionVersion", "workflowDefinitionVersionLayout", "workflowDesignOperation"],
+            units.Select(unit => unit.Id.Value).Order(StringComparer.Ordinal));
+        Assert.Equal(5, units.Count);
+        Assert.Equal(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [WorkflowsDesignStorageManifest.DesignOperationDocumentKind] = "elsa_design_operations",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind] = "elsa_workflow_definitions",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind] = "elsa_workflow_definition_drafts",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind] = "elsa_workflow_definition_versions",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind] = "elsa_workflow_definition_version_layouts"
+            },
+            units.ToDictionary(unit => unit.Id.Value, unit => unit.Name, StringComparer.Ordinal));
+        Assert.Equal(5, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(units, unit =>
         {
-            Assert.Equal(PhysicalStorageForm.PhysicalEntityTable, definition.Definition.Form);
-            Assert.Equal("storage_scope", definition.Definition.Envelope!.StorageScopeColumn);
-            Assert.Contains(definition.Definition.Indexes, index =>
-                index.Columns.First().ColumnLogicalName == "storage_scope");
+            Assert.Equal(ScopePolicy.Scoped, unit.Scope);
+            Assert.True(unit.Concurrency.IsOptimistic);
+            Assert.Equal([WorkflowsDesignStorageManifest.IdField], unit.Key.Columns);
+            Assert.Contains(unit.Columns, column => column.Name == WorkflowsDesignStorageManifest.ContentField && column.Type == PortableType.Json);
+            Assert.Contains(unit.Columns, column => column.Name == WorkflowsDesignStorageManifest.SchemaVersionField && column.IsNullable == false);
+            Assert.Contains(unit.Columns, column => column.Name == WorkflowsDesignStorageManifest.TenantIdField);
+            Assert.Equal(unit.Columns.Count, unit.Columns.Select(column => column.Name).Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(unit.Indexes.Count, unit.Indexes.Select(index => index.Name).Distinct(StringComparer.Ordinal).Count());
         });
     }
 
     [Fact]
     public void Manifest_declares_only_bounded_physical_routes_with_complete_index_evidence()
     {
-        var manifest = WorkflowsDesignStorageManifest.Create();
-        var expectedRoutes = new[]
+        var indexes = WorkflowsDesignStorageManifest.CreateUnits().SelectMany(unit => unit.Indexes).ToArray();
+        var expected = new[]
         {
-            WorkflowsDesignStorageManifest.FindDefinitionByIdQuery,
-            WorkflowsDesignStorageManifest.ListDefinitionsByIdQuery,
-            WorkflowsDesignStorageManifest.ListDefinitionsByNameQuery,
-            WorkflowsDesignStorageManifest.ListDefinitionsByDescriptionQuery,
-            WorkflowsDesignStorageManifest.SearchDefinitionsQuery,
-            WorkflowsDesignStorageManifest.FindVersionByIdQuery,
-            WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
-            WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
-            WorkflowsDesignStorageManifest.FindLatestVersionQuery,
-            WorkflowsDesignStorageManifest.FindDraftByIdQuery,
-            WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
-            WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery,
-            WorkflowsDesignStorageManifest.FindLayoutByVersionQuery
+            WorkflowsDesignStorageManifest.DefinitionByIdIndex,
+            WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+            WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+            WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+            WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
+            WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex,
+            WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
+            WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
+            WorkflowsDesignStorageManifest.LayoutByVersionIndex,
+            WorkflowsDesignStorageManifest.OperationByKeyIndex
         };
-
+        Assert.Equal(expected.Order(StringComparer.Ordinal), indexes.Select(index => index.Name).Order(StringComparer.Ordinal));
+        Assert.All(indexes, index => Assert.NotEmpty(index.Columns));
+        Assert.All(indexes, index => Assert.All(index.Columns, column => Assert.False(string.IsNullOrWhiteSpace(column.Column))));
         Assert.Equal(
-            expectedRoutes.Order(StringComparer.Ordinal),
-            manifest.StorageUnits
-                .SelectMany(unit => unit.PhysicalStorage!.BoundedQueries)
-                .Select(query => query.Identity)
-                .Order(StringComparer.Ordinal));
-
-        foreach (var unit in manifest.StorageUnits)
-        {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-
-            Assert.Equal(StorageUnitProvisioningMode.Declared, storage.ProvisioningMode);
-            Assert.All(storage.BoundedQueries, query =>
+            [
+                WorkflowsDesignStorageManifest.FindDefinitionByIdQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByIdQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByNameQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByDescriptionQuery,
+                WorkflowsDesignStorageManifest.SearchDefinitionsQuery,
+                WorkflowsDesignStorageManifest.FindVersionByIdQuery,
+                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
+                WorkflowsDesignStorageManifest.FindLatestVersionQuery,
+                WorkflowsDesignStorageManifest.FindDraftByIdQuery,
+                WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindLayoutByVersionQuery
+            ],
+            new[]
             {
-                Assert.Equal(BoundedQueryExecutionClass.ScaleBearing, query.ExecutionClass);
-                Assert.NotEmpty(query.PredicateFields);
-                Assert.NotEmpty(query.ResultOperations);
-                Assert.Contains(storage.LogicalIndexes, index => index.Identity == query.IndexIdentity);
-                Assert.Contains(table.Indexes, index => index.LogicalName == query.IndexIdentity);
+                WorkflowsDesignStorageManifest.FindDefinitionByIdQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByIdQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByNameQuery,
+                WorkflowsDesignStorageManifest.ListDefinitionsByDescriptionQuery,
+                WorkflowsDesignStorageManifest.SearchDefinitionsQuery,
+                WorkflowsDesignStorageManifest.FindVersionByIdQuery,
+                WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindVersionByDefinitionAndSortKeyQuery,
+                WorkflowsDesignStorageManifest.FindLatestVersionQuery,
+                WorkflowsDesignStorageManifest.FindDraftByIdQuery,
+                WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindCurrentDraftByDefinitionQuery,
+                WorkflowsDesignStorageManifest.FindLayoutByVersionQuery
             });
-        }
     }
 
     [Fact]
     public void Version_and_draft_routes_have_deterministic_ordering_and_bounded_in_support()
     {
-        var routes = WorkflowsDesignStorageManifest.Create().StorageUnits
-            .SelectMany(unit => unit.PhysicalStorage!.BoundedQueries)
-            .ToDictionary(query => query.Identity, StringComparer.Ordinal);
-
-        var versions = routes[WorkflowsDesignStorageManifest.ListVersionsByDefinitionQuery];
-        Assert.Contains(
-            versions.PredicateFields,
-            field => field.Operations.Contains(PortableQueryOperation.In));
+        var versions = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind);
+        AssertIndex(versions, WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: true);
+        AssertIndex(versions, WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: false);
+        var drafts = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
+        AssertIndex(drafts, WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
+            [WorkflowsDesignStorageManifest.DraftDefinitionIdField, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, WorkflowsDesignStorageManifest.DraftCreatedAtField, WorkflowsDesignStorageManifest.DraftIdField], unique: true);
         Assert.Equal(
             [
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.VersionDefinitionIdField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.VersionIdField, PhysicalSortDirection.Ascending)
+                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
+                WorkflowsDesignStorageManifest.VersionIdField
             ],
-            versions.SortFields);
-
-        var latest = routes[WorkflowsDesignStorageManifest.FindLatestVersionQuery];
+            versions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.VersionByDefinitionIndex).Columns.Select(column => column.Column));
         Assert.Equal(
             [
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, PhysicalSortDirection.Descending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.VersionIdField, PhysicalSortDirection.Descending)
+                WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
+                WorkflowsDesignStorageManifest.DraftCreatedAtField,
+                WorkflowsDesignStorageManifest.DraftIdField
             ],
-            latest.SortFields);
-
-        var drafts = routes[WorkflowsDesignStorageManifest.ListDraftsByDefinitionQuery];
-        Assert.Contains(
-            drafts.PredicateFields,
-            field => field.Operations.Contains(PortableQueryOperation.In));
-        Assert.Equal(
-            [
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.DraftDefinitionIdField, PhysicalSortDirection.Ascending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.DraftLastModifiedAtField, PhysicalSortDirection.Descending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.DraftCreatedAtField, PhysicalSortDirection.Descending),
-                new BoundedQuerySortField(WorkflowsDesignStorageManifest.DraftIdField, PhysicalSortDirection.Descending)
-            ],
-            drafts.SortFields);
+            drafts.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DraftByDefinitionIndex).Columns.Select(column => column.Column));
     }
 
     [Fact]
     public void Search_reuses_the_name_v2_index_without_a_duplicate_mongodb_key_shape()
     {
-        var unit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(candidate =>
-            candidate.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
-        var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-        var search = Assert.Single(storage.BoundedQueries, query =>
-            query.Identity == WorkflowsDesignStorageManifest.SearchDefinitionsQuery);
-
-        Assert.Equal("definition-by-name-v2", search.IndexIdentity);
-        Assert.DoesNotContain(storage.LogicalIndexes, index =>
-            index.Identity == "definition-by-search-v2");
-        Assert.DoesNotContain(table.Indexes, index =>
-            index.LogicalName == "definition-by-search-v2");
-        Assert.Contains(storage.LogicalIndexes, index =>
-            index.Identity == "definition-by-search" && !index.IsUnique);
-        Assert.Contains(table.Indexes, index =>
-            index.LogicalName == "definition-by-search" && !index.IsUnique);
+        var definitions = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        Assert.Contains(definitions.Indexes, index => index.Name == WorkflowsDesignStorageManifest.DefinitionByNameIndex);
+        Assert.DoesNotContain(definitions.Indexes, index => index.Name == "definition-by-search-v2");
+        Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionNameField, WorkflowsDesignStorageManifest.DefinitionIdField],
+            definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByNameIndex).Columns.Select(column => column.Column));
+        Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionDescriptionField, WorkflowsDesignStorageManifest.DefinitionIdField],
+            definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex).Columns.Select(column => column.Column));
+        Assert.True(definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionIdField).IsNullable is false);
+        Assert.True(definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField).IsNullable is false);
+        Assert.True(definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByIdIndex).IsUnique);
+        Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField],
+            definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex).Columns.Select(column => column.Column));
+        Assert.True(definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex).IsUnique);
+        Assert.True(definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByNameIndex).IsUnique);
+        Assert.True(definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex).IsUnique);
+        Assert.Equal(
+            PortableCollation.UnicodeOrdinalIgnoreCase,
+            definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionNameField).Collation);
+        Assert.Equal(
+            PortableCollation.UnicodeOrdinalIgnoreCase,
+            definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionDescriptionField).Collation);
     }
 
     [Fact]
     public void Exact_version_route_enforces_uniqueness_on_definition_and_semver_sort_key_only()
     {
-        var versionUnit = WorkflowsDesignStorageManifest.Create().StorageUnits.Single(unit =>
-            unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind);
-        var storage = Assert.IsType<StorageUnitPhysicalStorage>(versionUnit.PhysicalStorage);
-        var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-        var index = Assert.Single(storage.LogicalIndexes, candidate =>
-            candidate.Identity == "version-by-definition-and-sort-key");
-        var physicalIndex = Assert.Single(table.Indexes, candidate => candidate.LogicalName == index.Identity);
-
+        var versions = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind);
+        var index = versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex);
         Assert.True(index.IsUnique);
         Assert.Equal(
-            [
-                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
-                WorkflowsDesignStorageManifest.VersionSemVerSortKeyField
-            ],
-            index.Fields.Select(field => field.Path));
-        Assert.True(physicalIndex.IsUnique);
-        Assert.Equal(
-            ["storage_scope", "definition_id", "sem_ver_sort_key"],
-            physicalIndex.Columns.Select(column => column.ColumnLogicalName));
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField],
+            index.Columns.Select(column => column.Column));
+        Assert.Equal(WorkflowsDesignStorageManifest.VersionDefinitionIdField, index.Columns[0].Column);
+        Assert.Equal(WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, index.Columns[1].Column);
+        Assert.True(versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.VersionByDefinitionIndex).IsUnique);
+        Assert.False(versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex).IsUnique);
     }
 
     [Fact]
     public void Offset_routes_use_unique_entity_identity_tuples_without_the_wide_provider_comparison_key()
     {
-        var comparisonKey = new DocumentEnvelopeDefinition().IdComparisonKeyColumn;
-        foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
+        foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
         {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
-            foreach (var route in storage.BoundedQueries.Where(route =>
-                         route.PagingSupport == QueryPagingSupport.Offset))
-            {
-                Assert.True(storage.LogicalIndexes.Single(index => index.Identity == route.IndexIdentity).IsUnique);
-                var physical = table.Indexes.Single(index => index.LogicalName == route.IndexIdentity);
-                Assert.True(physical.IsUnique);
-                Assert.DoesNotContain(physical.Columns, column =>
-                    column.ColumnLogicalName == comparisonKey);
-            }
+            Assert.DoesNotContain(unit.Indexes, index => index.Columns.Any(column => column.Column.Contains("comparison", StringComparison.OrdinalIgnoreCase)));
+            Assert.All(unit.Indexes, index => Assert.DoesNotContain(index.Columns, column => string.IsNullOrWhiteSpace(column.Column)));
         }
     }
 
     [Fact]
     public void Identity_comparison_algorithm_version_participates_in_the_target_fingerprint()
     {
-        var baselineManifest = WorkflowsDesignStorageManifest.Create();
-        var changedManifest = baselineManifest with
-        {
-            StorageUnits = baselineManifest.StorageUnits.Select(unit =>
-                unit.Identity.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind
-                    ? unit with
-                    {
-                        IdentityPolicy = IdentityPolicy.StringId(
-                            stringCasePolicy: StringIdentityCasePolicy.UnicodeOrdinalIgnoreCase)
-                    }
-                    : unit).ToArray()
-        };
-        var provider = new ProviderIdentity("groundwork-test", "1.0.0");
+        var units = WorkflowsDesignStorageManifest.CreateUnits();
+        var ids = units.Select(unit => unit.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.IdField).MaxLength);
+        Assert.All(ids, length => Assert.Equal(WorkflowsDesignStorageManifest.IdentityMaximumLength, length));
+        Assert.DoesNotContain(units, unit => unit.Columns.Any(column => column.Name.Contains("folded", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(WorkflowsDesignStorageManifest.SchemaVersionMaximumLength,
+            units.SelectMany(unit => unit.Columns).Where(column => column.Name == WorkflowsDesignStorageManifest.SchemaVersionField).Select(column => column.MaxLength).Distinct().Single());
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdSearchKeyMaximumLength,
+            units.Single(unit => unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind)
+            .Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField).MaxLength);
+    }
 
-        var baseline = PhysicalSchemaTargetCompiler.Compile(
-            baselineManifest,
-            provider,
-            ProviderPhysicalNameNormalizer.Identity);
-        var changed = PhysicalSchemaTargetCompiler.Compile(
-            changedManifest,
-            provider,
-            ProviderPhysicalNameNormalizer.Identity);
-        var baselineIdentity = baseline.Routes.Single(route =>
-            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
-            .Envelope.Identity;
-        var changedIdentity = changed.Routes.Single(route =>
-            route.StorageUnit.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
-            .Envelope.Identity;
-
-        Assert.NotEqual(baselineIdentity.ComparisonAlgorithmId, changedIdentity.ComparisonAlgorithmId);
-        Assert.Equal(baselineIdentity.LookupAlgorithmId, changedIdentity.LookupAlgorithmId);
-        Assert.NotEqual(baseline.Fingerprint, changed.Fingerprint);
+    [Fact]
+    public void Definition_id_search_route_is_within_the_public_portable_index_budget()
+    {
+        var definitions = WorkflowsDesignStorageManifest.Require(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        var index = definitions.Indexes.Single(candidate =>
+            candidate.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex);
+        var width = index.Columns.Sum(column =>
+            definitions.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * 2);
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdSearchKeyMaximumLength * 2, width);
+        Assert.True(width <= PortabilityValidator.StrictIndexKeyByteBudget);
     }
 
     [Fact]
     public void No_unit_declares_a_by_collection_enumeration_route()
     {
-        foreach (var unit in WorkflowsDesignStorageManifest.Create().StorageUnits)
-        {
-            var storage = Assert.IsType<StorageUnitPhysicalStorage>(unit.PhysicalStorage);
-            var table = Assert.IsType<PhysicalStoragePolicy.ExplicitPolicy>(storage.Policy).Definition;
+        Assert.DoesNotContain(WorkflowsDesignStorageManifest.CreateUnits().SelectMany(unit => unit.Indexes), index =>
+            index.Name is "by-collection" or "list-all");
+    }
 
-            Assert.DoesNotContain(storage.LogicalIndexes, index => index.Identity == "by-collection");
-            Assert.DoesNotContain(table.Indexes, index => index.LogicalName == "by-collection");
-            Assert.All(storage.BoundedQueries, query =>
-                Assert.NotEqual("list-all", query.Identity));
-        }
+    private static void AssertIndex(StorageUnit unit, string name, IReadOnlyList<string> columns, bool unique)
+    {
+        var index = Assert.Single(unit.Indexes, candidate => candidate.Name == name);
+        Assert.Equal(unique, index.IsUnique);
+        Assert.Equal(columns, index.Columns.Select(column => column.Column));
     }
 }
