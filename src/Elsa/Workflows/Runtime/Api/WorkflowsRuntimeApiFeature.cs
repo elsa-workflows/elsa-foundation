@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Extensions;
@@ -56,6 +57,11 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
         services.AddHttpContextAccessor();
+        services.AddDynamicEndpointApiExplorerRefresh();
+        // The owner's failure services are keyed so hosts composing several modules keep each
+        // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowsRuntimeProblemWriter>(WorkflowsRuntimeApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.WorkflowsRuntimeFaultRenderer>(WorkflowsRuntimeApi.OwnerId);
         services.ConfigureHttpJsonOptions(options =>
         {
             if (!options.SerializerOptions.TypeInfoResolverChain.Any(resolver => resolver is WorkflowsRuntimeJsonTypeInfoResolver))

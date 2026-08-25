@@ -395,6 +395,9 @@ public sealed class RuntimeMinimalApiBehaviorTests
             options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "RuntimeBehavior" });
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IRequestSender>(new RecordingRequestSender(behavior));
+        // The owner's failure shapes are DI-provided services now, so the host composes the feature
+        // exactly like the replay oracle does; the recording sender above still wins dispatch.
+        new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
         var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();

@@ -39,7 +39,17 @@ public enum EndpointBodyMode
     /// content type is a bare 415 — but a body that deserializes to <c>null</c> binds from route and
     /// query instead of being rejected.
     /// </summary>
-    OptionalWithContentType
+    OptionalWithContentType,
+
+    /// <summary>
+    /// As <see cref="RequiredWithContentType"/>, but a body that deserializes to <c>null</c> is also
+    /// rejected at the media gate as a bare 415 with no response body, rather than as a 400 problem.
+    /// </summary>
+    /// <remarks>
+    /// This reproduces a published contract in which the owner's body reader treated a literal-null
+    /// payload exactly like an unsupported media type: status only, before any problem shape exists.
+    /// </remarks>
+    RequiredWithContentTypeAndPayload
 }
 
 /// <summary>The reason a request could not be bound, mapped by the caller to a status code.</summary>
@@ -110,7 +120,8 @@ public static class EndpointRequestBinder
             {
                 // An optional body simply is not there when it is not JSON.
                 EndpointBodyMode.Optional => false,
-                EndpointBodyMode.RequiredWithContentType or EndpointBodyMode.OptionalWithContentType => !isJson,
+                EndpointBodyMode.RequiredWithContentType or EndpointBodyMode.OptionalWithContentType
+                    or EndpointBodyMode.RequiredWithContentTypeAndPayload => !isJson,
                 _ => declared && !isJson
             };
 
@@ -155,6 +166,10 @@ public static class EndpointRequestBinder
 
                 if (body is null && bodyMode is EndpointBodyMode.Required or EndpointBodyMode.RequiredWithContentType)
                     return new(default, EndpointBindingFailure.MissingBody, "A request body is required.");
+
+                if (body is null && bodyMode is EndpointBodyMode.RequiredWithContentTypeAndPayload)
+                    return new(default, EndpointBindingFailure.UnsupportedMediaType,
+                        "The request body must contain a JSON payload.");
             }
         }
 

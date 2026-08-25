@@ -113,6 +113,29 @@ public sealed class EndpointRequestBinderTests
     }
 
     [Fact]
+    public async Task RequiredWithContentTypeAndPayload_rejects_a_literal_null_body_as_unsupported_media()
+    {
+        var context = Context(body: "null", contentType: "application/json");
+
+        var result = await BindAsync<SampleBody>(context, EndpointBodyMode.RequiredWithContentTypeAndPayload);
+
+        Assert.Equal(EndpointBindingFailure.UnsupportedMediaType, result.Failure);
+    }
+
+    [Fact]
+    public async Task RequiredWithContentTypeAndPayload_keeps_the_content_type_gate_and_the_body_read()
+    {
+        var absent = Context(body: """{"id":"typed"}""");
+        Assert.Equal(EndpointBindingFailure.UnsupportedMediaType,
+            (await BindAsync<SampleBody>(absent, EndpointBodyMode.RequiredWithContentTypeAndPayload)).Failure);
+
+        var supplied = Context(body: """{"id":"typed"}""", contentType: "application/json");
+        var result = await BindAsync<SampleBody>(supplied, EndpointBodyMode.RequiredWithContentTypeAndPayload);
+        Assert.True(result.Succeeded);
+        Assert.Equal("typed", result.Value!.Id);
+    }
+
+    [Fact]
     public async Task Optional_with_a_non_json_content_type_falls_through_to_route_and_query()
     {
         var context = Context(body: "not json", contentType: "text/plain", route: ("id", "route-1"));
