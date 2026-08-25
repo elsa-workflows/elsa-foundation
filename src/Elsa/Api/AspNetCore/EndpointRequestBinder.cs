@@ -71,8 +71,10 @@ public readonly record struct EndpointBindingResult<T>(T? Value, EndpointBinding
 /// ownership guards reject. Binding therefore cannot be delegated to the framework here, and this
 /// type covers exactly the shapes first-party endpoints use.
 /// <para>
-/// Precedence is route, then body, then query, then the parameter's own default. Route wins over the
-/// body so a route-addressed resource identifier cannot be contradicted by the payload.
+/// Precedence is per parameter: route, then the body properties the payload actually supplied, then
+/// query, then the parameter's own default. Route wins over the body so a route-addressed resource
+/// identifier cannot be contradicted by the payload, and a property the body omitted still binds
+/// from the query string while one supplied as an explicit null stays null.
 /// </para>
 /// </remarks>
 public static class EndpointRequestBinder
@@ -99,6 +101,7 @@ public static class EndpointRequestBinder
         ArgumentNullException.ThrowIfNull(jsonOptions);
 
         object? body = null;
+        HashSet<string>? suppliedBodyProperties = null;
         if (bodyMode is not EndpointBodyMode.None)
         {
             var declared = !string.IsNullOrWhiteSpace(context.Request.ContentType);
@@ -125,8 +128,24 @@ public static class EndpointRequestBinder
             {
                 try
                 {
-                    body = await JsonSerializer.DeserializeAsync(
-                        context.Request.Body, typeof(T), jsonOptions, context.RequestAborted);
+                    // The body is parsed to a document first so binding knows which properties the
+                    // payload actually supplied: a property the client omitted falls through to the
+                    // query string, while one supplied as null stays null.
+                    var documentOptions = new JsonDocumentOptions
+                    {
+                        AllowTrailingCommas = jsonOptions.AllowTrailingCommas,
+                        CommentHandling = jsonOptions.ReadCommentHandling,
+                        MaxDepth = jsonOptions.MaxDepth
+                    };
+                    using var document = await JsonDocument.ParseAsync(
+                        context.Request.Body, documentOptions, context.RequestAborted);
+                    body = document.RootElement.Deserialize(typeof(T), jsonOptions);
+                    if (document.RootElement.ValueKind is JsonValueKind.Object)
+                    {
+                        suppliedBodyProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var property in document.RootElement.EnumerateObject())
+                            suppliedBodyProperties.Add(property.Name);
+                    }
                 }
                 catch (JsonException exception)
                 {
@@ -141,7 +160,7 @@ public static class EndpointRequestBinder
 
         try
         {
-            return new(BindParameters<T>(body, context, strictTypedParsing), null, null);
+            return new(BindParameters<T>(body, suppliedBodyProperties, context, strictTypedParsing), null, null);
         }
         catch (StrictTypedValueException strict)
         {
@@ -153,7 +172,7 @@ public static class EndpointRequestBinder
         }
     }
 
-    private static T BindParameters<T>(object? body, HttpContext context, bool strict)
+    private static T BindParameters<T>(object? body, IReadOnlySet<string>? suppliedBodyProperties, HttpContext context, bool strict)
     {
         var constructor = Constructors.GetValue(typeof(T), SelectConstructor);
         var parameters = constructor.GetParameters();
@@ -161,7 +180,7 @@ public static class EndpointRequestBinder
         // A contract declared with init-only properties rather than positional parameters is bound by
         // assignment: the deserialized body is kept and route values are applied over it.
         if (parameters.Length == 0)
-            return BindProperties<T>(body, context, strict);
+            return BindProperties<T>(body, suppliedBodyProperties, context, strict);
         var arguments = new object?[parameters.Length];
         var routeValues = context.Request.RouteValues;
         var query = context.Request.Query;
@@ -177,7 +196,7 @@ public static class EndpointRequestBinder
                 continue;
             }
 
-            if (body is not null)
+            if (body is not null && SuppliedByBody(suppliedBodyProperties, name))
             {
                 arguments[index] = ReadProperty(body, name, parameter.ParameterType);
                 continue;
@@ -197,7 +216,12 @@ public static class EndpointRequestBinder
         return (T)constructor.Invoke(arguments);
     }
 
-    private static T BindProperties<T>(object? body, HttpContext context, bool strict)
+    // A body payload counts as supplying a value only for the properties it actually carried; a
+    // non-object payload (only reachable through a custom converter) supplies everything.
+    private static bool SuppliedByBody(IReadOnlySet<string>? suppliedBodyProperties, string name) =>
+        suppliedBodyProperties is null || suppliedBodyProperties.Contains(name);
+
+    private static T BindProperties<T>(object? body, IReadOnlySet<string>? suppliedBodyProperties, HttpContext context, bool strict)
     {
         var instance = body ?? Activator.CreateInstance(typeof(T))!;
         var routeValues = context.Request.RouteValues;
@@ -210,7 +234,7 @@ public static class EndpointRequestBinder
 
             if (TryGetRouteValue(routeValues, property.Name, out var routeValue))
                 property.SetValue(instance, Convert(routeValue, property.PropertyType, property.Name, strict));
-            else if (body is null && TryGetQueryValue(query, property.Name, out var queryValue))
+            else if ((body is null || !SuppliedByBody(suppliedBodyProperties, property.Name)) && TryGetQueryValue(query, property.Name, out var queryValue))
                 property.SetValue(instance, Convert(queryValue, property.PropertyType, property.Name, strict));
         }
 
