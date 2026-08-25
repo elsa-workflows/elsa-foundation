@@ -1,12 +1,11 @@
 using Elsa.Primitives.Contracts;
 using Elsa.Persistence.Core.Design;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -21,12 +20,12 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class AddDefinitionOperationKeyTests
 {
     private readonly RecordingAddWorkflowDefinitionCommand _persistence = new();
-    private readonly AddDefinitionCommandHandler _handler;
+    private readonly Endpoint _handler;
 
     public AddDefinitionOperationKeyTests()
     {
         var identities = new SequentialIdentityGenerator();
-        _handler = new AddDefinitionCommandHandler(
+        _handler = new Endpoint(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
             _persistence);
@@ -35,7 +34,7 @@ public sealed class AddDefinitionOperationKeyTests
     [Fact]
     public async Task Creation_without_an_operation_key_succeeds_with_a_generated_key()
     {
-        await _handler.Handle(
+        await _handler.HandleAsync(
             new AddDefinition(OperationKey: null, "WF", Description: null),
             CancellationToken.None);
 
@@ -48,7 +47,7 @@ public sealed class AddDefinitionOperationKeyTests
     [InlineData("   ")]
     public async Task Creation_with_a_blank_operation_key_succeeds_with_a_generated_key(string blank)
     {
-        await _handler.Handle(
+        await _handler.HandleAsync(
             new AddDefinition(blank, "WF", Description: null),
             CancellationToken.None);
 
@@ -59,7 +58,7 @@ public sealed class AddDefinitionOperationKeyTests
     [Fact]
     public async Task Creation_preserves_a_supplied_operation_key()
     {
-        await _handler.Handle(
+        await _handler.HandleAsync(
             new AddDefinition("create-request-1", "WF", Description: null),
             CancellationToken.None);
 

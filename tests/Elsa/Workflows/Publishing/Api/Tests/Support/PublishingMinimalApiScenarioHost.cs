@@ -54,6 +54,7 @@ internal sealed class PublishingMinimalApiScenarioHost(WebApplication app) : IAs
         builder.Services.AddSingleton<IWorkflowExecutableCompiler>(compiler ?? new CaptureWorkflowExecutableCompiler());
         new WorkflowsPublishingFeature().ConfigureServices(builder.Services);
         new WorkflowsPublishingApiFeature().ConfigureServices(builder.Services);
+        PublishingDomainSeams.Register(builder.Services);
         builder.Services.RemoveAll<TimeProvider>();
         builder.Services.AddSingleton<TimeProvider, CaptureTimeProvider>();
         if (requestSenderFactory is null)

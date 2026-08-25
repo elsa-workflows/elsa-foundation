@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The endpoint-class framework: self-describing endpoint classes mapped explicitly onto Minimal
+    APIs, with binding, failure translation, and unload-safe metadata shared per module. It layers
+    on ordinary ASP.NET Core primitives and keeps no process-global state, so a consumer can adopt
+    it without adopting Elsa's mediator: dispatch backends compose over the public MapOperation pipeline.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

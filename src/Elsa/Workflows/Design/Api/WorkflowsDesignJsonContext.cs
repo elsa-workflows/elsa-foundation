@@ -1,11 +1,28 @@
 using Elsa.Expressions.Core.Models;
-using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Discard;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
+using Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Delete;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
 
 namespace Elsa.Workflows.Design.Api;
 

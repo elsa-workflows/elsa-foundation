@@ -1,14 +1,13 @@
 using System.Text.Json;
-using Elsa.Workflows.Design.Api.Handlers;
-using Elsa.Workflows.Design.Api.Requests;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.SubmitSchema;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class GetWorkflowDefinitionSubmitSchemaHandlerTests
 {
     private static Task<Models.WorkflowDefinitionSubmitSchemaView> HandleAsync() =>
-        new GetWorkflowDefinitionSubmitSchemaHandler().Handle(new GetWorkflowDefinitionSubmitSchema(), CancellationToken.None);
+        new Endpoint().HandleAsync(new GetWorkflowDefinitionSubmitSchema(), CancellationToken.None);
 
     [Fact]
     public async Task Schema_document_is_versioned_and_stably_fingerprinted()

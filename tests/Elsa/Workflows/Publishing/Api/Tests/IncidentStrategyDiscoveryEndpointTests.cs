@@ -12,6 +12,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Xunit;
 
+using IncidentStrategiesEndpoint = Elsa.Workflows.Publishing.Api.Endpoints.IncidentStrategies.List.Endpoint;
+
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class IncidentStrategyDiscoveryEndpointTests
@@ -38,9 +40,9 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
             Descriptor("Acme.Review", "2", "Review v2", null),
             Descriptor("Acme.Review", "1", "Review v1", "First")
         ], new IncidentStrategyReference("Fault", "1"));
-        var handler = new ListIncidentStrategiesRequestHandler(catalog);
+        var handler = new IncidentStrategiesEndpoint(catalog);
 
-        var response = await handler.Handle(new ListIncidentStrategies(), CancellationToken.None);
+        var response = await handler.HandleAsync(new ListIncidentStrategies(), CancellationToken.None);
 
         Assert.Equal(("Fault", "1"), (response.DefaultStrategy.Alias, response.DefaultStrategy.Version));
         Assert.Equal(
@@ -55,9 +57,9 @@ public sealed class IncidentStrategyDiscoveryEndpointTests
         var catalog = new StubCatalog(
             [Descriptor("Acme.Review", "1", "Review", null)],
             new IncidentStrategyReference("Fault", "1"));
-        var handler = new ListIncidentStrategiesRequestHandler(catalog);
+        var handler = new IncidentStrategiesEndpoint(catalog);
 
-        _ = await handler.Handle(new ListIncidentStrategies(), CancellationToken.None);
+        _ = await handler.HandleAsync(new ListIncidentStrategies(), CancellationToken.None);
 
         Assert.Equal(1, catalog.ListCallCount);
     }

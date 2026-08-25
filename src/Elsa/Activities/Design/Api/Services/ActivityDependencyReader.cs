@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -102,8 +103,11 @@ public sealed class ActivityDependencyReader(
     IActivityDependencyProjectionStore projectionStore,
     IActivityDependencyCursorCodec cursorCodec,
     IActivityDependencyContextAsync authorization,
-    IOptions<ActivityDependencyReaderOptions> options)
+    IOptions<ActivityDependencyReaderOptions> options) : IActivityDependencyReader
 {
+    Task<ActivityDependencyPageView> IActivityDependencyReader.ReadAsync(GetActivityDependencies request, CancellationToken cancellationToken) =>
+        ReadAsync(request.VersionId, request.Direction, request.Transitive, request.Include, request.Cursor, request.Limit, cancellationToken);
+
     public async Task<ActivityDependencyPageView> ReadAsync(
         string rootVersionId,
         string direction,
@@ -393,4 +397,10 @@ public sealed class ActivityDependencyReader(
             recovery: new(Relation: "restart", Instruction: "Keep the loaded snapshot separate and restart from the latest authorized snapshot."));
     private static ActivityAuthoringException OperationFailed(string detail) =>
         new(500, ActivityErrorCodes.OperationFailed, "Activity dependency query failed", detail);
+}
+
+/// <summary>The dependency read operation the Design endpoints dispatch to.</summary>
+public interface IActivityDependencyReader
+{
+    Task<ActivityDependencyPageView> ReadAsync(GetActivityDependencies request, CancellationToken cancellationToken);
 }

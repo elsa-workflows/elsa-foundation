@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -9,14 +8,29 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
+/// <summary>Removes a slot's active publication from service, compensating on projection failure.</summary>
+public interface IPublicationSlotUnpublisher
+{
+    Task<PublicationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken);
+}
+
+/// <summary>Reactivates a slot's most recently retired publication under the root write lease.</summary>
+public interface IPublicationSlotRestorer
+{
+    Task<PublicationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken);
+}
+
 public sealed class UnpublishPublicationSlotRequestHandler(
     IPublicationSlotStore slotStore,
     IPublicationRecordStore publicationStore,
     IPublicationProjectionPreparer projectionPreparer,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     TimeProvider timeProvider,
-    ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IRequestHandler<UnpublishPublicationSlot, PublicationSlot>
+    ILogger<UnpublishPublicationSlotRequestHandler>? logger = null) : IPublicationSlotUnpublisher
 {
+    public Task<PublicationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
+        Handle(new UnpublishPublicationSlot(workflowDefinitionId, slotName), cancellationToken);
+
     public async Task<PublicationSlot> Handle(UnpublishPublicationSlot request, CancellationToken cancellationToken)
     {
         var slot = await slotStore.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)
@@ -95,8 +109,11 @@ public sealed class RestorePublicationSlotRequestHandler(
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
     TimeProvider timeProvider,
-    ILogger<RestorePublicationSlotRequestHandler>? logger = null) : IRequestHandler<RestorePublicationSlot, PublicationSlot>
+    ILogger<RestorePublicationSlotRequestHandler>? logger = null) : IPublicationSlotRestorer
 {
+    public Task<PublicationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
+        Handle(new RestorePublicationSlot(workflowDefinitionId, slotName), cancellationToken);
+
     public async Task<PublicationSlot> Handle(RestorePublicationSlot request, CancellationToken cancellationToken)
     {
         var slot = await slotStore.FindAsync(request.WorkflowDefinitionId, request.SlotName, cancellationToken)

@@ -1,10 +1,11 @@
 using System.Text.Json;
-using Elsa.Workflows.Design.Api.Handlers;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Versions;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Get;
+using GetVersionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Versions.Get.Endpoint;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Api;
 
@@ -45,7 +46,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         };
         var handler = NewHandler(layout);
 
-        var result = await handler.Handle(new GetVersion(VersionId), CancellationToken.None);
+        var result = await handler.HandleAsync(new GetVersion(VersionId), CancellationToken.None);
 
         var record = Assert.Single(result.Layout);
         Assert.Equal("node-1", record.NodeId);
@@ -61,7 +62,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
     {
         var handler = NewHandler(layout: null);
 
-        var result = await handler.Handle(new GetVersion(VersionId), CancellationToken.None);
+        var result = await handler.HandleAsync(new GetVersion(VersionId), CancellationToken.None);
 
         Assert.Empty(result.Layout);
     }
@@ -72,7 +73,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         var store = new StubVersionStore(_version);
         var layout = new StubLayoutStore(layout: null);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionRequestHandler(store, layout).Handle(
+        await Assert.ThrowsAsync<ArgumentException>(() => new GetVersionEndpoint(new WorkflowVersionDetailsReader(store, layout)).HandleAsync(
             new GetVersion("draft:synthetic"),
             CancellationToken.None));
 
@@ -80,8 +81,8 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         Assert.Equal(0, layout.Calls);
     }
 
-    private GetVersionRequestHandler NewHandler(WorkflowDefinitionVersionLayout? layout) =>
-        new(new StubVersionStore(_version), new StubLayoutStore(layout));
+    private GetVersionEndpoint NewHandler(WorkflowDefinitionVersionLayout? layout) =>
+        new(new WorkflowVersionDetailsReader(new StubVersionStore(_version), new StubLayoutStore(layout)));
 
     private sealed class StubVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
     {

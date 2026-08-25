@@ -3,6 +3,7 @@ using CShells.Features;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Api.AspNetCore;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Tasks.Core;
@@ -17,6 +18,8 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+
+using Elsa.Workflows.Design.Api.Endpoints;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -36,11 +39,20 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
     {
         var assembly = GetType().Assembly;
 
+        // Endpoint failure translation and error-shape writing, keyed by the owner so a host
+        // composing several modules keeps each module's own error shapes: an unkeyed writer would
+        // make the first module's wire format win, and an unkeyed translator could claim another
+        // module's generic exceptions.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, WorkflowDesignProblemWriter>(WorkflowsDesignApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointExceptionTranslator, WorkflowDesignExceptionTranslator>(WorkflowsDesignApi.OwnerId);
+
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
         // These services back the authoring API and must not depend on the optional validation feature.
         services.AddScopedVariableAuthoring();
+        services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
+        services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
             ActivatorUtilities.CreateInstance<PersistedExpressionAuthoringContextSource>(

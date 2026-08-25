@@ -188,19 +188,37 @@ public sealed class PublishingApiContractTests
     }
 
     [Fact]
-    public void Reviewed_openapi_approvals_are_exact_two_sided_and_mutation_bite_proof()
+    public void Reviewed_approvals_are_exact_two_sided_and_mutation_bite_proof()
     {
         var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
-        var approvals = PublishingApprovalRegistry.Load(approvalsPath);
+        var allApprovals = PublishingApprovalRegistry.Load(approvalsPath);
+        Assert.All(allApprovals, approval => Assert.NotEqual(approval.Expected, approval.Actual));
+
+        // The FastEndpoints-to-Minimal-API migration reviewed one OpenAPI difference per operation.
+        var approvals = allApprovals.Where(approval => approval.Case == "openapi").ToArray();
         Assert.Equal(46, approvals.Length);
         Assert.Equal(23, approvals.Count(approval => !approval.Reverse));
         Assert.Equal(23, approvals.Count(approval => approval.Reverse));
-        Assert.All(approvals, approval =>
+        Assert.All(approvals, approval => Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet));
+
+        // Handler absorption reviewed the cases whose frozen rows only ever described the capture
+        // harness's sender fake: the two publish captures the real operation rejects as malformed,
+        // and the receipt status the fake fabricated. Every entry is two-sided and case-scoped.
+        var httpApprovals = allApprovals.Where(approval => approval.Case != "openapi").ToArray();
+        Assert.Equal(28, httpApprovals.Length);
+        Assert.Equal(
+            [
+                "ActivityDrafts.Publish|trusted-null-json-body",
+                "ActivityDrafts.Publish|trusted-success",
+                "ActivityPublications.GetReceipt|trusted-success"
+            ],
+            httpApprovals.Select(approval => approval.Case).Distinct().Order(StringComparer.Ordinal));
+        Assert.All(httpApprovals, approval => Assert.NotEqual(CompatibilityFacet.OpenApi, approval.Facet));
+        foreach (var group in httpApprovals.GroupBy(approval => (approval.Endpoint, approval.Case, approval.Facet)))
         {
-            Assert.Equal("openapi", approval.Case);
-            Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet);
-            Assert.NotEqual(approval.Expected, approval.Actual);
-        });
+            Assert.Equal(2, group.Count());
+            Assert.Single(group, approval => approval.Reverse);
+        }
 
         var first = Assert.Single(approvals.Where(approval => !approval.Reverse).Take(1));
         var reverse = Assert.Single(approvals, approval => approval.Reverse &&
@@ -260,7 +278,7 @@ public sealed class PublishingApiContractTests
         };
     }
 
-    private static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
+    internal static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
     {
         try
         {
@@ -401,6 +419,7 @@ internal sealed class PublishingMinimalApiHost(WebApplication app) : IAsyncDispo
         builder.Services.AddSingleton<IWorkflowExecutableCompiler, CaptureWorkflowExecutableCompiler>();
         new WorkflowsPublishingFeature().ConfigureServices(builder.Services);
         new WorkflowsPublishingApiFeature().ConfigureServices(builder.Services);
+        PublishingDomainSeams.Register(builder.Services);
         builder.Services.RemoveAll<TimeProvider>();
         builder.Services.AddSingleton<TimeProvider, CaptureTimeProvider>();
         if (requestSenderFactory is null)

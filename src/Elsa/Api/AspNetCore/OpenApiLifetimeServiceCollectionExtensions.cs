@@ -18,4 +18,22 @@ public static class OpenApiLifetimeServiceCollectionExtensions
             ServiceDescriptor.Singleton<IActionDescriptorChangeProvider, EndpointDataSourceActionDescriptorChangeProvider>());
         return services;
     }
+
+    /// <summary>
+    /// Stops <c>RequireStableOpenApi()</c> from rejecting collectible API Explorer-facing metadata,
+    /// for a host that does not register an OpenAPI document service.
+    /// </summary>
+    /// <remarks>
+    /// Suppression is only correct where nothing builds an OpenAPI document: the retention the
+    /// boundary guards against is created by API Explorer's host-lifetime caches, not by the endpoint
+    /// metadata itself. A suppressed endpoint carries no <see cref="OpenApiLifetimeMetadata"/> marker,
+    /// because nothing verified it. Compiler-only handler metadata is still stripped, since an
+    /// async state machine pins its owner regardless of whether a document is ever produced.
+    /// </remarks>
+    public static IServiceCollection SuppressOpenApiLifetimeEnforcement(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.Configure<OpenApiLifetimeEnforcementOptions>(options => options.Enabled = false);
+        return services;
+    }
 }

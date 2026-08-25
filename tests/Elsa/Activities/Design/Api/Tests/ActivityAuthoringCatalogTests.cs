@@ -102,7 +102,7 @@ public sealed class ActivityAuthoringCatalogTests
     public void Outcome_ports_expose_explicit_or_name_based_stable_references()
     {
         var handler = typeof(ActivitiesDesignApiFeature).Assembly.GetType(
-            "Elsa.Activities.Design.Api.Handlers.ListActivityAuthoringCatalogRequestHandler")!;
+            "Elsa.Activities.Design.Api.Services.ActivityAuthoringCatalogReader")!;
         var toPorts = handler.GetMethod("ToPorts", BindingFlags.NonPublic | BindingFlags.Static)!;
         var facet = new ActivityDesignFacet("elsa.outcomes", "1", System.Text.Json.JsonSerializer.SerializeToElement(new
         {
@@ -122,7 +122,7 @@ public sealed class ActivityAuthoringCatalogTests
     public void Catalog_handler_reads_persisted_versions_and_applies_availability_policy()
     {
         var handler = typeof(ActivitiesDesignApiFeature).Assembly.GetType(
-            "Elsa.Activities.Design.Api.Handlers.ListActivityAuthoringCatalogRequestHandler");
+            "Elsa.Activities.Design.Api.Services.ActivityAuthoringCatalogReader");
         Assert.NotNull(handler);
         var dependencies = handler!.GetConstructors().Single().GetParameters().Select(parameter => parameter.ParameterType.FullName).ToArray();
 

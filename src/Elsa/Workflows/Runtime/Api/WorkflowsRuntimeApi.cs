@@ -15,7 +15,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,33 +37,31 @@ public static class WorkflowsRuntimeApi
     public static void MapWorkflowsRuntimeApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        var description = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}"), (RequestDelegate)GetInstanceAsync), "GetInstance", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowInstanceDetailsView), description);
-        Map(endpoints.MapGet(RouteConstants.Instances, (RequestDelegate)ListInstancesAsync), "ListInstances", PermissionNames.WorkflowRuntimeRead, typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>), description);
-        Map(endpoints.MapGet(RouteConstants.InstancesPage, (RequestDelegate)ListInstancesPageAsync), "ListInstancesPage", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowInstanceListView), description);
-        Map(endpoints.MapGet(RouteConstants.Executables, (RequestDelegate)ListExecutablesAsync), "ListExecutables", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowExecutablesListView), description);
-        Map(endpoints.MapGet(RouteConstants.Executable, (RequestDelegate)GetExecutableAsync), "GetExecutable", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowExecutableDetailsView), description);
-        Map(endpoints.MapGet(RouteConstants.ExecutableInputSources, (RequestDelegate)GetExecutableInputSourcesAsync), "GetExecutableInputSources", PermissionNames.WorkflowPublishingRead, typeof(WorkflowExecutableInputSourcesView), description);
-        Map(endpoints.MapGet(RouteConstants.ExecutableProvenance, (RequestDelegate)GetExecutableProvenanceAsync), "GetExecutableProvenance", PermissionNames.WorkflowRuntimeRead, typeof(ExecutableProvenanceView), description);
-        Map(endpoints.MapPost(RouteConstants.GetRoute("executables/{artifactId}/execute"), (RequestDelegate)ExecuteAsync), "Execute", PermissionNames.WorkflowRuntimeExecute, typeof(WorkflowExecutionStartDispatchView), description, typeof(ExecuteWorkflow));
-        Map(endpoints.MapPost(RouteConstants.GetRoute("stimuli"), (RequestDelegate)DispatchStimulusAsync), "DispatchStimulus", PermissionNames.WorkflowRuntimeExecute, typeof(DispatchStimulusResponse), description, typeof(DispatchStimulus));
-        Map(endpoints.MapGet(RouteConstants.Dispatches, (RequestDelegate)ListDispatchesAsync), "ListDispatches", PermissionNames.WorkflowRuntimeRead, typeof(IReadOnlyCollection<WorkflowDispatchView>), description);
-        Map(endpoints.MapGet(RouteConstants.Dispatch, (RequestDelegate)GetDispatchAsync), "GetDispatch", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowDispatchView), description);
-        Map(endpoints.MapPost(RouteConstants.DispatchRedrive, (RequestDelegate)RedriveDispatchAsync), "RedriveDispatch", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowDispatchRedriveView), description, typeof(RedriveWorkflowDispatch));
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}"), (RequestDelegate)GetActivityExecutionAsync), "GetActivityExecution", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionInspectionView), description);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants"), (RequestDelegate)GetActivityDescendantsAsync), "GetActivityDescendants", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionHierarchyPageView), description);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout"), (RequestDelegate)GetActivityLayoutAsync), "GetActivityLayout", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionLayoutView), description);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload"), (RequestDelegate)GetActivityValuePayloadAsync), "GetActivityValuePayload", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionValuePayloadView), description);
-        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/incidents"), (RequestDelegate)ListIncidentsAsync), "ListIncidents", PermissionNames.WorkflowRuntimeRead, typeof(ListIncidentsResponse), description);
-        Map(endpoints.MapGet(RouteConstants.RuntimeDiagnosticsSettings, (RequestDelegate)GetDiagnosticsAsync), "GetDiagnostics", PermissionNames.WorkflowRuntimeRead, typeof(RuntimeDiagnosticsSettingsView), description);
-        Map(endpoints.MapPut(RouteConstants.RuntimeDiagnosticsSettings, (RequestDelegate)SaveDiagnosticsAsync), "SaveDiagnostics", PermissionNames.WorkflowRuntimeManage, typeof(RuntimeDiagnosticsSettingsView), description, typeof(SaveRuntimeDiagnosticsSettings));
-        Map(endpoints.MapPost(AlterationRouteConstants.Plans, (RequestDelegate)SubmitAlterationAsync), "SubmitAlteration", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowAlterationPlanSubmissionView), description, typeof(SubmitWorkflowAlterationPlan));
-        Map(endpoints.MapGet(AlterationRouteConstants.Plan, (RequestDelegate)GetAlterationAsync), "GetAlteration", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationPlanView), description);
-        Map(endpoints.MapGet(AlterationRouteConstants.JobsPage, (RequestDelegate)PageAlterationJobsAsync), "PageAlterationJobs", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationJobPageView), description);
-        Map(endpoints.MapGet(AlterationRouteConstants.Job, (RequestDelegate)GetAlterationJobAsync), "GetAlterationJob", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationJobView), description);
-        Map(endpoints.MapPost(AlterationRouteConstants.Cancel, (RequestDelegate)CancelAlterationAsync), "CancelAlteration", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowAlterationPlanView), description);
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}"), (RequestDelegate)GetInstanceAsync), "GetInstance", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowInstanceDetailsView));
+        Map(endpoints.MapGet(RouteConstants.Instances, (RequestDelegate)ListInstancesAsync), "ListInstances", PermissionNames.WorkflowRuntimeRead, typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>));
+        Map(endpoints.MapGet(RouteConstants.InstancesPage, (RequestDelegate)ListInstancesPageAsync), "ListInstancesPage", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowInstanceListView));
+        Map(endpoints.MapGet(RouteConstants.Executables, (RequestDelegate)ListExecutablesAsync), "ListExecutables", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowExecutablesListView));
+        Map(endpoints.MapGet(RouteConstants.Executable, (RequestDelegate)GetExecutableAsync), "GetExecutable", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowExecutableDetailsView));
+        Map(endpoints.MapGet(RouteConstants.ExecutableInputSources, (RequestDelegate)GetExecutableInputSourcesAsync), "GetExecutableInputSources", PermissionNames.WorkflowPublishingRead, typeof(WorkflowExecutableInputSourcesView));
+        Map(endpoints.MapGet(RouteConstants.ExecutableProvenance, (RequestDelegate)GetExecutableProvenanceAsync), "GetExecutableProvenance", PermissionNames.WorkflowRuntimeRead, typeof(ExecutableProvenanceView));
+        Map(endpoints.MapPost(RouteConstants.GetRoute("executables/{artifactId}/execute"), (RequestDelegate)ExecuteAsync), "Execute", PermissionNames.WorkflowRuntimeExecute, typeof(WorkflowExecutionStartDispatchView), typeof(ExecuteWorkflow));
+        Map(endpoints.MapPost(RouteConstants.GetRoute("stimuli"), (RequestDelegate)DispatchStimulusAsync), "DispatchStimulus", PermissionNames.WorkflowRuntimeExecute, typeof(DispatchStimulusResponse), typeof(DispatchStimulus));
+        Map(endpoints.MapGet(RouteConstants.Dispatches, (RequestDelegate)ListDispatchesAsync), "ListDispatches", PermissionNames.WorkflowRuntimeRead, typeof(IReadOnlyCollection<WorkflowDispatchView>));
+        Map(endpoints.MapGet(RouteConstants.Dispatch, (RequestDelegate)GetDispatchAsync), "GetDispatch", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowDispatchView));
+        Map(endpoints.MapPost(RouteConstants.DispatchRedrive, (RequestDelegate)RedriveDispatchAsync), "RedriveDispatch", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowDispatchRedriveView), typeof(RedriveWorkflowDispatch));
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}"), (RequestDelegate)GetActivityExecutionAsync), "GetActivityExecution", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionInspectionView));
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants"), (RequestDelegate)GetActivityDescendantsAsync), "GetActivityDescendants", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionHierarchyPageView));
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout"), (RequestDelegate)GetActivityLayoutAsync), "GetActivityLayout", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionLayoutView));
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload"), (RequestDelegate)GetActivityValuePayloadAsync), "GetActivityValuePayload", PermissionNames.WorkflowRuntimeRead, typeof(ActivityExecutionValuePayloadView));
+        Map(endpoints.MapGet(RouteConstants.GetRoute("instances/{workflowExecutionId}/incidents"), (RequestDelegate)ListIncidentsAsync), "ListIncidents", PermissionNames.WorkflowRuntimeRead, typeof(ListIncidentsResponse));
+        Map(endpoints.MapGet(RouteConstants.RuntimeDiagnosticsSettings, (RequestDelegate)GetDiagnosticsAsync), "GetDiagnostics", PermissionNames.WorkflowRuntimeRead, typeof(RuntimeDiagnosticsSettingsView));
+        Map(endpoints.MapPut(RouteConstants.RuntimeDiagnosticsSettings, (RequestDelegate)SaveDiagnosticsAsync), "SaveDiagnostics", PermissionNames.WorkflowRuntimeManage, typeof(RuntimeDiagnosticsSettingsView), typeof(SaveRuntimeDiagnosticsSettings));
+        Map(endpoints.MapPost(AlterationRouteConstants.Plans, (RequestDelegate)SubmitAlterationAsync), "SubmitAlteration", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowAlterationPlanSubmissionView), typeof(SubmitWorkflowAlterationPlan));
+        Map(endpoints.MapGet(AlterationRouteConstants.Plan, (RequestDelegate)GetAlterationAsync), "GetAlteration", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationPlanView));
+        Map(endpoints.MapGet(AlterationRouteConstants.JobsPage, (RequestDelegate)PageAlterationJobsAsync), "PageAlterationJobs", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationJobPageView));
+        Map(endpoints.MapGet(AlterationRouteConstants.Job, (RequestDelegate)GetAlterationJobAsync), "GetAlterationJob", PermissionNames.WorkflowRuntimeRead, typeof(WorkflowAlterationJobView));
+        Map(endpoints.MapPost(AlterationRouteConstants.Cancel, (RequestDelegate)CancelAlterationAsync), "CancelAlteration", PermissionNames.WorkflowRuntimeManage, typeof(WorkflowAlterationPlanView));
     }
 
     private static void Map(
@@ -72,32 +69,15 @@ public static class WorkflowsRuntimeApi
         string operation,
         string permission,
         Type responseType,
-        System.Reflection.MethodInfo description,
-        Type? requestType = null)
-    {
-        var metadata = new List<object>
-        {
-            new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, [Json]),
-            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), [])
-        };
-        if (requestType is not null)
-            metadata.Add(new AcceptsMetadata([Json], requestType, false));
-
-        builder.WithName($"ElsaWorkflowsRuntimeApiEndpoints{operation}")
-            .WithTags(Tag)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(permission)
-            .WithMetadata(metadata.ToArray());
-
-        // Keep the API Explorer description method as the final MethodInfo metadata.
-        // EndpointMetadataCollection.GetMetadata<T>() selects the last matching item;
-        // using a stable framework MethodInfo prevents API Explorer from rooting this
-        // owner assembly through a handler MethodInfo.
-        builder.WithMetadata(description);
-        builder.RequireStableOpenApi();
-    }
+        Type? requestType = null) =>
+        builder.WithModuleOperation(
+                $"ElsaWorkflowsRuntimeApiEndpoints{operation}",
+                OwnerId,
+                responseType,
+                requestType,
+                [Json],
+                tag: Tag)
+            .RequirePermission(permission);
 
     private static async Task GetInstanceAsync(HttpContext context)
     {

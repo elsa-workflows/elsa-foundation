@@ -28,6 +28,9 @@ internal static class WorkflowsPublishingJsonOptions
         return options;
     }
 
+    /// <summary>The owner context bound to the effective wire options, shared by the mapper and the problem writer.</summary>
+    internal static WorkflowsPublishingJsonContext WireContext { get; } = new(Create());
+
     public static void Configure(JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -35,6 +38,9 @@ internal static class WorkflowsPublishingJsonOptions
         options.PropertyNameCaseInsensitive = true;
         options.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+        // The former Minimal API JsonResult path wrote with the host HTTP options, whose default
+        // encoder is relaxed; the owner options keep that wire shape.
+        options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
 
         if (!options.TypeInfoResolverChain.Any(resolver => resolver is JsonTypeInfoResolver))
             options.TypeInfoResolverChain.Insert(0, new JsonTypeInfoResolver());
@@ -112,6 +118,8 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(PublicationSnapshotPreflightView))]
 [JsonSerializable(typeof(ActivityPublishingDiagnosticView))]
 [JsonSerializable(typeof(ActivityPublishingProblemDetails))]
+[JsonSerializable(typeof(Endpoints.WorkflowPublishingLegacyProblem))]
+[JsonSerializable(typeof(Endpoints.WorkflowPublishingLegacyProblemError))]
 [JsonSerializable(typeof(ExpressionPublicationValidationDiagnosticView))]
 [JsonSerializable(typeof(ExpressionPublicationValidationProblemDetails))]
 [JsonSerializable(typeof(RuntimePreflightProblemDetails))]

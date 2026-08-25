@@ -19,6 +19,17 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 /// <summary>
+/// Starts versioned and draft workflow test runs. The interface exists so the endpoints depend on
+/// the operation rather than this orchestrator's construction, and so hosts can substitute a
+/// deterministic seam.
+/// </summary>
+public interface IWorkflowTestRunStarter
+{
+    Task<WorkflowTestRunView> StartAsync(StartWorkflowTestRun request, CancellationToken cancellationToken);
+    Task<WorkflowTestRunView> StartDraftAsync(StartWorkflowDraftTestRun request, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Test run (ADR 0040) = compile → idempotent save to the SINGLE content-addressed artifact store → append an
 /// expiring <see cref="WorkflowExecutableReferenceScope.TestRun"/> Source Reference (source: the definition version
 /// or draft snapshot; expiry = the retention window; layout copied from the definition-version layout store when a
@@ -42,8 +53,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IExpressionDraftSemanticValidator? expressionValidator = null)
-    : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
-      IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
+    : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
@@ -100,6 +110,12 @@ public sealed class StartWorkflowTestRunRequestHandler(
             testScopeStore: TestRunCompatibilityScope.Store)
     {
     }
+
+    public Task<WorkflowTestRunView> StartAsync(StartWorkflowTestRun request, CancellationToken cancellationToken) =>
+        Handle(request, cancellationToken);
+
+    public Task<WorkflowTestRunView> StartDraftAsync(StartWorkflowDraftTestRun request, CancellationToken cancellationToken) =>
+        Handle(request, cancellationToken);
 
     public async Task<WorkflowTestRunView> Handle(StartWorkflowTestRun request, CancellationToken cancellationToken)
     {

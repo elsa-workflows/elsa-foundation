@@ -13,8 +13,13 @@ namespace Elsa.Activities.Design.Api.Services;
 public sealed class ActivityDefinitionManagementProjectionService(
     IActivityDefinitionManagementProjectionStore store,
     IActivityAuthoringContextAsync context,
-    IActivityManagementCursorCodec cursorCodec)
+    IActivityManagementCursorCodec cursorCodec) : IActivityDefinitionManagementProjectionService
 {
+    Task<ReusableActivityDefinitionManagementView> IActivityDefinitionManagementProjectionService.GetDefinitionAsync(
+        GetReusableActivityDefinition request,
+        CancellationToken cancellationToken) =>
+        GetDefinitionAsync(request.DefinitionId, cancellationToken);
+
     public async Task<ActivityManagementPageView<ReusableActivityDefinitionManagementView>> ListDefinitionsAsync(
         ListReusableActivityDefinitions request,
         CancellationToken cancellationToken)
@@ -362,4 +367,14 @@ public sealed class ActivityDefinitionManagementProjectionService(
         innerException: exception);
 
     private sealed record CursorBinding(string Scope, int Offset, long SnapshotSequence);
+}
+
+/// <summary>The definition management projections the Design endpoints dispatch to.</summary>
+/// <remarks>Every method takes its wire contract, so the operation seam mirrors the routes one to one.</remarks>
+public interface IActivityDefinitionManagementProjectionService
+{
+    Task<ActivityManagementPageView<ReusableActivityDefinitionManagementView>> ListDefinitionsAsync(ListReusableActivityDefinitions request, CancellationToken cancellationToken);
+    Task<ReusableActivityDefinitionManagementView> GetDefinitionAsync(GetReusableActivityDefinition request, CancellationToken cancellationToken);
+    Task<ActivityManagementPageView<ReusableActivityDraftManagementView>> ListDraftsAsync(ListReusableActivityDrafts request, CancellationToken cancellationToken);
+    Task<ActivityManagementPageView<ReusableActivityVersionManagementView>> ListVersionsAsync(ListReusableActivityVersions request, CancellationToken cancellationToken);
 }

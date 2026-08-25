@@ -6,7 +6,6 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
@@ -49,8 +48,6 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        var assembly = GetType().Assembly;
-
         // Transport authorization (HTTP-bound). Authorization is a transport concern; the engine is
         // authorization-free, so its context + the activity-draft services that consume it live here.
         services.AddHttpContextAccessor();
@@ -67,8 +64,18 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
 
         // The workflow-publish + compile engine (compiler + collaborators, publication stores/activator,
-        // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via DependsOn.
-        services.AddRequestHandlersFrom(assembly);
+        // the PublishWorkflow handler) is supplied by the WorkflowsPublishing engine feature via
+        // DependsOn; publish is the one operation still dispatched through the mediator. Every other
+        // operation's handling lives on its endpoint, backed by these module services.
+        services.TryAddScoped<Handlers.IWorkflowTestRunStarter, Handlers.StartWorkflowTestRunRequestHandler>();
+        services.TryAddScoped<Handlers.IPublicationSlotUnpublisher, Handlers.UnpublishPublicationSlotRequestHandler>();
+        services.TryAddScoped<Handlers.IPublicationSlotRestorer, Handlers.RestorePublicationSlotRequestHandler>();
+        services.TryAddScoped<IRuntimeRequirementPreflight>(provider => provider.GetRequiredService<RuntimeRequirementPreflight>());
+        // Endpoint failure rendering and translation, keyed by the owner so hosts composing several
+        // modules keep each module's own problem shapes.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowPublishingProblemWriter>(WorkflowsPublishingApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointExceptionTranslator, Endpoints.WorkflowPublishingExceptionTranslator>(WorkflowsPublishingApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, Endpoints.WorkflowPublishingFaultRenderer>(WorkflowsPublishingApi.OwnerId);
         // Keep the owner serializer contract ready for the Minimal API mapper. The effective host
         // options preserve the former FastEndpoints web defaults while routing Publishing types
         // through generated metadata before any general fallback resolver.

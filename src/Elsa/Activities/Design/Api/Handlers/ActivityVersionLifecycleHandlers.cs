@@ -15,7 +15,7 @@ public sealed class ActivityVersionLifecycleService(
     IActivityDefinitionAuthoringStore authoringStore,
     IChangeActivityVersionLifecycleCommand changeLifecycle,
     IActivityAuthoringContextAsync context,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider) : IActivityVersionLifecycleService
 {
     public Task<ReusableActivityVersionLifecycleView> RetireAsync(
         RetireReusableActivityVersion command,
@@ -142,23 +142,10 @@ public sealed class ActivityVersionLifecycleService(
         inner);
 }
 
-public sealed class RetireReusableActivityVersionHandler(ActivityVersionLifecycleService service)
-    : ICommandHandler<RetireReusableActivityVersion, ReusableActivityVersionLifecycleView>
+/// <summary>The version lifecycle operations the Design endpoints dispatch to.</summary>
+public interface IActivityVersionLifecycleService
 {
-    public Task<ReusableActivityVersionLifecycleView> Handle(RetireReusableActivityVersion command, CancellationToken cancellationToken) =>
-        service.RetireAsync(command, cancellationToken);
-}
-
-public sealed class RestoreReusableActivityVersionHandler(ActivityVersionLifecycleService service)
-    : ICommandHandler<RestoreReusableActivityVersion, ReusableActivityVersionLifecycleView>
-{
-    public Task<ReusableActivityVersionLifecycleView> Handle(RestoreReusableActivityVersion command, CancellationToken cancellationToken) =>
-        service.RestoreAsync(command, cancellationToken);
-}
-
-public sealed class RevokeReusableActivityVersionHandler(ActivityVersionLifecycleService service)
-    : ICommandHandler<RevokeReusableActivityVersion, ReusableActivityVersionLifecycleView>
-{
-    public Task<ReusableActivityVersionLifecycleView> Handle(RevokeReusableActivityVersion command, CancellationToken cancellationToken) =>
-        service.RevokeAsync(command, cancellationToken);
+    Task<ReusableActivityVersionLifecycleView> RetireAsync(RetireReusableActivityVersion command, CancellationToken cancellationToken);
+    Task<ReusableActivityVersionLifecycleView> RestoreAsync(RestoreReusableActivityVersion command, CancellationToken cancellationToken);
+    Task<ReusableActivityVersionLifecycleView> RevokeAsync(RevokeReusableActivityVersion command, CancellationToken cancellationToken);
 }

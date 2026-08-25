@@ -1,20 +1,21 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core.Design;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
-using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
+using UpdateHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Update.Handler;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
+using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 /// <summary>
-/// Behavioral tests for <see cref="UpdateDefinitionCommandHandler"/> — the DS-6 Draft mutation gate. They
+/// Behavioral tests for <see cref="UpdateHandler"/> — the DS-6 Draft mutation gate. They
 /// prove the handler resolves the owning Draft, forwards the complete desired state to the single coarse
 /// <see cref="IUpdateDraftCommand"/> under the resolved DraftId, preserves stored layout when the caller omits
 /// it, and faults when no Draft exists. The endpoint that hosts this handler is permission-guarded by
@@ -31,8 +32,8 @@ public sealed class UpdateDefinitionCommandHandlerTests
             WorkflowDefinitionId = "def-1",
         });
         var updateCommand = new RecordingUpdateDraftCommand();
-        var sender = new StubRequestSender(DetailsFor("def-1"));
-        var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, sender);
+        var sender = new StubDetailsReader(DetailsFor("def-1"));
+        var handler = new UpdateHandler(draftStore, updateCommand, sender);
 
         var state = new WorkflowDefinitionStateView();
         var result = await handler.Handle(new UpdateDefinition("update-1", "def-1", state), CancellationToken.None);
@@ -51,7 +52,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
             new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1" },
             storedLayout);
         var updateCommand = new RecordingUpdateDraftCommand();
-        var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, new StubRequestSender(DetailsFor("def-1")));
+        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")));
 
         await handler.Handle(new UpdateDefinition("update-2", "def-1", new WorkflowDefinitionStateView(), Layout: null), CancellationToken.None);
 
@@ -65,7 +66,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
             new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1" },
             new DesignMetadataRecord[] { new("stored", 0, 0) });
         var updateCommand = new RecordingUpdateDraftCommand();
-        var handler = new UpdateDefinitionCommandHandler(draftStore, updateCommand, new StubRequestSender(DetailsFor("def-1")));
+        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")));
 
         var layout = new WorkflowDefinitionLayoutRecordView[] { new("incoming", 5, 6, null, null, null) };
         await handler.Handle(new UpdateDefinition("update-3", "def-1", new WorkflowDefinitionStateView(), layout), CancellationToken.None);
@@ -78,10 +79,10 @@ public sealed class UpdateDefinitionCommandHandlerTests
     [Fact]
     public async Task Missing_draft_throws()
     {
-        var handler = new UpdateDefinitionCommandHandler(
+        var handler = new UpdateHandler(
             new StubDraftStore(draft: null),
             new RecordingUpdateDraftCommand(),
-            new StubRequestSender(DetailsFor("def-1")));
+            new StubDetailsReader(DetailsFor("def-1")));
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => handler.Handle(new UpdateDefinition("update-missing", "missing", new WorkflowDefinitionStateView()), CancellationToken.None));
@@ -133,15 +134,9 @@ public sealed class UpdateDefinitionCommandHandlerTests
         }
     }
 
-    private sealed class StubRequestSender(WorkflowDefinitionDetailsView response) : IRequestSender
+    private sealed class StubDetailsReader(WorkflowDefinitionDetailsView? details = null) : IWorkflowDefinitionDetailsReader
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
-            where T : notnull
-        {
-            if (request is GetDefinition && typeof(T) == typeof(WorkflowDefinitionDetailsView))
-                return (Task<T>)(object)Task.FromResult(response);
-
-            throw new InvalidOperationException($"Unexpected request type '{request.GetType()}'.");
-        }
+        public Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken) =>
+            Task.FromResult(details ?? throw new InvalidOperationException("This test did not expect the details view to be read."));
     }
 }

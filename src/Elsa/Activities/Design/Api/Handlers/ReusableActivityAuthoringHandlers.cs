@@ -36,7 +36,7 @@ public sealed class ReusableActivityAuthoringService(
     IActivityTypeKeyPolicy typeKeyPolicy,
     IIdentityGenerator identityGenerator,
     TimeProvider timeProvider,
-    IActivityAuthoringContextAsync context)
+    IActivityAuthoringContextAsync context) : IReusableActivityAuthoringService
 {
     public async Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(
         CreateReusableActivityDefinition command,
@@ -757,6 +757,12 @@ public sealed class ReusableActivityAuthoringService(
         ActivityDiagnosticOrderer.Order(diagnostics),
         inner);
 
+    Task<ReusableActivityDraftView> IReusableActivityAuthoringService.GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken) =>
+        GetDraftViewAsync(request.DraftId, cancellationToken);
+
+    Task<ReusableActivityVersionView> IReusableActivityAuthoringService.GetVersionAsync(GetReusableActivityVersion request, CancellationToken cancellationToken) =>
+        GetVersionAsync(request.VersionId, cancellationToken);
+
     private static ActivityAuthoringException BadRequest(string detail) => new(400, ActivityErrorCodes.RequestInvalid, "Invalid activity authoring request", detail);
     private static ActivityAuthoringException Forbidden(string detail, string code = ActivityErrorCodes.AuthorizationDenied) => new(403, code, "Activity authoring is forbidden", detail);
     private static ActivityAuthoringException NotFound(string code, string title, string detail, Exception? inner = null) => new(404, code, title, detail, innerException: inner);
@@ -764,110 +770,19 @@ public sealed class ReusableActivityAuthoringService(
     private static ActivityAuthoringException OperationFailed(string detail) => new(500, ActivityErrorCodes.OperationFailed, "Activity authoring operation failed", detail);
 }
 
-public sealed class CreateReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<CreateReusableActivityDefinition, ReusableActivityDefinitionMutationView>
+/// <summary>The reusable-activity authoring operations the Design endpoints dispatch to.</summary>
+/// <remarks>Every method takes its wire contract, so the operation seam mirrors the routes one to one.</remarks>
+public interface IReusableActivityAuthoringService
 {
-    public Task<ReusableActivityDefinitionMutationView> Handle(CreateReusableActivityDefinition command, CancellationToken cancellationToken) =>
-        service.CreateDefinitionAsync(command, cancellationToken);
-}
-
-public sealed class UpdateReusableActivityDefinitionHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<UpdateReusableActivityDefinition, ActivityDefinitionIdentityView>
-{
-    public Task<ActivityDefinitionIdentityView> Handle(UpdateReusableActivityDefinition command, CancellationToken cancellationToken) =>
-        service.UpdateDefinitionAsync(command, cancellationToken);
-}
-
-public sealed class CreateReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<CreateReusableActivityDraft, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(CreateReusableActivityDraft command, CancellationToken cancellationToken) =>
-        service.CreateDraftAsync(command, cancellationToken);
-}
-
-public sealed class ReplaceReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<ReplaceReusableActivityDraft, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(ReplaceReusableActivityDraft command, CancellationToken cancellationToken) =>
-        service.ReplaceDraftAsync(command, cancellationToken);
-}
-
-public sealed class UpdateReusableActivityDraftPresentationHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<UpdateReusableActivityDraftPresentation, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken) =>
-        service.UpdateDraftPresentationAsync(command, cancellationToken);
-}
-
-public sealed class CreateReusableActivityDraftConflictCopyHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<CreateReusableActivityDraftConflictCopy, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(CreateReusableActivityDraftConflictCopy command, CancellationToken cancellationToken) =>
-        service.CreateConflictCopyAsync(command, cancellationToken);
-}
-
-public sealed class MigrateReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<MigrateReusableActivityDraft, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(MigrateReusableActivityDraft command, CancellationToken cancellationToken) =>
-        service.MigrateDraftAsync(command, cancellationToken);
-}
-
-public sealed class DiscardReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<DiscardReusableActivityDraft>
-{
-    public async Task<Unit> Handle(DiscardReusableActivityDraft command, CancellationToken cancellationToken)
-    {
-        await service.DiscardDraftAsync(command, cancellationToken);
-        return Unit.Instance;
-    }
-}
-
-public sealed class ValidateReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : ICommandHandler<ValidateReusableActivityDraft, ActivityDraftValidationView>
-{
-    public Task<ActivityDraftValidationView> Handle(ValidateReusableActivityDraft command, CancellationToken cancellationToken) =>
-        service.ValidateDraftAsync(command, cancellationToken);
-}
-
-public sealed class ListReusableActivityDefinitionsHandler(ActivityDefinitionManagementProjectionService service)
-    : IRequestHandler<ListReusableActivityDefinitions, ActivityManagementPageView<ReusableActivityDefinitionManagementView>>
-{
-    public Task<ActivityManagementPageView<ReusableActivityDefinitionManagementView>> Handle(ListReusableActivityDefinitions request, CancellationToken cancellationToken) =>
-        service.ListDefinitionsAsync(request, cancellationToken);
-}
-
-public sealed class GetReusableActivityDefinitionHandler(ActivityDefinitionManagementProjectionService service)
-    : IRequestHandler<GetReusableActivityDefinition, ReusableActivityDefinitionManagementView>
-{
-    public Task<ReusableActivityDefinitionManagementView> Handle(GetReusableActivityDefinition request, CancellationToken cancellationToken) =>
-        service.GetDefinitionAsync(request.DefinitionId, cancellationToken);
-}
-
-public sealed class ListReusableActivityDraftsHandler(ActivityDefinitionManagementProjectionService service)
-    : IRequestHandler<ListReusableActivityDrafts, ActivityManagementPageView<ReusableActivityDraftManagementView>>
-{
-    public Task<ActivityManagementPageView<ReusableActivityDraftManagementView>> Handle(ListReusableActivityDrafts request, CancellationToken cancellationToken) =>
-        service.ListDraftsAsync(request, cancellationToken);
-}
-
-public sealed class GetReusableActivityDraftHandler(ReusableActivityAuthoringService service)
-    : IRequestHandler<GetReusableActivityDraft, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(GetReusableActivityDraft request, CancellationToken cancellationToken) =>
-        service.GetDraftViewAsync(request.DraftId, cancellationToken);
-}
-
-public sealed class ListReusableActivityVersionsHandler(ActivityDefinitionManagementProjectionService service)
-    : IRequestHandler<ListReusableActivityVersions, ActivityManagementPageView<ReusableActivityVersionManagementView>>
-{
-    public Task<ActivityManagementPageView<ReusableActivityVersionManagementView>> Handle(ListReusableActivityVersions request, CancellationToken cancellationToken) =>
-        service.ListVersionsAsync(request, cancellationToken);
-}
-
-public sealed class GetReusableActivityVersionHandler(ReusableActivityAuthoringService service)
-    : IRequestHandler<GetReusableActivityVersion, ReusableActivityVersionView>
-{
-    public Task<ReusableActivityVersionView> Handle(GetReusableActivityVersion request, CancellationToken cancellationToken) =>
-        service.GetVersionAsync(request.VersionId, cancellationToken);
+    Task<ReusableActivityDefinitionMutationView> CreateDefinitionAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken);
+    Task<ActivityDefinitionIdentityView> UpdateDefinitionAsync(UpdateReusableActivityDefinition command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> CreateDraftAsync(CreateReusableActivityDraft command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> ReplaceDraftAsync(ReplaceReusableActivityDraft command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> UpdateDraftPresentationAsync(UpdateReusableActivityDraftPresentation command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> CreateConflictCopyAsync(CreateReusableActivityDraftConflictCopy command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> MigrateDraftAsync(MigrateReusableActivityDraft command, CancellationToken cancellationToken);
+    Task DiscardDraftAsync(DiscardReusableActivityDraft command, CancellationToken cancellationToken);
+    Task<ActivityDraftValidationView> ValidateDraftAsync(ValidateReusableActivityDraft command, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> GetDraftAsync(GetReusableActivityDraft request, CancellationToken cancellationToken);
+    Task<ReusableActivityVersionView> GetVersionAsync(GetReusableActivityVersion request, CancellationToken cancellationToken);
 }

@@ -265,6 +265,7 @@ internal sealed class PublishingAuthorizationHost(IHost host) : IAsyncDisposable
                     services.AddSingleton<IWorkflowTriggerBindingExtractor>(new WorkflowTriggerBindingExtractor([]));
                     new WorkflowsPublishingFeature().ConfigureServices(services);
                     new WorkflowsPublishingApiFeature().ConfigureServices(services);
+                    Support.PublishingDomainSeams.Register(services);
                     services.AddPermissionContributor<PublishingAuthorizationContributor>();
                     services.ReplacePermissionEvaluator<PublishingRecordingPermissionEvaluator>();
                     services.AddScoped<IPermissionResourceHandler, PublishingAuthorizationResourceHandler>();

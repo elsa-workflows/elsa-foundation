@@ -1,12 +1,12 @@
 using Elsa.Persistence.Core.Design;
-using Elsa.Workflows.Design.Api.Commands;
-using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
+using Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
+using AddVersionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Versions.Add.Endpoint;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -16,9 +16,9 @@ public sealed class AddVersionCommandHandlerTests
     public async Task Forwards_the_caller_operation_key_and_authored_state()
     {
         var addCommand = new RecordingAddCommand("persisted-version", "3.0.0");
-        var handler = new AddVersionCommandHandler(addCommand, new StubVersionStore());
+        var handler = new AddVersionEndpoint(addCommand, new StubVersionStore());
 
-        await handler.Handle(
+        await handler.HandleAsync(
             new AddVersion("publish-request-42", "definition-1", new WorkflowDefinitionStateView()),
             CancellationToken.None);
 
@@ -31,11 +31,11 @@ public sealed class AddVersionCommandHandlerTests
     public async Task Reads_the_authoritative_version_returned_by_persistence()
     {
         var versionStore = new StubVersionStore();
-        var handler = new AddVersionCommandHandler(
+        var handler = new AddVersionEndpoint(
             new RecordingAddCommand("first-committed-id", "2.0.0"),
             versionStore);
 
-        var result = await handler.Handle(
+        var result = await handler.HandleAsync(
             new AddVersion("replayed-request", "definition-1", new WorkflowDefinitionStateView()),
             CancellationToken.None);
 

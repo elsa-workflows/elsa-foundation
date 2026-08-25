@@ -20,7 +20,7 @@ public sealed class ActivityVersionDiffService(
     IActivityDirectDependencyStore dependencyStore,
     IActivityVersionDiffer differ,
     IActivityDraftDiffCandidateCompiler candidateCompiler,
-    IActivityAuthoringContextAsync context)
+    IActivityAuthoringContextAsync context) : IActivityVersionDiffService
 {
     public async Task<ActivityVersionDiffView> CompareVersionsAsync(
         string fromVersionId,
@@ -231,18 +231,16 @@ public sealed class ActivityVersionDiffService(
     private static ActivityAuthoringException OperationFailed(string detail) =>
         new(500, ActivityErrorCodes.OperationFailed, "Activity diff operation failed", detail);
 
+    Task<ActivityVersionDiffView> IActivityVersionDiffService.CompareVersionsAsync(CompareActivityVersions request, CancellationToken cancellationToken) =>
+        CompareVersionsAsync(request.FromVersionId, request.ToVersionId, cancellationToken);
+
+    Task<ActivityVersionDiffView> IActivityVersionDiffService.PreviewDraftAsync(PreviewActivityDraftDiff request, CancellationToken cancellationToken) =>
+        PreviewDraftAsync(request.DraftId, request.ExpectedRevision, request.BaseVersionId, cancellationToken);
 }
 
-public sealed class CompareActivityVersionsHandler(ActivityVersionDiffService service)
-    : IRequestHandler<CompareActivityVersions, ActivityVersionDiffView>
+/// <summary>The version comparison operations the Design endpoints dispatch to.</summary>
+public interface IActivityVersionDiffService
 {
-    public Task<ActivityVersionDiffView> Handle(CompareActivityVersions request, CancellationToken cancellationToken) =>
-        service.CompareVersionsAsync(request.FromVersionId, request.ToVersionId, cancellationToken);
-}
-
-public sealed class PreviewActivityDraftDiffHandler(ActivityVersionDiffService service)
-    : IRequestHandler<PreviewActivityDraftDiff, ActivityVersionDiffView>
-{
-    public Task<ActivityVersionDiffView> Handle(PreviewActivityDraftDiff request, CancellationToken cancellationToken) =>
-        service.PreviewDraftAsync(request.DraftId, request.ExpectedRevision, request.BaseVersionId, cancellationToken);
+    Task<ActivityVersionDiffView> CompareVersionsAsync(CompareActivityVersions request, CancellationToken cancellationToken);
+    Task<ActivityVersionDiffView> PreviewDraftAsync(PreviewActivityDraftDiff request, CancellationToken cancellationToken);
 }

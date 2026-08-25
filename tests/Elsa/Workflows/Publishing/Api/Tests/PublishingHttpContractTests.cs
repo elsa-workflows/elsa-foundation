@@ -24,6 +24,9 @@ using System.Text;
 using System.Text.Json;
 using Xunit;
 
+using PublishActivityEndpoint = Elsa.Workflows.Publishing.Api.Endpoints.ActivityDrafts.Publish.Endpoint;
+using RuntimePreflightEndpoint = Elsa.Workflows.Publishing.Api.Endpoints.RuntimePreflight.Run.Endpoint;
+
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class PublishingHttpContractTests
@@ -103,9 +106,9 @@ public sealed class PublishingHttpContractTests
     public async Task Activity_publish_handler_forwards_only_public_inputs_and_maps_the_success_view()
     {
         var publisher = new RecordingPublisher(AppliedReceipt());
-        var handler = new PublishActivityDraftRequestHandler(publisher);
+        var handler = new PublishActivityEndpoint(publisher) { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() };
 
-        var view = await handler.Handle(
+        var view = await handler.HandleAsync(
             new("draft-1", 8, null, "1.0.0", "review-sha256", "publish-operation-1"),
             CancellationToken.None);
 
@@ -123,7 +126,7 @@ public sealed class PublishingHttpContractTests
         Assert.Equal("sha256:template-1", view.Outcome?.TemplateHash);
 
         var invalid = await Assert.ThrowsAsync<ActivityPublicationRejectedException>(() =>
-            handler.Handle(
+            handler.HandleAsync(
                 new("draft-1", 8, null, "not-semver", "review-sha256", "publish-operation-2"),
                 CancellationToken.None));
         Assert.Equal("activity.request.invalid", invalid.ErrorCode);
@@ -133,9 +136,8 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Activity_publish_endpoint_returns_201_location_and_rfc7807_conflicts()
     {
-        var responseView = ActivityPublicationReceiptView.From(AppliedReceipt());
-        await using var successHost = await PublishingMinimalApiHost.StartAsync(
-            _ => new ValueSender(responseView));
+        await using var successHost = await PublishingMinimalApiHost.StartAsync();
+        successHost.App.Services.GetRequiredService<CaptureActivityPublisher>().Receipt = AppliedReceipt();
         using var success = await SendAsync(
             successHost,
             HttpMethod.Post,
@@ -147,12 +149,13 @@ public sealed class PublishingHttpContractTests
             "/design/activities/publications/publish-operation-1",
             success.Headers.Location?.OriginalString);
 
-        await using var conflictHost = await PublishingMinimalApiHost.StartAsync(
-            _ => new ExceptionSender(new ActivityPublicationRejectedException(
+        await using var conflictHost = await PublishingMinimalApiHost.StartAsync();
+        conflictHost.App.Services.GetRequiredService<CaptureActivityPublisher>().Failure =
+            new ActivityPublicationRejectedException(
                 "activity.draft.stale-revision",
                 "The activity draft revision is stale.",
                 [],
-                true)));
+                true);
         using var conflict = await SendAsync(
             conflictHost,
             HttpMethod.Post,
@@ -168,14 +171,15 @@ public sealed class PublishingHttpContractTests
     public async Task Publishing_problem_details_order_diagnostics_and_serialize_string_severity_and_empty_metadata()
     {
         var subject = new ActivityDiagnosticSubject("ActivityDraft", "draft-1", "definition-1", Revision: 8);
-        await using var host = await PublishingMinimalApiHost.StartAsync(
-            _ => new ExceptionSender(new ActivityPublicationRejectedException(
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        host.App.Services.GetRequiredService<CaptureActivityPublisher>().Failure =
+            new ActivityPublicationRejectedException(
                 "activity.publication.invalid",
                 "Publication was rejected.",
                 [
                     new("z.warning", ActivityDiagnosticSeverity.Warning, "Warning", subject),
                     new("a.error", ActivityDiagnosticSeverity.Error, "Error", subject)
-                ])));
+                ]);
 
         using var response = await SendAsync(
             host,
@@ -196,11 +200,12 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Test_run_not_found_is_404_and_unexpected_failures_are_safe_generic_500s()
     {
-        var sender = new ExceptionSender(new ActivityPublicationRejectedException(
-            "activity.draft.not-found",
-            "The requested activity draft was not found.",
-            []));
-        await using var notFoundHost = await PublishingMinimalApiHost.StartAsync(_ => sender);
+        await using var notFoundHost = await PublishingMinimalApiHost.StartAsync();
+        notFoundHost.App.Services.GetRequiredService<CaptureActivityTestRunService>().Failure =
+            new ActivityPublicationRejectedException(
+                "activity.draft.not-found",
+                "The requested activity draft was not found.",
+                []);
         using var notFound = await SendAsync(
             notFoundHost,
             HttpMethod.Post,
@@ -210,8 +215,9 @@ public sealed class PublishingHttpContractTests
         Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
         Assert.Contains("\"errorCode\":\"activity.draft.not-found\"", await notFound.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 
-        await using var unexpectedHost = await PublishingMinimalApiHost.StartAsync(
-            _ => new ExceptionSender(new InvalidOperationException("secret provider payload")));
+        await using var unexpectedHost = await PublishingMinimalApiHost.StartAsync();
+        unexpectedHost.App.Services.GetRequiredService<CaptureActivityTestRunService>().Failure =
+            new InvalidOperationException("secret provider payload");
         using var unexpected = await SendAsync(
             unexpectedHost,
             HttpMethod.Post,
@@ -227,8 +233,9 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Activity_test_run_endpoints_bind_every_route_identity_explicitly()
     {
-        var sender = new CapturingExceptionSender();
-        await using var host = await PublishingMinimalApiHost.StartAsync(_ => sender);
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        var testRuns = host.App.Services.GetRequiredService<CaptureActivityTestRunService>();
+        testRuns.Failure = new InvalidOperationException("The deterministic route identity probe failed.");
 
         using (var start = await SendAsync(
                    host,
@@ -237,13 +244,13 @@ public sealed class PublishingHttpContractTests
                    "{\"draftId\":\"draft-body\",\"expectedRevision\":7,\"idempotencyKey\":\"operation-1\"}"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, start.StatusCode);
-            Assert.Equal("draft-routed", Assert.IsType<StartActivityDraftTestRun>(sender.Request).DraftId);
+            Assert.Equal("draft-routed", Assert.IsType<StartActivityDraftTestRun>(testRuns.LastStart).DraftId);
         }
 
         using (var get = await SendAsync(host, HttpMethod.Get, "/publishing/activity-test-runs/test-run-routed"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, get.StatusCode);
-            Assert.Equal("test-run-routed", Assert.IsType<GetActivityDraftTestRun>(sender.Request).TestRunId);
+            Assert.Equal("test-run-routed", testRuns.LastGetTestRunId);
         }
 
         using (var receipt = await SendAsync(
@@ -252,9 +259,7 @@ public sealed class PublishingHttpContractTests
                    "/publishing/activity-drafts/draft-routed/test-runs/idempotency/operation-routed"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, receipt.StatusCode);
-            var request = Assert.IsType<GetActivityDraftTestRunByIdempotencyKey>(sender.Request);
-            Assert.Equal("draft-routed", request.DraftId);
-            Assert.Equal("operation-routed", request.IdempotencyKey);
+            Assert.Equal(("draft-routed", "operation-routed"), testRuns.LastByIdempotencyKey);
         }
 
         using (var cancel = await SendAsync(
@@ -263,15 +268,16 @@ public sealed class PublishingHttpContractTests
                    "/publishing/activity-test-runs/test-run-routed/cancel"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, cancel.StatusCode);
-            Assert.Equal("test-run-routed", Assert.IsType<CancelActivityDraftTestRun>(sender.Request).TestRunId);
+            Assert.Equal("test-run-routed", testRuns.LastCancelTestRunId);
         }
     }
 
     [Fact]
     public async Task Activity_publication_endpoints_bind_every_route_identity_explicitly()
     {
-        var sender = new CapturingExceptionSender();
-        await using var host = await PublishingMinimalApiHost.StartAsync(_ => sender);
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        var publisher = host.App.Services.GetRequiredService<CaptureActivityPublisher>();
+        publisher.Failure = new InvalidOperationException("The deterministic route identity probe failed.");
 
         using (var preflight = await SendAsync(
                    host,
@@ -280,7 +286,7 @@ public sealed class PublishingHttpContractTests
                    "{\"draftId\":\"draft-body\",\"expectedDraftRevision\":7}"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, preflight.StatusCode);
-            Assert.Equal("draft-routed", Assert.IsType<PreflightActivityDraftPublication>(sender.Request).DraftId);
+            Assert.Equal("draft-routed", publisher.LastPreflight?.DraftId);
         }
 
         using (var publish = await SendAsync(
@@ -290,7 +296,7 @@ public sealed class PublishingHttpContractTests
                    "{\"draftId\":\"draft-body\",\"expectedDraftRevision\":7,\"version\":\"1.0.0\",\"reviewToken\":\"review-sha256\",\"idempotencyKey\":\"operation-1\"}"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, publish.StatusCode);
-            Assert.Equal("draft-routed", Assert.IsType<PublishActivityDraft>(sender.Request).DraftId);
+            Assert.Equal("draft-routed", publisher.LastPublish?.DraftId);
         }
 
         using (var receipt = await SendAsync(
@@ -299,18 +305,19 @@ public sealed class PublishingHttpContractTests
                    "/design/activities/publications/operation-routed"))
         {
             Assert.Equal(HttpStatusCode.InternalServerError, receipt.StatusCode);
-            Assert.Equal("operation-routed", Assert.IsType<GetActivityPublicationReceipt>(sender.Request).IdempotencyKey);
+            Assert.Equal("operation-routed", publisher.LastReceiptKey);
         }
     }
 
     [Fact]
     public async Task Foreign_exact_activity_reference_maps_to_non_disclosing_rfc7807_403()
     {
-        await using var host = await PublishingMinimalApiHost.StartAsync(
-            _ => new ExceptionSender(new ActivityPublicationRejectedException(
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        host.App.Services.GetRequiredService<CaptureActivityPublisher>().Failure =
+            new ActivityPublicationRejectedException(
                 "activity.tenant.reference-denied",
                 "The requested activity identity is outside the caller's authorized scope.",
-                [])));
+                []);
 
         using var response = await SendAsync(
             host,
@@ -346,8 +353,8 @@ public sealed class PublishingHttpContractTests
             [],
             new RuntimeDurableValueStorageDriverRegistry([]),
             TimeProvider.System);
-        var handler = new RunRuntimeRequirementPreflightRequestHandler(service);
-        var result = await handler.Handle(request, CancellationToken.None);
+        var handler = new RuntimePreflightEndpoint(service);
+        var result = await handler.HandleAsync(request, CancellationToken.None);
 
         Assert.Equal(1, result.CheckedArtifactCount);
         Assert.False(result.IsReady);
@@ -363,8 +370,9 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Preflight_endpoint_maps_invalid_selection_to_rfc7807_400()
     {
-        await using var host = await PublishingMinimalApiHost.StartAsync(
-            _ => new ExceptionSender(new RuntimeRequirementPreflightRequestException("Invalid scope.")));
+        await using var host = await PublishingMinimalApiHost.StartAsync();
+        host.App.Services.GetRequiredService<CaptureRuntimeRequirementPreflight>().Failure =
+            new RuntimeRequirementPreflightRequestException("Invalid scope.");
         using var response = await SendAsync(
             host,
             HttpMethod.Post,

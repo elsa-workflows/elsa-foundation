@@ -36,7 +36,7 @@ public sealed class ActivityForkService(
     IActivityForkCandidateIdCodec candidateIdCodec,
     IOptions<ActivityForkReservationOptions> options,
     TimeProvider timeProvider,
-    IActivityAuthoringContextAsync context)
+    IActivityAuthoringContextAsync context) : IActivityForkService
 {
     private readonly ActivityForkReservationOptions _options = ValidateOptions(options.Value);
 
@@ -642,29 +642,10 @@ public sealed class ActivityForkService(
         new(500, "activity.fork.outcome-unknown", "Activity fork outcome is unknown", detail, innerException: inner);
 }
 
-public sealed class PreviewReusableActivityForkHandler(ActivityForkService service)
-    : ICommandHandler<PreviewReusableActivityFork, ActivityForkPreviewView>
+/// <summary>The fork operations the Design endpoints dispatch to.</summary>
+public interface IActivityForkService
 {
-    public Task<ActivityForkPreviewView> Handle(
-        PreviewReusableActivityFork command,
-        CancellationToken cancellationToken) =>
-        service.PreviewAsync(command, cancellationToken);
-}
-
-public sealed class ApplyReusableActivityForkHandler(ActivityForkService service)
-    : ICommandHandler<ApplyReusableActivityFork, ActivityForkReceiptView>
-{
-    public Task<ActivityForkReceiptView> Handle(
-        ApplyReusableActivityFork command,
-        CancellationToken cancellationToken) =>
-        service.ApplyAsync(command, cancellationToken);
-}
-
-public sealed class GetReusableActivityForkStatusHandler(ActivityForkService service)
-    : IRequestHandler<GetReusableActivityForkStatus, ActivityForkReceiptView>
-{
-    public Task<ActivityForkReceiptView> Handle(
-        GetReusableActivityForkStatus request,
-        CancellationToken cancellationToken) =>
-        service.GetStatusAsync(request, cancellationToken);
+    Task<ActivityForkPreviewView> PreviewAsync(PreviewReusableActivityFork command, CancellationToken cancellationToken);
+    Task<ActivityForkReceiptView> ApplyAsync(ApplyReusableActivityFork command, CancellationToken cancellationToken);
+    Task<ActivityForkReceiptView> GetStatusAsync(GetReusableActivityForkStatus request, CancellationToken cancellationToken);
 }

@@ -219,6 +219,9 @@ DocProject/Help/html
 
 # Click-Once directory
 publish/
+# Endpoint classes live in Endpoints/<Resource>/<Operation>/ folders, and "Publish" is a real
+# operation name; without this negation the Click-Once rule silently eats those sources on add.
+!src/**/Endpoints/**/[Pp]ublish/
 
 # Publish Web Output
 *.[Pp]ublish.xml

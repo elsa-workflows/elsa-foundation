@@ -472,7 +472,7 @@ public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatt
     }
 }
 
-public sealed class RequirePermissionAttribute : AuthorizeAttribute
+public sealed class RequirePermissionAttribute : AuthorizeAttribute, Elsa.Api.AspNetCore.IEndpointConventionAttribute
 {
     public RequirePermissionAttribute(string permission)
     {
@@ -481,6 +481,14 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute
     }
 
     public string Permission { get; }
+
+    /// <summary>
+    /// Applied when the attribute decorates an endpoint class: attaches the full permission
+    /// requirement, including the security-disposition metadata the endpoint inventory asserts on,
+    /// not only the authorization policy this attribute carries as metadata.
+    /// </summary>
+    public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
+        builder.RequirePermission(Permission);
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;

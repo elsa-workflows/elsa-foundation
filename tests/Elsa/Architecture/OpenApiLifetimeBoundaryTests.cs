@@ -195,6 +195,65 @@ public sealed class OpenApiLifetimeBoundaryTests
     }
 
     [Fact]
+    public void Enforcement_is_on_for_a_host_that_configured_nothing()
+    {
+        // Fail-closed: a host that never registers the options, or exposes no service provider at
+        // all, keeps the boundary. Only an explicit, resolvable suppression turns it off.
+        var conventions = new RecordingConventionBuilder();
+        conventions.RequireStableOpenApi();
+        var builder = Endpoint(
+            "GET /unconfigured",
+            new ServiceCollection().BuildServiceProvider(),
+            EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
+        builder.Metadata.Add(new AcceptsMetadata(CreateCollectibleType("UnconfiguredRequest")));
+
+        Assert.Throws<UnsafeOpenApiMetadataException>(() => conventions.FinalConventions.Single()(builder));
+    }
+
+    [Fact]
+    public void Suppressed_enforcement_accepts_a_collectible_contract_and_marks_nothing()
+    {
+        // A host with no OpenAPI document service has no API Explorer cache to retain the type, so
+        // the candidate is not rejected. It carries no lifetime marker, because nothing verified it.
+        var services = new ServiceCollection();
+        services.SuppressOpenApiLifetimeEnforcement();
+        var conventions = new RecordingConventionBuilder();
+        conventions.RequireStableOpenApi();
+        var builder = Endpoint(
+            "GET /collectible",
+            services.BuildServiceProvider(),
+            EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
+        builder.Metadata.Add(new AcceptsMetadata(CreateCollectibleType("SuppressedRequest")));
+
+        conventions.FinalConventions.Single()(builder);
+
+        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+    }
+
+    [Fact]
+    public void Suppressed_enforcement_still_strips_compiler_only_handler_metadata()
+    {
+        // An async state machine pins its owner through endpoint metadata whether or not a document
+        // is ever produced, so stripping is unconditional while validation is not.
+        var services = new ServiceCollection();
+        services.SuppressOpenApiLifetimeEnforcement();
+        var conventions = new RecordingConventionBuilder();
+        conventions.RequireStableOpenApi();
+        var builder = Endpoint(
+            "PUT /suppressed-async",
+            services.BuildServiceProvider(),
+            EndpointOwnershipMetadata.Module("Elsa.Tests"));
+        builder.Metadata.Add(new System.Runtime.CompilerServices.AsyncStateMachineAttribute(CreateCollectibleType("SuppressedStateMachine")));
+        builder.Metadata.Add(new System.Diagnostics.DebuggerStepThroughAttribute());
+
+        conventions.FinalConventions.Single()(builder);
+
+        Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
+        Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
+        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+    }
+
+    [Fact]
     public void Final_convention_runs_after_metadata_added_by_ordinary_conventions()
     {
         var conventions = new RecordingConventionBuilder();
@@ -449,6 +508,17 @@ public sealed class OpenApiLifetimeBoundaryTests
     private static TestEndpointBuilder Endpoint(string displayName, params EndpointOwnershipMetadata[] ownership)
     {
         var builder = new TestEndpointBuilder { DisplayName = displayName };
+        foreach (var metadata in ownership)
+            builder.Metadata.Add(metadata);
+        return builder;
+    }
+
+    private static TestEndpointBuilder Endpoint(
+        string displayName,
+        IServiceProvider services,
+        params EndpointOwnershipMetadata[] ownership)
+    {
+        var builder = new TestEndpointBuilder { DisplayName = displayName, ApplicationServices = services };
         foreach (var metadata in ownership)
             builder.Metadata.Add(metadata);
         return builder;

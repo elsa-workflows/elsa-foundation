@@ -15,7 +15,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tools/compatibility/WorkflowsDesignFastEndpointsCapture/Program.cs",
-      "sha256": "548addc87f0f475a4d4eda352625e819aacc6749213972ec7d08f9b219b1400b"
+      "sha256": "5563ce5bedc298da8273f4c240b1a45aa06f7cf5d0a916978b29deea751bed6f"
     },
     {
       "identity": "checked-in-commit",
@@ -43,7 +43,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "3adbc355e185f9fc19677c4c9da75d93757b8d091ba042a4aefa40c8ee11912a",
+  "runnerFingerprint": "1a600e6e224148f5c1568e0f7c0e36504a648e687f80c48a420e4d8e3a4386c4",
   "httpFixture": "workflows-design-http-fastendpoints.json",
   "openApiFixture": "workflows-design-openapi-fastendpoints.json",
   "handlerTraceFixture": "workflows-design-handler-trace-fastendpoints.json",

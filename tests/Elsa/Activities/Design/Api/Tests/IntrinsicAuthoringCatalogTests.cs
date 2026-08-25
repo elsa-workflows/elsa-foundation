@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
@@ -126,7 +125,7 @@ public sealed class IntrinsicAuthoringCatalogTests
     [Fact]
     public async Task Catalog_handler_appends_built_in_intrinsics_to_the_persisted_catalog()
     {
-        var handler = new ListActivityAuthoringCatalogRequestHandler(
+        var handler = new ActivityAuthoringCatalogReader(
             new EmptyDefinitionStore(),
             new EmptyVersionStore(),
             new NoneAddableEvaluator(),
@@ -134,7 +133,7 @@ public sealed class IntrinsicAuthoringCatalogTests
             [_provider],
             new NullFeatureAttributionResolver());
 
-        var view = await handler.Handle(new ListActivityAuthoringCatalog(), CancellationToken.None);
+        var view = await handler.ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
 
         Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetVariable");
         Assert.Contains(view.Activities, activity => activity.ActivityTypeKey == "Elsa.SetOutput");

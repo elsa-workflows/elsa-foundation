@@ -24,8 +24,7 @@ public sealed class ActivitiesDesignMinimalApiHost(IHost host) : IAsyncDisposabl
 {
     public HttpClient Client { get; } = host.GetTestClient();
     public IHost Host { get; } = host;
-    internal CaptureRequestSender RequestSender { get; } = host.Services.GetRequiredService<CaptureRequestSender>();
-    internal CaptureCommandSender CommandSender { get; } = host.Services.GetRequiredService<CaptureCommandSender>();
+    internal CaptureDomainSeams Seams { get; } = host.Services.GetRequiredService<CaptureDomainSeams>();
 
     public static async Task<ActivitiesDesignMinimalApiHost> StartAsync()
     {
@@ -46,10 +45,9 @@ public sealed class ActivitiesDesignMinimalApiHost(IHost host) : IAsyncDisposabl
                         options.NormalizedAuthenticationTypes = new HashSet<string>([CaptureAuthenticationHandler.SchemeName], StringComparer.Ordinal));
                     services.AddOpenApi();
                     new ActivitiesDesignApiFeature().ConfigureServices(services);
-                    services.AddSingleton<CaptureRequestSender>();
-                    services.AddSingleton<IRequestSender>(provider => provider.GetRequiredService<CaptureRequestSender>());
-                    services.AddSingleton<CaptureCommandSender>();
-                    services.AddSingleton<ICommandSender>(provider => provider.GetRequiredService<CaptureCommandSender>());
+                    // The endpoints dispatch to the owner's operation seams; the fakes reproduce
+                    // the retired sender fakes' scenarios and canned payloads at those seams.
+                    services.AddActivitiesDesignDomainSeams<CaptureDomainSeams>();
                 });
                 webHost.Configure(app =>
                 {
