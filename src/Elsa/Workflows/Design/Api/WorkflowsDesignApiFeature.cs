@@ -39,9 +39,12 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
     {
         var assembly = GetType().Assembly;
 
-        // Endpoint failure translation and error-shape writing, used by the mapped mediator endpoints.
-        services.TryAddSingleton<IEndpointProblemWriter, WorkflowDesignProblemWriter>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IEndpointExceptionTranslator, WorkflowDesignExceptionTranslator>());
+        // Endpoint failure translation and error-shape writing, keyed by the owner so a host
+        // composing several modules keeps each module's own error shapes: an unkeyed writer would
+        // make the first module's wire format win, and an unkeyed translator could claim another
+        // module's generic exceptions.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, WorkflowDesignProblemWriter>(WorkflowsDesignApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointExceptionTranslator, WorkflowDesignExceptionTranslator>(WorkflowsDesignApi.OwnerId);
 
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);

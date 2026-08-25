@@ -6,10 +6,10 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 64
-- Source catalogs discovered: 63
+- Catalog files discovered: 65
+- Source catalogs discovered: 64
 - Source catalogs indexed from root: 60
-- Discovered source catalogs not linked from root index: 3
+- Discovered source catalogs not linked from root index: 4
 - Root-indexed catalogs missing on disk: 0
 
 ## Catalogs
@@ -42,6 +42,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/Elsa/Agent/Core/EXTENSION_POINTS.md](../../src/Elsa/Agent/Core/EXTENSION_POINTS.md) | Elsa.Agent.Core | Elsa.Agent | Overridable contracts<br>Implementable contributor interfaces<br>Provider bridge contracts | `IAgentSessionService`<br>`IAgentPolicyEvaluator`<br>`IAgentContextCollector`<br>`IAgentContextSanitizer`<br>`IAgentProposalService`<br>`IAgentActionProposalExecutor`<br>`IAgentStreamingService`<br>`IAgentToolInvoker`<br>`IAgentTurnRegistry`<br>`IAgentTurnStateStore`<br>`IAgentFeedbackService`<br>`IAgentAuditSink`<br>`IAgentAuditReader`<br>`IAgentProviderRegistry`<br>`IAgentContextProvider`<br>`IAgentCapabilityProvider`<br>`IAgentTool`<br>`IAgentProvider`<br>`IAgentHarness` | - | 0 | yes |
 | [src/Elsa/Agent/Workflows/EXTENSION_POINTS.md](../../src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) | Elsa.Agent.Workflows | Elsa.Agent | Contributions to other domains<br>Overridable contracts | `IAgentCapabilityProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IAgentContextProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IWorkflowAgentContextProvider`<br>`IWorkflowRevisionProvider`<br>`IWorkflowChangePermissionEvaluator`<br>`IWorkflowChangeProposalService` | - | 0 | yes |
 | [src/Elsa/Api/Capabilities/EXTENSION_POINTS.md](../../src/Elsa/Api/Capabilities/EXTENSION_POINTS.md) | Elsa.Api.Capabilities | Elsa.Api | Contributor seam<br>Replaceable service<br>Static declarations<br>References | `IApiCapabilitySource`<br>`IApiCapabilityCatalog` | typed Source, add-don't-replace. | 0 | yes |
+| [src/Elsa/Api/EXTENSION_POINTS.md](../../src/Elsa/Api/EXTENSION_POINTS.md) | - | repo root | Failure pipeline contracts<br>Endpoint composition contracts<br>Unload-safety enforcement | - | - | 0 | no |
 | [src/Elsa/Caching/Memory/EXTENSION_POINTS.md](../../src/Elsa/Caching/Memory/EXTENSION_POINTS.md) | Elsa.Caching.Memory | Elsa.Caching | Overridable contracts | `ICacheManager` *(Core — `Elsa.Caching.Core`)*<br>`IChangeTokenSignaler` *(Core — `Elsa.Caching.Core`)*<br>`IChangeTokenSignalInvoker` *(Core — `Elsa.Caching.Core`)* | - | 0 | yes |
 | [src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md](../../src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md) | Elsa.Diagnostics.OpenTelemetry | Elsa.Diagnostics | Overridable contracts<br>Ingestion & transport (not extension points)<br>Deferred<br>Frozen EF Core benchmark baseline<br>Notes | `IOpenTelemetryIngestionContributor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOpenTelemetryStore` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOpenTelemetryLiveFeed` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOpenTelemetryIngestor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOtlpRequestAuthenticator` *(`Elsa.Diagnostics.OpenTelemetry`)*<br>`IOpenTelemetryRedactor` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOpenTelemetrySourceRegistry` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`IOpenTelemetryProvider` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)*<br>`ICollectorConfigurationProvider` *(Core — `Elsa.Diagnostics.OpenTelemetry.Core`)* | - | 0 | yes |
 | [src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md](../../src/Elsa/Diagnostics/Persistence/EXTENSION_POINTS.md) | Elsa.Diagnostics.Persistence | Elsa.Diagnostics | Overridable contracts<br>Implementable contributor interfaces<br>Events<br>Production bridges and registration | `IDiagnosticsDrainTarget<TItem, TResult>` *(Feature contract — `Elsa.Diagnostics.Persistence`)*<br>`IDiagnosticsPersistenceObserver` *(Feature contract — `Elsa.Diagnostics.Persistence`)*<br>`IDiagnosticsPersistenceDrain` *(Feature contract — `Elsa.Diagnostics.Persistence`)* | Adapter / Bridge; single Replacement.<br>Adapter / Bridge; single Replacement.<br>additive host-lifecycle contribution; one contribution per selected singleton store. | 0 | yes |
@@ -88,3 +89,4 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | discovered but not root-indexed | [src/Elsa/Activities/Bpmn/EXTENSION_POINTS.md](../../src/Elsa/Activities/Bpmn/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/Elsa/Activities/Bpmn/Interchange/EXTENSION_POINTS.md](../../src/Elsa/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 | discovered but not root-indexed | [src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md](../../src/Elsa/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
+| discovered but not root-indexed | [src/Elsa/Api/EXTENSION_POINTS.md](../../src/Elsa/Api/EXTENSION_POINTS.md) |
