@@ -285,6 +285,96 @@ public sealed class EngineConcurrencyBenchmarks(ITestOutputHelper output)
         return result;
     }
 
+    /// <summary>
+    /// The group-commit headroom curve (#1425), and the evidence #1233 asks for.
+    ///
+    /// It replaces the deleted <c>ConcurrencyScalingCurve_GroupCommit</c>, which A/B'd the v1
+    /// <c>RuntimeGroupCommitCoordinator</c> ON against OFF. That coordinator went with the v1 document substrate,
+    /// so there is nothing left to A/B — and an arm that presupposed a coordinator could not be run at all. This
+    /// one measures the same question without one: how much of the cost at a given N is attributable purely to
+    /// sharing a single durable writer.
+    ///
+    /// The method is a paired sweep of the two durable backends at each N. <b>isolated-sqlite</b> gives every
+    /// execution its own database, so it pays full durability cost with no cross-run write contention;
+    /// <b>shared-sqlite</b> puts all N on one database, the real deployment shape, where SQLite's single writer
+    /// serializes them. Both run the identical graph and commit the identical number of checkpoints, so the
+    /// isolated→shared delta at each N is the contention tax — and that tax is the entire prize a group-commit
+    /// coordinator could compete for. If the two curves track each other, batching commits across drains has
+    /// nothing to win on this substrate and #1233 closes on a null result; if shared collapses away from
+    /// isolated as N rises, the delta is the upper bound on what a coordinator could recover.
+    ///
+    /// Deliberately narrower than <see cref="ConcurrencyScalingCurve"/>: one leaf shape, two backends, and N
+    /// stopping at 32. That curve sweeps three shapes over three backends to N=128 and exhausts memory on a
+    /// 24 GB host before it finishes, and the whole in-memory arm is irrelevant here — a backend with no fsync
+    /// cannot say anything about sharing one. The External CLR leaf is the shape chosen because it is unfusable
+    /// and commits ~11 times per run against the ReplaySafe leaf's 1, so it puts the most durable writes through
+    /// the contended writer per unit of engine work.
+    ///
+    /// Commits are reported as a rate, not just a total: the count is fixed by the graph, so commits/second is
+    /// the fsync throughput the writer actually sustained, and it is the number that moves when contention bites.
+    ///
+    /// No assertions — this is an instrument. Machine load is printed at both ends because a sweep outlives any
+    /// single reading, and a contended-writer measurement taken on a busy host measures the host.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrencyScalingCurve_SharedWriterHeadroom()
+    {
+        var shape = LeafShapes[0];
+        int[] levels = [1, 4, 8, 16, 32];
+
+        output.WriteLine($"machine uptime/load at start: {ReadUptime()}");
+        output.WriteLine($"processor count: {Environment.ProcessorCount}");
+        output.WriteLine($"leaf shape: {shape.Name} · hot-loop×{HotLoopLength} · Coalesced persistence");
+
+        // Same reason as ConcurrencyScalingCurve: the External leaf is a real WriteLine, and Console's global
+        // lock would otherwise be charged to the writer under study.
+        var stdout = Console.Out;
+        Console.SetOut(TextWriter.Null);
+        try
+        {
+            foreach (var backend in new[] { Backend.IsolatedSqlite, Backend.SharedSqlite })
+                await MeasureAsync(backend, shape, concurrency: 8, warmup: true);
+
+            output.WriteLine("N | backend | totalWall(ms) | p50(ms) | p95(ms) | aggCommits | commits/s | throughput(runs/s)");
+            foreach (var concurrency in levels)
+            {
+                // Paired back-to-back at each N, so the delta the arm exists to read is not straddling a drift
+                // in ambient load.
+                foreach (var backend in new[] { Backend.IsolatedSqlite, Backend.SharedSqlite })
+                {
+                    ConcurrencyResult result;
+                    try
+                    {
+                        result = await MeasureAsync(backend, shape, concurrency, warmup: false);
+                    }
+                    catch (Exception exception)
+                    {
+                        // A level that faults is itself a result: past some depth the drain's ownership
+                        // heartbeat starves behind the same writer it is queued on. Record and continue so the
+                        // rest of the curve survives.
+                        output.WriteLine($"{concurrency,4} | {backend,-15} | FAULTED — {exception.GetType().Name}: {exception.Message}");
+                        continue;
+                    }
+
+                    var seconds = result.TotalWallMs / 1000.0;
+                    var throughput = seconds > 0 ? concurrency / seconds : double.NaN;
+                    var commitsPerSecond = seconds > 0 && result.AggregateCommits is { } commits
+                        ? commits / seconds
+                        : double.NaN;
+                    output.WriteLine(
+                        $"{concurrency,4} | {backend,-15} | {result.TotalWallMs,10:F1} | {result.P50,7:F1} | {result.P95,7:F1} | " +
+                        $"{FormatCommits(result.AggregateCommits),10} | {commitsPerSecond,9:F1} | {throughput,8:F1}");
+                }
+            }
+        }
+        finally
+        {
+            Console.SetOut(stdout);
+        }
+
+        output.WriteLine($"machine uptime/load at end: {ReadUptime()}");
+    }
+
     private async Task<ConcurrencyResult> MeasureAsync(Backend backend, LeafShape shape, int concurrency, bool warmup)
     {
         var trackedStores = new List<(IStorageProviderConnection Store, string Path)>();
