@@ -43,7 +43,7 @@ public sealed class ActivityDraftTestRunProviderMatrixTests
     public async Task Receipts_are_create_only_and_round_trip_on_every_native_provider(string providerName)
     {
         var sqlitePath = providerName == "sqlite"
-            ? Path.Combine(Path.GetTempPath(), $"elsa-draft-test-run-matrix-{Guid.NewGuid():N}.db")
+            ? Path.Join(Path.GetTempPath(), $"elsa-draft-test-run-matrix-{Guid.NewGuid():N}.db")
             : null;
         var connectionString = sqlitePath is not null
             ? $"Data Source={sqlitePath};Pooling=False"
@@ -122,11 +122,8 @@ public sealed class ActivityDraftTestRunProviderMatrixTests
         {
             if (sqlitePath is not null)
             {
-                foreach (var path in new[] { sqlitePath, $"{sqlitePath}-shm", $"{sqlitePath}-wal" })
-                {
-                    if (File.Exists(path))
-                        File.Delete(path);
-                }
+                foreach (var path in new[] { sqlitePath, $"{sqlitePath}-shm", $"{sqlitePath}-wal" }.Where(File.Exists))
+                    File.Delete(path);
             }
         }
     }
