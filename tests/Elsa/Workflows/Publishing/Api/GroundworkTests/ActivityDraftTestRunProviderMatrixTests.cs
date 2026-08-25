@@ -128,6 +128,122 @@ public sealed class ActivityDraftTestRunProviderMatrixTests
         }
     }
 
+    /// <summary>
+    /// The transactional write path, on every native provider.
+    ///
+    /// Everything else in the four-provider matrix — this file's create-only proof, the publishing catalog
+    /// proof, and the filtered runtime classes the matrix job runs — writes one row at a time through
+    /// <c>IStorageSession</c>. The product does not: a runtime checkpoint and a publication both commit
+    /// through <c>BeginUnitOfWork</c>, which batches its rows and flushes them as one statement. That is a
+    /// different statement generator, so a matrix that only ever writes single rows proves the providers
+    /// and not the path, and #1432 is what that gap was hiding.
+    /// </summary>
+    [SkippableTheory]
+    [MemberData(nameof(Providers))]
+    public void Transactional_writes_reach_every_native_provider(string providerName)
+    {
+        // Unconditional, and not gated on the native-matrix opt-in: this is a known-broken provider rather
+        // than a missing connection string. PostgreSQL rejects the batched statement's JSON parameter
+        // ("column \"content\" is of type jsonb but expression is of type text") while accepting the same
+        // value written one row at a time. sqlite, sqlserver and mongodb all pass this proof, so the case
+        // stays in the theory and only this provider is held back. Deleting this branch is #1432's
+        // acceptance check.
+        //
+        // Until then this is NOT PostgreSQL coverage for transactional writes and must not be cited as
+        // such: the matrix job starts PostgreSQL and supplies its connection string, and this case still
+        // reports nothing for it.
+        Skip.If(providerName == "postgresql", "Blocked on #1432: PostgreSQL rejects batched writes to a JSON column.");
+
+        var sqlitePath = providerName == "sqlite"
+            ? Path.Join(Path.GetTempPath(), $"elsa-draft-test-run-uow-{Guid.NewGuid():N}.db")
+            : null;
+        var connectionString = sqlitePath is not null
+            ? $"Data Source={sqlitePath};Pooling=False"
+            : Environment.GetEnvironmentVariable(EnvironmentVariable(providerName));
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            if (Environment.GetEnvironmentVariable("GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX") is "1" or "true")
+            {
+                throw new InvalidOperationException(
+                    $"The {providerName} transactional-write proof requires {EnvironmentVariable(providerName)}.");
+            }
+
+            Skip.If(true, $"Set {EnvironmentVariable(providerName)} to run the {providerName} transactional-write proof.");
+        }
+
+        try
+        {
+            using var connection = CreateConnection(providerName, connectionString!);
+            var unit = PublishingGroundworkStorageManifest.Require(
+                PublishingGroundworkStorageManifest.ActivityDraftTestRunDocumentKind);
+            connection.Schema.Apply(unit);
+
+            var tenant = $"uow-matrix-{providerName}-{Guid.NewGuid():N}";
+            var access = StorageAccess.Scoped(new StorageScope(tenant));
+            var id = $"uow-{Guid.NewGuid():N}";
+            var values = RequiredRow(unit, id);
+
+            using (var unitOfWork = connection.BeginUnitOfWork(access, BatchWriteOptions.Exact, [unit]))
+            {
+                unitOfWork.Stage(RowWrite.Upsert(unit, values, WriteOptions.Unconditional));
+                unitOfWork.CommitWithOutcomes();
+            }
+
+            // Committed rather than merely accepted: the batch has to be visible to a fresh session.
+            Assert.NotNull(connection.OpenSession(unit, access).Read(new StorageKey(new Dictionary<string, object?>
+            {
+                [PublishingGroundworkStorageManifest.IdField] = id
+            })));
+        }
+        finally
+        {
+            if (sqlitePath is not null)
+            {
+                foreach (var path in new[] { sqlitePath, $"{sqlitePath}-shm", $"{sqlitePath}-wal" }.Where(File.Exists))
+                    File.Delete(path);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A row every declared column will accept, filled from the unit itself rather than a hand-written list.
+    /// The declared projections are <c>Required()</c>, so a "minimal" row of id/schemaVersion/content is
+    /// rejected — as NULL on SQL Server, as a required-column error on MongoDB, and, misleadingly, as
+    /// <c>UniqueViolation</c> on SQLite. Deriving the row from the manifest also means a column added later
+    /// does not quietly stop being covered here.
+    /// </summary>
+    private static StorageValues RequiredRow(StorageUnit unit, string id)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [PublishingGroundworkStorageManifest.IdField] = id,
+            [PublishingGroundworkStorageManifest.SchemaVersionField] = PublishingGroundworkStorageManifest.SchemaVersion,
+            [PublishingGroundworkStorageManifest.ContentField] = "{}"
+        };
+
+        foreach (var column in unit.Columns)
+        {
+            // The optimistic token is system-owned: supplying it is refused before the provider is reached.
+            if (values.ContainsKey(column.Name) ||
+                column.IsNullable ||
+                column.Name == PublishingGroundworkStorageManifest.ConcurrencyTokenField)
+                continue;
+
+            values[column.Name] = column.Type switch
+            {
+                PortableType.String => $"uow-{column.Name}",
+                PortableType.DateTimeOffset => new DateTimeOffset(2026, 7, 17, 12, 0, 0, TimeSpan.Zero),
+                PortableType.Int32 => 0,
+                PortableType.Int64 => 0L,
+                PortableType.Boolean => false,
+                PortableType.Guid => Guid.Empty,
+                _ => throw new NotSupportedException($"Unhandled matrix column type '{column.Type}'.")
+            };
+        }
+
+        return new StorageValues(values);
+    }
+
     private static ActivityDraftTestRunReceipt Receipt(string tenant, string idempotencyKey, string fingerprint)
     {
         var operationScope = ActivityDraftTestRunIdentity.CreateOperationScope(tenant);
