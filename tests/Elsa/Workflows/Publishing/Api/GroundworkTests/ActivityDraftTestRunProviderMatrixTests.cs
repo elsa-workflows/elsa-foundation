@@ -148,6 +148,10 @@ public sealed class ActivityDraftTestRunProviderMatrixTests
         // value written one row at a time. sqlite, sqlserver and mongodb all pass this proof, so the case
         // stays in the theory and only this provider is held back. Deleting this branch is #1432's
         // acceptance check.
+        //
+        // Until then this is NOT PostgreSQL coverage for transactional writes and must not be cited as
+        // such: the matrix job starts PostgreSQL and supplies its connection string, and this case still
+        // reports nothing for it.
         Skip.If(providerName == "postgresql", "Blocked on #1432: PostgreSQL rejects batched writes to a JSON column.");
 
         var sqlitePath = providerName == "sqlite"
