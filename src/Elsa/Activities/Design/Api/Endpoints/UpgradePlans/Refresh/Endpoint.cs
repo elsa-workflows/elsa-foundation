@@ -2,9 +2,9 @@ using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Refresh;
@@ -12,7 +12,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.UpgradePlans.Refresh;
 [Post("/design/activities/upgrade-plans/{planId}/refresh")]
 [RequirePermission(ActivityDesignPermissions.Manage)]
 [AuthoringProblems]
-public sealed class Endpoint(ICommandSender sender) : ApiEndpoint<RefreshActivityUpgradePlan, ActivityUpgradePlanView>
+public sealed class Endpoint(IActivityUpgradeOperations service) : ApiEndpoint<RefreshActivityUpgradePlan, ActivityUpgradePlanView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -24,7 +24,7 @@ public sealed class Endpoint(ICommandSender sender) : ApiEndpoint<RefreshActivit
 
     public override async Task<ActivityUpgradePlanView> HandleAsync(RefreshActivityUpgradePlan command, CancellationToken cancellationToken)
     {
-        var response = await sender.Send(command, cancellationToken);
+        var response = await service.RefreshPlanAsync(command, cancellationToken);
         HttpContext.Response.Headers.Location = $"/{RouteConstants.GetRoute($"upgrade-plans/{response.PlanId}")}";
         return response;
     }

@@ -298,13 +298,13 @@ public sealed class ActivityUpgradePlanTests
     {
         var plan = ReadyPlan();
         var store = new PlanStore(plan);
-        var handler = new ApplyActivityUpgradePlanHandler(
-            new ApplyActivityUpgradePlanCommand(store, new ReceiptStore(), new RecordingMutationStore(), new Clock(Now)),
-            store,
-            new AuthoringContext(null));
+        var operations = Operations(
+            applier: new ApplyActivityUpgradePlanCommand(store, new ReceiptStore(), new RecordingMutationStore(), new Clock(Now)),
+            plans: store,
+            context: new AuthoringContext(null));
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            handler.Handle(new(plan.PlanId, "stage-child", ""), default));
+            operations.ApplyPlanAsync(new(plan.PlanId, "stage-child", ""), default));
 
         Assert.Equal(400, exception.StatusCode);
         Assert.Equal("activity.request.invalid", exception.ErrorCode);
@@ -604,9 +604,9 @@ public sealed class ActivityUpgradePlanTests
         var publications = new PublicationStore(Publication("old", "dependency", "hash-old"), Publication("new", "dependency", "hash-new"));
 
         var readException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new GetActivityUpgradePlanHandler(store, publications, context).Handle(new(plan.PlanId), default));
+            Operations(plans: store, publications: publications, context: context).GetPlanAsync(new(plan.PlanId), default));
         var applyException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(new(plan.PlanId, "stage-child", "operation-1"), default));
+            Operations(applier: applier, plans: store, context: context).ApplyPlanAsync(new(plan.PlanId, "stage-child", "operation-1"), default));
 
         Assert.Equal("activity.upgrade.plan-not-found", readException.ErrorCode);
         Assert.Equal("activity.upgrade.plan-not-found", applyException.ErrorCode);
@@ -625,9 +625,9 @@ public sealed class ActivityUpgradePlanTests
             Publication("new", "dependency", "hash-new"));
 
         var readException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new GetActivityUpgradePlanHandler(store, publications, context).Handle(new(plan.PlanId), default));
+            Operations(plans: store, publications: publications, context: context).GetPlanAsync(new(plan.PlanId), default));
         var applyException = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            new ApplyActivityUpgradePlanHandler(applier, store, context).Handle(
+            Operations(applier: applier, plans: store, context: context).ApplyPlanAsync(
                 new(plan.PlanId, "stage-child", "operation-1"),
                 default));
 
@@ -639,13 +639,13 @@ public sealed class ActivityUpgradePlanTests
     [Fact]
     public async Task Create_handler_translates_invalid_plan_arguments_to_the_canonical_request_error()
     {
-        var handler = new CreateActivityUpgradePlanHandler(
-            Planner(new([], []), new PlanStore()),
-            new PublicationStore(),
-            new AuthoringContext(null));
+        var operations = Operations(
+            planner: Planner(new([], []), new PlanStore()),
+            publications: new PublicationStore(),
+            context: new AuthoringContext(null));
 
         var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() =>
-            handler.Handle(new([], [], true, false), default));
+            operations.CreatePlanAsync(new([], [], true, false), default));
 
         Assert.Equal(400, exception.StatusCode);
         Assert.Equal("activity.request.invalid", exception.ErrorCode);
@@ -1051,4 +1051,15 @@ public sealed class ActivityUpgradePlanTests
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(CanRead(reference));
     }
+
+    private static ActivityUpgradeOperations Operations(
+        IActivityUpgradePlanner? planner = null,
+        IActivityUpgradePlanRefresher? refresher = null,
+        IActivityUpgradePlanApplier? applier = null,
+        IActivityUpgradePlanStore? plans = null,
+        IActivityUpgradeApplyReceiptStore? receipts = null,
+        IActivityDefinitionVersionPublicationStore? publications = null,
+        IActivityAuthoringContextAsync? context = null) =>
+        new(planner!, refresher!, applier!, plans!, receipts!, publications!, context!);
+
 }

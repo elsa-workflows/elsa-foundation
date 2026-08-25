@@ -1,5 +1,4 @@
 using Elsa.Activities.Design.Api.Contracts;
-using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
@@ -94,7 +93,7 @@ public sealed class ActivityAuthoringCatalogProvenanceTests
             SourceId = "catalog/approvals.json",
         };
 
-        var handler = new ListActivityAuthoringCatalogRequestHandler(
+        var handler = new ActivityAuthoringCatalogReader(
             new InMemoryDefinitionStore([clrDefinition, graphDefinition]),
             new InMemoryVersionStore([clrVersion, graphVersion]),
             new AllAddableEvaluator(),
@@ -102,7 +101,7 @@ public sealed class ActivityAuthoringCatalogProvenanceTests
             [new IntrinsicAuthoringDescriptorProvider()],
             resolver);
 
-        return await handler.Handle(new ListActivityAuthoringCatalog(), CancellationToken.None);
+        return await handler.ListAsync(new ListActivityAuthoringCatalog(), CancellationToken.None);
     }
 
     private sealed class RecordingResolver(string featureId) : IActivityFeatureAttributionResolver

@@ -20,7 +20,7 @@ public sealed class ActivityContractProposalService(
     IApplyActivityContractProposalCommand applyProposal,
     ActivityContractAuthoringValidator contractValidator,
     ReusableActivityAuthoringService projections,
-    IActivityAuthoringContextAsync context)
+    IActivityAuthoringContextAsync context) : IActivityContractProposalService
 {
     public async Task<ActivityContractProposalView> ProposeAsync(
         ProposeReusableActivityContract request,
@@ -329,16 +329,9 @@ public sealed class ActivityContractProposalService(
         new(502, "activity.provider.proposal-invalid", "Activity provider proposal is invalid", "The provider returned a malformed contract proposal.");
 }
 
-public sealed class ProposeReusableActivityContractHandler(ActivityContractProposalService service)
-    : IRequestHandler<ProposeReusableActivityContract, ActivityContractProposalView>
+/// <summary>The contract proposal operations the Design endpoints dispatch to.</summary>
+public interface IActivityContractProposalService
 {
-    public Task<ActivityContractProposalView> Handle(ProposeReusableActivityContract request, CancellationToken cancellationToken) =>
-        service.ProposeAsync(request, cancellationToken);
-}
-
-public sealed class ApplyReusableActivityContractProposalHandler(ActivityContractProposalService service)
-    : ICommandHandler<ApplyReusableActivityContractProposal, ReusableActivityDraftView>
-{
-    public Task<ReusableActivityDraftView> Handle(ApplyReusableActivityContractProposal command, CancellationToken cancellationToken) =>
-        service.ApplyAsync(command, cancellationToken);
+    Task<ActivityContractProposalView> ProposeAsync(ProposeReusableActivityContract request, CancellationToken cancellationToken);
+    Task<ReusableActivityDraftView> ApplyAsync(ApplyReusableActivityContractProposal command, CancellationToken cancellationToken);
 }

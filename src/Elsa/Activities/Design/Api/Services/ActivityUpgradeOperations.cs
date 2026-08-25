@@ -5,18 +5,21 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Diagnostics;
 
-namespace Elsa.Activities.Design.Api.Handlers;
+namespace Elsa.Activities.Design.Api.Services;
 
-public sealed class CreateActivityUpgradePlanHandler(
+/// <summary>The staged upgrade-plan operations the Design endpoints dispatch to.</summary>
+public sealed class ActivityUpgradeOperations(
     IActivityUpgradePlanner planner,
+    IActivityUpgradePlanRefresher refresher,
+    IActivityUpgradePlanApplier applier,
+    IActivityUpgradePlanStore plans,
+    IActivityUpgradeApplyReceiptStore receipts,
     IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContextAsync context)
-    : ICommandHandler<CreateActivityUpgradePlan, ActivityUpgradePlanView>
+    IActivityAuthoringContextAsync context) : IActivityUpgradeOperations
 {
-    public async Task<ActivityUpgradePlanView> Handle(CreateActivityUpgradePlan command, CancellationToken cancellationToken)
+    public async Task<ActivityUpgradePlanView> CreatePlanAsync(CreateActivityUpgradePlan command, CancellationToken cancellationToken)
     {
         try
         {
@@ -39,53 +42,21 @@ public sealed class CreateActivityUpgradePlanHandler(
                 innerException: exception);
         }
     }
-}
 
-public sealed class GetActivityUpgradePlanHandler(
-    IActivityUpgradePlanStore store,
-    IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContextAsync context)
-    : IRequestHandler<GetActivityUpgradePlan, ActivityUpgradePlanView>
-{
-    public async Task<ActivityUpgradePlanView> Handle(GetActivityUpgradePlan request, CancellationToken cancellationToken)
+    public async Task<ActivityUpgradePlanView> GetPlanAsync(GetActivityUpgradePlan request, CancellationToken cancellationToken)
     {
-        var plan = await store.FindAsync(request.PlanId, cancellationToken)
+        var plan = await plans.FindAsync(request.PlanId, cancellationToken)
                    ?? throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
         EnsureTenant(plan);
         await EnsureAccessProfileAsync(plan, context, cancellationToken);
         return await plan.ToViewAsync(publications, cancellationToken);
     }
 
-    private void EnsureTenant(ActivityUpgradePlan plan)
-    {
-        if (!StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId))
-            throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
-    }
-
-    private static async ValueTask EnsureAccessProfileAsync(
-        ActivityUpgradePlan plan,
-        IActivityAuthoringContextAsync context,
-        CancellationToken cancellationToken)
-    {
-        if (plan.Binding is null ||
-            !StringComparer.Ordinal.Equals(
-                plan.Binding.AccessProfileFingerprint,
-                ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))))
-            throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
-    }
-}
-
-public sealed class ApplyActivityUpgradePlanHandler(
-    IActivityUpgradePlanApplier applier,
-    IActivityUpgradePlanStore store,
-    IActivityAuthoringContextAsync context)
-    : ICommandHandler<ApplyActivityUpgradePlan, ActivityUpgradeApplyResultView>
-{
-    public async Task<ActivityUpgradeApplyResultView> Handle(ApplyActivityUpgradePlan command, CancellationToken cancellationToken)
+    public async Task<ActivityUpgradeApplyResultView> ApplyPlanAsync(ApplyActivityUpgradePlan command, CancellationToken cancellationToken)
     {
         try
         {
-            var plan = await store.FindAsync(command.PlanId, cancellationToken);
+            var plan = await plans.FindAsync(command.PlanId, cancellationToken);
             if (plan is null ||
                 !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId) ||
                 plan.Binding is null ||
@@ -106,17 +77,8 @@ public sealed class ApplyActivityUpgradePlanHandler(
                 exception);
         }
     }
-}
 
-public sealed class GetActivityUpgradeApplyReceiptHandler(
-    IActivityUpgradeApplyReceiptStore receipts,
-    IActivityUpgradePlanStore plans,
-    IActivityAuthoringContextAsync context)
-    : IRequestHandler<GetActivityUpgradeApplyReceipt, ActivityUpgradeApplyReceiptView>
-{
-    public async Task<ActivityUpgradeApplyReceiptView> Handle(
-        GetActivityUpgradeApplyReceipt request,
-        CancellationToken cancellationToken)
+    public async Task<ActivityUpgradeApplyReceiptView> GetApplyReceiptAsync(GetActivityUpgradeApplyReceipt request, CancellationToken cancellationToken)
     {
         var plan = await plans.FindAsync(request.PlanId, cancellationToken);
         var fingerprint = ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken));
@@ -124,32 +86,17 @@ public sealed class GetActivityUpgradeApplyReceiptHandler(
             !StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId) ||
             plan.Binding is null ||
             !StringComparer.Ordinal.Equals(plan.Binding.AccessProfileFingerprint, fingerprint))
-            throw NotFound();
+            throw ReceiptNotFound();
         var receipt = await receipts.FindAsync(request.ReceiptId, cancellationToken);
         if (receipt is null ||
             !StringComparer.Ordinal.Equals(receipt.PlanId, request.PlanId) ||
             !StringComparer.Ordinal.Equals(receipt.TenantId, context.TenantId) ||
             !StringComparer.Ordinal.Equals(receipt.AccessProfileFingerprint, fingerprint))
-            throw NotFound();
+            throw ReceiptNotFound();
         return receipt.ToView();
     }
 
-    private static ActivityAuthoringException NotFound() => new(
-        404,
-        "activity.upgrade.receipt-not-found",
-        "Upgrade apply receipt not found",
-        "The activity upgrade apply receipt was not found.");
-}
-
-public sealed class RefreshActivityUpgradePlanHandler(
-    IActivityUpgradePlanRefresher refresher,
-    IActivityDefinitionVersionPublicationStore publications,
-    IActivityAuthoringContextAsync context)
-    : ICommandHandler<RefreshActivityUpgradePlan, ActivityUpgradePlanView>
-{
-    public async Task<ActivityUpgradePlanView> Handle(
-        RefreshActivityUpgradePlan command,
-        CancellationToken cancellationToken)
+    public async Task<ActivityUpgradePlanView> RefreshPlanAsync(RefreshActivityUpgradePlan command, CancellationToken cancellationToken)
     {
         try
         {
@@ -171,4 +118,38 @@ public sealed class RefreshActivityUpgradePlanHandler(
                 exception);
         }
     }
+
+    private void EnsureTenant(ActivityUpgradePlan plan)
+    {
+        if (!StringComparer.Ordinal.Equals(plan.TenantId, context.TenantId))
+            throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
+    }
+
+    private static async ValueTask EnsureAccessProfileAsync(
+        ActivityUpgradePlan plan,
+        IActivityAuthoringContextAsync context,
+        CancellationToken cancellationToken)
+    {
+        if (plan.Binding is null ||
+            !StringComparer.Ordinal.Equals(
+                plan.Binding.AccessProfileFingerprint,
+                ActivityAccessProfileFingerprint.Create(await context.GetAuthorizationProfileAsync(cancellationToken))))
+            throw new ActivityAuthoringException(404, "activity.upgrade.plan-not-found", "Upgrade plan not found", "The activity upgrade plan was not found.");
+    }
+
+    private static ActivityAuthoringException ReceiptNotFound() => new(
+        404,
+        "activity.upgrade.receipt-not-found",
+        "Upgrade apply receipt not found",
+        "The activity upgrade apply receipt was not found.");
+}
+
+/// <summary>The upgrade-plan seam, one method per route.</summary>
+public interface IActivityUpgradeOperations
+{
+    Task<ActivityUpgradePlanView> CreatePlanAsync(CreateActivityUpgradePlan command, CancellationToken cancellationToken);
+    Task<ActivityUpgradePlanView> GetPlanAsync(GetActivityUpgradePlan request, CancellationToken cancellationToken);
+    Task<ActivityUpgradeApplyResultView> ApplyPlanAsync(ApplyActivityUpgradePlan command, CancellationToken cancellationToken);
+    Task<ActivityUpgradeApplyReceiptView> GetApplyReceiptAsync(GetActivityUpgradeApplyReceipt request, CancellationToken cancellationToken);
+    Task<ActivityUpgradePlanView> RefreshPlanAsync(RefreshActivityUpgradePlan command, CancellationToken cancellationToken);
 }

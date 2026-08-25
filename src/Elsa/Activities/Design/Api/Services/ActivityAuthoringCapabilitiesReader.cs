@@ -5,20 +5,24 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Mediator.Core.Contracts;
 
-namespace Elsa.Activities.Design.Api.Handlers;
+namespace Elsa.Activities.Design.Api.Services;
 
-public sealed class GetActivityAuthoringCapabilitiesHandler(
+/// <summary>The authoring capabilities projection the Design endpoints dispatch to.</summary>
+public sealed class ActivityAuthoringCapabilitiesReader(
     IActivityProviderRegistry providers,
     IActivityContractCapabilityCatalog contractTypes,
     IActivityTypeKeyPolicy typeKeys,
-    IActivityAuthoringContextAsync context)
-    : IRequestHandler<GetActivityAuthoringCapabilities, ActivityAuthoringCapabilitiesView>
+    IActivityAuthoringContextAsync context) : IActivityAuthoringCapabilitiesReader
 {
-    public async Task<ActivityAuthoringCapabilitiesView> Handle(
-        GetActivityAuthoringCapabilities request,
-        CancellationToken cancellationToken)
+    // Serializing the snapshot with fresh Web-default options would cache this assembly's type
+    // metadata in the process-shared Web-defaults serializer cache and root the collectible
+    // module context. The owner context avoids that; it is bound to plain Web defaults (strict
+    // encoder, no wire converters) because the fingerprint bytes are a frozen contract.
+    private static readonly ActivitiesDesignJsonContext FingerprintContext =
+        new(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+    public async Task<ActivityAuthoringCapabilitiesView> GetAsync(GetActivityAuthoringCapabilities request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var providerViews = new List<ActivityProviderAuthoringCapabilityView>();
@@ -55,22 +59,26 @@ public sealed class GetActivityAuthoringCapabilitiesHandler(
                 x.CompatibleStorageDriverKeys.Order(StringComparer.Ordinal).ToArray()))
             .ToArray();
         var drivers = typeViews.SelectMany(x => x.CompatibleStorageDriverKeys).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var snapshot = new
-        {
-            contractSchemaVersions = new[] { "1" },
-            activityTypeKeyRules = typeKeys.Rules,
-            providers = providerViews,
-            types = typeViews,
-            storageDriverKeys = drivers
-        };
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        var fingerprint = $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
-        return new ActivityAuthoringCapabilitiesView(
-            snapshot.contractSchemaVersions,
+        var snapshot = new ActivityAuthoringCapabilitiesSnapshot(
+            ["1"],
             typeKeys.Rules,
             providerViews,
             typeViews,
-            drivers,
+            drivers);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, FingerprintContext.ActivityAuthoringCapabilitiesSnapshot);
+        var fingerprint = $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
+        return new ActivityAuthoringCapabilitiesView(
+            snapshot.ContractSchemaVersions,
+            snapshot.ActivityTypeKeyRules,
+            snapshot.Providers,
+            snapshot.Types,
+            snapshot.StorageDriverKeys,
             fingerprint);
     }
+}
+
+/// <summary>The authoring capabilities seam.</summary>
+public interface IActivityAuthoringCapabilitiesReader
+{
+    Task<ActivityAuthoringCapabilitiesView> GetAsync(GetActivityAuthoringCapabilities request, CancellationToken cancellationToken);
 }

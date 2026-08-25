@@ -104,7 +104,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.InRange((int)response.StatusCode, 200, 499);
-        var message = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        var message = host.Seams.LastRequest ?? host.Seams.LastCommand;
         Assert.NotNull(message);
         var property = message!.GetType().GetProperty(identifierProperty);
         Assert.NotNull(property);
@@ -133,7 +133,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.InRange((int)response.StatusCode, 200, 499);
-        var message = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        var message = host.Seams.LastRequest ?? host.Seams.LastCommand;
         Assert.NotNull(message);
         var property = message!.GetType().GetProperty(identifierProperty);
         Assert.NotNull(property);
@@ -150,7 +150,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsType<ListRecommendedActivityDefinitions>(host.RequestSender.LastRequest);
+        Assert.IsType<ListRecommendedActivityDefinitions>(host.Seams.LastRequest);
     }
 
     private static string RouteBody(string routeId, string identifierProperty, bool includeIdentifier)
@@ -352,7 +352,7 @@ public sealed class ActivityDefinitionAuthoringApiTests
         using var response = await host.Client.SendAsync(message);
 
         response.EnsureSuccessStatusCode();
-        var dispatched = host.RequestSender.LastRequest ?? host.CommandSender.LastCommand;
+        var dispatched = host.Seams.LastRequest ?? host.Seams.LastCommand;
         Assert.NotNull(dispatched);
         Assert.Equal(routeValue, dispatched!.GetType().GetProperty(propertyName)!.GetValue(dispatched));
     }

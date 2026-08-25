@@ -1,10 +1,10 @@
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
+using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Add;
@@ -12,7 +12,7 @@ namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Add;
 [Post("/design/activities/definitions")]
 [RequirePermission(ActivityDesignPermissions.Manage)]
 [AuthoringProblems]
-public sealed class Endpoint(ICommandSender sender) : ApiEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionMutationView>
+public sealed class Endpoint(IReusableActivityAuthoringService service) : ApiEndpoint<CreateReusableActivityDefinition, ReusableActivityDefinitionMutationView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -24,7 +24,7 @@ public sealed class Endpoint(ICommandSender sender) : ApiEndpoint<CreateReusable
 
     public override async Task<ReusableActivityDefinitionMutationView> HandleAsync(CreateReusableActivityDefinition command, CancellationToken cancellationToken)
     {
-        var response = await sender.Send(command, cancellationToken);
+        var response = await service.CreateDefinitionAsync(command, cancellationToken);
         HttpContext.Response.Headers.Location = $"/{RouteConstants.GetRoute($"definitions/{response.Definition.DefinitionId}")}";
         return response;
     }

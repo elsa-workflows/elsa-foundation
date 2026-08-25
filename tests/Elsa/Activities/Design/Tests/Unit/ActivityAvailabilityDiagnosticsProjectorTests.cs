@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Api.Handlers;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Options;
@@ -171,13 +171,13 @@ public sealed class ActivityAvailabilityDiagnosticsProjectorTests
                 Sets = ["MissingManagementSet"]
             }
         });
-        var handler = new ListActivityAvailabilityDiagnosticsRequestHandler(
+        var operations = new ActivityAvailabilityOperations(
             new StubActivityDefinitionStore(_activities),
             store,
             new DefaultActivityAvailabilityDiagnosticsProjector(),
             Options.Create(new ActivityAvailabilityOptions()));
 
-        var result = await handler.Handle(new ListActivityAvailabilityDiagnostics(), CancellationToken.None);
+        var result = await operations.ListDiagnosticsAsync(new ListActivityAvailabilityDiagnostics(), CancellationToken.None);
         var savedSettings = await store.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope);
 
         AssertState(result, WriteLineTypeKey, ActivityAvailabilityDiagnosticState.Available, ActivityAvailabilityPolicyLayer.Catalog);

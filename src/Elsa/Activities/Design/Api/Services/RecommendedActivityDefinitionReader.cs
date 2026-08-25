@@ -5,19 +5,18 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Diagnostics;
 
-namespace Elsa.Activities.Design.Api.Handlers;
+namespace Elsa.Activities.Design.Api.Services;
 
-public sealed class ListRecommendedActivityDefinitionsHandler(
+/// <summary>The recommended-definition picker projection the Design endpoints dispatch to.</summary>
+public sealed class RecommendedActivityDefinitionReader(
     IRecommendedActivityDefinitionPickerStore picker,
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
-    IActivityAuthoringContextAsync context)
-    : IRequestHandler<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>
+    IActivityAuthoringContextAsync context) : IRecommendedActivityDefinitionReader
 {
-    public async Task<RecommendedActivityDefinitionPageView> Handle(
+    public async Task<RecommendedActivityDefinitionPageView> ListAsync(
         ListRecommendedActivityDefinitions request,
         CancellationToken cancellationToken)
     {
@@ -46,4 +45,10 @@ public sealed class ListRecommendedActivityDefinitionsHandler(
             }).ToArray(),
             page.NextOffset);
     }
+}
+
+/// <summary>The recommended-definition picker seam.</summary>
+public interface IRecommendedActivityDefinitionReader
+{
+    Task<RecommendedActivityDefinitionPageView> ListAsync(ListRecommendedActivityDefinitions request, CancellationToken cancellationToken);
 }

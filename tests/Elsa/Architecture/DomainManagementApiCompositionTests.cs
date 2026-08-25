@@ -493,6 +493,10 @@ public sealed class DomainManagementApiCompositionTests
             // so the representative journey needs empty stores rather than a sender fake.
             builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore, EmptyWorkflowDefinitionStore>();
             builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore, EmptyWorkflowDefinitionListProjectionStore>();
+            // The Activities Design catalog and diagnostics endpoints likewise read their stores
+            // through the owner's operation services since the mediator wrappers retired.
+            builder.Services.AddSingleton<Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionStore, EmptyActivityDefinitionStore>();
+            builder.Services.AddSingleton<Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore, EmptyActivityDefinitionVersionStore>();
 
             var app = builder.Build();
             // Every first-party management owner is now an explicit Minimal API mapper.
@@ -591,6 +595,45 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
+    }
+
+    private sealed class EmptyActivityDefinitionStore : Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionStore
+    {
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The representative journeys only list activity definitions.");
+
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition?> FindAsync(Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition?>(null);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition>> ListAsync(Elsa.Activities.Design.Persistence.Core.Filters.ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition>>([]);
+
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinition?>(null);
+
+        public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+    }
+
+    private sealed class EmptyActivityDefinitionVersionStore : Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore
+    {
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The representative journeys only list activity versions.");
+
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The representative journeys only list activity versions.");
+
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion?> FindByDefinitionAndSortKeyAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion?>(null);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>>([]);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>>([]);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersion>>([]);
     }
 
     private sealed class EmptyWorkflowDefinitionStore : Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore

@@ -266,6 +266,19 @@ public sealed record ActivityAuthoringCapabilitiesView(
     IReadOnlyList<string> StorageDriverKeys,
     string SnapshotFingerprint);
 
+/// <summary>
+/// The material hashed into <see cref="ActivityAuthoringCapabilitiesView.SnapshotFingerprint"/>.
+/// The fingerprint is wire-visible, so this record's property names and order are a frozen
+/// contract: serialized with camel-case Web defaults they must keep producing the exact bytes
+/// the original anonymous-type snapshot emitted.
+/// </summary>
+internal sealed record ActivityAuthoringCapabilitiesSnapshot(
+    IReadOnlyList<string> ContractSchemaVersions,
+    ActivityTypeKeyRules ActivityTypeKeyRules,
+    IReadOnlyList<ActivityProviderAuthoringCapabilityView> Providers,
+    IReadOnlyList<ActivityContractTypeCapabilityView> Types,
+    IReadOnlyList<string> StorageDriverKeys);
+
 public sealed record ActivityContractProposalChangeView(
     string ChangeId,
     ActivityContractProposalOperation Operation,

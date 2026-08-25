@@ -108,7 +108,7 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
 
     [Theory]
     [MemberData(nameof(InvalidTypedQueries))]
-    public async Task Every_malformed_typed_query_fails_before_mediator_dispatch(
+    public async Task Every_malformed_typed_query_fails_before_domain_dispatch(
         string path,
         string queryName,
         string typeName)
@@ -124,7 +124,7 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         Assert.Contains($"\"name\":\"{queryName}\"", body, StringComparison.Ordinal);
         Assert.Contains($"Value [invalid] is not valid for a [{typeName}] property!", body, StringComparison.Ordinal);
-        Assert.Null(host.RequestSender.LastRequest);
+        Assert.Null(host.Seams.LastRequest);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
     }
 
     [Fact]
-    public async Task Cancellation_reaches_the_sender_with_the_same_request_aborted_instance()
+    public async Task Cancellation_reaches_the_domain_seam_with_the_same_request_aborted_instance()
     {
         await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
         var route = ActivitiesDesignCompatibilityCases.Manifest.Single(candidate => candidate.Id == "Drafts.Get");
@@ -152,8 +152,8 @@ public sealed class ActivitiesDesignMinimalApiBehaviorTests
 
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => host.Client.SendAsync(request));
 
-        Assert.Same(host.RequestSender.LastCancellationException, exception);
-        Assert.Equal(host.RequestSender.RequestAbortedAtDispatch, host.RequestSender.LastCancellationToken);
+        Assert.Same(host.Seams.LastCancellationException, exception);
+        Assert.Equal(host.Seams.RequestAbortedAtDispatch, host.Seams.LastCancellationToken);
     }
 
     private static HttpRequestMessage Request(ActivityDesignRoute route, string identity, string? body = null)

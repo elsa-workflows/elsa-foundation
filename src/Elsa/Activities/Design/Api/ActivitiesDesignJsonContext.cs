@@ -125,6 +125,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(IEnumerable<ActivityDefinitionVersionSummary>))]
 [JsonSerializable(typeof(ActivityDependencyPageView))]
 [JsonSerializable(typeof(ActivityAuthoringCapabilitiesView))]
+[JsonSerializable(typeof(ActivityAuthoringCapabilitiesSnapshot))]
 [JsonSerializable(typeof(ActivityManagementPageView<ReusableActivityDefinitionManagementView>))]
 [JsonSerializable(typeof(ActivityManagementPageView<ReusableActivityDraftManagementView>))]
 [JsonSerializable(typeof(ActivityManagementPageView<ReusableActivityVersionManagementView>))]

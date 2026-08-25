@@ -78,6 +78,9 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
                     services.AddSingleton<IRequestSender>(provider => provider.GetRequiredService<AuthorizationRequestSender>());
                     services.AddSingleton<AuthorizationCommandSender>();
                     services.AddSingleton<ICommandSender>(provider => provider.GetRequiredService<AuthorizationCommandSender>());
+                    // The Minimal API endpoints dispatch to the operation seams; the senders above
+                    // remain for the retained FastEndpoints canary and the probe routes.
+                    services.AddActivitiesDesignDomainSeams<AuthorizationDomainSeams>();
                     services.AddSingleton<AuthorizationProviderProbe>();
                     services.AddSingleton<AuthorizationStoreProbe>();
                     services.AddFastEndpoints(options =>

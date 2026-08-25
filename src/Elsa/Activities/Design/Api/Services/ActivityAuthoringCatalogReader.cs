@@ -8,20 +8,19 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Mediator.Core.Contracts;
 
-namespace Elsa.Activities.Design.Api.Handlers;
+namespace Elsa.Activities.Design.Api.Services;
 
-public sealed class ListActivityAuthoringCatalogRequestHandler(
+/// <summary>The authoring catalog projection the Design endpoints dispatch to.</summary>
+public sealed class ActivityAuthoringCatalogReader(
     IActivityDefinitionStore definitionStore,
     IActivityDefinitionVersionStore versionStore,
     IActivityAvailabilityEvaluator availabilityEvaluator,
     IActivityAvailabilitySettingsStore settingsStore,
     IEnumerable<IBuiltInAuthoringDescriptorProvider> builtInDescriptorProviders,
-    IActivityFeatureAttributionResolver featureAttributionResolver)
-    : IRequestHandler<ListActivityAuthoringCatalog, ActivityAuthoringCatalogView>
+    IActivityFeatureAttributionResolver featureAttributionResolver) : IActivityAuthoringCatalogReader
 {
-    public async Task<ActivityAuthoringCatalogView> Handle(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
+    public async Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken)
     {
         var definitions = await definitionStore.ListAsync(new ActivityDefinitionFilter(), cancellationToken);
         var definitionsById = definitions.ToDictionary(x => x.Id, StringComparer.Ordinal);
@@ -159,4 +158,10 @@ public sealed class ListActivityAuthoringCatalogRequestHandler(
         element.TryGetProperty(propertyName, out var property) && property.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? property.GetBoolean()
             : null;
+}
+
+/// <summary>The authoring catalog seam.</summary>
+public interface IActivityAuthoringCatalogReader
+{
+    Task<ActivityAuthoringCatalogView> ListAsync(ListActivityAuthoringCatalog request, CancellationToken cancellationToken);
 }

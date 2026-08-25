@@ -1,16 +1,16 @@
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Picker;
 
 [Get("/design/activities/definitions/picker")]
 [RequirePermission(ActivityDesignPermissions.Read)]
 [AuthoringProblems]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>
+public sealed class Endpoint(IRecommendedActivityDefinitionReader service) : ApiEndpoint<ListRecommendedActivityDefinitions, RecommendedActivityDefinitionPageView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -20,5 +20,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<ListRecommende
     }
 
     public override Task<RecommendedActivityDefinitionPageView> HandleAsync(ListRecommendedActivityDefinitions request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        service.ListAsync(request, cancellationToken);
 }

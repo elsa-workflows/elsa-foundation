@@ -1,16 +1,16 @@
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.ListVersions;
 
 [Get("/design/activities/definitions/{definitionId}/versions")]
 [RequirePermission(ActivityDesignPermissions.Read)]
 [AuthoringProblems]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<ListReusableActivityVersions, ActivityManagementPageView<ReusableActivityVersionManagementView>>
+public sealed class Endpoint(IActivityDefinitionManagementProjectionService service) : ApiEndpoint<ListReusableActivityVersions, ActivityManagementPageView<ReusableActivityVersionManagementView>>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -20,5 +20,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<ListReusableAc
     }
 
     public override Task<ActivityManagementPageView<ReusableActivityVersionManagementView>> HandleAsync(ListReusableActivityVersions request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        service.ListVersionsAsync(request, cancellationToken);
 }

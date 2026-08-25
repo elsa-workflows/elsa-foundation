@@ -14,7 +14,7 @@ public sealed class ActivityDefinitionRecommendationService(
     IActivityDefinitionVersionPublicationStore publicationStore,
     ISetActivityDefinitionRecommendationCommand setRecommendation,
     IActivityAuthoringContextAsync context,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider) : IActivityDefinitionRecommendationService
 {
     public async Task<ActivityDefinitionRecommendationView> SetAsync(
         SetRecommendedReusableActivityVersion command,
@@ -101,9 +101,8 @@ public sealed class ActivityDefinitionRecommendationService(
         new(404, "activity.version.not-found", "Activity version not found", "The requested activity version was not found for this definition.", innerException: inner);
 }
 
-public sealed class SetRecommendedReusableActivityVersionHandler(ActivityDefinitionRecommendationService service)
-    : ICommandHandler<SetRecommendedReusableActivityVersion, ActivityDefinitionRecommendationView>
+/// <summary>The recommendation operation the Design endpoints dispatch to.</summary>
+public interface IActivityDefinitionRecommendationService
 {
-    public Task<ActivityDefinitionRecommendationView> Handle(SetRecommendedReusableActivityVersion command, CancellationToken cancellationToken) =>
-        service.SetAsync(command, cancellationToken);
+    Task<ActivityDefinitionRecommendationView> SetAsync(SetRecommendedReusableActivityVersion command, CancellationToken cancellationToken);
 }

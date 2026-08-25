@@ -1,16 +1,16 @@
 using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Get;
 
 [Get("/design/activities/definitions/{definitionId}")]
 [RequirePermission(ActivityDesignPermissions.Read)]
 [AuthoringProblems]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionManagementView>
+public sealed class Endpoint(IActivityDefinitionManagementProjectionService service) : ApiEndpoint<GetReusableActivityDefinition, ReusableActivityDefinitionManagementView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -19,5 +19,5 @@ public sealed class Endpoint(IRequestSender sender) : ApiEndpoint<GetReusableAct
     }
 
     public override Task<ReusableActivityDefinitionManagementView> HandleAsync(GetReusableActivityDefinition request, CancellationToken cancellationToken) =>
-        sender.Send(request, cancellationToken);
+        service.GetDefinitionAsync(request, cancellationToken);
 }

@@ -119,10 +119,10 @@ public sealed class ActivityContractAuthoringCapabilityTests
                 new HashSet<string>(StringComparer.Ordinal) { "elsa.json" })
         ]);
         var registry = new ActivityProviderRegistry([new Provider("allowed.provider"), new Provider("hidden.provider")]);
-        var handler = new GetActivityAuthoringCapabilitiesHandler(registry, catalog, new DefaultActivityTypeKeyPolicy(), new Context());
+        var handler = new ActivityAuthoringCapabilitiesReader(registry, catalog, new DefaultActivityTypeKeyPolicy(), new Context());
 
-        var first = await handler.Handle(new GetActivityAuthoringCapabilities(), default);
-        var second = await handler.Handle(new GetActivityAuthoringCapabilities(), default);
+        var first = await handler.GetAsync(new GetActivityAuthoringCapabilities(), default);
+        var second = await handler.GetAsync(new GetActivityAuthoringCapabilities(), default);
 
         var provider = Assert.Single(first.Providers);
         Assert.Equal("allowed.provider", provider.ProviderKey);

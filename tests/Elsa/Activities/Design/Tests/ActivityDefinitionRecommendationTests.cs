@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
+using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Stores;
@@ -66,13 +67,13 @@ public sealed class ActivityDefinitionRecommendationTests
     public async Task Picker_returns_only_the_exact_recommended_active_version_and_never_substitutes_head()
     {
         var stores = await StoresAsync();
-        var handler = new ListRecommendedActivityDefinitionsHandler(
+        var handler = new RecommendedActivityDefinitionReader(
             stores,
             new AllAvailable(),
             new EmptySettings(),
             new Context());
 
-        var page = await handler.Handle(new(0, 25), default);
+        var page = await handler.ListAsync(new(0, 25), default);
 
         var item = Assert.Single(page.Items);
         Assert.Equal("version-1", item.VersionId);
@@ -85,13 +86,13 @@ public sealed class ActivityDefinitionRecommendationTests
     public async Task Picker_omits_a_recommendation_that_is_no_longer_active()
     {
         var stores = await StoresAsync(recommendedLifecycle: ActivityDefinitionVersionLifecycle.Retired);
-        var handler = new ListRecommendedActivityDefinitionsHandler(
+        var handler = new RecommendedActivityDefinitionReader(
             stores,
             new AllAvailable(),
             new EmptySettings(),
             new Context());
 
-        var page = await handler.Handle(new(0, 25), default);
+        var page = await handler.ListAsync(new(0, 25), default);
 
         Assert.Empty(page.Items);
     }

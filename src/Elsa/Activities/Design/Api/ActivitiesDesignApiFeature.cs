@@ -114,6 +114,28 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.TryAddScoped<ActivityContractProposalService>();
         services.TryAddScoped<ActivityVersionLifecycleService>();
         services.TryAddScoped<ActivityDefinitionRecommendationService>();
+        services.TryAddScoped<ActivityVersionDiffService>();
+        services.TryAddScoped<ActivityAvailabilityOperations>();
+        services.TryAddScoped<ActivityAuthoringCapabilitiesReader>();
+        services.TryAddScoped<ActivityAuthoringCatalogReader>();
+        services.TryAddScoped<RecommendedActivityDefinitionReader>();
+        services.TryAddScoped<ActivityUpgradeOperations>();
+
+        // The operation seams the endpoint classes dispatch to. Registered against the concrete
+        // services so a replacement of either registration keeps the other coherent.
+        services.TryAddScoped<IActivityDependencyReader>(sp => sp.GetRequiredService<ActivityDependencyReader>());
+        services.TryAddScoped<IReusableActivityAuthoringService>(sp => sp.GetRequiredService<ReusableActivityAuthoringService>());
+        services.TryAddScoped<IActivityForkService>(sp => sp.GetRequiredService<ActivityForkService>());
+        services.TryAddScoped<IActivityDefinitionManagementProjectionService>(sp => sp.GetRequiredService<ActivityDefinitionManagementProjectionService>());
+        services.TryAddScoped<IActivityContractProposalService>(sp => sp.GetRequiredService<ActivityContractProposalService>());
+        services.TryAddScoped<IActivityVersionLifecycleService>(sp => sp.GetRequiredService<ActivityVersionLifecycleService>());
+        services.TryAddScoped<IActivityDefinitionRecommendationService>(sp => sp.GetRequiredService<ActivityDefinitionRecommendationService>());
+        services.TryAddScoped<IActivityVersionDiffService>(sp => sp.GetRequiredService<ActivityVersionDiffService>());
+        services.TryAddScoped<IActivityAvailabilityOperations>(sp => sp.GetRequiredService<ActivityAvailabilityOperations>());
+        services.TryAddScoped<IActivityAuthoringCapabilitiesReader>(sp => sp.GetRequiredService<ActivityAuthoringCapabilitiesReader>());
+        services.TryAddScoped<IActivityAuthoringCatalogReader>(sp => sp.GetRequiredService<ActivityAuthoringCatalogReader>());
+        services.TryAddScoped<IRecommendedActivityDefinitionReader>(sp => sp.GetRequiredService<RecommendedActivityDefinitionReader>());
+        services.TryAddScoped<IActivityUpgradeOperations>(sp => sp.GetRequiredService<ActivityUpgradeOperations>());
         services.TryAddSingleton<IActivityVersionSelectionPolicy, DefaultActivityVersionSelectionPolicy>();
         services.TryAddScoped<IActivityFeatureAttributionResolver, ActivityFeatureAttributionResolver>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IBuiltInAuthoringDescriptorProvider, IntrinsicAuthoringDescriptorProvider>());
