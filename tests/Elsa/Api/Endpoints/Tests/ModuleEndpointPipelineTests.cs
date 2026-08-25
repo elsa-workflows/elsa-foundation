@@ -141,6 +141,21 @@ public sealed class ModuleEndpointPipelineTests
     }
 
     [Fact]
+    public async Task The_payload_gated_mode_rejects_a_literal_null_body_with_a_bare_415_and_no_body()
+    {
+        await using var host = await PipelineHost.StartAsync(api =>
+            api.MapOperation<SampleBody>(
+                "POST", "/payload-gated", "PayloadGated", EndpointBodyMode.RequiredWithContentTypeAndPayload,
+                ["application/json"], typeof(SampleResponse), 200, null,
+                (context, _, _) => context.Response.WriteAsync("never")));
+
+        var response = await host.Client.PostAsync("/payload-gated", Json("null"));
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task A_strict_typed_query_failure_names_the_wire_parameter()
     {
         await using var host = await PipelineHost.StartAsync(api => api.MapEndpoint<ShapeEndpoints.QueryShape>());
