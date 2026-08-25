@@ -37,8 +37,14 @@ over three backends to N=128 exhaust memory on a 24 GB host before finishing.
 
 ## Machine state
 
-Apple Silicon, 8 logical processors, 24 GB. macOS. Five repeats, each gated to start below **load 4.0**
-with a settle-wait between them; per-repeat load recorded at both ends. Load at start ranged 3.88–4.31.
+Apple Silicon, 8 logical processors, 24 GB. macOS. Five repeats with a settle-wait between them, each
+launched only once the one-minute load average read below **4.0**; per-repeat load recorded at both ends.
+
+The **observed** start loads were 3.88, 4.31, 4.31, 3.98 and 4.24 — three of them above the gate. The gate
+is a check before launch, not a guarantee at first measurement: load drifts between the check and the
+point the child process reports its own reading, and the benchmark's own startup contributes to that
+drift. So the honest statement is that every repeat was *launched* under 4.0 and *measured* between 3.88
+and 4.31, not that every repeat started below 4.0.
 
 This gating is not ceremony. An earlier unpaced set drove load from 3.4 to 25 through its own repeats and
 swung the N=16 shared cell from 3725 ms to 8207 ms and back to 3780 ms — a 2.2× spread attributable
