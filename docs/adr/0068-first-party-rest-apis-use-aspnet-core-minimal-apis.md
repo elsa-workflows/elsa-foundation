@@ -6,6 +6,12 @@ decision_context: Endpoint framework spike #1329, report PR #1338, and program s
 
 # First-party REST APIs use ASP.NET Core Minimal APIs
 
+> **Shared-layer bound narrowed by [ADR 0071](0071-first-party-rest-apis-use-endpoint-classes.md)**
+> (2026-08-25). Read after 0071, the prohibition below is on process-global discovery, static
+> registries, and a parallel endpoint DSL — not on request and handler bases as such. This ADR's
+> scope, security disposition, authorization ownership, HTTP and OpenAPI compatibility
+> requirements, and FastEndpoints retirement criteria all remain in force.
+
 ## Context
 
 Elsa Foundation currently exposes first-party HTTP APIs through several authoring and publication
