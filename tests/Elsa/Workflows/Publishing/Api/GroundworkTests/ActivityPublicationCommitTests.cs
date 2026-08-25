@@ -122,7 +122,9 @@ public sealed class ActivityPublicationCommitTests
 
     /// <summary>
     /// A tenant publishing an authorized global resource commits under its own operation scope while the
-    /// resource stays unscoped. The receipt carries the caller's tenant; the artifacts do not acquire one.
+    /// resource itself stays global. Both halves are asserted: the receipt acquires the caller's tenant,
+    /// and the design entities it publishes do not — they are <c>TenantEntity</c>, so a publication that
+    /// stamped the operation's tenant onto them would silently make a global activity tenant-owned.
     /// </summary>
     [Fact]
     public async Task Publication_uses_the_tenant_operation_scope_for_an_authorized_global_resource()
@@ -132,10 +134,22 @@ public sealed class ActivityPublicationCommitTests
         var result = await harness.Command.ExecuteAsync(harness.Commit);
 
         Assert.Equal("version-1", result.DefinitionVersionId);
-        Assert.NotNull(await harness.Receipts.FindAsync(
-            harness.Commit.Receipt.TenantId,
-            harness.Commit.Receipt.IdempotencyKey));
+
+        // The operation is the tenant's: the receipt is theirs and carries their id.
+        var receipt = await harness.Receipts.FindAsync("tenant-a", harness.Commit.Receipt.IdempotencyKey);
+        Assert.NotNull(receipt);
+        Assert.Equal("tenant-a", receipt!.TenantId);
+
+        // The resource is not. Nothing the publication wrote may acquire the operation's tenant.
         Assert.NotNull(harness.LoadDesign(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "version-1"));
+        var authoring = harness.Design<ActivityDefinitionAuthoringState>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionAuthoringStateDocumentKind,
+            "authoring-generated-id");
+        var draft = harness.Design<ActivityDefinitionDraft>(
+            ActivitiesDesignStorageManifest.ActivityDefinitionDraftDocumentKind,
+            "draft-1");
+        Assert.Null(authoring.TenantId);
+        Assert.Null(draft.TenantId);
     }
 
     /// <summary>
@@ -150,6 +164,10 @@ public sealed class ActivityPublicationCommitTests
         await using var harness = await Harness.CreateAsync(failTransaction: true);
 
         await Assert.ThrowsAnyAsync<Exception>(() => harness.Command.ExecuteAsync(harness.Commit));
+
+        // The publication reached the transaction and staged its writes before the commit was refused, so
+        // what follows is a statement about rollback rather than about a transaction that never opened.
+        Assert.True(harness.StagedWrites > 0, "The publication staged no writes, so this proves nothing about rollback.");
 
         Assert.Null(harness.LoadDesign(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind, "version-1"));
         Assert.Null(await harness.Templates.FindAsync(TemplateId));
@@ -172,12 +190,16 @@ public sealed class ActivityPublicationCommitTests
         GroundworkV2ExecutableActivityTemplateStore templates,
         GroundworkV2WorkflowExecutableSourceReferenceStore sourceReferences,
         GroundworkActivityPublicationReceiptStore receipts,
+        FailingTransactionSessionSource? failing,
         GroundworkActivityPublicationCommand command,
         ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> commit) : IAsyncDisposable
     {
         public GroundworkV2ExecutableActivityTemplateStore Templates { get; } = templates;
         public GroundworkV2WorkflowExecutableSourceReferenceStore SourceReferences { get; } = sourceReferences;
         public GroundworkActivityPublicationReceiptStore Receipts { get; } = receipts;
+
+        /// <summary>Rows the refused transaction accepted before its commit failed; zero when not disturbed.</summary>
+        public int StagedWrites => failing?.Staged ?? 0;
         public GroundworkActivityPublicationCommand Command { get; } = command;
         public ActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt> Commit { get; } = commit;
 
@@ -199,9 +221,8 @@ public sealed class ActivityPublicationCommitTests
 
             // Seeding uses the raw source; only the command under test sees the disturbed one, so the
             // fixture is always built successfully and only the publication transaction fails.
-            var sessions = failTransaction
-                ? new FailingTransactionSessionSource(persistence.Sessions)
-                : persistence.Sessions;
+            var failing = failTransaction ? new FailingTransactionSessionSource(persistence.Sessions) : null;
+            IGroundworkStorageSessionSource sessions = failing ?? persistence.Sessions;
             var designStore = new GroundworkV2ActivityDesignStore(sessions, access);
             var publishingStorage = new GroundworkPublishingStorage(sessions, access);
             var templates = new GroundworkV2ExecutableActivityTemplateStore(sessions, access);
@@ -227,6 +248,7 @@ public sealed class ActivityPublicationCommitTests
                 new GroundworkV2WorkflowExecutableSourceReferenceStore(persistence.Sessions, access),
                 new GroundworkActivityPublicationReceiptStore(
                     persistence.Sessions, access, new PublishingGroundworkDocumentSerializer()),
+                failing,
                 command,
                 CreateCommit(operationTenantId));
         }
@@ -406,15 +428,21 @@ public sealed class ActivityPublicationCommitTests
     private sealed class FailingTransactionSessionSource(IGroundworkStorageSessionSource inner)
         : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
     {
+        /// <summary>Rows the publication staged before its commit was refused.</summary>
+        public int Staged { get; private set; }
+
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
             inner.Open(unitId, access, targetName);
 
+        // The transaction opens and accepts every write; only the commit is refused. Failing at
+        // BeginUnitOfWork instead would prove nothing about rollback — the publication would never have
+        // staged anything, so "nothing was written" would be true by construction.
         public IUnitOfWork BeginUnitOfWork(
             StorageAccess access,
             BatchWriteOptions options,
             IReadOnlyList<string> unitIds,
             string? targetName = null) =>
-            throw new PublicationTransactionFailure();
+            new FailingCommitUnitOfWork(inner.BeginUnitOfWork(access, options, unitIds, targetName), () => Staged++);
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
 
@@ -424,6 +452,28 @@ public sealed class ActivityPublicationCommitTests
             inner is IGroundworkStorageCapabilitySource capabilities
                 ? capabilities.Capabilities(targetName)
                 : throw new NotSupportedException("The wrapped session source reports no capabilities.");
+    }
+
+    private sealed class FailingCommitUnitOfWork(IUnitOfWork inner, Action onStage) : IUnitOfWork
+    {
+        public void Stage(RowWrite write)
+        {
+            onStage();
+            inner.Stage(write);
+        }
+
+        // Every commit route is refused: the command may take any of them, and a route that slipped
+        // through would commit the publication this test is asserting the absence of.
+        public BatchWriteSummary Commit() => throw new PublicationTransactionFailure();
+        public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) => throw new PublicationTransactionFailure();
+        public BatchWriteReport CommitWithOutcomes() => throw new PublicationTransactionFailure();
+        public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) => throw new PublicationTransactionFailure();
+
+        public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+
+        public void Rollback() => inner.Rollback();
+
+        public void Dispose() => inner.Dispose();
     }
 
     private sealed class PublicationTransactionFailure() : Exception("The publication transaction failed.");

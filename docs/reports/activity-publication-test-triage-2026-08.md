@@ -68,13 +68,17 @@ These are now in `tests/Elsa/Workflows/Publishing/Api/GroundworkTests/ActivityPu
 | One transaction leaves design version, runtime template, source reference and receipt all present | `Publication_commits_design_runtime_and_publishing_together` |
 | The authoring head and recommended version advance, and the draft becomes `Published`, in that same commit | `Publication_advances_the_authoring_head_and_publishes_the_draft` |
 | Authoring is resolved by definition, not by document id | `Publication_finds_authoring_by_definition_when_its_document_id_differs` |
-| A tenant publishing an authorized global resource commits under its own operation scope | `Publication_uses_the_tenant_operation_scope_for_an_authorized_global_resource` |
+| A tenant publishing an authorized global resource commits under its own operation scope, and the resource stays global | `Publication_uses_the_tenant_operation_scope_for_an_authorized_global_resource` |
 | A failure inside the transaction leaves **no** part of the publication behind | `A_failure_inside_the_transaction_leaves_no_partial_publication` |
 
-The last is the one with no substitute anywhere. It disturbs the storage seam rather than asking the
-command to fail, so what it asserts is the transaction's own atomicity rather than an error path the
-command chose to take. It and the first test assert `Null` and `NotNull` over the same four artifacts, so
-neither can pass vacuously — the same predicates discriminate between the two scenarios.
+The last is the one with no substitute anywhere, and it is built to avoid the way this test usually goes
+wrong. The transaction **opens and accepts every write**, and only the commit is refused; the test then
+asserts that the publication staged more than zero rows before that happened. Refusing
+`BeginUnitOfWork` instead would have proved nothing — the publication would never have staged anything,
+so "nothing was written" would be true by construction rather than because anything rolled back.
+
+It and the first test assert `Null` and `NotNull` over the same four artifacts, so neither can pass
+vacuously: the same predicates discriminate between the two scenarios.
 
 ## What was not carried over, and why
 
