@@ -198,25 +198,7 @@ public sealed class ActivityDraftTestRunService(
             now);
 
         await activityTemplates.SaveAsync(compilation.Template, cancellationToken);
-        // The reference id is content-addressed by the template hash, so a rerun of an unchanged draft
-        // resolves to the reference the first run already created. Source references are create-only, so
-        // reuse that one: recreating it is what made every second test run of a draft throw.
-        if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
-        {
-            try
-            {
-                await sourceReferences.SaveAsync(templateReference, cancellationToken);
-            }
-            catch (InvalidOperationException)
-            {
-                // Two first-use requests can both observe the reference as absent, and only one create-only
-                // write can win. Both are valid test runs and the row is content-addressed, so the loser
-                // continues against the winner's reference rather than being rejected. If no row exists even
-                // now the write failed for some other reason, which must surface.
-                if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
-                    throw;
-            }
-        }
+        await EnsureTemplateSourceReferenceAsync(templateReferenceId, templateReference, cancellationToken);
 
         var origin = new ActivityInvocationOrigin([
             new(ActivityInvocationOriginSegmentKind.WorkflowRoot, $"activity-test-wrapper:{definition.Id}"),
@@ -805,6 +787,37 @@ public sealed class ActivityDraftTestRunService(
         CreatedAt = now,
         LastModifiedAt = now
     };
+
+    /// <summary>
+    /// Makes the content-addressed template source reference exist, and returns once it does — whether this
+    /// request created it, an earlier run created it, or a simultaneous first run won the create.
+    ///
+    /// The id is derived from the template hash, so every test run of an unchanged draft asks for the same
+    /// reference, and Groundwork source references are create-only. Writing unconditionally therefore failed
+    /// every rerun, and testing-then-writing fails whichever of two simultaneous first runs loses the race.
+    /// Both outcomes reject a request that is perfectly valid, so neither is treated as an error here: the row
+    /// the winner wrote describes the same template this request compiled.
+    ///
+    /// A create that fails while no row exists is a different matter and still propagates.
+    /// </summary>
+    private async ValueTask EnsureTemplateSourceReferenceAsync(
+        string templateReferenceId,
+        WorkflowExecutableSourceReference templateReference,
+        CancellationToken cancellationToken)
+    {
+        if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is not null)
+            return;
+
+        try
+        {
+            await sourceReferences.SaveAsync(templateReference, cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
+                throw;
+        }
+    }
 
     private static WorkflowExecutableSourceReference CreateTemplateReference(
         string sourceReferenceId,
