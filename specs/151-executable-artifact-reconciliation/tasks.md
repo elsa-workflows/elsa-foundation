@@ -867,7 +867,11 @@ it is the item most likely to need a conversation rather than code.
 
 ### Verify what survived main's port
 
-- [ ] T159 **Diff each already-ported v2 store against our v1 version and list the missing spec-151 deltas.** `main` ported `WorkflowTriggerBinding`, `RecurringTriggerSchedule`, `WorkflowExecutableSourceReference`, `WorkflowExecutable` and `ExecutableActivityTemplate` from the **pre-151** v1, so our deltas are probably absent: the `Source` and `Revision` fields, T145's store-side filtering, and the bounded-read shapes. Cheap, and it sharpens every estimate below - do it before starting the build group.
+- [x] T159 **Diff each already-ported v2 store against our v1 version and list the missing spec-151 deltas.** `main` ported `WorkflowTriggerBinding`, `RecurringTriggerSchedule`, `WorkflowExecutableSourceReference`, `WorkflowExecutable` and `ExecutableActivityTemplate` from the **pre-151** v1, so our deltas are probably absent: the `Source` and `Revision` fields, T145's store-side filtering, and the bounded-read shapes. Cheap, and it sharpens every estimate below - do it before starting the build group.
+  - **Done 2026-08-24. The delta is one rename, not a set of added fields.** Spec 151 renames `PublicationId` to `ActivationId` on `WorkflowTriggerBinding`, `RecurringTriggerSchedule` and `WorkflowExecutableSourceReference`, propagated through their id-builders (`BuildId`, `BuildFanOutId`).
+  - v2 serializes each model wholesale into the row's JSON content and projects named lookup fields alongside it, so the **content** carries our shape automatically once the model is renamed. What does not follow automatically is the projection: `main`'s conventions write `ElsaRuntimeV2StorageManifest.PublicationIdField`. The port renames that projected field rather than adding one.
+  - `WorkflowActivationSlot` has **0 matches on `main`** - it is ours alone and is the subject of T160-T164. The other four models exist there unchanged.
+  - Consequence for estimating: the already-ported entities need a rename swept through the v2 manifest and conventions, not a re-port. T170's test rebase shrinks accordingly.
 
 ### Build the activation ledger on v2
 
@@ -886,7 +890,10 @@ it is the item most likely to need a conversation rather than code.
 ### Delete rather than port
 
 - [ ] T168 **Retire the document-versioning work - v2 makes it unnecessary.** v2 carries one manifest-level `SchemaVersion` and `main` has zero upcaster or document-version files. Delete rather than port: T142's per-kind version bumps, `ElsaRuntimeDocumentVersions`, `GroundworkRuntimeDocumentSerializer`, the V4-to-V5 upcaster, and the `v3/` and `v5/` fixtures with their bridge tests. Record the removals under §2.21.1 - these are deletions of *our own* tests made obsolete by a platform change, which is a different case from removing coverage.
-- [ ] T169 **Drop the `ActivitiesDesignStorageManifest` nullability fix (`d539b591f`) and confirm the reported regression is moot.** v2 deletes the auto-physicalization block that fix patched - `main`'s file is 275 lines against our ~1,090 - so the `GW-SCHEMA-003` upgrade break very likely disappears with the port. **Tell the Groundwork owner before he spends time on it**; the PR comment currently asks him to fix it.
+- [x] T169 **Drop the `ActivitiesDesignStorageManifest` nullability fix (`d539b591f`) and confirm the reported regression is moot.** v2 deletes the auto-physicalization block that fix patched - `main`'s file is 275 lines against our ~1,090 - so the `GW-SCHEMA-003` upgrade break very likely disappears with the port. **Tell the Groundwork owner before he spends time on it**; the PR comment currently asks him to fix it.
+  - **Confirmed moot 2026-08-24, and the owner has been told** (PR comment 5408901009). Both statements hold at their own point: at the merge base `ccf8a2807` the `Preview102_*` cases existed on `main`, passed there and failed here - a genuine regression. At current `main` `f2b88192e`, **the cause and the detector are both gone**: #1420 deletes the auto-physicalization block (0 matches for the v1 physicalization vocabulary in `main`'s 275-line manifest, against our ~1,090) and deletes `HistoricalSchemaUpgradeTests.cs` outright.
+  - So this becomes a deletion during the port rather than a decision. The earlier ask to the Groundwork owner is withdrawn; nothing to fix.
+  - **T153 is not affected and stands**: it concerns EF Design leaking into the Nuplane package feed, which is unrelated to the v2 migration.
 
 ### Tests and acceptance
 
