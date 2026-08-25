@@ -157,14 +157,38 @@ public sealed class ApiEndpointMapperTests
     [Fact]
     public void Assembly_scanning_maps_endpoints_in_deterministic_full_name_order()
     {
-        var (group, routes) = Group();
+        var (group, _) = Group();
 
         var exception = Record.Exception(() => group.MapEndpointsFrom(typeof(ApiEndpointMapperTests).Assembly));
 
-        // The scan includes the deliberately invalid endpoints above, which throw; determinism is
-        // proven by the failure always being the ordinal-first invalid class.
+        // The scan includes deliberately invalid fixtures, which throw. Determinism is proven by
+        // the failure always naming the ordinal-first type that individually fails to map — the
+        // expectation is computed with the mapper's own ordering, so adding or renaming fixtures
+        // cannot silently change it.
+        var firstInvalid = typeof(ApiEndpointMapperTests).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && typeof(ApiEndpointBase).IsAssignableFrom(type))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .First(type => !MapsIndividually(type));
         Assert.NotNull(exception);
-        Assert.Contains(nameof(NoOperationEndpoint), exception!.Message);
+        Assert.Contains(firstInvalid.FullName!, exception!.Message);
+    }
+
+    private static bool MapsIndividually(Type endpointType)
+    {
+        var (group, _) = Group();
+        var method = typeof(ApiEndpointMapper)
+            .GetMethod(nameof(ApiEndpointMapper.MapEndpoint))!
+            .MakeGenericMethod(endpointType);
+        try
+        {
+            method.Invoke(null, [group, null]);
+            return true;
+        }
+        catch (System.Reflection.TargetInvocationException exception)
+            when (exception.InnerException is InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private sealed class NoRouteEndpoint : ApiEndpointWithoutRequest<SampleResponse>
