@@ -286,6 +286,39 @@ public sealed class ActivityDraftTestRunTests
     }
 
     [Fact]
+    public async Task Concurrent_first_runs_of_one_draft_share_the_template_reference_instead_of_rejecting_one()
+    {
+        var authoring = AuthoringState.Create();
+        // Hold both requests at the point where each has seen the reference as absent, then release them
+        // together. Left to chance the window is far too narrow to hit, and a test that cannot reproduce
+        // the interleaving cannot show the difference between handling it and getting away with it.
+        using var bothObservedAbsent = new RendezvousOnMissingReference(participants: 2);
+        await using var provider = BuildProvider(
+            CreateCatalog(),
+            TimeProvider.System,
+            authoring,
+            decorateSourceReferences: inner => new RendezvousSourceReferenceStore(inner, bothObservedAbsent));
+
+        // Both requests are the first use of this template, so both observe the content-addressed source
+        // reference as absent and race to create it. Only one create-only write can win; the loser is a
+        // valid test run and must proceed against the winner's reference rather than being rejected.
+        // Task.Run so both are dispatched before either blocks: the rendezvous is a blocking wait, and a
+        // caller that reached it inline would stop the second request from ever being issued.
+        var runs = await Task.WhenAll(
+            Task.Run(() => StartAsync(provider, authoring.Draft.Revision, "concurrent-first-a")),
+            Task.Run(() => StartAsync(provider, authoring.Draft.Revision, "concurrent-first-b")));
+
+        Assert.All(runs, run => Assert.Null(run.Failure));
+        Assert.Equal(2, runs.Select(run => run.TestRunId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, runs.Select(run => run.WorkflowExecutionId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, runs.Select(run => run.SourceReferenceId).Distinct(StringComparer.Ordinal).Count());
+        // One template, so one artifact: the reference both runs raced to create is addressed by its content.
+        Assert.Single(runs.Select(run => run.ArtifactId).Distinct(StringComparer.Ordinal));
+        // Both dispatched: the loser of the create race produced a real run, not a rejected one.
+        Assert.All(runs, run => Assert.NotNull(run.SourceReferenceId));
+    }
+
+    [Fact]
     public async Task Tri_state_inputs_reject_contradictions_and_accept_explicit_json_null()
     {
         var authoring = AuthoringState.Create();
@@ -713,7 +746,8 @@ public sealed class ActivityDraftTestRunTests
         bool makeFirstDispatchAmbiguous = false,
         string? persistenceScope = null,
         IActivityDraftTestRunCancellationPolicy? cancellationPolicy = null,
-        IExternalPayloadStore? externalPayloadStore = null)
+        IExternalPayloadStore? externalPayloadStore = null,
+        Func<IWorkflowExecutableSourceReferenceStore, IWorkflowExecutableSourceReferenceStore>? decorateSourceReferences = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -748,6 +782,16 @@ public sealed class ActivityDraftTestRunTests
         services.AddSingleton<IGroundworkStorageSessionSource>(persistence.Sessions);
         services.Replace(ServiceDescriptor.Scoped<IPersistenceAccessContextAccessor>(
             _ => persistence.Access(persistenceScope ?? DefaultScope)));
+        if (decorateSourceReferences is not null)
+        {
+            var registration = services.Last(x => x.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore));
+            services.Remove(registration);
+            services.Add(ServiceDescriptor.Describe(
+                typeof(IWorkflowExecutableSourceReferenceStore),
+                serviceProvider => decorateSourceReferences(
+                    (IWorkflowExecutableSourceReferenceStore)CreateService(registration, serviceProvider)),
+                registration.Lifetime));
+        }
         if (startPolicy is not null)
         {
             services.RemoveAll<IWorkflowExecutableStartPolicy>();
@@ -1082,6 +1126,62 @@ public sealed class ActivityDraftTestRunTests
     {
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             throw new InvalidOperationException("provider-secret fault details stay in Runtime Evidence.");
+    }
+
+    /// <summary>
+    /// Releases its participants only once every one of them has arrived, so the create-only race is forced
+    /// rather than hoped for. It opens once and stays open: only the first use of a template races.
+    /// </summary>
+    private sealed class RendezvousOnMissingReference(int participants) : IDisposable
+    {
+        private readonly CountdownEvent countdown = new(participants);
+
+        public void ArriveAndWait()
+        {
+            if (countdown.IsSet)
+                return;
+
+            countdown.Signal();
+            // A generous bound rather than an indefinite wait: if the interleaving cannot be reached the
+            // test should fail on its assertions, not hang the suite.
+            countdown.Wait(TimeSpan.FromSeconds(30));
+        }
+
+        public void Dispose() => countdown.Dispose();
+    }
+
+    private sealed class RendezvousSourceReferenceStore(
+        IWorkflowExecutableSourceReferenceStore inner,
+        RendezvousOnMissingReference rendezvous) : IWorkflowExecutableSourceReferenceStore
+    {
+        public async ValueTask<WorkflowExecutableSourceReference?> FindAsync(
+            string sourceReferenceId,
+            CancellationToken cancellationToken = default)
+        {
+            var reference = await inner.FindAsync(sourceReferenceId, cancellationToken);
+            if (reference is null)
+                rendezvous.ArriveAndWait();
+            return reference;
+        }
+
+        public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(reference, cancellationToken);
+        public ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default) =>
+            inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(sourceReferenceId, cancellationToken);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+            WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListByArtifactPageAsync(query, cancellationToken);
+        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+            WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListPageAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
+            WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            inner.ListUnreferencedArtifactIdsAsync(candidates, now, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
+            WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default) =>
+            inner.DeleteExpiredOrRetiredAsync(batch, now, cancellationToken);
     }
 
     private sealed class SequentialIdentityGenerator : IIdentityGenerator

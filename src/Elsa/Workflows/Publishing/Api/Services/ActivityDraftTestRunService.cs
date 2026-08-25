@@ -202,7 +202,21 @@ public sealed class ActivityDraftTestRunService(
         // resolves to the reference the first run already created. Source references are create-only, so
         // reuse that one: recreating it is what made every second test run of a draft throw.
         if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
-            await sourceReferences.SaveAsync(templateReference, cancellationToken);
+        {
+            try
+            {
+                await sourceReferences.SaveAsync(templateReference, cancellationToken);
+            }
+            catch (InvalidOperationException)
+            {
+                // Two first-use requests can both observe the reference as absent, and only one create-only
+                // write can win. Both are valid test runs and the row is content-addressed, so the loser
+                // continues against the winner's reference rather than being rejected. If no row exists even
+                // now the write failed for some other reason, which must surface.
+                if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
+                    throw;
+            }
+        }
 
         var origin = new ActivityInvocationOrigin([
             new(ActivityInvocationOriginSegmentKind.WorkflowRoot, $"activity-test-wrapper:{definition.Id}"),
