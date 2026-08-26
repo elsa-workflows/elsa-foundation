@@ -282,8 +282,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     {
         var operationalStateId = $"ownership:{commit.WorkflowExecutionId}";
         var identity = GroundworkV2RuntimeLivenessCodec.Identity(commit.WorkflowExecutionId, operationalStateId);
-        var unit = sessions.Unit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, targetName);
-        var entry = sessions.Open(unit.Id.Value, access, targetName).Read(GroundworkRuntimeRowStore.Key(identity));
+        var entry = ReadRowIsolated(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, access, identity);
         if (entry is null)
             return new(
                 commit.WorkflowExecutionId,
@@ -479,9 +478,25 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
     private CheckpointMarker? ReadMarker(StorageAccess access, string commitId)
     {
-        var unit = sessions.Unit(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, targetName);
-        var entry = sessions.Open(unit.Id.Value, access, targetName).Read(GroundworkRuntimeRowStore.Key(commitId));
+        var entry = ReadRowIsolated(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access, commitId);
         return entry is null ? null : DeserializeMarker(entry.Values.Values);
+    }
+
+    /// <summary>
+    /// Reads one row through a unit of work of its own rather than through the session source's cached
+    /// session. The cached session wraps one provider connection, and the source hands the same instance
+    /// to every caller whose access matches — so two concurrent commits for the same scope share a
+    /// connection, and PostgreSQL and SQL Server refuse concurrent commands on one connection outright
+    /// ("a command is already in progress"). SQLite serializes and the MongoDB driver is thread-safe,
+    /// which is why the defect surfaces on exactly two of the four providers. The commit itself already
+    /// runs in its own unit of work per call; this gives its reads the same isolation. The unit of work
+    /// is disposed without committing, which rolls back a transaction that staged nothing.
+    /// </summary>
+    private StoredEntry? ReadRowIsolated(string unitId, StorageAccess access, string id)
+    {
+        var unit = sessions.Unit(unitId, targetName);
+        using var unitOfWork = sessions.BeginUnitOfWork(access, BatchWriteOptions.Default, [unitId], targetName);
+        return unitOfWork.OpenSession(unit).Read(GroundworkRuntimeRowStore.Key(id));
     }
 
     private static CheckpointMarker DeserializeMarker(IReadOnlyDictionary<string, object?> values)

@@ -41,8 +41,17 @@ internal sealed class CheckpointCommitAdapter(
             "The checkpoint-commit measured operation sequence is not implemented on the v2 adapter. " +
             "Correctness verification is available; measured runs are blocked. See the adapter host README.");
 
+    /// <summary>
+    /// The frozen scenario stamps every committed state with this tenant, and the checkpoint writer's
+    /// EnsureTenantScope refuses a commit whose ambient scope differs — so this is the only scope the
+    /// correctness baseline can run in. v1 imposed the same requirement; the handover README marked it
+    /// unverified on v2, and the first live correctness run answered it.
+    /// </summary>
+    private const string ScenarioPersistenceScope = "tenant-checkpoint";
+
     public async Task PrepareAsync(CancellationToken cancellationToken) =>
-        composition ??= await RuntimeStoreComposition.CreateAsync(request.Provider, connectionString, cancellationToken);
+        composition ??= await RuntimeStoreComposition.CreateAsync(
+            request.Provider, connectionString, ScenarioPersistenceScope, cancellationToken);
 
     /// <summary>
     /// Runs the catalog-owned correctness baseline and reports the digest it actually produced.

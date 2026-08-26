@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -48,6 +49,7 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
     public static async Task<RuntimeStoreComposition> CreateAsync(
         string providerName,
         string connectionString,
+        string persistenceScope,
         CancellationToken cancellationToken)
     {
         var observer = new WritePathRoundTripObserver(providerName);
@@ -61,6 +63,14 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
 
             // Registered before the runtime family so the units this connection must admit resolve against it.
             services.AddGroundworkStorageProviderConnection(connection);
+
+            // Registered before AddGroundworkV2RuntimeStores, which calls AddPersistenceCore with the
+            // DEFAULT scope — and AddPersistenceCore registers with TryAddScoped, so whoever registers
+            // first wins. The checkpoint writer's EnsureTenantScope compares each committed state's
+            // TenantId against this ambient scope and refuses on mismatch, so a host composed with the
+            // default scope cannot commit the workload's tenant-stamped states at all. Verified against a
+            // live provider, not inferred: the first correctness run failed exactly there.
+            services.AddPersistenceCore(persistenceScope);
 
             // The observer the checkpoint writer picks up. Singleton because the harness snapshots one
             // cumulative count for the process, and both clients must contribute to the same total.
