@@ -104,8 +104,19 @@ scenario parameters and prove it by reproducing `ExpectedInputFingerprint`.
 command rather than a flag on `run`.
 
 **Running the correctness half against a provider.** It compiles and is wired end to end, but no provider
-has executed it. This is the next concrete step and it needs no measurement conditions — only a reachable
-database — because correctness is not timed. A loaded machine is fine.
+has executed it, and it cannot be run yet for a reason that is not the database.
+
+`VerifyCorrectnessAsync` calls `NativePlanEvidenceStaging.PublishInto`, which copies a native-plan evidence
+document out of `ELSA_BENCH_NATIVE_PLAN_STAGING` and fails unless it hashes to the requested
+`--native-plan-sha256`. Nothing produces that document: `capture-plan` is not started. So correctness is
+blocked on a staged document, not on measurement conditions — a loaded machine is otherwise fine, because
+correctness is not timed.
+
+The good news for this particular workload: `checkpoint-commit` declares **no** required native routes, so
+the document it needs carries an empty `Routes` list and no real plan has to be captured to produce one.
+`NativePlanEvidenceStaging.Write` will emit a well-formed document from a `NativePlanEvidenceDocument`
+whose provider identity matches the request. Either finish `capture-plan` or stage a zero-route document
+that way; both are small, and either unblocks running correctness on all four providers.
 
 **`probe-provider` still cannot observe provider identity.** `CheckpointCommitAdapter` therefore echoes
 `ProviderVersion`, `ProviderTopology` and `ProviderConfiguration` from the request. `ValidateCorrectness`
