@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/benchmarks/Elsa/Groundwork/" />
   <Folder Name="/benchmarks/Elsa/Groundwork/StorePerformance/">
+    <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj" />
     <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/benchmarks/Elsa/Workflows/" />

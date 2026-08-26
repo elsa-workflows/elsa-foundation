@@ -52,6 +52,9 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
     {
         var observer = new WritePathRoundTripObserver(providerName);
         var connection = ProviderConnections.Open(providerName, connectionString);
+        // Held so the catch can dispose it, and cleared once ownership transfers to the composition —
+        // after that point DisposeAsync owns both it and the connection.
+        ServiceProvider? built = null;
         try
         {
             var services = new ServiceCollection();
@@ -68,17 +71,24 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // IRuntimeExecutionOwnershipService has no Groundwork replacement; it comes from the runtime core.
             services.AddWorkflowRuntime();
 
-            var built = services.BuildServiceProvider(new ServiceProviderOptions
+            built = services.BuildServiceProvider(new ServiceProviderOptions
             {
                 ValidateScopes = true,
                 ValidateOnBuild = false
             });
 
+            // Admission is real database work — schema inspection per unit — so it is a genuine failure
+            // point, not a formality. If it throws, the provider it was resolved from must be disposed
+            // here: nothing else holds a reference to it yet, and it owns singletons of its own.
             await built.GetRequiredService<GroundworkStorageSessionSource>().InitializeAsync(cancellationToken);
-            return new RuntimeStoreComposition(built, connection, observer);
+            var composition = new RuntimeStoreComposition(built, connection, observer);
+            built = null;
+            return composition;
         }
         catch
         {
+            if (built is not null)
+                await built.DisposeAsync();
             connection.Dispose();
             throw;
         }

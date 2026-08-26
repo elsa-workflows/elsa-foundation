@@ -46,7 +46,9 @@ internal static class NativePlanEvidenceStaging
     /// </summary>
     public static NativePlanEvidenceDocument PublishInto(string outputDirectory, RunRequest request)
     {
-        var reference = request.NativePlanEvidenceReference;
+        // Admitted before use for the same reason as the raw plans below: ArtifactSafety screens the
+        // request for connection material, not for path traversal, and the destination is built from it.
+        var reference = ArtifactStore.EvidenceName(request.NativePlanEvidenceReference);
         var destination = Path.Combine(outputDirectory, reference);
         if (!File.Exists(destination))
             CopyFromStaging(outputDirectory, reference);
@@ -78,16 +80,34 @@ internal static class NativePlanEvidenceStaging
     public static string Sha256(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
-    private static void CopyFromStaging(string outputDirectory, string reference)
+    /// <summary>
+    /// Copies one already-admitted reference. Callers must pass a name that has been through
+    /// <see cref="ArtifactStore.EvidenceName"/> or <see cref="ArtifactStore.RawPlanName"/> first — this
+    /// method does no checking of its own, and the parameter name says so.
+    /// </summary>
+    private static void CopyFromStaging(string outputDirectory, string admittedReference)
     {
         Directory.CreateDirectory(outputDirectory);
-        File.Copy(Path.Combine(RequireStaging(reference), reference), Path.Combine(outputDirectory, reference));
+        File.Copy(
+            Path.Combine(RequireStaging(admittedReference), admittedReference),
+            Path.Combine(outputDirectory, admittedReference));
     }
 
+    /// <summary>
+    /// Admits the reference before it touches the filesystem.
+    ///
+    /// The route list is deserialized from the staged document, so <c>RawPlanReference</c> is untrusted
+    /// input: a value like <c>../outside.txt</c> resolves outside both the staging and artifact roots.
+    /// <c>ArtifactAdmission.ValidateCorrectness</c> does apply <c>SafeRawPlanReference</c>, but only after
+    /// this runs, so relying on it would mean the copy has already happened by the time the reference is
+    /// rejected. <see cref="ArtifactStore.RawPlanName"/> is the harness's own checked resolver and throws
+    /// on anything that is not a safe top-level name.
+    /// </summary>
     private static void EnsureRawPlan(string outputDirectory, string reference)
     {
-        if (File.Exists(Path.Combine(outputDirectory, reference))) return;
-        CopyFromStaging(outputDirectory, reference);
+        var admitted = ArtifactStore.RawPlanName(reference);
+        if (File.Exists(Path.Combine(outputDirectory, admitted))) return;
+        CopyFromStaging(outputDirectory, admitted);
     }
 
     /// <summary>
