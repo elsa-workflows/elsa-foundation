@@ -73,6 +73,19 @@ public sealed class ApiEndpointOptions
     /// <summary>The stable operation identifier used in the endpoint name and inventory.</summary>
     public string? Operation { get; set; }
 
+    /// <summary>
+    /// Overrides the generated <c>{Owner}Endpoints{Operation}</c> endpoint name. Only for operation
+    /// identifiers that were published before the naming scheme existed and are wire-frozen: the
+    /// generated scheme remains the default for everything new.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Whether the shared 401/403 response pair is documented. Public operations that never
+    /// challenge keep their published 200-only documents by opting out.
+    /// </summary>
+    public bool DocumentAuthResponses { get; set; } = true;
+
     /// <summary>Content types the request is accepted as. Also decides whether a request schema is documented.</summary>
     public string[]? Accepts { get; set; }
 

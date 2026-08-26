@@ -491,6 +491,25 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute, Elsa.Api.As
         builder.RequirePermission(Permission);
 }
 
+/// <summary>
+/// The attribute form of <c>RequireAnyPermission</c> for endpoint classes: the caller passes every
+/// permission that individually satisfies the requirement, and the applied convention carries the
+/// full any-mode policy plus the security-disposition metadata the endpoint inventory asserts on.
+/// </summary>
+public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, Elsa.Api.AspNetCore.IEndpointConventionAttribute
+{
+    public RequireAnyPermissionAttribute(params string[] permissions)
+    {
+        Permissions = permissions;
+        Policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Any(permissions));
+    }
+
+    public IReadOnlyList<string> Permissions { get; }
+
+    public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
+        builder.RequireAnyPermission([.. Permissions]);
+}
+
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;
 
 public sealed record PermissionSetAuthorizationRequirement : IAuthorizationRequirement

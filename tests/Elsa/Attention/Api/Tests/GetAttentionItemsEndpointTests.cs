@@ -62,11 +62,18 @@ public sealed class GetAttentionItemsEndpointTests
     [Fact]
     public async Task Unexpected_aggregation_failure_is_not_converted_to_partial_success()
     {
+        // The module endpoint pipeline contains unexpected failures as a sanitized problem: the
+        // caller never sees a partial success, and the failure's own message never leaks.
         var context = CreateContext(new StubAggregationService(new InvalidOperationException("aggregation unavailable")));
+        context.Response.Body = new MemoryStream();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => GetEndpoint().RequestDelegate!(context));
+        await GetEndpoint().RequestDelegate!(context);
 
-        Assert.Equal("aggregation unavailable", exception.Message);
+        Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        context.Response.Body.Position = 0;
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        Assert.DoesNotContain("aggregation unavailable", body);
+        Assert.DoesNotContain("items", body);
     }
 
     private static RouteEndpoint GetEndpoint()

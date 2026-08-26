@@ -1,11 +1,10 @@
 using System.Globalization;
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Workflows.Dashboard;
 
@@ -18,34 +17,29 @@ public static class WorkflowsDashboardApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var portfolio = new RequestDelegate(HandleWorkflowPortfolioAsync);
-        var health = new RequestDelegate(HandleWorkflowRunHealthAsync);
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The published document tags this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
+        var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
+        var api = endpoints.MapModuleEndpoints(
+            OwnerId,
+            WorkflowsDashboardJsonContext.Default,
+            jsonContentType: "application/json",
+            tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
-        endpoints.MapGet("/_elsa/workflows/dashboard/definitions", portfolio)
-            .WithName("ElsaWorkflowsDashboardGetWorkflowPortfolio")
-            .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(WorkflowsDashboardPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(WorkflowPortfolioSnapshot)),
-                Unauthorized(),
-                Forbidden());
+        // The published error contract is a plain-text 400 carrying the exact validation message,
+        // and both operation ids predate the naming scheme, so the operations stay on the group's
+        // raw seam with their own query parsing and writes.
+        api.MapUnboundOperation(
+                "GET", "/_elsa/workflows/dashboard/definitions", "GetWorkflowPortfolio",
+                typeof(WorkflowPortfolioSnapshot), StatusCodes.Status200OK, null, HandleWorkflowPortfolioAsync,
+                name: "ElsaWorkflowsDashboardGetWorkflowPortfolio")
+            .RequirePermission(WorkflowsDashboardPermissions.Read);
 
-        endpoints.MapGet("/_elsa/workflows/dashboard/runs", health)
-            .WithName("ElsaWorkflowsDashboardGetWorkflowRunHealth")
-            .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(WorkflowsDashboardPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(WorkflowRunHealthSnapshot)),
-                Unauthorized(),
-                Forbidden());
+        api.MapUnboundOperation(
+                "GET", "/_elsa/workflows/dashboard/runs", "GetWorkflowRunHealth",
+                typeof(WorkflowRunHealthSnapshot), StatusCodes.Status200OK, null, HandleWorkflowRunHealthAsync,
+                name: "ElsaWorkflowsDashboardGetWorkflowRunHealth")
+            .RequirePermission(WorkflowsDashboardPermissions.Read);
     }
 
     private static async Task HandleWorkflowPortfolioAsync(HttpContext context)
@@ -103,13 +97,4 @@ public static class WorkflowsDashboardApi
             await context.Response.WriteAsync(exception.Message, context.RequestAborted);
         }
     }
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>
-        new(statusCode, bodyType, ["application/json"]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 }

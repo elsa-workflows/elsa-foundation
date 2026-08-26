@@ -66,6 +66,64 @@ public sealed class ApiEndpointMapperTests
     }
 
     [Fact]
+    public void A_group_tag_replaces_the_owner_tag_on_every_operation()
+    {
+        var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(services);
+        var group = routes.MapModuleEndpoints(
+            "Test.Owner",
+            new TestJsonContext(new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            tag: "HostApplication");
+
+        group.MapEndpoint<ShapeEndpoints.UnboundShape>();
+
+        var endpoint = Single(routes);
+        Assert.Equal(["HostApplication"], endpoint.Metadata.GetMetadata<ITagsMetadata>()!.Tags);
+    }
+
+    [Fact]
+    public void A_wire_frozen_name_override_replaces_the_generated_endpoint_name()
+    {
+        var (group, routes) = Group();
+
+        group.MapOperation<SampleBody>("POST", "/legacy", "Legacy", EndpointBodyMode.None, null,
+            typeof(SampleResponse), StatusCodes.Status200OK, null,
+            (_, _, _) => Task.CompletedTask, name: "LegacyFrozenOperationId");
+
+        var endpoint = Single(routes);
+        Assert.Equal("LegacyFrozenOperationId", endpoint.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName);
+    }
+
+    [Fact]
+    public void Auth_responses_can_be_left_undocumented_for_public_operations()
+    {
+        var (group, routes) = Group();
+
+        group.MapOperation<SampleBody>("GET", "/public", "Public", EndpointBodyMode.None, null,
+            typeof(SampleResponse), StatusCodes.Status200OK, null,
+            (_, _, _) => Task.CompletedTask, documentAuthResponses: false);
+
+        var endpoint = Single(routes);
+        var statuses = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Select(metadata => metadata.StatusCode).ToArray();
+        Assert.Equal([StatusCodes.Status200OK], statuses);
+    }
+
+    [Fact]
+    public void An_unbound_operation_can_document_a_status_its_dispatch_does_not_use()
+    {
+        var (group, routes) = Group();
+
+        group.MapUnboundOperation("GET", "/stream", "Stream", null,
+            StatusCodes.Status200OK, StatusCodes.Status204NoContent, _ => Task.CompletedTask);
+
+        var endpoint = Single(routes);
+        var documented = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Single(metadata => metadata.StatusCode == StatusCodes.Status204NoContent);
+        Assert.Equal(typeof(void), documented.Type);
+    }
+
+    [Fact]
     public void Unbound_shape_declares_no_request_metadata()
     {
         var (group, routes) = Group();

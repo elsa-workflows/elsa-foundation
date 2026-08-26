@@ -90,6 +90,10 @@ public static class EndpointConventionBuilderExtensions
     /// <param name="accepts">Content types the request body is accepted as. Defaults to JSON.</param>
     /// <param name="responseStatus">The success status code. Defaults to 200, or 204 when there is no response body.</param>
     /// <param name="tag">The OpenAPI tag. Defaults to <paramref name="owner"/>.</param>
+    /// <param name="documentAuthResponses">
+    /// Whether the shared 401/403 response pair is documented. Public operations that never
+    /// challenge keep their published 200-only documents by opting out.
+    /// </param>
     public static TBuilder WithModuleOperation<TBuilder>(
         this TBuilder builder,
         string name,
@@ -98,7 +102,8 @@ public static class EndpointConventionBuilderExtensions
         Type? requestType = null,
         string[]? accepts = null,
         int? responseStatus = null,
-        string? tag = null)
+        string? tag = null,
+        bool documentAuthResponses = true)
         where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -111,10 +116,14 @@ public static class EndpointConventionBuilderExtensions
         var status = responseStatus ?? (hasBody ? StatusCodes.Status200OK : StatusCodes.Status204NoContent);
         var metadata = new List<object>
         {
-            new ProducesResponseTypeMetadata(status, responseType ?? typeof(void), hasBody ? [JsonContentType] : []),
-            new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-            new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), [])
+            new ProducesResponseTypeMetadata(status, responseType ?? typeof(void), hasBody ? [JsonContentType] : [])
         };
+
+        if (documentAuthResponses)
+        {
+            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []));
+            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
+        }
 
         if (requestType is not null)
             metadata.Add(new AcceptsMetadata(accepts ?? [JsonContentType], requestType, false));
@@ -214,4 +223,18 @@ public static class EndpointConventionBuilderExtensions
     {
         public IReadOnlyList<string> Tags { get; } = [ApplicationName];
     }
+}
+
+/// <summary>
+/// The attribute form of <see cref="EndpointConventionBuilderExtensions.AllowPublic{TBuilder}"/> for
+/// endpoint classes: applies the anonymous-access marker together with the public security
+/// disposition the endpoint inventory demands, so the attribute and the imperative form cannot drift.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public sealed class AllowPublicAttribute(string category, string reason) : Attribute, IEndpointConventionAttribute
+{
+    public string Category { get; } = category;
+    public string Reason { get; } = reason;
+
+    public void Apply(IEndpointConventionBuilder builder) => builder.AllowPublic(Category, Reason);
 }

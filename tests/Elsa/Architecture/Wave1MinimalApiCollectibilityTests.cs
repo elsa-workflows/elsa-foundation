@@ -95,6 +95,11 @@ public sealed class Wave1MinimalApiCollectibilityTests
         var publishedDataSource = new CollectibilityEndpointDataSource();
         serviceDescriptors.AddSingleton<EndpointDataSource>(publishedDataSource);
         serviceDescriptors.AddDynamicEndpointApiExplorerRefresh();
+        // The owner assembly is deliberately loaded collectibly here, so its contract types ARE
+        // collectible and the fail-closed lifetime boundary would reject the mapping outright.
+        // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
+        // document survives the cycle, and the weak-reference assertions below prove the release.
+        serviceDescriptors.SuppressOpenApiLifetimeEnforcement();
         var configureServices = featureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)
             ?? throw new InvalidOperationException($"{owner.FeatureType} does not expose ConfigureServices.");
         configureServices.Invoke(feature, [serviceDescriptors]);

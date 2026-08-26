@@ -1,5 +1,6 @@
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -21,6 +22,7 @@ public sealed class ApiCapabilitiesFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddApiCapabilities();
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<ApiCapabilitiesPermissionContributor>();
     }
 

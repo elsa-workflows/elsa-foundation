@@ -32,13 +32,15 @@ public sealed class ModuleEndpointGroup
     private readonly IEndpointRouteBuilder _endpoints;
     private readonly string _jsonContentType;
     private readonly JsonSerializerContext _jsonContext;
+    private readonly string? _tag;
 
-    internal ModuleEndpointGroup(IEndpointRouteBuilder endpoints, string ownerId, JsonSerializerContext jsonContext, string jsonContentType)
+    internal ModuleEndpointGroup(IEndpointRouteBuilder endpoints, string ownerId, JsonSerializerContext jsonContext, string jsonContentType, string? tag = null)
     {
         _endpoints = endpoints;
         OwnerId = ownerId;
         _jsonContext = jsonContext;
         _jsonContentType = jsonContentType;
+        _tag = tag;
     }
 
     /// <summary>The stable owning module identifier applied to every endpoint in the group.</summary>
@@ -77,7 +79,7 @@ public sealed class ModuleEndpointGroup
         Func<HttpContext, CancellationToken, Task<TResponse>> handler,
         int successStatus = StatusCodes.Status200OK)
         where TResponse : notnull =>
-        MapUnbound(method, pattern, operation, typeof(TResponse), successStatus,
+        MapUnbound(method, pattern, operation, typeof(TResponse), successStatus, null,
             async context => await WriteJsonAsync(context, await handler(context, context.RequestAborted), successStatus));
 
     /// <summary>Writes a value using the owner's source-generated serializer metadata.</summary>
@@ -104,7 +106,9 @@ public sealed class ModuleEndpointGroup
         int successStatus,
         int? documentedStatus,
         Func<HttpContext, TMessage, CancellationToken, Task> dispatch,
-        bool strictTypedParsing = false)
+        bool strictTypedParsing = false,
+        string? name = null,
+        bool documentAuthResponses = true)
     {
         var effectiveBodyMode = bodyMode ?? DefaultBodyMode(method);
         var jsonOptions = _jsonContext.Options;
@@ -167,12 +171,14 @@ public sealed class ModuleEndpointGroup
         // Declaring accepts is therefore what decides the OpenAPI request type, not the body mode.
         var declaresRequest = accepts is not null || effectiveBodyMode is not EndpointBodyMode.None;
         return builder.WithModuleOperation(
-            $"{OwnerId.Replace(".", string.Empty, StringComparison.Ordinal)}Endpoints{operation}",
+            name ?? $"{OwnerId.Replace(".", string.Empty, StringComparison.Ordinal)}Endpoints{operation}",
             OwnerId,
             responseType,
             declaresRequest ? typeof(TMessage) : null,
             accepts,
-            documentedStatus ?? successStatus);
+            documentedStatus ?? successStatus,
+            _tag,
+            documentAuthResponses);
     }
 
     /// <summary>Maps an options-described operation returning a body. Used by the endpoint-class mapper.</summary>
@@ -184,7 +190,7 @@ public sealed class ModuleEndpointGroup
             typeof(TResponse), options.SuccessStatus, options.DocumentedStatus,
             async (context, request, cancellationToken) =>
                 await WriteJsonAsync(context, await dispatch(context, request, cancellationToken), options.SuccessStatus),
-            options.StrictTypedParsing);
+            options.StrictTypedParsing, options.Name, options.DocumentAuthResponses);
 
     /// <summary>Maps an options-described operation with no request contract. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapUnboundBody<TResponse>(
@@ -192,7 +198,9 @@ public sealed class ModuleEndpointGroup
         Func<HttpContext, CancellationToken, Task<TResponse>> dispatch)
         where TResponse : notnull =>
         MapUnbound(options.Method!, options.Route!, options.Operation!, typeof(TResponse), options.SuccessStatus,
-            async context => await WriteJsonAsync(context, await dispatch(context, context.RequestAborted), options.SuccessStatus));
+            options.DocumentedStatus,
+            async context => await WriteJsonAsync(context, await dispatch(context, context.RequestAborted), options.SuccessStatus),
+            options.Name, options.DocumentAuthResponses);
 
     /// <summary>Maps an options-described operation whose status travels with the result. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapResultBody<TRequest, TResponse>(
@@ -206,7 +214,7 @@ public sealed class ModuleEndpointGroup
                 var result = await dispatch(context, request, cancellationToken);
                 await WriteJsonAsync(context, result.Response, result.StatusCode);
             },
-            options.StrictTypedParsing);
+            options.StrictTypedParsing, options.Name, options.DocumentAuthResponses);
 
     /// <summary>Maps an options-described operation returning no content. Used by the endpoint-class mapper.</summary>
     internal IEndpointConventionBuilder MapNoContent<TRequest>(
@@ -219,7 +227,7 @@ public sealed class ModuleEndpointGroup
                 await dispatch(context, request, cancellationToken);
                 context.Response.StatusCode = StatusCodes.Status204NoContent;
             },
-            options.StrictTypedParsing);
+            options.StrictTypedParsing, options.Name, options.DocumentAuthResponses);
 
     private static EndpointBodyMode DefaultBodyMode(string method) => method switch
     {
@@ -284,13 +292,32 @@ public sealed class ModuleEndpointGroup
         return null;
     }
 
+    /// <summary>
+    /// Maps an operation with no bound request whose dispatch owns the entire response — the escape
+    /// hatch for streaming and other non-JSON responses that still belong to the module convention.
+    /// </summary>
+    public IEndpointConventionBuilder MapUnboundOperation(
+        string method,
+        string pattern,
+        string operation,
+        Type? responseType,
+        int successStatus,
+        int? documentedStatus,
+        Func<HttpContext, Task> dispatch,
+        string? name = null,
+        bool documentAuthResponses = true) =>
+        MapUnbound(method, pattern, operation, responseType, successStatus, documentedStatus, dispatch, name, documentAuthResponses);
+
     private IEndpointConventionBuilder MapUnbound(
         string method,
         string pattern,
         string operation,
         Type? responseType,
         int successStatus,
-        Func<HttpContext, Task> dispatch)
+        int? documentedStatus,
+        Func<HttpContext, Task> dispatch,
+        string? name = null,
+        bool documentAuthResponses = true)
     {
         RequestDelegate handler = async context =>
         {
@@ -310,19 +337,51 @@ public sealed class ModuleEndpointGroup
 
         return _endpoints.MapMethods(pattern, [method], handler)
             .WithModuleOperation(
-                $"{OwnerId.Replace(".", string.Empty, StringComparison.Ordinal)}Endpoints{operation}",
+                name ?? $"{OwnerId.Replace(".", string.Empty, StringComparison.Ordinal)}Endpoints{operation}",
                 OwnerId,
                 responseType,
                 null,
                 null,
-                successStatus);
+                documentedStatus ?? successStatus,
+                _tag,
+                documentAuthResponses);
     }
 
     private Task WriteProblemAsync(HttpContext context, EndpointProblem problem)
     {
         var writer = context.RequestServices.GetKeyedService<IEndpointProblemWriter>(OwnerId)
-                     ?? context.RequestServices.GetRequiredService<IEndpointProblemWriter>();
-        return writer.WriteAsync(context, problem);
+                     ?? context.RequestServices.GetService<IEndpointProblemWriter>();
+        return writer is not null
+            ? writer.WriteAsync(context, problem)
+            : WriteFallbackProblemAsync(context, problem);
+    }
+
+    // The last-resort problem shape for owners that publish no error contract of their own. Owners
+    // whose failure bodies are pinned register a keyed writer; this fallback keeps a bare host from
+    // failing the failure path itself. Written by hand so no serializer cache is involved.
+    private static async Task WriteFallbackProblemAsync(HttpContext context, EndpointProblem problem)
+    {
+        context.Response.StatusCode = problem.StatusCode;
+        context.Response.ContentType = "application/problem+json";
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("status", problem.StatusCode);
+            writer.WriteStartObject("errors");
+            foreach (var (key, messages) in problem.Errors)
+            {
+                writer.WriteStartArray(key);
+                foreach (var message in messages)
+                    writer.WriteStringValue(message);
+                writer.WriteEndArray();
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
     }
 
     private static void LogUnexpected(HttpContext context, Exception exception, Type messageType) =>

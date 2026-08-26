@@ -9,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../Api/Endpoints/Elsa.Api.Endpoints.csproj" />
     <ProjectReference Include="../../Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="../../Events/Core/Elsa.Events.Core.csproj" />
     <ProjectReference Include="../Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
