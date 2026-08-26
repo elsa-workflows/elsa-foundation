@@ -105,7 +105,37 @@ a throwing `Operations` blocks every process kind, not only the measured one. Th
 tidiness. Do not collapse it back into `run` while `Operations` throws, or correctness becomes unreachable
 along with measurement.
 
-**Running the correctness half against a provider.** It compiles and is wired end to end, but no provider
+**Correctness has now run against all four providers — two pass, two are blocked upstream of this project.**
+
+| provider | result |
+|---|---|
+| sqlite | **passes** — result digest exactly matches the frozen `ebb92b59…`, 4 096 provider round trips counted through the production commit path |
+| mongodb | **passes** — same digest, 10 240 round trips |
+| postgresql | **fails in the concurrent stale-fence phase** — see elsa-workflows/elsa-foundation#1449 |
+| sqlserver | fails identically to postgresql, same mechanism |
+
+The two failures are not adapter bugs: `GroundworkStorageSessionSource` hands one cached session (one
+physical connection) to every caller with matching access, and PostgreSQL/SQL Server refuse concurrent
+commands on one connection. The concurrent phase collides first in the checkpoint writer's marker read
+(fixed here — serialized on the cached session instance, because the writer's contract tests forbid
+opening a unit of work before lease handling) and then in the executable store's own reads
+(structural, tracked in #1449). SQLite serializes and Mongo's driver is thread-safe, which is why exactly
+those two pass.
+
+Two operational facts the runs established, both previously unverified:
+
+- **The correctness baseline must run in the `tenant-checkpoint` persistence scope.** The scenario stamps
+  every state with that tenant and the checkpoint writer's `EnsureTenantScope` refuses any other ambient
+  scope. `RuntimeStoreComposition` now takes the scope and registers it *before* `AddGroundworkV2RuntimeStores`,
+  whose own `AddPersistenceCore()` call registers the default scope via `TryAddScoped` — first registration
+  wins, so ordering is load-bearing.
+- **Use a fresh database per attempt.** The executable's ArtifactId is fixed by the frozen scenario, and a
+  failed run leaves rows (including the separate coordination row) that make the next run fail differently —
+  which cost a misdiagnosis before it was spotted.
+
+Historical note — the paragraph below described the state before those runs:
+
+It compiles and is wired end to end, but no provider
 has executed it, and it cannot be run yet for a reason that is not the database.
 
 `VerifyCorrectnessAsync` calls `NativePlanEvidenceStaging.PublishInto`, which copies a native-plan evidence
