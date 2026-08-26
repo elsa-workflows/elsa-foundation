@@ -117,7 +117,8 @@ along with measurement.
 The two failures are not adapter bugs: `GroundworkStorageSessionSource` hands one cached session (one
 physical connection) to every caller with matching access, and PostgreSQL/SQL Server refuse concurrent
 commands on one connection. The concurrent phase collides first in the checkpoint writer's marker read
-(fixed here — isolated into its own unit of work) and then in the executable store's coordination read
+(fixed here — serialized on the cached session instance, because the writer's contract tests forbid
+opening a unit of work before lease handling) and then in the executable store's own reads
 (structural, tracked in #1449). SQLite serializes and Mongo's driver is thread-safe, which is why exactly
 those two pass.
 

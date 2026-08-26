@@ -95,8 +95,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         // writes — it resolves from the durable marker alone — and it must stay resolvable when the lease is
         // gone, because the replay case IS crash recovery: the original committer may have died holding the
         // lease, and the retry arrives after expiry. Requiring a lease here would turn an idempotent replay
-        // into a rejection. The read has always been provider I/O at this point; the isolated unit of work
-        // only changes which connection carries it (see ReadRowIsolated).
+        // into a rejection. The read is a session read, never a unit of work: the writer's contract tests
+        // assert that no unit of work opens before lease handling (see ReadRowSerialized).
         if (ReadMarker(access, commit.CommitId) is { } existing)
             return ResolveReplay(commit, fingerprint, existing);
 
@@ -288,7 +288,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     {
         var operationalStateId = $"ownership:{commit.WorkflowExecutionId}";
         var identity = GroundworkV2RuntimeLivenessCodec.Identity(commit.WorkflowExecutionId, operationalStateId);
-        var entry = ReadRowIsolated(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, access, identity);
+        var entry = ReadRowSerialized(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind, access, identity);
         if (entry is null)
             return new(
                 commit.WorkflowExecutionId,
@@ -484,25 +484,35 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
     private CheckpointMarker? ReadMarker(StorageAccess access, string commitId)
     {
-        var entry = ReadRowIsolated(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access, commitId);
+        var entry = ReadRowSerialized(ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind, access, commitId);
         return entry is null ? null : DeserializeMarker(entry.Values.Values);
     }
 
     /// <summary>
-    /// Reads one row through a unit of work of its own rather than through the session source's cached
-    /// session. The cached session wraps one provider connection, and the source hands the same instance
-    /// to every caller whose access matches — so two concurrent commits for the same scope share a
-    /// connection, and PostgreSQL and SQL Server refuse concurrent commands on one connection outright
-    /// ("a command is already in progress"). SQLite serializes and the MongoDB driver is thread-safe,
-    /// which is why the defect surfaces on exactly two of the four providers. The commit itself already
-    /// runs in its own unit of work per call; this gives its reads the same isolation. The unit of work
-    /// is disposed without committing, which rolls back a transaction that staged nothing.
+    /// Reads one row through the session source's cached session, serialized on the session instance.
+    ///
+    /// Two constraints meet here and each rules out the other's obvious fix. The writer's own contract
+    /// tests require that nothing opens a unit of work before root-write lease handling
+    /// (Workflow_execution_write_requires_the_root_write_lease_before_opening_a_unit_of_work and its
+    /// unavailable/lost-lease siblings), so this read cannot ride a unit of work of its own — an earlier
+    /// revision did exactly that and those tests caught it. And the cached session wraps one provider
+    /// connection handed to every caller whose access matches, and PostgreSQL and SQL Server refuse
+    /// concurrent commands on one connection ("a command is already in progress") — observed live under
+    /// the checkpoint workload's concurrent stale-rejection phase, so the read cannot be a bare
+    /// session.Read either.
+    ///
+    /// The lock serializes exactly the collision domain: sessions are cached per (target, unit,
+    /// fingerprint, access), so every sharer of this connection locks the same instance, and sessions for
+    /// other units are untouched. The broader shared-session hazard across stores is #1449; this only
+    /// keeps the writer's own reads from racing each other.
     /// </summary>
-    private StoredEntry? ReadRowIsolated(string unitId, StorageAccess access, string id)
+    private StoredEntry? ReadRowSerialized(string unitId, StorageAccess access, string id)
     {
-        var unit = sessions.Unit(unitId, targetName);
-        using var unitOfWork = sessions.BeginUnitOfWork(access, BatchWriteOptions.Default, [unitId], targetName);
-        return unitOfWork.OpenSession(unit).Read(GroundworkRuntimeRowStore.Key(id));
+        var session = sessions.Open(sessions.Unit(unitId, targetName).Id.Value, access, targetName);
+        lock (session)
+        {
+            return session.Read(GroundworkRuntimeRowStore.Key(id));
+        }
     }
 
     private static CheckpointMarker DeserializeMarker(IReadOnlyDictionary<string, object?> values)
