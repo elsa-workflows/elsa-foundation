@@ -14,7 +14,11 @@ substrate.
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
 | `probe-provider` | **partial** — opens the connection; does not yet read back sanitized provider configuration |
 | `capture-plan` | **not started** |
-| `checkpoint-commit` adapter leaf | **not started** — see "What remains". Handed to another session; the optional-observer `src/` change on `GroundworkV2RuntimeCheckpointWriter` is approved and belongs with it |
+| optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
+| `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
+| `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
+| `verify-correctness` command | **done**, compiles, **not yet run against a provider** |
+| the five measured operations | **not started** — see "What remains" |
 | a measured cohort | **not run**, and not runnable on a loaded machine by construction |
 
 Nothing here has produced a measurement. No number in this project has been measured on v2.
@@ -69,16 +73,47 @@ instrumented from outside `src/`. Anything the leaf measured would have been a *
 from elementary store calls — a caveat that would have had to travel with every published number, because a
 reader will otherwise assume the figure describes the path the product actually runs.
 
-**Resolved: Sipke has approved giving the checkpoint writer an optional observer as a `src/` change.** The
-leaf therefore measures the production path directly and the reconstruction caveat does not apply. Do not
-reintroduce it by timing hand-rolled store calls where the public writer would do — that was a workaround for
-a constraint that no longer exists.
+**Resolved, and implemented.** `GroundworkV2RuntimeCheckpointWriter` now takes an optional
+`IWritePathObserver` and attaches it to every staged write through its two staging funnels (`Stage` and
+`StageDelete`, so the coverage is every mutation rather than a remembered subset), and
+`GroundworkV2RuntimeRegistration` resolves one with `provider.GetService<IWritePathObserver>()`.
+`BatchWriteOptions` carries no observer, so per-write is the only place it can attach; the batched
+unit-of-work path takes the observer from the first staged write of each chunk. Production is unchanged
+when nothing registers one. The leaf therefore measures the production path directly and the
+reconstruction caveat does not apply. Do not reintroduce it by timing hand-rolled store calls where the
+public writer would do — that was a workaround for a constraint that no longer exists.
 
 The v1 host's separate reason for timing elementary calls still stands and is unrelated: a named phase of
 1024 durable commits is hours at 100 invocations, so the *decomposition* is about run time, not about
 instrumentation.
 
 ## What remains
+
+**The five measured operations.** The frozen spec names them `seed-fenced-executions`,
+`commit-checkpoint-bundle`, `replay-equivalent-commit`, `attempt-stale-fence-commit` and
+`reopen-and-read-committed-bundle`. `CheckpointCommitAdapter.Operations` throws rather than returning an
+approximation: everything that builds the bundle — execution ids, activity and durable-value changes,
+outbox entries, payload sizing, fencing tokens — is private to `RuntimeCheckpointCommitWorkload`, which
+exposes only `ExecuteAsync`. A guessed shape would still emit a digest, a duration and a round-trip count,
+and the artifact would look well-formed while describing a different bundle than the frozen scenario names.
+Whoever builds them should either widen the workload's public surface or rebuild the bundle against the
+scenario parameters and prove it by reproducing `ExpectedInputFingerprint`.
+
+`ProcessMeasurement` enumerates `adapter.Operations` for **warmup** processes as well as measured ones, so
+`run` is blocked for every process kind until they exist. That is why `verify-correctness` is a separate
+command rather than a flag on `run`.
+
+**Running the correctness half against a provider.** It compiles and is wired end to end, but no provider
+has executed it. This is the next concrete step and it needs no measurement conditions — only a reachable
+database — because correctness is not timed. A loaded machine is fine.
+
+**`probe-provider` still cannot observe provider identity.** `CheckpointCommitAdapter` therefore echoes
+`ProviderVersion`, `ProviderTopology` and `ProviderConfiguration` from the request. `ValidateCorrectness`
+requires observed to equal requested exactly, so echoing is the only thing that can pass today — meaning
+those three fields currently prove the operator was self-consistent, not that the provider was what they
+said. The result digest is the substantive claim and is unaffected by this.
+
+### The composition, for reference
 
 The `checkpoint-commit` leaf must supply `RuntimeCheckpointCommitClient`, which is seven public runtime
 contracts over one adapter-owned backing:
@@ -96,9 +131,13 @@ needed for `IRuntimeExecutionOwnershipService`, which has no Groundwork replacem
 must also drive `GroundworkStorageSessionSource` — it admits units from `IHostedService.StartAsync` /
 `IShellInitializer.InitializeAsync`, so a plain `BuildServiceProvider()` leaves nothing admitted.
 
-The open question is how the adapter binds its chosen `IStorageProviderConnection` into that registration for a
-given target; the v2 store tests construct stores directly rather than through DI, so the DI binding still has to
-be established.
+**Answered, in `RuntimeStoreComposition`.**
+`GroundworkStorageProviderConnectionRegistration.AddGroundworkStorageProviderConnection` takes an
+already-created `IStorageProviderConnection` and binds it to a target — provider packages own construction
+and lifetime, so the adapter opens the connection itself and hands the instance over. Two further things a
+direct host gets wrong by default, both handled there: unit admission must be driven explicitly via
+`IShellInitializer.InitializeAsync`, and the two independent clients must come from two DI scopes, because
+the runtime stores are scoped registrations and the workload rejects clients that share an instance.
 
 ### Traps in the contract that its own documentation does not state
 
