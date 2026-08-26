@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 148
 - Test projects: 107
 - Domains: 27
-- Direct cross-domain references: 704
+- Direct cross-domain references: 705
 
 ## Domains
 
@@ -145,7 +145,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | Core | contract | - |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | Hosting | feature/implementation | Elsa.Primitives |
 | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | (root) | feature/implementation | - |
-| [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | source | Elsa.Secrets | Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Core |
+| [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | source | Elsa.Secrets | Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Attention](../../src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj) | source | Elsa.Secrets | Attention | feature/implementation | Elsa.Attention.Core<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | Core | contract | Elsa.Primitives |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | (root) | feature/implementation | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |
@@ -684,6 +684,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Expressions.Core](../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj) | Elsa.Expressions |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
 | [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | Elsa.Secrets | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
+| [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | Elsa.Secrets | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | Elsa.Api |
 | [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | Elsa.Secrets | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
 | [Elsa.Secrets.Attention](../../src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj) | Elsa.Secrets | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | Elsa.Secrets | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |

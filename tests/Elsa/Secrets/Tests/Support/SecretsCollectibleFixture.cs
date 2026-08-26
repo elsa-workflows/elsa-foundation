@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -332,6 +333,11 @@ public static class SecretsCollectibleFixture
             .Build();
         services.AddLogging();
         services.AddRouting();
+        // The owner assembly is deliberately loaded collectibly here, so its contract types and
+        // OpenAPI transformer delegates ARE collectible and the fail-closed lifetime boundary
+        // would reject the mapping outright. This probe is the regime the explicit suppression
+        // exists for: the weak-reference assertions prove the release honestly.
+        services.SuppressOpenApiLifetimeEnforcement();
         services.AddSingleton<IHostEnvironment>(new CollectibilityHostEnvironment());
         services.AddAuthentication();
         services.AddAuthorization();

@@ -245,6 +245,19 @@ public sealed class ModuleEndpointPipelineTests
     }
 
     [Fact]
+    public async Task An_uncontained_unbound_operation_lets_its_failures_propagate_to_the_host()
+    {
+        // An owner whose published contract lets the host's exception pipeline answer unexpected
+        // failures opts out of containment; the dispatch runs bare and the exception escapes.
+        await using var host = await PipelineHost.StartAsync(api =>
+            api.MapUnboundOperation("GET", "/bare", "Bare", null, StatusCodes.Status200OK, null,
+                _ => throw new InvalidOperationException("must-escape"), containFailures: false));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.Client.GetAsync("/bare"));
+        Assert.Equal("must-escape", exception.Message);
+    }
+
+    [Fact]
     public async Task An_owner_without_a_problem_writer_gets_the_sanitized_fallback_shape()
     {
         // No IEndpointProblemWriter is registered at all: the failure path must still answer with

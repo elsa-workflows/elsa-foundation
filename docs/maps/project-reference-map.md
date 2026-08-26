@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 148
 - Test projects: 107
-- Direct project references: 1213
+- Direct project references: 1214
 
 ## Projects
 
@@ -112,7 +112,7 @@ Records direct project references only.
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | - | default | - |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | - | default | Elsa.Primitives |
 | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | - | default | - |
-| [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | source | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Core |
+| [Elsa.Secrets.Api](../../src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj) | source | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Attention](../../src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj) | source | Elsa.Secrets | - | default | Elsa.Attention.Core<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | - | default | Elsa.Primitives |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | - | default | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |

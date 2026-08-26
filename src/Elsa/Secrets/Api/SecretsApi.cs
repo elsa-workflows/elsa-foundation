@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Secrets.Api.Requests;
 using Elsa.Secrets.Core.Contracts;
@@ -30,135 +30,68 @@ public static class SecretsApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        RequestDelegate list = HandleListAsync;
-        RequestDelegate create = HandleCreateAsync;
-        RequestDelegate descriptors = HandleDescriptorsAsync;
-        RequestDelegate picker = HandlePickerAsync;
-        RequestDelegate get = HandleGetAsync;
-        RequestDelegate update = HandleUpdateAsync;
-        RequestDelegate delete = HandleDeleteAsync;
-        RequestDelegate revoke = HandleRevokeAsync;
-        RequestDelegate rotate = HandleRotateAsync;
-        RequestDelegate test = HandleTestAsync;
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // Every operation keeps its own tenant gate, reads, writes, and problem shapes, so the
+        // surface stays on the group's raw seam; the operation names restore the historical
+        // ElsaSecretsApiEndpointsSecrets* identities the owner published before the Minimal API
+        // rewrite dropped endpoint names.
+        var api = endpoints.MapModuleEndpoints(OwnerId, SecretsJsonContext.Default, jsonContentType: "application/json");
 
-        endpoints.MapGet(SecretsRoute, list)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("GET", SecretsRoute, "SecretsList",
+                typeof(ListSecretsResponse), StatusCodes.Status200OK, null, HandleListAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(ListSecretsResponse)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(SecretQuery), ["*/*", "application/json"], cancellationToken));
 
-        endpoints.MapPost(SecretsRoute, create)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        // The legacy endpoint returns 201 at runtime but advertises 200 in OpenAPI; preserve both contracts.
+        api.MapUnboundOperation("POST", SecretsRoute, "SecretsCreate",
+                typeof(SecretMetadata), StatusCodes.Status201Created, StatusCodes.Status200OK, HandleCreateAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Write)
-            .WithMetadata(
-                descriptionMethod,
-                // The legacy endpoint returns 201 at runtime but advertises 200 in OpenAPI; preserve both contracts.
-                Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(CreateSecretRequest), ["application/json"], cancellationToken));
 
-        endpoints.MapGet($"{SecretsRoute}/descriptors", descriptors)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretDescriptorsResponse)),
-                Unauthorized(),
-                Forbidden());
+        api.MapUnboundOperation("GET", $"{SecretsRoute}/descriptors", "SecretsDescriptors",
+                typeof(SecretDescriptorsResponse), StatusCodes.Status200OK, null, HandleDescriptorsAsync, containFailures: false)
+            .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Read);
 
-        endpoints.MapPost($"{SecretsRoute}/picker", picker)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("POST", $"{SecretsRoute}/picker", "SecretsPicker",
+                typeof(SecretPickerResponse), StatusCodes.Status200OK, null, HandlePickerAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretPickerResponse)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(SecretPickerRequest), ["application/json"], cancellationToken));
 
-        endpoints.MapGet(SecretRoute, get)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("GET", SecretRoute, "SecretsGet",
+                typeof(SecretMetadata), StatusCodes.Status200OK, null, HandleGetAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(GetSecretRequest), ["*/*", "application/json"], cancellationToken));
 
-        endpoints.MapPut(SecretRoute, update)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("PUT", SecretRoute, "SecretsUpdate",
+                typeof(SecretMetadata), StatusCodes.Status200OK, null, HandleUpdateAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Write)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(UpdateSecretApiRequest), ["application/json"], cancellationToken));
 
-        endpoints.MapDelete(SecretRoute, delete)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("DELETE", SecretRoute, "SecretsDelete",
+                null, StatusCodes.Status204NoContent, null, HandleDeleteAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Delete)
-            .WithMetadata(
-                descriptionMethod,
-                new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(DeleteSecretRequest), ["*/*", "application/json"], cancellationToken));
 
-        endpoints.MapPost($"{SecretRoute}/revoke", revoke)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("POST", $"{SecretRoute}/revoke", "SecretsRevoke",
+                typeof(SecretMetadata), StatusCodes.Status200OK, null, HandleRevokeAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Delete)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(RevokeSecretRequest), ["application/json"], cancellationToken));
 
-        endpoints.MapPost($"{SecretRoute}/rotate", rotate)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("POST", $"{SecretRoute}/rotate", "SecretsRotate",
+                typeof(SecretMetadata), StatusCodes.Status200OK, null, HandleRotateAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.UpdateValue)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretMetadata)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(RotateSecretApiRequest), ["application/json"], cancellationToken));
 
-        endpoints.MapPost($"{SecretRoute}/test", test)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("POST", $"{SecretRoute}/test", "SecretsTest",
+                typeof(SecretTestResult), StatusCodes.Status200OK, null, HandleTestAsync, containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, SecretsPermissions.Test)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(SecretTestResult)),
-                Unauthorized(),
-                Forbidden())
             .AddOpenApiOperationTransformer((operation, context, cancellationToken) =>
                 ConfigureLegacyOpenApiAsync(operation, context, typeof(TestSecretRequest), ["application/json"], cancellationToken));
     }
@@ -433,15 +366,6 @@ public static class SecretsApi
 
     private static IResult Json(object value, int statusCode = StatusCodes.Status200OK) =>
         Results.Json(value, JsonOptions, contentType: "application/json", statusCode: statusCode);
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type type) =>
-        new(statusCode, type, ["application/json"]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
