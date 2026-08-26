@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 148
-- Test projects: 107
+- Test projects: 108
 - Domains: 27
 - Direct cross-domain references: 708
 
@@ -26,7 +26,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Expressions | 10 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Foundation | 10 | 6 | feature/implementation<br>test |
 | Elsa.Git | 1 | 0 | feature/implementation |
-| Elsa.Groundwork | 0 | 2 | test |
+| Elsa.Groundwork | 0 | 3 | test |
 | Elsa.Http | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
@@ -248,6 +248,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Foundation | Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks |
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | ProviderEvidenceImporter.Tests | test | Elsa.Groundwork.ProviderEvidenceImporter |
+| [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.AdapterHost.Tests | test | Elsa.Groundwork.StorePerformance.AdapterHost |
 | [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.Benchmarks.Tests | test | Elsa.Groundwork.StorePerformance.Benchmarks |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Api.AspNetCore<br>Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
