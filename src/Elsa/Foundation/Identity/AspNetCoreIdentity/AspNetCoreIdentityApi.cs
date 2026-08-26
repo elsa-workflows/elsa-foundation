@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
@@ -26,17 +27,23 @@ public static class AspNetCoreIdentityApi
 
         var owner = typeof(AspNetCoreIdentityFeature).Assembly.GetName().Name
             ?? throw new InvalidOperationException("The ASP.NET Core Identity assembly has no name.");
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        endpoints.MapGet("/" + AspNetCoreIdentityDefaults.LoginRoute, HandleLoginPageAsync)
-            .WithLoginMetadata(owner, descriptionMethod, "AspNetCoreIdentityLoginPage")
-            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(string), ["text/html"]))
+        // The published operation ids predate the naming scheme, the tag is the literal "Identity",
+        // and the sign-in flow owns an HTML page, dual JSON/form binding, antiforgery, and
+        // content-negotiated redirects — so both operations stay on the group's raw seam.
+        var api = endpoints.MapModuleEndpoints(owner, AspNetCoreIdentityJsonContext.Default, tag: "Identity");
+
+        api.MapUnboundOperation("GET", "/" + AspNetCoreIdentityDefaults.LoginRoute, "LoginPage",
+                typeof(string), StatusCodes.Status200OK, null, HandleLoginPageAsync,
+                name: "AspNetCoreIdentityLoginPage", documentAuthResponses: false, successContentType: "text/html", containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapPost("/" + AspNetCoreIdentityDefaults.LoginRoute, HandleLoginAsync)
-            .WithLoginMetadata(owner, descriptionMethod, "AspNetCoreIdentityLogin", typeof(AuthSession), includeRequest: true)
-            .WithMetadata(new AcceptsMetadata(["application/json", "application/x-www-form-urlencoded"], typeof(LoginRequest), false))
+        api.MapUnboundOperation("POST", "/" + AspNetCoreIdentityDefaults.LoginRoute, "Login",
+                typeof(AuthSession), StatusCodes.Status200OK, null, HandleLoginAsync,
+                name: "AspNetCoreIdentityLogin", documentAuthResponses: false, containFailures: false)
+            .WithMetadata(
+                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
+                new AcceptsMetadata(["application/json", "application/x-www-form-urlencoded"], typeof(LoginRequest), false))
             .AllowPublic(PublicCategory, PublicReason);
     }
 
@@ -172,26 +179,4 @@ public static class AspNetCoreIdentityApi
         await Results.Redirect(back, permanent: false).ExecuteAsync(context);
     }
 
-    private static IEndpointConventionBuilder WithLoginMetadata(
-        this IEndpointConventionBuilder builder,
-        string owner,
-        System.Reflection.MethodInfo descriptionMethod,
-        string operationId,
-        Type? responseType = null,
-        bool includeRequest = false)
-    {
-        builder.WithOwner(owner).WithAuthoringModel(EndpointAuthoringModels.MinimalApi);
-        var metadata = new List<object>
-        {
-            descriptionMethod,
-            new EndpointNameMetadata(operationId),
-            new TagsAttribute("Identity")
-        };
-        if (responseType is not null)
-            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, ["application/json"]));
-        if (includeRequest)
-            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []));
-        builder.WithMetadata(metadata.ToArray());
-        return builder;
-    }
 }

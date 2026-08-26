@@ -12,6 +12,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
 		<ProjectReference Include="..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 	</ItemGroup>
