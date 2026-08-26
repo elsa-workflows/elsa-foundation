@@ -100,8 +100,10 @@ Whoever builds them should either widen the workload's public surface or rebuild
 scenario parameters and prove it by reproducing `ExpectedInputFingerprint`.
 
 `ProcessMeasurement` enumerates `adapter.Operations` for **warmup** processes as well as measured ones, so
-`run` is blocked for every process kind until they exist. That is why `verify-correctness` is a separate
-command rather than a flag on `run`.
+a throwing `Operations` blocks every process kind, not only the measured one. That is why
+`verify-correctness` is a separate command and not a flag on `run` — the separation is load-bearing, not
+tidiness. Do not collapse it back into `run` while `Operations` throws, or correctness becomes unreachable
+along with measurement.
 
 **Running the correctness half against a provider.** It compiles and is wired end to end, but no provider
 has executed it, and it cannot be run yet for a reason that is not the database.
