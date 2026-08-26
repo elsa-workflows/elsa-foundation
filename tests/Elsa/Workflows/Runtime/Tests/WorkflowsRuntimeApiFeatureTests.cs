@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -121,15 +122,16 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
-    public void Registers_runtime_diagnostics_settings_command_handler()
+    public void Registers_runtime_diagnostics_settings_service()
     {
         var services = new ServiceCollection();
 
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
 
-        provider.GetRequiredService<ICommandHandler<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>>();
+        scope.ServiceProvider.GetRequiredService<IRuntimeDiagnosticsSettingsService>();
     }
 
     private static WorkflowExecutionState InspectionState() =>
@@ -189,7 +191,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
-    public void RegistersRuntimeExecutionServicesAndRequestHandlers()
+    public void RegistersRuntimeExecutionServicesAndOperationSeams()
     {
         var services = new ServiceCollection();
 
@@ -259,7 +261,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowStartDispatcher));
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
         using var rootProvider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = rootProvider.CreateScope();
@@ -316,6 +317,18 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<WorkflowIntrinsicExecutor>();
         provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
         provider.GetRequiredService<IWorkflowStartDispatcher>();
+        provider.GetRequiredService<IWorkflowExecutableInspector>();
+        provider.GetRequiredService<IActivityExecutionDescendantsReader>();
+        provider.GetRequiredService<IActivityExecutionLayoutReader>();
+        // The stimulus seam's IStimulusRouter dependency ships with the triggers feature, so only presence is asserted here.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IStimulusDispatchService));
+        provider.GetRequiredService<IWorkflowExecutionStartService>();
+        provider.GetRequiredService<IActivityExecutionInspectionService>();
+        provider.GetRequiredService<IWorkflowInstanceDetailsService>();
+        provider.GetRequiredService<IWorkflowInstanceListService>();
+        provider.GetRequiredService<IWorkflowIncidentListService>();
+        provider.GetRequiredService<IWorkflowDispatchInspectionService>();
+        provider.GetRequiredService<Elsa.Workflows.Runtime.Api.Handlers.Alterations.IWorkflowAlterationPlanApiService>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is BlockingIncidentWorkflowFaultObserver);
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();

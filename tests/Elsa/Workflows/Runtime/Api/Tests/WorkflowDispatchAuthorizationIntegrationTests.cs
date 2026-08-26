@@ -6,7 +6,6 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -197,7 +196,6 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
                     TestAuthenticationHandler.SchemeName
                 });
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
-            builder.Services.AddScoped<IRequestSender, DispatchInspectionRequestSender>();
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -298,30 +296,6 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
         }
     }
 
-    private sealed class DispatchInspectionRequestSender(IServiceProvider services) : IRequestSender
-    {
-        public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default)
-            where T : notnull
-        {
-            object response = request switch
-            {
-                ListWorkflowDispatches list => await new ListWorkflowDispatchesRequestHandler(
-                        services.GetRequiredService<IWorkflowDispatchQueryStore>(),
-                        services.GetRequiredService<IPersistenceAccessContextAccessor>())
-                    .Handle(list, cancellationToken),
-                GetWorkflowDispatch get => await new GetWorkflowDispatchRequestHandler(
-                        services.GetRequiredService<IWorkflowDispatchStore>(),
-                        services.GetRequiredService<IPersistenceAccessContextAccessor>())
-                    .Handle(get, cancellationToken),
-                RedriveWorkflowDispatch redrive => await new RedriveWorkflowDispatchRequestHandler(
-                        services.GetRequiredService<IWorkflowDispatchRedriveStore>(),
-                        services.GetRequiredService<TimeProvider>())
-                    .Handle(redrive, cancellationToken),
-                _ => throw new NotSupportedException($"Unexpected dispatch inspection request '{request.GetType().FullName}'.")
-            };
-            return (T)response;
-        }
-    }
 
     private sealed class TestAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,

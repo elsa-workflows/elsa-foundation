@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
@@ -7,17 +6,19 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations;
 
+// The namespace is pinned: the receipt-locked capture tool (tools/compatibility/RuntimeFastEndpointsCapture)
+// references WorkflowAlterationResourceNotFoundException by this exact name and must keep compiling unmodified.
 namespace Elsa.Workflows.Runtime.Api.Handlers.Alterations;
 
-public sealed class SubmitWorkflowAlterationPlanRequestHandler(
+public sealed class WorkflowAlterationPlanApiService(
     WorkflowAlterationPlanService planService,
+    IWorkflowAlterationStore store,
     IWorkflowAlterationAdmissionGate admissionGate,
-    IWorkflowAlterationRequestContext requestContext)
-    : IRequestHandler<SubmitWorkflowAlterationPlan, WorkflowAlterationPlanSubmissionView>
+    IWorkflowAlterationRequestContext requestContext) : IWorkflowAlterationPlanApiService
 {
     internal const int MaximumIdempotencyKeyLength = 256;
 
-    public async Task<WorkflowAlterationPlanSubmissionView> Handle(SubmitWorkflowAlterationPlan request, CancellationToken cancellationToken)
+    public async Task<WorkflowAlterationPlanSubmissionView> SubmitAsync(SubmitWorkflowAlterationPlan request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
@@ -34,6 +35,57 @@ public sealed class SubmitWorkflowAlterationPlanRequestHandler(
         var result = await planService.SubmitAsync(submission, requestContext.Operator, request.IdempotencyKey, cancellationToken);
         return WorkflowAlterationPlanSubmissionView.From(result.Plan, result.IsReplay);
     }
+
+    public async Task<WorkflowAlterationPlanView> GetPlanAsync(GetWorkflowAlterationPlan request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
+        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
+        if (plan is null || !requestContext.CanAccess(plan))
+            throw new WorkflowAlterationResourceNotFoundException();
+        return await WorkflowAlterationProjection.ToPlanAsync(store, plan, cancellationToken);
+    }
+
+    public async Task<WorkflowAlterationJobPageView> PageJobsAsync(PageWorkflowAlterationJobs request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
+        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
+        if (plan is null || !requestContext.CanAccess(plan))
+            throw new WorkflowAlterationResourceNotFoundException();
+        if (request.Take is <= 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(request.Take), "The alteration jobs page size must be between 1 and 100.");
+        var take = request.Take ?? 25;
+        var page = await store.PageJobsAsync(plan.PlanId, take, request.Cursor, cancellationToken);
+        var totalCount = plan.SealedAt is null ? plan.CapturedSoFar : plan.TargetCount;
+        return new WorkflowAlterationJobPageView(page.Items.Select(WorkflowAlterationJobSummaryView.From).ToArray(), page.NextCursor, page.HasNext, page.Items.Count, totalCount);
+    }
+
+    public async Task<WorkflowAlterationJobView> GetJobAsync(GetWorkflowAlterationJob request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.JobId);
+        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
+        if (plan is null || !requestContext.CanAccess(plan))
+            throw new WorkflowAlterationResourceNotFoundException();
+        var job = await store.FindJobAsync(request.JobId, cancellationToken);
+        if (job is null || !StringComparer.Ordinal.Equals(job.PlanId, plan.PlanId))
+            throw new WorkflowAlterationResourceNotFoundException();
+        return WorkflowAlterationJobView.From(job, plan.SubmittedBy);
+    }
+
+    public async Task<WorkflowAlterationPlanCancellationView> CancelAsync(CancelWorkflowAlterationPlan request, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
+        var existing = await store.FindPlanAsync(request.PlanId, cancellationToken);
+        if (existing is null || !requestContext.CanAccess(existing))
+            throw new WorkflowAlterationResourceNotFoundException();
+        var terminalNoOp = IsTerminal(existing.Status);
+        var plan = await planService.CancelAsync(existing.PlanId, cancellationToken);
+        return new WorkflowAlterationPlanCancellationView(await WorkflowAlterationProjection.ToPlanAsync(store, plan, cancellationToken), terminalNoOp);
+    }
+
+    private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is
+        WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or
+        WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
 
     internal static WorkflowAlterationTargetSelector ToTarget(WorkflowAlterationTargetRequest? request)
     {
@@ -82,80 +134,14 @@ public sealed class SubmitWorkflowAlterationPlanRequestHandler(
     }
 }
 
-public sealed class GetWorkflowAlterationPlanRequestHandler(
-    IWorkflowAlterationStore store,
-    IWorkflowAlterationRequestContext requestContext)
-    : IRequestHandler<GetWorkflowAlterationPlan, WorkflowAlterationPlanView>
+/// <summary>The alteration-plan operations the runtime endpoints dispatch to.</summary>
+public interface IWorkflowAlterationPlanApiService
 {
-    public async Task<WorkflowAlterationPlanView> Handle(GetWorkflowAlterationPlan request, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
-        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
-        if (plan is null || !requestContext.CanAccess(plan))
-            throw new WorkflowAlterationResourceNotFoundException();
-        return await WorkflowAlterationProjection.ToPlanAsync(store, plan, cancellationToken);
-    }
-}
-
-public sealed class PageWorkflowAlterationJobsRequestHandler(
-    IWorkflowAlterationStore store,
-    IWorkflowAlterationRequestContext requestContext)
-    : IRequestHandler<PageWorkflowAlterationJobs, WorkflowAlterationJobPageView>
-{
-    public async Task<WorkflowAlterationJobPageView> Handle(PageWorkflowAlterationJobs request, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
-        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
-        if (plan is null || !requestContext.CanAccess(plan))
-            throw new WorkflowAlterationResourceNotFoundException();
-        if (request.Take is <= 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(request.Take), "The alteration jobs page size must be between 1 and 100.");
-        var take = request.Take ?? 25;
-        var page = await store.PageJobsAsync(plan.PlanId, take, request.Cursor, cancellationToken);
-        var totalCount = plan.SealedAt is null ? plan.CapturedSoFar : plan.TargetCount;
-        return new WorkflowAlterationJobPageView(page.Items.Select(WorkflowAlterationJobSummaryView.From).ToArray(), page.NextCursor, page.HasNext, page.Items.Count, totalCount);
-    }
-}
-
-public sealed class GetWorkflowAlterationJobRequestHandler(
-    IWorkflowAlterationStore store,
-    IWorkflowAlterationRequestContext requestContext)
-    : IRequestHandler<GetWorkflowAlterationJob, WorkflowAlterationJobView>
-{
-    public async Task<WorkflowAlterationJobView> Handle(GetWorkflowAlterationJob request, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.JobId);
-        var plan = await store.FindPlanAsync(request.PlanId, cancellationToken);
-        if (plan is null || !requestContext.CanAccess(plan))
-            throw new WorkflowAlterationResourceNotFoundException();
-        var job = await store.FindJobAsync(request.JobId, cancellationToken);
-        if (job is null || !StringComparer.Ordinal.Equals(job.PlanId, plan.PlanId))
-            throw new WorkflowAlterationResourceNotFoundException();
-        return WorkflowAlterationJobView.From(job, plan.SubmittedBy);
-    }
-}
-
-public sealed class CancelWorkflowAlterationPlanRequestHandler(
-    IWorkflowAlterationStore store,
-    WorkflowAlterationPlanService planService,
-    IWorkflowAlterationRequestContext requestContext)
-    : IRequestHandler<CancelWorkflowAlterationPlan, WorkflowAlterationPlanCancellationView>
-{
-    public async Task<WorkflowAlterationPlanCancellationView> Handle(CancelWorkflowAlterationPlan request, CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.PlanId);
-        var existing = await store.FindPlanAsync(request.PlanId, cancellationToken);
-        if (existing is null || !requestContext.CanAccess(existing))
-            throw new WorkflowAlterationResourceNotFoundException();
-        var terminalNoOp = IsTerminal(existing.Status);
-        var plan = await planService.CancelAsync(existing.PlanId, cancellationToken);
-        return new WorkflowAlterationPlanCancellationView(await WorkflowAlterationProjection.ToPlanAsync(store, plan, cancellationToken), terminalNoOp);
-    }
-
-    private static bool IsTerminal(WorkflowAlterationPlanStatus status) => status is
-        WorkflowAlterationPlanStatus.Completed or WorkflowAlterationPlanStatus.CompletedWithFailures or
-        WorkflowAlterationPlanStatus.Failed or WorkflowAlterationPlanStatus.Cancelled;
+    Task<WorkflowAlterationPlanSubmissionView> SubmitAsync(SubmitWorkflowAlterationPlan request, CancellationToken cancellationToken);
+    Task<WorkflowAlterationPlanView> GetPlanAsync(GetWorkflowAlterationPlan request, CancellationToken cancellationToken);
+    Task<WorkflowAlterationJobPageView> PageJobsAsync(PageWorkflowAlterationJobs request, CancellationToken cancellationToken);
+    Task<WorkflowAlterationJobView> GetJobAsync(GetWorkflowAlterationJob request, CancellationToken cancellationToken);
+    Task<WorkflowAlterationPlanCancellationView> CancelAsync(CancelWorkflowAlterationPlan request, CancellationToken cancellationToken);
 }
 
 public sealed class WorkflowAlterationAdmissionRejectedException(TimeSpan? retryAfter)

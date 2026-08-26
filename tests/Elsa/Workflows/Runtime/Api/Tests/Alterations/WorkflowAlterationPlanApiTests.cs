@@ -23,31 +23,30 @@ public sealed class WorkflowAlterationPlanApiTests
     public async Task Submission_replays_a_matching_key_and_rejects_a_different_canonical_request()
     {
         var fixture = Fixture.Create();
-        var first = await fixture.Submit.Handle(Submit("key-1", ["execution-a"]), CancellationToken.None);
-        var replay = await fixture.Submit.Handle(Submit("key-1", ["execution-a"]), CancellationToken.None);
+        var first = await fixture.Service.SubmitAsync(Submit("key-1", ["execution-a"]), CancellationToken.None);
+        var replay = await fixture.Service.SubmitAsync(Submit("key-1", ["execution-a"]), CancellationToken.None);
 
         Assert.Equal("Accepted", first.SubmissionDisposition);
         Assert.Equal("Replayed", replay.SubmissionDisposition);
         Assert.Equal(first.PlanId, replay.PlanId);
         await Assert.ThrowsAsync<WorkflowAlterationIdempotencyConflictException>(() =>
-            fixture.Submit.Handle(Submit("key-1", ["execution-b"]), CancellationToken.None));
+            fixture.Service.SubmitAsync(Submit("key-1", ["execution-b"]), CancellationToken.None));
     }
 
     [Fact]
     public async Task Reads_are_tenant_scoped_and_never_expose_protected_payload_material()
     {
         var fixture = Fixture.Create();
-        var submitted = await fixture.Submit.Handle(Submit("key-2", ["execution-a"]), CancellationToken.None);
+        var submitted = await fixture.Service.SubmitAsync(Submit("key-2", ["execution-a"]), CancellationToken.None);
         var plan = await fixture.Store.FindPlanAsync(submitted.PlanId);
         Assert.NotNull(plan);
 
-        var read = new GetWorkflowAlterationPlanRequestHandler(fixture.Store, fixture.Context);
-        var own = await read.Handle(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None);
+        var own = await fixture.Service.GetPlanAsync(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None);
         Assert.Equal("CancelWorkflow", Assert.Single(own.Alterations).Kind);
         Assert.Equal("operator-1", own.SubmittedBy.Subject);
         Assert.Equal("test-request", own.SubmittedBy.CorrelationId);
-        await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => new GetWorkflowAlterationPlanRequestHandler(fixture.Store, Fixture.CreateContext("tenant-b"))
-            .Handle(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None));
+        await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => fixture.ServiceFor(Fixture.CreateContext("tenant-b"))
+            .GetPlanAsync(new GetWorkflowAlterationPlan(submitted.PlanId), CancellationToken.None));
         var serialized = JsonSerializer.Serialize(own);
         Assert.DoesNotContain("ciphertext", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("idempotency", serialized, StringComparison.OrdinalIgnoreCase);
@@ -58,30 +57,27 @@ public sealed class WorkflowAlterationPlanApiTests
     public async Task Stable_job_page_is_scoped_to_its_plan_and_uses_capture_order()
     {
         var fixture = Fixture.Create();
-        var submitted = await fixture.Submit.Handle(Submit("key-3", ["execution-b", "execution-a"]), CancellationToken.None);
+        var submitted = await fixture.Service.SubmitAsync(Submit("key-3", ["execution-b", "execution-a"]), CancellationToken.None);
         var plan = (await fixture.Store.FindPlanAsync(submitted.PlanId))!;
         await fixture.Store.CaptureAsync(plan.PlanId, plan.Revision,
             [new WorkflowAlterationCapturedTarget("execution-b", "tenant-a"), new WorkflowAlterationCapturedTarget("execution-a", "tenant-a")], null);
 
-        var page = await new PageWorkflowAlterationJobsRequestHandler(fixture.Store, fixture.Context)
-            .Handle(new PageWorkflowAlterationJobs(plan.PlanId, 25, null), CancellationToken.None);
-        var progress = await new GetWorkflowAlterationPlanRequestHandler(fixture.Store, fixture.Context)
-            .Handle(new GetWorkflowAlterationPlan(plan.PlanId), CancellationToken.None);
+        var page = await fixture.Service.PageJobsAsync(new PageWorkflowAlterationJobs(plan.PlanId, 25, null), CancellationToken.None);
+        var progress = await fixture.Service.GetPlanAsync(new GetWorkflowAlterationPlan(plan.PlanId), CancellationToken.None);
 
         Assert.Equal(["execution-a", "execution-b"], page.Items.Select(item => item.WorkflowExecutionId));
         Assert.Equal(2, page.TotalCount);
         Assert.Equal(2, progress.Counts.CapturedSoFar);
         Assert.Equal(0, progress.Counts.TargetCount);
-        var jobRead = await new GetWorkflowAlterationJobRequestHandler(fixture.Store, fixture.Context)
-            .Handle(new GetWorkflowAlterationJob(plan.PlanId, page.Items.First().JobId), CancellationToken.None);
+        var jobRead = await fixture.Service.GetJobAsync(new GetWorkflowAlterationJob(plan.PlanId, page.Items.First().JobId), CancellationToken.None);
         Assert.Equal("operator-1", jobRead.SubmittedBy.Subject);
         Assert.Equal("test-request", jobRead.SubmittedBy.CorrelationId);
-        var foreignPlan = await fixture.Submit.Handle(Submit("key-4", ["execution-c"]), CancellationToken.None);
+        var foreignPlan = await fixture.Service.SubmitAsync(Submit("key-4", ["execution-c"]), CancellationToken.None);
         var firstJob = page.Items.First();
-        await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => new GetWorkflowAlterationJobRequestHandler(fixture.Store, fixture.Context)
-            .Handle(new GetWorkflowAlterationJob(foreignPlan.PlanId, firstJob.JobId), CancellationToken.None));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => new PageWorkflowAlterationJobsRequestHandler(fixture.Store, fixture.Context)
-            .Handle(new PageWorkflowAlterationJobs(plan.PlanId, 101, null), CancellationToken.None));
+        await Assert.ThrowsAsync<WorkflowAlterationResourceNotFoundException>(() => fixture.Service
+            .GetJobAsync(new GetWorkflowAlterationJob(foreignPlan.PlanId, firstJob.JobId), CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Service
+            .PageJobsAsync(new PageWorkflowAlterationJobs(plan.PlanId, 101, null), CancellationToken.None));
     }
 
     [Fact]
@@ -91,10 +87,10 @@ public sealed class WorkflowAlterationPlanApiTests
         var invalid = new SubmitWorkflowAlterationPlan(
             new WorkflowAlterationTargetRequest(null, new WorkflowAlterationQueryRequest(From: DateTimeOffset.UtcNow, To: DateTimeOffset.UtcNow.AddMinutes(-1))),
             [new WorkflowAlterationEnvelopeRequest("CancelWorkflow", 1, JsonSerializer.SerializeToElement(new { }))]) { IdempotencyKey = "invalid" };
-        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Submit.Handle(invalid, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Service.SubmitAsync(invalid, CancellationToken.None));
 
         var rejected = await Assert.ThrowsAsync<WorkflowAlterationAdmissionRejectedException>(() =>
-            fixture.Submit.Handle(Submit("key-5", ["execution-a"]), CancellationToken.None));
+            fixture.Service.SubmitAsync(Submit("key-5", ["execution-a"]), CancellationToken.None));
         Assert.Equal(TimeSpan.FromSeconds(7), rejected.RetryAfter);
         Assert.Null(await fixture.Store.FindPlanAsync("alteration-plan-does-not-exist"));
     }
@@ -137,18 +133,26 @@ public sealed class WorkflowAlterationPlanApiTests
 
     private sealed class Fixture
     {
-        private Fixture(InMemoryWorkflowAlterationStore store, IWorkflowAlterationPayloadProtector protector, IWorkflowAlterationRequestContext context, SubmitWorkflowAlterationPlanRequestHandler submit)
+        private readonly WorkflowAlterationPlanService _planService;
+        private readonly IWorkflowAlterationAdmissionGate _gate;
+
+        private Fixture(InMemoryWorkflowAlterationStore store, IWorkflowAlterationPayloadProtector protector, IWorkflowAlterationRequestContext context, WorkflowAlterationPlanService planService, IWorkflowAlterationAdmissionGate gate)
         {
             Store = store;
             Protector = protector;
             Context = context;
-            Submit = submit;
+            _planService = planService;
+            _gate = gate;
+            Service = new WorkflowAlterationPlanApiService(planService, store, gate, context);
         }
 
         public InMemoryWorkflowAlterationStore Store { get; }
         public IWorkflowAlterationPayloadProtector Protector { get; }
         public IWorkflowAlterationRequestContext Context { get; }
-        public SubmitWorkflowAlterationPlanRequestHandler Submit { get; }
+        public WorkflowAlterationPlanApiService Service { get; }
+
+        public WorkflowAlterationPlanApiService ServiceFor(IWorkflowAlterationRequestContext context) =>
+            new(_planService, Store, _gate, context);
 
         public static Fixture Create(IWorkflowAlterationAdmissionGate? gate = null)
         {
@@ -166,7 +170,7 @@ public sealed class WorkflowAlterationPlanApiTests
                 ]),
                 protector,
                 store);
-            return new(store, protector, context, new SubmitWorkflowAlterationPlanRequestHandler(service, gate ?? new AllowGate(), context));
+            return new(store, protector, context, service, gate ?? new AllowGate());
         }
 
         public static IWorkflowAlterationRequestContext CreateContext(string tenant) => new TestContext(tenant);

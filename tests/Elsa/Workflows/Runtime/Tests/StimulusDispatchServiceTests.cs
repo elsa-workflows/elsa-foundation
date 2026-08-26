@@ -6,17 +6,17 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class DispatchStimulusRequestHandlerTests
+public sealed class StimulusDispatchServiceTests
 {
     [Fact]
-    public async Task Handle_MapsRequestOntoRouter_AndProjectsResult()
+    public async Task Dispatch_MapsRequestOntoRouter_AndProjectsResult()
     {
         var router = new RecordingRouter(new StimulusRoutingResult(
             [StimulusStartOutcome.Started("artifact-1:node-a", "artifact-1", "wfexec-new-1")],
             [new StimulusResumeOutcome("wfexec-1", BookmarkResumeDispatchStatus.Dispatched)]));
-        var handler = new DispatchStimulusRequestHandler(router);
+        var handler = new StimulusDispatchService(router);
 
-        var response = await handler.Handle(
+        var response = await handler.DispatchAsync(
             new DispatchStimulus("Event", "sha256:event:hello", CorrelationId: "order-7", IdempotencyKey: "delivery-1"),
             CancellationToken.None);
 
@@ -29,23 +29,23 @@ public sealed class DispatchStimulusRequestHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ParsesModeCaseInsensitively()
+    public async Task Dispatch_ParsesModeCaseInsensitively()
     {
         var router = new RecordingRouter(new StimulusRoutingResult([], []));
-        var handler = new DispatchStimulusRequestHandler(router);
+        var handler = new StimulusDispatchService(router);
 
-        await handler.Handle(new DispatchStimulus("Event", "sha256:event:hello", Mode: "startonly"), CancellationToken.None);
+        await handler.DispatchAsync(new DispatchStimulus("Event", "sha256:event:hello", Mode: "startonly"), CancellationToken.None);
 
         Assert.Equal(StimulusRoutingMode.StartOnly, router.LastRequest!.Mode);
     }
 
     [Fact]
-    public async Task Handle_ThrowsOnUnknownMode()
+    public async Task Dispatch_ThrowsOnUnknownMode()
     {
-        var handler = new DispatchStimulusRequestHandler(new RecordingRouter(new StimulusRoutingResult([], [])));
+        var handler = new StimulusDispatchService(new RecordingRouter(new StimulusRoutingResult([], [])));
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new DispatchStimulus("Event", "sha256:event:hello", Mode: "sideways"), CancellationToken.None));
+            handler.DispatchAsync(new DispatchStimulus("Event", "sha256:event:hello", Mode: "sideways"), CancellationToken.None));
     }
 
     private sealed class RecordingRouter(StimulusRoutingResult result) : IStimulusRouter

@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// Guardrails for RT-5: the operator incident query surface returns recorded incidents for a workflow execution,
 /// supports a blocking-only filter, and signals a missing workflow so the endpoint can answer 404.
 /// </summary>
-public sealed class ListIncidentsRequestHandlerTests
+public sealed class WorkflowIncidentListServiceTests
 {
     private readonly DateTimeOffset _now = new(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
 
@@ -23,9 +23,9 @@ public sealed class ListIncidentsRequestHandlerTests
         await workflowStore.SaveAsync(NewWorkflowState());
         await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
         await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
-        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
+        var handler = new WorkflowIncidentListService(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
-        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+        var response = await handler.ListAsync(new ListIncidents("wfexec-1"), CancellationToken.None);
 
         Assert.True(response.WorkflowExists);
         Assert.Equal(2, response.Count);
@@ -39,9 +39,9 @@ public sealed class ListIncidentsRequestHandlerTests
         await workflowStore.SaveAsync(NewWorkflowState());
         await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
         await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
-        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
+        var handler = new WorkflowIncidentListService(workflowStore, incidentStore, new AllowAllActivityExecutionInspectionAuthorizationContext());
 
-        var response = await handler.Handle(new ListIncidents("wfexec-1", BlockingOnly: true), CancellationToken.None);
+        var response = await handler.ListAsync(new ListIncidents("wfexec-1", BlockingOnly: true), CancellationToken.None);
 
         Assert.True(response.WorkflowExists);
         var view = Assert.Single(response.Incidents);
@@ -52,12 +52,12 @@ public sealed class ListIncidentsRequestHandlerTests
     [Fact]
     public async Task Handle_ForMissingWorkflow_ReportsWorkflowDoesNotExist()
     {
-        var handler = new ListIncidentsRequestHandler(
+        var handler = new WorkflowIncidentListService(
             new InMemoryWorkflowExecutionStateStore(),
             new InMemoryIncidentStateStore(),
             new AllowAllActivityExecutionInspectionAuthorizationContext());
 
-        var response = await handler.Handle(new ListIncidents("missing"), CancellationToken.None);
+        var response = await handler.ListAsync(new ListIncidents("missing"), CancellationToken.None);
 
         Assert.False(response.WorkflowExists);
         Assert.Empty(response.Incidents);
@@ -68,12 +68,12 @@ public sealed class ListIncidentsRequestHandlerTests
     {
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         await workflowStore.SaveAsync(NewWorkflowState());
-        var handler = new ListIncidentsRequestHandler(
+        var handler = new WorkflowIncidentListService(
             workflowStore,
             new InMemoryIncidentStateStore(),
             new TestAuthorization(canInspectStructure: false, canInspectSensitiveValues: true));
 
-        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+        var response = await handler.ListAsync(new ListIncidents("wfexec-1"), CancellationToken.None);
 
         Assert.False(response.WorkflowExists);
         Assert.Empty(response.Incidents);
@@ -89,12 +89,12 @@ public sealed class ListIncidentsRequestHandlerTests
             "incident-blocking",
             IncidentStatus.Blocking,
             new Dictionary<string, string> { ["runtime.faultStackTrace"] = "secret-stack" }));
-        var handler = new ListIncidentsRequestHandler(
+        var handler = new WorkflowIncidentListService(
             workflowStore,
             incidentStore,
             new TestAuthorization(canInspectStructure: true, canInspectSensitiveValues: false));
 
-        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+        var response = await handler.ListAsync(new ListIncidents("wfexec-1"), CancellationToken.None);
 
         var incident = Assert.Single(response.Incidents);
         Assert.Equal("Incident details are redacted.", incident.Message);

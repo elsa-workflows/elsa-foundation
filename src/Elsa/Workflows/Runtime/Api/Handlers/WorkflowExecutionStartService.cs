@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -8,15 +7,14 @@ using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-public sealed class ExecuteWorkflowRequestHandler(
+public sealed class WorkflowExecutionStartService(
     IWorkflowStartDispatcher startDispatcher,
-    IWorkflowExecutableStore executableStore)
-    : IRequestHandler<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
+    IWorkflowExecutableStore executableStore) : IWorkflowExecutionStartService
 {
     private const string RequestedBy = "runtime-api";
     private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
 
-    public async Task<WorkflowExecutionStartDispatchView> Handle(ExecuteWorkflow request, CancellationToken cancellationToken)
+    public async Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken)
     {
         // Seed authored workflow variable defaults so `variables.*` input expressions resolve to their
         // declared values in production (Seam C, #254). The defaults are read from the compiled executable's
@@ -53,4 +51,10 @@ public sealed class ExecuteWorkflowRequestHandler(
             : inputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyVariables = new Dictionary<string, object?>(StringComparer.Ordinal);
+}
+
+/// <summary>The published-workflow start operation the runtime execute endpoint dispatches to.</summary>
+public interface IWorkflowExecutionStartService
+{
+    Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken);
 }

@@ -19,9 +19,9 @@ namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
 /// End-to-end acceptance for #254 Seam R1: a workflow output assigned by the <c>SetOutput</c> leaf during a
-/// run started through the real <see cref="ExecuteWorkflowRequestHandler"/> → dispatcher → scheduler-drain
+/// run started through the real <see cref="WorkflowExecutionStartService"/> → dispatcher → scheduler-drain
 /// flow must be readable back on the instance details view served by
-/// <see cref="GetWorkflowInstanceRequestHandler"/> (the handler behind <c>GET instances/{id}</c>). Also pins
+/// <see cref="WorkflowInstanceDetailsService"/> (the service behind <c>GET instances/{id}</c>). Also pins
 /// the default diagnostic snapshot contract: a payload the default <c>IRuntimePayloadCapturePolicy</c> does not
 /// expose raw still surfaces as named diagnostic evidence — never silently absent.
 /// </summary>
@@ -97,10 +97,10 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
         var executable = NewSetOutputExecutable(artifactId);
         await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
-        var executeHandler = new ExecuteWorkflowRequestHandler(
+        var startService = new WorkflowExecutionStartService(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),
             provider.GetRequiredService<IWorkflowExecutableStore>());
-        var view = await executeHandler.Handle(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
+        var view = await startService.ExecuteAsync(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
 
         var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(view.WorkflowExecutionId);
         Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
@@ -111,7 +111,7 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
         ServiceProvider provider,
         string workflowExecutionId)
     {
-        var readHandler = new GetWorkflowInstanceRequestHandler(
+        var readService = new WorkflowInstanceDetailsService(
             provider.GetRequiredService<IWorkflowExecutionStateStore>(),
             provider.GetRequiredService<IActivityExecutionInspectionStore>(),
             provider.GetRequiredService<IIncidentStateStore>(),
@@ -119,10 +119,10 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             provider.GetRequiredService<IRuntimePayloadCapturePolicy>(),
             new AllowAllActivityExecutionInspectionAuthorizationContext(),
             new Elsa.Workflows.Runtime.Api.Coalescing.RuntimeCheckpointCadenceInspector([]));
-        var response = await readHandler.Handle(new GetWorkflowInstance(workflowExecutionId), CancellationToken.None);
+        var view = await readService.GetAsync(new GetWorkflowInstance(workflowExecutionId), CancellationToken.None);
 
-        Assert.NotNull(response.Instance);
-        return response.Instance!;
+        Assert.NotNull(view);
+        return view!;
     }
 
     private DurableValueState NewSensitiveOutputState(string workflowExecutionId, string outputName, string value) =>

@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -9,23 +8,22 @@ using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-public sealed class GetWorkflowInstanceRequestHandler(
+public sealed class WorkflowInstanceDetailsService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionInspectionStore activityExecutionInspectionStore,
     IIncidentStateStore incidentStateStore,
     IDurableValueStateStore durableValueStateStore,
     IRuntimePayloadCapturePolicy payloadCapturePolicy,
     IActivityInspectionContextAsync authorization,
-    RuntimeCheckpointCadenceInspector checkpointCadenceInspector)
-    : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
+    RuntimeCheckpointCadenceInspector checkpointCadenceInspector) : IWorkflowInstanceDetailsService
 {
-    public async Task<GetWorkflowInstanceResponse> Handle(GetWorkflowInstance request, CancellationToken cancellationToken)
+    public async Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
 
         var state = await workflowExecutionStateStore.FindAsync(request.WorkflowExecutionId, cancellationToken);
         if (state is null || !await authorization.CanInspectStructureAsync(state, cancellationToken))
-            return new GetWorkflowInstanceResponse(null);
+            return null;
 
         var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
 
@@ -61,7 +59,7 @@ public sealed class GetWorkflowInstanceRequestHandler(
         // instance reports the cadence it actually executed under, falling back to the host projection for legacy runs.
         var cadence = checkpointCadenceInspector.Resolve(state);
 
-        return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
+        return new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
             activities,
             incidents,
@@ -69,6 +67,15 @@ public sealed class GetWorkflowInstanceRequestHandler(
             cadence.CheckpointCadence,
             cadence.MaxSegmentCheckpoints,
             cadence.InspectionGranularity,
-            activityPage.NextContinuationToken));
+            activityPage.NextContinuationToken);
     }
+}
+
+/// <summary>
+/// The workflow-instance detail read operation the runtime endpoints dispatch to. A null view means the workflow
+/// execution is missing or the caller may not inspect it.
+/// </summary>
+public interface IWorkflowInstanceDetailsService
+{
+    Task<WorkflowInstanceDetailsView?> GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken);
 }

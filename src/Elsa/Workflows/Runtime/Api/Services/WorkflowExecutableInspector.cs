@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -11,10 +12,25 @@ public sealed class WorkflowExecutableInspector(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore referenceStore,
     IWorkflowExecutionStateStore executionStore,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null) : IWorkflowExecutableInspector
 {
     private const int PreviewLength = 80;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
+    Task<WorkflowExecutablesListView> IWorkflowExecutableInspector.ListAsync(ListWorkflowExecutables request, CancellationToken cancellationToken) =>
+        ListAsync(request.Scope, request.IncludeRetired, cancellationToken).AsTask();
+
+    async Task<WorkflowExecutableDetailsView> IWorkflowExecutableInspector.GetAsync(GetWorkflowExecutable request, CancellationToken cancellationToken) =>
+        await GetAsync(request.ArtifactId, request.Ref, cancellationToken)
+        ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutable), request.ArtifactId);
+
+    async Task<WorkflowExecutableInputSourcesView> IWorkflowExecutableInspector.GetInputSourcesAsync(GetWorkflowExecutableInputSources request, CancellationToken cancellationToken) =>
+        await GetInputSourcesAsync(request.ArtifactId, request.SourceReferenceId, cancellationToken)
+        ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), request.SourceReferenceId);
+
+    async Task<ExecutableProvenanceView> IWorkflowExecutableInspector.GetProvenanceAsync(GetWorkflowExecutableProvenance request, CancellationToken cancellationToken) =>
+        await GetProvenanceAsync(request.ArtifactId, cancellationToken)
+        ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutable), request.ArtifactId);
 
     public async ValueTask<WorkflowExecutablesListView> ListAsync(
         WorkflowExecutableListScope scope = WorkflowExecutableListScope.Published,
@@ -319,4 +335,16 @@ public sealed class WorkflowExecutableInspector(
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";
     }
+}
+
+/// <summary>
+/// The executable inspection operations the runtime endpoints dispatch to. Each method takes the endpoint's
+/// wire contract; a missing artifact or source reference surfaces as an <see cref="EntityNotFoundException"/>.
+/// </summary>
+public interface IWorkflowExecutableInspector
+{
+    Task<WorkflowExecutablesListView> ListAsync(ListWorkflowExecutables request, CancellationToken cancellationToken);
+    Task<WorkflowExecutableDetailsView> GetAsync(GetWorkflowExecutable request, CancellationToken cancellationToken);
+    Task<WorkflowExecutableInputSourcesView> GetInputSourcesAsync(GetWorkflowExecutableInputSources request, CancellationToken cancellationToken);
+    Task<ExecutableProvenanceView> GetProvenanceAsync(GetWorkflowExecutableProvenance request, CancellationToken cancellationToken);
 }

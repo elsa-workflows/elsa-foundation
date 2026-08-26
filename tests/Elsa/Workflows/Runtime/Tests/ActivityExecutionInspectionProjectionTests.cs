@@ -143,11 +143,11 @@ public class ActivityExecutionInspectionProjectionTests
             "wf", new("artifact", "def", "ver", "1", "hash"), WorkflowExecutionStatus.Running, null,
             DateTimeOffset.UnixEpoch, null, null, null, null, null, "tenant-a", new Dictionary<string, string>()));
         await inspections.SaveAsync(Projection("outer", "outer", null, 1, ActivityExecutionStatus.Running, boundary: true));
-        var handler = new GetActivityExecutionRequestHandler(workflows, inspections, authorization: new DenyStructureAuthorization());
+        var service = new ActivityExecutionInspectionService(workflows, inspections, authorization: new DenyStructureAuthorization());
 
-        var response = await handler.Handle(new GetActivityExecution("wf", "outer"), default);
+        var response = await service.GetAsync(new GetActivityExecution("wf", "outer"), default);
 
-        Assert.Null(response.ActivityExecution);
+        Assert.Null(response);
     }
 
     [Fact]

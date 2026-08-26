@@ -295,9 +295,9 @@ public sealed class RuntimeStartCommandSchedulingTests
         await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
 
         var authorization = new AllowAllActivityExecutionInspectionAuthorizationContext();
-        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore, authorization)
-            .Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
-        var detail = await new GetWorkflowInstanceRequestHandler(
+        var list = await new WorkflowInstanceListService(workflowStore, activityStore, incidentStore, authorization)
+            .ListAsync(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var detail = await new WorkflowInstanceDetailsService(
                 workflowStore,
                 inspectionStore,
                 incidentStore,
@@ -305,14 +305,14 @@ public sealed class RuntimeStartCommandSchedulingTests
                 new DefaultRuntimePayloadCapturePolicy(),
                 authorization,
                 new RuntimeCheckpointCadenceInspector([]))
-            .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
+            .GetAsync(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);
         Assert.Equal("2.0.0", summary.ArtifactVersion);
         Assert.Equal("reference-2", summary.SourceReferenceId);
         Assert.Equal("publication-2", summary.PublicationId);
         Assert.Equal("slot-production", summary.SlotId);
-        Assert.Equal(summary, detail.Instance!.Instance);
+        Assert.Equal(summary, detail!.Instance);
     }
 
     [Fact]

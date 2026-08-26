@@ -9,7 +9,6 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
@@ -852,7 +851,6 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
                 });
             new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
             configureServices?.Invoke(builder.Services);
-            builder.Services.AddScoped<IRequestSender, AlterationRequestSender>();
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -883,34 +881,6 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         }
     }
 
-    private sealed class AlterationRequestSender(IServiceProvider services) : IRequestSender
-    {
-        public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            object response = request switch
-            {
-                SubmitWorkflowAlterationPlan submit => await new SubmitWorkflowAlterationPlanRequestHandler(
-                    services.GetRequiredService<Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationPlanService>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationAdmissionGate>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationRequestContext>()).Handle(submit, cancellationToken),
-                GetWorkflowAlterationPlan get => await new GetWorkflowAlterationPlanRequestHandler(
-                    services.GetRequiredService<IWorkflowAlterationStore>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationRequestContext>()).Handle(get, cancellationToken),
-                PageWorkflowAlterationJobs page => await new PageWorkflowAlterationJobsRequestHandler(
-                    services.GetRequiredService<IWorkflowAlterationStore>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationRequestContext>()).Handle(page, cancellationToken),
-                GetWorkflowAlterationJob getJob => await new GetWorkflowAlterationJobRequestHandler(
-                    services.GetRequiredService<IWorkflowAlterationStore>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationRequestContext>()).Handle(getJob, cancellationToken),
-                CancelWorkflowAlterationPlan cancel => await new CancelWorkflowAlterationPlanRequestHandler(
-                    services.GetRequiredService<IWorkflowAlterationStore>(),
-                    services.GetRequiredService<Elsa.Workflows.Runtime.Services.Alterations.WorkflowAlterationPlanService>(),
-                    services.GetRequiredService<AlterationContracts.IWorkflowAlterationRequestContext>()).Handle(cancel, cancellationToken),
-                _ => throw new NotSupportedException($"Unexpected alteration request '{request.GetType().FullName}'.")
-            };
-            return (T)response;
-        }
-    }
 
     private sealed class TestAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,

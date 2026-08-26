@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -98,7 +98,7 @@ public sealed class RuntimeAdmissionShedResponseTests
             builder.Services.AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "RuntimeApiTest" });
             builder.Services.AddAuthorization();
-            builder.Services.AddSingleton<IRequestSender>(new StubRequestSender(view));
+            builder.Services.AddSingleton<IWorkflowExecutionStartService>(new StubStartService(view));
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -121,10 +121,10 @@ public sealed class RuntimeAdmissionShedResponseTests
         }
     }
 
-    private sealed class StubRequestSender(WorkflowExecutionStartDispatchView view) : IRequestSender
+    private sealed class StubStartService(WorkflowExecutionStartDispatchView view) : IWorkflowExecutionStartService
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult((T)(object)view);
+        public Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken) =>
+            Task.FromResult(view);
     }
 
     private sealed class AllowAuthenticationHandler(

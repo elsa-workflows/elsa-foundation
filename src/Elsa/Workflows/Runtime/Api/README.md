@@ -6,7 +6,7 @@ See the [domain-owned API specification](../../../../../specs/092-domain-owned-a
 
 ## Composition
 
-Add `WorkflowsRuntimeApiFeature` to the active shell. The feature composes the host-agnostic runtime engine with `AddWorkflowRuntime()`, registers API request handlers, and supplies the executable inspector. Compose durable Runtime stores separately when in-memory defaults are insufficient. Optional trigger, coalescing, resumption, HTTP, and garbage-collection features remain independently selectable.
+Add `WorkflowsRuntimeApiFeature` to the active shell. The feature composes the host-agnostic runtime engine with `AddWorkflowRuntime()`, registers the operation services the endpoint classes dispatch to, and supplies the executable inspector. Compose durable Runtime stores separately when in-memory defaults are insufficient. Optional trigger, coalescing, resumption, HTTP, and garbage-collection features remain independently selectable.
 
 This package does not depend on `Elsa.Workbench`; a worker, custom application, or reference server may compose it.
 

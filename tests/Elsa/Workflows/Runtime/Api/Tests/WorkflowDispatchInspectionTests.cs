@@ -60,12 +60,12 @@ public sealed class WorkflowDispatchInspectionTests
     public async Task List_handler_enforces_the_bounded_maximum_and_forwards_continuation()
     {
         var store = new CapturingQueryStore();
-        var handler = new ListWorkflowDispatchesRequestHandler(store);
+        var handler = NewService(queryStore: store);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            handler.Handle(new ListWorkflowDispatches("parent-1", null, null, WorkflowDispatchQuery.MaximumTake + 1), CancellationToken.None));
+            handler.ListAsync(new ListWorkflowDispatches("parent-1", null, null, WorkflowDispatchQuery.MaximumTake + 1), CancellationToken.None));
 
-        await handler.Handle(
+        await handler.ListAsync(
             new ListWorkflowDispatches("parent-1", null, "dispatchfailed", 5)
             {
                 AfterCreatedAt = Now,
@@ -88,9 +88,9 @@ public sealed class WorkflowDispatchInspectionTests
         await SaveLifecycleAsync(store, NewRecord("parent-1", "activity-2", WorkflowDispatchStatus.Started));
         await SaveLifecycleAsync(store, NewRecord("parent-2", "activity-3", WorkflowDispatchStatus.Completed));
         var childId = new WorkflowDispatchIdentity("parent-1", "activity-1").ChildWorkflowExecutionId;
-        var handler = new ListWorkflowDispatchesRequestHandler(store);
+        var handler = NewService(queryStore: store);
 
-        var result = await handler.Handle(
+        var result = await handler.ListAsync(
             new ListWorkflowDispatches("parent-1", childId, "completed", Take: 1),
             CancellationToken.None);
 
@@ -105,10 +105,10 @@ public sealed class WorkflowDispatchInspectionTests
     [InlineData(null, null, "not-a-status")]
     public async Task List_handler_rejects_missing_or_invalid_filters(string? parent, string? child, string? status)
     {
-        var handler = new ListWorkflowDispatchesRequestHandler(new InMemoryWorkflowDispatchStore());
+        var handler = NewService();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new ListWorkflowDispatches(parent, child, status), CancellationToken.None));
+            handler.ListAsync(new ListWorkflowDispatches(parent, child, status), CancellationToken.None));
     }
 
     [Fact]
@@ -117,13 +117,13 @@ public sealed class WorkflowDispatchInspectionTests
         var store = new InMemoryWorkflowDispatchStore();
         var record = NewRecord("parent-1", "activity-1", WorkflowDispatchStatus.Pending);
         await store.SaveAsync(record);
-        var handler = new GetWorkflowDispatchRequestHandler(store);
+        var handler = NewService(store: store);
 
-        var found = await handler.Handle(new GetWorkflowDispatch(record.DispatchId), CancellationToken.None);
-        var missing = await handler.Handle(new GetWorkflowDispatch("missing"), CancellationToken.None);
+        var found = await handler.GetAsync(new GetWorkflowDispatch(record.DispatchId), CancellationToken.None);
+        var missing = await handler.GetAsync(new GetWorkflowDispatch("missing"), CancellationToken.None);
 
-        Assert.NotNull(found.Dispatch);
-        Assert.Null(missing.Dispatch);
+        Assert.NotNull(found);
+        Assert.Null(missing);
     }
 
     [Fact]
@@ -147,14 +147,14 @@ public sealed class WorkflowDispatchInspectionTests
             failedAt);
         await store.SaveAsync(pending);
         await store.SaveAsync(failed);
-        var listHandler = new ListWorkflowDispatchesRequestHandler(store);
-        var detailHandler = new GetWorkflowDispatchRequestHandler(store);
+        var listHandler = NewService(queryStore: store, store: store);
+        var detailHandler = listHandler;
 
-        var listed = Assert.Single(await listHandler.Handle(
+        var listed = Assert.Single(await listHandler.ListAsync(
             new ListWorkflowDispatches(failed.ParentWorkflowExecutionId, null, "dispatchfailed"),
             CancellationToken.None));
         var detailed = Assert.IsType<WorkflowDispatchView>(
-            (await detailHandler.Handle(new GetWorkflowDispatch(failed.DispatchId), CancellationToken.None)).Dispatch);
+            await detailHandler.GetAsync(new GetWorkflowDispatch(failed.DispatchId), CancellationToken.None));
 
         Assert.Equal(JsonSerializer.Serialize(detailed), JsonSerializer.Serialize(listed));
         Assert.Equal(identity.DeliveryIncidentId(2), listed.DeliveryIncidentId);
@@ -319,9 +319,9 @@ public sealed class WorkflowDispatchInspectionTests
             generation: 4,
             incidentId: "incident-1",
             deadLetterId: "outbox-1"));
-        var handler = new RedriveWorkflowDispatchRequestHandler(store, new FixedTimeProvider(Now));
+        var handler = NewService(redriveStore: store, timeProvider: new FixedTimeProvider(Now));
 
-        var view = await handler.Handle(new RedriveWorkflowDispatch("dispatch-1", "request-1"), CancellationToken.None);
+        var view = await handler.RedriveAsync(new RedriveWorkflowDispatch("dispatch-1", "request-1"), CancellationToken.None);
 
         Assert.Equal(new WorkflowDispatchRedriveRequest("dispatch-1", "request-1", Now), store.Request);
         Assert.Equal("dispatch-1", view.DispatchId);
@@ -342,7 +342,7 @@ public sealed class WorkflowDispatchInspectionTests
     public async Task Redrive_handler_logs_safe_structured_disposition_only(
         WorkflowDispatchRedriveDisposition disposition)
     {
-        var logger = new RecordingLogger<RedriveWorkflowDispatchRequestHandler>();
+        var logger = new RecordingLogger<WorkflowDispatchInspectionService>();
         var store = new CapturingRedriveStore(new WorkflowDispatchRedriveResult(
             "dispatch-safe",
             disposition,
@@ -350,9 +350,9 @@ public sealed class WorkflowDispatchInspectionTests
             generation: 3,
             incidentId: "incident-safe",
             deadLetterId: "outbox-safe"));
-        var handler = new RedriveWorkflowDispatchRequestHandler(store, new FixedTimeProvider(Now), logger);
+        var handler = NewService(redriveStore: store, timeProvider: new FixedTimeProvider(Now), logger: logger);
 
-        await handler.Handle(new RedriveWorkflowDispatch("dispatch-safe", "request-secret"), CancellationToken.None);
+        await handler.RedriveAsync(new RedriveWorkflowDispatch("dispatch-safe", "request-secret"), CancellationToken.None);
 
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(68109, entry.EventId.Id);
@@ -423,6 +423,30 @@ public sealed class WorkflowDispatchInspectionTests
         var pending = NewRecord(record.ParentWorkflowExecutionId, record.ParentActivityExecutionId, WorkflowDispatchStatus.Pending);
         await store.SaveAsync(pending);
         await store.SaveAsync(pending.TransitionTo(record.Status, record.UpdatedAt));
+    }
+
+    private static WorkflowDispatchInspectionService NewService(
+        IWorkflowDispatchQueryStore? queryStore = null,
+        IWorkflowDispatchStore? store = null,
+        IWorkflowDispatchRedriveStore? redriveStore = null,
+        TimeProvider? timeProvider = null,
+        ILogger<WorkflowDispatchInspectionService>? logger = null)
+    {
+        var fallback = new InMemoryWorkflowDispatchStore();
+        return new(
+            queryStore ?? fallback,
+            store ?? fallback,
+            redriveStore ?? new UnusedRedriveStore(),
+            timeProvider: timeProvider,
+            logger: logger);
+    }
+
+    private sealed class UnusedRedriveStore : IWorkflowDispatchRedriveStore
+    {
+        public ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
+            WorkflowDispatchRedriveRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Redrive is not exercised by this test.");
     }
 
     private sealed class CapturingQueryStore : IWorkflowDispatchQueryStore
