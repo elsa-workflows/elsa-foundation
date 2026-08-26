@@ -47,13 +47,15 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     private readonly IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager;
     private readonly string? targetName;
     private readonly TimeProvider timeProvider;
+    private readonly IWritePathObserver? writePathObserver;
 
     public GroundworkV2RuntimeCheckpointWriter(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null,
         TimeProvider? timeProvider = null,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
+        IWritePathObserver? writePathObserver = null)
     {
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(accessContextAccessor);
@@ -62,6 +64,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         this.rootWriteLeaseManager = rootWriteLeaseManager;
         this.targetName = targetName;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.writePathObserver = writePathObserver;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
@@ -126,7 +129,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         CancellationToken cancellationToken)
     {
         using var unitOfWork = sessions.BeginUnitOfWork(access, BatchWriteOptions.Exact, CommitUnitIds, targetName);
-        var stage = new StageContext(sessions, targetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider);
+        var stage = new StageContext(
+            sessions, targetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider, writePathObserver);
         try
         {
             // The fence touch is intentionally the first staged mutation. Every other row, including the marker,
@@ -541,6 +545,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         private readonly string fingerprint;
         private readonly CancellationToken cancellationToken;
         private readonly TimeProvider timeProvider;
+        private readonly IWritePathObserver? writePathObserver;
         private readonly HashSet<string> touchedTestScopes = new(StringComparer.Ordinal);
         private readonly HashSet<string> newIncidentIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, IStorageSession> unitSessions = new(StringComparer.Ordinal);
@@ -555,7 +560,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             RuntimeCheckpointCommit commit,
             string fingerprint,
             CancellationToken cancellationToken,
-            TimeProvider timeProvider)
+            TimeProvider timeProvider,
+            IWritePathObserver? writePathObserver)
         {
             this.sessions = sessions;
             this.targetName = targetName;
@@ -565,6 +571,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             this.fingerprint = fingerprint;
             this.cancellationToken = cancellationToken;
             this.timeProvider = timeProvider;
+            this.writePathObserver = writePathObserver;
         }
 
         public bool CommitStarted { get; private set; }
@@ -1288,15 +1295,22 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
             var write = operation switch
             {
-                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, options ?? WriteOptions.CreateOnly),
-                RuntimeStateChangeOperation.Upsert when options is not null => RowWrite.ConditionalUpsert(unit, values, options),
-                _ => RowWrite.Upsert(unit, values, options ?? WriteOptions.Unconditional)
+                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, Observed(options ?? WriteOptions.CreateOnly)),
+                RuntimeStateChangeOperation.Upsert when options is not null => RowWrite.ConditionalUpsert(unit, values, Observed(options)),
+                _ => RowWrite.Upsert(unit, values, Observed(options ?? WriteOptions.Unconditional))
             };
             unitOfWork.Stage(write);
         }
 
         private void StageDelete(string unitId, string id, WriteOptions? options = null) =>
-            unitOfWork.Stage(RowWrite.Delete(Unit(unitId), GroundworkRuntimeRowStore.Key(id), options ?? WriteOptions.Unconditional));
+            unitOfWork.Stage(RowWrite.Delete(
+                Unit(unitId), GroundworkRuntimeRowStore.Key(id), Observed(options ?? WriteOptions.Unconditional)));
+
+        // Every staged mutation funnels through Stage or StageDelete, so attaching the observer here is what
+        // makes the production commit path measurable. The static WriteOptions singletons carry no observer,
+        // and a caller outside src/ cannot reach the staging calls to supply one.
+        private WriteOptions Observed(WriteOptions options) =>
+            writePathObserver is null ? options : options with { Observer = writePathObserver };
 
         private IStorageSession Open(string unitId) =>
             unitSessions.TryGetValue(unitId, out var session)
