@@ -87,10 +87,39 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         }
         catch
         {
-            if (built is not null)
-                await built.DisposeAsync();
-            connection.Dispose();
+            // Cleanup is best-effort on both handles, and deliberately so. Disposing the provider first
+            // without guarding it would mean a throwing DisposeAsync skipped the connection entirely and
+            // replaced the admission failure — the thing the caller actually needs to see — with a far less
+            // diagnostic cleanup error. Each is therefore released independently, and the original
+            // exception is the one that propagates.
+            await SafelyDisposeAsync(built);
+            SafelyDispose(connection);
             throw;
+        }
+    }
+
+    private static async ValueTask SafelyDisposeAsync(ServiceProvider? provider)
+    {
+        try
+        {
+            if (provider is not null)
+                await provider.DisposeAsync();
+        }
+        catch
+        {
+            // Swallowed so the failure being handled survives; see the catch block above.
+        }
+    }
+
+    private static void SafelyDispose(IStorageProviderConnection connection)
+    {
+        try
+        {
+            connection.Dispose();
+        }
+        catch
+        {
+            // Swallowed so the failure being handled survives; see the catch block above.
         }
     }
 
