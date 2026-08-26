@@ -373,16 +373,17 @@ public sealed class EndpointSecurityTests
         var permissions = File.ReadAllText(permissionsPath);
         var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
         var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+        // The mapper composes the module endpoint convention: one owned group and exactly three
+        // operations, each carrying the any-of wildcard-or-catalog permission requirement.
         var routeMappings = calls.Count(call =>
-            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax endpoint } &&
-            endpoint.Identifier.ValueText == "endpoints" &&
-            InvocationName(call) == "MapGet");
+            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax group } &&
+            group.Identifier.ValueText == "api" &&
+            InvocationName(call) == "MapUnboundOperation");
 
         Assert.Equal(3, routeMappings);
+        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapModuleEndpoints"));
         Assert.Equal(3, calls.Count(call => InvocationName(call) == "RequireAnyPermission"));
-        Assert.Equal(3, calls.Count(call => InvocationName(call) == "WithOwner"));
-        Assert.Equal(3, calls.Count(call => InvocationName(call) == "WithAuthoringModel"));
-        Assert.Contains("EndpointAuthoringModels.MinimalApi", mapper, StringComparison.Ordinal);
+        Assert.Contains("StructuredLogsPermissions.OwnerId", mapper, StringComparison.Ordinal);
         Assert.Contains("PermissionKey.Wildcard", mapper, StringComparison.Ordinal);
         Assert.Contains("Diagnostics:StructuredLogs", permissions, StringComparison.Ordinal);
         Assert.Contains("StructuredLogsPermissions.Read", contributor, StringComparison.Ordinal);

@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 148
 - Test projects: 107
-- Direct project references: 1210
+- Direct project references: 1213
 
 ## Projects
 
@@ -40,7 +40,7 @@ Records direct project references only.
 | [Elsa.Activities.Scripting](../../src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Anthropic](../../src/Elsa/Agent/Anthropic/Elsa.Agent.Anthropic.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core |
-| [Elsa.Agent.Api](../../src/Elsa/Agent/Api/Elsa.Agent.Api.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core<br>Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Agent.Api](../../src/Elsa/Agent/Api/Elsa.Agent.Api.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Agent.Core](../../src/Elsa/Agent/Core/Elsa.Agent.Core.csproj) | source | Elsa.Agent | - | default | Elsa.Primitives |
 | [Elsa.Agent.GitHubCopilot](../../src/Elsa/Agent/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core<br>Elsa.Agent.Workflows |
 | [Elsa.Agent.Workflows](../../src/Elsa/Agent/Workflows/Elsa.Agent.Workflows.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core |
@@ -53,14 +53,14 @@ Records direct project references only.
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | - | default | Elsa.Caching.Core |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | - | default | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | - | default | - |
-| [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
+| [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Tasks.Core |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.Persistence |
 | [Elsa.Diagnostics.Persistence](../../src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Diagnostics.Persistence.Groundwork](../../src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork |
 | [Elsa.Diagnostics.StructuredLogs.Core](../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj) | source | Elsa.Diagnostics | - | default | - |
-| [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.EFCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Tasks.Core |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.Groundwork.V2 |

@@ -94,6 +94,10 @@ public static class EndpointConventionBuilderExtensions
     /// Whether the shared 401/403 response pair is documented. Public operations that never
     /// challenge keep their published 200-only documents by opting out.
     /// </param>
+    /// <param name="successContentType">
+    /// The documented success content type. Defaults to JSON; a streaming operation documents its
+    /// event-stream media type here.
+    /// </param>
     public static TBuilder WithModuleOperation<TBuilder>(
         this TBuilder builder,
         string name,
@@ -103,7 +107,8 @@ public static class EndpointConventionBuilderExtensions
         string[]? accepts = null,
         int? responseStatus = null,
         string? tag = null,
-        bool documentAuthResponses = true)
+        bool documentAuthResponses = true,
+        string? successContentType = null)
         where TBuilder : IEndpointConventionBuilder
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -116,7 +121,7 @@ public static class EndpointConventionBuilderExtensions
         var status = responseStatus ?? (hasBody ? StatusCodes.Status200OK : StatusCodes.Status204NoContent);
         var metadata = new List<object>
         {
-            new ProducesResponseTypeMetadata(status, responseType ?? typeof(void), hasBody ? [JsonContentType] : [])
+            new ProducesResponseTypeMetadata(status, responseType ?? typeof(void), hasBody ? [successContentType ?? JsonContentType] : [])
         };
 
         if (documentAuthResponses)

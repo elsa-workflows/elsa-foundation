@@ -1,4 +1,4 @@
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -25,95 +25,104 @@ public static class OpenTelemetryApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var description = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The published operation ids predate the naming scheme and the published tag is the plain
+        // "OpenTelemetry" query tag — both pinned by the reviewed approval registry — and every
+        // operation keeps its own reads, writes, problem shapes, and the SSE stream, so the surface
+        // stays on the group's raw seam with per-operation name overrides.
+        var api = endpoints.MapModuleEndpoints(
+            OpenTelemetryPermissions.OwnerId,
+            OpenTelemetryJsonContext.Default,
+            tag: QueryTag);
 
-        MapPost<OpenTelemetryResourceFilter, OpenTelemetryResourceResult>(endpoints,
-            "/diagnostics/opentelemetry/resources/search", "OpenTelemetryResourcesSearch", description,
+        MapPost<OpenTelemetryResourceFilter, OpenTelemetryResourceResult>(api,
+            "/diagnostics/opentelemetry/resources/search", "ResourcesSearch", "OpenTelemetryResourcesSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetResourcesAsync(filter, cancellationToken),
             OpenTelemetryJsonContext.Default.OpenTelemetryResourceFilter, OpenTelemetryJsonContext.Default.OpenTelemetryResourceResult);
-        MapPost<OpenTelemetryTraceFilter, OpenTelemetryTraceResult>(endpoints,
-            "/diagnostics/opentelemetry/traces/search", "OpenTelemetryTracesSearch", description,
+        MapPost<OpenTelemetryTraceFilter, OpenTelemetryTraceResult>(api,
+            "/diagnostics/opentelemetry/traces/search", "TracesSearch", "OpenTelemetryTracesSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetTracesAsync(filter, cancellationToken),
             OpenTelemetryJsonContext.Default.OpenTelemetryTraceFilter, OpenTelemetryJsonContext.Default.OpenTelemetryTraceResult);
-        MapPost<OpenTelemetryMetricFilter, OpenTelemetryMetricResult>(endpoints,
-            "/diagnostics/opentelemetry/metrics/search", "OpenTelemetryMetricsSearch", description,
+        MapPost<OpenTelemetryMetricFilter, OpenTelemetryMetricResult>(api,
+            "/diagnostics/opentelemetry/metrics/search", "MetricsSearch", "OpenTelemetryMetricsSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetMetricsAsync(filter, cancellationToken),
             OpenTelemetryJsonContext.Default.OpenTelemetryMetricFilter, OpenTelemetryJsonContext.Default.OpenTelemetryMetricResult);
-        MapPost<OpenTelemetryLogFilter, OpenTelemetryLogResult>(endpoints,
-            "/diagnostics/opentelemetry/logs/search", "OpenTelemetryLogsSearch", description,
+        MapPost<OpenTelemetryLogFilter, OpenTelemetryLogResult>(api,
+            "/diagnostics/opentelemetry/logs/search", "LogsSearch", "OpenTelemetryLogsSearch",
             static (context, filter, cancellationToken) => context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetLogsAsync(filter, cancellationToken),
             OpenTelemetryJsonContext.Default.OpenTelemetryLogFilter, OpenTelemetryJsonContext.Default.OpenTelemetryLogResult);
 
-        MapGet(endpoints, "/diagnostics/opentelemetry/traces/{traceId}", "OpenTelemetryTraceDetail", description,
-            async context =>
-            {
-                var traceId = context.Request.RouteValues["traceId"]?.ToString() ?? string.Empty;
-                var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetTraceAsync(traceId, context.RequestAborted);
-                if (result is null)
+        api.MapUnboundOperation("GET", "/diagnostics/opentelemetry/traces/{traceId}", "TraceDetail",
+                typeof(OpenTelemetryTraceDetail), StatusCodes.Status200OK, null,
+                async context =>
                 {
-                    await Results.NotFound().ExecuteAsync(context);
-                    return;
-                }
+                    var traceId = context.Request.RouteValues["traceId"]?.ToString() ?? string.Empty;
+                    var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetTraceAsync(traceId, context.RequestAborted);
+                    if (result is null)
+                    {
+                        await Results.NotFound().ExecuteAsync(context);
+                        return;
+                    }
 
-                await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryTraceDetail).ExecuteAsync(context);
-            },
-            new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(OpenTelemetryTraceDetail), ["application/json"]),
-            new ProducesResponseTypeMetadata(StatusCodes.Status404NotFound, typeof(void), []));
+                    await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryTraceDetail).ExecuteAsync(context);
+                },
+                name: "OpenTelemetryTraceDetail", documentAuthResponses: false)
+            .RequirePermission(OpenTelemetryPermissions.Read)
+            // The reviewed approval pins the response-status order 200, 404, 401, 403.
+            .WithMetadata(
+                new ProducesResponseTypeMetadata(StatusCodes.Status404NotFound, typeof(void), []),
+                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
+                new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
 
-        MapGet(endpoints, "/diagnostics/opentelemetry/storage", "OpenTelemetryStorage", description,
-            async context =>
-            {
-                var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetStorageDiagnosticsAsync(context.RequestAborted);
-                await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryStorageDiagnostics).ExecuteAsync(context);
-            },
-            new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(OpenTelemetryStorageDiagnostics), ["application/json"]));
+        api.MapUnboundOperation("GET", "/diagnostics/opentelemetry/storage", "Storage",
+                typeof(OpenTelemetryStorageDiagnostics), StatusCodes.Status200OK, null,
+                async context =>
+                {
+                    var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetStorageDiagnosticsAsync(context.RequestAborted);
+                    await Results.Json(result, OpenTelemetryJsonContext.Default.OpenTelemetryStorageDiagnostics).ExecuteAsync(context);
+                },
+                name: "OpenTelemetryStorage")
+            .RequirePermission(OpenTelemetryPermissions.Read);
 
-        MapGet(endpoints, "/diagnostics/opentelemetry/collector-configuration", "OpenTelemetryCollectorConfiguration", description,
-            async context =>
-            {
-                var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetCollectorConfigurationAsync(context.RequestAborted);
-                await Results.Json(result, OpenTelemetryJsonContext.Default.CollectorConfiguration).ExecuteAsync(context);
-            },
-            new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(CollectorConfiguration), ["application/json"]));
+        api.MapUnboundOperation("GET", "/diagnostics/opentelemetry/collector-configuration", "CollectorConfiguration",
+                typeof(CollectorConfiguration), StatusCodes.Status200OK, null,
+                async context =>
+                {
+                    var result = await context.RequestServices.GetRequiredService<IOpenTelemetryProvider>().GetCollectorConfigurationAsync(context.RequestAborted);
+                    await Results.Json(result, OpenTelemetryJsonContext.Default.CollectorConfiguration).ExecuteAsync(context);
+                },
+                name: "OpenTelemetryCollectorConfiguration")
+            .RequirePermission(OpenTelemetryPermissions.Read);
 
-        endpoints.MapGet(
+        api.MapUnboundOperation("GET",
                 endpoints.ServiceProvider.GetRequiredService<IOptions<OpenTelemetryDiagnosticsOptions>>().Value.StreamPath,
-                HandleStreamAsync)
-            .WithMetadata(description, new EndpointNameMetadata("OpenTelemetryStream"), new TagsAttribute(QueryTag),
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(OpenTelemetryStreamItem), ["text/event-stream"]),
-                Unauthorized(), Forbidden())
-            .WithOwner(OpenTelemetryPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+                "Stream", typeof(OpenTelemetryStreamItem), StatusCodes.Status200OK, null, HandleStreamAsync,
+                name: "OpenTelemetryStream", successContentType: "text/event-stream")
             .RequirePermission(OpenTelemetryPermissions.Read);
     }
 
     private static void MapPost<TFilter, TResult>(
-        IEndpointRouteBuilder endpoints,
+        ModuleEndpointGroup api,
         string route,
+        string operation,
         string operationId,
-        System.Reflection.MethodInfo description,
         Func<HttpContext, TFilter, CancellationToken, ValueTask<TResult>> execute,
         System.Text.Json.Serialization.Metadata.JsonTypeInfo<TFilter> filterInfo,
         System.Text.Json.Serialization.Metadata.JsonTypeInfo<TResult> resultInfo)
         where TFilter : class
     {
-        endpoints.MapPost(route, async context =>
-            {
-                var filter = await ReadJsonAsync(context, filterInfo);
-                if (filter is null)
-                    return;
+        api.MapUnboundOperation("POST", route, operation, typeof(TResult), StatusCodes.Status200OK, null,
+                async context =>
+                {
+                    var filter = await ReadJsonAsync(context, filterInfo);
+                    if (filter is null)
+                        return;
 
-                var result = await execute(context, filter, context.RequestAborted);
-                await Results.Json(result, resultInfo).ExecuteAsync(context);
-            })
-            .WithMetadata(description, new EndpointNameMetadata(operationId), new TagsAttribute(QueryTag),
-                new AcceptsMetadata(["application/json"], typeof(TFilter), false),
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(TResult), ["application/json"]),
-                Unauthorized(), Forbidden())
-            .WithOwner(OpenTelemetryPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(OpenTelemetryPermissions.Read);
+                    var result = await execute(context, filter, context.RequestAborted);
+                    await Results.Json(result, resultInfo).ExecuteAsync(context);
+                },
+                name: operationId)
+            .RequirePermission(OpenTelemetryPermissions.Read)
+            .WithMetadata(new AcceptsMetadata(["application/json"], typeof(TFilter), false));
     }
 
     private static async Task<T?> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> typeInfo)
@@ -153,21 +162,6 @@ public static class OpenTelemetryApi
 
     private static string NormalizeJsonError(string message) => message.Replace("Path: $ | ", string.Empty, StringComparison.Ordinal);
 
-    private static void MapGet(
-        IEndpointRouteBuilder endpoints,
-        string route,
-        string operationId,
-        System.Reflection.MethodInfo description,
-        RequestDelegate handler,
-        params object[] responseMetadata)
-    {
-        endpoints.MapGet(route, handler)
-            .WithMetadata([description, new EndpointNameMetadata(operationId), new TagsAttribute(QueryTag), .. responseMetadata, Unauthorized(), Forbidden()])
-            .WithOwner(OpenTelemetryPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(OpenTelemetryPermissions.Read);
-    }
-
     private static async Task HandleStreamAsync(HttpContext context)
     {
         var services = context.RequestServices;
@@ -204,11 +198,6 @@ public static class OpenTelemetryApi
         }
     }
 
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 }
 
 internal sealed record OpenTelemetryBindingProblemDetails(
