@@ -12,8 +12,8 @@
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />
     <PackageReference Include="Groundwork.Store" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.2.0-preview.1" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.2.0-preview.2" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.2" />
   </ItemGroup>
 
   <ItemGroup>

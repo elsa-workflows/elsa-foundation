@@ -11,6 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
-    <PackageReference Include="Groundwork.Sqlite" Version="0.2.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" Version="0.2.0-preview.2" />
   </ItemGroup>
 </Project>
