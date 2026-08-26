@@ -27,7 +27,14 @@ internal static class NativePlanEvidenceStaging
     /// The <c>.native-plan.json</c> suffix is load-bearing: <c>SafeRawPlanReference</c> rejects it, so an
     /// evidence document can never be mistaken for — or cross-registered as — a raw provider plan.
     /// </summary>
-    public static string ReferenceFor(string workloadId, string provider) => $"{workloadId}.{provider}.native-plan.json";
+    /// <summary>
+    /// Admits the composed name rather than trusting its parts. <c>workloadId</c> and <c>provider</c> reach
+    /// here from a document, so a value like <c>../evil</c> would compose into a reference that escapes the
+    /// directory it is about to be written into. <c>EvidenceName</c> rejects anything that is not a safe
+    /// top-level name, which is what makes every <c>Path.Combine</c> on the result sound.
+    /// </summary>
+    public static string ReferenceFor(string workloadId, string provider) =>
+        ArtifactStore.EvidenceName($"{workloadId}.{provider}.native-plan.json");
 
     public static string Write(string directory, NativePlanEvidenceDocument document)
     {

@@ -51,6 +51,17 @@ public sealed class NativePlanEvidenceStagingTests : IDisposable
         Assert.True(File.Exists(escapee), "the source outside the roots must be untouched");
     }
 
+    [Theory]
+    [InlineData("../evil")]
+    [InlineData("/rooted")]
+    public void A_document_whose_own_identity_would_escape_the_directory_is_refused(string workloadId)
+    {
+        // ReferenceFor composes the file name from the document's own fields, so those are an input path
+        // too — not only the route references it carries.
+        Assert.Throws<PerformanceContractException>(() =>
+            NativePlanEvidenceStaging.ReferenceFor(workloadId, "sqlite"));
+    }
+
     [Fact]
     public void A_zero_route_document_is_published_because_checkpoint_commit_declares_no_native_routes()
     {
