@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Studio.Preferences.Api.Models;
 using Elsa.Studio.Preferences.Api.Services;
@@ -28,31 +29,22 @@ public static class StudioPreferencesApi
 
         var owner = typeof(StudioPreferencesApiFeature).Assembly.GetName().Name
             ?? throw new InvalidOperationException("The Studio Preferences API assembly has no name.");
-        RequestDelegate getHandler = HandleGetRequestAsync;
-        RequestDelegate putHandler = HandlePutRequestAsync;
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        endpoints.MapGet(PreferencesRoute, getHandler)
-            .WithOwner(owner)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        // Both operations keep their own reads, writes, precondition handling, ETag headers, and
+        // problem shapes — and the published contract lets unexpected failures reach the host's
+        // exception pipeline — so the surface stays on the group's raw seam.
+        var api = endpoints.MapModuleEndpoints(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
+
+        api.MapUnboundOperation("GET", PreferencesRoute, "Get",
+                typeof(StudioPreferenceDocument), StatusCodes.Status200OK, null, HandleGetRequestAsync,
+                containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, StudioPreferencesPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(StudioPreferenceDocument), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-                new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []))
             .AddOpenApiOperationTransformer(ConfigureGetOpenApiAsync);
 
-        endpoints.MapPut(PreferencesRoute, putHandler)
-            .WithOwner(owner)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        api.MapUnboundOperation("PUT", PreferencesRoute, "Put",
+                typeof(StudioPreferenceDocument), StatusCodes.Status200OK, null, HandlePutRequestAsync,
+                containFailures: false)
             .RequireAnyPermission(PermissionKey.Wildcard, StudioPreferencesPermissions.Write)
-            .WithMetadata(
-                descriptionMethod,
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(StudioPreferenceDocument), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-                new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []))
             .AddOpenApiOperationTransformer(ConfigurePutOpenApiAsync);
     }
 

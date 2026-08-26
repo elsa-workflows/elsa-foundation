@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 148
 - Test projects: 107
-- Direct project references: 1216
+- Direct project references: 1217
 
 ## Projects
 
@@ -120,7 +120,7 @@ Records direct project references only.
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | - | default | Elsa.Serialization.Core |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
-| [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
+| [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Studio.Preferences.Core](../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj) | source | Elsa.Studio | - | default | - |
 | [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | source | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | - | default | - |
