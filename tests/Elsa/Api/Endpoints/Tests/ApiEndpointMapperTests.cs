@@ -110,6 +110,20 @@ public sealed class ApiEndpointMapperTests
     }
 
     [Fact]
+    public void An_unbound_operation_can_document_a_non_json_success_content_type()
+    {
+        var (group, routes) = Group();
+
+        group.MapUnboundOperation("GET", "/sse", "Sse", typeof(SampleResponse),
+            StatusCodes.Status200OK, null, _ => Task.CompletedTask, successContentType: "text/event-stream");
+
+        var endpoint = Single(routes);
+        var success = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
+            .Single(metadata => metadata.StatusCode == StatusCodes.Status200OK);
+        Assert.Equal(["text/event-stream"], success.ContentTypes);
+    }
+
+    [Fact]
     public void An_unbound_operation_can_document_a_status_its_dispatch_does_not_use()
     {
         var (group, routes) = Group();

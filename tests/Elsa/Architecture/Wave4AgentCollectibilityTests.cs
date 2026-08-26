@@ -50,6 +50,11 @@ public sealed class Wave4AgentCollectibilityTests
         var featureType = assembly.GetType("Elsa.Agent.Api.FoundationAgentApiFeature", true)!;
         var feature = Activator.CreateInstance(featureType)!;
         var descriptors = new ServiceCollection().AddLogging().AddRouting();
+        // The owner assembly is deliberately loaded collectibly here, so its contract types ARE
+        // collectible and the fail-closed lifetime boundary would reject the mapping outright.
+        // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
+        // document survives the cycle, and the weak-reference assertions below prove the release.
+        descriptors.SuppressOpenApiLifetimeEnforcement();
         descriptors.AddAuthentication(Wave4AgentAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, Wave4AgentAuthenticationHandler>(
                 Wave4AgentAuthenticationHandler.SchemeName, _ => { });

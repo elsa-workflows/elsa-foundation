@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Agent.Api.Extensions;
+using Elsa.Api.AspNetCore;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,7 @@ public class FoundationAgentApiFeature : IWebShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddFoundationAgentApi();
+        services.AddDynamicEndpointApiExplorerRefresh();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>

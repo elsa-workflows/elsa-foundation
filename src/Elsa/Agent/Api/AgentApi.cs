@@ -4,7 +4,7 @@ using Elsa.Agent.Api.Models;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -25,110 +25,58 @@ public static class AgentApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The Agent operations keep their own reads, writes, failure-carrying response envelopes,
+        // and the SSE stream, so every operation stays on the group's raw seam; the group supplies
+        // the shared metadata the mapper used to inline per endpoint.
+        var api = endpoints.MapModuleEndpoints(OwnerId, AgentJsonContext.Default, jsonContentType: "application/json");
 
-        Configure(endpoints.MapGet($"{RoutePrefix}/bootstrap", (RequestDelegate)HandleBootstrapAsync),
-                "ElsaAgentApiEndpointsBootstrap", AgentPermissionKeys.Use,
-                typeof(AgentBootstrapResponse), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentBootstrapResponse>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/sessions", (RequestDelegate)HandleCreateSessionAsync),
-                "ElsaAgentApiEndpointsCreateSession", AgentPermissionKeys.Use,
-                typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentCreateSessionResponse>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapGet($"{RoutePrefix}/sessions/{{sessionId}}", (RequestDelegate)HandleGetSessionAsync),
-                "ElsaAgentApiEndpointsGetSession", AgentPermissionKeys.Use,
-                typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentSessionDetailsResponse>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentSessionDetailsResponse>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/sessions/{{sessionId}}/messages", (RequestDelegate)HandlePostMessageAsync),
-                "ElsaAgentApiEndpointsPostMessage", AgentPermissionKeys.Use,
-                typeof(AgentMessageRequest), typeof(AgentApiResponse<AgentMessageAcceptedResponse>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentMessageAcceptedResponse>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/sessions/{{sessionId}}/turns/{{turnId}}/cancel", (RequestDelegate)HandleCancelTurnAsync),
-                "ElsaAgentApiEndpointsCancelTurn", AgentPermissionKeys.Use,
-                typeof(AgentTurnCancelRequest), typeof(AgentApiResponse<AgentTurnCancelResponse>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentTurnCancelResponse>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapGet($"{RoutePrefix}/sessions/{{sessionId}}/stream", (RequestDelegate)HandleStreamSessionAsync),
-                "ElsaAgentApiEndpointsStreamSession", AgentPermissionKeys.Use,
-                typeof(AgentSessionRouteRequest), typeof(void), descriptionMethod)
-            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/feedback", (RequestDelegate)HandleFeedbackAsync),
-                "ElsaAgentApiEndpointsFeedback", AgentPermissionKeys.Use,
-                typeof(AgentFeedbackApiRequest), typeof(AgentApiResponse<AgentFeedback>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentFeedback>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/proposals/{{proposalId}}/approve", (RequestDelegate)HandleApproveProposalAsync),
-                "ElsaAgentApiEndpointsApproveProposal", AgentPermissionKeys.Proposals,
-                typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentActionProposal>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentActionProposal>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/proposals/{{proposalId}}/deny", (RequestDelegate)HandleDenyProposalAsync),
-                "ElsaAgentApiEndpointsDenyProposal", AgentPermissionKeys.Proposals,
-                typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentActionProposal>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentActionProposal>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapPost($"{RoutePrefix}/proposals/{{proposalId}}/execute", (RequestDelegate)HandleExecuteProposalAsync),
-                "ElsaAgentApiEndpointsExecuteProposal", AgentPermissionKeys.Proposals,
-                typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentProposalExecutionResult>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<AgentProposalExecutionResult>)), Unauthorized(), Forbidden());
-
-        Configure(endpoints.MapGet($"{RoutePrefix}/audit", (RequestDelegate)HandleAuditAsync),
-                "ElsaAgentApiEndpointsAudit", AgentPermissionKeys.Audit,
-                typeof(AgentAuditQueryRequest), typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>), descriptionMethod)
-            .WithMetadata(Response(StatusCodes.Status200OK, typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>)), Unauthorized(), Forbidden());
+        Map(api, "GET", $"{RoutePrefix}/bootstrap", "Bootstrap", AgentPermissionKeys.Use,
+            null, typeof(AgentApiResponse<AgentBootstrapResponse>), HandleBootstrapAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions", "CreateSession", AgentPermissionKeys.Use,
+            typeof(AgentCreateSessionRequest), typeof(AgentApiResponse<AgentCreateSessionResponse>), HandleCreateSessionAsync);
+        Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}", "GetSession", AgentPermissionKeys.Use,
+            typeof(AgentSessionRouteRequest), typeof(AgentApiResponse<AgentSessionDetailsResponse>), HandleGetSessionAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/messages", "PostMessage", AgentPermissionKeys.Use,
+            typeof(AgentMessageRequest), typeof(AgentApiResponse<AgentMessageAcceptedResponse>), HandlePostMessageAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/turns/{{turnId}}/cancel", "CancelTurn", AgentPermissionKeys.Use,
+            typeof(AgentTurnCancelRequest), typeof(AgentApiResponse<AgentTurnCancelResponse>), HandleCancelTurnAsync);
+        Map(api, "GET", $"{RoutePrefix}/sessions/{{sessionId}}/stream", "StreamSession", AgentPermissionKeys.Use,
+            typeof(AgentSessionRouteRequest), null, HandleStreamSessionAsync, successStatus: StatusCodes.Status204NoContent);
+        Map(api, "POST", $"{RoutePrefix}/feedback", "Feedback", AgentPermissionKeys.Use,
+            typeof(AgentFeedbackApiRequest), typeof(AgentApiResponse<AgentFeedback>), HandleFeedbackAsync);
+        Map(api, "POST", $"{RoutePrefix}/proposals/{{proposalId}}/approve", "ApproveProposal", AgentPermissionKeys.Proposals,
+            typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentActionProposal>), HandleApproveProposalAsync);
+        Map(api, "POST", $"{RoutePrefix}/proposals/{{proposalId}}/deny", "DenyProposal", AgentPermissionKeys.Proposals,
+            typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentActionProposal>), HandleDenyProposalAsync);
+        Map(api, "POST", $"{RoutePrefix}/proposals/{{proposalId}}/execute", "ExecuteProposal", AgentPermissionKeys.Proposals,
+            typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentProposalExecutionResult>), HandleExecuteProposalAsync);
+        Map(api, "GET", $"{RoutePrefix}/audit", "Audit", AgentPermissionKeys.Audit,
+            typeof(AgentAuditQueryRequest), typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>), HandleAuditAsync);
     }
 
-    private static IEndpointConventionBuilder Configure(
-        IEndpointConventionBuilder builder,
-        string operationId,
+    private static void Map(
+        ModuleEndpointGroup api,
+        string method,
+        string pattern,
+        string operation,
         string permission,
-        Type responseType,
-        System.Reflection.MethodInfo descriptionMethod)
-        => ConfigureCore(builder, operationId, permission, responseType, descriptionMethod);
-
-    private static IEndpointConventionBuilder Configure(
-        IEndpointConventionBuilder builder,
-        string operationId,
-        string permission,
-        Type requestType,
-        Type responseType,
-        System.Reflection.MethodInfo descriptionMethod)
+        Type? requestType,
+        Type? responseType,
+        Func<HttpContext, Task> dispatch,
+        int successStatus = StatusCodes.Status200OK)
     {
-        builder.WithMetadata(new AcceptsMetadata(
-            requestType == typeof(AgentSessionRouteRequest) || requestType == typeof(AgentAuditQueryRequest)
-                ? ["*/*", "application/json"]
-                : ["application/json"], requestType, false));
-        return ConfigureCore(builder, operationId, permission, responseType, descriptionMethod);
+        var builder = api.MapUnboundOperation(method, pattern, operation, responseType, successStatus, null, dispatch)
+            .RequirePermission(permission);
+        if (requestType is not null)
+        {
+            // The published documents accept any media type on the route- and query-bound reads,
+            // exactly as the hand-written mapper declared them.
+            builder.WithMetadata(new AcceptsMetadata(
+                requestType == typeof(AgentSessionRouteRequest) || requestType == typeof(AgentAuditQueryRequest)
+                    ? ["*/*", "application/json"]
+                    : ["application/json"], requestType, false));
+        }
     }
-
-    private static IEndpointConventionBuilder ConfigureCore(
-        IEndpointConventionBuilder builder,
-        string operationId,
-        string permission,
-        Type responseType,
-        System.Reflection.MethodInfo descriptionMethod)
-        => builder
-            .WithName(operationId)
-            .WithTags(OwnerId)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(permission)
-            .WithMetadata(descriptionMethod);
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>
-        new(statusCode, bodyType, ["application/json"]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 
     private static async Task HandleBootstrapAsync(HttpContext context)
     {

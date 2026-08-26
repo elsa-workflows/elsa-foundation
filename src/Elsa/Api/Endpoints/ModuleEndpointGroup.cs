@@ -305,8 +305,9 @@ public sealed class ModuleEndpointGroup
         int? documentedStatus,
         Func<HttpContext, Task> dispatch,
         string? name = null,
-        bool documentAuthResponses = true) =>
-        MapUnbound(method, pattern, operation, responseType, successStatus, documentedStatus, dispatch, name, documentAuthResponses);
+        bool documentAuthResponses = true,
+        string? successContentType = null) =>
+        MapUnbound(method, pattern, operation, responseType, successStatus, documentedStatus, dispatch, name, documentAuthResponses, successContentType);
 
     private IEndpointConventionBuilder MapUnbound(
         string method,
@@ -317,7 +318,8 @@ public sealed class ModuleEndpointGroup
         int? documentedStatus,
         Func<HttpContext, Task> dispatch,
         string? name = null,
-        bool documentAuthResponses = true)
+        bool documentAuthResponses = true,
+        string? successContentType = null)
     {
         RequestDelegate handler = async context =>
         {
@@ -344,7 +346,8 @@ public sealed class ModuleEndpointGroup
                 null,
                 documentedStatus ?? successStatus,
                 _tag,
-                documentAuthResponses);
+                documentAuthResponses,
+                successContentType);
     }
 
     private Task WriteProblemAsync(HttpContext context, EndpointProblem problem)

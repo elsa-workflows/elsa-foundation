@@ -1,4 +1,4 @@
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -26,44 +26,29 @@ public static class StructuredLogsApi
 
         var options = endpoints.ServiceProvider.GetService<IOptions<StructuredLogsOptions>>()?.Value
             ?? new StructuredLogsOptions();
-        RequestDelegate recent = static context => HandleRecentAsync(context);
-        RequestDelegate sources = static context => HandleSourcesAsync(context);
-        RequestDelegate stream = static context => HandleStreamAsync(context);
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        endpoints.MapGet(options.RecentPath, recent)
-            .WithOwner(StructuredLogsPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status204NoContent),
-                Unauthorized(),
-                Forbidden())
-            .RequireStableOpenApi();
+        // The routes are host-configurable and the responses are pre-serialized JSON documents and
+        // SSE frames with plain-text failures, so the operations stay on the group's raw seam with
+        // their own reads and writes; the group supplies the shared metadata.
+        var api = endpoints.MapModuleEndpoints(
+            StructuredLogsPermissions.OwnerId,
+            StructuredLogsJsonContext.Default,
+            jsonContentType: "application/json");
 
-        endpoints.MapGet(options.SourcesPath, sources)
-            .WithOwner(StructuredLogsPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(IReadOnlyList<LogSource>), "application/json"),
-                Unauthorized(),
-                Forbidden())
-            .RequireStableOpenApi();
+        api.MapUnboundOperation("GET", options.RecentPath, "Recent",
+                null, StatusCodes.Status200OK, StatusCodes.Status204NoContent,
+                static context => HandleRecentAsync(context))
+            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy);
 
-        endpoints.MapGet(options.StreamPath, stream)
-            .WithOwner(StructuredLogsPermissions.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status204NoContent),
-                Unauthorized(),
-                Forbidden())
-            .RequireStableOpenApi();
+        api.MapUnboundOperation("GET", options.SourcesPath, "Sources",
+                typeof(IReadOnlyList<LogSource>), StatusCodes.Status200OK, null,
+                static context => HandleSourcesAsync(context))
+            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy);
+
+        api.MapUnboundOperation("GET", options.StreamPath, "Stream",
+                null, StatusCodes.Status200OK, StatusCodes.Status204NoContent,
+                static context => HandleStreamAsync(context))
+            .RequireAnyPermission(PermissionKey.Wildcard, StructuredLogsPermissions.Policy);
     }
 
     private static async Task HandleRecentAsync(HttpContext context)
@@ -348,15 +333,4 @@ public static class StructuredLogsApi
         response.Headers["X-Accel-Buffering"] = "no";
     }
 
-    private static ProducesResponseTypeMetadata Response(int statusCode) =>
-        new(statusCode, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type type, string contentType) =>
-        new(statusCode, type, [contentType]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 }
