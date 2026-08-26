@@ -338,17 +338,18 @@ public sealed class EndpointSecurityTests
         var contributor = File.ReadAllText(contributorPath);
         var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
         var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+        // The mapper composes the module endpoint convention: one owned group and exactly ten
+        // operations, each carrying the any-of wildcard-or-catalog permission requirement.
         var routeMappings = calls.Count(call =>
-            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax endpoint } &&
-            endpoint.Identifier.ValueText == "endpoints" &&
-            InvocationName(call) is "MapGet" or "MapPost" or "MapPut" or "MapDelete");
+            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax group } &&
+            group.Identifier.ValueText == "api" &&
+            InvocationName(call) == "MapUnboundOperation");
         var permissionPolicies = calls.Count(call => InvocationName(call) == "RequireAnyPermission");
 
         Assert.Equal(10, routeMappings);
         Assert.Equal(10, permissionPolicies);
+        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapModuleEndpoints"));
         Assert.Contains("Elsa.Secrets.Api", mapper, StringComparison.Ordinal);
-        Assert.Contains("EndpointAuthoringModels.MinimalApi", mapper, StringComparison.Ordinal);
-        Assert.Contains("WithOwner", mapper, StringComparison.Ordinal);
 
         foreach (var permission in new[] { "Read", "Write", "UpdateValue", "Delete", "Test", "Use", "Import", "Export" })
             Assert.Contains($"SecretsPermissions.{permission}", contributor, StringComparison.Ordinal);

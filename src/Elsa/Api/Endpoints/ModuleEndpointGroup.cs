@@ -315,8 +315,9 @@ public sealed class ModuleEndpointGroup
         Func<HttpContext, Task> dispatch,
         string? name = null,
         bool documentAuthResponses = true,
-        string? successContentType = null) =>
-        MapUnbound(method, pattern, operation, responseType, successStatus, documentedStatus, dispatch, name, documentAuthResponses, successContentType);
+        string? successContentType = null,
+        bool containFailures = true) =>
+        MapUnbound(method, pattern, operation, responseType, successStatus, documentedStatus, dispatch, name, documentAuthResponses, successContentType, containFailures);
 
     private IEndpointConventionBuilder MapUnbound(
         string method,
@@ -328,23 +329,29 @@ public sealed class ModuleEndpointGroup
         Func<HttpContext, Task> dispatch,
         string? name = null,
         bool documentAuthResponses = true,
-        string? successContentType = null)
+        string? successContentType = null,
+        bool containFailures = true)
     {
-        RequestDelegate handler = async context =>
-        {
-            try
+        // A dispatch that owns its entire response may also own failure propagation: an owner whose
+        // published contract lets the host's exception pipeline answer unexpected failures opts out
+        // of containment and runs bare.
+        RequestDelegate handler = containFailures
+            ? async context =>
             {
-                await dispatch(context);
+                try
+                {
+                    await dispatch(context);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    await HandleFailureAsync(context, exception, typeof(ModuleEndpointGroup));
+                }
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                await HandleFailureAsync(context, exception, typeof(ModuleEndpointGroup));
-            }
-        };
+            : dispatch.Invoke;
 
         return _endpoints.MapMethods(pattern, [method], handler)
             .WithModuleOperation(

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -25,6 +26,7 @@ public class SecretsApiFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSecrets();
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<SecretsPermissionContributor>();
     }
 
