@@ -13,9 +13,7 @@ public sealed record ListWorkflowDispatches(
     public string? AfterDispatchId { get; init; }
 }
 
-public sealed record GetWorkflowDispatch(string DispatchId) : IRequest<GetWorkflowDispatchResponse>;
-
-public sealed record GetWorkflowDispatchResponse(WorkflowDispatchView? Dispatch);
+public sealed record GetWorkflowDispatch(string DispatchId);
 
 /// <summary>The route supplies DispatchId; callers supply only a stable idempotency RequestId.</summary>
 public sealed record RedriveWorkflowDispatch(string DispatchId, string RequestId) : IRequest<WorkflowDispatchRedriveView>;

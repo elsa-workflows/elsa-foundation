@@ -3,13 +3,14 @@ using CShells.Features;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Services.Alterations;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -82,10 +83,28 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         }
         services.TryAddScoped<WorkflowExecutableInspector>();
 
-        // API-only wiring: the request and command handlers this feature's endpoints dispatch through.
-        var assembly = GetType().Assembly;
-        services.AddRequestHandlersFrom(assembly);
-        services.AddCommandHandlersFrom(assembly);
+        // The operation seams the endpoint classes dispatch to. Registered against the concrete
+        // services so a replacement of either registration keeps the other coherent.
+        services.TryAddScoped<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<WorkflowExecutableInspector>());
+        services.TryAddScoped<StimulusDispatchService>();
+        services.TryAddScoped<IStimulusDispatchService>(sp => sp.GetRequiredService<StimulusDispatchService>());
+        services.TryAddScoped<WorkflowExecutionStartService>();
+        services.TryAddScoped<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<WorkflowExecutionStartService>());
+        services.TryAddScoped<ActivityExecutionInspectionService>();
+        services.TryAddScoped<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<ActivityExecutionInspectionService>());
+        services.TryAddScoped<WorkflowInstanceDetailsService>();
+        services.TryAddScoped<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<WorkflowInstanceDetailsService>());
+        services.TryAddScoped<WorkflowInstanceListService>();
+        services.TryAddScoped<IWorkflowInstanceListService>(sp => sp.GetRequiredService<WorkflowInstanceListService>());
+        services.TryAddScoped<WorkflowIncidentListService>();
+        services.TryAddScoped<IWorkflowIncidentListService>(sp => sp.GetRequiredService<WorkflowIncidentListService>());
+        services.TryAddScoped<WorkflowDispatchInspectionService>();
+        services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
+        services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
+        services.TryAddScoped<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeDiagnosticsSettingsService>());
+        services.TryAddScoped<WorkflowAlterationPlanApiService>();
+        services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
+
         var hasAsyncInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync));
 #pragma warning disable CS0618
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
@@ -101,7 +120,9 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
         services.TryAddScoped<RuntimeCheckpointCadenceInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
+        services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());
         services.TryAddScoped<ActivityExecutionLayoutReader>();
+        services.TryAddScoped<IActivityExecutionLayoutReader>(sp => sp.GetRequiredService<ActivityExecutionLayoutReader>());
         services.TryAddScoped<IActivityExecutionValuePayloadReader, ActivityExecutionValuePayloadReader>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IActivityExecutionValuePayloadAuditSink, LoggingActivityExecutionValuePayloadAuditSink>();

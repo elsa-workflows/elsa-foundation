@@ -8,11 +8,15 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Commands;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Handlers.Alterations;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -866,8 +870,20 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
                     services.AddFoundationIdentityAbstractions(options =>
                         options.NormalizedAuthenticationTypes = new HashSet<string>([RuntimeAuthentication.SchemeName], StringComparer.Ordinal));
                     services.AddHttpContextAccessor();
-                    services.AddSingleton<IRequestSender, RuntimeReplayRequestSender>();
-                    services.AddSingleton<ICommandSender, RuntimeReplayCommandSender>();
+                    services.AddSingleton<RuntimeReplaySeams>();
+                    services.AddSingleton<IWorkflowExecutableInspector>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IActivityExecutionLayoutReader>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IActivityExecutionValuePayloadReader>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IActivityExecutionInspectionService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowInstanceDetailsService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowInstanceListService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowIncidentListService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowExecutionStartService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IStimulusDispatchService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
+                    services.AddSingleton<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<RuntimeReplaySeams>());
                     new WorkflowsRuntimeApiFeature().ConfigureServices(services);
                 });
                 webHost.Configure(app =>
@@ -925,49 +941,138 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
         }
     }
 
-    private sealed class RuntimeReplayRequestSender(IHttpContextAccessor contextAccessor) : IRequestSender
+    /// <summary>
+    /// One scenario-keyed fake behind every Runtime operation seam. It reproduces the retired replay
+    /// senders byte for byte: the binding-evidence header, the /missing and /terminal path scenarios,
+    /// the bounded-take rejection, and the deterministic capture-* value fabrication.
+    /// </summary>
+    private sealed class RuntimeReplaySeams(IHttpContextAccessor contextAccessor) :
+        IWorkflowExecutableInspector,
+        IActivityExecutionDescendantsReader,
+        IActivityExecutionLayoutReader,
+        IActivityExecutionValuePayloadReader,
+        IActivityExecutionInspectionService,
+        IWorkflowInstanceDetailsService,
+        IWorkflowInstanceListService,
+        IWorkflowIncidentListService,
+        IWorkflowExecutionStartService,
+        IStimulusDispatchService,
+        IWorkflowDispatchInspectionService,
+        IRuntimeDiagnosticsSettingsService,
+        IWorkflowAlterationPlanApiService
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult(CreateResponse<T>(request, contextAccessor.HttpContext));
+        Task<WorkflowExecutablesListView> IWorkflowExecutableInspector.ListAsync(ListWorkflowExecutables request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowExecutablesListView>(request));
 
-        private static T CreateResponse<T>(IRequest<T> request, HttpContext? context) where T : notnull
+        Task<WorkflowExecutableDetailsView> IWorkflowExecutableInspector.GetAsync(GetWorkflowExecutable request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowExecutableDetailsView>(request));
+
+        Task<WorkflowExecutableInputSourcesView> IWorkflowExecutableInspector.GetInputSourcesAsync(GetWorkflowExecutableInputSources request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowExecutableInputSourcesView>(request));
+
+        Task<ExecutableProvenanceView> IWorkflowExecutableInspector.GetProvenanceAsync(GetWorkflowExecutableProvenance request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<ExecutableProvenanceView>(request));
+
+        Task<ActivityExecutionHierarchyPageView?> IActivityExecutionDescendantsReader.ReadAsync(GetActivityExecutionDescendants request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayOrNull<ActivityExecutionHierarchyPageView>(request));
+
+        Task<ActivityExecutionLayoutView?> IActivityExecutionLayoutReader.ReadAsync(GetActivityExecutionLayout request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayOrNull<ActivityExecutionLayoutView>(request));
+
+        ValueTask<ActivityExecutionValuePayloadReadResult> IActivityExecutionValuePayloadReader.ReadAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            string evidenceId,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(Replay<ActivityExecutionValuePayloadReadResult>(
+                new GetActivityExecutionValuePayload(workflowExecutionId, activityExecutionId, evidenceId)));
+
+        Task<ActivityExecutionInspectionView?> IActivityExecutionInspectionService.GetAsync(GetActivityExecution request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayOrNull<ActivityExecutionInspectionView>(request));
+
+        Task<WorkflowInstanceDetailsView?> IWorkflowInstanceDetailsService.GetAsync(GetWorkflowInstance request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayOrNull<WorkflowInstanceDetailsView>(request));
+
+        Task<WorkflowInstanceListView> IWorkflowInstanceListService.ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowInstanceListView>(request));
+
+        Task<ListIncidentsResponse> IWorkflowIncidentListService.ListAsync(ListIncidents request, CancellationToken cancellationToken) =>
+            Task.FromResult(Prepare(request)
+                ? new ListIncidentsResponse(false, [], 0)
+                : Fabricate<ListIncidentsResponse>());
+
+        Task<WorkflowExecutionStartDispatchView> IWorkflowExecutionStartService.ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowExecutionStartDispatchView>(request));
+
+        Task<DispatchStimulusResponse> IStimulusDispatchService.DispatchAsync(DispatchStimulus request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<DispatchStimulusResponse>(request));
+
+        Task<IReadOnlyCollection<WorkflowDispatchView>> IWorkflowDispatchInspectionService.ListAsync(ListWorkflowDispatches request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<IReadOnlyCollection<WorkflowDispatchView>>(request));
+
+        Task<WorkflowDispatchRedriveView> IWorkflowDispatchInspectionService.RedriveAsync(RedriveWorkflowDispatch request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<WorkflowDispatchRedriveView>(request));
+
+        Task<WorkflowDispatchView?> IWorkflowDispatchInspectionService.GetAsync(GetWorkflowDispatch request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayOrNull<WorkflowDispatchView>(request));
+
+        Task<RuntimeDiagnosticsSettingsView> IRuntimeDiagnosticsSettingsService.GetAsync(GetRuntimeDiagnosticsSettings request, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<RuntimeDiagnosticsSettingsView>(request));
+
+        Task<RuntimeDiagnosticsSettingsView> IRuntimeDiagnosticsSettingsService.SaveAsync(SaveRuntimeDiagnosticsSettings command, CancellationToken cancellationToken) =>
+            Task.FromResult(Replay<RuntimeDiagnosticsSettingsView>(command));
+
+        Task<WorkflowAlterationPlanSubmissionView> IWorkflowAlterationPlanApiService.SubmitAsync(SubmitWorkflowAlterationPlan request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayAlteration<WorkflowAlterationPlanSubmissionView>(request));
+
+        Task<WorkflowAlterationPlanView> IWorkflowAlterationPlanApiService.GetPlanAsync(GetWorkflowAlterationPlan request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayAlteration<WorkflowAlterationPlanView>(request));
+
+        Task<WorkflowAlterationJobPageView> IWorkflowAlterationPlanApiService.PageJobsAsync(PageWorkflowAlterationJobs request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayAlteration<WorkflowAlterationJobPageView>(request));
+
+        Task<WorkflowAlterationJobView> IWorkflowAlterationPlanApiService.GetJobAsync(GetWorkflowAlterationJob request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayAlteration<WorkflowAlterationJobView>(request));
+
+        Task<WorkflowAlterationPlanCancellationView> IWorkflowAlterationPlanApiService.CancelAsync(CancelWorkflowAlterationPlan request, CancellationToken cancellationToken) =>
+            Task.FromResult(ReplayAlteration<WorkflowAlterationPlanCancellationView>(request));
+
+        private T Replay<T>(object request) where T : notnull
         {
-            if (context is not null)
-            {
-                var route = string.Join(",", context.Request.RouteValues.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
-                var requestValues = string.Join(",", request.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                    .OrderBy(x => x.Name, StringComparer.Ordinal)
-                    .Select(property => $"{property.Name}={Format(property.GetValue(request))}"));
-                context.Response.Headers["X-Runtime-Capture-Binding"] = $"route={route};request={requestValues}";
+            Prepare(request);
+            return Fabricate<T>();
+        }
 
-                if (context.Request.Path.Value?.Contains("/missing", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    if (typeof(T).Name is "GetWorkflowInstanceResponse" or "GetActivityExecutionResponse" or "GetActivityExecutionDescendantsResponse" or "GetActivityExecutionLayoutResponse" or "GetWorkflowDispatchResponse")
-                        return (T)CreateResponseWrapper(typeof(T));
-                    if (typeof(T).Name == "ListIncidentsResponse")
-                        return (T)CreateNotFoundListIncidentsResponse();
-                    if (typeof(T).Name.Contains("WorkflowAlteration", StringComparison.Ordinal))
-                        throw new Elsa.Workflows.Runtime.Api.Handlers.Alterations.WorkflowAlterationResourceNotFoundException();
-                }
+        private T? ReplayOrNull<T>(object request) where T : class =>
+            Prepare(request) ? null : Fabricate<T>();
 
-                if (context.Request.Query.TryGetValue("take", out var take) && int.TryParse(take, out var requestedTake) && requestedTake > 100)
-                    throw new ArgumentException("The take value must be between 1 and 100.");
-            }
+        private T ReplayAlteration<T>(object request) where T : notnull =>
+            Prepare(request) ? throw new WorkflowAlterationResourceNotFoundException() : Fabricate<T>();
 
-            return (T)(CreateValue(typeof(T), typeof(T).Name, context?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true)
+        /// <summary>Writes the binding-evidence header and evaluates the path/query replay scenarios; returns whether the /missing scenario applies.</summary>
+        private bool Prepare(object request)
+        {
+            var context = contextAccessor.HttpContext;
+            if (context is null)
+                return false;
+
+            var route = string.Join(",", context.Request.RouteValues.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
+            var requestValues = string.Join(",", request.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .OrderBy(x => x.Name, StringComparer.Ordinal)
+                .Select(property => $"{property.Name}={Format(property.GetValue(request))}"));
+            context.Response.Headers["X-Runtime-Capture-Binding"] = $"route={route};request={requestValues}";
+
+            if (context.Request.Query.TryGetValue("take", out var take) && int.TryParse(take, out var requestedTake) && requestedTake > 100)
+                throw new ArgumentException("The take value must be between 1 and 100.");
+
+            return context.Request.Path.Value?.Contains("/missing", StringComparison.OrdinalIgnoreCase) == true;
+        }
+
+        private T Fabricate<T>()
+        {
+            var terminal = contextAccessor.HttpContext?.Request.Path.Value?.Contains("/terminal", StringComparison.OrdinalIgnoreCase) == true;
+            return (T)(CreateValue(typeof(T), typeof(T).Name, terminal)
                 ?? throw new InvalidOperationException($"No replay value was defined for '{typeof(T)}'."));
-        }
-
-        private static object CreateResponseWrapper(Type type)
-        {
-            var constructor = type.GetConstructors().Single();
-            return constructor.Invoke(constructor.GetParameters().Select(parameter => CreateDefault(parameter.ParameterType)).ToArray());
-        }
-
-        private static object CreateNotFoundListIncidentsResponse()
-        {
-            var constructor = typeof(ListIncidentsResponse).GetConstructors().Single();
-            return constructor.Invoke([false, Array.Empty<IncidentStateView>(), 0]);
         }
 
         private static object? CreateDefault(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
@@ -1022,35 +1127,6 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
             {
                 return RuntimeHelpers.GetUninitializedObject(type);
             }
-        }
-
-        private static string Format(object? value) => value switch
-        {
-            null => "<null>",
-            IEnumerable values when value is not string => $"[{string.Join("|", values.Cast<object?>().Select(Format))}]",
-            _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "<null>"
-        };
-    }
-
-    private sealed class RuntimeReplayCommandSender(IHttpContextAccessor contextAccessor) : ICommandSender
-    {
-        public Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult(CreateResponse<T>(command, contextAccessor.HttpContext));
-
-        public Task Send(ICommand command, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        private static T CreateResponse<T>(ICommand<T> command, HttpContext? context) where T : notnull
-        {
-            if (context is not null)
-            {
-                var route = string.Join(",", context.Request.RouteValues.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
-                var requestValues = string.Join(",", command.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                    .OrderBy(x => x.Name, StringComparer.Ordinal)
-                    .Select(property => $"{property.Name}={Format(property.GetValue(command))}"));
-                context.Response.Headers["X-Runtime-Capture-Binding"] = $"route={route};request={requestValues}";
-            }
-
-            return (T)RuntimeReplayRequestSender.CreateValue(typeof(T), typeof(T).Name)!;
         }
 
         private static string Format(object? value) => value switch

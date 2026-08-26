@@ -1,9 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Contracts;
-using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Microsoft.AspNetCore.Http;
 
@@ -12,14 +10,17 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.ActivityExecutions.ValuePayload;
 [Get("runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload")]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeRead)]
 [ActivityInspectionProblems("resolving activity execution value evidence")]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpointWithResult<GetActivityExecutionValuePayload, ActivityExecutionValuePayloadView>
+public sealed class Endpoint(IActivityExecutionValuePayloadReader reader) : ApiEndpointWithResult<GetActivityExecutionValuePayload, ActivityExecutionValuePayloadView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "GetActivityValuePayload";
 
     public override async Task<EndpointResult<ActivityExecutionValuePayloadView>> HandleAsync(GetActivityExecutionValuePayload request, CancellationToken cancellationToken)
     {
-        var response = await sender.Send(request, cancellationToken);
-        var result = response.Result;
+        var result = await reader.ReadAsync(
+            request.WorkflowExecutionId,
+            request.ActivityExecutionId,
+            request.EvidenceId,
+            cancellationToken);
         if (result.Value is not null)
         {
             var status = result.Outcome switch

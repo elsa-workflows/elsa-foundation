@@ -224,19 +224,20 @@ public abstract class TwoNodeAcceptanceTests
         AssertAuthority(dispatch.Record.Authority, parent.Authority);
         Assert.Equal(1, parent.DispatchNestingDepth);
 
-        var inspected = await new GetWorkflowDispatchRequestHandler(
-                inspectionNode.DispatchStore,
-                inspectionNode.AccessContextAccessor)
-            .Handle(new GetWorkflowDispatch(dispatch.Record.DispatchId), CancellationToken.None);
-        Assert.NotNull(inspected.Dispatch);
-        Assert.Equal(WorkflowDispatchStatus.Started, inspected.Dispatch.Status);
-        Assert.Equal(dispatch.Record.ChildWorkflowExecutionId, inspected.Dispatch.ChildWorkflowExecutionId);
+        var inspected = await NewDispatchInspection(inspectionNode.DispatchStore, inspectionNode.AccessContextAccessor)
+            .GetAsync(new GetWorkflowDispatch(dispatch.Record.DispatchId), CancellationToken.None);
+        Assert.NotNull(inspected);
+        Assert.Equal(WorkflowDispatchStatus.Started, inspected.Status);
+        Assert.Equal(dispatch.Record.ChildWorkflowExecutionId, inspected.ChildWorkflowExecutionId);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new GetWorkflowDispatchRequestHandler(
-                    inspectionNode.DispatchStore,
-                    new FixedAccessContextAccessor("another-tenant"))
-                .Handle(new GetWorkflowDispatch(dispatch.Record.DispatchId), CancellationToken.None));
+            NewDispatchInspection(inspectionNode.DispatchStore, new FixedAccessContextAccessor("another-tenant"))
+                .GetAsync(new GetWorkflowDispatch(dispatch.Record.DispatchId), CancellationToken.None));
     }
+
+    private static WorkflowDispatchInspectionService NewDispatchInspection(
+        IWorkflowDispatchStore store,
+        IPersistenceAccessContextAccessor accessContextAccessor) =>
+        new(queryStore: null!, store, redriveStore: null!, accessContextAccessor);
 
     /// <summary>Creates the cluster-shared routing and dispatch persistence used by both nodes.</summary>
     protected abstract ClusterState CreateClusterState();

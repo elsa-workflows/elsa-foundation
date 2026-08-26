@@ -1,10 +1,11 @@
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -150,7 +151,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     }
 
     [Fact]
-    public async Task Malformed_execute_body_returns_400_without_invoking_the_request_sender()
+    public async Task Malformed_execute_body_returns_400_without_invoking_the_start_seam()
     {
         var calls = 0;
         await using var host = await StartAsync(_ =>
@@ -174,10 +175,10 @@ public sealed class RuntimeMinimalApiBehaviorTests
     {
         await using var host = await StartAsync(request => request switch
         {
-            GetActivityExecution => new GetActivityExecutionResponse(null),
-            GetActivityExecutionDescendants => new GetActivityExecutionDescendantsResponse(null),
-            GetActivityExecutionLayout => new GetActivityExecutionLayoutResponse(null),
-            GetActivityExecutionValuePayload => new GetActivityExecutionValuePayloadResponse(ActivityExecutionValuePayloadReadResult.NotFound()),
+            GetActivityExecution => null,
+            GetActivityExecutionDescendants => null,
+            GetActivityExecutionLayout => null,
+            GetActivityExecutionValuePayload => ActivityExecutionValuePayloadReadResult.NotFound(),
             _ => throw new InvalidOperationException("unexpected request")
         });
 
@@ -192,7 +193,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     [Fact]
     public async Task Activity_problem_details_are_exact_at_the_mapped_delegate_boundary()
     {
-        await using var host = await StartAsync(_ => new GetActivityExecutionResponse(null));
+        await using var host = await StartAsync(_ => null);
 
         var context = await host.InvokeMappedAsync(
             "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}",
@@ -270,7 +271,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
         ActivityExecutionValuePayloadReadOutcome outcome,
         string expectedCode)
     {
-        await using var host = await StartAsync(_ => new GetActivityExecutionValuePayloadResponse(new(outcome, null)));
+        await using var host = await StartAsync(_ => new ActivityExecutionValuePayloadReadResult(outcome, null));
 
         using var response = await host.Client.GetAsync(ValuePayloadPath);
 
@@ -281,7 +282,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     public async Task Value_payload_resolution_returns_the_captured_json_and_rethrows_cancellation()
     {
         var value = new ActivityExecutionValuePayloadView("value-1", "Payload", JsonSerializer.SerializeToElement(new { answer = 42 }));
-        await using (var host = await StartAsync(_ => new GetActivityExecutionValuePayloadResponse(ActivityExecutionValuePayloadReadResult.Resolved(value))))
+        await using (var host = await StartAsync(_ => ActivityExecutionValuePayloadReadResult.Resolved(value)))
         {
             using var response = await host.Client.GetAsync(ValuePayloadPath);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -340,7 +341,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     public async Task Layout_without_a_sidecar_returns_the_automatic_layout_view()
     {
         var view = new ActivityExecutionLayoutView("wf-1", "ae-1", "artifact-1", "", "Automatic", [], "sha256:historical-template", [], [], []);
-        await using var host = await StartAsync(_ => new GetActivityExecutionLayoutResponse(view));
+        await using var host = await StartAsync(_ => view);
 
         using var response = await host.Client.GetAsync(LayoutPath);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -385,7 +386,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private static WorkflowExecutionStartDispatchView DispatchView(WorkflowExecutionCommandDispatchStatus status) =>
         new("wfexec-1", "artifact-1", "1.0.0", "hash-1", status.ToString(), "envelope-1", "agent-1", "in-process", status == WorkflowExecutionCommandDispatchStatus.Accepted ? null : "reason");
 
-    private static async Task<BehaviorHost> StartAsync(Func<object, object> behavior)
+    private static async Task<BehaviorHost> StartAsync(Func<object, object?> behavior)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -394,9 +395,14 @@ public sealed class RuntimeMinimalApiBehaviorTests
         builder.Services.AddFoundationIdentityAbstractions(options =>
             options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "RuntimeBehavior" });
         builder.Services.AddAuthorization();
-        builder.Services.AddSingleton<IRequestSender>(new RecordingRequestSender(behavior));
-        // The owner's failure shapes are DI-provided services now, so the host composes the feature
-        // exactly like the replay oracle does; the recording sender above still wins dispatch.
+        var seams = new BehaviorSeams(behavior);
+        builder.Services.AddSingleton<IWorkflowExecutionStartService>(seams);
+        builder.Services.AddSingleton<IActivityExecutionInspectionService>(seams);
+        builder.Services.AddSingleton<IActivityExecutionDescendantsReader>(seams);
+        builder.Services.AddSingleton<IActivityExecutionLayoutReader>(seams);
+        builder.Services.AddSingleton<IActivityExecutionValuePayloadReader>(seams);
+        // The owner's failure shapes are DI-provided services, so the host composes the feature
+        // exactly like the replay oracle does; the behavior seams above win the TryAdd registrations.
         new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);
         var app = builder.Build();
         app.UseAuthentication();
@@ -429,15 +435,32 @@ public sealed class RuntimeMinimalApiBehaviorTests
         }
     }
 
-    private sealed class RecordingRequestSender(Func<object, object> behavior) : IRequestSender
+    private sealed class BehaviorSeams(Func<object, object?> behavior) :
+        IWorkflowExecutionStartService,
+        IActivityExecutionInspectionService,
+        IActivityExecutionDescendantsReader,
+        IActivityExecutionLayoutReader,
+        IActivityExecutionValuePayloadReader
     {
-        public int Calls { get; private set; }
+        public Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken) =>
+            Task.FromResult((WorkflowExecutionStartDispatchView)behavior(request)!);
 
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            Calls++;
-            return Task.FromResult((T)behavior(request));
-        }
+        public Task<ActivityExecutionInspectionView?> GetAsync(GetActivityExecution request, CancellationToken cancellationToken) =>
+            Task.FromResult((ActivityExecutionInspectionView?)behavior(request));
+
+        public Task<ActivityExecutionHierarchyPageView?> ReadAsync(GetActivityExecutionDescendants request, CancellationToken cancellationToken) =>
+            Task.FromResult((ActivityExecutionHierarchyPageView?)behavior(request));
+
+        public Task<ActivityExecutionLayoutView?> ReadAsync(GetActivityExecutionLayout request, CancellationToken cancellationToken) =>
+            Task.FromResult((ActivityExecutionLayoutView?)behavior(request));
+
+        public ValueTask<ActivityExecutionValuePayloadReadResult> ReadAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            string evidenceId,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult((ActivityExecutionValuePayloadReadResult)behavior(
+                new GetActivityExecutionValuePayload(workflowExecutionId, activityExecutionId, evidenceId))!);
     }
 
     private sealed class AllowAuthenticationHandler(

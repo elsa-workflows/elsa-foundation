@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -11,13 +10,12 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 /// that has transitioned to <see cref="Core.Models.WorkflowExecutionStatus.Faulted"/> because of a blocking incident is
 /// observable and diagnosable, optionally filtered to blocking incidents only.
 /// </summary>
-public sealed class ListIncidentsRequestHandler(
+public sealed class WorkflowIncidentListService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityInspectionContextAsync authorization)
-    : IRequestHandler<ListIncidents, ListIncidentsResponse>
+    IActivityInspectionContextAsync authorization) : IWorkflowIncidentListService
 {
-    public async Task<ListIncidentsResponse> Handle(ListIncidents request, CancellationToken cancellationToken)
+    public async Task<ListIncidentsResponse> ListAsync(ListIncidents request, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkflowExecutionId);
 
@@ -39,4 +37,10 @@ public sealed class ListIncidentsRequestHandler(
 
         return new ListIncidentsResponse(true, views, views.Length);
     }
+}
+
+/// <summary>The incident list operation the runtime endpoints dispatch to.</summary>
+public interface IWorkflowIncidentListService
+{
+    Task<ListIncidentsResponse> ListAsync(ListIncidents request, CancellationToken cancellationToken);
 }

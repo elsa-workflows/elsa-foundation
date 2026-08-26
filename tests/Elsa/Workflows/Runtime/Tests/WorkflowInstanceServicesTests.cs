@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -12,7 +11,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class WorkflowInstancesRequestHandlerTests
+public sealed class WorkflowInstanceServicesTests
 {
     private readonly InMemoryWorkflowExecutionStateStore _workflowStore = new();
     private readonly InMemoryActivityExecutionStateStore _activityStore = new();
@@ -21,10 +20,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private readonly InMemoryDurableValueStateStore _durableValueStore = new();
     private static readonly IActivityInspectionContextAsync AllowAll = new AllowAllActivityExecutionInspectionAuthorizationContext();
 
-    private ListWorkflowInstancesRequestHandler NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
+    private WorkflowInstanceListService NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
         new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);
 
-    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler(RuntimeCheckpointCadenceInspector? cadenceInspector = null) =>
+    private WorkflowInstanceDetailsService NewGetInstanceHandler(RuntimeCheckpointCadenceInspector? cadenceInspector = null) =>
         new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll,
             cadenceInspector ?? ImmediateCadenceInspector());
 
@@ -51,7 +50,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _incidentStore.TryAddAsync(Incident("wf-new", "incident-1"));
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(new ListWorkflowInstances("Running", "definition-1", "correlation-1", 10), CancellationToken.None);
+        var result = await handler.ListAsync(new ListWorkflowInstances("Running", "definition-1", "correlation-1", 10), CancellationToken.None);
 
         var summary = Assert.Single(result.Items);
         Assert.Equal("wf-new", summary.WorkflowExecutionId);
@@ -71,7 +70,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var store = new BoundedQueryOnlyWorkflowExecutionStateStore(_workflowStore);
         var handler = NewListInstanceHandler(store);
 
-        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
 
         Assert.Equal("wf-1", Assert.Single(result.Items).WorkflowExecutionId);
         Assert.True(store.QueryPageCalled);
@@ -85,9 +84,9 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
         var activities = new CountOnlyActivityExecutionStateStore(_activityStore);
         var incidents = new CountOnlyIncidentStateStore(_incidentStore);
-        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, activities, incidents, AllowAll);
+        var handler = new WorkflowInstanceListService(_workflowStore, activities, incidents, AllowAll);
 
-        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
 
         Assert.Equal(1, Assert.Single(result.Items).ActivityCount);
         Assert.Equal(1, Assert.Single(result.Items).IncidentCount);
@@ -104,10 +103,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRun"), CancellationToken.None);
-        var publishedResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "PublishedRun"), CancellationToken.None);
-        var weaverResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "BackgroundWeaverRun"), CancellationToken.None);
-        var legacyResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "Unknown"), CancellationToken.None);
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRun"), CancellationToken.None);
+        var publishedResult = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "PublishedRun"), CancellationToken.None);
+        var weaverResult = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "BackgroundWeaverRun"), CancellationToken.None);
+        var legacyResult = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "Unknown"), CancellationToken.None);
 
         var summary = Assert.Single(result.Items);
         Assert.Equal("wf-test", summary.WorkflowExecutionId);
@@ -126,8 +125,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
             await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Completed, "definition-1", updatedAt: timestamp));
         var handler = NewListInstanceHandler();
 
-        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
-        var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
+        var first = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var second = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
 
         Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
         Assert.True(first.HasNext);
@@ -143,8 +142,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await SeedWorkflowInstancesAsync(40);
         var handler = NewListInstanceHandler();
 
-        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
-        var nextWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, first.NextCursor), CancellationToken.None);
+        var first = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var nextWithOmittedTake = await handler.ListAsync(new ListWorkflowInstances(null, null, null, null, first.NextCursor), CancellationToken.None);
 
         Assert.Equal(25, nextWithOmittedTake.Count);
         Assert.Equal("wf-002", nextWithOmittedTake.Items.First().WorkflowExecutionId);
@@ -155,9 +154,9 @@ public sealed class WorkflowInstancesRequestHandlerTests
     {
         await SeedWorkflowInstancesAsync(3);
         var handler = NewListInstanceHandler();
-        var first = await handler.Handle(new ListWorkflowInstances(null, "definition-1", null, 1), CancellationToken.None);
+        var first = await handler.ListAsync(new ListWorkflowInstances(null, "definition-1", null, 1), CancellationToken.None);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.ListAsync(
             new ListWorkflowInstances(null, "definition-2", null, 1, first.NextCursor),
             CancellationToken.None));
 
@@ -170,8 +169,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await SeedWorkflowInstancesAsync(105);
         var handler = NewListInstanceHandler();
 
-        var maximum = await handler.Handle(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
-        var minimum = await handler.Handle(new ListWorkflowInstances(null, null, null, 0), CancellationToken.None);
+        var maximum = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
+        var minimum = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 0), CancellationToken.None);
 
         Assert.Equal(100, maximum.Count);
         Assert.True(maximum.HasNext);
@@ -189,7 +188,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await SeedWorkflowInstancesAsync(501);
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(
+        var result = await handler.ListAsync(
             new ListWorkflowInstances(null, null, null, take),
             CancellationToken.None);
 
@@ -207,7 +206,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await SeedWorkflowInstancesAsync(501);
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(
+        var result = await handler.ListAsync(
             new ListWorkflowInstances(null, null, null, take).ForLegacyArray(),
             CancellationToken.None);
 
@@ -222,7 +221,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wrong-definition", WorkflowExecutionStatus.Running, "definition-2", "correlation-1", Now(-5)));
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(new ListWorkflowInstances(
+        var result = await handler.ListAsync(new ListWorkflowInstances(
             "Running",
             "definition-1",
             "correlation-1",
@@ -245,7 +244,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
             sourceDefinitionId: "published-definition"));
         var handler = NewListInstanceHandler();
 
-        var result = await handler.Handle(
+        var result = await handler.ListAsync(
             new ListWorkflowInstances(null, "published-definition", null, 10),
             CancellationToken.None);
 
@@ -258,7 +257,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
+            handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
 
         Assert.Equal("cursor", exception.ParamName);
     }
@@ -269,7 +268,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         var handler = NewListInstanceHandler();
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
+            handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
 
         Assert.Equal("RunKind", exception.ParamName);
         Assert.Contains("TestRnu", exception.Message, StringComparison.Ordinal);
@@ -286,13 +285,13 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
         var handler = NewGetInstanceHandler();
 
-        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
-        Assert.NotNull(result.Instance);
-        Assert.Equal("wf-1", result.Instance.Instance.WorkflowExecutionId);
-        Assert.Equal("Faulted", result.Instance.Instance.Status);
-        Assert.Equal(["activity-1", "activity-2"], result.Instance.Activities.Select(activity => activity.ActivityExecutionId));
-        Assert.Equal("incident-1", Assert.Single(result.Instance.Incidents).IncidentId);
+        Assert.NotNull(result);
+        Assert.Equal("wf-1", result!.Instance.WorkflowExecutionId);
+        Assert.Equal("Faulted", result!.Instance.Status);
+        Assert.Equal(["activity-1", "activity-2"], result!.Activities.Select(activity => activity.ActivityExecutionId));
+        Assert.Equal("incident-1", Assert.Single(result!.Incidents).IncidentId);
     }
 
     [Fact]
@@ -301,12 +300,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
         var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
 
-        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
-        Assert.NotNull(result.Instance);
-        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
-        Assert.Null(result.Instance.MaxSegmentCheckpoints);
-        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+        Assert.NotNull(result);
+        Assert.Equal("Immediate", result!.CheckpointCadence);
+        Assert.Null(result!.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result!.InspectionGranularity);
     }
 
     [Fact]
@@ -315,12 +314,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
         var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
 
-        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
-        Assert.NotNull(result.Instance);
-        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
-        Assert.Equal(32, result.Instance.MaxSegmentCheckpoints);
-        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
+        Assert.NotNull(result);
+        Assert.Equal("Coalesced", result!.CheckpointCadence);
+        Assert.Equal(32, result!.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result!.InspectionGranularity);
     }
 
     [Fact]
@@ -338,12 +337,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
             }));
         var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
 
-        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
-        Assert.NotNull(result.Instance);
-        Assert.Equal("Immediate", result.Instance.CheckpointCadence);
-        Assert.Null(result.Instance.MaxSegmentCheckpoints);
-        Assert.Equal("activity-level", result.Instance.InspectionGranularity);
+        Assert.NotNull(result);
+        Assert.Equal("Immediate", result!.CheckpointCadence);
+        Assert.Null(result!.MaxSegmentCheckpoints);
+        Assert.Equal("activity-level", result!.InspectionGranularity);
     }
 
     [Fact]
@@ -360,12 +359,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
             }));
         var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
 
-        var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
-        Assert.NotNull(result.Instance);
-        Assert.Equal("Coalesced", result.Instance.CheckpointCadence);
-        Assert.Equal(8, result.Instance.MaxSegmentCheckpoints);
-        Assert.Equal("boundary-level", result.Instance.InspectionGranularity);
+        Assert.NotNull(result);
+        Assert.Equal("Coalesced", result!.CheckpointCadence);
+        Assert.Equal(8, result!.MaxSegmentCheckpoints);
+        Assert.Equal("boundary-level", result!.InspectionGranularity);
     }
 
     [Fact]
@@ -375,11 +374,11 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
         var listHandler = NewListInstanceHandler();
 
-        var list = await listHandler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
-        var detail = await NewGetInstanceHandler().Handle(new GetWorkflowInstance("wf-published"), CancellationToken.None);
+        var list = await listHandler.ListAsync(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var detail = await NewGetInstanceHandler().GetAsync(new GetWorkflowInstance("wf-published"), CancellationToken.None);
 
         Assert.Equal("PublishedRun", Assert.Single(list.Items, item => item.WorkflowExecutionId == "wf-published").RunKind);
-        Assert.Equal("PublishedRun", detail.Instance!.Instance.RunKind);
+        Assert.Equal("PublishedRun", detail!.Instance.RunKind);
         Assert.Equal("Unknown", Assert.Single(list.Items, item => item.WorkflowExecutionId == "wf-legacy").RunKind);
     }
 
@@ -388,9 +387,9 @@ public sealed class WorkflowInstancesRequestHandlerTests
     {
         var handler = NewGetInstanceHandler();
 
-        var result = await handler.Handle(new GetWorkflowInstance("missing"), CancellationToken.None);
+        var result = await handler.GetAsync(new GetWorkflowInstance("missing"), CancellationToken.None);
 
-        Assert.Null(result.Instance);
+        Assert.Null(result);
     }
 
     private static WorkflowExecutionState Workflow(
@@ -562,17 +561,5 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
     private static DateTimeOffset Now(int minutes) =>
         new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero) + TimeSpan.FromMinutes(minutes);
-
-    private sealed class StubRequestSender(
-        Func<ListWorkflowInstances, CancellationToken, Task<WorkflowInstanceListView>> send) : IRequestSender
-    {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
-        {
-            if (request is ListWorkflowInstances listWorkflowInstances && typeof(T) == typeof(WorkflowInstanceListView))
-                return (Task<T>)(object)send(listWorkflowInstances, cancellationToken);
-
-            throw new InvalidOperationException($"Unexpected request type '{request.GetType()}'.");
-        }
-    }
 
 }

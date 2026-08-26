@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
+public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
 {
     private readonly InMemoryWorkflowExecutableStore _store = new();
 
@@ -19,9 +19,9 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
     [Fact]
     public async Task RejectsUnknownArtifactId()
     {
-        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
+        var handler = new WorkflowExecutionStartService(await NewDispatcherAsync(), _store);
 
-        var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => handler.Handle(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => handler.ExecuteAsync(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
 
         Assert.Contains("missing-artifact", exception.Message);
         Assert.Equal("missing-artifact", exception.ArtifactId);
@@ -30,9 +30,9 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
     [Fact]
     public async Task ReturnsAgentDispatchView()
     {
-        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
+        var handler = new WorkflowExecutionStartService(await NewDispatcherAsync(), _store);
 
-        var result = await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+        var result = await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 
         Assert.Equal("wfexec-fixed", result.WorkflowExecutionId);
         Assert.Equal("artifact-1", result.ArtifactId);
@@ -46,9 +46,9 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
     public async Task ClassifiesDirectExecutableStartsAsPublishedRuns()
     {
         var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
-        var handler = new ExecuteWorkflowRequestHandler(dispatcher, _store);
+        var handler = new WorkflowExecutionStartService(dispatcher, _store);
 
-        await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 
         Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(dispatcher.Requests).RunKind);
         Assert.Equal(
@@ -65,9 +65,9 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
             "definition-1", "version-1", "1.0.0", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
             WorkflowExecutableReferenceScope.Published));
         var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync(references));
-        var handler = new ExecuteWorkflowRequestHandler(dispatcher, _store);
+        var handler = new WorkflowExecutionStartService(dispatcher, _store);
 
-        await handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: "published-ref-1"), CancellationToken.None);
+        await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1", SourceReferenceId: "published-ref-1"), CancellationToken.None);
 
         var selection = Assert.Single(dispatcher.Requests).SourceSelection;
         Assert.Equal("published-ref-1", selection!.SourceReferenceId);
@@ -78,12 +78,12 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
     [Fact]
     public async Task RejectsDirectExecutionWhenArtifactHasNoPublishedReference()
     {
-        var handler = new ExecuteWorkflowRequestHandler(
+        var handler = new WorkflowExecutionStartService(
             await NewDispatcherAsync(new InMemoryWorkflowExecutableSourceReferenceStore()),
             _store);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
-            handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None));
+            handler.ExecuteAsync(new ExecuteWorkflow("artifact-1"), CancellationToken.None));
 
         Assert.Equal(WorkflowExecutableReferenceRejectionReason.NoLiveReference, exception.Reason);
     }
@@ -91,10 +91,10 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
     [Fact]
     public async Task RejectsBlankSourceReferenceSelectorAsInvalidInput()
     {
-        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
+        var handler = new WorkflowExecutionStartService(await NewDispatcherAsync(), _store);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: " "), CancellationToken.None));
+            handler.ExecuteAsync(new ExecuteWorkflow("artifact-1", SourceReferenceId: " "), CancellationToken.None));
 
         Assert.Equal("sourceReferenceId", exception.ParamName);
     }
@@ -105,18 +105,18 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
         await references.SaveAsync(PublishedReference("ref-v1", "version-1", "1.0.0"));
         await references.SaveAsync(PublishedReference("ref-v2", "version-2", "2.0.0"));
-        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(references), _store);
+        var handler = new WorkflowExecutionStartService(await NewDispatcherAsync(references), _store);
 
-        var result = await handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: "ref-v2"), CancellationToken.None);
+        var result = await handler.ExecuteAsync(new ExecuteWorkflow("artifact-1", SourceReferenceId: "ref-v2"), CancellationToken.None);
 
         Assert.Equal("2.0.0", result.ArtifactVersion);
     }
 
     [Fact]
-    public void ExecuteWorkflowHandler_DoesNotDependOnInlineExecutor()
+    public void ExecuteWorkflowService_DoesNotDependOnInlineExecutor()
     {
         var runtimeCoreAssembly = typeof(IWorkflowStartDispatcher).Assembly;
-        var constructorParameters = typeof(ExecuteWorkflowRequestHandler)
+        var constructorParameters = typeof(WorkflowExecutionStartService)
             .GetConstructors()
             .SelectMany(constructor => constructor.GetParameters())
             .Select(parameter => parameter.ParameterType.FullName)

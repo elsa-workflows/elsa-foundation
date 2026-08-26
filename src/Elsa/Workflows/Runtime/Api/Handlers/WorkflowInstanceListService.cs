@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -8,19 +7,18 @@ using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-public sealed class ListWorkflowInstancesRequestHandler(
+public sealed class WorkflowInstanceListService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionStateStore activityExecutionStateStore,
     IIncidentStateStore incidentStateStore,
-    IActivityInspectionContextAsync authorization)
-    : IRequestHandler<ListWorkflowInstances, WorkflowInstanceListView>
+    IActivityInspectionContextAsync authorization) : IWorkflowInstanceListService
 {
     private const int PagedDefaultTake = 25;
     private const int PagedMaxTake = 100;
     private const int LegacyDefaultTake = 100;
     private const int LegacyMaxTake = 500;
 
-    public async Task<WorkflowInstanceListView> Handle(ListWorkflowInstances request, CancellationToken cancellationToken)
+    public async Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken)
     {
         var (defaultTake, maxTake) = request.PagingContract == WorkflowInstanceListPagingContract.LegacyArray
             ? (LegacyDefaultTake, LegacyMaxTake)
@@ -113,4 +111,13 @@ public sealed class ListWorkflowInstancesRequestHandler(
     }
 
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+}
+
+/// <summary>
+/// The workflow-instance list operation the runtime endpoints dispatch to. The request's paging contract selects
+/// the historical array route's bounds or the additive page route's bounded defaults.
+/// </summary>
+public interface IWorkflowInstanceListService
+{
+    Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken);
 }

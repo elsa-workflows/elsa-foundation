@@ -113,7 +113,7 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
                         options.NormalizedAuthenticationTypes = new HashSet<string>([RuntimeAuthentication.SchemeName], StringComparer.Ordinal));
                     services.AddPermissionContributor<Wave9AuthorizationContributor>();
                     services.AddScoped<IPermissionResourceHandler, TenantResourceHandler>();
-                    services.AddSingleton<IRequestSender, RuntimeRequestSender>();
+                    services.AddSingleton<Elsa.Workflows.Runtime.Api.Handlers.IWorkflowInstanceListService>(new EmptyInstanceListService());
                     new WorkflowsRuntimeApiFeature().ConfigureServices(services);
                     services.AddFastEndpoints(options =>
                     {
@@ -146,14 +146,10 @@ public sealed class Wave9RuntimeAuthorizationIntegrationTests
         }
     }
 
-    private sealed class RuntimeRequestSender : IRequestSender
+    private sealed class EmptyInstanceListService : Elsa.Workflows.Runtime.Api.Handlers.IWorkflowInstanceListService
     {
-        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
-            Task.FromResult((T)(object)(request switch
-            {
-                ListWorkflowInstances => new WorkflowInstanceListView([], null, false, 0, 0),
-                _ => throw new InvalidOperationException($"Unexpected Runtime authorization request '{request.GetType().FullName}'.")
-            }));
+        public Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken) =>
+            Task.FromResult(new WorkflowInstanceListView([], null, false, 0, 0));
     }
 
     private sealed class Wave9AuthorizationContributor : IPermissionContributor

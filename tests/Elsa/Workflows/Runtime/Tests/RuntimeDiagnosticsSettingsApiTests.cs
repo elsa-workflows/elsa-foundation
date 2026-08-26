@@ -11,19 +11,17 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeDiagnosticsSettingsApiTests
 {
     private readonly InMemoryRuntimeDiagnosticsSettingsStore _settingsStore = new();
-    private readonly GetRuntimeDiagnosticsSettingsRequestHandler _getHandler;
-    private readonly SaveRuntimeDiagnosticsSettingsCommandHandler _saveHandler;
+    private readonly RuntimeDiagnosticsSettingsService _service;
 
     public RuntimeDiagnosticsSettingsApiTests()
     {
-        _getHandler = new GetRuntimeDiagnosticsSettingsRequestHandler(_settingsStore);
-        _saveHandler = new SaveRuntimeDiagnosticsSettingsCommandHandler(_settingsStore);
+        _service = new RuntimeDiagnosticsSettingsService(_settingsStore);
     }
 
     [Fact]
     public async Task GetSettings_ReturnsDiagnosticSnapshotsByDefaultWithHostPayloadCap()
     {
-        var view = await _getHandler.Handle(new GetRuntimeDiagnosticsSettings(), CancellationToken.None);
+        var view = await _service.GetAsync(new GetRuntimeDiagnosticsSettings(), CancellationToken.None);
 
         Assert.Equal(RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot, view.Requested.DefaultLevel);
         Assert.Equal(RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot, view.Effective.DefaultLevel);
@@ -35,7 +33,7 @@ public sealed class RuntimeDiagnosticsSettingsApiTests
     [Fact]
     public async Task SaveSettings_CapsPayloadRequestToHostMaximumInEffectiveSettings()
     {
-        var view = await _saveHandler.Handle(
+        var view = await _service.SaveAsync(
             new SaveRuntimeDiagnosticsSettings(
                 Scope: null,
                 DefaultLevel: RuntimeDiagnosticsEvidenceLevel.Payload,
@@ -93,7 +91,7 @@ public sealed class RuntimeDiagnosticsSettingsApiTests
     public async Task SaveSettings_RejectsUnknownSubjects()
     {
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            _saveHandler.Handle(
+            _service.SaveAsync(
                 new SaveRuntimeDiagnosticsSettings(
                     Scope: null,
                     DefaultLevel: RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
@@ -105,7 +103,7 @@ public sealed class RuntimeDiagnosticsSettingsApiTests
     public async Task SaveSettings_RejectsUnknownDefaultLevel()
     {
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            _saveHandler.Handle(
+            _service.SaveAsync(
                 new SaveRuntimeDiagnosticsSettings(
                     Scope: null,
                     DefaultLevel: (RuntimeDiagnosticsEvidenceLevel)999,

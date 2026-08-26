@@ -493,6 +493,9 @@ public sealed class DomainManagementApiCompositionTests
             // so the representative journey needs empty stores rather than a sender fake.
             builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore, EmptyWorkflowDefinitionStore>();
             builder.Services.AddSingleton<Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore, EmptyWorkflowDefinitionListProjectionStore>();
+            // The Runtime executables list endpoint dispatches to the owner's inspection seam
+            // since its mediator wrappers retired, so the journey fakes that seam directly.
+            builder.Services.AddSingleton<Elsa.Workflows.Runtime.Api.Services.IWorkflowExecutableInspector>(new EmptyRuntimeExecutableInspector());
             // The Activities Design catalog and diagnostics endpoints likewise read their stores
             // through the owner's operation services since the mediator wrappers retired.
             builder.Services.AddSingleton<Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionStore, EmptyActivityDefinitionStore>();
@@ -580,8 +583,6 @@ public sealed class DomainManagementApiCompositionTests
                     "publication-1", "definition-1", "version-1", "version-1", "artifact-1", "default",
                     PublicationStatusView.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
                     null, "1.0.0", "hash-1", "root-1", 1, true),
-                var type when type == typeof(Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView) =>
-                    new Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView([]),
                 _ => throw new InvalidOperationException($"Unexpected representative journey response type '{typeof(T)}'.")
             };
 
@@ -595,6 +596,29 @@ public sealed class DomainManagementApiCompositionTests
             var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
             return (T)(object)await handler.Handle(request, cancellationToken);
         }
+    }
+
+    private sealed class EmptyRuntimeExecutableInspector : Elsa.Workflows.Runtime.Api.Services.IWorkflowExecutableInspector
+    {
+        public Task<Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView> ListAsync(
+            Elsa.Workflows.Runtime.Api.Requests.ListWorkflowExecutables request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new Elsa.Workflows.Runtime.Api.Models.WorkflowExecutablesListView([]));
+
+        public Task<Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableDetailsView> GetAsync(
+            Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutable request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The representative journey lists executables only.");
+
+        public Task<Elsa.Workflows.Runtime.Api.Models.WorkflowExecutableInputSourcesView> GetInputSourcesAsync(
+            Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableInputSources request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The representative journey lists executables only.");
+
+        public Task<Elsa.Workflows.Runtime.Api.Models.ExecutableProvenanceView> GetProvenanceAsync(
+            Elsa.Workflows.Runtime.Api.Requests.GetWorkflowExecutableProvenance request,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException("The representative journey lists executables only.");
     }
 
     private sealed class EmptyActivityDefinitionStore : Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionStore

@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -9,15 +8,21 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
-public sealed class ListWorkflowDispatchesRequestHandler(
+public sealed class WorkflowDispatchInspectionService(
     IWorkflowDispatchQueryStore queryStore,
-    IPersistenceAccessContextAccessor? accessContextAccessor = null)
-    : IRequestHandler<ListWorkflowDispatches, IReadOnlyCollection<WorkflowDispatchView>>
+    IWorkflowDispatchStore store,
+    IWorkflowDispatchRedriveStore redriveStore,
+    IPersistenceAccessContextAccessor? accessContextAccessor = null,
+    TimeProvider? timeProvider = null,
+    ILogger<WorkflowDispatchInspectionService>? logger = null) : IWorkflowDispatchInspectionService
 {
     private const int DefaultTake = WorkflowDispatchQuery.MaximumTake;
     private const int MaxTake = WorkflowDispatchQuery.MaximumTake;
 
-    public async Task<IReadOnlyCollection<WorkflowDispatchView>> Handle(
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly ILogger<WorkflowDispatchInspectionService> _logger = logger ?? NullLogger<WorkflowDispatchInspectionService>.Instance;
+
+    public async Task<IReadOnlyCollection<WorkflowDispatchView>> ListAsync(
         ListWorkflowDispatches request,
         CancellationToken cancellationToken)
     {
@@ -50,6 +55,38 @@ public sealed class ListWorkflowDispatchesRequestHandler(
         return records.Select(WorkflowDispatchView.From).ToArray();
     }
 
+    public async Task<WorkflowDispatchRedriveView> RedriveAsync(
+        RedriveWorkflowDispatch request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RequestId);
+
+        var result = await redriveStore.RedriveAsync(
+            new WorkflowDispatchRedriveRequest(request.DispatchId, request.RequestId, _timeProvider.GetUtcNow()),
+            cancellationToken);
+
+        _logger.LogInformation(
+            new EventId(68109, "WorkflowDispatchRedriveEvaluated"),
+            "Workflow dispatch redrive {Disposition} for {DispatchId} at generation {DeliveryGeneration}",
+            result.Disposition,
+            result.DispatchId,
+            result.Generation);
+        return WorkflowDispatchRedriveView.From(result);
+    }
+
+    public async Task<WorkflowDispatchView?> GetAsync(
+        GetWorkflowDispatch request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
+        var record = await store.FindAsync(request.DispatchId, cancellationToken);
+        if (record is not null)
+            accessContextAccessor?.Current.EnsureTenantScope(record.TenantId);
+        return record is null ? null : WorkflowDispatchView.From(record);
+    }
+
     private static WorkflowDispatchStatus? ParseStatus(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -62,57 +99,13 @@ public sealed class ListWorkflowDispatchesRequestHandler(
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }
 
-public sealed class RedriveWorkflowDispatchRequestHandler : IRequestHandler<RedriveWorkflowDispatch, WorkflowDispatchRedriveView>
+/// <summary>
+/// The dispatch inspection operations the runtime endpoints dispatch to. A null view from
+/// <see cref="GetAsync"/> means the dispatch record is missing.
+/// </summary>
+public interface IWorkflowDispatchInspectionService
 {
-    private readonly IWorkflowDispatchRedriveStore _store;
-    private readonly TimeProvider _timeProvider;
-    private readonly ILogger<RedriveWorkflowDispatchRequestHandler> _logger;
-
-    public RedriveWorkflowDispatchRequestHandler(
-        IWorkflowDispatchRedriveStore store,
-        TimeProvider? timeProvider = null,
-        ILogger<RedriveWorkflowDispatchRequestHandler>? logger = null)
-    {
-        _store = store;
-        _timeProvider = timeProvider ?? TimeProvider.System;
-        _logger = logger ?? NullLogger<RedriveWorkflowDispatchRequestHandler>.Instance;
-    }
-
-    public async Task<WorkflowDispatchRedriveView> Handle(
-        RedriveWorkflowDispatch request,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RequestId);
-
-        var result = await _store.RedriveAsync(
-            new WorkflowDispatchRedriveRequest(request.DispatchId, request.RequestId, _timeProvider.GetUtcNow()),
-            cancellationToken);
-
-        _logger.LogInformation(
-            new EventId(68109, "WorkflowDispatchRedriveEvaluated"),
-            "Workflow dispatch redrive {Disposition} for {DispatchId} at generation {DeliveryGeneration}",
-            result.Disposition,
-            result.DispatchId,
-            result.Generation);
-        return WorkflowDispatchRedriveView.From(result);
-    }
-}
-
-public sealed class GetWorkflowDispatchRequestHandler(
-    IWorkflowDispatchStore store,
-    IPersistenceAccessContextAccessor? accessContextAccessor = null)
-    : IRequestHandler<GetWorkflowDispatch, GetWorkflowDispatchResponse>
-{
-    public async Task<GetWorkflowDispatchResponse> Handle(
-        GetWorkflowDispatch request,
-        CancellationToken cancellationToken)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.DispatchId);
-        var record = await store.FindAsync(request.DispatchId, cancellationToken);
-        if (record is not null)
-            accessContextAccessor?.Current.EnsureTenantScope(record.TenantId);
-        return new(record is null ? null : WorkflowDispatchView.From(record));
-    }
+    Task<IReadOnlyCollection<WorkflowDispatchView>> ListAsync(ListWorkflowDispatches request, CancellationToken cancellationToken);
+    Task<WorkflowDispatchRedriveView> RedriveAsync(RedriveWorkflowDispatch request, CancellationToken cancellationToken);
+    Task<WorkflowDispatchView?> GetAsync(GetWorkflowDispatch request, CancellationToken cancellationToken);
 }

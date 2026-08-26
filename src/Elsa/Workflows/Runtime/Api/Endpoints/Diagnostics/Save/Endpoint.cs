@@ -1,6 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Constants;
@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints.Diagnostics.Save;
 [Put(RouteConstants.RuntimeDiagnosticsSettings)]
 [RequirePermission(WorkflowRuntimePermissions.WorkflowRuntimeManage)]
 [RuntimeProblems("handling runtime command")]
-public sealed class Endpoint(ICommandSender commands) : ApiEndpoint<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>
+public sealed class Endpoint(IRuntimeDiagnosticsSettingsService settings) : ApiEndpoint<SaveRuntimeDiagnosticsSettings, RuntimeDiagnosticsSettingsView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -21,5 +21,5 @@ public sealed class Endpoint(ICommandSender commands) : ApiEndpoint<SaveRuntimeD
     }
 
     public override Task<RuntimeDiagnosticsSettingsView> HandleAsync(SaveRuntimeDiagnosticsSettings command, CancellationToken cancellationToken) =>
-        commands.Send(command, cancellationToken);
+        settings.SaveAsync(command, cancellationToken);
 }

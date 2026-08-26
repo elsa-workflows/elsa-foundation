@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -11,8 +12,11 @@ public sealed class ActivityExecutionLayoutReader(
     IActivityExecutionHierarchyStore hierarchy,
     IWorkflowExecutableStore executables,
     IWorkflowExecutableSourceReferenceStore sourceReferences,
-    IActivityInspectionContextAsync authorization)
+    IActivityInspectionContextAsync authorization) : IActivityExecutionLayoutReader
 {
+    Task<ActivityExecutionLayoutView?> IActivityExecutionLayoutReader.ReadAsync(GetActivityExecutionLayout request, CancellationToken cancellationToken) =>
+        ReadAsync(request.WorkflowExecutionId, request.ActivityExecutionId, cancellationToken).AsTask();
+
     public async ValueTask<ActivityExecutionLayoutView?> ReadAsync(
         string workflowExecutionId,
         string activityExecutionId,
@@ -169,4 +173,13 @@ public sealed class ActivityExecutionLayoutReader(
 
     private static bool HasValue(IReadOnlyDictionary<string, string> metadata, string key) =>
         metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value);
+}
+
+/// <summary>
+/// The boundary-layout read operation the runtime endpoints dispatch to. A null layout means the workflow
+/// execution, boundary, or executable is missing, or the caller may not inspect it.
+/// </summary>
+public interface IActivityExecutionLayoutReader
+{
+    Task<ActivityExecutionLayoutView?> ReadAsync(GetActivityExecutionLayout request, CancellationToken cancellationToken);
 }

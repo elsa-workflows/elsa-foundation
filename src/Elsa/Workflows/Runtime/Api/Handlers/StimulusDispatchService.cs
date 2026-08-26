@@ -1,4 +1,3 @@
-using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -11,12 +10,11 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 /// its result into a <see cref="DispatchStimulusResponse"/> (W7). The endpoint is the integration surface that
 /// makes trigger-based start (E3-1) and cross-execution fan-in (E3-5) reachable from outside the process.
 /// </summary>
-public sealed class DispatchStimulusRequestHandler(IStimulusRouter router)
-    : IRequestHandler<DispatchStimulus, DispatchStimulusResponse>
+public sealed class StimulusDispatchService(IStimulusRouter router) : IStimulusDispatchService
 {
     private const string RequestedBy = "runtime-api";
 
-    public async Task<DispatchStimulusResponse> Handle(DispatchStimulus request, CancellationToken cancellationToken)
+    public async Task<DispatchStimulusResponse> DispatchAsync(DispatchStimulus request, CancellationToken cancellationToken)
     {
         var mode = ParseMode(request.Mode);
 
@@ -43,4 +41,10 @@ public sealed class DispatchStimulusRequestHandler(IStimulusRouter router)
                     nameof(mode));
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+}
+
+/// <summary>The stimulus dispatch operation the runtime endpoints dispatch to.</summary>
+public interface IStimulusDispatchService
+{
+    Task<DispatchStimulusResponse> DispatchAsync(DispatchStimulus request, CancellationToken cancellationToken);
 }

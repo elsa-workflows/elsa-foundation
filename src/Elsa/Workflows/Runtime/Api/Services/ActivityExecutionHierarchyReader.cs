@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -8,8 +9,11 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 public sealed class ActivityExecutionHierarchyReader(
     IWorkflowExecutionStateStore workflowExecutions,
     IActivityExecutionHierarchyStore hierarchy,
-    IActivityInspectionContextAsync authorization)
+    IActivityInspectionContextAsync authorization) : IActivityExecutionDescendantsReader
 {
+    Task<ActivityExecutionHierarchyPageView?> IActivityExecutionDescendantsReader.ReadAsync(GetActivityExecutionDescendants request, CancellationToken cancellationToken) =>
+        ReadAsync(request.WorkflowExecutionId, request.ActivityExecutionId, request.Cursor, request.Limit, request.Include, cancellationToken).AsTask();
+
     public async ValueTask<ActivityExecutionHierarchyPageView?> ReadAsync(
         string workflowExecutionId,
         string activityExecutionId,
@@ -58,4 +62,13 @@ public sealed class ActivityExecutionHierarchyReader(
         }
         return result;
     }
+}
+
+/// <summary>
+/// The descendant-hierarchy read operation the runtime endpoints dispatch to. A null page means the workflow
+/// execution is missing or the caller may not inspect it.
+/// </summary>
+public interface IActivityExecutionDescendantsReader
+{
+    Task<ActivityExecutionHierarchyPageView?> ReadAsync(GetActivityExecutionDescendants request, CancellationToken cancellationToken);
 }
