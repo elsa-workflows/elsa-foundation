@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
@@ -29,37 +30,46 @@ public static class FoundationIdentityApi
 
         var owner = typeof(FoundationIdentityApiFeature).Assembly.GetName().Name
             ?? throw new InvalidOperationException("The Foundation Identity API assembly has no name.");
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
 
-        endpoints.MapGet(Route("bootstrap"), HandleBootstrapAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityBootstrapResponse), "FoundationIdentityBootstrap")
+        // The published operation ids predate the naming scheme, the tag is the literal "Identity",
+        // the public entry points document no auth responses, and the flows own challenges,
+        // sign-outs, and bare failure statuses — so the surface stays on the group's raw seam.
+        var api = endpoints.MapModuleEndpoints(owner, FoundationIdentityApiJsonContext.Default, tag: "Identity");
+
+        api.MapUnboundOperation("GET", Route("bootstrap"), "Bootstrap",
+                typeof(IdentityBootstrapResponse), StatusCodes.Status200OK, null, HandleBootstrapAsync,
+                name: "FoundationIdentityBootstrap", documentAuthResponses: false, containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapGet(Route("capabilities"), HandleCapabilitiesAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(IdentityCapabilitiesResponse), "FoundationIdentityCapabilities", secured: true)
+        api.MapUnboundOperation("GET", Route("capabilities"), "Capabilities",
+                typeof(IdentityCapabilitiesResponse), StatusCodes.Status200OK, null, HandleCapabilitiesAsync,
+                name: "FoundationIdentityCapabilities", containFailures: false)
             .RequirePermission(DefaultIdentityPermissionKeys.IdentityProvidersRead);
 
-        endpoints.MapGet(Route("session"), HandleSessionAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(AuthSession), "FoundationIdentitySession")
+        api.MapUnboundOperation("GET", Route("session"), "Session",
+                typeof(AuthSession), StatusCodes.Status200OK, null, HandleSessionAsync,
+                name: "FoundationIdentitySession", documentAuthResponses: false, containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapGet(Route("token"), HandleTokenAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(AccessTokenResponse), "FoundationIdentityToken")
+        api.MapUnboundOperation("GET", Route("token"), "Token",
+                typeof(AccessTokenResponse), StatusCodes.Status200OK, null, HandleTokenAsync,
+                name: "FoundationIdentityToken", documentAuthResponses: false, containFailures: false)
             .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []))
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapGet(Route("challenge/{provider}"), HandleChallengeAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, responseType: null, operationId: "FoundationIdentityChallenge")
+        api.MapUnboundOperation("GET", Route("challenge/{provider}"), "Challenge",
+                null, StatusCodes.Status200OK, null, HandleChallengeAsync,
+                name: "FoundationIdentityChallenge", documentAuthResponses: false, containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapPost(Route("logout/{provider}"), HandleLogoutAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, responseType: null, operationId: "FoundationIdentityLogout")
-            .WithMetadata(new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []))
+        api.MapUnboundOperation("POST", Route("logout/{provider}"), "Logout",
+                null, StatusCodes.Status204NoContent, null, HandleLogoutAsync,
+                name: "FoundationIdentityLogout", documentAuthResponses: false, containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
-        endpoints.MapPost(Route("refresh"), HandleRefreshAsync)
-            .WithIdentityMetadata(owner, descriptionMethod, typeof(TokenRefreshResult), "FoundationIdentityRefresh")
+        api.MapUnboundOperation("POST", Route("refresh"), "Refresh",
+                typeof(TokenRefreshResult), StatusCodes.Status200OK, null, HandleRefreshAsync,
+                name: "FoundationIdentityRefresh", documentAuthResponses: false, containFailures: false)
             .WithMetadata(
                 new AcceptsMetadata(["application/json"], typeof(RefreshTokenRequest), false),
                 new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(void), []),
@@ -302,30 +312,4 @@ public static class FoundationIdentityApi
 
     private static string Route(string path) => "/" + IdentityRouteConstants.GetRoute(path);
 
-    private static IEndpointConventionBuilder WithIdentityMetadata(
-        this IEndpointConventionBuilder builder,
-        string owner,
-        System.Reflection.MethodInfo descriptionMethod,
-        Type? responseType,
-        string operationId,
-        bool secured = false)
-    {
-        builder.WithOwner(owner).WithAuthoringModel(EndpointAuthoringModels.MinimalApi);
-        var metadata = new List<object>
-        {
-            descriptionMethod,
-            new EndpointNameMetadata(operationId),
-            new TagsAttribute("Identity")
-        };
-        if (responseType is not null)
-            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, responseType, ["application/json"]));
-        if (secured)
-        {
-            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []));
-            metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
-        }
-
-        builder.WithMetadata(metadata.ToArray());
-        return builder;
-    }
 }

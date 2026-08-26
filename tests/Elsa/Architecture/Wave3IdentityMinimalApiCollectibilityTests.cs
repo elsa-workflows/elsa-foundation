@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Collectibility;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Api;
@@ -86,6 +87,11 @@ public sealed class Wave3IdentityMinimalApiCollectibilityTests
         var featureType = assembly.GetType(owner.FeatureType, throwOnError: true)!;
         var feature = Activator.CreateInstance(featureType)!;
         var services = new ServiceCollection().AddLogging().AddRouting();
+        // The owner assembly is deliberately loaded collectibly here, so its contract types ARE
+        // collectible and the fail-closed lifetime boundary would reject the mapping outright.
+        // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
+        // document survives the cycle, and the weak-reference assertions below prove the release.
+        services.SuppressOpenApiLifetimeEnforcement();
         featureType.GetMethod("ConfigureServices")!.Invoke(feature, [services]);
         using var serviceProvider = services.BuildServiceProvider();
         var routes = new CollectibleRouteBuilder(serviceProvider);

@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 148
 - Test projects: 107
 - Domains: 27
-- Direct cross-domain references: 705
+- Direct cross-domain references: 707
 
 ## Domains
 
@@ -111,8 +111,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | Elsa.Expressions | JavaScript.Rendering | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
 | [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Elsa.Expressions | Liquid | provider/implementation | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core |
 | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | source | Elsa.Foundation | Identity.Abstractions | feature/implementation | Elsa.Api.AspNetCore |
-| [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | Identity.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
-| [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core |
+| [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | Identity.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity.EntityFrameworkCore | feature/implementation | Elsa.Foundation.Identity.AspNetCoreIdentity |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity.Groundwork | feature/implementation | Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | source | Elsa.Foundation | Identity.Oidc | feature/implementation | Elsa.Foundation.Identity.Abstractions |
@@ -581,7 +581,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | Elsa.Foundation | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
+| [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | Elsa.Foundation | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | Elsa.Api |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | Elsa.Foundation | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
+| [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | Elsa.Foundation | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | Elsa.Api |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | Elsa.Foundation | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj) | Elsa.Foundation | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | Elsa.Foundation | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |

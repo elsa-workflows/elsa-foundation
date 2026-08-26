@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 148
 - Test projects: 107
-- Direct project references: 1214
+- Direct project references: 1216
 
 ## Projects
 
@@ -78,8 +78,8 @@ Records direct project references only.
 | [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | Elsa.Expressions | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
 | [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Elsa.Expressions | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core |
 | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore |
-| [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
-| [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core |
+| [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.AspNetCoreIdentity |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions |
