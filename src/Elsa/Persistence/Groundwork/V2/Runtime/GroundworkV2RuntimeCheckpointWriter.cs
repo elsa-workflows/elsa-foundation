@@ -91,6 +91,12 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         var access = StorageAccess.Scoped(new StorageScope(context.Scope.Value));
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
 
+        // Replay resolution deliberately precedes root-write lease handling. A replayed commit performs no
+        // writes — it resolves from the durable marker alone — and it must stay resolvable when the lease is
+        // gone, because the replay case IS crash recovery: the original committer may have died holding the
+        // lease, and the retry arrives after expiry. Requiring a lease here would turn an idempotent replay
+        // into a rejection. The read has always been provider I/O at this point; the isolated unit of work
+        // only changes which connection carries it (see ReadRowIsolated).
         if (ReadMarker(access, commit.CommitId) is { } existing)
             return ResolveReplay(commit, fingerprint, existing);
 
