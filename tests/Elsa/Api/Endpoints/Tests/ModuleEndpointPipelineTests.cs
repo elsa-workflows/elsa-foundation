@@ -223,6 +223,24 @@ public sealed class ModuleEndpointPipelineTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => host.Client.GetAsync("/faulting/canceled"));
     }
 
+    [Fact]
+    public async Task An_owner_without_a_problem_writer_gets_the_sanitized_fallback_shape()
+    {
+        // No IEndpointProblemWriter is registered at all: the failure path must still answer with
+        // the last-resort problem document rather than failing the failure path itself.
+        await using var host = await PipelineHost.StartAsync(
+            api => api.MapEndpoint<ShapeEndpoints.FaultingShape>(),
+            registerProblemWriter: false);
+
+        var response = await host.Client.GetAsync("/faulting/unexpected");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.ToString());
+        Assert.Contains("\"status\":500", body);
+        Assert.Contains("Unexpected error occurred", body);
+    }
+
     // ---------- Owner-keyed resolution ----------
 
     [Fact]

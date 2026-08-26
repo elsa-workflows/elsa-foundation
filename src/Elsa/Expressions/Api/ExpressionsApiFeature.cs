@@ -1,5 +1,6 @@
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,7 @@ public sealed class ExpressionsApiFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddRequestHandlersFrom(GetType().Assembly);
+        services.AddDynamicEndpointApiExplorerRefresh();
         services.AddApiCapability(ExpressionsApiCapabilities.StaticDeclaration);
         services.AddPermissionContributor<ExpressionsPermissionContributor>();
     }

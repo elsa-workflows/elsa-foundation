@@ -1,4 +1,4 @@
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -20,24 +21,27 @@ public static class JavaScriptExecutionApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var handler = new RequestDelegate(HandleExecuteAsync);
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The published document tags this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
+        var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
+        var api = endpoints.MapModuleEndpoints(
+            OwnerId,
+            JavaScriptExecutionJsonContext.Default,
+            jsonContentType: "application/json",
+            tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
-        endpoints.MapPost("javascript/execute", handler)
-            .WithName("ElsaWorkflowsRuntimeJavaScriptActivitiesRunJavaScriptEndpoint")
-            .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        // The published document declares a plain object 200/500 pair plus the legacy problem 400,
+        // under an operation id that predates the naming scheme, so the operation stays on the
+        // group's raw seam with its own body reading and writes.
+        api.MapUnboundOperation(
+                "POST", "javascript/execute", "RunJavaScript",
+                typeof(object), StatusCodes.Status200OK, null, HandleExecuteAsync,
+                name: "ElsaWorkflowsRuntimeJavaScriptActivitiesRunJavaScriptEndpoint")
             .RequirePermission(JavaScriptExecutionPermissions.Execute)
             .WithMetadata(
-                descriptionMethod,
                 new AcceptsMetadata(["application/json"], typeof(RequestModel), false),
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(object), ["application/json"]),
                 new ProducesResponseTypeMetadata(StatusCodes.Status400BadRequest, typeof(JavaScriptExecutionProblemDetailsResponse), ["application/problem+json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status500InternalServerError, typeof(object), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-                new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
+                new ProducesResponseTypeMetadata(StatusCodes.Status500InternalServerError, typeof(object), ["application/json"]));
     }
 
     private static async Task HandleExecuteAsync(HttpContext context)

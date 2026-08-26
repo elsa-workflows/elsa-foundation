@@ -1,56 +1,28 @@
-using Elsa.Api.AspNetCore;
-using Elsa.Api.Capabilities.Contracts;
-using Elsa.Api.Capabilities.Authorization;
-using Elsa.Api.Capabilities.Models;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
+using Elsa.Api.Endpoints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Api.Capabilities;
 
 /// <summary>Maps the API capabilities surface using ordinary ASP.NET Core endpoints.</summary>
 public static class ApiCapabilitiesApi
 {
-    private const string OwnerId = "Elsa.Api.Capabilities";
+    internal const string OwnerId = "Elsa.Api.Capabilities";
 
     public static void MapApiCapabilitiesApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var handler = new RequestDelegate(HandleGetCapabilitiesAsync);
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The published document tags this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
+        var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
+        var api = endpoints.MapModuleEndpoints(
+            OwnerId,
+            ApiCapabilitiesJsonContext.Default,
+            jsonContentType: "application/json",
+            tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
-        endpoints.MapGet("/capabilities", handler)
-            .WithName("ElsaApiCapabilitiesEndpointsGetCapabilities")
-            .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(ApiCapabilitiesPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                Response(StatusCodes.Status200OK, typeof(ApiCapabilitiesDocument)),
-                Unauthorized(),
-                Forbidden());
+        api.MapEndpointsFrom(typeof(ApiCapabilitiesApi).Assembly);
     }
-
-    private static async Task HandleGetCapabilitiesAsync(HttpContext context)
-    {
-        var document = await context.RequestServices
-            .GetRequiredService<IApiCapabilityCatalog>()
-            .GetAsync(context.RequestAborted);
-        await Results.Json(document, ApiCapabilitiesJsonContext.Default.ApiCapabilitiesDocument, contentType: "application/json").ExecuteAsync(context);
-    }
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type bodyType) =>
-        new(statusCode, bodyType, ["application/json"]);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 }

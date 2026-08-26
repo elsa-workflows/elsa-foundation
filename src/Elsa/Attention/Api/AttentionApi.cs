@@ -1,11 +1,10 @@
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Attention.Core;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Attention.Api;
 
@@ -18,21 +17,22 @@ public static class AttentionApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var handler = new RequestDelegate(HandleGetAttentionItemsAsync);
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+        // The published document tags this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
+        var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
+        var api = endpoints.MapModuleEndpoints(
+            OwnerId,
+            AttentionJsonContext.Default,
+            jsonContentType: "application/json",
+            tag: string.IsNullOrWhiteSpace(applicationName) ? null : applicationName);
 
-        endpoints.MapGet(AttentionRoutes.Items, handler)
-            .WithName("ElsaAttentionApiEndpointsGetAttentionItems")
-            .WithHostApplicationOpenApiTag(endpoints.ServiceProvider)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(AttentionPermissions.Read)
-            .WithMetadata(
-                descriptionMethod,
-                new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(AttentionAggregationResult), ["application/json"]),
-                new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
-                new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []));
+        // The published error contract is a plain-text 400 carrying the query exception's message,
+        // and the repeatable contributor filter is undocumented on purpose, so the operation stays
+        // on the group's raw seam with its own reads and writes.
+        api.MapUnboundOperation(
+                "GET", AttentionRoutes.Items, "GetAttentionItems",
+                typeof(AttentionAggregationResult), StatusCodes.Status200OK, null, HandleGetAttentionItemsAsync)
+            .RequirePermission(AttentionPermissions.Read);
     }
 
     private static async Task HandleGetAttentionItemsAsync(HttpContext context)

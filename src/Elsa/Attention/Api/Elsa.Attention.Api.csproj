@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
     <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
   </ItemGroup>
 

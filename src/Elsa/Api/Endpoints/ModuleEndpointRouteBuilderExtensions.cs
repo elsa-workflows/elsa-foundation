@@ -21,16 +21,22 @@ public static class ModuleEndpointRouteBuilderExtensions
     /// The exact Content-Type written on success responses. The charset suffix is part of a module's
     /// published wire contract, so it is configured rather than assumed.
     /// </param>
+    /// <param name="tag">
+    /// The OpenAPI tag applied to every operation in the group. Defaults to the owner id; modules
+    /// whose published documents tag with the host application name resolve it at composition time
+    /// and pass it here.
+    /// </param>
     public static ModuleEndpointGroup MapModuleEndpoints(
         this IEndpointRouteBuilder endpoints,
         string ownerId,
         JsonSerializerContext jsonContext,
-        string jsonContentType = "application/json; charset=utf-8")
+        string jsonContentType = "application/json; charset=utf-8",
+        string? tag = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentNullException.ThrowIfNull(jsonContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(jsonContentType);
-        return new(endpoints, ownerId, jsonContext, jsonContentType);
+        return new(endpoints, ownerId, jsonContext, jsonContentType, tag);
     }
 }

@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 148
 - Test projects: 107
-- Direct project references: 1200
+- Direct project references: 1206
 
 ## Projects
 
@@ -45,9 +45,9 @@ Records direct project references only.
 | [Elsa.Agent.GitHubCopilot](../../src/Elsa/Agent/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core<br>Elsa.Agent.Workflows |
 | [Elsa.Agent.Workflows](../../src/Elsa/Agent/Workflows/Elsa.Agent.Workflows.csproj) | source | Elsa.Agent | - | default | Elsa.Agent.Core |
 | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | source | Elsa.Api | - | default | - |
-| [Elsa.Api.Capabilities](../../src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj) | source | Elsa.Api | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Api.Capabilities](../../src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj) | source | Elsa.Api | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | source | Elsa.Api | - | default | Elsa.Api.AspNetCore |
-| [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | source | Elsa.Attention | - | default | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Attention.Api](../../src/Elsa/Attention/Api/Elsa.Attention.Api.csproj) | source | Elsa.Attention | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | - | default | - |
 | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | source | Elsa.Caching | - | default | - |
 | [Elsa.Caching.Memory](../../src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | - | default | Elsa.Caching.Core |
@@ -67,7 +67,7 @@ Records direct project references only.
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | source | Elsa.Events | - | default | Elsa.Pipelines.Core |
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Elsa.Events | - | default | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Events.Strategies](../../src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj) | source | Elsa.Events | - | default | Elsa.Events.Core<br>Elsa.Primitives |
-| [Elsa.Expressions.Api](../../src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj) | source | Elsa.Expressions | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Expressions.Core<br>Elsa.Mediator.Core |
+| [Elsa.Expressions.Api](../../src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj) | source | Elsa.Expressions | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Endpoints<br>Elsa.Expressions.Core<br>Elsa.Mediator.Core |
 | [Elsa.Expressions.Core](../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj) | source | Elsa.Expressions | - | default | Elsa.Primitives |
 | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | source | Elsa.Expressions | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core |
 | [Elsa.Expressions.JavaScript.Core](../../src/Elsa/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj) | source | Elsa.Expressions | - | default | Elsa.Expressions.Core |
@@ -75,7 +75,7 @@ Records direct project references only.
 | [Elsa.Expressions.JavaScript.Jint](../../src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | source | Elsa.Expressions | - | default | Elsa.Expressions.JavaScript.Core |
 | [Elsa.Expressions.JavaScript.Primitives](../../src/Elsa/Expressions/JavaScript/Primitives/Elsa.Expressions.JavaScript.Primitives.csproj) | source | Elsa.Expressions | - | default | - |
 | [Elsa.Expressions.JavaScript.Rendering.Core](../../src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj) | source | Elsa.Expressions | - | default | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Primitives |
-| [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | Elsa.Expressions | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
+| [Elsa.Expressions.JavaScript.Rendering](../../src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj) | source | Elsa.Expressions | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
 | [Elsa.Expressions.Liquid](../../src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | source | Elsa.Expressions | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core |
 | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore |
 | [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
@@ -126,7 +126,7 @@ Records direct project references only.
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | - | default | - |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Tasks | - | default | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Elsa.Tasks | - | default | Elsa.Primitives<br>Elsa.Tasks.Core |
-| [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork.V2](../../src/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.CodeGeneration](../../src/Elsa/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj) | source | Elsa.Workflows | netstandard2.0 | default | - |
@@ -153,7 +153,7 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | - | default | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |

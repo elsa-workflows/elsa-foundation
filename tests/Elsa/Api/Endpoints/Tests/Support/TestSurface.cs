@@ -240,7 +240,8 @@ public sealed class PipelineHost(IHost host) : IAsyncDisposable
         Action<ModuleEndpointGroup> map,
         Action<IServiceCollection>? configureServices = null,
         string ownerId = "Test.Owner",
-        string jsonContentType = "application/json")
+        string jsonContentType = "application/json",
+        bool registerProblemWriter = true)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -250,7 +251,8 @@ public sealed class PipelineHost(IHost host) : IAsyncDisposable
                 {
                     services.AddLogging();
                     services.AddRouting();
-                    services.AddSingleton<IEndpointProblemWriter, TestProblemWriter>();
+                    if (registerProblemWriter)
+                        services.AddSingleton<IEndpointProblemWriter, TestProblemWriter>();
                     configureServices?.Invoke(services);
                 });
                 webHost.Configure(app =>
