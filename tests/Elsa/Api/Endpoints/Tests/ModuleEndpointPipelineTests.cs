@@ -168,6 +168,27 @@ public sealed class ModuleEndpointPipelineTests
         Assert.Contains("Value [invalid] is not valid for a [Int32] property!", body);
     }
 
+    [Fact]
+    public async Task A_failure_after_the_response_started_is_rethrown_not_rewritten()
+    {
+        // Once headers are on the wire (a streaming producer failing mid-response), no problem
+        // document can be written; the original failure must surface, never a secondary
+        // headers-already-sent mutation error.
+        await using var host = await PipelineHost.StartAsync(api =>
+            api.MapUnboundOperation("GET", "/started", "Started", null, StatusCodes.Status200OK, null,
+                async context =>
+                {
+                    await context.Response.WriteAsync("partial");
+                    await context.Response.Body.FlushAsync();
+                    throw new InvalidOperationException("mid-stream failure");
+                }));
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => host.Client.GetAsync("/started"));
+
+        Assert.Contains("mid-stream failure", exception.ToString());
+        Assert.DoesNotContain("response has already started", exception.ToString());
+    }
+
     // ---------- The failure ladder ----------
 
     [Fact]

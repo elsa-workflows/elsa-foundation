@@ -256,6 +256,15 @@ public sealed class ModuleEndpointGroup
     /// </summary>
     private async Task HandleFailureAsync(HttpContext context, Exception exception, Type messageType)
     {
+        // Once headers are on the wire — a streaming producer failing mid-response — no problem
+        // document can be written: mutating the status would itself throw and mask the failure.
+        // Rethrow so the server aborts the response honestly, exactly as an uncontained handler did.
+        if (context.Response.HasStarted)
+        {
+            LogUnexpected(context, exception, messageType);
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+        }
+
         foreach (var renderer in FaultRenderers(context))
         {
             if (await renderer.TryWriteAsync(context, exception))
