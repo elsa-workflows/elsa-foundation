@@ -1,169 +1,32 @@
-using Elsa.Activities.Bpmn.Interchange.Contracts;
-using Elsa.Activities.Bpmn.Interchange.Exceptions;
-using Elsa.Activities.Bpmn.Interchange.Models;
-using Elsa.Api.AspNetCore;
-using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Api.Endpoints;
 using Elsa.Workflows.Design.Core.Models;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints;
 
 /// <summary>Maps the BPMN interchange surface using ordinary ASP.NET Core endpoints.</summary>
 public static class BpmnInterchangeApi
 {
-    private const string OwnerId = "Elsa.Activities.Bpmn.Interchange";
+    internal const string OwnerId = "Elsa.Activities.Bpmn.Interchange";
 
     public static void MapBpmnInterchangeApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
+        // The published documents tag this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
-                               ?? typeof(BpmnInterchangeApi).Assembly.GetName().Name!;
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
+                              ?? typeof(BpmnInterchangeApi).Assembly.GetName().Name!;
+        var api = endpoints.MapModuleEndpoints(
+            OwnerId,
+            BpmnInterchangeJsonContext.Default,
+            jsonContentType: "application/json; charset=utf-8",
+            tag: applicationName);
 
-        endpoints.MapPost("interchange/bpmn/analyze", HandleAnalyzeAsync)
-            .WithName("ElsaActivitiesBpmnInterchangeEndpointsAnalyzeBpmnDocumentEndpoint")
-            .WithTags(applicationName)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(BpmnInterchangePermissions.Read)
-            .WithMetadata(descriptionMethod, Accepts(typeof(AnalyzeBpmnDocumentRequest)), Response(StatusCodes.Status200OK, typeof(BpmnImportAnalysis)), Unauthorized(), Forbidden());
-
-        endpoints.MapPost("interchange/bpmn/import", HandleImportAsync)
-            .WithName("ElsaActivitiesBpmnInterchangeEndpointsImportBpmnDocumentEndpoint")
-            .WithTags(applicationName)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(BpmnInterchangePermissions.Manage)
-            .WithMetadata(descriptionMethod, Accepts(typeof(ImportBpmnDocumentRequest)), Response(StatusCodes.Status200OK, typeof(BpmnImportResult)), Unauthorized(), Forbidden());
-
-        endpoints.MapPost("interchange/bpmn/export", HandleExportAsync)
-            .WithName("ElsaActivitiesBpmnInterchangeEndpointsExportBpmnDocumentEndpoint")
-            .WithTags(applicationName)
-            .WithOwner(OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(BpmnInterchangePermissions.Read)
-            .WithMetadata(descriptionMethod, Accepts(typeof(ExportBpmnDocumentRequest)), Response(StatusCodes.Status200OK, typeof(ExportBpmnDocumentResult)), Unauthorized(), Forbidden());
+        api.MapEndpointsFrom(typeof(BpmnInterchangeApi).Assembly);
     }
-
-    private static async Task HandleAnalyzeAsync(HttpContext context)
-    {
-        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.AnalyzeBpmnDocumentRequest);
-        if (request is null)
-            return;
-
-        try
-        {
-            var importer = context.RequestServices.GetRequiredService<IBpmnDocumentImporter>();
-            await Results.Json(
-                importer.Analyze(request.Xml, new BpmnImportOptions { ProcessId = request.ProcessId }),
-                BpmnInterchangeJsonContext.Default.BpmnImportAnalysis,
-                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
-        }
-        catch (BpmnInterchangeException exception)
-        {
-            await WriteLegacyErrorAsync(context, exception.Message, StatusCodes.Status400BadRequest);
-        }
-    }
-
-    private static async Task HandleImportAsync(HttpContext context)
-    {
-        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.ImportBpmnDocumentRequest);
-        if (request is null)
-            return;
-
-        try
-        {
-            var importer = context.RequestServices.GetRequiredService<IBpmnDocumentImporter>();
-            await Results.Json(
-                importer.Import(request.Xml, new BpmnImportOptions
-                {
-                    ProcessId = request.ProcessId,
-                    NodeIdPrefix = request.NodeIdPrefix
-                }),
-                BpmnInterchangeJsonContext.Default.BpmnImportResult,
-                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
-        }
-        catch (BpmnInterchangeException exception)
-        {
-            await WriteLegacyErrorAsync(context, exception.Message, StatusCodes.Status400BadRequest);
-        }
-    }
-
-    private static async Task HandleExportAsync(HttpContext context)
-    {
-        var request = await ReadJsonAsync(context, BpmnInterchangeJsonContext.Default.ExportBpmnDocumentRequest);
-        if (request is null)
-            return;
-
-        try
-        {
-            var exporter = context.RequestServices.GetRequiredService<IBpmnDocumentExporter>();
-            await Results.Json(
-                new ExportBpmnDocumentResult(exporter.Export(request.ProcessNode, new BpmnExportOptions
-                {
-                    ProcessId = request.ProcessId
-                })),
-                BpmnInterchangeJsonContext.Default.ExportBpmnDocumentResult,
-                contentType: "application/json; charset=utf-8").ExecuteAsync(context);
-        }
-        catch (BpmnInterchangeException exception)
-        {
-            await WriteLegacyErrorAsync(context, exception.Message, StatusCodes.Status400BadRequest);
-        }
-    }
-
-    private static async Task<T?> ReadJsonAsync<T>(HttpContext context, JsonTypeInfo<T> jsonTypeInfo)
-        where T : class
-    {
-        try
-        {
-            var request = await context.Request.ReadFromJsonAsync(jsonTypeInfo, context.RequestAborted);
-            if (request is not null)
-                return request;
-        }
-        catch (JsonException exception)
-        {
-            await WriteLegacyErrorAsync(context, exception.Message, StatusCodes.Status400BadRequest);
-            return null;
-        }
-
-        await WriteLegacyErrorAsync(context, "A request body is required.", StatusCodes.Status400BadRequest);
-        return null;
-    }
-
-    private static Task WriteLegacyErrorAsync(HttpContext context, string message, int statusCode)
-    {
-        context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/problem+json; charset=utf-8";
-        var error = new BpmnInterchangeError(
-            new Dictionary<string, string[]> { ["generalErrors"] = [message] },
-            "One or more errors occurred!",
-            statusCode);
-        return context.Response.WriteAsync(
-            JsonSerializer.Serialize(error, BpmnInterchangeJsonContext.Default.BpmnInterchangeError),
-            context.RequestAborted);
-    }
-
-    private static ProducesResponseTypeMetadata Response(int statusCode, Type type) =>
-        new(statusCode, type, ["application/json"]);
-
-    private static AcceptsMetadata Accepts(Type type) =>
-        new(["application/json"], type, false);
-
-    private static ProducesResponseTypeMetadata Unauthorized() =>
-        new(StatusCodes.Status401Unauthorized, typeof(void), []);
-
-    private static ProducesResponseTypeMetadata Forbidden() =>
-        new(StatusCodes.Status403Forbidden, typeof(void), []);
 }
 
 public sealed record AnalyzeBpmnDocumentRequest(string Xml, string? ProcessId = null);

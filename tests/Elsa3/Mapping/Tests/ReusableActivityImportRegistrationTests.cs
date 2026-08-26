@@ -44,6 +44,9 @@ public sealed class ReusableActivityImportRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        // The feature now registers the API Explorer refresh, whose change provider depends on the
+        // web host's composite EndpointDataSource; routing supplies it.
+        services.AddRouting();
         services.AddScoped<IReusableActivityImportMaterializer, StubMaterializer>();
         services.AddScoped<IReusableActivityImportCommand, StubCommand>();
         services.AddScoped<IReusableActivityImportOperationStore, StubOperationStore>();

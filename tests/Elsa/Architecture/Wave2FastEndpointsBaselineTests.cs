@@ -86,6 +86,12 @@ public sealed class Wave2MinimalApiCompatibilityTests : IAsyncLifetime
                     services.AddOptions<ReusableActivityImportOptions>();
                     services.AddScoped<IReusableActivityImportOperationService, StubImportService>();
                     services.AddPermissionContributor<Elsa3ImportPermissionContributor>();
+                    // Modularity and Elsa 3 Import are wired from stubs here rather than through
+                    // their features, so their owner-keyed failure services are registered directly.
+                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointProblemWriter, Elsa.Modularity.Api.Endpoints.ModularityProblemWriter>("Elsa.Modularity.Api");
+                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointFaultRenderer, Elsa.Modularity.Api.Endpoints.ModularityFaultRenderer>("Elsa.Modularity.Api");
+                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointProblemWriter, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportProblemWriter>("Elsa3.Activities.Design.Import");
+                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointFaultRenderer, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportFaultRenderer>("Elsa3.Activities.Design.Import");
                 });
                 webHost.Configure(app =>
                 {

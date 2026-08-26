@@ -1,11 +1,9 @@
-using Elsa.Api.AspNetCore;
+using Elsa.Api.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
 using Elsa.Workflows.ExecutionEvidence.Models;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,41 +17,33 @@ public static class ExecutionEvidenceApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
+        // The published documents tag this surface with the host application name, resolved at
+        // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
-                               ?? typeof(ExecutionEvidenceApi).Assembly.GetName().Name!;
-        var descriptionMethod = typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-            ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
-        var response = new ProducesResponseTypeMetadata(StatusCodes.Status200OK, typeof(ExecutionEvidencePage), ["application/json"]);
-        var unauthorized = new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []);
-        var forbidden = new ProducesResponseTypeMetadata(StatusCodes.Status403Forbidden, typeof(void), []);
+                              ?? typeof(ExecutionEvidenceApi).Assembly.GetName().Name!;
+        var api = endpoints.MapModuleEndpoints(
+            ExecutionEvidencePermissionKeys.OwnerId,
+            ExecutionEvidenceJsonContext.Default,
+            jsonContentType: "application/json; charset=utf-8",
+            tag: applicationName);
 
-        endpoints.MapGet(ExecutionEvidenceRoutes.Base, HandleCorrelatedAsync)
-            .WithName("ElsaWorkflowsExecutionEvidenceEndpointsGetCorrelatedEvidence")
-            .WithTags(applicationName)
-            .WithOwner(ExecutionEvidencePermissionKeys.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(ExecutionEvidencePermissionKeys.Read)
-            .WithMetadata(descriptionMethod, response, unauthorized, forbidden);
+        // The published error contract is plain-text 400s with exact messages (quoted verbatim in
+        // this module's README), and the reads long-poll, so the operations stay on the group's raw
+        // seam with their own query parsing and writes.
+        api.MapUnboundOperation(
+                "GET", ExecutionEvidenceRoutes.Base, "GetCorrelatedEvidence",
+                typeof(ExecutionEvidencePage), StatusCodes.Status200OK, null, HandleCorrelatedAsync)
+            .RequirePermission(ExecutionEvidencePermissionKeys.Read);
 
-        endpoints.MapGet(ExecutionEvidenceRoutes.ByWorkflow, HandleWorkflowAsync)
-            .WithName("ElsaWorkflowsExecutionEvidenceEndpointsGetWorkflowEvidence")
-            .WithTags(applicationName)
-            .WithOwner(ExecutionEvidencePermissionKeys.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(ExecutionEvidencePermissionKeys.Read)
-            .WithMetadata(descriptionMethod, response, unauthorized, forbidden);
+        api.MapUnboundOperation(
+                "GET", ExecutionEvidenceRoutes.ByWorkflow, "GetWorkflowEvidence",
+                typeof(ExecutionEvidencePage), StatusCodes.Status200OK, null, HandleWorkflowAsync)
+            .RequirePermission(ExecutionEvidencePermissionKeys.Read);
 
-        endpoints.MapDelete(ExecutionEvidenceRoutes.Base, HandleDeleteAsync)
-            .WithName("ElsaWorkflowsExecutionEvidenceEndpointsDeleteEvidence")
-            .WithTags(applicationName)
-            .WithOwner(ExecutionEvidencePermissionKeys.OwnerId)
-            .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
-            .RequirePermission(ExecutionEvidencePermissionKeys.Delete)
-            .WithMetadata(
-                descriptionMethod,
-                new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []),
-                unauthorized,
-                forbidden);
+        api.MapUnboundOperation(
+                "DELETE", ExecutionEvidenceRoutes.Base, "DeleteEvidence",
+                null, StatusCodes.Status204NoContent, null, HandleDeleteAsync)
+            .RequirePermission(ExecutionEvidencePermissionKeys.Delete);
     }
 
     private static async Task HandleCorrelatedAsync(HttpContext context)

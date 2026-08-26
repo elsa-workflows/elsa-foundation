@@ -1,6 +1,8 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Api.Endpoints;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Modularity.Api.Extensions;
 using Elsa.Modularity.Api.Options;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -28,6 +30,11 @@ public class ModularityApiFeature : IWebShellFeature
         {
             options.ShellsJsonPath = ShellsJsonPath;
         });
+        services.AddDynamicEndpointApiExplorerRefresh();
+        // The owner's failure services are keyed so hosts composing several modules keep each
+        // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, ModularityProblemWriter>(ModularityApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, ModularityFaultRenderer>(ModularityApi.OwnerId);
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
