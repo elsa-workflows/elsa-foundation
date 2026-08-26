@@ -74,6 +74,11 @@ public sealed class Wave2MinimalApiUnloadabilityTests
             ?? throw new InvalidOperationException($"Could not construct '{collectibleFeatureType.FullName}'.");
         var services = new ServiceCollection();
         services.AddLogging();
+        // The owner assembly is deliberately loaded collectibly here, so its contract types ARE
+        // collectible and the fail-closed lifetime boundary would reject the mapping outright.
+        // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
+        // document survives the cycle, and the weak-reference assertions below prove the release.
+        services.SuppressOpenApiLifetimeEnforcement();
         var configureServices = collectibleFeatureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)
             ?? throw new InvalidOperationException($"'{collectibleFeatureType.FullName}' has no ConfigureServices method.");
         configureServices.Invoke(feature, [services]);

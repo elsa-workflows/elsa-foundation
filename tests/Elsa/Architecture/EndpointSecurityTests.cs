@@ -137,7 +137,7 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
-    public void Every_current_management_FastEndpoints_type_declares_an_owned_permission_and_not_anonymous()
+    public void Every_current_management_endpoint_type_declares_an_owned_permission_and_not_anonymous()
     {
         var canonicalPermissions = typeof(PermissionNames)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
@@ -157,6 +157,36 @@ public sealed class EndpointSecurityTests
                 var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetCompilationUnitRoot();
                 foreach (var declaration in syntax.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
+                    // Endpoint classes are the current authoring model: the permission is a class
+                    // attribute the framework applies as a full convention, so the sweep demands
+                    // exactly one named-constant permission attribute and no anonymous access.
+                    var isEndpointClass = declaration.BaseList?.Types
+                        .Any(baseType => baseType.Type.ToString().StartsWith("ApiEndpoint", StringComparison.Ordinal)) == true;
+                    if (isEndpointClass)
+                    {
+                        endpointCount++;
+                        var display2 = $"{root.Area}: {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}:{declaration.Identifier.ValueText}";
+                        var attributes = declaration.AttributeLists.SelectMany(list => list.Attributes).ToArray();
+                        var permissionAttributes = attributes
+                            .Where(attribute => attribute.Name.ToString() is "RequirePermission" or "RequireAnyPermission")
+                            .ToArray();
+                        if (permissionAttributes.Length != 1)
+                        {
+                            violations.Add($"{display2}: expected exactly one RequirePermission/RequireAnyPermission attribute, found {permissionAttributes.Length}");
+                            continue;
+                        }
+
+                        var namedConstantArguments = permissionAttributes[0].ArgumentList?.Arguments
+                            .Select(argument => argument.Expression)
+                            .OfType<MemberAccessExpressionSyntax>()
+                            .Count() ?? 0;
+                        if (namedConstantArguments == 0)
+                            violations.Add($"{display2}: the permission must be a declared named constant, not an inline literal");
+                        if (attributes.Any(attribute => attribute.Name.ToString() is "AllowPublic" or "AllowAnonymous"))
+                            violations.Add($"{display2}: management endpoints must not allow anonymous access");
+                        continue;
+                    }
+
                     var configure = declaration.Members.OfType<MethodDeclarationSyntax>()
                         .SingleOrDefault(method => method.Identifier.ValueText == "Configure");
                     if (configure is null)

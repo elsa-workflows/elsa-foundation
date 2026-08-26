@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -58,6 +59,11 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
         services.TryAddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
 
         services.AddEventHandlersFrom(GetType().Assembly);
+        services.AddDynamicEndpointApiExplorerRefresh();
+        // The owner's failure services are keyed so hosts composing several modules keep each
+        // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.
+        services.TryAddKeyedSingleton<IEndpointProblemWriter, ReusableActivityImportProblemWriter>(ReusableActivityImportApi.OwnerId);
+        services.TryAddKeyedSingleton<IEndpointFaultRenderer, ReusableActivityImportFaultRenderer>(ReusableActivityImportApi.OwnerId);
         services.AddPermissionContributor<Elsa3ImportPermissionContributor>();
     }
 
