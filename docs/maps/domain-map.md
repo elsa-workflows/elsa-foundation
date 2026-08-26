@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 148
 - Test projects: 107
 - Domains: 27
-- Direct cross-domain references: 707
+- Direct cross-domain references: 708
 
 ## Domains
 
@@ -153,7 +153,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | Core | contract | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | Newtonsoft | feature/implementation | Elsa.Serialization.Core |
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Serialization | SystemText | feature/implementation | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
-| [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | Preferences.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
+| [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | Preferences.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Endpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Studio.Preferences.Core](../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj) | source | Elsa.Studio | Preferences.Core | contract | - |
 | [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | source | Elsa.Studio | Preferences.Persistence.Groundwork | feature/implementation | Elsa.Persistence.Groundwork.V2<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | Core | contract | - |
@@ -704,6 +704,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | Elsa.Serialization | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | Elsa.Serialization | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | Elsa.Studio | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
+| [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | Elsa.Studio | [Elsa.Api.Endpoints](../../src/Elsa/Api/Endpoints/Elsa.Api.Endpoints.csproj) | Elsa.Api |
 | [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | Elsa.Studio | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
 | [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | Elsa.Studio | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | Elsa.Studio | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
