@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/benchmarks/Elsa/Groundwork/" />
   <Folder Name="/benchmarks/Elsa/Groundwork/StorePerformance/">
+    <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj" />
     <Project Path="benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/benchmarks/Elsa/Workflows/" />
@@ -469,6 +470,9 @@
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/" />
   <Folder Name="/tests/Elsa/Groundwork/ProviderEvidenceImporter/">
     <Project Path="tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/AdapterHost/">
+    <Project Path="tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Groundwork/StorePerformance/Benchmarks/">
     <Project Path="tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />

@@ -96,7 +96,8 @@ public static class GroundworkV2RuntimeRegistration
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 target,
                 provider.GetService<TimeProvider>(),
-                provider.GetService<IWorkflowExecutableRootWriteLeaseManager>()),
+                provider.GetService<IWorkflowExecutableRootWriteLeaseManager>(),
+                provider.GetService<IWritePathObserver>()),
             typeof(IRuntimeCheckpointCommitStore));
         ReplaceScoped<GroundworkV2RuntimePostCommitOutboxStore>(services, Standard<GroundworkV2RuntimePostCommitOutboxStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRuntimePostCommitOutboxStore), typeof(IPostCommitOutboxLookupStore),
