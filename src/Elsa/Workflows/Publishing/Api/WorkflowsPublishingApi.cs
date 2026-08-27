@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Workflows.Publishing.Api;
@@ -20,7 +20,7 @@ public static class WorkflowsPublishingApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             WorkflowsPublishingJsonOptions.WireContext,
             jsonContentType: "application/json");

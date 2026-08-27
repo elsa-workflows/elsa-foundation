@@ -1,5 +1,6 @@
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -23,6 +24,7 @@ public sealed class WorkflowsDashboardFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.TryAddScoped<IWorkflowRunHealthDataSource>(provider =>
         {
             var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();

@@ -5,6 +5,7 @@ using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.ActivityTestRuns.Cancel;
 

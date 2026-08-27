@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
 

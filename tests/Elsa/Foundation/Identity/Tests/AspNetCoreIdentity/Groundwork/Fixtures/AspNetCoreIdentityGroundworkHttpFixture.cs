@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Api;
@@ -77,6 +78,7 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddLogging();
                     services.AddRouting();
                     services.AddAuthorization();

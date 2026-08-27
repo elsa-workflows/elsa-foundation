@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -319,6 +320,7 @@ public static class SecretsCollectibleFixture
             })
             .Build();
         var services = new ServiceCollection();
+        services.AddElsaEndpoints();
         AddCoreServices(services, configuration);
         return services;
     }
@@ -337,7 +339,7 @@ public static class SecretsCollectibleFixture
         // OpenAPI transformer delegates ARE collectible and the fail-closed lifetime boundary
         // would reject the mapping outright. This probe is the regime the explicit suppression
         // exists for: the weak-reference assertions prove the release honestly.
-        services.SuppressOpenApiLifetimeEnforcement();
+        services.SuppressEndpointLifetimeEnforcement();
         services.AddSingleton<IHostEnvironment>(new CollectibilityHostEnvironment());
         services.AddAuthentication();
         services.AddAuthorization();

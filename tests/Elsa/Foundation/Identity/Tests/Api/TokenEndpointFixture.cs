@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
@@ -59,6 +60,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddLogging();
                     services.AddRouting();
                     services.AddOpenApi();

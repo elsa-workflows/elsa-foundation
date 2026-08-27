@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -603,6 +604,7 @@ public sealed class OpenTelemetryCompatibilityTests
             webHost.UseSetting(WebHostDefaults.EnvironmentKey, Environments.Development);
             webHost.ConfigureServices(services =>
             {
+                services.AddElsaEndpoints();
                 services.AddLogging();
                 services.AddRouting();
                 services.AddOpenApi();

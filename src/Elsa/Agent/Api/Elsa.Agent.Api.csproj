@@ -1,10 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
-		<PackageReference Include="CShells.Abstractions" />
-		<PackageReference Include="CShells.AspNetCore.Abstractions" />
-		<PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
-		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -12,10 +12,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
-		<ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
-		<ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
 	</ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
+  </ItemGroup>
 
 </Project>

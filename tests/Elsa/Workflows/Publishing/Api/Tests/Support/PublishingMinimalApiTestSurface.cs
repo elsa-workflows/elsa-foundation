@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -9,7 +10,7 @@ internal static class PublishingMinimalApiTestSurface
 {
     public static IReadOnlyList<RouteEndpoint> Map()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new RouteBuilder(provider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
         return routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

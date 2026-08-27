@@ -182,7 +182,7 @@ public sealed class ExpressionToolingEndpointTests
                 .AddSingleton<IExpressionToolingProviderResolver>(new ProviderResolver(provider));
             if (provider is not null)
                 serviceCollection.AddSingleton<IExpressionToolingProvider>(provider);
-            var services = serviceCollection.BuildServiceProvider();
+            var services = serviceCollection.AddElsaEndpoints().BuildServiceProvider();
             return new(services);
         }
 

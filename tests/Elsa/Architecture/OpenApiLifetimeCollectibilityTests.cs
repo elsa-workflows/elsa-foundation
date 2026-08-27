@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Architecture.Tests.Support;
+using NativeEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -44,8 +45,8 @@ public sealed class OpenApiLifetimeCollectibilityTests
         Assert.True(evidence.PreviousDocumentedAfter);
         Assert.True(evidence.CandidateNeverDocumented);
         Assert.True(evidence.PreviousCallableAfter);
-        Assert.Equal(OpenApiLifetimeViolationCategory.RequestType, evidence.Violation.Category);
-        Assert.Equal("Elsa.OpenApi.LifetimeFixture", evidence.Violation.Owner);
+        Assert.Equal(EndpointLifetimeViolationCategory.RequestType, evidence.Violation.Category);
+        Assert.Equal("Elsa.OpenApi.LifetimeFixture", evidence.Violation.Group);
     }
 
     [Fact]

@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
+using NativeEndpoints;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;

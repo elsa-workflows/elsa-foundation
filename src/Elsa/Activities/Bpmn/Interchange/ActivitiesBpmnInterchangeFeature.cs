@@ -11,6 +11,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange;
 
@@ -26,6 +27,7 @@ public class ActivitiesBpmnInterchangeFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddSingleton<IBpmnDocumentImporter, BpmnDocumentImporter>();
         services.AddSingleton<IBpmnDocumentExporter, BpmnDocumentExporter>();
         services.AddDynamicEndpointApiExplorerRefresh();

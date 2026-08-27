@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api;
@@ -178,7 +179,7 @@ public sealed class PublishingMinimalApiBindingTests
     [Fact]
     public void Every_body_shape_has_a_declared_json_request_contract_and_bodyless_route_has_none()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new BindingEndpointRouteBuilder(provider);
         // This deliberately inspects the public mapper rather than the old FastEndpoints endpoint classes.
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);

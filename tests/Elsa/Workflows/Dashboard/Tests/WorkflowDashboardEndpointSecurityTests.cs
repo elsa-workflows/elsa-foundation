@@ -30,7 +30,7 @@ public sealed class WorkflowDashboardEndpointSecurityTests
 
     private static RouteEndpoint GetEndpoint(string route)
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         WorkflowsDashboardApi.MapWorkflowsDashboardApi(routes);
         var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()

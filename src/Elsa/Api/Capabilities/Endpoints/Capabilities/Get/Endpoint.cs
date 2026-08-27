@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities.Authorization;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using NativeEndpoints;
 
 namespace Elsa.Api.Capabilities.Endpoints.Capabilities.Get;
 

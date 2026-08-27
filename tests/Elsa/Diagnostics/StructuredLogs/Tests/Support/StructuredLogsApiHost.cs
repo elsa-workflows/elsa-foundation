@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Collections.Concurrent;
 using System.Security.Claims;
 using Elsa.Api.Compatibility.Testing.Http;
@@ -126,6 +127,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
                 webHost.UseSetting(WebHostDefaults.EnvironmentKey, Environments.Development);
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddLogging(logging => logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Warning));
                     services.AddRouting();
                     services.AddAuthentication(SchemeName)

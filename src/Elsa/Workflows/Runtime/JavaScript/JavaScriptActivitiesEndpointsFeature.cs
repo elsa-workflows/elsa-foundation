@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -20,8 +21,11 @@ namespace Elsa.Workflows.Runtime.JavaScript;
 )]
 public sealed class JavaScriptActivitiesEndpointsFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) =>
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddElsaEndpoints();
         services.AddPermissionContributor<JavaScriptExecutionPermissionContributor>();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         JavaScriptExecutionApi.MapJavaScriptExecutionApi(endpoints);

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Security.Claims;
 using CShells.AspNetCore.Features;
 using Elsa.Api.Compatibility.Testing.Endpoints;
@@ -58,6 +59,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddLogging();
                     services.AddRouting();
                     services.AddAuthentication(CanaryAuthenticationHandler.SchemeName)

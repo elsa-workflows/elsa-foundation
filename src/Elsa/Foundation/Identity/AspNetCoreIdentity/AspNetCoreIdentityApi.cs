@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
@@ -31,7 +31,7 @@ public static class AspNetCoreIdentityApi
         // The published operation ids predate the naming scheme, the tag is the literal "Identity",
         // and the sign-in flow owns an HTML page, dual JSON/form binding, antiforgery, and
         // content-negotiated redirects — so both operations stay on the group's raw seam.
-        var api = endpoints.MapModuleEndpoints(owner, AspNetCoreIdentityJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(owner, AspNetCoreIdentityJsonContext.Default, tag: "Identity");
 
         api.MapUnboundOperation("GET", "/" + AspNetCoreIdentityDefaults.LoginRoute, "LoginPage",
                 typeof(string), StatusCodes.Status200OK, null, HandleLoginPageAsync,

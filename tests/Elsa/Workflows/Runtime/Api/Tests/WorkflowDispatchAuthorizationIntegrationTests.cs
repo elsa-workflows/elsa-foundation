@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -185,6 +186,8 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
             var tenantADispatch = await SeedEligibleFailureAsync(atomicStore, rawDispatchStore, tenantAPending);
 
             var builder = WebApplication.CreateBuilder();
+
+            builder.Services.AddElsaEndpoints();
             builder.WebHost.UseTestServer();
             builder.Services.AddSingleton(state);
             builder.Services.AddAuthentication(TestAuthenticationHandler.SchemeName)

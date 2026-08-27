@@ -2,6 +2,7 @@ using Elsa.Activities.Bpmn.Interchange.Contracts;
 using Elsa.Activities.Bpmn.Interchange.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Bpmn.Interchange.Endpoints.Documents.Export;
 

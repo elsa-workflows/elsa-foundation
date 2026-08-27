@@ -7,6 +7,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -20,6 +21,7 @@ public sealed class OpenTelemetryMappedOtlpAuthenticationTests
     {
         var feature = new OpenTelemetryFeature { ApiKey = "secret", AllowUnauthenticatedLoopback = true };
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddElsaEndpoints();
         builder.WebHost.UseTestServer();
         builder.Services.AddRouting();
         builder.Services.AddSingleton<IOpenTelemetryIngestor, RecordingIngestor>();
@@ -74,6 +76,7 @@ public sealed class OpenTelemetryMappedOtlpAuthenticationTests
 
         var noApiKeyFeature = new OpenTelemetryFeature { AllowUnauthenticatedLoopback = true };
         var loopbackBuilder = WebApplication.CreateBuilder();
+        loopbackBuilder.Services.AddElsaEndpoints();
         loopbackBuilder.WebHost.UseTestServer();
         loopbackBuilder.Services.AddRouting();
         loopbackBuilder.Services.AddSingleton<IOpenTelemetryIngestor, RecordingIngestor>();

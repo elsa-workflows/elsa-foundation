@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Workflows.Design.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -10,7 +11,7 @@ internal static class WorkflowDesignEndpointTestSupport
 {
     public static RouteEndpoint[] MapEndpoints()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
         return routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

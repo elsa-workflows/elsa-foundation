@@ -13,6 +13,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
 using Microsoft.OpenApi;
+using NativeEndpoints;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -74,7 +75,7 @@ internal sealed record OpenApiCandidateRejectionEvidence(
     bool PreviousDocumentedAfter,
     bool CandidateNeverDocumented,
     bool PreviousCallableAfter,
-    UnsafeOpenApiMetadataViolation Violation);
+    UnsafeEndpointMetadataViolation Violation);
 
 internal sealed record OpenApiAcceptedReplacementEvidence(
     bool PreviousCompleteBefore,
@@ -279,7 +280,7 @@ internal static class OpenApiLifetimeFixture
             after.Paths?.ContainsKey("/generation-one") == true,
             after.Paths?.ContainsKey("/generation-two") != true,
             true,
-            exception.Violations.First(violation => violation.Category == OpenApiLifetimeViolationCategory.RequestType));
+            exception.Violations.First(violation => violation.Category == EndpointLifetimeViolationCategory.RequestType));
 
         source.Replace([]);
         loadContext.Unload();
@@ -372,7 +373,7 @@ internal static class OpenApiLifetimeFixture
     {
         var builder = BuildEndpointBuilder(requestDelegate, requestType, responseType, operationId, route);
         if (validateLifetime)
-            OpenApiLifetimeValidator.ValidateAndMark(builder);
+            EndpointLifetimeValidator.ValidateAndMark(builder);
         return (RouteEndpoint)builder.Build();
     }
 
@@ -388,6 +389,9 @@ internal static class OpenApiLifetimeFixture
             DisplayName = operationId
         };
         builder.Metadata.Add(EndpointOwnershipMetadata.Module("Elsa.OpenApi.LifetimeFixture"));
+        // The lifetime validator reports the group, which Elsa's operation convention sets from the
+        // owner id. The fixture builds its metadata by hand, so it states the same pairing itself.
+        builder.Metadata.Add(new EndpointGroupMetadata("Elsa.OpenApi.LifetimeFixture"));
         builder.Metadata.Add(new HttpMethodMetadata([HttpMethods.Post]));
         builder.Metadata.Add(typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))!);
         builder.Metadata.Add(new EndpointNameMetadata(operationId));
@@ -396,13 +400,13 @@ internal static class OpenApiLifetimeFixture
         return builder;
     }
 
-    private static UnsafeOpenApiMetadataException AssertRejected(EndpointBuilder builder)
+    private static UnsafeEndpointMetadataException AssertRejected(EndpointBuilder builder)
     {
         try
         {
-            OpenApiLifetimeValidator.ValidateAndMark(builder);
+            EndpointLifetimeValidator.ValidateAndMark(builder);
         }
-        catch (UnsafeOpenApiMetadataException exception)
+        catch (UnsafeEndpointMetadataException exception)
         {
             return exception;
         }

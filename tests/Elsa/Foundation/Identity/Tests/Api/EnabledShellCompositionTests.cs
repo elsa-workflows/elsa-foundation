@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
@@ -54,6 +55,7 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddLogging();
                     services.AddRouting();
                     services.AddAuthorization();

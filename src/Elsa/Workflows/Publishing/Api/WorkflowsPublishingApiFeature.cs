@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -48,6 +49,7 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         // Transport authorization (HTTP-bound). Authorization is a transport concern; the engine is
         // authorization-free, so its context + the activity-draft services that consume it live here.
         services.AddHttpContextAccessor();

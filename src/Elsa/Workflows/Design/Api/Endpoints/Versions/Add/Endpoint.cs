@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
 

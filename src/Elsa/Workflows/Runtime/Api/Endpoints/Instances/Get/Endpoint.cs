@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Instances.Get;
 

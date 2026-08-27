@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -23,7 +23,7 @@ namespace Elsa.Architecture.Tests;
 /// <see cref="EndpointRequestBinder"/> was invisible to every existing suite: collectible tests
 /// never bind, and binding tests are never collectible. This fixture compiles a contract record and
 /// an <c>ApiEndpoint&lt;T&gt;</c> subclass into a collectible context, maps them through
-/// <c>MapModuleEndpoints(...).MapEndpointsFrom(...)</c>, serves one request so
+/// <c>MapEndpointGroup(...).MapEndpointsFrom(...)</c>, serves one request so
 /// <c>BindAsync&lt;T&gt;</c> executes and populates the binder cache, and then requires the context
 /// to collect. The endpoint shape is deliberately a bodyless GET with no Accepts: it passes the
 /// OpenAPI lifetime validator cleanly, so a failure here points squarely at framework internals.
@@ -54,9 +54,9 @@ public sealed class BinderCacheCollectibilityTests
         var assembly = loadContext.LoadFromStream(stream);
         var contractType = assembly.GetType("CollectibleFixture.ProbeRequest", throwOnError: true)!;
 
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new ProbeEndpointRouteBuilder(provider);
-        routes.MapModuleEndpoints("Elsa.BinderProbe", BinderProbeJsonContext.Default)
+        routes.MapEndpointGroup("Elsa.BinderProbe", BinderProbeJsonContext.Default)
             .MapEndpointsFrom(assembly);
         var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().Single();
 
@@ -76,7 +76,7 @@ public sealed class BinderCacheCollectibilityTests
     private static byte[] CompileFixture()
     {
         const string source = """
-            using Elsa.Api.AspNetCore;
+            using NativeEndpoints;
             using System.Threading;
             using System.Threading.Tasks;
 

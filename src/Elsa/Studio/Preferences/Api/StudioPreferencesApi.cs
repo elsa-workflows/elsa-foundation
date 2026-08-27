@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Studio.Preferences.Api.Models;
 using Elsa.Studio.Preferences.Api.Services;
@@ -33,7 +33,7 @@ public static class StudioPreferencesApi
         // Both operations keep their own reads, writes, precondition handling, ETag headers, and
         // problem shapes — and the published contract lets unexpected failures reach the host's
         // exception pipeline — so the surface stays on the group's raw seam.
-        var api = endpoints.MapModuleEndpoints(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(owner, StudioPreferencesJsonContext.Default, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", PreferencesRoute, "Get",
                 typeof(StudioPreferenceDocument), StatusCodes.Status200OK, null, HandleGetRequestAsync,

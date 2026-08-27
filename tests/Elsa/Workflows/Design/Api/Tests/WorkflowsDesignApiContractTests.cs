@@ -49,7 +49,7 @@ public sealed class WorkflowsDesignApiContractTests
     [Fact]
     public void Mapper_registers_exactly_the_27_owned_operations_with_stable_metadata()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
 
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
@@ -71,7 +71,7 @@ public sealed class WorkflowsDesignApiContractTests
     [Fact]
     public void Permission_metadata_contains_only_the_catalog_action()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 
@@ -89,7 +89,7 @@ public sealed class WorkflowsDesignApiContractTests
     [Fact]
     public void Every_owned_route_declares_exactly_one_catalog_permission()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 
@@ -125,7 +125,7 @@ public sealed class WorkflowsDesignApiContractTests
     [Fact]
     public void Endpoint_metadata_uses_stable_owner_local_names_tags_and_consumed_security()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 

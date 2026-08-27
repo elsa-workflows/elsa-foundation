@@ -53,7 +53,7 @@ public sealed class PublishingApiContractTests
     [Fact]
     public void Publishing_mapper_exposes_exactly_the_frozen_23_operation_manifest()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
 
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
@@ -82,7 +82,7 @@ public sealed class PublishingApiContractTests
     [Fact]
     public void Publishing_mapper_publishes_stable_names_tags_permissions_and_wire_types()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 

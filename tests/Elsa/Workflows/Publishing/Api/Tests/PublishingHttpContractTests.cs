@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Api.AspNetCore;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Handlers;
@@ -36,7 +37,7 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public void Activity_preflight_publish_and_receipt_routes_match_the_reviewed_contract()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new PublishingTestEndpointRouteBuilder(provider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
@@ -334,7 +335,7 @@ public sealed class PublishingHttpContractTests
     [Fact]
     public async Task Preflight_route_request_handler_and_response_match_the_reviewed_contract()
     {
-        using var provider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new PublishingTestEndpointRouteBuilder(provider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
         AssertRoute(routes, "RuntimeRequirementPreflightEndpoint", "POST", "/publishing/preflight");

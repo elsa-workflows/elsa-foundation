@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using NativeEndpoints;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit;

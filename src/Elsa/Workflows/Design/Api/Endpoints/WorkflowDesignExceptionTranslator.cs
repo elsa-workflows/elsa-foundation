@@ -2,6 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints;
 

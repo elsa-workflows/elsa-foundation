@@ -102,15 +102,17 @@ misbinding.
 
 ### Externalization
 
-The `Elsa.Api.AspNetCore` and `Elsa.Api.Endpoints` assemblies are the pre-extraction staging of a
+The `Elsa.Api.AspNetCore` and `Elsa.Api.Endpoints` assemblies were the pre-extraction staging of a
 library intended to ship as an external MIT-licensed project that Elsa consumes as a package. They
-already carry zero Elsa domain dependencies and zero NuGet package references, holding only
+carried zero Elsa domain dependencies and zero NuGet package references, holding only
 `FrameworkReference Microsoft.AspNetCore.App`.
 
-When the criteria below are met, Elsa replaces those project references with a `PackageReference`.
-**That swap is a packaging change, not an architectural one, and does not require a further ADR.**
-The architectural commitment is made here, in the constraints above, and those constraints bind the
-external library exactly as they bind the in-tree assemblies.
+**This has happened.** The library ships as [NativeEndpoints](https://www.nuget.org/packages/NativeEndpoints)
+under MIT. `Elsa.Api.Endpoints` is deleted; `Elsa.Api.AspNetCore` keeps its name and every inbound
+reference, sheds the framework, and holds only what the section below says stays Elsa-owned. As
+stated when this ADR was written, that swap was a packaging change rather than an architectural one
+and needed no further ADR: the constraints above bind the external library exactly as they bound the
+in-tree assemblies, and the endpoint manifest baseline is byte-identical across the change.
 
 ### What stays with Elsa
 

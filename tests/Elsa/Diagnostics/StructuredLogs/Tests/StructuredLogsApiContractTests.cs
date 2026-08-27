@@ -185,7 +185,7 @@ public sealed class StructuredLogsApiContractTests
             typeof(IWebShellFeature).IsAssignableFrom(typeof(StructuredLogsFeature)),
             "Expected StructuredLogsFeature to implement CShells IWebShellFeature before mapping replacement routes.");
 
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         var feature = new StructuredLogsFeature();
         var mapEndpoints = typeof(StructuredLogsFeature).GetMethod(

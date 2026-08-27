@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using CShells.AspNetCore.Features;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
@@ -19,8 +20,11 @@ namespace Elsa.Expressions.JavaScript.Rendering;
    )]
 public sealed class JavaScriptRenderingEndpointsFeature : IWebShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) =>
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddElsaEndpoints();
         services.AddPermissionContributor<JavaScriptRenderingPermissionContributor>();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         JavaScriptRenderingApi.MapJavaScriptRenderingApi(endpoints);

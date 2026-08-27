@@ -1,4 +1,5 @@
-using Elsa.Api.Endpoints;
+using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Authorization;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
@@ -21,7 +22,7 @@ public static class ExecutionEvidenceApi
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
                               ?? typeof(ExecutionEvidenceApi).Assembly.GetName().Name!;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             ExecutionEvidencePermissionKeys.OwnerId,
             ExecutionEvidenceJsonContext.Default,
             jsonContentType: "application/json; charset=utf-8",

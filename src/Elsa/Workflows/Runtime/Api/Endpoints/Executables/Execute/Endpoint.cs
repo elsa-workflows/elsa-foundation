@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 using System.Globalization;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.Executables.Execute;

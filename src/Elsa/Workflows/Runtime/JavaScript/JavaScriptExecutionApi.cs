@@ -1,4 +1,5 @@
-using Elsa.Api.Endpoints;
+using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -24,7 +25,7 @@ public static class JavaScriptExecutionApi
         // The published document tags this surface with the host application name, resolved at
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             JavaScriptExecutionJsonContext.Default,
             jsonContentType: "application/json",

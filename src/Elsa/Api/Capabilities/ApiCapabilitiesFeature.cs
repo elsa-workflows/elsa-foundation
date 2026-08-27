@@ -8,6 +8,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Api.Capabilities;
 
@@ -21,6 +22,7 @@ public sealed class ApiCapabilitiesFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddApiCapabilities();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<ApiCapabilitiesPermissionContributor>();

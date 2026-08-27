@@ -24,7 +24,7 @@ public sealed class MinimalIdentityEndpointMetadataTests
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();
-                webHost.ConfigureServices(services => services.AddRouting());
+                webHost.ConfigureServices(services => services.AddRouting().AddElsaEndpoints());
                 webHost.Configure(app =>
                 {
                     app.UseRouting();

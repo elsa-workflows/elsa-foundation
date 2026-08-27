@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Versions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Promote;
 

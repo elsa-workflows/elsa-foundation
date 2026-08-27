@@ -1,5 +1,6 @@
 using CShells.Features;
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Routing;
@@ -18,6 +19,7 @@ public sealed class AttentionApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddAttentionCore();
         services.AddPermissionContributor<AttentionPermissionContributor>();
     }

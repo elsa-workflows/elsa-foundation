@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Services;
+using NativeEndpoints;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.SubmitSchema;

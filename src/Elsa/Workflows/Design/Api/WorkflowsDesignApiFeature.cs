@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 using Elsa.Workflows.Design.Api.Endpoints;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -37,6 +38,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         var assembly = GetType().Assembly;
 
         // Endpoint failure translation and error-shape writing, keyed by the owner so a host

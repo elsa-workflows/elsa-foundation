@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NativeEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -54,7 +55,7 @@ public sealed class Wave4AgentCollectibilityTests
         // collectible and the fail-closed lifetime boundary would reject the mapping outright.
         // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
         // document survives the cycle, and the weak-reference assertions below prove the release.
-        descriptors.SuppressOpenApiLifetimeEnforcement();
+        descriptors.SuppressEndpointLifetimeEnforcement();
         descriptors.AddAuthentication(Wave4AgentAuthenticationHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, Wave4AgentAuthenticationHandler>(
                 Wave4AgentAuthenticationHandler.SchemeName, _ => { });

@@ -25,7 +25,7 @@ public sealed class OpenTelemetryApiMappingTests
         services.AddRouting();
         services.AddFoundationIdentityAbstractions();
         new OpenTelemetryFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.AddElsaEndpoints().BuildServiceProvider();
         var builder = new TestRouteBuilder(provider);
 
         new OpenTelemetryFeature().MapEndpoints(builder, null);
@@ -60,7 +60,7 @@ public sealed class OpenTelemetryApiMappingTests
         services.AddRouting();
         services.AddFoundationIdentityAbstractions();
         new OpenTelemetryFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.AddElsaEndpoints().BuildServiceProvider();
         var builder = new TestRouteBuilder(provider);
         builder.MapOpenTelemetryOtlpReceiver();
         var routes = builder.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

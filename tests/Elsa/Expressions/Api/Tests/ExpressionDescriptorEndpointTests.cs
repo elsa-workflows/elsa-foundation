@@ -104,7 +104,7 @@ public sealed class ExpressionDescriptorEndpointTests
 
     private static RouteEndpoint FindEndpoint(string route)
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ExpressionsApi.MapExpressionsApi(routes);
         var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()

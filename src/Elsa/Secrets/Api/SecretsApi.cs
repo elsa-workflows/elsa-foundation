@@ -1,8 +1,9 @@
+using Elsa.Api.AspNetCore;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Secrets.Api.Requests;
 using Elsa.Secrets.Core.Contracts;
@@ -34,7 +35,7 @@ public static class SecretsApi
         // surface stays on the group's raw seam; the operation names restore the historical
         // ElsaSecretsApiEndpointsSecrets* identities the owner published before the Minimal API
         // rewrite dropped endpoint names.
-        var api = endpoints.MapModuleEndpoints(OwnerId, SecretsJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(OwnerId, SecretsJsonContext.Default, jsonContentType: "application/json");
 
         api.MapUnboundOperation("GET", SecretsRoute, "SecretsList",
                 typeof(ListSecretsResponse), StatusCodes.Status200OK, null, HandleListAsync, containFailures: false)

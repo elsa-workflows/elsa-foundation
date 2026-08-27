@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Api.Services;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions.Picker;
 

@@ -1,3 +1,4 @@
+using NativeEndpoints;
 using System.Collections.Frozen;
 using System.Security.Claims;
 using Elsa.Foundation.Identity.Abstractions.Iam;
@@ -472,7 +473,7 @@ public sealed class PermissionPolicyNameFormatter : IPermissionPolicyNameFormatt
     }
 }
 
-public sealed class RequirePermissionAttribute : AuthorizeAttribute, Elsa.Api.AspNetCore.IEndpointConventionAttribute
+public sealed class RequirePermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
 {
     public RequirePermissionAttribute(string permission)
     {
@@ -496,7 +497,7 @@ public sealed class RequirePermissionAttribute : AuthorizeAttribute, Elsa.Api.As
 /// permission that individually satisfies the requirement, and the applied convention carries the
 /// full any-mode policy plus the security-disposition metadata the endpoint inventory asserts on.
 /// </summary>
-public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, Elsa.Api.AspNetCore.IEndpointConventionAttribute
+public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
 {
     public RequireAnyPermissionAttribute(params string[] permissions)
     {

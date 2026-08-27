@@ -8,4 +8,15 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!--
+    The endpoint-class framework this project used to carry alongside Elsa.Api.Endpoints now ships as
+    NativeEndpoints. What stays here is Elsa's own vocabulary — endpoint ownership, security
+    disposition, authoring model, host-credential enforcement — attached to the package's pipeline
+    through its operation-convention seam. Consumers that only speak that vocabulary keep referencing
+    this project and never see the package; consumers that map endpoints get it transitively.
+  -->
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
+  </ItemGroup>
+
 </Project>

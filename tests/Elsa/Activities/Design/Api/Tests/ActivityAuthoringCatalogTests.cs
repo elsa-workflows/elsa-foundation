@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -135,7 +136,7 @@ public sealed class ActivityAuthoringCatalogTests
 
     private static RouteEndpoint FindCatalogEndpoint()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ActivitiesDesignApi.MapActivitiesDesignApi(routes);
         return Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>(), endpoint =>

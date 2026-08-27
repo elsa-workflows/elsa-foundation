@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
 
