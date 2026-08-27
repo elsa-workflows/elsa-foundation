@@ -9,6 +9,7 @@ using Elsa.Secrets.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Secrets.Api.Features;
 
@@ -25,6 +26,7 @@ public class SecretsApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddSecrets();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<SecretsPermissionContributor>();

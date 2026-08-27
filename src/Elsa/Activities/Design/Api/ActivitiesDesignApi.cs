@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Activities.Design.Api;
@@ -22,7 +22,7 @@ public static class ActivitiesDesignApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             ActivitiesDesignJsonOptions.WireContext,
             jsonContentType: "application/json");

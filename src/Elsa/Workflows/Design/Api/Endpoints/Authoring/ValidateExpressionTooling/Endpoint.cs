@@ -3,6 +3,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.ValidateExpressionTooling;
 

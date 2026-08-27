@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -35,6 +36,7 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                 webHost.ConfigureServices(services =>
                 {
                     services.AddRouting();
+                    services.AddElsaEndpoints();
                     services.AddAuthentication(HeaderAuthenticationHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>(HeaderAuthenticationHandler.SchemeName, _ => { });
                     services.AddAuthorization(options =>

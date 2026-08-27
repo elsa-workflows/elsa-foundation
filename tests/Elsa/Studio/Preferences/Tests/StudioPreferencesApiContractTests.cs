@@ -96,7 +96,7 @@ public sealed class StudioPreferencesApiContractTests
 
         using var services = new ServiceCollection()
             .AddRouting()
-            .BuildServiceProvider();
+            .AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         var feature = new StudioPreferencesApiFeature();
         var mapEndpoints = typeof(StudioPreferencesApiFeature).GetMethod(

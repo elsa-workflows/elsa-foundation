@@ -6,6 +6,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Agent.Api;
 
@@ -20,6 +21,7 @@ public class FoundationAgentApiFeature : IWebShellFeature
 {
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddFoundationAgentApi();
         services.AddDynamicEndpointApiExplorerRefresh();
     }

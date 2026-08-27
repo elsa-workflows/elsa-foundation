@@ -10,6 +10,7 @@ using Elsa.Expressions.Api.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Expressions.Api;
 
@@ -25,6 +26,7 @@ public sealed class ExpressionsApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddRequestHandlersFrom(GetType().Assembly);
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddApiCapability(ExpressionsApiCapabilities.StaticDeclaration);

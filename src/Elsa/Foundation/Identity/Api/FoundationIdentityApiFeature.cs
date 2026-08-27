@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
@@ -20,6 +21,7 @@ public class FoundationIdentityApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddFoundationIdentityApi();
     }
 

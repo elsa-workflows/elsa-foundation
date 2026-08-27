@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Structures.List;
 

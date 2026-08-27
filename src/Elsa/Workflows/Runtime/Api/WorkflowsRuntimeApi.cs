@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Routing;
 
 namespace Elsa.Workflows.Runtime.Api;
@@ -21,7 +21,7 @@ public static class WorkflowsRuntimeApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             WorkflowsRuntimeJsonContext.Default,
             jsonContentType: "application/json; charset=utf-8");

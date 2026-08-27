@@ -9,6 +9,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa.Modularity.Api;
 
@@ -26,6 +27,7 @@ public class ModularityApiFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddModularityApi(options =>
         {
             options.ShellsJsonPath = ShellsJsonPath;

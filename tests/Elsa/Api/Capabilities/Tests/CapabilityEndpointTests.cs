@@ -18,7 +18,7 @@ public sealed class CapabilityEndpointTests
     [Fact]
     public void Endpoint_is_canonical_authenticated_and_action_scoped()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ApiCapabilitiesApi.MapApiCapabilitiesApi(routes);
         var endpoint = Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>());
@@ -58,7 +58,7 @@ public sealed class CapabilityEndpointTests
         var services = new ServiceCollection();
         services.AddApiCapabilities();
         services.AddApiCapability(declaration);
-        return services.BuildServiceProvider();
+        return services.AddElsaEndpoints().BuildServiceProvider();
     }
 
     private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder

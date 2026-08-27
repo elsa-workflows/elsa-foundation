@@ -1,9 +1,12 @@
 # Extension points — API endpoint layer
 
-`Elsa.Api.AspNetCore` and `Elsa.Api.Endpoints` carry the shared endpoint conventions every
-first-party REST owner composes: the endpoint-class bases, the module-local mapper, the request
-binder, and the module-owned failure pipeline. They hold zero Elsa domain dependencies; everything
-below is attached by the owning module through standard DI or class-level attributes.
+The endpoint-class bases, the module-local mapper, the request binder, and the module-owned failure
+pipeline ship in the [NativeEndpoints](https://www.nuget.org/packages/NativeEndpoints) package.
+`Elsa.Api.AspNetCore` carries what stays Elsa's: endpoint ownership, security disposition, authoring
+model, and host-credential enforcement, plus the operation convention that attaches them (see
+`ElsaEndpointConventions`). Everything below is attached by the owning module through standard DI or
+class-level attributes; the contracts named here are the package's, and every owner reaches them by
+calling `services.AddElsaEndpoints()` in its feature.
 
 ## Failure pipeline contracts
 

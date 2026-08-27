@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.PromotionPreflight;
 

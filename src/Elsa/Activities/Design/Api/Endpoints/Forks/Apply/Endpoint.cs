@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Forks.Apply;
 

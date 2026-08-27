@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Authorization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -68,6 +69,7 @@ public class OpenTelemetryFeature : IWebShellFeature
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddOpenTelemetryDiagnosticsServices(ConfigureOptions);
         services.AddPermissionContributor<OpenTelemetryPermissionContributor>();
 

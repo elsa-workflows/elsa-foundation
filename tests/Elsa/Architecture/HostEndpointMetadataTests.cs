@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Xml.Linq;
 using Xunit;
 

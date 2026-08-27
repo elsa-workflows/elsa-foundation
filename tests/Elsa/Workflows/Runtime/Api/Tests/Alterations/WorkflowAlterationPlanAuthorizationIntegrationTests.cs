@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -840,6 +841,7 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         public static async Task<AlterationApiHost> StartAsync(Action<IServiceCollection>? configureServices = null)
         {
             var builder = WebApplication.CreateBuilder();
+            builder.Services.AddElsaEndpoints();
             builder.WebHost.UseTestServer();
             builder.Services.AddAuthentication(TestAuthenticationHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(TestAuthenticationHandler.SchemeName, _ => { });

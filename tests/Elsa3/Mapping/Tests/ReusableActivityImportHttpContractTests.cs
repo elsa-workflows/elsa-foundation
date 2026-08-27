@@ -14,6 +14,7 @@ public sealed class ReusableActivityImportHttpContractTests
     public void Routes_are_exact_and_permission_guarded()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddElsaEndpoints();
         builder.Services.AddRouting();
         using var app = builder.Build();
 

@@ -17,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
     <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
@@ -30,6 +29,10 @@
     <EmbeddedResource Remove="Persistence/**/*" />
     <None Remove="Core/**/*" />
     <None Remove="Persistence/**/*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,6 @@
 using Elsa.Api.AspNetCore;
 using Microsoft.AspNetCore.Builder;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 

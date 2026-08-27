@@ -465,6 +465,7 @@ public sealed class DomainManagementApiCompositionTests
         public static async Task<CustomManagementHost> StartAsync(bool includeExpressions, bool allowAnonymous = true)
         {
             var builder = WebApplication.CreateBuilder();
+            builder.Services.AddElsaEndpoints();
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
 

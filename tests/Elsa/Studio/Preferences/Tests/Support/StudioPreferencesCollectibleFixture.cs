@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -238,8 +239,8 @@ public static class StudioPreferencesCollectibleFixture
         // collectible and the fail-closed lifetime boundary would reject the mapping outright.
         // This probe is the regime the explicit suppression exists for: the weak-reference
         // assertions prove the release honestly.
-        services.SuppressOpenApiLifetimeEnforcement();
-        return services.BuildServiceProvider();
+        services.SuppressEndpointLifetimeEnforcement();
+        return services.AddElsaEndpoints().BuildServiceProvider();
     }
 
     private static IServiceProvider BuildProductionServiceProvider(Type endpointType)

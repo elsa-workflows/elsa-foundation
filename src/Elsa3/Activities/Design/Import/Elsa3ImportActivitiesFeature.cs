@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using NativeEndpoints;
 
 namespace Elsa3.Activities.Design.Import;
 
@@ -37,6 +38,7 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         foreach (var source in WorkflowCollectionSourceTypes)
         {
             var type = Type.GetType(source)

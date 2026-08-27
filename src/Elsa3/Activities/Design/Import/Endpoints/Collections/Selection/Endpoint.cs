@@ -2,6 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using NativeEndpoints;
 
 namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Selection;
 

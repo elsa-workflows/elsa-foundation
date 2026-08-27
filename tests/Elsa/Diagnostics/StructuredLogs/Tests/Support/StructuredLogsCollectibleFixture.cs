@@ -20,6 +20,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;

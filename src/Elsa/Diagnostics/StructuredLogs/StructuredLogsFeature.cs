@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.StructuredLogs.Capture;
 using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
@@ -47,6 +48,7 @@ public class StructuredLogsFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         var minimumLevel = Enum.TryParse<LogLevel>(MinimumLevel, ignoreCase: true, out var parsed)
             ? parsed
             : LogLevel.Information;

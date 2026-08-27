@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,7 +18,7 @@ public static class ModularityApi
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
                               ?? typeof(ModularityApi).Assembly.GetName().Name!;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             ModularityJsonContext.Default,
             jsonContentType: "application/json; charset=utf-8",

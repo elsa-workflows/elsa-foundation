@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.ExecutionEvidence.Authorization;
@@ -61,6 +62,7 @@ public sealed class WorkflowsExecutionEvidenceFeature : IWebShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddElsaEndpoints();
         services.AddExecutionEvidence(options =>
         {
             options.MaxRecordsPerWorkflow = MaxRecordsPerWorkflow;

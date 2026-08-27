@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Workflows.Design.Core.Models;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +19,7 @@ public static class BpmnInterchangeApi
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
                               ?? typeof(BpmnInterchangeApi).Assembly.GetName().Name!;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             BpmnInterchangeJsonContext.Default,
             jsonContentType: "application/json; charset=utf-8",

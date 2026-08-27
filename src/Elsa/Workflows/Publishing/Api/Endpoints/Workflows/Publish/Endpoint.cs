@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Microsoft.AspNetCore.Http;
+using NativeEndpoints;
 using PublishWorkflowCommand = Elsa.Workflows.Publishing.Core.Requests.PublishWorkflow;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Publish;

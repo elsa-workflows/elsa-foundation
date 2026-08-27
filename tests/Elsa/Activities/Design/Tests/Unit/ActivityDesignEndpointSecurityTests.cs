@@ -89,7 +89,7 @@ public sealed class ActivityDesignEndpointSecurityTests
 
     private static IReadOnlyList<RouteEndpoint> MapEndpoints()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ActivitiesDesignApi.MapActivitiesDesignApi(routes);
         return routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

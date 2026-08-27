@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -389,6 +390,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private static async Task<BehaviorHost> StartAsync(Func<object, object?> behavior)
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddElsaEndpoints();
         builder.WebHost.UseTestServer();
         builder.Services.AddAuthentication("RuntimeBehavior")
             .AddScheme<AuthenticationSchemeOptions, AllowAuthenticationHandler>("RuntimeBehavior", _ => { });

@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
+using NativeEndpoints;
 
 namespace Elsa.Modularity.Api.Endpoints.Features.Apply;
 

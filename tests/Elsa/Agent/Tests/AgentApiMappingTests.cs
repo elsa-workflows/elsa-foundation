@@ -15,7 +15,7 @@ public sealed class AgentApiMappingTests
     [Fact]
     public void Maps_exactly_eleven_named_operations()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
 
         AgentApi.MapAgentApi(app);
@@ -34,7 +34,7 @@ public sealed class AgentApiMappingTests
     [Fact]
     public void Every_route_declares_owner_minimal_authoring_and_exactly_one_permission_disposition()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
         AgentApi.MapAgentApi(app);
 

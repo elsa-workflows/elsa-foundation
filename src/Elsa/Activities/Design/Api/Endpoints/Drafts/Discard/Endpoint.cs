@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Handlers;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Drafts.Discard;
 

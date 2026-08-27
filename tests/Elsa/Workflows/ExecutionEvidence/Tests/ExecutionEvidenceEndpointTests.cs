@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -289,6 +290,7 @@ public sealed class ExecutionEvidenceEndpointTests(ExecutionEvidenceEndpointTest
         public async Task InitializeAsync()
         {
             var builder = WebApplication.CreateBuilder();
+            builder.Services.AddElsaEndpoints();
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
 

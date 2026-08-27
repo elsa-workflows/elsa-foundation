@@ -9,8 +9,12 @@
     <ProjectReference Include="..\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
-    <ProjectReference Include="..\..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
+    <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
 </Project>

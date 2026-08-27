@@ -133,7 +133,7 @@ public sealed class SecretsApiContractTests
     {
         Assert.True(typeof(IWebShellFeature).IsAssignableFrom(typeof(SecretsApiFeature)));
 
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         var feature = new SecretsApiFeature();
         var mapEndpoints = typeof(SecretsApiFeature).GetMethod(

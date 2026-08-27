@@ -1,5 +1,5 @@
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
@@ -34,7 +34,7 @@ public static class FoundationIdentityApi
         // The published operation ids predate the naming scheme, the tag is the literal "Identity",
         // the public entry points document no auth responses, and the flows own challenges,
         // sign-outs, and bare failure statuses — so the surface stays on the group's raw seam.
-        var api = endpoints.MapModuleEndpoints(owner, FoundationIdentityApiJsonContext.Default, tag: "Identity");
+        var api = endpoints.MapEndpointGroup(owner, FoundationIdentityApiJsonContext.Default, tag: "Identity");
 
         api.MapUnboundOperation("GET", Route("bootstrap"), "Bootstrap",
                 typeof(IdentityBootstrapResponse), StatusCodes.Status200OK, null, HandleBootstrapAsync,

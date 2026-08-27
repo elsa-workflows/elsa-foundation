@@ -4,45 +4,47 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using System.Reflection;
+using NativeEndpoints;
 
 namespace Elsa.Api.AspNetCore;
 
-/// <summary>Standard ASP.NET Core endpoint conventions for migration metadata.</summary>
-public static class EndpointConventionBuilderExtensions
+/// <summary>Elsa's endpoint metadata vocabulary, as standard ASP.NET Core endpoint conventions.</summary>
+/// <remarks>
+/// The endpoint pipeline itself is <see href="https://www.nuget.org/packages/NativeEndpoints">NativeEndpoints</see>.
+/// What stays here is what the package has no opinion about: which module owns an endpoint, how its
+/// access is dispositioned, which authoring model published it, and which host credential enforces
+/// it. Those are Elsa's inventory and governance concepts, they are read by the endpoint manifest and
+/// the security tests, and they are attached through the package's ordinary convention seams.
+/// </remarks>
+public static class ElsaEndpointConventions
 {
     private const string JsonContentType = "application/json";
 
-    private static readonly MethodInfo ApiExplorerDescriptionMethod =
-        typeof(RequestDelegate).GetMethod(nameof(RequestDelegate.Invoke))
-        ?? throw new InvalidOperationException("RequestDelegate.Invoke metadata is unavailable.");
-
     public static TBuilder WithOwner<TBuilder>(this TBuilder builder, string owner)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, EndpointOwnershipMetadata.Module(owner));
+        builder.AddEndpointMetadata(EndpointOwnershipMetadata.Module(owner));
 
     public static TBuilder WithHostOwner<TBuilder>(this TBuilder builder, string owner)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, EndpointOwnershipMetadata.Host(owner));
+        builder.AddEndpointMetadata(EndpointOwnershipMetadata.Host(owner));
 
     public static TBuilder WithDynamicShellOwner<TBuilder>(this TBuilder builder, string owner, string shellId, int generation)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, EndpointOwnershipMetadata.DynamicShell(owner, shellId, generation));
+        builder.AddEndpointMetadata(EndpointOwnershipMetadata.DynamicShell(owner, shellId, generation));
 
     public static TBuilder AllowPublic<TBuilder>(this TBuilder builder, string category, string reason)
         where TBuilder : IEndpointConventionBuilder
     {
-        AddMetadata(builder, EndpointSecurityDispositionMetadata.Public(category, reason));
-        return AddMetadata(builder, new AllowAnonymousAttribute());
+        builder.AddEndpointMetadata(EndpointSecurityDispositionMetadata.Public(category, reason));
+        return builder.AddEndpointMetadata(new AllowAnonymousAttribute());
     }
 
     public static TBuilder RequireHostCredential<TBuilder>(this TBuilder builder, string credential, string owner)
         where TBuilder : IEndpointConventionBuilder
     {
-        AddMetadata(builder, EndpointSecurityDispositionMetadata.HostCredential(credential, owner));
-        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
-        return AddMetadata(builder, new AuthorizeAttribute { AuthenticationSchemes = credential });
+        builder.AddEndpointMetadata(EndpointSecurityDispositionMetadata.HostCredential(credential, owner));
+        builder.AddEndpointMetadata(new EndpointHostCredentialEnforcementMetadata(credential, owner));
+        return builder.AddEndpointMetadata(new AuthorizeAttribute { AuthenticationSchemes = credential });
     }
 
     /// <summary>
@@ -51,22 +53,63 @@ public static class EndpointConventionBuilderExtensions
     /// </summary>
     public static TBuilder WithHostCredentialEnforcement<TBuilder>(this TBuilder builder, string credential, string owner)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, new EndpointHostCredentialEnforcementMetadata(credential, owner));
+        builder.AddEndpointMetadata(new EndpointHostCredentialEnforcementMetadata(credential, owner));
 
     public static TBuilder RequireNamedPolicy<TBuilder>(this TBuilder builder, string policy, string owner)
         where TBuilder : IEndpointConventionBuilder
     {
-        AddMetadata(builder, EndpointSecurityDispositionMetadata.NamedPolicy(policy, owner));
-        return AddMetadata(builder, new AuthorizeAttribute(policy));
+        builder.AddEndpointMetadata(EndpointSecurityDispositionMetadata.NamedPolicy(policy, owner));
+        return builder.AddEndpointMetadata(new AuthorizeAttribute(policy));
     }
 
     public static TBuilder WithSecurityDisposition<TBuilder>(this TBuilder builder, EndpointSecurityDispositionMetadata disposition)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, disposition);
+        builder.AddEndpointMetadata(disposition);
 
     public static TBuilder WithAuthoringModel<TBuilder>(this TBuilder builder, string model)
         where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, new EndpointAuthoringMetadata(model));
+        builder.AddEndpointMetadata(new EndpointAuthoringMetadata(model));
+
+    /// <summary>
+    /// The operation convention every Elsa endpoint group installs, replacing the package's default.
+    /// </summary>
+    /// <remarks>
+    /// Two things about Elsa's published documents are deliberate rather than incidental, and both
+    /// are decided here rather than inherited:
+    /// <list type="bullet">
+    /// <item>
+    /// <description>
+    /// Endpoint names follow <c>{Owner}Endpoints{Operation}</c> with the dots stripped, not the
+    /// package's <c>{group}_{operation}</c>. Clients generate from those identifiers, so the scheme
+    /// is frozen; an operation whose published id predates the scheme pins it outright with
+    /// <c>options.Name</c>, which arrives here as <see cref="EndpointOperationContext.Name"/>.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// The 401/403 pair is documented unconditionally. The package infers it from the authorization
+    /// metadata an endpoint actually carries, which is the better default and the wrong answer here:
+    /// inferring would drop the pair from every <c>AllowPublic</c> endpoint and move documents that
+    /// are already published.
+    /// </description>
+    /// </item>
+    /// </list>
+    /// </remarks>
+    public static readonly EndpointOperationConvention ElsaModuleOperation = (builder, context) =>
+        builder
+            // The package attaches this itself only from its own default convention, and the lifetime
+            // validator names the group from it when it reports a violation.
+            .WithEndpointGroup(context.GroupName)
+            .WithModuleOperation(
+                context.Name ?? $"{context.GroupName.Replace(".", string.Empty, StringComparison.Ordinal)}Endpoints{context.Operation}",
+                context.GroupName,
+                context.ResponseType,
+                context.RequestType,
+                context.Accepts,
+                context.DocumentedStatus,
+                context.Tag,
+                context.DocumentAuthResponses ?? true,
+                context.SuccessContentType);
 
     /// <summary>
     /// Applies the endpoint metadata every module REST operation carries: its name and tag, its
@@ -74,14 +117,9 @@ public static class EndpointConventionBuilderExtensions
     /// request body, the API Explorer description method, and the unload-safety validation.
     /// </summary>
     /// <remarks>
-    /// This is ordinary ASP.NET Core metadata applied through the standard convention builder, not
-    /// an endpoint abstraction: routing, binding, serialization, results, and policy execution are
-    /// untouched, and the handler is still mapped with <c>MapGet</c>, <c>MapPost</c>, and friends.
-    /// <para>
     /// Authorization is deliberately not applied here. Permissions are owned by Foundation Identity,
     /// and pulling them in would give the shared endpoint layer a dependency on it. Call
     /// <c>RequirePermission</c> at the mapping site.
-    /// </para>
     /// </remarks>
     /// <param name="name">The endpoint name, unique across the host.</param>
     /// <param name="owner">The stable owning module identifier.</param>
@@ -139,65 +177,11 @@ public static class EndpointConventionBuilderExtensions
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .WithMetadata(metadata.ToArray());
 
-        return builder.WithApiExplorerDescription().RequireStableOpenApi();
+        // Ownership is validated as a final convention alongside the package's lifetime check, so
+        // both see the completed metadata rather than whatever had been added by this point.
+        builder.Finally(endpointBuilder => EndpointOwnershipValidator.Validate(endpointBuilder));
+        return builder.WithApiExplorerDescription().RequireStableEndpointMetadata();
     }
-
-    /// <summary>
-    /// Publishes <see cref="RequestDelegate.Invoke"/> as the endpoint's description method.
-    /// </summary>
-    /// <remarks>
-    /// API Explorer needs a <see cref="MethodInfo"/> in endpoint metadata to derive an
-    /// <c>ApiDescription</c>; without one the endpoint never reaches the OpenAPI document, and a
-    /// test that inspects the document passes vacuously. It must also be the last <see cref="MethodInfo"/>
-    /// in the collection, because <c>EndpointMetadataCollection.GetMetadata&lt;T&gt;()</c> selects
-    /// the last match. Publishing the handler's own method instead would root its declaring
-    /// assembly through API Explorer, so the stable framework method is used deliberately.
-    /// </remarks>
-    public static TBuilder WithApiExplorerDescription<TBuilder>(this TBuilder builder)
-        where TBuilder : IEndpointConventionBuilder =>
-        AddMetadata(builder, ApiExplorerDescriptionMethod);
-
-    /// <summary>
-    /// Validates the completed endpoint metadata as the final standard ASP.NET Core convention.
-    /// The returned builder is the original builder and no request, routing, authorization, binding,
-    /// serialization, or result behavior is changed.
-    /// </summary>
-    public static TBuilder RequireStableOpenApi<TBuilder>(this TBuilder builder)
-        where TBuilder : IEndpointConventionBuilder
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        builder.Finally(RemoveCompilerMetadataAndValidate);
-        return builder;
-    }
-
-    private static void RemoveCompilerMetadataAndValidate(EndpointBuilder builder)
-    {
-        // RequestDelegateFactory copies handler attributes into endpoint metadata. Compiler-only
-        // attributes are not part of the HTTP/OpenAPI contract, but AsyncStateMachineAttribute
-        // references the handler's generated implementation type and would pin a collectible owner.
-        // This runs whether or not the boundary is enforced: a state machine pins its owner even in
-        // a host that never builds a document.
-        for (var index = builder.Metadata.Count - 1; index >= 0; index--)
-        {
-            if (builder.Metadata[index] is System.Runtime.CompilerServices.AsyncStateMachineAttribute
-                or System.Diagnostics.DebuggerStepThroughAttribute)
-            {
-                builder.Metadata.RemoveAt(index);
-            }
-        }
-
-        if (!EnforcementEnabled(builder.ApplicationServices))
-            return;
-
-        OpenApiLifetimeValidator.ValidateAndMark(builder);
-    }
-
-    /// <summary>
-    /// Fail-closed: anything other than an explicit, resolvable suppression enforces the boundary,
-    /// so an unconfigured host or one with no service provider keeps the guard.
-    /// </summary>
-    private static bool EnforcementEnabled(IServiceProvider? services) =>
-        services?.GetService<IOptions<OpenApiLifetimeEnforcementOptions>>()?.Value.Enabled ?? true;
 
     /// <summary>
     /// Preserves the host application's OpenAPI tag without introducing a module-specific endpoint
@@ -212,16 +196,7 @@ public static class EndpointConventionBuilderExtensions
         var applicationName = services.GetService<IHostEnvironment>()?.ApplicationName;
         return string.IsNullOrWhiteSpace(applicationName)
             ? builder
-            : AddMetadata(builder, new HostApplicationOpenApiTagMetadata(applicationName));
-    }
-
-    private static TBuilder AddMetadata<TBuilder, TMetadata>(TBuilder builder, TMetadata metadata)
-        where TBuilder : IEndpointConventionBuilder
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(metadata);
-        builder.Add(endpointBuilder => endpointBuilder.Metadata.Add(metadata));
-        return builder;
+            : builder.AddEndpointMetadata(new HostApplicationOpenApiTagMetadata(applicationName));
     }
 
     private sealed record HostApplicationOpenApiTagMetadata(string ApplicationName) : ITagsMetadata
@@ -231,9 +206,9 @@ public static class EndpointConventionBuilderExtensions
 }
 
 /// <summary>
-/// The attribute form of <see cref="EndpointConventionBuilderExtensions.AllowPublic{TBuilder}"/> for
-/// endpoint classes: applies the anonymous-access marker together with the public security
-/// disposition the endpoint inventory demands, so the attribute and the imperative form cannot drift.
+/// The attribute form of <see cref="ElsaEndpointConventions.AllowPublic{TBuilder}"/> for endpoint
+/// classes: applies the anonymous-access marker together with the public security disposition the
+/// endpoint inventory demands, so the attribute and the imperative form cannot drift.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class AllowPublicAttribute(string category, string reason) : Attribute, IEndpointConventionAttribute

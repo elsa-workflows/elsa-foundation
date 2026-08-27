@@ -1,5 +1,6 @@
 using CShells;
 using Elsa.Activities.Bpmn.Interchange;
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Api.Compatibility.Testing.Http;
@@ -33,6 +34,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -70,6 +72,7 @@ public sealed class Wave2MinimalApiCompatibilityTests : IAsyncLifetime
                 webHost.UseTestServer();
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddRouting();
                     services.AddSingleton(new ShellSettings(new ShellId("wave2-baseline")));
                     services.AddFoundationIdentityAbstractions(options =>
@@ -88,10 +91,10 @@ public sealed class Wave2MinimalApiCompatibilityTests : IAsyncLifetime
                     services.AddPermissionContributor<Elsa3ImportPermissionContributor>();
                     // Modularity and Elsa 3 Import are wired from stubs here rather than through
                     // their features, so their owner-keyed failure services are registered directly.
-                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointProblemWriter, Elsa.Modularity.Api.Endpoints.ModularityProblemWriter>("Elsa.Modularity.Api");
-                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointFaultRenderer, Elsa.Modularity.Api.Endpoints.ModularityFaultRenderer>("Elsa.Modularity.Api");
-                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointProblemWriter, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportProblemWriter>("Elsa3.Activities.Design.Import");
-                    services.AddKeyedSingleton<Elsa.Api.AspNetCore.IEndpointFaultRenderer, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportFaultRenderer>("Elsa3.Activities.Design.Import");
+                    services.AddKeyedSingleton<NativeEndpoints.IEndpointProblemWriter, Elsa.Modularity.Api.Endpoints.ModularityProblemWriter>("Elsa.Modularity.Api");
+                    services.AddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, Elsa.Modularity.Api.Endpoints.ModularityFaultRenderer>("Elsa.Modularity.Api");
+                    services.AddKeyedSingleton<NativeEndpoints.IEndpointProblemWriter, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportProblemWriter>("Elsa3.Activities.Design.Import");
+                    services.AddKeyedSingleton<NativeEndpoints.IEndpointFaultRenderer, Elsa3.Activities.Design.Import.Endpoints.ReusableActivityImportFaultRenderer>("Elsa3.Activities.Design.Import");
                 });
                 webHost.Configure(app =>
                 {

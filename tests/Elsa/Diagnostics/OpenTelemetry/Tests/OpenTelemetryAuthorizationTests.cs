@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
@@ -81,6 +82,7 @@ public sealed class OpenTelemetryAuthorizationTests
             webHost.UseTestServer();
             webHost.ConfigureServices(services =>
             {
+                services.AddElsaEndpoints();
                 services.AddLogging();
                 services.AddRouting();
                 services.AddFastEndpoints();

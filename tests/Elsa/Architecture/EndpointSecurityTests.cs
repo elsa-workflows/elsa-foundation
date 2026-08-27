@@ -23,6 +23,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
@@ -231,7 +232,7 @@ public sealed class EndpointSecurityTests
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.AddElsaEndpoints().BuildServiceProvider();
         var contributors = provider.GetServices<IPermissionContributor>().ToArray();
         var permissions = typeof(PermissionNames).GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(field => field.Name != nameof(PermissionNames.All))
@@ -248,7 +249,7 @@ public sealed class EndpointSecurityTests
     [Fact]
     public void Activities_design_minimal_api_declares_38_owned_secure_routes_with_one_catalog_action_each()
     {
-        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         ActivitiesDesignApi.MapActivitiesDesignApi(routes);
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
@@ -288,7 +289,7 @@ public sealed class EndpointSecurityTests
     [Fact]
     public void Publishing_minimal_api_declares_23_owned_secure_routes_with_one_catalog_action_each()
     {
-        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
@@ -348,7 +349,7 @@ public sealed class EndpointSecurityTests
 
         Assert.Equal(10, routeMappings);
         Assert.Equal(10, permissionPolicies);
-        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapModuleEndpoints"));
+        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapEndpointGroup"));
         Assert.Contains("Elsa.Secrets.Api", mapper, StringComparison.Ordinal);
 
         foreach (var permission in new[] { "Read", "Write", "UpdateValue", "Delete", "Test", "Use", "Import", "Export" })
@@ -382,7 +383,7 @@ public sealed class EndpointSecurityTests
             InvocationName(call) == "MapUnboundOperation");
 
         Assert.Equal(3, routeMappings);
-        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapModuleEndpoints"));
+        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapEndpointGroup"));
         Assert.Equal(3, calls.Count(call => InvocationName(call) == "RequireAnyPermission"));
         Assert.Contains("StructuredLogsPermissions.OwnerId", mapper, StringComparison.Ordinal);
         Assert.Contains("PermissionKey.Wildcard", mapper, StringComparison.Ordinal);
@@ -394,7 +395,7 @@ public sealed class EndpointSecurityTests
     [Fact]
     public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
     {
-        using var serviceProvider = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         ApiCapabilitiesApi.MapApiCapabilitiesApi(routes);
         var endpoint = Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints));

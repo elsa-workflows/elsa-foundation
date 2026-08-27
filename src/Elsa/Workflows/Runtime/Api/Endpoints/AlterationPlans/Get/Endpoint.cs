@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models.Alterations;
 using Elsa.Workflows.Runtime.Api.Requests.Alterations;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Runtime.Api.Endpoints.AlterationPlans.Get;
 

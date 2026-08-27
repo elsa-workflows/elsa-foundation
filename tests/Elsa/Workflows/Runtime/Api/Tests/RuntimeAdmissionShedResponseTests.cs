@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using System.Net;
 using System.Net.Http.Json;
 using Elsa.Workflows.Runtime.Api.Handlers;
@@ -92,6 +93,7 @@ public sealed class RuntimeAdmissionShedResponseTests
         public static async Task<RuntimeApiHost> StartAsync(WorkflowExecutionStartDispatchView view)
         {
             var builder = WebApplication.CreateBuilder();
+            builder.Services.AddElsaEndpoints();
             builder.WebHost.UseTestServer();
             builder.Services.AddAuthentication("RuntimeApiTest")
                 .AddScheme<AuthenticationSchemeOptions, AllowAuthenticationHandler>("RuntimeApiTest", _ => { });

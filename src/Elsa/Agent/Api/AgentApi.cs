@@ -4,7 +4,8 @@ using Elsa.Agent.Api.Models;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
-using Elsa.Api.Endpoints;
+using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -28,7 +29,7 @@ public static class AgentApi
         // The Agent operations keep their own reads, writes, failure-carrying response envelopes,
         // and the SSE stream, so every operation stays on the group's raw seam; the group supplies
         // the shared metadata the mapper used to inline per endpoint.
-        var api = endpoints.MapModuleEndpoints(OwnerId, AgentJsonContext.Default, jsonContentType: "application/json");
+        var api = endpoints.MapEndpointGroup(OwnerId, AgentJsonContext.Default, jsonContentType: "application/json");
 
         Map(api, "GET", $"{RoutePrefix}/bootstrap", "Bootstrap", AgentPermissionKeys.Use,
             null, typeof(AgentApiResponse<AgentBootstrapResponse>), HandleBootstrapAsync);
@@ -55,7 +56,7 @@ public static class AgentApi
     }
 
     private static void Map(
-        ModuleEndpointGroup api,
+        EndpointGroup api,
         string method,
         string pattern,
         string operation,

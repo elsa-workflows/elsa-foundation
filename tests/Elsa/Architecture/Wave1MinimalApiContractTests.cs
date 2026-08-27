@@ -33,7 +33,7 @@ public sealed class Wave1MinimalApiContractTests
     [Fact]
     public void All_wave_one_owners_publish_explicit_owned_minimal_api_contracts()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ApiCapabilitiesApi.MapApiCapabilitiesApi(routes);
         AttentionApi.MapAttentionApi(routes);
@@ -152,7 +152,7 @@ public sealed class Wave1MinimalApiContractTests
     public async Task Runtime_javascript_invalid_json_preserves_the_request_error_contract()
     {
         var endpoint = GetEndpoint("javascript/execute");
-        using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        using var services = new ServiceCollection().AddLogging().AddElsaEndpoints().BuildServiceProvider();
         using var requestBody = new MemoryStream(Encoding.UTF8.GetBytes("{invalid"));
         using var responseBody = new MemoryStream();
         var context = new DefaultHttpContext
@@ -176,7 +176,7 @@ public sealed class Wave1MinimalApiContractTests
             .AddLogging()
             .AddSingleton<IJavaScriptDeclarationsDocumentFactory>(new ThrowingDocumentFactory())
             .AddSingleton<IJavaScriptDeclarationsDocumentRenderer>(new NoopDocumentRenderer())
-            .BuildServiceProvider();
+            .AddElsaEndpoints().BuildServiceProvider();
         using var responseBody = new MemoryStream();
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = responseBody;
@@ -194,7 +194,7 @@ public sealed class Wave1MinimalApiContractTests
             .AddLogging()
             .AddSingleton<IJavaScriptDeclarationsDocumentFactory>(new CancellingDocumentFactory())
             .AddSingleton<IJavaScriptDeclarationsDocumentRenderer>(new NoopDocumentRenderer())
-            .BuildServiceProvider();
+            .AddElsaEndpoints().BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = services };
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
@@ -207,7 +207,7 @@ public sealed class Wave1MinimalApiContractTests
         using var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IJavaScriptScriptEvaluator>(new CancellingScriptEvaluator())
-            .BuildServiceProvider();
+            .AddElsaEndpoints().BuildServiceProvider();
         using var requestBody = new MemoryStream(Encoding.UTF8.GetBytes("{\"script\":\"return 1;\"}"));
         var context = new DefaultHttpContext { RequestServices = services };
         context.Request.ContentType = "application/json";
@@ -220,7 +220,7 @@ public sealed class Wave1MinimalApiContractTests
     [Fact]
     public async Task Dashboard_without_tenant_scope_is_a_request_error()
     {
-        using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        using var services = new ServiceCollection().AddLogging().AddElsaEndpoints().BuildServiceProvider();
         using var responseBody = new MemoryStream();
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = responseBody;
@@ -235,6 +235,7 @@ public sealed class Wave1MinimalApiContractTests
     public async Task OpenApi_preserves_all_wave_one_operation_contracts()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddElsaEndpoints();
         builder.WebHost.UseTestServer();
         builder.Environment.ApplicationName = "testhost";
         builder.Services.AddOpenApi();
@@ -360,7 +361,7 @@ public sealed class Wave1MinimalApiContractTests
 
     private static RouteEndpoint GetEndpoint(string route)
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         ApiCapabilitiesApi.MapApiCapabilitiesApi(routes);
         AttentionApi.MapAttentionApi(routes);

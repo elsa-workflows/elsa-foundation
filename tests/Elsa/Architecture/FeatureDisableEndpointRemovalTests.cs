@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -21,7 +22,7 @@ namespace Elsa.Architecture.Tests;
 /// different mechanism. Those suites prove an <c>AssemblyLoadContext</c> can be collected, which is what the
 /// stable <c>*.Api.Core</c> contract split exists to enable. This proves *document and routing correctness*
 /// after removal, which depends only on the endpoint data source changing and
-/// <see cref="OpenApiLifetimeServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh"/> projecting
+/// <see cref="NativeEndpointsServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh"/> projecting
 /// that change into API Explorer's invalidation seam. Nothing here requires the owning assembly to unload,
 /// so a module whose endpoints can be disabled at runtime does not, on this evidence alone, need its
 /// contracts split into a separate stable assembly.

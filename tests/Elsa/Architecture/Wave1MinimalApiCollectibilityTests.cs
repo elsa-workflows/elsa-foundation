@@ -10,6 +10,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -99,7 +100,7 @@ public sealed class Wave1MinimalApiCollectibilityTests
         // collectible and the fail-closed lifetime boundary would reject the mapping outright.
         // This probe is the regime the explicit suppression exists for: no host-lifetime OpenAPI
         // document survives the cycle, and the weak-reference assertions below prove the release.
-        serviceDescriptors.SuppressOpenApiLifetimeEnforcement();
+        serviceDescriptors.SuppressEndpointLifetimeEnforcement();
         var configureServices = featureType.GetMethod("ConfigureServices", BindingFlags.Public | BindingFlags.Instance)
             ?? throw new InvalidOperationException($"{owner.FeatureType} does not expose ConfigureServices.");
         configureServices.Invoke(feature, [serviceDescriptors]);

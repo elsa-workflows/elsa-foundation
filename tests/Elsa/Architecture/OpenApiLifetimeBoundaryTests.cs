@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using NativeEndpoints;
 using System.Collections;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -29,6 +30,7 @@ public sealed class OpenApiLifetimeBoundaryTests
     public void Activities_design_native_openapi_metadata_uses_only_non_collectible_types()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddElsaEndpoints();
         using var app = builder.Build();
 
         ActivitiesDesignApi.MapActivitiesDesignApi(app);
@@ -41,9 +43,9 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Equal(38, endpoints.Length);
         Assert.All(endpoints, endpoint =>
         {
-            var marker = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
-            Assert.Equal(OpenApiLifetimeClassification.SharedContract, marker.Classification);
-            Assert.Equal("Elsa.Activities.Design.Api", marker.Owner);
+            var marker = Assert.Single(endpoint.Metadata.OfType<EndpointLifetimeMetadata>());
+            Assert.Equal(EndpointLifetimeValidationCategories.All, marker.CheckedCategories);
+            Assert.Equal("Elsa.Activities.Design.Api", marker.Group);
 
             var acceptedTypes = endpoint.Metadata
                 .GetOrderedMetadata<IAcceptsMetadata>()
@@ -70,6 +72,8 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.NotNull(mapper);
 
         var builder = WebApplication.CreateBuilder();
+
+        builder.Services.AddElsaEndpoints();
         using var app = builder.Build();
         mapper!.Invoke(null, [app]);
 
@@ -81,9 +85,9 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Equal(23, endpoints.Length);
         Assert.All(endpoints, endpoint =>
         {
-            var lifetime = Assert.Single(endpoint.Metadata.OfType<OpenApiLifetimeMetadata>());
-            Assert.Equal(OpenApiLifetimeClassification.SharedContract, lifetime.Classification);
-            Assert.Equal("Elsa.Workflows.Publishing.Api", lifetime.Owner);
+            var lifetime = Assert.Single(endpoint.Metadata.OfType<EndpointLifetimeMetadata>());
+            Assert.Equal(EndpointLifetimeValidationCategories.All, lifetime.CheckedCategories);
+            Assert.Equal("Elsa.Workflows.Publishing.Api", lifetime.Group);
 
             var acceptedTypes = endpoint.Metadata
                 .GetOrderedMetadata<IAcceptsMetadata>()
@@ -112,15 +116,14 @@ public sealed class OpenApiLifetimeBoundaryTests
         builder.Metadata.Add(new AcceptsMetadata(typeof(StableRequest)));
         builder.Metadata.Add(new ProducesMetadata(typeof(StableResponse), StatusCodes.Status200OK));
 
-        OpenApiLifetimeValidator.ValidateAndMark(builder);
+        EndpointLifetimeValidator.ValidateAndMark(builder);
 
-        var marker = Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
-        Assert.Equal("Elsa.Tests", marker.Owner);
-        Assert.Equal(OpenApiLifetimeClassification.SharedContract, marker.Classification);
+        var marker = Assert.Single(builder.Metadata.OfType<EndpointLifetimeMetadata>());
+        Assert.Equal("Elsa.Tests", marker.Group);
         Assert.Equal("GET /safe", marker.Endpoint);
-        Assert.Equal(OpenApiLifetimeValidationCategories.All, marker.CheckedCategories);
-        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
-        Assert.All(typeof(OpenApiLifetimeMetadata).GetProperties(), property => Assert.False(property.CanWrite));
+        Assert.Equal(EndpointLifetimeValidationCategories.All, marker.CheckedCategories);
+        Assert.Single(builder.Metadata.OfType<EndpointLifetimeMetadata>());
+        Assert.All(typeof(EndpointLifetimeMetadata).GetProperties(), property => Assert.False(property.CanWrite));
     }
 
     [Fact]
@@ -129,36 +132,35 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("POST /stable-json", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(JsonTypeInfo.CreateJsonTypeInfo(typeof(StableRequest), new JsonSerializerOptions()));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.SerializerMetadata &&
+            violation.Category == EndpointLifetimeViolationCategory.SerializerMetadata &&
             violation.ArtifactIdentity.Contains("JsonTypeInfo objects are not allowed", StringComparison.Ordinal));
     }
 
     [Fact]
     public void Marker_and_validator_have_null_guards_and_reject_invalid_marker_values()
     {
-        Assert.Throws<ArgumentNullException>(() => OpenApiLifetimeValidator.Validate(null!));
-        Assert.Throws<ArgumentNullException>(() => OpenApiLifetimeValidator.ValidateAndMark(null!));
-        Assert.Throws<ArgumentNullException>(() => new OpenApiLifetimeMetadata(null!, OpenApiLifetimeClassification.HostStatic, "GET /safe"));
-        Assert.Throws<ArgumentException>(() => new OpenApiLifetimeMetadata("owner", OpenApiLifetimeClassification.HostStatic, " "));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new OpenApiLifetimeMetadata("owner", (OpenApiLifetimeClassification)99, "GET /safe"));
-        Assert.Throws<ArgumentException>(() => new OpenApiLifetimeMetadata("owner", OpenApiLifetimeClassification.HostStatic, "GET /safe", default));
+        Assert.Throws<ArgumentNullException>(() => EndpointLifetimeValidator.Validate(null!));
+        Assert.Throws<ArgumentNullException>(() => EndpointLifetimeValidator.ValidateAndMark(null!));
+        Assert.Throws<ArgumentNullException>(() => new EndpointLifetimeMetadata(null!, "GET /safe"));
+        Assert.Throws<ArgumentException>(() => new EndpointLifetimeMetadata("group", " "));
+        Assert.Throws<ArgumentException>(() => new EndpointLifetimeMetadata("group", "GET /safe", default));
     }
 
     [Fact]
     public void Dynamic_api_explorer_refresh_registration_is_idempotent_and_null_guarded()
     {
         Assert.Throws<ArgumentNullException>(() => new EndpointDataSourceActionDescriptorChangeProvider(null!));
-        Assert.Throws<ArgumentNullException>(() => OpenApiLifetimeServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh(null!));
+        Assert.Throws<ArgumentNullException>(() => NativeEndpointsServiceCollectionExtensions.AddDynamicEndpointApiExplorerRefresh(null!));
 
         var source = new TestEndpointDataSource();
         var services = new ServiceCollection();
         services.AddSingleton<EndpointDataSource>(source);
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddDynamicEndpointApiExplorerRefresh();
-        using var provider = services.BuildServiceProvider();
+        using var provider = services.AddElsaEndpoints().BuildServiceProvider();
 
         var changeProvider = Assert.Single(provider.GetServices<IActionDescriptorChangeProvider>());
         Assert.IsType<EndpointDataSourceActionDescriptorChangeProvider>(changeProvider);
@@ -169,20 +171,20 @@ public sealed class OpenApiLifetimeBoundaryTests
     public void RequireStableOpenApi_returns_the_same_builder_and_registers_a_final_convention()
     {
         var conventions = new RecordingConventionBuilder();
-        var result = conventions.RequireStableOpenApi();
+        var result = conventions.RequireStableEndpointMetadata();
 
         Assert.Same(conventions, result);
         Assert.Empty(conventions.OrdinaryConventions);
         var builder = Endpoint("GET /safe", EndpointOwnershipMetadata.Host("Elsa.Tests"));
         conventions.FinalConventions.Single()(builder);
-        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+        Assert.Single(builder.Metadata.OfType<EndpointLifetimeMetadata>());
     }
 
     [Fact]
     public void Stable_openapi_convention_removes_compiler_only_handler_metadata_before_validation()
     {
         var conventions = new RecordingConventionBuilder();
-        conventions.RequireStableOpenApi();
+        conventions.RequireStableEndpointMetadata();
         var builder = Endpoint("PUT /async", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
         builder.Metadata.Add(new System.Runtime.CompilerServices.AsyncStateMachineAttribute(CreateCollectibleType("AsyncHandlerStateMachine")));
         builder.Metadata.Add(new System.Diagnostics.DebuggerStepThroughAttribute());
@@ -191,7 +193,7 @@ public sealed class OpenApiLifetimeBoundaryTests
 
         Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
         Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
-        Assert.Single(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+        Assert.Single(builder.Metadata.OfType<EndpointLifetimeMetadata>());
     }
 
     [Fact]
@@ -200,14 +202,14 @@ public sealed class OpenApiLifetimeBoundaryTests
         // Fail-closed: a host that never registers the options, or exposes no service provider at
         // all, keeps the boundary. Only an explicit, resolvable suppression turns it off.
         var conventions = new RecordingConventionBuilder();
-        conventions.RequireStableOpenApi();
+        conventions.RequireStableEndpointMetadata();
         var builder = Endpoint(
             "GET /unconfigured",
-            new ServiceCollection().BuildServiceProvider(),
+            new ServiceCollection().AddElsaEndpoints().BuildServiceProvider(),
             EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
         builder.Metadata.Add(new AcceptsMetadata(CreateCollectibleType("UnconfiguredRequest")));
 
-        Assert.Throws<UnsafeOpenApiMetadataException>(() => conventions.FinalConventions.Single()(builder));
+        Assert.Throws<UnsafeEndpointMetadataException>(() => conventions.FinalConventions.Single()(builder));
     }
 
     [Fact]
@@ -216,18 +218,18 @@ public sealed class OpenApiLifetimeBoundaryTests
         // A host with no OpenAPI document service has no API Explorer cache to retain the type, so
         // the candidate is not rejected. It carries no lifetime marker, because nothing verified it.
         var services = new ServiceCollection();
-        services.SuppressOpenApiLifetimeEnforcement();
+        services.SuppressEndpointLifetimeEnforcement();
         var conventions = new RecordingConventionBuilder();
-        conventions.RequireStableOpenApi();
+        conventions.RequireStableEndpointMetadata();
         var builder = Endpoint(
             "GET /collectible",
-            services.BuildServiceProvider(),
+            services.AddElsaEndpoints().BuildServiceProvider(),
             EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
         builder.Metadata.Add(new AcceptsMetadata(CreateCollectibleType("SuppressedRequest")));
 
         conventions.FinalConventions.Single()(builder);
 
-        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+        Assert.Empty(builder.Metadata.OfType<EndpointLifetimeMetadata>());
     }
 
     [Fact]
@@ -236,12 +238,12 @@ public sealed class OpenApiLifetimeBoundaryTests
         // An async state machine pins its owner through endpoint metadata whether or not a document
         // is ever produced, so stripping is unconditional while validation is not.
         var services = new ServiceCollection();
-        services.SuppressOpenApiLifetimeEnforcement();
+        services.SuppressEndpointLifetimeEnforcement();
         var conventions = new RecordingConventionBuilder();
-        conventions.RequireStableOpenApi();
+        conventions.RequireStableEndpointMetadata();
         var builder = Endpoint(
             "PUT /suppressed-async",
-            services.BuildServiceProvider(),
+            services.AddElsaEndpoints().BuildServiceProvider(),
             EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(new System.Runtime.CompilerServices.AsyncStateMachineAttribute(CreateCollectibleType("SuppressedStateMachine")));
         builder.Metadata.Add(new System.Diagnostics.DebuggerStepThroughAttribute());
@@ -250,7 +252,7 @@ public sealed class OpenApiLifetimeBoundaryTests
 
         Assert.Empty(builder.Metadata.OfType<System.Runtime.CompilerServices.AsyncStateMachineAttribute>());
         Assert.Empty(builder.Metadata.OfType<System.Diagnostics.DebuggerStepThroughAttribute>());
-        Assert.Empty(builder.Metadata.OfType<OpenApiLifetimeMetadata>());
+        Assert.Empty(builder.Metadata.OfType<EndpointLifetimeMetadata>());
     }
 
     [Fact]
@@ -258,58 +260,68 @@ public sealed class OpenApiLifetimeBoundaryTests
     {
         var conventions = new RecordingConventionBuilder();
         conventions.Add(builder => builder.Metadata.Add(new AcceptsMetadata(CreateCollectibleType("RequestAfterConvention"))));
-        conventions.RequireStableOpenApi();
+        conventions.RequireStableEndpointMetadata();
         var builder = Endpoint("GET /late", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
 
         conventions.OrdinaryConventions.Single()(builder);
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => conventions.FinalConventions.Single()(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => conventions.FinalConventions.Single()(builder));
 
-        Assert.Equal(OpenApiLifetimeViolationCategory.RequestType, exception.Violation.Category);
-        Assert.Contains("owner='Elsa.Tests'; shell='shell-a'; generation=7; endpoint='GET /late'; category=RequestType", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(EndpointLifetimeViolationCategory.RequestType, exception.Violation.Category);
+        Assert.Contains("group='Elsa.Tests'; endpoint='GET /late'; category=RequestType", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <remarks>
+    /// Ownership is Elsa's vocabulary, so once the unload-safety validator moved into
+    /// NativeEndpoints the invariant moved with it into <see cref="EndpointOwnershipValidator"/>
+    /// rather than out of the tree. It is still enforced as a final convention at mapping time, so
+    /// an unowned endpoint still cannot reach the manifest.
+    /// </remarks>
     [Fact]
-    public void Missing_and_duplicate_ownership_fail_before_artifact_inspection()
+    public void Missing_and_duplicate_ownership_are_rejected_before_publication()
     {
         var missing = Endpoint("GET /missing");
-        var missingException = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(missing));
-        Assert.Equal(OpenApiLifetimeViolationCategory.MissingOwnership, missingException.Violation.Category);
+        var missingException = Assert.Throws<UnownedEndpointException>(() => EndpointOwnershipValidator.Validate(missing));
+        Assert.Equal(EndpointOwnershipViolationCategory.MissingOwnership, missingException.Category);
 
         var duplicate = Endpoint("GET /duplicate", EndpointOwnershipMetadata.Module("Elsa.One"));
         duplicate.Metadata.Add(EndpointOwnershipMetadata.Module("Elsa.Two"));
-        var duplicateException = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(duplicate));
-        Assert.Equal(OpenApiLifetimeViolationCategory.DuplicateOwnership, duplicateException.Violation.Category);
+        var duplicateException = Assert.Throws<UnownedEndpointException>(() => EndpointOwnershipValidator.Validate(duplicate));
+        Assert.Equal(EndpointOwnershipViolationCategory.DuplicateOwnership, duplicateException.Category);
         Assert.Contains("Elsa.One, Elsa.Two", duplicateException.Message, StringComparison.Ordinal);
 
         var conflictingDynamic = Endpoint(
             "GET /duplicate-dynamic",
             EndpointOwnershipMetadata.DynamicShell("Elsa.One", "shell-a", 1));
         conflictingDynamic.Metadata.Add(EndpointOwnershipMetadata.DynamicShell("Elsa.Two", "shell-b", 2));
-        var conflictingException = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(conflictingDynamic));
-        Assert.Equal(OpenApiLifetimeViolationCategory.DuplicateOwnership, conflictingException.Violation.Category);
-        Assert.Null(conflictingException.Violation.Shell);
-        Assert.Null(conflictingException.Violation.Generation);
+        var conflictingException = Assert.Throws<UnownedEndpointException>(() => EndpointOwnershipValidator.Validate(conflictingDynamic));
+        Assert.Equal(EndpointOwnershipViolationCategory.DuplicateOwnership, conflictingException.Category);
+    }
+
+    [Fact]
+    public void An_endpoint_owned_by_exactly_one_module_passes_ownership_validation()
+    {
+        var owned = Endpoint("GET /owned", EndpointOwnershipMetadata.Module("Elsa.One"));
+
+        Assert.Equal("Elsa.One", EndpointOwnershipValidator.Validate(owned).Owner);
     }
 
     [Theory]
     [MemberData(nameof(UnsafeMetadataCases))]
     public void Every_collectible_api_explorer_artifact_is_rejected(
-        OpenApiLifetimeViolationCategory expectedCategory,
+        EndpointLifetimeViolationCategory expectedCategory,
         Func<object> metadataFactory)
     {
         var builder = Endpoint("GET /unsafe", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-a", 7));
         builder.Metadata.Add(metadataFactory());
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
             violation.Category == expectedCategory &&
             violation.LoadContextIdentity.Contains("collectible", StringComparison.Ordinal));
         Assert.All(exception.Violations, violation =>
         {
-            Assert.Equal("Elsa.Tests", violation.Owner);
-            Assert.Equal("shell-a", violation.Shell);
-            Assert.Equal(7, violation.Generation);
+            Assert.Equal("Elsa.Tests", violation.Group);
             Assert.Equal("GET /unsafe", violation.Endpoint);
             Assert.DoesNotContain("0x", violation.ArtifactIdentity, StringComparison.OrdinalIgnoreCase);
         });
@@ -321,10 +333,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /unknown", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(new ThrowingMetadata());
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         var violation = Assert.Single(exception.Violations);
-        Assert.Equal(OpenApiLifetimeViolationCategory.UnknownMetadataShape, violation.Category);
+        Assert.Equal(EndpointLifetimeViolationCategory.UnknownMetadataShape, violation.Category);
         Assert.Contains("getter failed", violation.ArtifactIdentity, StringComparison.Ordinal);
         Assert.DoesNotContain("test-only getter", exception.Message, StringComparison.Ordinal);
     }
@@ -335,10 +347,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /nested", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(new NestedMetadata(new NestedMetadataValue(CreateCollectibleType("NestedContract"))));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.MetadataObject &&
+            violation.Category == EndpointLifetimeViolationCategory.MetadataObject &&
             violation.ArtifactIdentity.Contains("NestedContract", StringComparison.Ordinal));
     }
 
@@ -348,10 +360,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /private", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(new PrivateMetadata(Activator.CreateInstance(CreateCollectibleType("PrivateContract"))!));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.MetadataObject &&
+            violation.Category == EndpointLifetimeViolationCategory.MetadataObject &&
             violation.ArtifactIdentity.Contains("PrivateContract", StringComparison.Ordinal));
     }
 
@@ -362,10 +374,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var metadataType = typeof(GenericMetadata<>).MakeGenericType(CreateCollectibleType("GenericContract"));
         builder.Metadata.Add(Activator.CreateInstance(metadataType)!);
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.MetadataObject &&
+            violation.Category == EndpointLifetimeViolationCategory.MetadataObject &&
             violation.ArtifactIdentity.Contains("GenericContract", StringComparison.Ordinal));
     }
 
@@ -376,10 +388,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var target = new StableCallbackTarget(Activator.CreateInstance(CreateCollectibleType("CapturedContract"))!);
         builder.Metadata.Add((Action)target.Invoke);
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.DelegateOrTransformer &&
+            violation.Category == EndpointLifetimeViolationCategory.DelegateOrTransformer &&
             violation.ArtifactIdentity.Contains("CapturedContract", StringComparison.Ordinal));
     }
 
@@ -391,10 +403,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         Action stable = StableCallback;
         builder.Metadata.Add(collectible + stable);
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.DelegateOrTransformer &&
+            violation.Category == EndpointLifetimeViolationCategory.DelegateOrTransformer &&
             violation.ArtifactIdentity.Contains("CollectibleMethod", StringComparison.Ordinal));
     }
 
@@ -404,10 +416,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /enumeration", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(Enumerable.Repeat<object>("value", 257));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.UnknownMetadataShape &&
+            violation.Category == EndpointLifetimeViolationCategory.UnknownMetadataShape &&
             violation.ArtifactIdentity.Contains("enumeration exceeds 256 items", StringComparison.Ordinal));
     }
 
@@ -417,10 +429,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("GET /enumerable-state", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(new StableEnumerableMetadata(Activator.CreateInstance(CreateCollectibleType("EnumerableContract"))!));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.MetadataObject &&
+            violation.Category == EndpointLifetimeViolationCategory.MetadataObject &&
             violation.ArtifactIdentity.Contains("EnumerableContract", StringComparison.Ordinal));
     }
 
@@ -433,10 +445,10 @@ public sealed class OpenApiLifetimeBoundaryTests
             .MakeGenericMethod(CreateCollectibleType("MethodContract"));
         builder.Metadata.Add(method);
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.MemberOrMethod &&
+            violation.Category == EndpointLifetimeViolationCategory.MemberOrMethod &&
             violation.ArtifactIdentity.Contains("MethodContract", StringComparison.Ordinal));
     }
 
@@ -452,10 +464,10 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = Endpoint("POST /delegate-signature", EndpointOwnershipMetadata.Module("Elsa.Tests"));
         builder.Metadata.Add(callback);
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(builder));
 
         Assert.Contains(exception.Violations, violation =>
-            violation.Category == OpenApiLifetimeViolationCategory.DelegateOrTransformer &&
+            violation.Category == EndpointLifetimeViolationCategory.DelegateOrTransformer &&
             violation.ArtifactIdentity.Contains("DelegateContract", StringComparison.Ordinal));
     }
 
@@ -463,19 +475,16 @@ public sealed class OpenApiLifetimeBoundaryTests
     public void Conflicting_existing_lifetime_marker_fails_closed()
     {
         var builder = Endpoint("GET /marker", EndpointOwnershipMetadata.Module("Elsa.Tests"));
-        builder.Metadata.Add(new OpenApiLifetimeMetadata(
-            "Elsa.Other",
-            OpenApiLifetimeClassification.SharedContract,
-            "GET /other"));
+        builder.Metadata.Add(new EndpointLifetimeMetadata("Elsa.Other", "GET /other"));
 
-        var exception = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.ValidateAndMark(builder));
+        var exception = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.ValidateAndMark(builder));
 
-        Assert.Equal(OpenApiLifetimeViolationCategory.UnknownMetadataShape, exception.Violation.Category);
+        Assert.Equal(EndpointLifetimeViolationCategory.UnknownMetadataShape, exception.Violation.Category);
         Assert.Contains("lifetime marker", exception.Violation.ArtifactIdentity, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void Diagnostics_are_owner_aware_and_stable_across_repeated_validation()
+    public void Diagnostics_are_group_aware_and_stable_across_repeated_validation()
     {
         var collectibleType = CreateCollectibleType("StableDiagnosticRequest");
         var first = Endpoint("GET /diagnostic", EndpointOwnershipMetadata.DynamicShell("Elsa.Tests", "shell-b", 11));
@@ -485,24 +494,24 @@ public sealed class OpenApiLifetimeBoundaryTests
         second.Metadata.Add(new ProducesMetadata(collectibleType, StatusCodes.Status200OK));
         second.Metadata.Add(new AcceptsMetadata(collectibleType));
 
-        var firstException = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(first));
-        var secondException = Assert.Throws<UnsafeOpenApiMetadataException>(() => OpenApiLifetimeValidator.Validate(second));
+        var firstException = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(first));
+        var secondException = Assert.Throws<UnsafeEndpointMetadataException>(() => EndpointLifetimeValidator.Validate(second));
 
         Assert.Equal(firstException.Message, secondException.Message);
         Assert.Equal(
             firstException.Violations.Select(violation => violation.Category),
             firstException.Violations.Select(violation => violation.Category).OrderBy(category => category));
-        Assert.Contains("owner='Elsa.Tests'; shell='shell-b'; generation=11; endpoint='GET /diagnostic'", firstException.Message, StringComparison.Ordinal);
+        Assert.Contains("group='Elsa.Tests'; endpoint='GET /diagnostic'", firstException.Message, StringComparison.Ordinal);
     }
 
     public static IEnumerable<object[]> UnsafeMetadataCases()
     {
-        yield return [OpenApiLifetimeViolationCategory.RequestType, () => new AcceptsMetadata(CreateCollectibleType("RequestContract"))];
-        yield return [OpenApiLifetimeViolationCategory.ResponseType, () => new ProducesMetadata(CreateCollectibleType("ResponseContract"), StatusCodes.Status200OK)];
-        yield return [OpenApiLifetimeViolationCategory.MetadataObject, () => Activator.CreateInstance(CreateCollectibleType("MetadataObject"))!];
-        yield return [OpenApiLifetimeViolationCategory.MemberOrMethod, () => CreateCollectibleMethod()];
-        yield return [OpenApiLifetimeViolationCategory.DelegateOrTransformer, () => CreateCollectibleDelegate()];
-        yield return [OpenApiLifetimeViolationCategory.SerializerMetadata, () => JsonTypeInfo.CreateJsonTypeInfo(CreateCollectibleType("SerializerContract"), new JsonSerializerOptions())];
+        yield return [EndpointLifetimeViolationCategory.RequestType, () => new AcceptsMetadata(CreateCollectibleType("RequestContract"))];
+        yield return [EndpointLifetimeViolationCategory.ResponseType, () => new ProducesMetadata(CreateCollectibleType("ResponseContract"), StatusCodes.Status200OK)];
+        yield return [EndpointLifetimeViolationCategory.MetadataObject, () => Activator.CreateInstance(CreateCollectibleType("MetadataObject"))!];
+        yield return [EndpointLifetimeViolationCategory.MemberOrMethod, () => CreateCollectibleMethod()];
+        yield return [EndpointLifetimeViolationCategory.DelegateOrTransformer, () => CreateCollectibleDelegate()];
+        yield return [EndpointLifetimeViolationCategory.SerializerMetadata, () => JsonTypeInfo.CreateJsonTypeInfo(CreateCollectibleType("SerializerContract"), new JsonSerializerOptions())];
     }
 
     private static TestEndpointBuilder Endpoint(string displayName, params EndpointOwnershipMetadata[] ownership)
@@ -510,6 +519,7 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = new TestEndpointBuilder { DisplayName = displayName };
         foreach (var metadata in ownership)
             builder.Metadata.Add(metadata);
+        AddGroup(builder, ownership);
         return builder;
     }
 
@@ -521,7 +531,20 @@ public sealed class OpenApiLifetimeBoundaryTests
         var builder = new TestEndpointBuilder { DisplayName = displayName, ApplicationServices = services };
         foreach (var metadata in ownership)
             builder.Metadata.Add(metadata);
+        AddGroup(builder, ownership);
         return builder;
+    }
+
+    /// <remarks>
+    /// The lifetime validator names the group, not the owner: group membership is what it can see,
+    /// and ownership is Elsa's own vocabulary, enforced separately by
+    /// <see cref="EndpointOwnershipValidator"/>. Elsa maps every group under its owner id, so the two
+    /// carry the same string and the helper keeps that true here too.
+    /// </remarks>
+    private static void AddGroup(TestEndpointBuilder builder, EndpointOwnershipMetadata[] ownership)
+    {
+        if (ownership.Length == 1)
+            builder.Metadata.Add(new EndpointGroupMetadata(ownership[0].OwnerId));
     }
 
     private static Type CreateCollectibleType(string name)

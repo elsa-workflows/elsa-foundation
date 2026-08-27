@@ -1,5 +1,6 @@
+using Elsa.Api.AspNetCore;
 using System.Globalization;
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -20,7 +21,7 @@ public static class WorkflowsDashboardApi
         // The published document tags this surface with the host application name, resolved at
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             WorkflowsDashboardJsonContext.Default,
             jsonContentType: "application/json",

@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Collectibility;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
@@ -49,7 +50,7 @@ public sealed class Wave5OpenTelemetryMinimalApiCollectibilityTests
         services.AddFoundationIdentityAbstractions();
         featureType.GetMethod(nameof(OpenTelemetryFeature.ConfigureServices))!.Invoke(feature, [services]);
         services.AddSingleton<IOpenTelemetryLiveFeed, CollectibilityLiveFeed>();
-        var serviceProvider = services.BuildServiceProvider();
+        var serviceProvider = services.AddElsaEndpoints().BuildServiceProvider();
         var routes = new CollectibleRouteBuilder(serviceProvider);
         featureType.GetMethod(nameof(OpenTelemetryFeature.MapEndpoints))!.Invoke(feature, [routes, null]);
         var allRoutes = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();

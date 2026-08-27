@@ -15,9 +15,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
-    <ProjectReference Include="..\..\..\Api\Endpoints\Elsa.Api.Endpoints.csproj" />
     <ProjectReference Include="..\..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
 </Project>

@@ -78,7 +78,7 @@ public sealed class GetAttentionItemsEndpointTests
 
     private static RouteEndpoint GetEndpoint()
     {
-        using var services = new ServiceCollection().AddRouting().BuildServiceProvider();
+        using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
         AttentionApi.MapAttentionApi(routes);
         return Assert.Single(routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>());
@@ -89,7 +89,7 @@ public sealed class GetAttentionItemsEndpointTests
         ClaimsPrincipal? principal = null,
         string? queryString = null)
     {
-        var services = new ServiceCollection().AddLogging().AddSingleton(service).BuildServiceProvider();
+        var services = new ServiceCollection().AddLogging().AddSingleton(service).AddElsaEndpoints().BuildServiceProvider();
         var context = new DefaultHttpContext
         {
             RequestServices = services,

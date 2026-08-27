@@ -1,4 +1,5 @@
-using Elsa.Api.Endpoints;
+using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using Elsa.Diagnostics.StructuredLogs.Authorization;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
@@ -30,7 +31,7 @@ public static class StructuredLogsApi
         // The routes are host-configurable and the responses are pre-serialized JSON documents and
         // SSE frames with plain-text failures, so the operations stay on the group's raw seam with
         // their own reads and writes; the group supplies the shared metadata.
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             StructuredLogsPermissions.OwnerId,
             StructuredLogsJsonContext.Default,
             jsonContentType: "application/json");

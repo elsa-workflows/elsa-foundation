@@ -109,9 +109,9 @@
       three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
       Testing companions are only meaningful against the same build of it.
     -->
-    <PackageVersion Include="NativeEndpoints" Version="1.0.0-preview.5" />
-    <PackageVersion Include="NativeEndpoints.OpenApi" Version="1.0.0-preview.5" />
-    <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.5" />
+    <PackageVersion Include="NativeEndpoints" Version="1.0.0-preview.6" />
+    <PackageVersion Include="NativeEndpoints.OpenApi" Version="1.0.0-preview.6" />
+    <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.6" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />

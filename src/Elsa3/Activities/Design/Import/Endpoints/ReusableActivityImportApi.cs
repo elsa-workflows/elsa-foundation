@@ -1,4 +1,4 @@
-using Elsa.Api.Endpoints;
+using NativeEndpoints;
 using Elsa3.Activities.Design.Import.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -22,7 +22,7 @@ public static class ReusableActivityImportApi
         // composition time exactly as the hand-written mapper did.
         var applicationName = endpoints.ServiceProvider.GetService<IHostEnvironment>()?.ApplicationName
                               ?? typeof(ReusableActivityImportApi).Assembly.GetName().Name!;
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OwnerId,
             ReusableActivityImportJsonContext.Default,
             jsonContentType: "application/json; charset=utf-8",

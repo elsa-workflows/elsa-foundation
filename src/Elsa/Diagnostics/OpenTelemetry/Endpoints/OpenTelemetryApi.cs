@@ -1,4 +1,5 @@
-using Elsa.Api.Endpoints;
+using Elsa.Api.AspNetCore;
+using NativeEndpoints;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -29,7 +30,7 @@ public static class OpenTelemetryApi
         // "OpenTelemetry" query tag — both pinned by the reviewed approval registry — and every
         // operation keeps its own reads, writes, problem shapes, and the SSE stream, so the surface
         // stays on the group's raw seam with per-operation name overrides.
-        var api = endpoints.MapModuleEndpoints(
+        var api = endpoints.MapEndpointGroup(
             OpenTelemetryPermissions.OwnerId,
             OpenTelemetryJsonContext.Default,
             tag: QueryTag);
@@ -101,7 +102,7 @@ public static class OpenTelemetryApi
     }
 
     private static void MapPost<TFilter, TResult>(
-        ModuleEndpointGroup api,
+        EndpointGroup api,
         string route,
         string operation,
         string operationId,

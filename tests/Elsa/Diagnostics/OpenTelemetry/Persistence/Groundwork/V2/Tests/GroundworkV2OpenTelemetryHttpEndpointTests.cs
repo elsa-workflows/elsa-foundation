@@ -1,4 +1,5 @@
 using CShells.AspNetCore.Features;
+using Elsa.Api.AspNetCore;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Permissions;
@@ -90,6 +91,7 @@ public sealed class GroundworkV2OpenTelemetryHttpEndpointTests
                 webHost.UseSetting(WebHostDefaults.EnvironmentKey, Environments.Development);
                 webHost.ConfigureServices(services =>
                 {
+                    services.AddElsaEndpoints();
                     services.AddRouting();
                     services.AddAuthorization();
                     services.AddFoundationIdentityAbstractions(options =>

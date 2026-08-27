@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Services;
+using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Authoring.AnalyzeScopedVariables;
 
