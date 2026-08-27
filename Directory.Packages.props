@@ -104,6 +104,14 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.10.0" />
+    <!--
+      The endpoint-class framework this repository used to carry in src/Elsa/Api/Endpoints. The
+      three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
+      Testing companions are only meaningful against the same build of it.
+    -->
+    <PackageVersion Include="NativeEndpoints" Version="1.0.0-preview.5" />
+    <PackageVersion Include="NativeEndpoints.OpenApi" Version="1.0.0-preview.5" />
+    <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.5" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
