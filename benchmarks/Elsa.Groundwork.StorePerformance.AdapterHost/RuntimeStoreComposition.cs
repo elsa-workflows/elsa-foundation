@@ -24,9 +24,10 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 /// 2. <c>GroundworkStorageSessionSource</c> admits its units from <c>IHostedService.StartAsync</c> /
 ///    <c>IShellInitializer.InitializeAsync</c>. A plain <c>BuildServiceProvider()</c> runs neither, so a
 ///    direct host must drive admission itself or every session resolves against an unadmitted unit.
-/// 3. The observer is registered as a singleton <see cref="IWritePathObserver"/>, which is what
-///    <c>GroundworkV2RuntimeRegistration</c> resolves when it constructs the checkpoint writer. That is
-///    what makes the measured path the production commit path rather than a reconstruction of it.
+/// 3. The observer is registered as a singleton <see cref="IProviderCommandObserver"/>, which
+///    <c>GroundworkStorageSessionSource</c> resolves once for its lifetime and forwards to every session
+///    and unit of work it opens — both forwarding points, because the commit path runs through units of
+///    work. That is what makes the measured path the production commit path rather than a reconstruction.
 /// </summary>
 internal sealed class RuntimeStoreComposition : IAsyncDisposable
 {
@@ -72,9 +73,10 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // live provider, not inferred: the first correctness run failed exactly there.
             services.AddPersistenceCore(persistenceScope);
 
-            // The observer the checkpoint writer picks up. Singleton because the harness snapshots one
-            // cumulative count for the process, and both clients must contribute to the same total.
-            services.AddSingleton<IWritePathObserver>(observer);
+            // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
+            // of work it opens. Singleton because the harness snapshots one cumulative count for the
+            // process, and both clients must contribute to the same total.
+            services.AddSingleton<IProviderCommandObserver>(observer);
 
             services.AddGroundworkV2RuntimeStores();
 

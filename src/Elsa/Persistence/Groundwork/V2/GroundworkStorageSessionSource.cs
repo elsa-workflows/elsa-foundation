@@ -22,6 +22,19 @@ public sealed class GroundworkStorageSessionSource(
 {
     private readonly Lock admissionGate = new();
     private readonly Lock sessionGate = new();
+
+    /// <summary>
+    /// One observer for the source's lifetime, forwarded to every session and unit of work this source
+    /// opens. Lifetime-scoped rather than per-call for two reasons that reinforce each other: sessions are
+    /// cached, so a per-call observer would let the second caller of a cached session silently inherit the
+    /// first caller's observer — the same shape as the retired first-staged-write lookup — and putting the
+    /// observer in the cache key would multiply cached sessions (and their connections) per observer for
+    /// nothing any consumer wants. Resolved lazily because this source is constructed by DI before the
+    /// host has decided whether anything observes at all; null means unobserved, which is the production
+    /// default.
+    /// </summary>
+    private readonly Lazy<IProviderCommandObserver?> observer =
+        new(() => services.GetService<IProviderCommandObserver>());
     private readonly HashSet<(string Target, string Fingerprint)> admitted = [];
     private readonly Dictionary<
         (string Target, string UnitId, string Fingerprint, StorageAccess Access),
@@ -49,7 +62,7 @@ public sealed class GroundworkStorageSessionSource(
             if (sessions.TryGetValue(key, out var session))
                 return session;
 
-            session = connection.OpenSession(registration.Unit, access);
+            session = connection.OpenSession(registration.Unit, access, observer.Value);
             sessions.Add(key, session);
             return session;
         }
@@ -72,7 +85,11 @@ public sealed class GroundworkStorageSessionSource(
         var units = unitIds.Select(unitId => registry.Require(unitId, target)).ToArray();
         foreach (var registration in units)
             Admit(connection, registration);
-        return connection.BeginUnitOfWork(access, options, units.Select(candidate => candidate.Unit).ToArray());
+        // The observed overload sits beside the unobserved ones; both forwarding points matter, because the
+        // checkpoint commit path issues its provider commands through units of work, not sessions — an
+        // observer forwarded only at OpenSession would count zero for exactly the workload it exists to
+        // measure, while still reporting itself present and exact.
+        return connection.BeginUnitOfWork(access, options, observer.Value, units.Select(candidate => candidate.Unit).ToArray());
     }
 
     public StorageUnit Unit(string unitId, string? targetName = null) =>

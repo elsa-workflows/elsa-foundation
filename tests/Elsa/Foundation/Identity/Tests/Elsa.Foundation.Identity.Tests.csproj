@@ -13,7 +13,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.TestHost" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
-		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.2.0-preview.2" />
+		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.3.0-preview.1" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
 		<PackageReference Include="xunit" />
 		<PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />

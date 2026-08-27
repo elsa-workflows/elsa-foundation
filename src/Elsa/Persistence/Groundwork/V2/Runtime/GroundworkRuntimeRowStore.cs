@@ -74,8 +74,7 @@ public sealed class GroundworkRuntimeRowStore
         string schemaVersion,
         object content,
         long expectedVersion,
-        IReadOnlyDictionary<string, object?>? projections = null,
-        IWritePathObserver? observer = null)
+        IReadOnlyDictionary<string, object?>? projections = null)
     {
         if (Session is not IConcurrencyStorageSession concurrency)
             throw new NotSupportedException(
@@ -83,7 +82,7 @@ public sealed class GroundworkRuntimeRowStore
 
         return concurrency.ConditionalUpsert(
             Values(id, schemaVersion, content, projections),
-            new WriteOptions { Precondition = WritePrecondition.IfVersion(expectedVersion), Observer = observer });
+            new WriteOptions { Precondition = WritePrecondition.IfVersion(expectedVersion) });
     }
 
     public WriteOutcome Delete(string id, WriteOptions? options = null) => Session.Delete(Key(id), options);

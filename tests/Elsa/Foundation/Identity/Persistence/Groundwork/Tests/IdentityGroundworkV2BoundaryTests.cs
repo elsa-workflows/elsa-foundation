@@ -101,6 +101,14 @@ public sealed class IdentityGroundworkV2BoundaryTests
             return inner.OpenSession(unit, access);
         }
 
+        // Counts like the unobserved overload: the fake exists to count session opens, and an overload
+        // that skipped the increment would silently diverge the count the assertions rest on.
+        public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null)
+        {
+            Interlocked.Increment(ref openSessionCount);
+            return inner.OpenSession(unit, access, observer);
+        }
+
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
             inner.BeginUnitOfWork(access, units);
 
@@ -109,6 +117,13 @@ public sealed class IdentityGroundworkV2BoundaryTests
             BatchWriteOptions options,
             params StorageUnit[] units) =>
             inner.BeginUnitOfWork(access, options, units);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IProviderCommandObserver? observer,
+            params StorageUnit[] units) =>
+            inner.BeginUnitOfWork(access, options, observer, units);
 
         public void Dispose()
         {

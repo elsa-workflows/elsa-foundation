@@ -95,6 +95,9 @@ internal sealed class NonDisposingStorageProviderConnection(IStorageProviderConn
     public IStorageSession OpenSession(StorageUnit unit, StorageAccess access) =>
         inner.OpenSession(unit, access);
 
+    public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
+        inner.OpenSession(unit, access, observer);
+
     public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
         inner.BeginUnitOfWork(access, units);
 
@@ -103,6 +106,13 @@ internal sealed class NonDisposingStorageProviderConnection(IStorageProviderConn
         BatchWriteOptions options,
         params StorageUnit[] units) =>
         inner.BeginUnitOfWork(access, options, units);
+
+    public IUnitOfWork BeginUnitOfWork(
+        StorageAccess access,
+        BatchWriteOptions options,
+        IProviderCommandObserver? observer,
+        params StorageUnit[] units) =>
+        inner.BeginUnitOfWork(access, options, observer, units);
 
     public void Dispose()
     {
@@ -128,14 +138,24 @@ internal sealed class SerializingStorageProviderConnection(IStorageProviderConne
     public IStorageSession OpenSession(StorageUnit unit, StorageAccess access) =>
         inner.OpenSession(unit, access);
 
+    public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
+        inner.OpenSession(unit, access, observer);
+
     public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
-        Begin(access, null, units);
+        Begin(access, null, null, units);
 
     public IUnitOfWork BeginUnitOfWork(
         StorageAccess access,
         BatchWriteOptions options,
         params StorageUnit[] units) =>
-        Begin(access, options, units);
+        Begin(access, options, null, units);
+
+    public IUnitOfWork BeginUnitOfWork(
+        StorageAccess access,
+        BatchWriteOptions options,
+        IProviderCommandObserver? observer,
+        params StorageUnit[] units) =>
+        Begin(access, options, observer, units);
 
     public void Dispose()
     {
@@ -146,14 +166,17 @@ internal sealed class SerializingStorageProviderConnection(IStorageProviderConne
     private IUnitOfWork Begin(
         StorageAccess access,
         BatchWriteOptions? options,
+        IProviderCommandObserver? observer,
         StorageUnit[] units)
     {
         gate.Wait();
         try
         {
-            var unitOfWork = options is null
-                ? inner.BeginUnitOfWork(access, units)
-                : inner.BeginUnitOfWork(access, options, units);
+            var unitOfWork = observer is not null
+                ? inner.BeginUnitOfWork(access, options ?? BatchWriteOptions.Default, observer, units)
+                : options is null
+                    ? inner.BeginUnitOfWork(access, units)
+                    : inner.BeginUnitOfWork(access, options, units);
             return new SerializingUnitOfWork(unitOfWork, gate);
         }
         catch

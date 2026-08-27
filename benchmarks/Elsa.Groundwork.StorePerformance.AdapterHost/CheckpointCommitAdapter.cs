@@ -8,9 +8,10 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 ///
 /// It drives the catalog-owned workload through the public runtime stores only, over one adapter-owned
 /// provider connection, and counts provider round trips with <see cref="WritePathRoundTripObserver"/>.
-/// Because <c>GroundworkV2RuntimeCheckpointWriter</c> now takes an optional <c>IWritePathObserver</c>, the
-/// commits observed here are the production commit path rather than a hand-rolled sequence of elementary
-/// store calls standing in for it.
+/// Because <c>GroundworkStorageSessionSource</c> forwards a registered <c>IProviderCommandObserver</c> to
+/// every session and unit of work it opens, the commands observed here are the production commit path
+/// rather than a hand-rolled sequence of elementary store calls standing in for it — reads included, which
+/// the retired write-path observer could not see.
 /// </summary>
 internal sealed class CheckpointCommitAdapter(
     RunRequest request,
