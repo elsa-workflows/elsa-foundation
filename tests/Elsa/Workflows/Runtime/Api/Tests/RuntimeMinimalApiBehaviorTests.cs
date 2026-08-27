@@ -19,9 +19,11 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NativeEndpoints;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Xunit;
@@ -52,6 +54,56 @@ public sealed class RuntimeMinimalApiBehaviorTests
         using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
 
         Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    /// <remarks>
+    /// These five operations declare <see cref="EndpointBodyMode.RequiredWithContentTypeAndPayload"/>,
+    /// whose whole reason for existing is this case: a literal-null payload is answered at the media
+    /// gate as a bare 415, not as the 400 problem document every other required mode produces.
+    /// <para>
+    /// The coverage used to live in the in-tree framework's own suite, which went away when the
+    /// framework moved to NativeEndpoints. Without a test here, the five endpoints depend on a
+    /// package behaviour that nothing in this repository checks, and a future package change could
+    /// move them from 415 to 400 silently.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// Two of the five, not all five: the other three require <c>WorkflowRuntimeManage</c>, and this
+    /// harness's principal holds <c>WorkflowRuntimeExecute</c> only, so authorization would answer
+    /// before the binder ever reached the media gate. All five declare the same body mode, so these
+    /// two pin the behaviour that matters.
+    /// </remarks>
+    [Theory]
+    [InlineData("POST", "/runtime/workflows/executables/artifact-1/execute")]
+    [InlineData("POST", "/runtime/workflows/stimuli")]
+    public async Task A_literal_null_payload_is_a_bare_415_and_not_a_problem_document(string method, string path)
+    {
+        await using var host = await StartAsync(_ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted));
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path)
+        {
+            Content = new StringContent("null", Encoding.UTF8, "application/json")
+        };
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The boundary the gate must not widen past: a malformed body is still a 400.</summary>
+    [Fact]
+    public async Task A_malformed_payload_is_still_a_problem_document_and_not_swept_into_the_media_gate()
+    {
+        await using var host = await StartAsync(_ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, ExecutePath)
+        {
+            Content = new StringContent("{", Encoding.UTF8, "application/json")
+        };
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotEmpty(await response.Content.ReadAsStringAsync());
     }
 
     [Theory]
