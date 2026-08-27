@@ -47,15 +47,13 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     private readonly IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager;
     private readonly string? targetName;
     private readonly TimeProvider timeProvider;
-    private readonly IWritePathObserver? writePathObserver;
 
     public GroundworkV2RuntimeCheckpointWriter(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null,
         TimeProvider? timeProvider = null,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null,
-        IWritePathObserver? writePathObserver = null)
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
     {
         ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(accessContextAccessor);
@@ -64,7 +62,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         this.rootWriteLeaseManager = rootWriteLeaseManager;
         this.targetName = targetName;
         this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.writePathObserver = writePathObserver;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
@@ -135,8 +132,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         CancellationToken cancellationToken)
     {
         using var unitOfWork = sessions.BeginUnitOfWork(access, BatchWriteOptions.Exact, CommitUnitIds, targetName);
-        var stage = new StageContext(
-            sessions, targetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider, writePathObserver);
+        var stage = new StageContext(sessions, targetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider);
         try
         {
             // The fence touch is intentionally the first staged mutation. Every other row, including the marker,
@@ -576,7 +572,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         private readonly string fingerprint;
         private readonly CancellationToken cancellationToken;
         private readonly TimeProvider timeProvider;
-        private readonly IWritePathObserver? writePathObserver;
         private readonly HashSet<string> touchedTestScopes = new(StringComparer.Ordinal);
         private readonly HashSet<string> newIncidentIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, IStorageSession> unitSessions = new(StringComparer.Ordinal);
@@ -591,8 +586,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             RuntimeCheckpointCommit commit,
             string fingerprint,
             CancellationToken cancellationToken,
-            TimeProvider timeProvider,
-            IWritePathObserver? writePathObserver)
+            TimeProvider timeProvider)
         {
             this.sessions = sessions;
             this.targetName = targetName;
@@ -602,7 +596,6 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             this.fingerprint = fingerprint;
             this.cancellationToken = cancellationToken;
             this.timeProvider = timeProvider;
-            this.writePathObserver = writePathObserver;
         }
 
         public bool CommitStarted { get; private set; }
@@ -650,7 +643,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             unitOfWork.Stage(RowWrite.ConditionalUpsert(
                 Unit(ElsaRuntimeV2StorageManifest.ExecutionLivenessStateDocumentKind),
                 GroundworkV2RuntimeLivenessCodec.Values(state),
-                Observed(WriteOptions.IfVersion(entry.Version ?? 0))));
+                WriteOptions.IfVersion(entry.Version ?? 0)));
         }
 
         public void ApplyWorkflowExecution()
@@ -695,7 +688,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 unitOfWork.Stage(RowWrite.Upsert(
                     Unit(ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind),
                     GroundworkV2ActivityExecutionStorageConventions.Values(change.State),
-                    Observed(WriteOptions.Unconditional)));
+                    WriteOptions.Unconditional));
             }
         }
 
@@ -1105,7 +1098,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     unitOfWork.Stage(RowWrite.Upsert(
                         Unit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind),
                         GroundworkV2PostCommitOutboxStorageConventions.Values(candidate),
-                        Observed(WriteOptions.CreateOnly)));
+                        WriteOptions.CreateOnly));
                     continue;
                 }
 
@@ -1158,7 +1151,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                         [ElsaRuntimeV2StorageManifest.SchedulerWorkClaimOwnerIdField] = consumed.ClaimOwnerId,
                         [ElsaRuntimeV2StorageManifest.SchedulerWorkFencingTokenField] = consumed.FencingToken
                     },
-                    Observed(WriteOptions.Unconditional)));
+                    WriteOptions.Unconditional));
             }
         }
 
@@ -1210,8 +1203,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
             unitOfWork.Stage(RowWrite.ConditionalUpsert(
                 Unit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind),
                 entry.Values,
-                Observed(WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
-                    $"Workflow test scope '{expected.ScopeId}' did not expose a provider revision.")))));
+                WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException(
+                    $"Workflow test scope '{expected.ScopeId}' did not expose a provider revision."))));
         }
 
         private void Apply<TState>(
@@ -1327,27 +1320,17 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
             var write = operation switch
             {
-                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, Observed(options ?? WriteOptions.CreateOnly)),
-                RuntimeStateChangeOperation.Upsert when options is not null => RowWrite.ConditionalUpsert(unit, values, Observed(options)),
-                _ => RowWrite.Upsert(unit, values, Observed(options ?? WriteOptions.Unconditional))
+                RuntimeStateChangeOperation.Append => RowWrite.Insert(unit, values, options ?? WriteOptions.CreateOnly),
+                RuntimeStateChangeOperation.Upsert when options is not null => RowWrite.ConditionalUpsert(unit, values, options),
+                _ => RowWrite.Upsert(unit, values, options ?? WriteOptions.Unconditional)
             };
             unitOfWork.Stage(write);
         }
 
         private void StageDelete(string unitId, string id, WriteOptions? options = null) =>
             unitOfWork.Stage(RowWrite.Delete(
-                Unit(unitId), GroundworkRuntimeRowStore.Key(id), Observed(options ?? WriteOptions.Unconditional)));
+                Unit(unitId), GroundworkRuntimeRowStore.Key(id), options ?? WriteOptions.Unconditional));
 
-        // Attaching the observer is what makes the production commit path measurable: the static WriteOptions
-        // singletons carry no observer, and a caller outside src/ cannot reach the staging calls to supply one.
-        //
-        // Every write staged in this type must pass through here. Note that Stage and StageDelete are NOT the
-        // only staging sites — five phases call unitOfWork.Stage(RowWrite...) directly (the liveness CAS, the
-        // activity upsert, the outbox insert, the scheduler-work compare-and-delete, and the test-scope CAS),
-        // and each wraps its own options. Missing one does not fail: it undercounts, silently, while the
-        // adapter still reports its observer as exact. If you add a staging site, wrap it.
-        private WriteOptions Observed(WriteOptions options) =>
-            writePathObserver is null ? options : options with { Observer = writePathObserver };
 
         private IStorageSession Open(string unitId) =>
             unitSessions.TryGetValue(unitId, out var session)

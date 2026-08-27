@@ -107,12 +107,24 @@ along with measurement.
 
 **Correctness has now run against all four providers — two pass, two are blocked upstream of this project.**
 
-| provider | result |
+| provider | result (Groundwork `0.3.0-preview.1`, session-scoped observer) |
 |---|---|
-| sqlite | **passes** — result digest exactly matches the frozen `ebb92b59…`, 4 096 provider round trips counted through the production commit path |
-| mongodb | **passes** — same digest, 10 240 round trips |
+| sqlite | **passes** — result digest exactly matches the frozen `ebb92b59…`, **37 857** provider round trips |
+| mongodb | **passes** — same digest, **38 751** round trips |
 | postgresql | **fails in the concurrent stale-fence phase** — see elsa-workflows/elsa-foundation#1449 |
 | sqlserver | fails identically to postgresql, same mechanism |
+
+Counts made on `0.2.0-preview.2`'s write-path observer (4 096 sqlite / 10 240 mongodb on this same
+workload) are **not comparable**: the write-only seam was blind to reads, so the ~9× increase is added
+visibility, not added cost. Append-heavy workloads additionally undercount by the relational
+idempotency-ledger overhead (~5 commands per append) until the follow-up declared on
+valence-works/groundwork-v2#63 lands.
+
+One diagnosis trap recorded from the migration run: `RuntimeExecutionOwnershipOptions.LeaseDuration`
+defaults to one minute, and the workload heartbeats each lease before first commit — on a heavily loaded
+host the acquire-to-heartbeat gap alone can exceed it, failing with "could not refresh its current
+execution fence" on the slower providers while sqlite (first in line) still passes. That is a load
+phantom, not a provider difference; the same run passes on a quiet host.
 
 The two failures are not adapter bugs: `GroundworkStorageSessionSource` hands one cached session (one
 physical connection) to every caller with matching access, and PostgreSQL/SQL Server refuse concurrent
