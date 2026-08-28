@@ -32,13 +32,15 @@ public sealed class WorkflowDefinitionOptionsProvider(
             .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        return definitions
-            .Where(definition => definition.DeletedAt is null && unambiguousDefinitions.Contains(definition.Id))
-            .OrderBy(definition => definition.Name, StringComparer.Ordinal)
-            .ThenBy(definition => definition.Id, StringComparer.Ordinal)
-            .Select(definition => new ActivityInputOption(
-                string.IsNullOrWhiteSpace(definition.Name) ? definition.Id : definition.Name,
-                definition.Id))
-            .ToArray();
+        return
+        [
+            .. definitions
+                .Where(definition => definition.DeletedAt is null && unambiguousDefinitions.Contains(definition.Id))
+                .OrderBy(definition => definition.Name, StringComparer.Ordinal)
+                .ThenBy(definition => definition.Id, StringComparer.Ordinal)
+                .Select(definition => new ActivityInputOption(
+                    string.IsNullOrWhiteSpace(definition.Name) ? definition.Id : definition.Name,
+                    definition.Id))
+        ];
     }
 }
