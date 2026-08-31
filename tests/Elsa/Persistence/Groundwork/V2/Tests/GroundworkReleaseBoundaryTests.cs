@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Kernel.Schema;
 using Groundwork.Query.Model;
@@ -13,17 +14,35 @@ namespace Elsa.Persistence.Groundwork.V2.Tests;
 public sealed class GroundworkReleaseBoundaryTests
 {
     [Fact]
+    public void Synchronous_test_double_rejects_an_unadvertised_optional_capability_clearly()
+    {
+        var session = new CoreOnlySynchronousSession(Unit("elsa-release-core-only", "payload"));
+
+        var failure = Assert.Throws<NotSupportedException>(
+            () => session.ApplyRetentionAsync(new OperationId(DateTimeOffset.UnixEpoch, "retention")));
+
+        Assert.Contains(nameof(IExactRetentionStorageSession), failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Admission_gate_delegates_the_complete_native_async_surface()
     {
         var session = new AsyncOnlySession(Unit("elsa-release-async-gate", "payload"));
         var gate = new GroundworkStorageSessionGate();
         var key = new StorageKey(new Dictionary<string, object?> { ["id"] = "one" });
         var values = new StorageValues(new Dictionary<string, object?> { ["id"] = "one", ["payload"] = "value" });
+        var query = new QueryRequest(
+            new TableId(session.Unit.Name),
+            new Predicate.AlwaysTrue(),
+            [],
+            Projection.All,
+            Paging.None);
+        var aggregation = AggregationQuery.For("elsa-release-async-gate");
 
         gate.Publish(session);
         _ = await gate.ReadAsync(key);
-        _ = await gate.QueryAsync(null!);
-        _ = await gate.AggregateAsync(null!);
+        _ = await gate.QueryAsync(query);
+        _ = await gate.AggregateAsync(aggregation);
         _ = await gate.InsertAsync(values);
         _ = await gate.UpdateAsync(values);
         _ = await gate.UpsertAsync(values);
@@ -241,5 +260,22 @@ public sealed class GroundworkReleaseBoundaryTests
 
         private static InvalidOperationException SyncCall() =>
             new("The gate called the synchronous surface instead of the native async member.");
+    }
+
+    private sealed class CoreOnlySynchronousSession(StorageUnit unit) :
+        SynchronousStorageSessionTestDouble,
+        IStorageSession
+    {
+        public StorageUnit Unit { get; } = unit;
+        public StorageAccess Access { get; } = StorageAccess.Global;
+
+        public StoredEntry? Read(StorageKey key) => null;
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) => null!;
+        public AggregationResult Aggregate(AggregationQuery query) => null!;
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => null!;
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => null!;
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => null!;
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => null!;
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => null!;
     }
 }

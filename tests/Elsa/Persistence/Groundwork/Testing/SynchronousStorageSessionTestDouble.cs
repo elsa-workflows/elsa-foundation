@@ -95,7 +95,9 @@ public abstract class SynchronousStorageSessionTestDouble
     public ValueTask<RetentionOperationResult> ApplyRetentionAsync(
         OperationId operationId,
         RetentionExecutionOptions? options = null) =>
-        ValueTask.FromResult(((IExactRetentionStorageSession)this).ApplyRetention(operationId, options));
+        Invoke<IExactRetentionStorageSession, RetentionOperationResult>(
+            session => session.ApplyRetention(operationId, options),
+            CancellationToken.None);
 
     private ValueTask<T> Invoke<T>(Func<IStorageSession, T> operation, CancellationToken cancellationToken)
         => Invoke<IStorageSession, T>(operation, cancellationToken);
@@ -103,6 +105,13 @@ public abstract class SynchronousStorageSessionTestDouble
     private ValueTask<T> Invoke<TSession, T>(Func<TSession, T> operation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(operation((TSession)(object)this));
+        if (this is not TSession session)
+        {
+            throw new NotSupportedException(
+                $"Test double '{GetType().Name}' does not implement optional Groundwork capability " +
+                $"'{typeof(TSession).Name}'.");
+        }
+
+        return ValueTask.FromResult(operation(session));
     }
 }
