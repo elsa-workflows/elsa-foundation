@@ -174,9 +174,30 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         using (raw)
         {
             Assert.Equal(["a"], (await store.ListAsync(new WorkflowDefinitionFilter { Description = "Handles orders" })).Select(x => x.Id));
-            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdIndex,
+                AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdIndex,
                 [WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
+    }
+
+    [Fact]
+    public async Task Exact_name_filter_remains_complete_beyond_the_search_term_bound()
+    {
+        var definitions = Enumerable.Range(0, GroundworkDesignStorage.SearchTermProbeLimit)
+            .Select(index => new WorkflowDefinition
+            {
+                Id = $"exact-{index:D5}",
+                Name = index == GroundworkDesignStorage.SearchTermMaximumMatches ? "target" : $"name-{index:D5}"
+            })
+            .ToArray();
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        raw.SeedDefinitions(definitions);
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var result = await store.ListAsync(new WorkflowDefinitionFilter { Name = "target" });
+
+        Assert.Equal(["exact-10000"], result.Select(definition => definition.Id));
+        Assert.DoesNotContain(raw.Queries, query => query.Request.AcceptedScan is not null);
+        Assert.All(raw.Queries, query => Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdIndex, query.Options?.SelectedIndex));
     }
 
     [Fact]

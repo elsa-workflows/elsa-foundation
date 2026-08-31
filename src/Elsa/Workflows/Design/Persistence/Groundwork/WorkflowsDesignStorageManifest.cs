@@ -11,6 +11,11 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 public static class WorkflowsDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
+    // The definition projection changed incompatibly when the portable ID lookup hash was added.
+    // Keep the envelope version stable, but provision a new physical table for this clean
+    // pre-GA baseline so Groundwork never attempts to add a required, non-canonical projection
+    // column or retain the removed wide indexes in place.
+    public const int DefinitionStorageSchemaVersion = 2;
     public const int IdentityMaximumLength = 128;
     public const int TextMaximumLength = 256;
     public const int SchemaVersionMaximumLength = 32;
@@ -108,7 +113,7 @@ public static class WorkflowsDesignStorageManifest
         CreateUnits().Single(unit => StringComparer.Ordinal.Equals(unit.Id.Value, unitId));
 
     private static StorageUnit DefinitionUnit() =>
-        StorageUnit.Declare(WorkflowDefinitionDocumentKind, "elsa_workflow_definitions")
+        StorageUnit.Declare(WorkflowDefinitionDocumentKind, "elsa_workflow_definitions_v2")
             .String(IdField, IdentityMaximumLength, column => column.Required())
             .String(SchemaVersionField, SchemaVersionMaximumLength, column => column.Required())
             .Json(ContentField, column => column.Required())
@@ -128,7 +133,7 @@ public static class WorkflowsDesignStorageManifest
             .UniqueIndex(DefinitionByIdIndex, DefinitionIdField)
             .UniqueIndex(DefinitionByIdSearchIndex, DefinitionIdLookupHashField)
             .Scoped()
-            .Build();
+            .Build() with { SchemaVersion = DefinitionStorageSchemaVersion };
 
     private static StorageUnit VersionUnit() =>
         StorageUnit.Declare(WorkflowDefinitionVersionDocumentKind, "elsa_workflow_definition_versions")

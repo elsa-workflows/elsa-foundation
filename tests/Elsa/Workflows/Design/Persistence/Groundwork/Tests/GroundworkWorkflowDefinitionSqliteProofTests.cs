@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
+using Groundwork.Kernel.Schema;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
@@ -80,6 +81,73 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             Assert.Equal(
                 [WorkflowsDesignStorageManifest.DefinitionIdLookupHashField],
                 idIndex.Columns.ToArray());
+        }
+        finally
+        {
+            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
+                if (File.Exists(file))
+                    File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void Definition_projection_uses_a_new_versioned_table_for_the_clean_schema_boundary()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-v2-boundary-{Guid.NewGuid():N}.db");
+        try
+        {
+            using var connection = new SqliteProviderFactory().Create($"Data Source={path};Pooling=False");
+            var current = WorkflowsDesignStorageManifest.Require(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+            var legacy = current with
+            {
+                Name = "elsa_workflow_definitions",
+                SchemaVersion = 1,
+                Columns = current.Columns
+                    .Where(column => column.Name != WorkflowsDesignStorageManifest.DefinitionIdLookupHashField)
+                    .ToArray(),
+                Indexes =
+                [
+                    new IndexDefinition
+                    {
+                        Name = WorkflowsDesignStorageManifest.DefinitionByIdIndex,
+                        IsUnique = true,
+                        Columns = [new IndexColumn(WorkflowsDesignStorageManifest.DefinitionIdField)]
+                    },
+                    new IndexDefinition
+                    {
+                        Name = WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+                        IsUnique = true,
+                        Columns = [new IndexColumn(WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField)]
+                    },
+                    new IndexDefinition
+                    {
+                        Name = WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+                        IsUnique = true,
+                        Columns =
+                        [
+                            new IndexColumn(WorkflowsDesignStorageManifest.DefinitionNameField),
+                            new IndexColumn(WorkflowsDesignStorageManifest.DefinitionIdField)
+                        ]
+                    },
+                    new IndexDefinition
+                    {
+                        Name = WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+                        IsUnique = true,
+                        Columns =
+                        [
+                            new IndexColumn(WorkflowsDesignStorageManifest.DefinitionDescriptionField),
+                            new IndexColumn(WorkflowsDesignStorageManifest.DefinitionIdField)
+                        ]
+                    }
+                ]
+            };
+
+            connection.Schema.Apply(legacy);
+            var refusal = Assert.Throws<PhysicalSchemaPlanRefusedException>(() => connection.Schema.Apply(current));
+            Assert.Contains("Rebuild the target from the current declaration", refusal.Message, StringComparison.Ordinal);
+            Assert.Equal("elsa_workflow_definitions_v2", current.Name);
+            Assert.Equal(WorkflowsDesignStorageManifest.DefinitionStorageSchemaVersion, current.SchemaVersion);
         }
         finally
         {

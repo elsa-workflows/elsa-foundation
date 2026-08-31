@@ -201,7 +201,9 @@ public sealed class GroundworkDesignStorage(
         if (result.Rows.Count > 1)
             throw new GroundworkQueryReadinessException(
                 $"Workflow-definition point read for '{id}' is ambiguous across {result.Rows.Count} rows.");
-        return new GroundworkDesignEntry(new StoredEntry(new StorageValues(result.Rows[0]), null), null);
+        var entry = new GroundworkDesignEntry(new StoredEntry(new StorageValues(result.Rows[0]), null), null);
+        EnsureDefinitionIdentity(entry, id);
+        return entry;
     }
 
     private static GroundworkDesignEntry? ReadDefinitionResult(CrossScopeQueryResult result, string id)
@@ -211,9 +213,27 @@ public sealed class GroundworkDesignStorage(
         if (result.Rows.Count > 1)
             throw new GroundworkQueryReadinessException(
                 $"Workflow-definition point read for '{id}' is ambiguous across {result.Rows.Count} scopes.");
-        return new GroundworkDesignEntry(
+        var entry = new GroundworkDesignEntry(
             new StoredEntry(new StorageValues(result.Rows[0].Values), null),
             result.Rows[0].Scope);
+        EnsureDefinitionIdentity(entry, id);
+        return entry;
+    }
+
+    internal static bool SameDefinitionIdentity(string value, string other) =>
+        StringComparer.Ordinal.Equals(
+            QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase),
+            QuerySearchKeys.Encode(other, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase));
+
+    private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
+    {
+        if (!entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) ||
+            value is not string actualId ||
+            !SameDefinitionIdentity(actualId, requestedId))
+        {
+            throw new GroundworkQueryReadinessException(
+                $"Workflow-definition point read for '{requestedId}' returned a row with a non-matching definition identity.");
+        }
     }
 
     public IReadOnlyList<GroundworkDesignEntry> Query(
@@ -325,7 +345,6 @@ public sealed class GroundworkDesignStorage(
         RequireAcrossScopesIfRequested(acrossScopes);
         var unit = sessions.Unit(unitId, targetName);
         var table = new TableId(unit.Name);
-        var id = Column(unit, table, WorkflowsDesignStorageManifest.IdField);
         var request = new QueryRequest(
             table,
             predicate,

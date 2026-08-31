@@ -50,10 +50,9 @@ public sealed class GroundworkWorkflowDefinitionStore(
 
         var acrossScopes = filter.TenantAgnostic == true;
         var rows = new Dictionary<GroundworkDesignRowIdentity, GroundworkDesignEntry>();
-        var requiresCandidateScan = !string.IsNullOrWhiteSpace(filter.SearchTerm) ||
-                                    filter.Name is not null ||
-                                    filter.Names is not null ||
-                                    filter.Description is not null;
+        // Exact name/description filters retain the normal paged ID route, so their public
+        // equality semantics remain complete for catalogs larger than the SearchTerm bound.
+        var requiresCandidateScan = !string.IsNullOrWhiteSpace(filter.SearchTerm);
         if (requiresCandidateScan)
         {
             var candidates = filter.Id is not null || filter.Ids is not null
@@ -108,9 +107,9 @@ public sealed class GroundworkWorkflowDefinitionStore(
 
     private static bool Matches(WorkflowDefinition definition, WorkflowDefinitionFilter filter)
     {
-        if (filter.Id is not null && !SameIdentity(definition.Id, filter.Id))
+        if (filter.Id is not null && !GroundworkDesignStorage.SameDefinitionIdentity(definition.Id, filter.Id))
             return false;
-        if (filter.Ids is not null && !filter.Ids.Any(id => SameIdentity(definition.Id, id)))
+        if (filter.Ids is not null && !filter.Ids.Any(id => GroundworkDesignStorage.SameDefinitionIdentity(definition.Id, id)))
             return false;
         if (filter.Name is not null && !StringComparer.Ordinal.Equals(definition.Name, filter.Name))
             return false;
@@ -129,11 +128,6 @@ public sealed class GroundworkWorkflowDefinitionStore(
 
         return true;
     }
-
-    private static bool SameIdentity(string value, string other) =>
-        StringComparer.Ordinal.Equals(
-            QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase),
-            QuerySearchKeys.Encode(other, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase));
 
     private static bool ContainsIdentity(string value, string encodedTerm) =>
         QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)

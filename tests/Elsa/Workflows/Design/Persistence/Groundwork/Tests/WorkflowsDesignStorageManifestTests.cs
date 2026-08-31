@@ -15,10 +15,13 @@ public sealed class WorkflowsDesignStorageManifestTests
             units.Select(unit => unit.Id.Value).Order(StringComparer.Ordinal));
         Assert.Equal(5, units.Count);
         Assert.Equal(
+            WorkflowsDesignStorageManifest.DefinitionStorageSchemaVersion,
+            units.Single(unit => unit.Id.Value == WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind).SchemaVersion);
+        Assert.Equal(
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [WorkflowsDesignStorageManifest.DesignOperationDocumentKind] = "elsa_design_operations",
-                [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind] = "elsa_workflow_definitions",
+                [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind] = "elsa_workflow_definitions_v2",
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind] = "elsa_workflow_definition_drafts",
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind] = "elsa_workflow_definition_versions",
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind] = "elsa_workflow_definition_version_layouts"

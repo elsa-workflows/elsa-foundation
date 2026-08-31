@@ -136,6 +136,22 @@ persistence sets atomically while preserving Design and Activities data, then re
 serving traffic. Removing only selected documents is unsafe because execution state, continuations,
 publication authority, and serving projections form a dependent persistence set around the same artifacts.
 
+### Workflow-design Groundwork clean-schema boundary
+
+The workflow-definition projection is a pre-GA clean baseline. Its portable ID lookup changed from the wide
+search key to a required SHA-256 lookup projection, while the former name/description indexes were removed.
+The definition unit therefore uses the versioned physical table `elsa_workflow_definitions_v2` and storage schema
+version `2`; this deliberately prevents Groundwork from attempting an in-place required-column backfill or
+leaving the removed indexes attached to the active table. The workflow-design envelope `SchemaVersion` remains
+`"1.0.0"` because that value versions the document envelope, not this physical clean-schema boundary.
+
+This change has no in-place migration. Before enabling a build containing this projection, discard and reprovision
+the complete workflow-design Groundwork persistence set (definitions, versions, drafts, layouts, and design-operation
+markers) from the current manifest, then recreate or import the workflow designs. Do not retain old definition,
+version, or draft rows alongside the new definition table: they can otherwise form orphaned lifecycle records.
+The reset is intentional for the unreleased pre-GA line and must be replaced by an explicit data migration before
+the design schema is treated as production-compatible.
+
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 
 The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
