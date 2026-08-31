@@ -37,11 +37,21 @@ public sealed class GroundworkIdentityRowStore(
         return Map(plan.Session.Read(Key(id)), unitId, plan.Unit);
     }
 
+    /// <summary>Reads one bounded Identity cursor page.</summary>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="query"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the query bounds are invalid.</exception>
+    /// <exception cref="ArgumentException">Thrown when offset and continuation paging are combined.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+    /// <exception cref="GroundworkIdentityStoreException">Thrown when the provider or cursor protocol fails.</exception>
     public IReadOnlyList<GroundworkIdentityRow> Query(
         string unitId,
         GroundworkIdentityRowQuery query,
         CancellationToken cancellationToken = default)
-        => QueryCore(unitId, query, includeTotalCount: false, cancellationToken).Rows;
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ValidatePaging(query);
+        return QueryAtBoundary(unitId, query, includeTotalCount: false, cancellationToken).Rows;
+    }
 
     /// <summary>
     /// Reads a finite cursor sequence for one declared Identity route. Provider failures and
@@ -76,9 +86,10 @@ public sealed class GroundworkIdentityRowStore(
         for (var page = 0; page < maximumMaterialization; page++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = QueryPage(
+            var result = QueryAtBoundary(
                 unitId,
                 query with { Skip = 0, ContinuationToken = continuation },
+                includeTotalCount: false,
                 cancellationToken);
             totalCount ??= result.TotalCount;
 
@@ -104,12 +115,20 @@ public sealed class GroundworkIdentityRowStore(
         throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded page limit.");
     }
 
+    /// <summary>Reads one bounded Identity cursor page with its filtered total count.</summary>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="query"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the query bounds are invalid.</exception>
+    /// <exception cref="ArgumentException">Thrown when offset and continuation paging are combined.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+    /// <exception cref="GroundworkIdentityStoreException">Thrown when the provider or cursor protocol fails.</exception>
     public GroundworkIdentityRowQueryResult QueryWithTotalCount(
         string unitId,
         GroundworkIdentityRowQuery query,
         CancellationToken cancellationToken = default)
     {
-        var result = QueryCore(unitId, query, includeTotalCount: true, cancellationToken);
+        ArgumentNullException.ThrowIfNull(query);
+        ValidatePaging(query);
+        var result = QueryAtBoundary(unitId, query, includeTotalCount: true, cancellationToken);
         return new(
             result.Rows,
             result.TotalCount ?? throw new InvalidDataException(
@@ -254,14 +273,15 @@ public sealed class GroundworkIdentityRowStore(
             : new QueryRequest(table, where, [.. order], Projection.All, paging);
     }
 
-    private QueryCoreResult QueryPage(
+    private QueryCoreResult QueryAtBoundary(
         string unitId,
         GroundworkIdentityRowQuery query,
+        bool includeTotalCount,
         CancellationToken cancellationToken)
     {
         try
         {
-            return QueryCore(unitId, query, includeTotalCount: false, cancellationToken);
+            return QueryCore(unitId, query, includeTotalCount, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

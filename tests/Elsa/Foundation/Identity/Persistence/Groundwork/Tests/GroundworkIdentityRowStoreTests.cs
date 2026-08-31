@@ -364,10 +364,14 @@ public sealed class GroundworkIdentityRowStoreTests
     }
 
     [Fact]
-    public void Cursor_query_wraps_provider_failure_in_the_identity_store_exception_contract()
+    public void Cursor_query_enforces_the_page_limit_when_each_page_makes_progress()
     {
         using var fixture = Fixture.Create();
-        fixture.Source.QueryOverride = _ => throw new InvalidOperationException("provider failed");
+        var queryCalls = 0;
+        fixture.Source.QueryOverride = _ => new QueryMaterializedResult(
+            [IdentityValues($"r-{++queryCalls}")],
+            null,
+            "next-" + queryCalls);
         var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
 
         var error = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryAllPages(
@@ -378,6 +382,60 @@ public sealed class GroundworkIdentityRowStoreTests
                 "tenant-a",
                 IdentityV2StorageManifest.IdField,
                 Take: 1),
+            maximumMaterialization: 2));
+
+        Assert.Contains("page limit", error.Message, StringComparison.Ordinal);
+        Assert.Equal(2, queryCalls);
+    }
+
+    [Fact]
+    public void Offset_compatibility_stops_on_an_empty_provider_page()
+    {
+        using var fixture = Fixture.Create();
+        fixture.Source.QueryOverride = _ => new QueryMaterializedResult([], 0, null);
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+
+        var result = store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityV2StorageManifest.IdField,
+                Take: 1,
+                Skip: 3));
+
+        Assert.Empty(result.Rows);
+        Assert.Equal(0, result.TotalCount);
+        Assert.Null(result.NextContinuationToken);
+    }
+
+    [Fact]
+    public void Cursor_query_wraps_provider_failure_in_the_identity_store_exception_contract()
+    {
+        using var fixture = Fixture.Create();
+        fixture.Source.QueryOverride = _ => throw new InvalidOperationException("provider failed");
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+        var query = new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.TenantIdField,
+            GroundworkIdentityRowComparison.Equal,
+            "tenant-a",
+            IdentityV2StorageManifest.IdField,
+            Take: 1);
+
+        var pageError = Assert.Throws<GroundworkIdentityStoreException>(() => store.Query(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query));
+        Assert.Equal("provider failed", pageError.InnerException?.Message);
+
+        var totalError = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query));
+        Assert.Equal("provider failed", totalError.InnerException?.Message);
+
+        var error = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query,
             maximumMaterialization: 4));
         Assert.Equal("provider failed", error.InnerException?.Message);
     }

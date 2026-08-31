@@ -42,7 +42,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             """
             namespace Injected;
 
-            public sealed class ReviewedPager
+            public sealed class ReviewedPager(GroundworkIdentityRowStore rows)
             {
                 public Task LoadAsync() =>
                     rows.QueryAllPages();
@@ -145,6 +145,27 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             public sealed class SpoofedStore
             {
                 public GroundworkIdentityRowQueryResult QueryAllPages() => throw new NotSupportedException();
+            }
+            """);
+
+        var diagnostic = Assert.Single(AspNetCoreIdentityMutationScanner.Scan(fixture.Path));
+
+        Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+    }
+
+    [Fact]
+    public void An_allowlisted_path_with_an_unrelated_rows_type_cannot_bypass_the_cursor_guard()
+    {
+        using var fixture = new TemporaryDirectory();
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkClaimMappingStore.cs",
+            """
+            namespace Injected;
+
+            public sealed class UnrelatedRowsPager(string rows)
+            {
+                public Task LoadAsync() =>
+                    rows.QueryAllPages();
             }
             """);
 
@@ -355,6 +376,8 @@ internal static partial class AspNetCoreIdentityMutationScanner
         IReadOnlyList<string> lines,
         ICollection<AspNetCoreIdentityMutationDiagnostic> diagnostics)
     {
+        var source = string.Join('\n', lines.Select(StripLineComment));
+        var hasTypedRowsReceiver = GroundworkRowsReceiverRegex().IsMatch(source);
         var canonicalCursorDeclarationLine = StringComparer.Ordinal.Equals(relativePath, CanonicalIdentityRowStorePath)
             ? lines.Select((line, index) => (line, index))
                 .FirstOrDefault(candidate => candidate.line.Contains(
@@ -363,7 +386,6 @@ internal static partial class AspNetCoreIdentityMutationScanner
             : 0;
         if (!StringComparer.Ordinal.Equals(relativePath, CanonicalRegistrationPath))
         {
-            var source = string.Join('\n', lines.Select(StripLineComment));
             foreach (Match match in DuplicateAuthorityRegistrationRegex().Matches(source))
             {
                 Add(diagnostics, "IDENTITY-DUPLICATE-AUTHORITY-REGISTRATION", relativePath,
@@ -402,7 +424,8 @@ internal static partial class AspNetCoreIdentityMutationScanner
                     relativePath,
                     code,
                     lineNumber,
-                    canonicalCursorDeclarationLine)
+                    canonicalCursorDeclarationLine,
+                    hasTypedRowsReceiver)
                 ? ReviewedBoundedCursorCallRegex().Replace(code, string.Empty)
                 : code;
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
@@ -433,10 +456,12 @@ internal static partial class AspNetCoreIdentityMutationScanner
         string relativePath,
         string code,
         int lineNumber,
-        int canonicalCursorDeclarationLine) =>
+        int canonicalCursorDeclarationLine,
+        bool hasTypedRowsReceiver) =>
         (StringComparer.Ordinal.Equals(relativePath, CanonicalIdentityRowStorePath) &&
          lineNumber == canonicalCursorDeclarationLine) ||
         (ReviewedBoundedCursorCallerPaths.Contains(relativePath, StringComparer.Ordinal) &&
+         hasTypedRowsReceiver &&
          ReviewedBoundedCursorCallRegex().IsMatch(code));
 
     private static string StripLineComment(string line)
@@ -467,6 +492,9 @@ internal static partial class AspNetCoreIdentityMutationScanner
 
     [GeneratedRegex(@"\brows\.QueryAllPages\s*\(|\bpublic\s+GroundworkIdentityRowQueryResult\s+QueryAllPages\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex ReviewedBoundedCursorCallRegex();
+
+    [GeneratedRegex(@"\bGroundworkIdentityRowStore\s+rows\b", RegexOptions.CultureInvariant)]
+    private static partial Regex GroundworkRowsReceiverRegex();
 
     [GeneratedRegex(@"\b(?:Paging\.OffsetLimit|for\s*\(\s*var\s+skip\b)|\bnew\s+DocumentQuery\s*\([^)]*,\s*[^,]+,\s*[^,]+,\s*\d+\s*,\s*\d+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OffsetQueryRegex();
