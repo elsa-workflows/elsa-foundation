@@ -36,7 +36,7 @@
     },
     {
       "purpose": "Structured Logs Groundwork v2 provider matrix",
-      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=/tmp/elsa-642-v2-structured-20260831.db' dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=<temporary-dir>/elsa-642-v2-structured-20260831.db' dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
       "passed": 29,
       "failed": 0,
       "skipped": 3,
@@ -45,7 +45,7 @@
     },
     {
       "purpose": "OpenTelemetry Groundwork v2 provider matrix",
-      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=/tmp/elsa-642-v2-otel-20260831.db' dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=<temporary-dir>/elsa-642-v2-otel-20260831.db' dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
       "passed": 8,
       "failed": 0,
       "skipped": 3,

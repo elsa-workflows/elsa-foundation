@@ -61,7 +61,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
     }
 
     [Fact]
-    public void Current_groundwork_family_and_ef_oracle_ledger_are_deletion_ready()
+    public void Current_groundwork_family_and_ef_oracle_ledger_are_closeout_ready()
     {
         var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
             .Descendants("PackageVersion")
