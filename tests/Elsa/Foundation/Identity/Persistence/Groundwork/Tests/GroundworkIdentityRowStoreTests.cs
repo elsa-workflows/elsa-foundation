@@ -411,6 +411,37 @@ public sealed class GroundworkIdentityRowStoreTests
     }
 
     [Fact]
+    public void Offset_compatibility_consumes_multiple_non_empty_pages_before_collecting()
+    {
+        using var fixture = Fixture.Create();
+        var queryCalls = 0;
+        fixture.Source.QueryOverride = _ =>
+        {
+            queryCalls++;
+            return new QueryMaterializedResult(
+                [IdentityValues($"r-{queryCalls}")],
+                3,
+                queryCalls < 3 ? $"next-{queryCalls}" : null);
+        };
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+
+        var result = store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityV2StorageManifest.IdField,
+                Take: 1,
+                Skip: 2));
+
+        Assert.Equal("r-3", Assert.Single(result.Rows).Id);
+        Assert.Equal(3, result.TotalCount);
+        Assert.Null(result.NextContinuationToken);
+        Assert.Equal(3, queryCalls);
+    }
+
+    [Fact]
     public void Cursor_query_wraps_provider_failure_in_the_identity_store_exception_contract()
     {
         using var fixture = Fixture.Create();
@@ -438,6 +469,27 @@ public sealed class GroundworkIdentityRowStoreTests
             query,
             maximumMaterialization: 4));
         Assert.Equal("provider failed", error.InnerException?.Message);
+    }
+
+    [Fact]
+    public void Total_count_protocol_failure_uses_the_identity_store_exception_contract()
+    {
+        using var fixture = Fixture.Create();
+        fixture.Source.QueryOverride = _ => new QueryMaterializedResult([], null, null);
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+        var query = new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.TenantIdField,
+            GroundworkIdentityRowComparison.Equal,
+            "tenant-a",
+            IdentityV2StorageManifest.IdField,
+            Take: 1);
+
+        var error = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query));
+
+        Assert.IsType<InvalidDataException>(error.InnerException);
+        Assert.Contains("filtered total count", error.InnerException!.Message, StringComparison.Ordinal);
     }
 
     [Fact]

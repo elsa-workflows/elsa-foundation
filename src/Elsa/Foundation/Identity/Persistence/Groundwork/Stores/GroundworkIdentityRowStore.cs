@@ -131,8 +131,7 @@ public sealed class GroundworkIdentityRowStore(
         var result = QueryAtBoundary(unitId, query, includeTotalCount: true, cancellationToken);
         return new(
             result.Rows,
-            result.TotalCount ?? throw new InvalidDataException(
-                $"Identity unit '{unitId}' did not return the requested filtered total count."),
+            result.TotalCount!.Value,
             result.NextContinuationToken);
     }
 
@@ -281,7 +280,11 @@ public sealed class GroundworkIdentityRowStore(
     {
         try
         {
-            return QueryCore(unitId, query, includeTotalCount, cancellationToken);
+            var result = QueryCore(unitId, query, includeTotalCount, cancellationToken);
+            if (includeTotalCount && result.TotalCount is null)
+                throw new InvalidDataException(
+                    $"Identity unit '{unitId}' did not return the requested filtered total count.");
+            return result;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
