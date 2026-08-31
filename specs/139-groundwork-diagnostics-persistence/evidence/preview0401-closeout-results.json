@@ -4,12 +4,13 @@
   "scope": "exact-groundwork-0.4.0-preview.1-diagnostics-closeout",
   "outcome": "partial-pass",
   "evidenceClassification": "exact-adopted-groundwork-focused-receipt",
-  "recordedAtUtc": "2026-08-31T20:27:57Z",
+  "recordedAtUtc": "2026-08-31T20:55:08Z",
   "elsaSourceCommit": "3e694377ff6a73dc6b80e34991222b1f8cd47509",
   "closeoutGuardCommit": "9cb1ebfd80c2ce28fe77d0d240eec85ad4a4ce96",
+  "verifiedSourceCommit": "ee7503d1202c4be511afee3cd360684550ca803f",
   "groundworkReleaseSha": "701229e0a736670f406140ed7c61f00e10156ffd",
   "groundworkPackageVersion": "0.4.0-preview.1",
-  "testedSourceState": "The production adapter tree and package pins matched the adopted Elsa main head and exact Groundwork release above. The closeout guard was then added without deleting or weakening EF oracle code.",
+  "testedSourceState": "The production adapter tree and package pins matched the adopted Elsa main head and exact Groundwork release above. The corrected 43-covered / 3-mechanism-only closeout guard was then executed at verifiedSourceCommit without deleting or weakening EF oracle code.",
   "focusedTests": [
     {
       "purpose": "Shared diagnostics persistence suite before adding the closeout guard",
