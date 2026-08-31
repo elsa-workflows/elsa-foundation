@@ -34,7 +34,9 @@ python3 tools/groundwork/generate-e3-baseline.py \
 
 The search covered the local Git history and all refs, the historical measurement commits and files,
 the Elsa pull requests and comments that introduced the benchmark, and GitHub Actions runs/artifacts for
-the relevant commits.
+the relevant commits. GitHub's commit-run lookup returned no PR-triggered runs for the known measurement
+and adoption commits, and repository code search returned only the committed report/manifests—not any
+of the process artifact filenames named by those manifests.
 
 The result is:
 
