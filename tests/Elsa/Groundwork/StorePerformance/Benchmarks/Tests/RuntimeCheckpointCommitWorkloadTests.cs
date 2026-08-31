@@ -91,6 +91,24 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             value.Contains("Ledger", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task Exposes_the_frozen_public_operation_phases_without_rebuilding_the_scenario_in_the_adapter()
+    {
+        var adapter = new CheckpointAdapter();
+        var operations = await new RuntimeCheckpointCommitWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.Get(RuntimeCheckpointCommitWorkload.WorkloadId).OperationSequence,
+            operations.Select(operation => operation.Id));
+        Assert.All(operations, operation => Assert.NotNull(operation));
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(0);
+            await operation.InvokeAsync(0);
+        }
+    }
+
     private sealed class CheckpointAdapter(CheckpointFault fault = CheckpointFault.None) : IRuntimeCheckpointCommitWorkloadAdapter
     {
         private readonly CheckpointBacking _secondary = fault == CheckpointFault.DifferentInitialBacking ? new() : null!;

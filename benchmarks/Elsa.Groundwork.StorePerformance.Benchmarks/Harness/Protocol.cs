@@ -202,6 +202,8 @@ public static class ProcessMeasurement
             throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
         SourceProvenance.RequireCleanHead(SourceProvenance.FindRepositoryRoot(), request.CommitSha);
         SourceProvenance.RequireHarnessAssembly(request.HarnessAssemblySha256);
+        await adapter.PrepareAsync(cancellationToken);
+
         IProviderRoundTripObserver? observer = null;
         if (request.ProcessKind == ProcessKind.Measured)
         {
@@ -214,7 +216,6 @@ public static class ProcessMeasurement
                 throw new PerformanceContractException(
                     $"The round-trip observer targets provider '{observer.Provider}', not requested provider '{request.Provider}'.");
         }
-        await adapter.PrepareAsync(cancellationToken);
         var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
         var operations = new List<OperationSample>();

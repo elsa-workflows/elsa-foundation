@@ -18,10 +18,10 @@ substrate.
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
 | `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
 | `verify-correctness` command | **done**, compiles, **not yet run against a provider** |
-| the five measured operations | **not started** — see "What remains" |
+| the five measured operations | **implemented** in the workload-owned phase adapter; no timed cohort claimed |
 | a measured cohort | **not run**, and not runnable on a loaded machine by construction |
 
-Nothing here has produced a measurement. No number in this project has been measured on v2.
+Nothing here has produced a measurement yet. No number in this project has been measured on v2.
 
 ## The finding that shapes the rest of the work
 
@@ -91,19 +91,15 @@ instrumentation.
 
 **The five measured operations.** The frozen spec names them `seed-fenced-executions`,
 `commit-checkpoint-bundle`, `replay-equivalent-commit`, `attempt-stale-fence-commit` and
-`reopen-and-read-committed-bundle`. `CheckpointCommitAdapter.Operations` throws rather than returning an
-approximation: everything that builds the bundle — execution ids, activity and durable-value changes,
-outbox entries, payload sizing, fencing tokens — is private to `RuntimeCheckpointCommitWorkload`, which
-exposes only `ExecuteAsync`. A guessed shape would still emit a digest, a duration and a round-trip count,
-and the artifact would look well-formed while describing a different bundle than the frozen scenario names.
-Whoever builds them should either widen the workload's public surface or rebuild the bundle against the
-scenario parameters and prove it by reproducing `ExpectedInputFingerprint`.
+`reopen-and-read-committed-bundle`. `RuntimeCheckpointCommitWorkload` now exposes these phases through a
+small provider-neutral operation surface. It retains ownership of execution identities, state changes,
+outbox entries, payload sizing and fencing fixtures; `CheckpointCommitAdapter` only adapts those operations
+to the process-measurement contract after correctness succeeds. Fixture setup runs outside each timed
+callback, while the timed calls remain public runtime-store operations.
 
 `ProcessMeasurement` enumerates `adapter.Operations` for **warmup** processes as well as measured ones, so
-a throwing `Operations` blocks every process kind, not only the measured one. That is why
-`verify-correctness` is a separate command and not a flag on `run` — the separation is load-bearing, not
-tidiness. Do not collapse it back into `run` while `Operations` throws, or correctness becomes unreachable
-along with measurement.
+the adapter prepares the same five phases for either process kind. The separate `verify-correctness`
+command remains useful for provider admission without running the timed protocol.
 
 **Correctness has now run against all four providers — two pass, two are blocked upstream of this project.**
 
@@ -145,16 +141,13 @@ Two operational facts the runs established, both previously unverified:
   failed run leaves rows (including the separate coordination row) that make the next run fail differently —
   which cost a misdiagnosis before it was spotted.
 
-Historical note — the paragraph below described the state before those runs:
-
-It compiles and is wired end to end, but no provider
-has executed it, and it cannot be run yet for a reason that is not the database.
+The adapter now compiles and is wired end to end, but no provider has executed the timed path yet. A
+correctness or measurement process still requires a staged native-plan document.
 
 `VerifyCorrectnessAsync` calls `NativePlanEvidenceStaging.PublishInto`, which copies a native-plan evidence
 document out of `ELSA_BENCH_NATIVE_PLAN_STAGING` and fails unless it hashes to the requested
-`--native-plan-sha256`. Nothing produces that document: `capture-plan` is not started. So correctness is
-blocked on a staged document, not on measurement conditions — a loaded machine is otherwise fine, because
-correctness is not timed.
+`--native-plan-sha256`. Nothing produces that document because `capture-plan` is not started. Thus provider
+execution remains blocked on a staged document and the timed cohort remains unrun.
 
 The good news for this particular workload: `checkpoint-commit` declares **no** required native routes, so
 the document it needs carries an empty `Routes` list and no real plan has to be captured to produce one.

@@ -23,24 +23,15 @@ internal sealed class CheckpointCommitAdapter(
 
     public IProviderRoundTripObserver? RoundTripObserver => composition?.Observer;
 
+    private IReadOnlyList<IBenchmarkOperation>? operations;
+
     /// <summary>
-    /// The measured operation sequence is not implemented, and this refuses rather than substituting
-    /// something adjacent. The five operations the frozen spec names
-    /// (<c>specs/094-harden-groundwork-stores/workloads/runtime.json</c>) are seed-fenced-executions,
-    /// commit-checkpoint-bundle, replay-equivalent-commit, attempt-stale-fence-commit and
-    /// reopen-and-read-committed-bundle.
-    ///
-    /// They cannot be derived from <see cref="RuntimeCheckpointCommitWorkload"/>: it exposes only
-    /// <c>ExecuteAsync</c>, and everything that builds the bundle — execution ids, activity and
-    /// durable-value changes, outbox entries, payload sizing, fencing tokens — is private to it. A leaf that
-    /// guessed at that shape would still emit a digest, a duration and a round-trip count, and the artifact
-    /// would look well-formed while describing a different bundle than the frozen scenario names. Refusing
-    /// is this harness's own rule: a missing adapter is a blocked run, never a simulated result.
+    /// The workload owns the phase definitions and their representative fixtures. The adapter only adapts
+    /// those provider-neutral operations to the process-measurement contract after correctness succeeds.
     /// </summary>
     public IReadOnlyList<IBenchmarkOperation> Operations =>
-        throw new PerformanceContractException(
-            "The checkpoint-commit measured operation sequence is not implemented on the v2 adapter. " +
-            "Correctness verification is available; measured runs are blocked. See the adapter host README.");
+        operations ?? throw new PerformanceContractException(
+            "The checkpoint-commit operations were requested before correctness preparation completed.");
 
     /// <summary>
     /// The frozen scenario stamps every committed state with this tenant, and the checkpoint writer's
@@ -78,6 +69,9 @@ internal sealed class CheckpointCommitAdapter(
         var document = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
 
         var result = await new RuntimeCheckpointCommitWorkload().ExecuteAsync(this, cancellationToken);
+        operations = (await new RuntimeCheckpointCommitWorkload().PrepareMeasuredOperationsAsync(this, cancellationToken))
+            .Select(operation => (IBenchmarkOperation)new BenchmarkOperation(operation))
+            .ToArray();
 
         return new CorrectnessEvidence(
             result.ResultDigest,
@@ -114,4 +108,15 @@ internal sealed class CheckpointCommitAdapter(
     private RuntimeStoreComposition Require() =>
         composition ?? throw new PerformanceContractException(
             "The adapter has no composed backing; PrepareAsync must run first.");
+
+    private sealed class BenchmarkOperation(IRuntimeCheckpointCommitWorkloadOperation operation) : IBenchmarkOperation
+    {
+        public string Id => operation.Id;
+
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.PrepareInvocationAsync(invocation, cancellationToken).AsTask();
+
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.InvokeAsync(invocation, cancellationToken).AsTask();
+    }
 }

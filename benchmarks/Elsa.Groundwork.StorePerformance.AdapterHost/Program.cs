@@ -39,9 +39,8 @@ static int ProbeProvider(string[] args)
 // The measured path the matrix runner drives, writing the process artifact where the runner reads it
 // after the child exits.
 //
-// Today this reaches ProcessMeasurement and stops at adapter.Operations, which refuses: the checkpoint
-// leaf has no measured operation sequence yet. That is deliberate, and the non-zero exit says so, rather
-// than the host inventing a sequence whose artifact would look well-formed and describe the wrong bundle.
+// The adapter prepares the workload-owned public operation phases after the correctness baseline succeeds;
+// ProcessMeasurement then warms and times those same phases without rebuilding their private fixtures.
 static async Task<int> Run(string[] args)
 {
     var (request, outputDirectory, connectionString) = ParseRun(args, "run");
@@ -54,12 +53,8 @@ static async Task<int> Run(string[] args)
 }
 
 // Runs only the correctness baseline: compose, commit the catalog-owned bundle through the public stores,
-// and validate the digest and the evidence bindings. It exists because ProcessMeasurement enumerates
-// adapter.Operations for warmup processes as well as measured ones, so there is no way to reach
-// correctness through `run` while the measured sequence is absent.
-//
-// This is the command that exercises the v2 seam end to end against a real provider, and it is what should
-// be run on all four providers before anyone builds the timed operations on top of it.
+// and validate the digest and the evidence bindings. The `run` command additionally prepares and executes
+// the workload-owned timed phases after this same baseline has passed.
 static async Task<int> VerifyCorrectness(string[] args)
 {
     var (request, outputDirectory, connectionString) = ParseRun(args, "verify-correctness");
