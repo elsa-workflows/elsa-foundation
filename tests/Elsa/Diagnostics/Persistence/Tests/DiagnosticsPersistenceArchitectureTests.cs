@@ -100,12 +100,21 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
 
         var ledger = File.ReadAllLines(Path.Combine(
             RepoRoot, "specs", "139-groundwork-diagnostics-persistence", "ef-test-removal-ledger.md"));
-        var factRows = ledger.Count(line => line.StartsWith("| `", StringComparison.Ordinal) || line.StartsWith("| .", StringComparison.Ordinal));
+        var factRows = ledger
+            .Where(line => line.StartsWith("| `", StringComparison.Ordinal) || line.StartsWith("| .", StringComparison.Ordinal))
+            .ToArray();
 
-        Assert.Equal(46, factRows);
+        Assert.Equal(46, factRows.Length);
+        Assert.Equal(43, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(3, factRows.Count(line => line.Contains(
+            "Candidate for architect-approved removal", StringComparison.Ordinal)));
+        Assert.All(factRows, line => Assert.True(
+            line.Contains("covered", StringComparison.OrdinalIgnoreCase) ^
+            line.Contains("Candidate for architect-approved removal", StringComparison.Ordinal),
+            $"Ledger row must have exactly one closeout disposition: {line}"));
         var ledgerText = string.Join(Environment.NewLine, ledger);
         Assert.Contains("**Groundwork baseline:** exact `0.4.0-preview.1`", ledgerText, StringComparison.Ordinal);
-        Assert.Contains("Disposition: 44 covered; 2 EF-mechanism-only", ledgerText, StringComparison.Ordinal);
+        Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only", ledgerText, StringComparison.Ordinal);
         Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }
 

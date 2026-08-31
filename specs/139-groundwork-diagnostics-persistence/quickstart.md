@@ -519,7 +519,7 @@ Groundwork package pin is exactly `0.4.0-preview.1` from release SHA
 
 The focused shared diagnostics suite passed 96/96 before the closeout guard was added. The new
 guard then passed 1/1 and checks package currency, explicit diagnostics project overrides, all 46
-preserved EF facts, the 44 covered / 2 EF-mechanism-only disposition, and removal of the stale
+preserved EF facts, the 43 covered / 3 EF-mechanism-only disposition, and removal of the stale
 one-remaining-OpenTelemetry note. The exact current v2 matrices passed SQLite (Structured Logs
 29/29 and OpenTelemetry 8/8); PostgreSQL, SQL Server, and MongoDB were skipped because their
 connection-string environment variables were not configured.
@@ -528,7 +528,7 @@ This checkpoint does not promote grouped reduction or native-plan evidence. The 
 exercise public provider behavior but do not emit the required exact-0.4 four-provider plan receipt;
 preview.86/.88 and the stale draft PRs #1287/#1294 remain historical inputs. #646 owns the accepted
 diagnostics timing/physical-form verdict and grouped/native promotion. #647 owns explicit
-disposition of the two EF-mechanism-only facts, dependency-ordered EF deletion, and the final
+disposition of the three EF-mechanism-only facts, dependency-ordered EF deletion, and the final
 zero-EF guard. No EF oracle code was deleted by this checkpoint.
 
 ## Final dependency audit

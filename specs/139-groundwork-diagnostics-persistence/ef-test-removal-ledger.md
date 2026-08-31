@@ -11,10 +11,10 @@ EF scan can miss. A row is not deletion approval: framework §2.21.1 requires ex
 architect approval before the original test can be removed. `Covered` means a named Groundwork or
 provider-neutral test has been inspected and exercises the objective. `EF-mechanism-only` means the
 behavior is an implementation detail of the EF oracle with no provider-neutral contract to preserve.
-Neither label is deletion approval: the two mechanism-only rows still require explicit architect
+Neither label is deletion approval: the three mechanism-only rows still require explicit architect
 disposition before T053/T054.
 
-**Disposition: 44 covered; 2 EF-mechanism-only.** Every one of the 46 original EF facts has an
+**Disposition: 43 covered; 3 EF-mechanism-only.** Every one of the 46 original EF facts has an
 explicit row and named outcome; the ledger is mechanically checked by
 `DiagnosticsPersistenceArchitectureTests`.
 
@@ -85,8 +85,8 @@ blocker is historical and is not a reason to delete or retain a test by itself.
 
 Before T053/T054 can be approved and performed:
 
-1. The 44 covered rows must remain green in the exact current-family certification and preserved
-   provider-neutral suites; the two EF-mechanism-only rows require explicit recorded architect
+1. The 43 covered rows must remain green in the exact current-family certification and preserved
+   provider-neutral suites; the three EF-mechanism-only rows require explicit recorded architect
    disposition before their source tests are removed.
 2. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final
    architecture and zero-EF checks. #646 owns the accepted diagnostics verdict and #647 owns the

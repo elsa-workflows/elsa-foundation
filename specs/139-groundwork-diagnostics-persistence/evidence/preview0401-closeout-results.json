@@ -30,7 +30,7 @@
       "assertions": [
         "All root Groundwork package pins are 0.4.0-preview.1",
         "All explicit diagnostics project Groundwork versions are 0.4.0-preview.1",
-        "The EF ledger contains exactly 46 facts and the 44 covered / 2 EF-mechanism-only disposition",
+        "The EF ledger contains exactly 46 facts and the 43 covered / 3 EF-mechanism-only disposition",
         "The stale one-remaining-OpenTelemetry statement is absent"
       ]
     },
@@ -67,8 +67,8 @@
     "facts": 46,
     "structuredLogs": 30,
     "openTelemetry": 16,
-    "covered": 44,
-    "efMechanismOnly": 2,
+    "covered": 43,
+    "efMechanismOnly": 3,
     "deletion": "not-authorized",
     "owner": "#647"
   },
@@ -78,7 +78,7 @@
   },
   "remainingDependencies": [
     "#646 must accept the diagnostics durable-history timing/physical-form verdict and grouped/native promotion evidence.",
-    "#647 must receive explicit architect disposition for the two EF-mechanism-only rows, delete EF oracles in dependency order, and run the final zero-EF guard.",
+    "#647 must receive explicit architect disposition for the three EF-mechanism-only rows, delete EF oracles in dependency order, and run the final zero-EF guard.",
     "The final exact-provider and solution-wide zero-EF certification remains open; no EF oracle source was deleted here."
   ],
   "evidenceBoundary": "This receipt certifies exact package currency, focused provider-neutral tests, SQLite v2 behavior, and the preserved 46-fact ledger. It does not claim SQL Server, PostgreSQL, or MongoDB runtime execution, numeric performance budgets, grouped/native-plan promotion, T050/T051/T057 completion, EF deletion, or authorization to close #642."
