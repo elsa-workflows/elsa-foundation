@@ -42,6 +42,57 @@ public sealed class GroundworkIdentityRowStore(
         CancellationToken cancellationToken = default)
         => QueryCore(unitId, query, includeTotalCount: false, cancellationToken).Rows;
 
+    public GroundworkIdentityRowQueryResult QueryAllPages(
+        string unitId,
+        GroundworkIdentityRowQuery query,
+        int maximumMaterialization,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumMaterialization);
+
+        var rows = new List<GroundworkIdentityRow>();
+        var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
+        var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = query.ContinuationToken;
+        if (string.IsNullOrWhiteSpace(continuation) && continuation is not null)
+            throw new ArgumentException("An identity continuation token cannot be empty.", nameof(query));
+        if (continuation is not null)
+            seenContinuations.Add(continuation);
+        long? totalCount = null;
+
+        for (var page = 0; page < maximumMaterialization; page++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = QueryCore(
+                unitId,
+                query with { Skip = 0, ContinuationToken = continuation },
+                includeTotalCount: false,
+                cancellationToken);
+            totalCount ??= result.TotalCount;
+
+            foreach (var row in result.Rows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!seenIdentities.Add(row.Id))
+                    throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' repeated row '{row.Id}' while following a continuation.");
+                rows.Add(row);
+                if (rows.Count > maximumMaterialization)
+                    throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded materialization limit.");
+            }
+
+            continuation = result.NextContinuationToken;
+            if (continuation is null)
+                return new(rows, totalCount ?? rows.Count);
+            if (string.IsNullOrWhiteSpace(continuation) || !seenContinuations.Add(continuation))
+                throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' returned a repeated or empty continuation.");
+            if (result.Rows.Count == 0)
+                throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' returned a continuation without forward progress.");
+        }
+
+        throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded page limit.");
+    }
+
     public GroundworkIdentityRowQueryResult QueryWithTotalCount(
         string unitId,
         GroundworkIdentityRowQuery query,
@@ -51,7 +102,8 @@ public sealed class GroundworkIdentityRowStore(
         return new(
             result.Rows,
             result.TotalCount ?? throw new InvalidDataException(
-                $"Identity unit '{unitId}' did not return the requested filtered total count."));
+                $"Identity unit '{unitId}' did not return the requested filtered total count."),
+            result.NextContinuationToken);
     }
 
     private QueryCoreResult QueryCore(
@@ -91,17 +143,75 @@ public sealed class GroundworkIdentityRowStore(
             order.Add(new OrderTerm(idColumn, OrderDirection.Ascending, NullOrder.Last));
         }
 
-        var paging = query.Skip == 0
-            ? Paging.Keyset(query.Take)
-            : Paging.OffsetLimit(query.Skip, query.Take);
-        var request = includeTotalCount
-            ? new QueryRequest(table, where, [.. order], Projection.All, paging, ResultShape.TotalCount.Instance)
-            : new QueryRequest(table, where, [.. order], Projection.All, paging);
-        var result = plan.Session.Query(request, plan.Unit.CreateQueryRenderOptions(query.ExpectedIndex));
+        if (query.Skip < 0)
+            throw new ArgumentOutOfRangeException(nameof(query.Skip));
+        if (query.Take <= 0)
+            throw new ArgumentOutOfRangeException(nameof(query.Take));
+        if (query.Skip > 0 && query.ContinuationToken is not null)
+            throw new ArgumentException("An identity query cannot combine offset and cursor continuation paging.", nameof(query));
+
+        var options = plan.Unit.CreateQueryRenderOptions(query.ExpectedIndex);
+        var request = CreateRequest(table, where, order, query, includeTotalCount, query.ContinuationToken);
+        var result = plan.Session.Query(request, options);
+
+        if (query.Skip > 0)
+        {
+            // Public IAM page contracts still accept an offset. Consume that offset by bounded
+            // cursor pages; never send an offset to a provider.
+            var skipped = query.Skip;
+            var collected = result.Rows.Take(0).ToList();
+            var totalCount = result.TotalCount;
+            var continuation = result.NextContinuationToken;
+            var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+            var pagesConsumed = 1;
+            if (continuation is not null && string.IsNullOrWhiteSpace(continuation))
+                throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+            while (collected.Count < query.Take)
+            {
+                if (result.Rows.Count == 0)
+                {
+                    if (continuation is not null)
+                        throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                    break;
+                }
+
+                var available = result.Rows.Count - skipped;
+                if (available > 0)
+                {
+                    var take = Math.Min(query.Take - collected.Count, available);
+                    collected.AddRange(result.Rows.Skip(skipped).Take(take));
+                    skipped = 0;
+                }
+                else
+                    skipped -= result.Rows.Count;
+
+                if (collected.Count >= query.Take || continuation is null)
+                    break;
+                if (string.IsNullOrWhiteSpace(continuation) || !seenContinuations.Add(continuation))
+                    throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                if (pagesConsumed++ >= IdentityStorageManifest.MaxMaterializedListEntries)
+                    throw new InvalidOperationException("Identity cursor exceeded its bounded page limit while advancing a public page.");
+                request = CreateRequest(
+                    table,
+                    where,
+                    order,
+                    query with { Take = query.Take - collected.Count, Skip = 0 },
+                    includeTotalCount,
+                    continuation);
+                result = plan.Session.Query(request, options);
+                continuation = result.NextContinuationToken;
+                if (continuation is not null &&
+                    (string.IsNullOrWhiteSpace(continuation) || seenContinuations.Contains(continuation)))
+                    throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+            }
+
+            result = new QueryMaterializedResult(collected, totalCount, continuation);
+        }
 
         var rows = new List<GroundworkIdentityRow>(result.Rows.Count);
         foreach (var row in result.Rows)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var id = RequiredString(row, IdentityV2StorageManifest.IdField);
             var mapped = Map(row, unitId, plan.Unit);
             if (mapped is not null)
@@ -120,7 +230,21 @@ public sealed class GroundworkIdentityRowStore(
             }
         }
 
-        return new(rows, result.TotalCount);
+        return new(rows, result.TotalCount, result.NextContinuationToken);
+    }
+
+    private static QueryRequest CreateRequest(
+        TableId table,
+        Predicate where,
+        IReadOnlyList<OrderTerm> order,
+        GroundworkIdentityRowQuery query,
+        bool includeTotalCount,
+        string? continuation)
+    {
+        var paging = continuation is null ? Paging.Keyset(query.Take) : Paging.Continuation(continuation, query.Take);
+        return includeTotalCount
+            ? new QueryRequest(table, where, [.. order], Projection.All, paging, ResultShape.TotalCount.Instance)
+            : new QueryRequest(table, where, [.. order], Projection.All, paging);
     }
 
     public GroundworkIdentityWriteResult Save(
@@ -389,7 +513,8 @@ public sealed class GroundworkIdentityRowStore(
 
     private sealed record QueryCoreResult(
         IReadOnlyList<GroundworkIdentityRow> Rows,
-        long? TotalCount);
+        long? TotalCount,
+        string? NextContinuationToken);
 }
 
 public sealed record GroundworkIdentityRow(
@@ -418,11 +543,13 @@ public sealed record GroundworkIdentityRowQuery(
     int Take = 100,
     bool IncludeVersions = false,
     int Skip = 0,
-    string? ExpectedIndex = null);
+    string? ExpectedIndex = null,
+    string? ContinuationToken = null);
 
 public sealed record GroundworkIdentityRowQueryResult(
     IReadOnlyList<GroundworkIdentityRow> Rows,
-    long TotalCount);
+    long TotalCount,
+    string? NextContinuationToken = null);
 
 public enum GroundworkIdentityRowWriteConditionKind
 {

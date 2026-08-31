@@ -133,6 +133,32 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             5
         },
         {
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/OffsetIdentityQuery.cs",
+            """
+            namespace Injected;
+
+            public sealed class OffsetIdentityQuery
+            {
+                public object Create() => new QueryRequest(null!, null!, [], null!, Paging.OffsetLimit(1, 1));
+            }
+            """,
+            "IDENTITY-OFFSET-QUERY",
+            5
+        },
+        {
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/PositionalOffsetIdentityQuery.cs",
+            """
+            namespace Injected;
+
+            public sealed class PositionalOffsetIdentityQuery
+            {
+                public object Create() => new DocumentQuery("kind", "route", null, 1, 1);
+            }
+            """,
+            "IDENTITY-OFFSET-QUERY",
+            5
+        },
+        {
             "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/DependencyInjection/UnsupportedCapability.cs",
             """
             namespace Injected;
@@ -307,6 +333,13 @@ internal static partial class AspNetCoreIdentityMutationScanner
             }
 
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
+                OffsetQueryRegex().IsMatch(code))
+            {
+                Add(diagnostics, "IDENTITY-OFFSET-QUERY", relativePath, lineNumber,
+                    "Groundwork Identity scale-bearing routes must use finite cursor paging rather than offsets.");
+            }
+
+            if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
                 UnsupportedCapabilities.Any(capability => code.Contains(capability, StringComparison.Ordinal)))
             {
                 Add(diagnostics, "IDENTITY-UNSUPPORTED-CAPABILITY", relativePath, lineNumber,
@@ -344,6 +377,9 @@ internal static partial class AspNetCoreIdentityMutationScanner
 
     [GeneratedRegex(@"\bBoundedDocumentQueryPager\.QueryAllAsync\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex ReviewedBoundedPagerRegex();
+
+    [GeneratedRegex(@"\b(?:Paging\.OffsetLimit|for\s*\(\s*var\s+skip\b)|\bnew\s+DocumentQuery\s*\([^)]*,\s*[^,]+,\s*[^,]+,\s*\d+\s*,\s*\d+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OffsetQueryRegex();
 
     [GeneratedRegex(@"\b(?:Add|TryAdd|Replace)Scoped\s*<\s*(?:IUserStore\s*<\s*AspNetCoreIdentityUser\s*>|IRoleStore\s*<\s*IdentityRole\s*>)", RegexOptions.CultureInvariant)]
     private static partial Regex DuplicateAuthorityRegistrationRegex();

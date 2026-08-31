@@ -119,6 +119,116 @@ public sealed class GroundworkIdentityRowStoreTests
                 "mike",
                 IdentityStorageManifest.NormalizedRoleNameKeyField));
         Assert.Equal(["mike", "zulu"], range.Select(row => row.ProjectedValues[IdentityStorageManifest.NormalizedRoleNameKeyField]));
+
+        var offsetCompatiblePage = store.Query(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 1,
+                Skip: 2));
+        Assert.Equal("zulu", Assert.Single(offsetCompatiblePage).ProjectedValues[IdentityStorageManifest.NormalizedRoleNameKeyField]);
+    }
+
+    [Fact]
+    public void Cursor_pages_materialize_each_matching_identity_once_with_a_bounded_limit()
+    {
+        using var fixture = Fixture.Create();
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+        SaveRole(store, "r-3", "zulu");
+        SaveRole(store, "r-1", "alpha");
+        SaveRole(store, "r-4", "tango");
+        SaveRole(store, "r-2", "mike");
+        SaveRole(store, "r-5", "yankee");
+
+        var result = store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 2,
+                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
+            maximumMaterialization: 5);
+
+        Assert.Equal(["alpha", "mike", "tango", "yankee", "zulu"], result.Rows.Select(row =>
+            row.ProjectedValues[IdentityStorageManifest.NormalizedRoleNameKeyField]));
+        Assert.Equal(5, result.TotalCount);
+        Assert.Null(result.NextContinuationToken);
+
+        var boundedError = Assert.Throws<InvalidOperationException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 2),
+            maximumMaterialization: 3));
+        Assert.Contains("bounded materialization", boundedError.Message, StringComparison.Ordinal);
+
+        var offsetPage = store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 3,
+                Skip: 1,
+                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex));
+        Assert.Equal(["mike", "tango", "yankee"], offsetPage.Rows.Select(row =>
+            row.ProjectedValues[IdentityStorageManifest.NormalizedRoleNameKeyField]));
+        Assert.NotNull(offsetPage.NextContinuationToken);
+
+        var nextPage = store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 3,
+                ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex,
+                ContinuationToken: offsetPage.NextContinuationToken),
+            maximumMaterialization: 1);
+        Assert.Equal(["zulu"], nextPage.Rows.Select(row =>
+            row.ProjectedValues[IdentityStorageManifest.NormalizedRoleNameKeyField]));
+
+        Assert.Throws<ArgumentException>(() => store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 1,
+                Skip: 1,
+                ContinuationToken: offsetPage.NextContinuationToken)));
+    }
+
+    [Fact]
+    public void Cursor_query_honors_cancellation_before_opening_a_provider_session()
+    {
+        using var fixture = Fixture.Create();
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityStorageManifest.NormalizedRoleNameKeyField,
+                Take: 2),
+            maximumMaterialization: 4,
+            cancellationToken: cancellation.Token));
+        Assert.Equal(0, fixture.Source.OpenCalls);
     }
 
     [Fact]
