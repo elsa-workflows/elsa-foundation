@@ -4,7 +4,7 @@
   "scope": "exact-groundwork-0.4.0-preview.1-diagnostics-closeout",
   "outcome": "partial-pass",
   "evidenceClassification": "exact-adopted-groundwork-focused-receipt",
-  "recordedOn": "2026-08-31",
+  "recordedAtUtc": "2026-08-31T20:27:57Z",
   "elsaSourceCommit": "3e694377ff6a73dc6b80e34991222b1f8cd47509",
   "closeoutGuardCommit": "9cb1ebfd80c2ce28fe77d0d240eec85ad4a4ce96",
   "groundworkReleaseSha": "701229e0a736670f406140ed7c61f00e10156ffd",
