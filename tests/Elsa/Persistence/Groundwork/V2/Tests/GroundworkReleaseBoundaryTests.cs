@@ -180,7 +180,7 @@ public sealed class GroundworkReleaseBoundaryTests
 
     private sealed class TemporaryCatalog : IDisposable
     {
-        private readonly string path = Path.Combine(
+        private readonly string path = Path.Join(
             Path.GetTempPath(),
             $"elsa-groundwork-release-{Guid.NewGuid():N}.db");
 
